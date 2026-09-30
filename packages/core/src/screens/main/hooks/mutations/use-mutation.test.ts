@@ -182,6 +182,26 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('names the collection, not "#undefined", when a queued create has no store id yet', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith('common.saved', expect.anything());
+		expect(mockLoggerSuccess).not.toHaveBeenCalledWith('common.saved_2', expect.anything());
+	});
+
+	it('leaves the toast to a caller that announces the create itself', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' }, toast: false }));
+
+		expect(mockWrite).toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
+	});
+
 	it('preserves an engine record UUID when a customer patch does not update', async () => {
 		const customer = {
 			uuid: 'customer-local-uuid',

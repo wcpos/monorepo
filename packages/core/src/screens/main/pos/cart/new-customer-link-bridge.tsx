@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
+import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -38,7 +39,7 @@ let passes: Promise<void> = Promise.resolve();
  * routinely after the cashier has moved to another order or relaunched. A pass
  * runs on mount (acks that landed while nothing was listening), on every
  * journal change (a new link whose customer is already acknowledged), and on
- * every customer write outcome.
+ * every customer write outcome, and on every order ack (an order back from a resync).
  */
 export function NewCustomerLinkBridge(): null {
 	const { storeDB } = useStoreSession();
@@ -76,8 +77,27 @@ export function NewCustomerLinkBridge(): null {
 						data: { customer_id: customerId },
 					})
 				),
+			orderHasQueuedDelete: async (uuid) => {
+				const database = runtime.engine.active()?.database;
+				// Thrown, not guessed: the pass keeps the link and the next pass retries.
+				if (!database) throw new Error('No active scope to read the write queue from');
+				const queue = database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as {
+					findOne(query: { selector: Record<string, unknown> }): { exec(): Promise<unknown> };
+				};
+				const row = await queue
+					.findOne({
+						selector: {
+							collectionName: { $eq: 'orders' },
+							recordId: { $eq: uuid },
+							operation: { $eq: 'delete' },
+						},
+					})
+					.exec();
+				return row !== null;
+			},
 			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, () => run()),
 			drop: (uuid, at) => dropCustomerLink(storeDB, uuid, at),
+			now: () => Date.now(),
 		};
 
 		const pass = (rejectedCustomerUuid?: string) => {
@@ -122,7 +142,14 @@ export function NewCustomerLinkBridge(): null {
 				pass();
 				return;
 			}
-			if (!('collection' in event) || event.collection !== 'customers') return;
+			if (!('collection' in event)) return;
+			// A link whose order was away for a resync waits; the next order the
+			// till sends is a cheap moment to look for it again.
+			if (event.collection === 'orders' && event.type === 'write-acknowledged') {
+				pass();
+				return;
+			}
+			if (event.collection !== 'customers') return;
 			switch (event.type) {
 				case 'write-acknowledged':
 				case 'write-ack-rematerialized':

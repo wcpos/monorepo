@@ -7,6 +7,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
 
+import { enqueueDocumentWrite } from '../../contexts/use-push-document';
 import { NewCustomerLinkBridge } from './new-customer-link-bridge';
 import {
 	customerLinkIdentity,
@@ -43,6 +44,7 @@ function residentDoc(collection: string, data: Record<string, unknown>) {
 		get payload() {
 			return state.payload as Record<string, unknown>;
 		},
+		get: (field: string) => state[field],
 		toJSON: () => cloneDeep(state),
 		toMutableJSON: () => cloneDeep(state),
 		getLatest: () => doc,
@@ -56,6 +58,8 @@ function residentDoc(collection: string, data: Record<string, unknown>) {
 
 let listeners: Listener[] = [];
 let residents: Record<string, Map<string, Doc>> = {};
+/** The engine's write queue rows, as `recordMutations` stores them. */
+let queue: Record<string, unknown>[] = [];
 const mockWrite = jest.fn();
 const mockLoggerError = jest.fn();
 
@@ -63,12 +67,22 @@ const scope = () => ({
 	scopeId: 'scope-1',
 	barcodeSelectors: { products: [], variations: [] },
 	database: {
-		collections: Object.fromEntries(
-			['orders', 'customers'].map((name) => [
-				name,
-				{ findOne: (id: string) => ({ exec: async () => residents[name]?.get(id) ?? null }) },
-			])
-		),
+		collections: {
+			...Object.fromEntries(
+				['orders', 'customers'].map((name) => [
+					name,
+					{ findOne: (id: string) => ({ exec: async () => residents[name]?.get(id) ?? null }) },
+				])
+			),
+			recordMutations: {
+				findOne: ({ selector }: { selector: Record<string, { $eq: unknown }> }) => ({
+					exec: async () =>
+						queue.find((row) =>
+							Object.entries(selector).every(([field, { $eq }]) => row[field] === $eq)
+						) ?? null,
+				}),
+			},
+		},
 	},
 });
 const mockRuntime = {
@@ -110,9 +124,18 @@ let mockStoreDB: StoreDatabase;
 
 jest.mock('@wcpos/query', () => ({
 	...(() => {
-		const { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor } =
-			jest.requireActual('@wcpos/query');
-		return { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor };
+		const {
+			COLLECTION_VOCABULARY,
+			promotedColumnsFor,
+			adapterDerivedFieldsFor,
+			WRITEABLE_REMOTE_ID_FIELD,
+		} = jest.requireActual('@wcpos/query');
+		return {
+			COLLECTION_VOCABULARY,
+			promotedColumnsFor,
+			adapterDerivedFieldsFor,
+			WRITEABLE_REMOTE_ID_FIELD,
+		};
 	})(),
 	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
 		database?.collections?.[name] ?? null,
@@ -207,7 +230,18 @@ async function linkOrderToCustomer() {
 		customerUuid: CUSTOMER,
 		scopeId: 'scope-1',
 		identity: customerLinkIdentity(BILLING),
-		at: '2026-09-30T00:00:00.000Z',
+		// Now, not a fixed date: links expire, and this suite must not age out.
+		at: new Date().toISOString(),
+	});
+}
+
+function ackCustomerEvent() {
+	emit({
+		type: 'write-acknowledged',
+		collection: 'customers',
+		recordId: CUSTOMER,
+		mutationId: 'm-customer',
+		currentRevision: null,
 	});
 }
 
@@ -224,6 +258,7 @@ describe('NewCustomerLinkBridge', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		listeners = [];
+		queue = [];
 		mockStoreDB = fakeStoreDB();
 		mockWrite.mockResolvedValue({ mutationId: 'm-order', recordId: ORDER });
 	});
@@ -353,5 +388,135 @@ describe('NewCustomerLinkBridge', () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 		// The rejection was not the customer's, so it neither reports nor reconciles.
 		expect(mockWrite.mock.calls.length).toBe(callsBefore);
+	});
+
+	it('does not cancel a void made offline before the ack: no write, and the link is dropped', async () => {
+		// Pushed at checkout, then voided offline: the delete waits, never attempted.
+		// A stamp now would coalesce into it and turn the void into an update.
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		queue = [
+			{
+				mutationId: 'm-void',
+				collectionName: 'orders',
+				recordId: ORDER,
+				operation: 'delete',
+				status: 'pending',
+				attempts: 0,
+			},
+		];
+		await linkOrderToCustomer();
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		await acknowledgeCustomer(91);
+		ackCustomerEvent();
+		await flush();
+
+		expect(orderUpdates()).toEqual([]);
+		expect(residents.orders!.get(ORDER)!.payload).toMatchObject({ customer_id: 0 });
+		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
+	});
+
+	it('does not write behind a delete already sent: no write, and the link is dropped', async () => {
+		// The delete is in flight (claimed after one attempt). A stamp appended behind
+		// it would be an update to an order the store is deleting, and dead-letter.
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		queue = [
+			{
+				mutationId: 'm-delete',
+				collectionName: 'orders',
+				recordId: ORDER,
+				operation: 'delete',
+				status: 'claimed',
+				attempts: 1,
+			},
+		];
+		await linkOrderToCustomer();
+		await acknowledgeCustomer(91);
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		expect(orderUpdates()).toEqual([]);
+		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
+	});
+
+	it("stamps an order another record's delete does not touch", async () => {
+		seed({ order: attachedOpenCart });
+		queue = [
+			{
+				mutationId: 'm-other',
+				collectionName: 'orders',
+				recordId: 'another-order',
+				operation: 'delete',
+				status: 'pending',
+			},
+		];
+		await linkOrderToCustomer();
+		await acknowledgeCustomer(91);
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		expect(orderUpdates()).toEqual([
+			expect.objectContaining({ payload: expect.objectContaining({ customer_id: 91 }) }),
+		]);
+	});
+
+	it('acks after the checkout push: the stamp waits in the hold and rides the pre-payment push', async () => {
+		// The open cart's create already reached the store at checkout-open, as a guest.
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		await linkOrderToCustomer();
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		await acknowledgeCustomer(91);
+		ackCustomerEvent();
+		await flush();
+
+		// An ordinary, non-explicit update: the open-cart hold keeps it while pos-open.
+		const [stamp] = orderUpdates();
+		expect(stamp).toMatchObject({ operation: 'update', payload: { customer_id: 91 } });
+		expect(stamp).not.toHaveProperty('explicit');
+
+		// Every online payment pushes the order explicitly before any money moves
+		// (persistSaleProvenance). That push sends the resident, which carries the id.
+		mockWrite.mockClear();
+		await enqueueDocumentWrite(mockRuntime as never, residents.orders!.get(ORDER)! as never);
+		expect(orderUpdates()).toEqual([
+			expect.objectContaining({
+				operation: 'update',
+				recordId: ORDER,
+				explicit: true,
+				payload: expect.objectContaining({ customer_id: 91, status: 'pos-open' }),
+			}),
+		]);
+	});
+
+	it('keeps the link while a resync has the order away, and stamps it when it is back', async () => {
+		seed({ order: attachedOpenCart });
+		await linkOrderToCustomer();
+		const order = residents.orders!.get(ORDER)!;
+		residents.orders!.delete(ORDER);
+		await acknowledgeCustomer(91);
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		expect(orderUpdates()).toEqual([]);
+		expect(Object.keys(await pendingCustomerLinks(mockStoreDB))).toEqual([ORDER]);
+
+		// The re-pull brings the order back; the next order ack looks again.
+		residents.orders!.set(ORDER, order);
+		emit({
+			type: 'write-acknowledged',
+			collection: 'orders',
+			recordId: 'another-order',
+			mutationId: 'm-next-sale',
+			currentRevision: null,
+		});
+		await flush();
+
+		expect(orderUpdates()).toEqual([
+			expect.objectContaining({ payload: expect.objectContaining({ customer_id: 91 }) }),
+		]);
+		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
 	});
 });

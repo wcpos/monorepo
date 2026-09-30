@@ -141,7 +141,8 @@ describe.each([
 			await mockSubmitCustomer?.({ first_name: 'Ada' });
 		});
 
-		expect(mockCreate).toHaveBeenCalledWith({ data: { first_name: 'Ada' } });
+		// The cart's own "{name} saved" is the one toast; the generic one would read "#undefined".
+		expect(mockCreate).toHaveBeenCalledWith({ data: { first_name: 'Ada' }, toast: false });
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: currentOrderRecord,
 			data: {

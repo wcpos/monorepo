@@ -64,7 +64,8 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				// Our own "{name} saved" below replaces the generic toast.
+				const savedDoc = await create({ data, toast: false });
 				// create() has already reported a failed enqueue; the form stays open.
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its

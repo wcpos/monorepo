@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import type { StoreDatabase } from '@wcpos/database';
 
 import {
+	CUSTOMER_LINK_LIFETIME_MS,
 	type CustomerLink,
 	type CustomerLinkDeps,
 	customerLinkIdentity,
@@ -60,6 +61,8 @@ function deps(
 		order?: Record<string, unknown> | null;
 		stampResult?: boolean;
 		scopeId?: string;
+		queuedDelete?: boolean;
+		now?: number;
 	} = {}
 ) {
 	const document = { uuid: ORDER };
@@ -76,10 +79,12 @@ function deps(
 			stamps.push({ document: doc, customerId });
 			return state.stampResult ?? true;
 		},
+		orderHasQueuedDelete: async () => state.queuedDelete ?? false,
 		serializeOrder: (_uuid, run) => run(),
 		drop: async (uuid) => {
 			drops.push(uuid);
 		},
+		now: () => state.now ?? Date.parse('2026-09-30T01:00:00.000Z'),
 	};
 	return { value, stamps, drops, document };
 }
@@ -157,12 +162,37 @@ describe('reconcileCustomerLink', () => {
 		expect(d.stamps).toEqual([]);
 	});
 
-	it('drops a link whose customer or order is gone', async () => {
+	it('keeps a link whose customer or order is away, as a resync leaves them', async () => {
 		const noCustomer = deps({ customer: null });
-		await expect(reconcileCustomerLink(noCustomer.value, ORDER, link())).resolves.toBe('dropped');
+		await expect(reconcileCustomerLink(noCustomer.value, ORDER, link())).resolves.toBe('waiting');
 		const noOrder = deps({ customer: { remoteId: 91 }, order: null });
-		await expect(reconcileCustomerLink(noOrder.value, ORDER, link())).resolves.toBe('dropped');
+		await expect(reconcileCustomerLink(noOrder.value, ORDER, link())).resolves.toBe('waiting');
 		expect([...noCustomer.stamps, ...noOrder.stamps]).toEqual([]);
+		expect([...noCustomer.drops, ...noOrder.drops]).toEqual([]);
+	});
+
+	it('drops a link that has outlived its lifetime, without writing', async () => {
+		const expired = Date.parse(link().at) + CUSTOMER_LINK_LIFETIME_MS + 1;
+		const d = deps({ customer: { remoteId: 91 }, now: expired });
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('dropped');
+		expect(d.stamps).toEqual([]);
+		expect(d.drops).toEqual([ORDER]);
+	});
+
+	it('never writes to an order with a queued delete (a void before the ack)', async () => {
+		const d = deps({ customer: { remoteId: 91 }, queuedDelete: true });
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('dropped');
+		expect(d.stamps).toEqual([]);
+		expect(d.drops).toEqual([ORDER]);
+	});
+
+	it.each(['cancelled', 'trash'])('never writes to a %s order', async (status) => {
+		const d = deps({
+			customer: { remoteId: 91 },
+			order: { status, customer_id: 0, billing: BILLING },
+		});
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('dropped');
+		expect(d.stamps).toEqual([]);
 	});
 
 	it("leaves another scope's link alone", async () => {
