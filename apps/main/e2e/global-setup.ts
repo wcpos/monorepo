@@ -16,6 +16,7 @@ import {
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
 import { restoreLocalStorage } from './indexeddb-helpers';
+import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
@@ -183,10 +184,7 @@ async function reuseValidAuthState(
 
 	const browser = await chromium.launch();
 	try {
-		const context = await browser.newContext({
-			baseURL,
-			viewport: { width: 1280, height: 720 },
-		});
+		const context = await newSetupContext(browser, baseURL);
 		if (shouldStubCrossOriginStoreRequests(storeUrl, baseURL)) {
 			await stubCrossOriginStoreDiscovery(context, storeUrl);
 		}
@@ -313,10 +311,7 @@ async function setupVariant(
 
 	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
-	const context = await browser.newContext({
-		baseURL,
-		viewport: { width: 1280, height: 720 },
-	});
+	const context = await newSetupContext(browser, baseURL);
 
 	// In CI preview deployments, app origin differs from dev-* store origins.
 	// Product-image attachment fetches then fail CORS and spam errors. For auth

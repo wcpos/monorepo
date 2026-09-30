@@ -1484,7 +1484,11 @@ test('e2e-web-mini runs the suite against the mini store in parallel, never gati
 	assert.ok(mini, 'deploy.yml is missing the e2e-web-mini job');
 	assert.deepEqual(mini.needs, ['changes', 'deploy']);
 	assert.equal(mini['continue-on-error'], true);
-	assert.equal(mini.if, `${e2e.if} && needs.changes.outputs.lane == 'next'`);
+	const prefix = "!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && ";
+	const condition = e2e.if.replace(/^\$\{\{ /, '').replace(/ \}\}$/, '');
+	assert.ok(condition.startsWith(prefix));
+	const eligibility = condition.slice(prefix.length);
+	assert.equal(mini.if, `${eligibility} && needs.changes.outputs.lane == 'next'`);
 	assert.deepEqual(mini.strategy, e2e.strategy);
 	assert.equal(mini['runs-on'], 'ubuntu-latest');
 	assert.equal(mini['timeout-minutes'], 60);
@@ -1527,7 +1531,10 @@ test('e2e-web-mini runs the suite against the mini store in parallel, never gati
 		E2E_CASHIER_PASS: '${{ secrets.E2E_MINI_CASHIER_PASS }}',
 		E2E_PRODUCT_WRITER_USER: '${{ secrets.E2E_MINI_PRODUCT_WRITER_USER }}',
 		E2E_PRODUCT_WRITER_PASS: '${{ secrets.E2E_MINI_PRODUCT_WRITER_PASS }}',
+		E2E_ALLOW_LOCAL_NETWORK: '1',
 	});
+	// Only the tailnet store is a local address to Chrome; dev-next keeps the check.
+	assert.equal(originalRun.env.E2E_ALLOW_LOCAL_NETWORK, undefined);
 
 	const artifacts = steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
 	assert.deepEqual(artifacts.map((step) => step.with.name), [
