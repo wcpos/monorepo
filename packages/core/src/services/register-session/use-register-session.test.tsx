@@ -166,6 +166,21 @@ beforeEach(() => {
 	entries = [movement];
 });
 
+it('reports not loaded until the combined query first emits, so an open register never reads as closed', async () => {
+	const { result } = renderHook(() => useRegisterSession());
+	expect(result.current.session).toBeNull();
+	expect(result.current.loaded).toBe(false);
+	await waitFor(() => expect(result.current.loaded).toBe(true));
+	expect(result.current.session?.id).toBe('session');
+});
+
+it('reports loaded with no session for a closed register', async () => {
+	active = [];
+	const { result } = renderHook(() => useRegisterSession());
+	await waitFor(() => expect(result.current.loaded).toBe(true));
+	expect(result.current.session).toBeNull();
+});
+
 it('derives expected locally while a movement is still on its way to the server', async () => {
 	const result = await settled();
 	expect(result.current.expected.cash).toBe('120.0000');
