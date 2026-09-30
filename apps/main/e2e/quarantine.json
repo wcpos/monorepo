@@ -15,6 +15,12 @@
 		},
 		{
 			"project": "pro-authenticated",
+			"file": "checkout-device.spec.ts",
+			"title": "POS device capture with the simulated driver (live store) › tip",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
 			"file": "checkout-tender.spec.ts",
 			"title": "POS two-pane checkout (live store) › cancels mid-split, listing the cash to return, and voids the leg",
 			"group": "G2"
@@ -29,6 +35,12 @@
 			"project": "pro-authenticated",
 			"file": "checkout-terminal.spec.ts",
 			"title": "POS terminal (server capture-mode) checkout (live store) › cancel is a request; a late capture wins",
+			"group": "G2"
+		},
+		{
+			"project": "free-unauthenticated",
+			"file": "host-blocked-errors.spec.ts",
+			"title": "HOST151 blocks an authenticated echo replayed from shared cache",
 			"group": "G2"
 		},
 		{
@@ -47,12 +59,6 @@
 			"project": "pro-authenticated",
 			"file": "pos-coupon-apply.spec.ts",
 			"title": "POS Cart - coupon application parity (live store — store 24128) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G2"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
 			"group": "G2"
 		},
 		{
@@ -116,6 +122,24 @@
 			"group": "G2"
 		},
 		{
+			"project": "pro-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should show popover button on variable products instead of add-to-cart",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "products-page.spec.ts",
+			"title": "Products Page (Pro) › modal edit pushes a sparse payload even when the store serves poisoned fields",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "products-page.spec.ts",
+			"title": "Products Page (Pro) › should rename a product via the edit modal and push the change to the server",
+			"group": "G2"
+		},
+		{
 			"project": "free-authenticated",
 			"file": "products.spec.ts",
 			"title": "Products in POS › should add product to cart in table view",
@@ -134,10 +158,22 @@
 			"group": "G2"
 		},
 		{
-			"project": "free-unauthenticated",
-			"file": "rest-route-transport.spec.ts",
-			"title": "connects and finds an owned product through query-form REST when path routes are blocked",
+			"project": "free-authenticated",
+			"file": "update-required.spec.ts",
+			"title": "the gate refusal renders the blocking update screen and sync goes quiet",
 			"group": "G2"
+		},
+		{
+			"project": "pro-unauthenticated",
+			"file": "auth.spec.ts",
+			"title": "Connect Screen › should connect to store and show site card",
+			"group": "G3"
+		},
+		{
+			"project": "pro-unauthenticated",
+			"file": "auth.spec.ts",
+			"title": "Connect Screen › should show add user button after store discovery",
+			"group": "G3"
 		},
 		{
 			"project": "free-unauthenticated",
@@ -161,6 +197,12 @@
 			"project": "pro-authenticated",
 			"file": "pos-coupon-apply.spec.ts",
 			"title": "POS Cart - coupon application parity (live store — store 24129) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
 			"group": "G3"
 		},
 		{
@@ -196,6 +238,12 @@
 		{
 			"project": "free-authenticated",
 			"file": "reports-closures.spec.ts",
+			"title": "tablet › Free › locks historical dates without issuing a closures request",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
 			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
 			"group": "G3"
 		},
@@ -203,6 +251,24 @@
 			"project": "pro-authenticated",
 			"file": "reports-closures.spec.ts",
 			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › Free › locks historical dates without issuing a closures request",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "free-unauthenticated",
+			"file": "rest-route-transport.spec.ts",
+			"title": "connects and finds an owned product through query-form REST when path routes are blocked",
 			"group": "G3"
 		},
 		{
@@ -246,24 +312,6 @@
 			"file": "search-walk.spec.ts",
 			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
 			"group": "G4"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › Free › locks historical dates without issuing a closures request",
-			"group": "G5"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › Free › locks historical dates without issuing a closures request",
-			"group": "G5"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G5"
 		},
 		{
 			"project": "free-authenticated",
