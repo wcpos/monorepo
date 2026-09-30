@@ -21,6 +21,7 @@ import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { SaleCompletionBridge } from '@wcpos/core/screens/main/pos/checkout/completion-journal-bridge';
+import { NewCustomerLinkBridge } from '@wcpos/core/screens/main/pos/cart/new-customer-link-bridge';
 import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
@@ -195,6 +196,10 @@ function AppStack() {
 				<StripeTerminalDriverRegistration key={`${wpApiUrl}:${storeID}:${cashierID}`} />
 				<TerminalPaymentsBridge />
 				<SaleCompletionBridge />
+				{/* A customer created from the cart offline is attached as a guest with
+				    their addresses; its Woo id is stamped onto the order whenever the
+				    create is acknowledged, which can be after a relaunch (#1523). */}
+				<NewCustomerLinkBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products
