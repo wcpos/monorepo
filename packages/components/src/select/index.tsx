@@ -22,6 +22,7 @@ import { Text } from '../text';
 import { webTestID } from '../lib/test-id';
 import { cn } from '../lib/utils';
 
+import type { OverlayScrimProps } from '../lib/overlay';
 import type { ButtonProps } from '../button';
 import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';
 
@@ -184,7 +185,7 @@ function SelectSingleContent({
 			presentation={phone ? 'bottom' : 'anchored'}
 			onDismiss={phone ? () => onOpenChange(false) : undefined}
 			open={open}
-			Scrim={SelectPrimitive.Overlay}
+			Scrim={SelectScrim}
 			testID={props.testID}
 		>
 			{phone ? (
@@ -231,6 +232,18 @@ function SelectSingleContent({
 	) : (
 		<SelectPrimitive.Portal hostName={portalHost}>{shell}</SelectPrimitive.Portal>
 	);
+}
+
+/**
+ * The primitive's WEB Overlay renders its Pressable with no children and emits `children`
+ * as a sibling (Radix positions the anchored content itself), so the phone sheet fell out
+ * of the scrim's `justify-end` box and rendered after the app root: a dimmed screen with the
+ * sheet below the fold, on every single select at phone width on web. The scrim here is the
+ * plain Pressable the primitive would render, with its children kept inside it; native keeps
+ * the primitive's Overlay (the shell renders that scrim childless by design).
+ */
+function SelectScrim(p: OverlayScrimProps) {
+	return Platform.OS === 'web' ? <Pressable {...p} /> : <SelectPrimitive.Overlay {...p} />;
 }
 
 function SelectContent({
