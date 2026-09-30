@@ -10,6 +10,7 @@ import {
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import {
+	checkoutControl,
 	expectMoneyMatches,
 	expectTaxParity,
 	openCheckout,
@@ -188,8 +189,8 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
 		await addOrderProbeProduct(page);
 		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
-		const { uuid } = await openCheckout(page);
-		await page.getByTestId('cancel-checkout-button').click();
+		const { uuid, surface } = await openCheckout(page);
+		await checkoutControl(page, surface, 'close').click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 
 		const screen = await navigateToOrders(page);
