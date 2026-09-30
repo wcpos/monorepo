@@ -288,11 +288,13 @@ export function calculateOrderTotals(
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
 
-	// WC stores cart_tax and shipping_tax at full precision (array_sum of per-rate
-	// taxes), but rounds total_tax to dp. Match that behavior.
-	const roundedCartTax = fullPrecisionCartTax;
-	const roundedShippingTax = fullPrecisionShippingTax;
-	const roundedTotalTax = roundTaxTotal(roundedCartTax + roundedShippingTax, dp, pricesIncludeTax);
+	// WC set_cart_tax / set_shipping_tax snap summed taxes to rounding precision before
+	// set_total_tax / set_total consume them. set_total_tax uses HALF_UP even for inclusive prices.
+	const roundedCartTax = roundHalfUp(fullPrecisionCartTax, getRoundingPrecision(dp));
+	const roundedShippingTax = roundHalfUp(fullPrecisionShippingTax, getRoundingPrecision(dp));
+	const roundedTotalTax = taxRoundAtSubtotal
+		? roundHalfUp(roundedCartTax + roundedShippingTax, dp)
+		: roundTaxTotal(roundedCartTax + roundedShippingTax, dp, pricesIncludeTax);
 
 	return {
 		/**
@@ -301,10 +303,8 @@ export function calculateOrderTotals(
 		discount_total: String(roundHalfUp(discount_total, dp)),
 		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
-		shipping_tax: String(
-			roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, getRoundingPrecision(dp))
-		),
-		cart_tax: String(roundTaxTotal(roundedCartTax, dp, pricesIncludeTax, getRoundingPrecision(dp))),
+		shipping_tax: String(roundedShippingTax),
+		cart_tax: String(roundedCartTax),
 		// WC: `set_total( round( $cart_total + $fees_total + $shipping_total
 		// + $this->get_cart_tax() + $this->get_shipping_tax(), $price_decimals ) )`.
 		// The tax summands are the FULL-PRECISION props, not the display-rounded

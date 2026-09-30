@@ -627,6 +627,145 @@ describe('coupon line calculations', () => {
  * integration testing against WooCommerce servers.
  */
 describe('calculateOrderTotals — parity regressions', () => {
+	describe('round-tax-at-subtotal: stacked non-compound rates (#2333 A)', () => {
+		const order = {
+			lineItems: [
+				{
+					subtotal: '3.000000',
+					total: '3.000000',
+					subtotal_tax: '0.165000',
+					total_tax: '0.165000',
+					taxes: [
+						{ id: 3, subtotal: '0.015000', total: '0.015000' },
+						{ id: 7, subtotal: '0.150000', total: '0.150000' },
+					],
+				},
+			],
+			taxRates: [
+				{ id: 3, name: 'County', rate: '0.5', compound: false, priority: 1 },
+				{ id: 7, name: 'State', rate: '5', compound: false, priority: 2 },
+			],
+			taxRoundAtSubtotal: true,
+			pricesIncludeTax: false,
+			dp: 2,
+		};
+
+		it('snaps stacked taxes before rounding an exclusive $3 line', () => {
+			const result = calculateOrderTotals(order);
+
+			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.165' });
+		});
+
+		it('snaps stacked taxes after a fixed_cart $5 coupon on an $8 line', () => {
+			// Coupon allocation is already reflected in the line's subtotal and total.
+			const result = calculateOrderTotals({
+				...order,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						subtotal: '8.000000',
+						subtotal_tax: '0.440000',
+						taxes: [
+							{ id: 3, subtotal: '0.040000', total: '0.015000' },
+							{ id: 7, subtotal: '0.400000', total: '0.150000' },
+						],
+					},
+				],
+				couponLines: [{ code: 'fixed-cart-5', discount: '5' }],
+			});
+
+			expect(result).toMatchObject({
+				total_tax: '0.17',
+				total: '3.17',
+				cart_tax: '0.165',
+				discount_total: '5',
+			});
+		});
+
+		it('preserves per-rate cents with round-at-subtotal OFF', () => {
+			const result = calculateOrderTotals({
+				...order,
+				taxRoundAtSubtotal: false,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						subtotal_tax: '0.17',
+						total_tax: '0.17',
+						taxes: [
+							{ id: 3, subtotal: '0.02', total: '0.02' },
+							{ id: 7, subtotal: '0.15', total: '0.15' },
+						],
+					},
+				],
+			});
+
+			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.17' });
+		});
+
+		it('preserves a single 5.5% rate with round-at-subtotal ON', () => {
+			const result = calculateOrderTotals({
+				...order,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						taxes: [{ id: 3, subtotal: '0.165000', total: '0.165000' }],
+					},
+				],
+				taxRates: [{ id: 3, name: 'Sales tax', rate: '5.5', compound: false }],
+			});
+
+			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.165' });
+		});
+
+		it('rounds inclusive total_tax HALF_UP at a subtotal midpoint (#2333 C)', () => {
+			const result = calculateOrderTotals({
+				...order,
+				pricesIncludeTax: true,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						taxes: [
+							{ id: 3, subtotal: '0.005000', total: '0.005000' },
+							{ id: 7, subtotal: '0.160000', total: '0.160000' },
+						],
+					},
+				],
+			});
+
+			// WC set_total_tax uses NumberUtil::round regardless of prices_include_tax.
+			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.165' });
+		});
+	});
+
+	it('money oracle scenario is unchanged (#2333 A)', () => {
+		// GBP scenario from sync-core/contracts/write-contract/fixtures/order-money-oracle.json.
+		const result = calculateOrderTotals({
+			lineItems: [
+				{
+					quantity: 3,
+					price: 9.99,
+					subtotal: '29.97',
+					total: '29.97',
+					subtotal_tax: '6.71328',
+					total_tax: '6.71328',
+					taxes: [
+						{ id: 1, subtotal: '5.994', total: '5.994' },
+						{ id: 2, subtotal: '0.71928', total: '0.71928' },
+					],
+				},
+			],
+			taxRates: [
+				{ id: 1, name: 'VAT', rate: '20.0000', compound: false },
+				{ id: 2, name: 'Surcharge', rate: '2.0000', compound: true },
+			],
+			taxRoundAtSubtotal: true,
+			pricesIncludeTax: false,
+			dp: 2,
+		});
+
+		expect(result).toMatchObject({ cart_tax: '6.71328', total_tax: '6.71', total: '36.68' });
+	});
+
 	describe('tax line storage precision', () => {
 		it.each([
 			{ taxRoundAtSubtotal: true, expected: '1.636364' },
