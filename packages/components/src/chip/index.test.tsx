@@ -95,6 +95,18 @@ it('stops native clear propagation before clearing', () => {
 	expect(onPress).not.toHaveBeenCalled();
 	expect(outer).not.toHaveBeenCalled();
 });
+it('clear keeps its pointerdown off a trigger listening on the chip root', () => {
+	// A web Select trigger (`asChild`) puts this on the chip root and opens its menu from a mouse
+	// pointerdown; stopping the press alone never reached it.
+	const onPointerDown = jest.fn();
+	const trigger = { onPointerDown } as object;
+	render(<Chip label="Menu" testID="chip" onClear={jest.fn()} {...trigger} />);
+	fireEvent.pointerDown(screen.getByTestId('chip-clear'));
+	expect(onPointerDown).not.toHaveBeenCalled();
+	// The label still reaches the trigger, so the pill opens its menu.
+	fireEvent.pointerDown(screen.getByTestId('chip-label'));
+	expect(onPointerDown).toHaveBeenCalledTimes(1);
+});
 it('honors a custom clear name and identifier', () => {
 	render(
 		<Chip label="Menu" onClear={jest.fn()} clearLabel="Clear menu" clearTestID="clear-menu" />
