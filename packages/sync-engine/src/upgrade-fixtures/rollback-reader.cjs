@@ -2,8 +2,8 @@
  * Child process for `rxdb-rollback.test.ts` (#2292): runs ANOTHER rxdb / rxdb-premium install.
  *   node rollback-reader.cjs <otherPackageJson> <kind> <dir> <schemas.json> <expected.json> [read|write]
  * read (default): reopen the test's database, check every expected row, run the indexed find,
- * claim one queue row (patch) and ack another (bulkRemove). write: create it with the expected
- * rows. Schemas come only from schemas.json. Prints one JSON line
+ * claim one queue row (patch) and ack another (bulkRemove). write: insert `inserted`, then patch
+ * each `patches` row (#2296). Schemas come only from schemas.json. Prints one JSON line
  * `{ ok, rxdbVersion, rows, problems }` and exits 1 on any problem.
  */
 'use strict';
@@ -74,11 +74,17 @@ async function main() {
 		const db = await openDatabase();
 		try {
 			if (mode === 'read') await verifyAndWrite(db, report.problems, report.rows);
-			else
+			else {
 				for (const name of NAMES) {
-					for (const row of expected[name]) await db.collections[name].insert(row);
-					report.rows[name] = expected[name].length;
+					for (const row of expected.inserted[name]) await db.collections[name].insert(row);
+					report.rows[name] = expected.inserted[name].length;
 				}
+				for (const [id, patch] of expected.patches) {
+					const doc = await db.recordMutations.findOne(id).exec();
+					if (!doc) report.problems.push(`patch row ${id} missing`);
+					else await doc.patch(patch);
+				}
+			}
 		} finally {
 			await db.close();
 		}

@@ -1,7 +1,8 @@
 // @vitest-environment node
 /**
  * Rollback check across two rxdb installs (#2292): each direction writes orders + queue rows
- * (REAL schemas) under one version, reopens, verifies, queries, claims and acks under the other
+ * (REAL schemas) under one version by one insert-then-patch plan (INSERTED, PATCHES; #2296),
+ * reopens, verifies, queries, claims and acks under the other
  * (a child process, `rollback-reader.cjs`), then reopens under the installed one. Developer-run:
  * WCPOS_RXDB_OTHER_INSTALL = another worktree's package.json with a DIFFERENT rxdb installed.
  */
@@ -83,6 +84,12 @@ const WRITTEN = {
 	orders: [order(1, 'completed'), order(2, 'processing'), order(3, 'completed')],
 	recordMutations: [queued(1), queued(2, BACKOFF), queued(3, LEASE)],
 };
+/** How both directions write WRITTEN: insert without bookkeeping, then patch it in (a changelog). */
+const INSERTED = { orders: WRITTEN.orders, recordMutations: [queued(1), queued(2), queued(3)] };
+const PATCHES: [string, Json][] = [
+	['m-2', BACKOFF],
+	['m-3', LEASE],
+];
 /** After the claim of m-1 and the ack (removal) of m-3. */
 const AFTER = {
 	orders: WRITTEN.orders,
@@ -143,7 +150,8 @@ function runReader(kind: Kind, work: string, mode: 'read' | 'write'): Report {
 	const recordMutations = recordMutationQueueSchema;
 	const schemaFile = { databaseName: NAME, orders: orderSchema, recordMutations, queueMigrations };
 	writeFileSync(schemas, JSON.stringify(schemaFile));
-	writeFileSync(expected, JSON.stringify({ ...WRITTEN, claim: CLAIM, ack: ACK, query: QUERY }));
+	const plan = { inserted: INSERTED, patches: PATCHES, claim: CLAIM, ack: ACK, query: QUERY };
+	writeFileSync(expected, JSON.stringify({ ...WRITTEN, ...plan }));
 	const args = [READER, OTHER!, kind, join(work, 'db'), schemas, expected, mode];
 	try {
 		const out = execFileSync(process.execPath, args, { encoding: 'utf8', stdio: 'pipe' });
@@ -168,11 +176,11 @@ describeRollback(`rxdb rollback across two installs${OTHER ? '' : ` (${REASON})`
 		describe('installed version writes, other install reopens', () => {
 			it('the other install reads, claims and acks; the installed version sees it', async () => {
 				const written = await withDatabase(kind, work, async (db) => {
-					for (const row of WRITTEN.orders) await db.orders.insert(row);
+					for (const row of INSERTED.orders) await db.orders.insert(row);
 					// Insert then patch: the bookkeeping lands as later writes (a non-empty changelog).
-					for (const n of [1, 2, 3]) await db.recordMutations.insert(queued(n));
-					await (await db.recordMutations.findOne('m-2').exec())!.patch(BACKOFF);
-					await (await db.recordMutations.findOne('m-3').exec())!.patch(LEASE);
+					for (const row of INSERTED.recordMutations) await db.recordMutations.insert(row);
+					for (const [id, patch] of PATCHES)
+						await (await db.recordMutations.findOne(id).exec())!.patch(patch);
 					return contents(db);
 				});
 				expect(written).toEqual(WRITTEN);
