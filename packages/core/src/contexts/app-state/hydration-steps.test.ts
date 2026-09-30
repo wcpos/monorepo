@@ -1236,8 +1236,8 @@ describe('testAuthorizationMethod', () => {
 
 	it('classifies web preflight blocking when an unheadered echo remains readable', async () => {
 		fetchMock
-			.mockRejectedValueOnce(new Error('path CORS failure'))
-			.mockRejectedValueOnce(new Error('query CORS failure'))
+			.mockRejectedValueOnce(new TypeError('path CORS failure'))
+			.mockRejectedValueOnce(new TypeError('query CORS failure'))
 			.mockResolvedValueOnce({ status: 200 })
 			.mockResolvedValueOnce({ ok: true, status: 200 });
 
@@ -1248,6 +1248,76 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(fetchMock.mock.calls[3][1]).toMatchObject({ cache: 'no-store' });
 		expect(fetchMock.mock.calls[3][1]).not.toHaveProperty('headers');
+	});
+
+	it('treats web echo probe timeouts as a slow store when the simple echo succeeds', async () => {
+		jest.useFakeTimers();
+		try {
+			const waitForAbort = (_input: unknown, init: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init.signal!.addEventListener('abort', () => {
+						reject(new DOMException('The operation was aborted', 'AbortError'));
+					});
+				});
+			fetchMock
+				.mockImplementationOnce(waitForAbort)
+				.mockImplementationOnce(waitForAbort)
+				.mockResolvedValueOnce({ ok: true, status: 200 })
+				.mockResolvedValueOnce({ ok: true, status: 200 });
+
+			const authorization = testAuthorizationMethod(
+				'https://example.com/wp-json/wcpos/v2/',
+				'token'
+			);
+			await jest.advanceTimersByTimeAsync(6000);
+
+			await expect(authorization).resolves.toEqual({ ok: false, code: null, timedOut: true });
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+			expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+			expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(true);
+			expect(mockAppLogger.warn).toHaveBeenCalledTimes(1);
+			expect(mockAppLogger.warn).toHaveBeenCalledWith(
+				'Authorization probes timed out — store too slow to answer',
+				{ context: { wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/' } }
+			);
+			expect(mockAppLogger.error).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('classifies a path timeout with a fast query failure as preflight blocking', async () => {
+		jest.useFakeTimers();
+		try {
+			fetchMock
+				.mockImplementationOnce(
+					(_input: unknown, init: RequestInit) =>
+						new Promise<Response>((_resolve, reject) => {
+							init.signal!.addEventListener('abort', () => {
+								reject(new DOMException('The operation was aborted', 'AbortError'));
+							});
+						})
+				)
+				.mockRejectedValueOnce(new TypeError('query CORS failure'))
+				.mockResolvedValueOnce({ ok: true, status: 200 })
+				.mockResolvedValueOnce({ ok: true, status: 200 });
+
+			const authorization = testAuthorizationMethod(
+				'https://example.com/wp-json/wcpos/v2/',
+				'token'
+			);
+			await jest.advanceTimersByTimeAsync(3000);
+
+			await expect(authorization).resolves.toEqual({
+				ok: false,
+				code: ERROR_CODES.CORS_PREFLIGHT_BLOCKED,
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(4);
+			expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+			expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it('does not classify a readable simple-echo error as preflight blocking', async () => {

@@ -105,6 +105,22 @@ describe('useSiteConnect', () => {
 		expect(result.current.errorCode).toBeNull();
 	});
 
+	it.each([
+		[{ ok: false, code: null, timedOut: true }, 'auth.site_took_too_long_to_respond'],
+		[{ ok: false, code: null }, 'auth.failed_to_test_authorization_methods'],
+	] as const)('uses the translated %s connect error: %s', async (authResult, messageKey) => {
+		mockTestAuthorizationMethod.mockResolvedValue(authResult);
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			await result.current.onConnect('https://example.com');
+		});
+
+		expect(result.current.error).toBe(mockT(messageKey));
+		expect(result.current.errorCode).toBeNull();
+		expect(result.current.status).toBe('error');
+	});
+
 	it('exposes a blocking shared-cache replay with the generic translated host message', async () => {
 		mockTestAuthorizationMethod.mockResolvedValue({
 			ok: true,

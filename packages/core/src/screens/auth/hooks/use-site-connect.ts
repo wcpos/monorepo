@@ -315,6 +315,9 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 							errorCode: authResult.code,
 						});
 					}
+					if (!authResult.code && authResult.timedOut) {
+						throw new Error(t('auth.site_took_too_long_to_respond'));
+					}
 					throw new Error(t('auth.failed_to_test_authorization_methods'));
 				}
 				const compatibility = await runConnectCompatibilityProbes({

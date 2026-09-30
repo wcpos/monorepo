@@ -56,7 +56,8 @@ const PROBE_BODY_SNIPPET_LENGTH = 2048;
 async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
 	init: Parameters<typeof fetch>[1] = {},
-	timeoutMs = AUTH_TEST_TIMEOUT_MS
+	timeoutMs = AUTH_TEST_TIMEOUT_MS,
+	timeoutState?: { timedOut: boolean }
 ): Promise<{ response: Response; data: unknown; text: string } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
@@ -86,6 +87,7 @@ async function fetchJsonWithTimeout(
 					: '';
 		return { response, data, text };
 	} catch {
+		if (timeoutState) timeoutState.timedOut = controller.signal.aborted;
 		return null;
 	} finally {
 		clearTimeout(timeout);
@@ -248,7 +250,7 @@ export type AuthTransportResolution =
 			useRestRouteParam: boolean;
 			useProtocolHeaders: boolean;
 	  }
-	| { ok: false; code: ErrorCode | null };
+	| { ok: false; code: ErrorCode | null; timedOut?: true };
 
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
@@ -280,7 +282,8 @@ const ECHO_PROBE_SENT_HEADERS: readonly string[] = [
 async function probeHeaderEcho(
 	echoUrl: string,
 	accessToken: string,
-	wcposVersion?: string
+	wcposVersion?: string,
+	timeoutState?: { timedOut: boolean }
 ): Promise<EchoProbeVerdict> {
 	try {
 		const prepared = buildRequestPreamble(
@@ -305,7 +308,8 @@ async function probeHeaderEcho(
 		const result = await fetchJsonWithTimeout(
 			prepared.url,
 			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
-			AUTH_PROBE_TIMEOUT_MS
+			AUTH_PROBE_TIMEOUT_MS,
+			timeoutState
 		);
 
 		if (!result) return null;
@@ -371,6 +375,7 @@ interface HostBlockEvidence {
 	queryOnly: boolean;
 	pathEcho?: EchoProbeVerdict;
 	queryEcho?: EchoProbeVerdict;
+	echoesTimedOut?: boolean;
 	legacyHeaderStatus?: number;
 	legacyParamStatus?: number;
 	credentialChannels?: boolean;
@@ -396,6 +401,7 @@ const echoesNetworkDead = (evidence: HostBlockEvidence) =>
  * discriminator (research finding d9 — reachable-vs-hostile) found nothing
  * alive. That is a store-offline shape, owned by the online-status UX — a
  * host-blocked toast there would mislabel every outage as a hosting problem.
+ * Our own echo timeouts on web also mean "not provably hostile" (#2328).
  */
 function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 	const answered = [evidence.pathEcho, evidence.queryEcho].filter(isAnsweredEcho);
@@ -414,6 +420,7 @@ function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 		return null;
 	}
 	if (evidence.platform === 'web' && echoesNetworkDead(evidence)) {
+		if (evidence.echoesTimedOut) return null;
 		if (evidence.simpleEchoSucceeded) return ERROR_CODES.CORS_PREFLIGHT_BLOCKED;
 		if (evidence.pingResolved === false && evidence.noCorsPingResolved) {
 			return ERROR_CODES.CORS_MISCONFIGURED;
@@ -527,6 +534,12 @@ async function finishHostBlock(
 	}
 	const code = classifyHostBlock(evidence);
 	if (code === null) {
+		if (evidence.echoesTimedOut) {
+			appLogger.warn('Authorization probes timed out — store too slow to answer', {
+				context: { wcposApiUrl },
+			});
+			return { ok: false, code: null, timedOut: true };
+		}
 		appLogger.warn('Authorization probes unreachable — store appears offline', {
 			context: { wcposApiUrl },
 		});
@@ -560,9 +573,11 @@ export async function testAuthorizationMethod(
 		const queryEchoUrl = toRestRouteUrl(pathEchoUrl, pathRoot);
 		let echo: HeaderEchoResult | null = null;
 		let useRestRouteParam = queryOnly;
+		const pathTimeout = { timedOut: false };
+		const queryTimeout = { timedOut: false };
 		let pathEcho: EchoProbeVerdict | undefined;
 		if (!queryOnly) {
-			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion);
+			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion, pathTimeout);
 			if (pathEcho && !isAnsweredEcho(pathEcho)) {
 				echo = pathEcho;
 			}
@@ -584,7 +599,7 @@ export async function testAuthorizationMethod(
 				pathEcho === null);
 		let queryEcho: EchoProbeVerdict | undefined;
 		if (pathTriggersQuery) {
-			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion);
+			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion, queryTimeout);
 			if (queryEcho && !isAnsweredEcho(queryEcho)) {
 				echo = queryEcho;
 				useRestRouteParam = true;
@@ -595,6 +610,10 @@ export async function testAuthorizationMethod(
 			queryOnly,
 			pathEcho,
 			queryEcho,
+			echoesTimedOut:
+				(pathEcho === null || queryEcho === null) &&
+				(pathEcho !== null || pathTimeout.timedOut) &&
+				(queryEcho !== null || queryTimeout.timedOut),
 		};
 		const pingUrl = pingProbeUrl(pathRoot);
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;

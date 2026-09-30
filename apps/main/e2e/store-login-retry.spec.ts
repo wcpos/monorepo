@@ -5,6 +5,9 @@ test('store-outage signatures are retryable', () => {
 	expect(
 		isStoreUnreachable('Authorization probes unreachable — store appears offline (0/2 responded)')
 	).toBe(true);
+	expect(isStoreUnreachable('Authorization probes timed out — store too slow to answer')).toBe(
+		true
+	);
 	expect(isStoreUnreachable('warning: [SYNC121] request timed out (status 0)')).toBe(true);
 	expect(isStoreUnreachable('error: Failed to test authorization methods')).toBe(true);
 });

@@ -7,6 +7,8 @@
 // and must fail at once.
 const STORE_UNREACHABLE_SIGNATURES = [
 	'store appears offline',
+	// #2328: slow authorization probes remain a retryable store outage.
+	'Authorization probes timed out',
 	'SYNC121',
 	'Failed to test authorization methods',
 ];
