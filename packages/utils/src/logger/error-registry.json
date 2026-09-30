@@ -1345,15 +1345,15 @@
 		"symbol": "MULTI_TAB_LIMITED",
 		"domain": "CLIENT",
 		"severity": "warn",
-		"actionHint": "Historical notice — no action is needed.",
+		"actionHint": "Nothing to do — one tab syncs for all.",
 		"retryPolicy": "never",
 		"dataSafety": "no-impact",
 		"escalation": "none",
-		"summary": "Historical multi-tab syncing notice (1.10.x).",
-		"docsBody": "Retired on 2.0 SQLite. In the 1.10.x filesystem era, tabs shared local data and one tab sent changes for all of them. SQLite uses one live tab per origin instead.",
+		"summary": "This browser lets only one tab send changes at a time.",
+		"docsBody": "You can keep using every tab — they all share the same local data. One tab quietly handles the syncing for all of them.",
 		"troubleshooting": [
-			"For a 1.10.x log, no action was needed: one tab synced the shared local data.",
-			"On 2.0, use the live-tab takeover screen to move the active POS tab."
+			"Keep using every tab normally — they share the same local data, and one tab quietly syncs on behalf of the rest.",
+			"This browser (or a private window) lacks the tab-coordination feature the POS prefers, so it falls back to a single syncing tab. No fix is needed."
 		],
 		"logSources": [],
 		"evidence": "Retired on 2.0 by monorepo#2242; retained for published CLIENT121 documentation and 1.10.x log decoding.",
