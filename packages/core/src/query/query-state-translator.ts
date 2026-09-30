@@ -182,7 +182,8 @@ function mappedValue(mapping: FieldMapEntry, document: EngineDocument): unknown 
 
 function compileReadFilter(
 	entryValue: MappedFilterTranslator,
-	value: unknown
+	value: unknown,
+	salesStoreScope = false
 ): {
 	prefilter?: Record<string, unknown>;
 	complete?: boolean;
@@ -249,10 +250,23 @@ function compileReadFilter(
 		const identityFilter = identityColumnFilter({
 			storeId: String(value),
 		});
+		const posSelector = numeric ? identityFilter : { 'payload.created_via': value };
 		return {
-			prefilter: numeric ? identityFilter : { 'payload.created_via': value },
+			// The Sales room's store is the store's POS orders plus the site's non-POS orders (a
+			// missing `created_via` is non-POS); a register or cashier filter beside it still
+			// excludes them by its own predicate (roadmap#332 ruling A).
+			prefilter: salesStoreScope
+				? {
+						$or: [
+							posSelector,
+							{ 'payload.created_via': { $ne: 'woocommerce-pos' } },
+							{ 'payload.created_via': { $exists: false } },
+						],
+					}
+				: posSelector,
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
+				if (salesStoreScope && payload?.created_via !== 'woocommerce-pos') return true;
 				if (!numeric) return payload?.created_via === value;
 				const metadata = Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
 				return wooMetaCarrier.readIdentity(metadata).storeId === String(value);
@@ -331,12 +345,21 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	state: Omit<QueryStateOf<C>, 'limit'> & { limit?: number },
 	options: {
 		id: string;
+		storeScope?: 'pos' | 'sales';
 		targeted?: readonly unknown[];
 		searchFields?: string[];
 		/** A read-side predicate intentionally left outside QueryState. */
 		residual?: boolean;
 	}
-) {
+): {
+	collection: LegacyCollectionName;
+	demand: EngineRequirement[];
+	represented: boolean;
+	/** Omitted means exact; only a widened Sales demand proves subset completeness. */
+	coverage?: 'exact' | 'superset';
+	censusScoped: boolean;
+	read: CompiledQueryRead;
+} {
 	const legacyCollection = (
 		collection === 'tax-rates' ? 'taxes' : collection
 	) as LegacyCollectionName;
@@ -357,7 +380,13 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		return [{ field, value, translator }];
 	});
 	const targeted = options.targeted?.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
-	const readFilters = active.map(({ translator, value }) => compileReadFilter(translator, value));
+	const salesStoreScope =
+		collection === 'orders' &&
+		options.storeScope === 'sales' &&
+		!active.some(({ field }) => field === 'register');
+	const readFilters = active.map(({ translator, value }) =>
+		compileReadFilter(translator, value, salesStoreScope)
+	);
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
 		readFilters.push({
@@ -466,6 +495,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	if (demand.length > 0)
 		return { collection: legacyCollection, demand, represented: false, censusScoped, read };
 
+	let coverage: 'exact' | 'superset' = 'exact';
 	let represented =
 		!options.residual &&
 		active.every(({ translator }) => translator.mapping.wireFace !== 'local-only') &&
@@ -508,6 +538,11 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 				dimensions.registerId = String(value);
 				scoped = true;
 			} else if (field === 'store') {
+				if (salesStoreScope) {
+					coverage = 'superset';
+					represented = false;
+					continue;
+				}
 				const store = String(value);
 				if (/^\d+$/.test(store) || /^[a-z0-9_-]+$/.test(store)) {
 					dimensions.store = store;
@@ -631,5 +666,12 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		});
 		represented = false;
 	} else represented = false;
-	return { collection: legacyCollection, demand, represented, censusScoped, read };
+	return {
+		collection: legacyCollection,
+		demand,
+		represented,
+		...(coverage === 'superset' ? { coverage } : {}),
+		censusScoped,
+		read,
+	};
 }

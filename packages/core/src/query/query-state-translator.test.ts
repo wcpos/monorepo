@@ -1,5 +1,7 @@
-import { orderBrowserQueryKey } from '@wcpos/query/testing';
-import { engineCollectionNameFor } from '@wcpos/query/collection-map';
+import { Query } from 'mingo';
+
+import { engineOrder, orderBrowserQueryKey } from '@wcpos/query/testing';
+import { engineCollectionNameFor, type EngineDocument } from '@wcpos/query/collection-map';
 import { mintRemoteId } from '@wcpos/sync-core';
 import { engineCollectionCreators, engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
@@ -510,6 +512,115 @@ describe('query-state translator', () => {
 			compileQuery('orders', { ...base, filters: { store: 'checkout' } }, { id: 'orders' })
 				.demand[0]
 		).toMatchObject({ store: 'checkout' });
+	});
+
+	// These assertions catch widening only the residual, admitting foreign POS, or leaking store on wire.
+	describe('sales store scope', () => {
+		const base = {
+			search: '',
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		} as const;
+		const fixtures = [
+			engineOrder({
+				uuid: 'local',
+				created_via: 'woocommerce-pos',
+				meta_data: [{ key: '_pos_store', value: '12' }],
+			}),
+			engineOrder({
+				uuid: 'foreign',
+				created_via: 'woocommerce-pos',
+				meta_data: [{ key: '_pos_store', value: '13' }],
+			}),
+			engineOrder({ uuid: 'free', created_via: 'woocommerce-pos' }),
+			engineOrder({ uuid: 'checkout', created_via: 'checkout' }),
+			engineOrder({
+				uuid: 'admin',
+				created_via: 'admin',
+				meta_data: [{ key: '_pos_store', value: '13' }],
+			}),
+			engineOrder({ uuid: 'missing' }),
+		] as EngineDocument[];
+		it("storeScope sales widens a numeric store to the site's non-POS orders (prefilter and residual)", () => {
+			const { read } = compileQuery(
+				'orders',
+				{ ...base, filters: { store: '12' } },
+				{ id: 'sales', storeScope: 'sales' }
+			);
+			expect(read.complete).toBe(true);
+			expect(
+				fixtures.filter((row) => new Query(read.prefilter).test(row)).map((row) => row.uuid)
+			).toEqual(['local', 'checkout', 'admin', 'missing']);
+			expect(fixtures.filter(read.residual).map((row) => row.uuid)).toEqual([
+				'local',
+				'checkout',
+				'admin',
+				'missing',
+			]);
+		});
+		it('storeScope sales widens the woocommerce-pos sentinel the same way', () => {
+			const { read } = compileQuery(
+				'orders',
+				{ ...base, filters: { store: 'woocommerce-pos' } },
+				{ id: 'sales', storeScope: 'sales' }
+			);
+			expect(fixtures.every((row) => new Query(read.prefilter).test(row))).toBe(true);
+			expect(fixtures.every(read.residual)).toBe(true);
+		});
+		it("storeScope sales excludes another store's POS orders", () => {
+			const { read } = compileQuery(
+				'orders',
+				{ ...base, filters: { store: '12' } },
+				{ id: 'sales', storeScope: 'sales' }
+			);
+			expect(new Query(read.prefilter).test(fixtures[1])).toBe(false);
+			expect(read.residual(fixtures[1])).toBe(false);
+		});
+		it('storeScope sales with a register filter compiles as pos', () => {
+			for (const store of ['12', 'woocommerce-pos']) {
+				const state = { ...base, filters: { store, register: 'front' } };
+				const pos = compileQuery('orders', state, { id: 'same' });
+				const sales = compileQuery('orders', state, { id: 'same', storeScope: 'sales' });
+				expect(sales.demand).toEqual(pos.demand);
+				expect(sales.represented).toBe(pos.represented);
+				expect(sales.coverage ?? 'exact').toBe('exact');
+				expect(sales.read.prefilter).toEqual(pos.read.prefilter);
+				expect(fixtures.map(sales.read.residual)).toEqual(fixtures.map(pos.read.residual));
+			}
+		});
+		it('storeScope sales omits the store dimension from the orders-browse demand and reports represented false', () => {
+			const compiled = compileQuery(
+				'orders',
+				{
+					...base,
+					filters: {
+						store: '12',
+						cashier: '7',
+						status: 'completed',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
+					},
+				},
+				{ id: 'sales', storeScope: 'sales' }
+			);
+			expect(compiled.demand).toEqual([
+				{
+					id: 'sales:orders-browse',
+					collection: 'orders',
+					kind: 'orders-browse',
+					cashierId: 7,
+					status: 'completed',
+					afterSeconds: 1782864000,
+					beforeSeconds: 1783987200,
+					orderby: 'date',
+					order: 'desc',
+					limit: 'all',
+					priority: 700,
+				},
+			]);
+			expect(compiled.represented).toBe(false);
+			expect(compiled.coverage).toBe('superset');
+			expect(fixtures.filter(compiled.read.residual)).toEqual([]);
+		});
 	});
 
 	it('compiles order demand fields without a selector bridge', () => {

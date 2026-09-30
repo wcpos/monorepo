@@ -84,7 +84,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
-	const binding = useCollectionBinding('orders', state);
+	const binding = useCollectionBinding('orders', state, { storeScope: 'sales' });
 	const { comparisonFilter } = useReportsPeriod();
 	// The binding is compiled from the state object's identity: keep the comparison state stable
 	// across renders so the resource (and its Suspense) is rebuilt only when a bound changes.
@@ -96,7 +96,9 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		}),
 		[state, comparisonFrom, comparisonTo]
 	);
-	const comparisonBinding = useCollectionBinding('orders', comparisonState);
+	const comparisonBinding = useCollectionBinding('orders', comparisonState, {
+		storeScope: 'sales',
+	});
 	const {
 		search,
 		limit,

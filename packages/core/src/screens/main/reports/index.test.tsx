@@ -8,6 +8,7 @@ import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { compileQuery } from '../../../query/query-state-translator';
 import { ReportsScreen } from './index';
 
 import type { QueryStateOf } from '../../../query';
@@ -99,7 +100,10 @@ const mockBinding = {
 	total$: of(24),
 	sync: jest.fn(async () => undefined),
 };
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
+const mockUseCollectionBinding = jest.fn(
+	(_collection: unknown, _state: unknown, _options?: { storeScope?: 'pos' | 'sales' }) =>
+		mockBinding
+);
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
 let mockStoreID: number | undefined = 9;
@@ -108,8 +112,11 @@ jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionBinding: (
+			collection: unknown,
+			state: unknown,
+			options?: { storeScope?: 'pos' | 'sales' }
+		) => mockUseCollectionBinding(collection, state, options),
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -198,7 +205,9 @@ describe('ReportsScreen query-state wiring', () => {
 		render(<ReportsScreen />);
 
 		const today = new Date(2026, 6, 15, 12);
-		expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object));
+		expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object), {
+			storeScope: 'sales',
+		});
 		expect(latestState()).toEqual({
 			search: '',
 			filters: {
@@ -213,6 +222,38 @@ describe('ReportsScreen query-state wiring', () => {
 		});
 	});
 
+	it('the sales and comparison bindings are compiled with storeScope sales', () => {
+		render(<ReportsScreen />);
+		const calls = mockUseCollectionBinding.mock.calls
+			.filter(([collection]) => collection === 'orders')
+			.slice(-2);
+		expect(calls).toHaveLength(2);
+		for (const [, state, options] of calls) {
+			expect(options).toEqual({ storeScope: 'sales' });
+			const compiled = compileQuery('orders', state as QueryStateOf<'orders'>, {
+				id: 'report',
+				...options,
+			});
+			expect(compiled.represented).toBe(false);
+			expect(compiled.demand[0]).not.toHaveProperty('store');
+		}
+	});
+
+	it("Free's register-scoped state still compiles as pos", () => {
+		mockPro = false;
+		render(<ReportsScreen />);
+		for (const [, state, options] of mockUseCollectionBinding.mock.calls
+			.filter(([collection]) => collection === 'orders')
+			.slice(-2)) {
+			const queryState = state as QueryStateOf<'orders'>;
+			expect(queryState.filters.register).toBe('r');
+			const sales = compileQuery('orders', queryState, { id: 'report', ...options });
+			const pos = compileQuery('orders', queryState, { id: 'report' });
+			expect(sales.demand).toEqual(pos.demand);
+			expect(sales.read.prefilter).toEqual(pos.read.prefilter);
+			expect(sales.represented).toBe(true);
+		}
+	});
 	it('preserves the POS created-via fallback and valid persisted report sort', () => {
 		mockStoreID = undefined;
 		mockSortBy = 'status';
@@ -315,7 +356,9 @@ it('unmounts the Sales binding in Closures and remounts it only on returning to 
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('reports-back-sales'));
 	// The viewed-store directory can emit after mount; both renders use the Sales binding.
-	expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object));
+	expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object), {
+		storeScope: 'sales',
+	});
 });
 
 // Revert: remove the capability boundary before local report readers mount.
