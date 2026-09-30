@@ -3,7 +3,7 @@
  * GENERATOR for the rxdb 17.4.0 → 17.5.0 pending-orders fixture (PR #2253).
  *
  * The fixture must be WRITTEN by the real 17.4.0 code, never by hand: run this
- * in a worktree with rxdb + rxdb-premium 17.4.0 installed, with
+ * in a worktree (branch or detached) with rxdb + rxdb-premium 17.4.0 installed, with
  * WCPOS_GENERATE_UPGRADE_FIXTURE=1, then copy `rxdb-17.4.0-pending-orders/` into
  * the tree under test. Without the env var it is skipped. The reader is
  * `../rxdb-upgrade-pending-orders.test.ts`.
@@ -12,7 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -63,8 +63,21 @@ function headSha(): string {
 		? fs.readFileSync(dotGit, 'utf8').replace('gitdir:', '').trim()
 		: dotGit;
 	const head = fs.readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
-	if (!/^[0-9a-f]{40}$/.test(head)) throw new Error(`run on a detached HEAD, got ${head}`);
-	return head;
+	if (!head.startsWith('ref: ')) {
+		if (!/^[0-9a-f]{40}$/.test(head)) throw new Error(`unreadable HEAD ${head}`);
+		return head;
+	}
+	const ref = head.slice('ref: '.length);
+	// A linked worktree keeps its branch refs in the common git dir; packed ones in packed-refs.
+	const commonFile = join(gitDir, 'commondir');
+	const common = fs.existsSync(commonFile)
+		? resolve(gitDir, fs.readFileSync(commonFile, 'utf8').trim())
+		: gitDir;
+	if (fs.existsSync(join(common, ref))) return fs.readFileSync(join(common, ref), 'utf8').trim();
+	const packed = fs.readFileSync(join(common, 'packed-refs'), 'utf8').split('\n');
+	const line = packed.find((entry) => entry.endsWith(` ${ref}`));
+	if (!line) throw new Error(`cannot resolve ${ref}`);
+	return line.split(' ')[0];
 }
 
 /** A resident order, shaped as the write-path tests insert them. */
