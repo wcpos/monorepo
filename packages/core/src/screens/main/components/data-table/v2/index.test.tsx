@@ -15,7 +15,12 @@ it('fine headers fill their cells and sorting keeps the applied-sort marker', ()
 	const header = screen.getByTestId('data-table-header-name');
 	expect(header.style.flex).toBe('1 1 0%');
 	expect(header.style.alignSelf).toBe('stretch');
-	expect(screen.getByTestId('data-table-sort-name-asc')).toBeTruthy();
+	const sortRow = screen.getByTestId('data-table-sort-name-asc');
+	// A sortable label truncates inside its cell instead of overflowing the next column:
+	// the row is capped at the cell and the label may shrink (a non-sortable header's
+	// plain Text already does).
+	expect(sortRow.style.maxWidth).toBe('100%');
+	expect((sortRow.firstElementChild as HTMLElement).style.flexShrink).toBe('1');
 	fireEvent.click(header);
 	expect(setSort).toHaveBeenCalledWith('name', 'desc');
 	expect(patchUI).toHaveBeenCalledWith({ sortBy: 'name', sortDirection: 'desc' });
