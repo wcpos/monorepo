@@ -77,23 +77,67 @@ const params = {
   globalThis.probeResult = 'PASS write/read/close/reopen; growth beyond initial capacity';
 })().catch((error) => { globalThis.probeError = error.message; });
 `;
+// Probe-only worker build with the pool cap lowered to one partial growth step (#2242).
+const CAPPED_POOL = 30;
+const capEntry = `
+import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
+import { fillWithDefaultSettings } from 'rxdb/plugins/core';
+const storage = getRxStorageWorker({
+  workerInput: () => new Worker('/sqlite-capped.worker.js?ver=probe', { type: 'module' }),
+  mode: 'one', workerOptions: { type: 'module' },
+});
+const schema = fillWithDefaultSettings({ version: 0, primaryKey: 'id', type: 'object',
+  properties: { id: { type: 'string', maxLength: 100 } }, required: ['id'] });
+(async () => {
+  const instances = [];
+  try {
+    for (let i = 0; i < 64; i++) {
+      const instance = await storage.createStorageInstance({ databaseInstanceToken: 'cap-token',
+        databaseName: 'cap-' + i, collectionName: 'docs', schema, options: {}, multiInstance: false,
+        devMode: true });
+      // Premium opens lazily: a read opens each database in turn.
+      await instance.findDocumentsById(['none'], false);
+      instances.push(instance);
+    }
+    globalThis.probeError = 'pool never refused 64 databases';
+  } catch (error) {
+    globalThis.probeResult = { opened: instances.length, message: String(error?.message ?? error) };
+  }
+  await Promise.all(instances.map((instance) => instance.close()));
+})().catch((error) => { globalThis.probeError = error.message; });
+`;
+const lowerPoolCap = {
+	name: 'lower-pool-cap',
+	setup(pluginBuild) {
+		pluginBuild.onLoad({ filter: /sqlite-pool\.ts$/ }, async ({ path }) => {
+			const source = await readFile(path, 'utf8');
+			const capped = source.replace(
+				/export const SQLITE_POOL_MAX_CAPACITY =[^;]+;/,
+				`export const SQLITE_POOL_MAX_CAPACITY = ${CAPPED_POOL};`
+			);
+			assert.notEqual(capped, source, 'probe must lower SQLITE_POOL_MAX_CAPACITY');
+			return { contents: capped, loader: 'ts' };
+		});
+	},
+};
 let browser;
 const publicDir = new URL('../apps/main/public/', import.meta.url);
 const server = createServer(async (request, response) => {
 	const url = new URL(request.url, 'http://localhost');
 	try {
-		if (url.pathname === '/') {
+		const probeFiles = ['/probe.js', '/cap-probe.js', '/sqlite-capped.worker.js'];
+		if (url.pathname === '/' || url.pathname === '/cap') {
 			response.setHeader('Content-Type', 'text/html');
-			response.end('<!doctype html><script type="module" src="/probe.js"></script>');
-		} else if (['/probe.js', '/sqlite.worker.js', '/sqlite3.wasm'].includes(url.pathname)) {
+			const script = url.pathname === '/cap' ? '/cap-probe.js' : '/probe.js';
+			response.end(`<!doctype html><script type="module" src="${script}"></script>`);
+		} else if ([...probeFiles, '/sqlite.worker.js', '/sqlite3.wasm'].includes(url.pathname)) {
 			response.setHeader(
 				'Content-Type',
 				url.pathname.endsWith('.wasm') ? 'application/wasm' : 'text/javascript'
 			);
-			const file =
-				url.pathname === '/probe.js'
-					? join(dir, 'probe.js')
-					: new URL(url.pathname.slice(1), publicDir);
+			const file = probeFiles.includes(url.pathname)
+				? join(dir, url.pathname.slice(1))
+				: new URL(url.pathname.slice(1), publicDir);
 			response.end(await readFile(file));
 		} else {
 			response.writeHead(404).end();
@@ -109,6 +153,21 @@ try {
 		bundle: true,
 		format: 'esm',
 		platform: 'browser',
+	});
+	await build({
+		stdin: { contents: capEntry, resolveDir: process.cwd() },
+		outfile: join(dir, 'cap-probe.js'),
+		bundle: true,
+		format: 'esm',
+		platform: 'browser',
+	});
+	await build({
+		entryPoints: [new URL('./sqlite-worker-entry.mjs', import.meta.url).pathname],
+		outfile: join(dir, 'sqlite-capped.worker.js'),
+		bundle: true,
+		format: 'esm',
+		platform: 'browser',
+		plugins: [lowerPoolCap],
 	});
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 	const origin = `http://127.0.0.1:${server.address().port}`;
@@ -178,6 +237,23 @@ try {
 	assert.deepEqual(await exportOPFS(page), snapshot);
 	await run('/?read=restored');
 	console.log('PASS OPFS snapshot/restore preserves readable SQLite pool');
+	// Fresh context: an empty pool grows to the lowered cap, then refuses by name.
+	const capContext = await browser.newContext();
+	const capPage = await capContext.newPage();
+	await capPage.goto(origin + '/cap');
+	await capPage.waitForFunction(() => globalThis.probeResult || globalThis.probeError, undefined, {
+		timeout: 30000,
+	});
+	const capped = await capPage.evaluate(() => ({
+		result: globalThis.probeResult,
+		error: globalThis.probeError,
+	}));
+	console.log('Capped pool refusal:', JSON.stringify(capped));
+	assert.equal(capped.error, undefined);
+	assert.equal(capped.result.opened, CAPPED_POOL / 2, 'every slot under the cap is usable');
+	assert.match(capped.result.message, /SqlitePoolFullError/);
+	await capContext.close();
+	console.log(`PASS pool refuses past a lowered cap of ${CAPPED_POOL} with SqlitePoolFullError`);
 } finally {
 	await browser?.close();
 	await new Promise((resolve) => server.close(resolve));
