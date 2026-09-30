@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
+
 import { TaxBasedOn } from './index';
 
 // jest resolves the native primitives; hover versus press is a web question, so load the web
@@ -63,23 +65,33 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 
-// Revert: the hover card opens 700 ms after a mouse rests on the trigger, which is how it came
-// to cover the first product tiles in the POS (monorepo#2284).
-it('a pointer resting on the trigger does not open the tax rates', () => {
-	render(<TaxBasedOn />);
-	const trigger = screen.getByTestId('tax-based-on-trigger');
-	fireEvent.pointerOver(trigger, { pointerType: 'mouse' });
-	fireEvent.pointerEnter(trigger, { pointerType: 'mouse' });
-	act(() => jest.advanceTimersByTime(1000));
-	expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
-});
+// The anchored card (the POS on a tablet or desktop) and the phone sheet.
+describe.each([false, true])('phone: %s', (phone) => {
+	const renderTaxBasedOn = () =>
+		render(
+			<DeviceScope phone={phone}>
+				<TaxBasedOn />
+			</DeviceScope>
+		);
 
-it('a press opens the tax rates, and View all closes them before navigating', () => {
-	render(<TaxBasedOn />);
-	fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
-	expect(screen.getByTestId('tax-based-on-content')).toBeTruthy();
-	fireEvent.click(screen.getByText('common.view_all_tax_rates'));
-	act(() => jest.advanceTimersByTime(1000));
-	expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
-	expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
+	// Revert: the hover card opens 700 ms after a mouse rests on the trigger, which is how it
+	// came to cover the first product tiles in the POS (monorepo#2284).
+	it('a pointer resting on the trigger does not open the tax rates', () => {
+		renderTaxBasedOn();
+		const trigger = screen.getByTestId('tax-based-on-trigger');
+		fireEvent.pointerOver(trigger, { pointerType: 'mouse' });
+		fireEvent.pointerEnter(trigger, { pointerType: 'mouse' });
+		act(() => jest.advanceTimersByTime(1000));
+		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
+	});
+
+	it('a press opens the tax rates, and View all closes them before navigating', () => {
+		renderTaxBasedOn();
+		fireEvent.click(screen.getByTestId('tax-based-on-trigger'));
+		expect(screen.getByTestId('tax-based-on-content')).toBeTruthy();
+		fireEvent.click(screen.getByText('common.view_all_tax_rates'));
+		act(() => jest.advanceTimersByTime(1000));
+		expect(mockPush).toHaveBeenCalledWith('/(app)/(modals)/tax-rates');
+		expect(screen.queryByTestId('tax-based-on-content')).toBeNull();
+	});
 });
