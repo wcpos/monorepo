@@ -14,6 +14,7 @@ import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectPaymentBlocked,
 	expectRateSetParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
@@ -80,7 +81,7 @@ async function addTestProductToCart(page: Page) {
 }
 
 /**
- * Build an order and stop at the checkout modal.
+ * Build an order and stop at checkout (the wide pane or the phone modal).
  *
  * Only used by the two STUBBED contract tests below — with push/orders
  * intercepted, this order never reaches the server and no payment is taken, so
@@ -98,14 +99,10 @@ async function createRefundableOrder(page: Page) {
 		{ timeout: 90_000 }
 	);
 	gatewaysLoaded.catch(() => {});
-	await openCheckout(page);
-	await gatewaysLoaded;
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled();
+	const { uuid, surface } = await openCheckout(page);
+	await expectPaymentBlocked(page, surface, gatewaysLoaded, 90_000);
 
-	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
-	expect(orderUuid).toBeTruthy();
-
-	return { orderUuid: orderUuid!, total: Number(total) };
+	return { orderUuid: uuid, total: Number(total) };
 }
 
 async function interceptRefundDependencies(page: Page) {
