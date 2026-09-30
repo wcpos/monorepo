@@ -2492,5 +2492,13 @@
 	"reports.panel_channels": "Channels",
 	"reports.panel_registers": "Registers",
 	"common.channel": "Channel",
-	"reports.no_register_row": "No register"
+	"reports.no_register_row": "No register",
+	"settings.saved": "Saved",
+	"settings.restored": "Restored",
+	"settings.restore_confirm_title": "Restore server settings?",
+	"settings.restore_failed": "Couldn't reach the store",
+	"settings.try_again": "Try again",
+	"settings.store_locked_link": "Open WooCommerce settings",
+	"settings.delete_printer_title": "Delete {name}?",
+	"settings.delete_printer_description": "Receipts routed to it print with Auto instead."
 }

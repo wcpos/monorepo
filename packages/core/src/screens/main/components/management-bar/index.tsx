@@ -18,7 +18,12 @@ import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
 
-type Props = React.PropsWithChildren<{ title: string; testID: string; search: React.ReactNode }>;
+type Props = React.PropsWithChildren<{
+	title: string;
+	testID: string;
+	search?: React.ReactNode;
+	back?: React.ComponentProps<typeof PageBar>['back'];
+}>;
 
 export function ManagementBar(props: Props) {
 	const { site } = useStoreSession();
@@ -29,7 +34,7 @@ export function ManagementBar(props: Props) {
 	);
 }
 
-function ManagementBarContent({ title, testID, search, children }: Props) {
+function ManagementBarContent({ title, testID, search, back, children }: Props) {
 	const { screenSize } = useTheme();
 	const phone = useIsPhone();
 	const navigation = useNavigation();
@@ -49,6 +54,7 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 			<PageBar
 				title={title}
 				testID={testID}
+				back={back}
 				status={badge}
 				onMenu={
 					screenSize !== 'lg'
@@ -59,7 +65,7 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 						: undefined
 				}
 			>
-				{!phone && <View className="max-w-80 min-w-0 flex-1">{search}</View>}
+				{!phone && search != null && <View className="max-w-80 min-w-0 flex-1">{search}</View>}
 				{children}
 				<NotificationBell testID={`${testID}-bell`} />
 				{screenSize !== 'lg' && (
@@ -73,7 +79,9 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 					</Button>
 				)}
 			</PageBar>
-			{phone && <View className="h-ctl border-border justify-center border-b px-2">{search}</View>}
+			{phone && search != null && (
+				<View className="h-ctl border-border justify-center border-b px-2">{search}</View>
+			)}
 			<UserSheet open={userOpen} onOpenChange={setUserOpen} />
 		</>
 	);

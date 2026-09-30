@@ -6,9 +6,11 @@ import {
 	SQLITE_POOL_FILES_PER_DATABASE,
 	SQLITE_POOL_GROWTH_STEP,
 	SQLITE_POOL_INITIAL_CAPACITY,
+	SQLITE_POOL_MAX_CAPACITY,
 	SQLITE_POOL_NAME,
 } from '../packages/database/src/adapters/storage/sqlite-pool.ts';
 import { getSQLiteBasicsOo1 } from './sqlite-basics-oo1.mjs';
+import { ensurePoolCapacity } from './sqlite-pool-capacity.mjs';
 import { quietRecoveredConstraintWarnings } from './sqlite-quiet-constraint.mjs';
 
 const wasmUrl = new URL('sqlite3.wasm', self.location.href);
@@ -28,9 +30,11 @@ const sqliteBasics = getSQLiteBasicsOo1({
 			});
 		});
 		const pool = await ready;
-		if (pool.getFileCount() + SQLITE_POOL_FILES_PER_DATABASE > pool.getCapacity()) {
-			await pool.addCapacity(SQLITE_POOL_GROWTH_STEP);
-		}
+		await ensurePoolCapacity(pool, {
+			filesPerDatabase: SQLITE_POOL_FILES_PER_DATABASE,
+			growthStep: SQLITE_POOL_GROWTH_STEP,
+			maxCapacity: SQLITE_POOL_MAX_CAPACITY,
+		});
 		return new pool.OpfsSAHPoolDb('/' + name);
 	},
 });

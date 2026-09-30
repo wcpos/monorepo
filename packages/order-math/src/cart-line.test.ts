@@ -284,6 +284,158 @@ describe('calculateCartLine — line_item', () => {
 	});
 });
 
+describe('inclusive prices: line taxes re-derived from the 6dp net, as WC does (#2333 B)', () => {
+	const rate21: TaxRateInput = {
+		id: 1,
+		rate: '21.0000',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+
+	it.each([
+		{ price: 40, quantity: 2, net: '66.115702', tax: '13.884297' },
+		{ price: 27.5, quantity: 2, net: '45.454545', tax: '9.545454' },
+		{ price: 585, quantity: 1, net: '483.471074', tax: '101.528926' },
+	])('€$price × $quantity, round-at-subtotal ON', ({ price, quantity, net, tax }) => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.total).toBe(net);
+		expect(line.subtotal).toBe(net);
+		expect(line.taxes).toEqual([{ id: 1, total: tax, subtotal: tax }]);
+		expect(line.total_tax).toBe(tax);
+		expect(line.subtotal_tax).toBe(tax);
+	});
+
+	it('€40 × 2 keeps the cents tax with round-at-subtotal OFF', () => {
+		const config = createCartConfig({ ...baseConfig, rates: [rate21], pricesIncludeTax: true });
+		const lineItem = {
+			quantity: 2,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 40, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.price).toBe(33.057851);
+		expect(line.total).toBe('66.115702');
+		expect(line.subtotal).toBe('66.115702');
+		expect(line.taxes).toEqual([{ id: 1, total: '13.884297', subtotal: '13.884297' }]);
+		expect(line.total_tax).toBe('13.88');
+		expect(line.subtotal_tax).toBe('13.88');
+	});
+
+	it('pins the complete output for an exclusive €66.115702 line', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 66.115702, tax_status: 'taxable' })],
+		};
+
+		const result = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(result).toEqual({
+			line: {
+				...lineItem,
+				price: 66.115702,
+				total: '66.115702',
+				subtotal: '66.115702',
+				total_tax: '13.884297',
+				subtotal_tax: '13.884297',
+				taxes: [{ id: 1, subtotal: '13.884297', total: '13.884297' }],
+			},
+			warnings: [],
+		});
+	});
+
+	it('re-derives 20% plus 2% compound tax from the inclusive €80 net', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate20, { ...rate20, id: 2, rate: '2.0000', compound: true, order: 2 }],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 2,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 40, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// net6 = round6(80 / 1.02 / 1.20) = 65.359477.
+		// VAT = 65.359477 × 0.20 = 13.0718954 → 13.071895.
+		// Compound = (65.359477 + 13.0718954) × 0.02 = 1.568627448 → 1.568627.
+		expect(line.total).toBe('65.359477');
+		expect(line.subtotal).toBe('65.359477');
+		expect(line.taxes).toEqual([
+			{ id: 1, total: '13.071895', subtotal: '13.071895' },
+			{ id: 2, total: '1.568627', subtotal: '1.568627' },
+		]);
+		expect(line.total_tax).toBe('14.640522');
+		expect(line.subtotal_tax).toBe('14.640522');
+	});
+
+	it('sums the issue’s five reconstructed lines to 154028925 integer microunits', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const fixtures = [
+			{ price: 585, quantity: 1, net: '483.471074', tax: '101.528926' },
+			{ price: 150, quantity: 1, net: '123.966942', tax: '26.033058' },
+			{ price: 40, quantity: 2, net: '66.115702', tax: '13.884297' },
+			{ price: 17.5, quantity: 1, net: '14.46281', tax: '3.03719' },
+			{ price: 27.5, quantity: 2, net: '45.454545', tax: '9.545454' },
+		];
+		const lines = fixtures.map(
+			({ price, quantity }) =>
+				calculateCartLine(
+					{
+						kind: 'line_item',
+						line: {
+							quantity,
+							tax_class: 'standard',
+							meta_data: [posDataMeta({ price, tax_status: 'taxable' })],
+						},
+					},
+					config
+				).line
+		);
+		const taxMicrounits = lines.reduce(
+			(sum, line) => sum + Math.round(Number(line.total_tax) * 1e6),
+			0
+		);
+
+		expect(taxMicrounits).toBe(154028925);
+		lines.forEach((line, index) => {
+			expect(line.total).toBe(fixtures[index].net);
+			expect(line.total_tax).toBe(fixtures[index].tax);
+		});
+	});
+});
+
 describe('calculateCartLine — fee', () => {
 	it('should correctly calculate fee line tax and totals when prices exclude tax', () => {
 		const config = createCartConfig({ ...baseConfig, rates: [rate20], pricesIncludeTax: false });
@@ -1703,5 +1855,219 @@ describe('calculateCartLine — inherited shipping tax class', () => {
 		// The line's 'zero-rate' is not a choice WooCommerce can represent, so it is
 		// ignored: the store is set to 'inherit' and the cart is reduced-rate.
 		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
+	});
+});
+
+/**
+ * #2344: WooCommerce re-derives every order line's tax from the pushed ex-tax total —
+ * `WC_Order_Item::calculate_taxes` → `WC_Tax::calc_tax( get_total(), rates, false )` — and
+ * `calc_exclusive_tax` passes each rate through `WC_Tax::round` ONCE: HALF_UP at
+ * `wc_get_rounding_precision()` (6) in currency units. Rounding to 8dp first and then to 6dp
+ * turns a true `…49x` (x ≥ 5) at the 7th–9th decimals into a midpoint that rounds up, 1 µ
+ * above WooCommerce.
+ *
+ * Every expectation below was computed in exact decimal arithmetic (BigInt), not by this
+ * package: `raw` is net × rate exactly, `wc` is its single 6dp HALF_UP, `double` is what
+ * the 8dp-then-6dp path produced.
+ */
+describe('order-line per-rate tax is rounded ONCE at 6dp, as WC_Tax::round does (#2344)', () => {
+	const rateOf = (rate: string): TaxRateInput => ({
+		id: 1,
+		rate,
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	});
+
+	const parity = [
+		// raw 12.345009 × 5.5%   = 0.678975495 → wc 0.678975 (double 0.678976)
+		{ rate: '5.5000', net: 12.345009, wc: '0.678975', off: '0.68' },
+		// raw 23.458462 × 7.25%  = 1.700738495 → wc 1.700738 (double 1.700739)
+		{ rate: '7.2500', net: 23.458462, wc: '1.700738', off: '1.7' },
+		// raw 12.345076 × 8.875% = 1.095625495 → wc 1.095625 (double 1.095626)
+		{ rate: '8.8750', net: 12.345076, wc: '1.095625', off: '1.1' },
+		// raw 12.345176 × 19.6%  = 2.419654496 → wc 2.419654 (double 2.419655)
+		{ rate: '19.6000', net: 12.345176, wc: '2.419654', off: '2.42' },
+	];
+
+	describe.each([
+		{ roundAtSubtotal: true, label: 'ON' },
+		{ roundAtSubtotal: false, label: 'OFF' },
+	])('exclusive line, round-at-subtotal $label', ({ roundAtSubtotal }) => {
+		it.each(parity)('$rate% × $net stores $wc', ({ rate, net, wc, off }) => {
+			const config = createCartConfig({
+				...baseConfig,
+				rates: [rateOf(rate)],
+				pricesIncludeTax: false,
+				taxRoundAtSubtotal: roundAtSubtotal,
+			});
+			const lineItem = {
+				quantity: 1,
+				tax_class: 'standard',
+				meta_data: [posDataMeta({ price: net, tax_status: 'taxable' })],
+			};
+
+			const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+			expect(line.total).toBe(String(net));
+			expect(line.taxes).toEqual([{ id: 1, total: wc, subtotal: wc }]);
+			// OFF: total_tax is Σ wc_round_tax_total(rate) at dp, so only taxes[] shows the µ.
+			const expectedTotalTax = roundAtSubtotal ? String(Number(wc)) : off;
+			expect(line.total_tax).toBe(expectedTotalTax);
+			expect(line.subtotal_tax).toBe(expectedTotalTax);
+		});
+	});
+
+	it('a true 6dp midpoint still rounds up: 11.8885 × 5.5% = 0.6538675 → 0.653868', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000')],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 11.8885, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// The float product is 0.65386749999…; PHP's round() pre-rounds to 15 significant
+		// digits, sees the midpoint and rounds HALF_UP. A bare single round gives 0.653867.
+		expect(line.taxes).toEqual([{ id: 1, total: '0.653868', subtotal: '0.653868' }]);
+	});
+
+	it('inclusive €2.34 at 5.5% re-derives from the 6dp net and rounds once', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000')],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 2.34, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// Gross-derived tax 2.34 × 5.5/105.5 → 0.01199052 (8dp, unchanged); net6 = 2.218009.
+		// WC: 2.218009 × 5.5% = 0.121990495 → 0.121990 (double 0.121991).
+		expect(line.total).toBe('2.218009');
+		expect(line.taxes).toEqual([{ id: 1, total: '0.121990', subtotal: '0.121990' }]);
+		expect(line.total_tax).toBe('0.12199');
+	});
+
+	it('5.5% plus 2% compound: unrounded pre-compound base, one round per rate', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000'), { ...rateOf('2.0000'), id: 2, compound: true, order: 2 }],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 12.345142, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// calc_exclusive_tax: regular 12.345142 × 5.5% = 0.67898281 → 0.678983.
+		// Compound on price + UNROUNDED regular: (12.345142 + 0.67898281) × 2%
+		// = 0.2604824962 → 0.260482 (double 0.260483).
+		expect(line.taxes).toEqual([
+			{ id: 1, total: '0.678983', subtotal: '0.678983' },
+			{ id: 2, total: '0.260482', subtotal: '0.260482' },
+		]);
+		expect(line.total_tax).toBe('0.939465');
+	});
+
+	it('exclusive fee and shipping lines round once too (same calc_tax( get_total() ) path)', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000')],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const fee = calculateCartLine(
+			{
+				kind: 'fee',
+				cartLineItems: [],
+				line: {
+					tax_class: 'standard',
+					tax_status: 'taxable' as const,
+					meta_data: [
+						posDataMeta({
+							amount: 12.345009,
+							percent: false,
+							prices_include_tax: false,
+							percent_of_cart_total_with_tax: false,
+						}),
+					],
+				},
+			},
+			config
+		).line;
+		const shipping = calculateCartLine(
+			{
+				kind: 'shipping',
+				cartLineItems: [],
+				line: {
+					method_title: 'Flat Rate',
+					meta_data: [
+						posDataMeta({
+							amount: 12.345009,
+							prices_include_tax: false,
+							tax_status: 'taxable',
+							tax_class: 'standard',
+						}),
+					],
+				},
+			},
+			config
+		).line;
+
+		// 12.345009 × 5.5% = 0.678975495 → 0.678975 (double 0.678976).
+		expect(fee.taxes).toEqual([{ id: 1, total: '0.678975' }]);
+		expect(fee.total_tax).toBe('0.678975');
+		expect(shipping.taxes).toEqual([{ id: 1, total: '0.678975' }]);
+		expect(shipping.total_tax).toBe('0.678975');
+	});
+
+	it('matches single-round WooCommerce on every sampled 5.5% line from 0.01 to 99.99', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000')],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		// Deterministic 6dp nets: 0.010000 + k × 0.007919 up to 99.99 (12,626 lines, 63 of
+		// which the 8dp-then-6dp path got wrong). The expectation is exact BigInt maths:
+		// raw = net µ × 55000 in 1e-12 units, WC = HALF_UP to µ.
+		const mismatches: string[] = [];
+		for (let micro = 10000n; micro <= 99990000n; micro += 7919n) {
+			const wcMicro = (micro * 55000n + 500000n) / 1000000n;
+			const expected = (Number(wcMicro) / 1e6).toFixed(6);
+			const net = Number(micro) / 1e6;
+			const { line } = calculateCartLine(
+				{
+					kind: 'line_item',
+					line: {
+						quantity: 1,
+						tax_class: 'standard',
+						meta_data: [posDataMeta({ price: net, tax_status: 'taxable' })],
+					},
+				},
+				config
+			);
+			const actual = line.taxes?.[0]?.total;
+			if (actual !== expected) mismatches.push(`${net}: ${actual} ≠ ${expected}`);
+		}
+
+		expect(mismatches).toEqual([]);
 	});
 });

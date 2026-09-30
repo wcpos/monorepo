@@ -10,50 +10,51 @@ import { NavigationAreaIndex, NavigationAreaLayout } from './index';
 import type { NavigationAreaItem } from './index';
 
 const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 let mockPathname = '/settings/tax';
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 
 jest.mock('expo-router', () => ({
 	Redirect: ({ href }: { href: string }) => <div data-testid="redirect">{href}</div>,
 	usePathname: () => mockPathname,
-	useRouter: () => ({ push: mockPush }),
+	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+	useNavigation: () => ({ openDrawer: jest.fn() }),
 }));
 
 jest.mock('../../../../contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
 
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		onPress,
-		testID,
-		accessibilityState,
-	}: {
-		children: React.ReactNode;
-		onPress: () => void;
-		testID: string;
-		accessibilityState?: { selected: boolean };
-	}) => (
-		<button
-			data-testid={testID}
-			aria-selected={accessibilityState?.selected ?? false}
-			onClick={onPress}
-		>
-			{children}
-		</button>
-	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+jest.mock('expo-haptics', () => ({}));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
-jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => mockScreenSize === 'sm',
+	usePointer: () => 'fine',
 }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/lib/utils', () => ({
-	cn: (...values: (string | false | undefined)[]) => values.filter(Boolean).join(' '),
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({
+		site: { wcpos_login_url: 'login' },
+		wpCredentials: { display_name: 'Jane' },
+	}),
 }));
+jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
+	peekRedirectLoginUrl: () => null,
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../notification-bell/notification-bell', () => ({ NotificationBell: () => null }));
+jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
+jest.mock('../../pos/cart/user-sheet', () => ({ UserSheet: () => null }));
 
 const items: NavigationAreaItem[] = [
 	{
@@ -67,6 +68,7 @@ const items: NavigationAreaItem[] = [
 describe('NavigationAreaLayout', () => {
 	beforeEach(() => {
 		mockPush.mockClear();
+		mockNavigate.mockClear();
 		mockPathname = '/settings/tax';
 		mockScreenSize = 'lg';
 	});
@@ -79,21 +81,101 @@ describe('NavigationAreaLayout', () => {
 				areaLabel="Settings"
 				testID="settings-navigation"
 				screenTestID="settings-screen"
+				barTestID="settings-bar"
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
 
+		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
 		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
 		expect(screen.getByTestId('settings-screen')).toBeTruthy();
 		expect(screen.getByTestId('settings-nav-tax').getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByTestId('settings-nav-general').getAttribute('aria-selected')).toBe('false');
 
 		fireEvent.click(screen.getByTestId('settings-nav-general'));
 		expect(mockPush).toHaveBeenCalledWith('/settings/general');
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 	});
 
-	it('shows content with a back bar to the area index on narrow leaf pages', () => {
+	it('uses the leaf title and a single bar crumb to navigate a phone deep link to the index', () => {
+		mockScreenSize = 'sm';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID="settings-bar"
+			>
+				<div data-testid="settings-content" />
+			</NavigationAreaLayout>
+		);
+		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Tax');
+		const back = screen.getByTestId('settings-navigation-back');
+		expect(screen.getByTestId('settings-bar').contains(back)).toBe(true);
+		expect(back.textContent).toContain('Settings');
+		expect(screen.queryByTestId('settings-bar-menu')).toBeNull();
+		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
+		expect(screen.getByTestId('settings-content')).toBeTruthy();
+		fireEvent.click(back);
+		expect(mockNavigate).toHaveBeenCalledWith('/settings');
+	});
+
+	it('keeps the area title and chevron list on the phone index with no back crumb', () => {
+		mockScreenSize = 'sm';
+		mockPathname = '/settings';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				barTestID="settings-bar"
+			>
+				<NavigationAreaIndex
+					items={items}
+					defaultHref="/settings/general"
+					testID="screen-settings"
+				/>
+			</NavigationAreaLayout>
+		);
+		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
+		expect(screen.getByTestId('screen-settings')).toBeTruthy();
+		expect(
+			screen.getByTestId('settings-nav-general').querySelector('[data-icon="chevronRight"]')
+		).toBeTruthy();
+		fireEvent.click(screen.getByTestId('settings-nav-tax'));
+		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
+	});
+
+	it('lifts the selected row onto bg-card only on the opted-in (background) rail; the legacy rail keeps its tint', () => {
+		const layout = (barTestID?: string) => (
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID={barTestID}
+			>
+				<div />
+			</NavigationAreaLayout>
+		);
+		// Uniwind compiles the classes away, so the row exposes the surface it styles for.
+		const lifted = render(layout('settings-bar'));
+		expect(lifted.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('background');
+		lifted.unmount();
+
+		// Health has not opted in: its rail is still bg-card, where a bg-card row is invisible.
+		const legacy = render(layout());
+		expect(legacy.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('card');
+	});
+
+	it('keeps the legacy back bar when the layout has not opted in', () => {
 		mockScreenSize = 'sm';
 
 		render(
@@ -111,6 +193,9 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 		expect(screen.getByTestId('settings-navigation-back')).toBeTruthy();
+		expect(screen.queryByTestId('settings-bar')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+		expect(mockNavigate).toHaveBeenCalledWith('/settings');
 		expect(screen.getByTestId('settings-screen')).toBeTruthy();
 	});
 });
@@ -118,6 +203,7 @@ describe('NavigationAreaLayout', () => {
 describe('NavigationAreaIndex', () => {
 	beforeEach(() => {
 		mockPush.mockClear();
+		mockNavigate.mockClear();
 		mockScreenSize = 'sm';
 	});
 

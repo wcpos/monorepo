@@ -257,12 +257,7 @@ function EditPrinterDialog({
 				</>
 			}
 			advancedSettings={
-				<AdvancedSettings
-					form={form}
-					showVendor={false}
-					vendorOptions={[]}
-					defaultOpen={isEditing}
-				/>
+				<AdvancedSettings form={form} showVendor={false} vendorOptions={[]} defaultOpen={false} />
 			}
 			errorSection={<TestPrintError error={testError} />}
 			footer={

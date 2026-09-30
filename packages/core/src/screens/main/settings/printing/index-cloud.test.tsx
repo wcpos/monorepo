@@ -28,6 +28,26 @@ const cloudProfile: PrinterProfile = {
 const enqueue = jest.fn().mockResolvedValue(undefined);
 const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
+// SettingsRow renders the Saved mark, whose exit beat imports reanimated's ESM.
+jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
+// The Delete confirm imports the alert dialog, whose overlay shell needs the real react-native;
+// this suite mocks react-native, so the dialog is a passthrough here (its behaviour is index.test.tsx's).
+jest.mock('@wcpos/components/alert-dialog', () => {
+	function Part({ children }: React.PropsWithChildren) {
+		return <div>{children}</div>;
+	}
+	return {
+		AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
+			open ? <div>{children}</div> : null,
+		AlertDialogAction: Part,
+		AlertDialogCancel: Part,
+		AlertDialogContent: Part,
+		AlertDialogDescription: Part,
+		AlertDialogFooter: Part,
+		AlertDialogHeader: Part,
+		AlertDialogTitle: Part,
+	};
+});
 jest.mock('react-native', () => ({
 	View: ({
 		children,

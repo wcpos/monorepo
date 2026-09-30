@@ -164,7 +164,7 @@ function EditPrinterDialog({
 					form={form}
 					showVendor
 					vendorOptions={vendorOptions}
-					defaultOpen={isEditing}
+					defaultOpen={false}
 					onVendorManualChange={setManualVendor}
 				/>
 			}

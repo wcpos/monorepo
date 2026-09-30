@@ -27,8 +27,8 @@ export function SettingsPage({
 	children: React.ReactNode;
 }) {
 	return (
-		<ScrollView testID={testID} className="bg-card flex-1">
-			<View className="mx-auto w-full max-w-3xl gap-5 px-4 py-6 md:px-10 md:py-8">
+		<ScrollView testID={testID} className="bg-background flex-1">
+			<View className="mx-auto w-full max-w-3xl gap-6 px-4 py-5 md:px-8 md:py-6">
 				<View className="gap-1">
 					<Text role="heading" aria-level={1} className="text-xl font-semibold">
 						{title}
