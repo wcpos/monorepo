@@ -30,12 +30,7 @@ Current local skills:
 
 Before touching any screen, component or stylesheet, read `CODING_STANDARDS.md` § Design — the owner's UI design rules (touch targets, one number one action, grid not wrap, state not explanation, motion, tokens, copy, definition of done). A UI PR that breaks one of them states the reason in its body. `.claude/rules/design.mdc` is the pointer that loads for UI files.
 
-The consolidated local project rules live in `.claude/rules/project.mdc` and cover:
-
-- React, TypeScript, and logging conventions.
-- Uniwind/Tailwind styling and theming conventions.
-- Language-agnostic E2E locator requirements.
-- WCPOS naming requirements.
+Coding standards — React/TypeScript/logging conventions, styling and theming, translations, E2E selectors and store-agnostic specs, WCPOS naming, the design rules — live in `CODING_STANDARDS.md`; `/code-review` enforces them on the diff. `.claude/rules/project.mdc` keeps only the facts an implementer needs while coding (logging API, platform file resolution, theming quirks, translation source).
 
 ## Review guidelines
 

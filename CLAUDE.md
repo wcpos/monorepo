@@ -11,7 +11,7 @@ This repository keeps project-specific agent configuration local to the repo:
 - `CLAUDE.md` — project overview and shared local agent policy.
 - `AGENTS.md` — Codex/agent entrypoint and local discovery instructions.
 - `.claude/rules/*.mdc` — local project rules.
-- `.claude/rules/design.mdc` — **must-read before any UI work** (screens, components, `global.css`, mockups, UI review).
+- `CODING_STANDARDS.md` § Design — **must-read before any UI work** (screens, components, `global.css`, mockups, UI review); `.claude/rules/design.mdc` is the pointer that loads for UI files.
 - `.claude/skills/*/SKILL.md` — local project skills.
 
 Do not move these local rules or skills to global `~/.claude`, `~/.codex`, or other global agent configuration without explicit user approval.
@@ -115,7 +115,6 @@ version bump no longer moves it. Read from `eas build:view <build-id> --json`, n
 
 Orders are created **through the POS UI** (the app stamps the correct cashier/store scope; `order-cleanup.ts` finalizes them); products/customers via the store API with the captured or writer credentials.
 
-- **Declared-missing environment is a skip; broken environment is a failure.** Zero rows in scope, or a capability the environment never claimed (no writer credentials configured, the anonymous demo user's known catalog read-only 403) produce `test.skip` with a reason naming exactly what's missing — the spec lights up when the environment provides it. But when the environment _declares_ a capability (credentials configured) and the operation still fails (401/403/500), that is a **test failure**, not a skip — otherwise an auth or creation regression turns CI green while the covered behavior silently goes untested.
 
 The `e2e-product-writer` (shop_manager) identity exists on every dev server with one shared credential pair (`E2E_PRODUCT_WRITER_USER/_PASS` Actions secrets); a new or moved server needs exactly one `wp user create` line and the specs skip-with-reason until it's run.
 
