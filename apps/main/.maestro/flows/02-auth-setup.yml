@@ -1,6 +1,11 @@
 appId: com.wcpos.main.dev
 env:
-  STORE_URL: https://dev-pro.wcpos.com
+  # The lane's store. `next` (2.0) pairs only with the `next`-lane plugin on
+  # dev-next; dev-pro runs the released plugin, which the 2.0 app refuses with
+  # "Update the WooCommerce POS plugin on this site to continue" (local run
+  # 2026-09-30). A flow's env wins over `-e`, so this cannot be overridden
+  # from the command line — change it here when the lane changes.
+  STORE_URL: https://dev-next.wcpos.com
   E2E_USERNAME: demo
   E2E_PASSWORD: demo
 ---
@@ -181,16 +186,20 @@ env:
           commands:
             - assertVisible:
                 text: '${STORE_URL.replace(/\./g, "\\.")}'
-# optional — see flow 01: hideKeyboard is flaky on iOS and this is
-# housekeeping; a genuinely covered target fails at its own tap.
+# hideKeyboard is Android-only here — see flow 01: on iOS it is a flick at the
+# screen centre that lands on "Try the demo store" and connects the wrong store.
 # Skipped, with the two taps, when the consent alert is already up (see the
 # retry above): they lead exactly there, and tapping under an alert fails.
 - runFlow:
     when:
       notVisible: 'Continue'
     commands:
-      - hideKeyboard:
-          optional: true
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - hideKeyboard:
+                optional: true
       - tapOn:
           id: 'connect-store-button'
       - extendedWaitUntil:

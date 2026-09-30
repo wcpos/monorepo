@@ -1,6 +1,7 @@
 appId: com.wcpos.main.dev
 env:
-  STORE_URL: https://dev-pro.wcpos.com
+  # The lane's store — see flow 02 for why this is dev-next on `next`.
+  STORE_URL: https://dev-next.wcpos.com
   INVALID_URL: https://not-a-real-store.invalid
 ---
 # P0-1: clean launch → connect screen renders; invalid URL does not connect.
@@ -157,15 +158,21 @@ env:
       # not localized UI copy — the selector policy's composite-string carve-out.
       - assertVisible:
           text: '${INVALID_URL.replace(/\./g, "\\.")}'
-# optional: hideKeyboard is unreliable on iOS (this file already says so at
-# the two Android-gated uses below, but this one was left ungated and failed
-# a local iOS suite run 2026-08-29 at exactly this step, having passed the
-# same step minutes earlier). Dismissing the keyboard is housekeeping — if it
-# genuinely covers the next target, THAT tap fails and names the real problem.
-# Failing here instead just reports "Hide Keyboard" and hides which element
-# was blocked.
-- hideKeyboard:
-    optional: true
+# Android only. On iOS, Maestro's hideKeyboard is a 27-point flick at the
+# centre of the screen (driver log: `Swipe (v2) from (201.0, 437.0) to
+# (201.0, 410.0)` on an iPhone 16 Pro), and with the keyboard up the connect
+# screen's "Try the demo store" link sits under exactly that point: the flick
+# registered as a press, the demo store connected, its sign-in consent alert
+# came up and the Connect button was gone before the tap (local run
+# 2026-09-30, first execution of this flow on `next`). The Connect button is
+# above the keyboard on iOS, so nothing needs dismissing there; on Android
+# the keyboard is up inside a focused form, where Back is the right key.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard:
+          optional: true
 - tapOn:
     id: "connect-store-button"
 # The button disables while the discovery request is in flight; waiting for it

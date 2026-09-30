@@ -83,6 +83,64 @@ describe('native SQLite storage seam', () => {
 		expect(mockDb.execAsync).not.toHaveBeenCalledWith('PRAGMA synchronous = NORMAL');
 	});
 
+	// Statement lifecycle: expo-sqlite's own runAsync/getAllAsync finalize in a
+	// bare `finally`, so a failed step's error is replaced by the finalizer's
+	// ("Error code 0: not an error") and premium's constraint fallback never
+	// sees "UNIQUE constraint" (first iOS device run, 2026-09-30: 62 failed
+	// bulkWrites). The wrapper owns the lifecycle instead.
+	function statementDb(behaviour: {
+		execute?: () => Promise<unknown>;
+		finalize?: () => Promise<void>;
+	}) {
+		const executed = { getAllAsync: jest.fn(async () => [{ id: 'a' }]) };
+		const statement = {
+			executeAsync: jest.fn(behaviour.execute ?? (async () => executed)),
+			finalizeAsync: jest.fn(behaviour.finalize ?? (async () => {})),
+		};
+		const db = { prepareAsync: jest.fn(async () => statement) };
+		return { db, statement, executed };
+	}
+
+	it('run keeps the constraint error when the finalizer throws afterwards', async () => {
+		const { db, statement } = statementDb({
+			execute: async () => {
+				throw new Error('UNIQUE constraint failed: products.id');
+			},
+			finalize: async () => {
+				throw new Error('Error code 0: not an error (at ExpoSQLite/NativeStatement.swift:89)');
+			},
+		});
+		const config = await settings();
+		await expect(
+			config.sqliteBasics.run(db as never, { query: 'INSERT …', params: ['a'] } as never)
+		).rejects.toThrow(/UNIQUE constraint/);
+		expect(statement.finalizeAsync).toHaveBeenCalledTimes(1);
+	});
+
+	it('all prepares, executes with the params array, reads every row and finalizes once', async () => {
+		const { db, statement, executed } = statementDb({});
+		const config = await settings();
+		await expect(
+			config.sqliteBasics.all(db as never, { query: 'SELECT …', params: ['a', 1] } as never)
+		).resolves.toEqual([{ id: 'a' }]);
+		expect(db.prepareAsync).toHaveBeenCalledWith('SELECT …');
+		expect(statement.executeAsync).toHaveBeenCalledWith(['a', 1]);
+		expect(executed.getAllAsync).toHaveBeenCalledTimes(1);
+		expect(statement.finalizeAsync).toHaveBeenCalledTimes(1);
+	});
+
+	it('a finalizer error after a successful execute is real and propagates', async () => {
+		const { db } = statementDb({
+			finalize: async () => {
+				throw new Error('database is locked');
+			},
+		});
+		const config = await settings();
+		await expect(
+			config.sqliteBasics.run(db as never, { query: 'UPDATE …', params: [] } as never)
+		).rejects.toThrow(/database is locked/);
+	});
+
 	it('wraps only the raw storage when timing is enabled', async () => {
 		process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE = '1';
 		const { getNativeNewStorage } = await import('./index');
