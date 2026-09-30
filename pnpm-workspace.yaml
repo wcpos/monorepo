@@ -192,7 +192,9 @@ patchedDependencies:
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
-  rxdb@17.4.0: patches/rxdb@17.4.0.patch
+  # Backports pubkey/rxdb#9026: IncrementalWriteQueue.triggerRun() has no try/finally.
+  # rxdb 17.5.0 still lacks it; drop this patch when upstream ships the fix.
+  rxdb@17.5.0: patches/rxdb@17.5.0.patch
   # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
   # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
   # Skia 2.13.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.

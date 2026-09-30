@@ -44,7 +44,7 @@ patchedDependencies:
   expo@58.0.0-preview.8: bce95a9d5d34897a6af728fa0d4c5fc82b2b241520091ff46fbbd38b19e5232d
   react-native-drawer-layout@4.2.10: 9d9db4422f8345852d7626ff6d6bffed92bdb2fd600bb1fb466c8fba6bb40f7b
   react-native-esc-pos-printer@4.5.0: f5c6fa6bddf06b2e5934df4919d7e5e39f09f89e9d5b7e30174e799bfda31faf
-  rxdb@17.4.0: 87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97
+  rxdb@17.5.0: d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61
 
 importers:
 
@@ -82,11 +82,11 @@ importers:
         specifier: ^0.8.1
         version: 0.8.1(prettier@3.9.8)
       rxdb:
-        specifier: 17.4.0
-        version: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2)
       rxdb-premium:
-        specifier: 17.4.0
-        version: 17.4.0(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(rxdb@17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
       yaml:
         specifier: 2.9.1
         version: 2.9.1
@@ -850,11 +850,11 @@ importers:
         specifier: 4.2.4
         version: 4.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.4.0
-        version: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2)
       rxdb-premium:
-        specifier: 17.4.0
-        version: 17.4.0(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(rxdb@17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1092,8 +1092,8 @@ importers:
         specifier: ^4.2.4
         version: 4.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.4.0
-        version: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1220,15 +1220,15 @@ importers:
         specifier: workspace:*
         version: link:../sync-core
       rxdb:
-        specifier: 17.4.0
-        version: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2)
     devDependencies:
       '@wcpos/utils':
         specifier: workspace:*
         version: link:../utils
       rxdb-premium:
-        specifier: 17.4.0
-        version: 17.4.0(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.5.0
+        version: 17.5.0(rxdb@17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@25.9.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@25.9.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.1)(tsx@4.23.15)(yaml@2.9.1))
@@ -1820,10 +1820,6 @@ packages:
 
   '@babel/runtime@7.27.6':
     resolution: {integrity: sha512-vbavdySgbTTrmFE+EsiqUTzlOr5bzlnJtUv9PynGCAKvfQqjIXbvFdumPM/GxMDfyuGMJaJAU6TO4zc1Jf1i8Q==}
-    engines: {node: '>=6.9.0'}
-
-  '@babel/runtime@7.28.6':
-    resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
     engines: {node: '>=6.9.0'}
 
   '@babel/runtime@7.29.7':
@@ -5761,8 +5757,8 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
-  broadcast-channel@7.3.0:
-    resolution: {integrity: sha512-UHPhLBQKfQ8OmMFMpmPfO5dRakyA1vsfiDGWTYNvChYol65tbuhivPEGgZZiuetorvExdvxaWiBy/ym1Ty08yA==}
+  broadcast-channel@7.4.0:
+    resolution: {integrity: sha512-Oe0EdXTN+BjH0QatATL1tnK0Qs9aKMSML59nYKOJ8Jk6IMT9Y2O+bJGU6MEA9tD7onvj5HnrwQf8fCzXEBcbDQ==}
 
   brorand@1.1.0:
     resolution: {integrity: sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==}
@@ -5954,9 +5950,9 @@ packages:
     resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
     engines: {node: '>=18'}
 
-  commander@14.0.3:
-    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
-    engines: {node: '>=20'}
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -7312,15 +7308,25 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  graphql-ws@5.16.2:
-    resolution: {integrity: sha512-E1uccsZxt/96jH/OwmLPuXMACILs76pKF2i3W861LpKBCYtGIyPQGtWLuBLkND4ox1KHns70e83PS4te50nvPQ==}
-    engines: {node: '>=10'}
+  graphql-ws@6.2.1:
+    resolution: {integrity: sha512-NMbPNeTwXpUOxmczdMtzEnynLNbbR267E9hRcJ81SSbQeIvZup3cMjbD1ZT3jpS2xkpxooisitvO7LZNOyz17Q==}
+    engines: {node: '>=20'}
     peerDependencies:
-      graphql: '>=0.11 <=16'
+      '@fastify/websocket': ^10 || ^11
+      crossws: ~0.3
+      graphql: ^15.10.1 || ^16 || ^17
+      ws: ^8
+    peerDependenciesMeta:
+      '@fastify/websocket':
+        optional: true
+      crossws:
+        optional: true
+      ws:
+        optional: true
 
-  graphql@16.14.2:
-    resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
-    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+  graphql@17.0.2:
+    resolution: {integrity: sha512-FRWbddMxfkjiB7z+aQDWIR+E34xo9I8c9mtK2RPv8PmMzKRvrdsreHL/Ui/TmwHJfhHChEtsFPyMHKI+xuarQQ==}
+    engines: {node: ^22.0.0 || ^24.0.0 || ^25.0.0 || >=26.0.0}
 
   handlebars@4.7.9:
     resolution: {integrity: sha512-4E71E0rpOaQuJR2A3xDZ+GM1HyWYv1clR58tC8emQNeQe3RH7MAzSbat+V0wG78LQBo6m6bzSG/L4pBuCsgnUQ==}
@@ -7938,8 +7944,8 @@ packages:
   jpeg-js@0.4.4:
     resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
 
-  js-base64@3.8.0:
-    resolution: {integrity: sha512-65kvbemyZhj+ExQt1PEFyBEjL5vAHysu1lJdW1AwhhChkO8ZBPizYk/m9GVrpbS2Je1hF+UYZ+6KywqtZV8mHw==}
+  js-base64@3.9.2:
+    resolution: {integrity: sha512-6zayE8QlUdiweYI6cETD/XBSqFcoCUlufn/29PJR99r82x1yDnIprRca0YvAYpAW+ez0GuQkVBC6xG5QkD7OjA==}
 
   js-base64@3.9.4:
     resolution: {integrity: sha512-PtOMXpEGuP0RRiRXsjzHzl44dMHxSu2CPvAhinupR1tBa88me+1DPqsobl7eupn5UukjLkln1ZnAOAOXOrYG0Q==}
@@ -8321,9 +8327,6 @@ packages:
   min-indent@1.0.1:
     resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
     engines: {node: '>=4'}
-
-  mingo@7.2.2:
-    resolution: {integrity: sha512-ll8DV+C5RnV2zF3Jwendxhgqknofzp7KaDwmlpvqo4xrdMC5F7JTc2ToZOz//de84QymZTFY7LPHMViE8uNHhA==}
 
   mingo@7.2.4:
     resolution: {integrity: sha512-KrxHKzMMguL+G1lBC6YbU5UTXdw2viwVHNTPzNYVfEQfSAoetC3M1a7rlveOksn/96oNy+QwBlIXvx/q6rWyxQ==}
@@ -9208,9 +9211,6 @@ packages:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
 
-  reconnecting-websocket@4.4.0:
-    resolution: {integrity: sha512-D2E33ceRPga0NvTDhJmphEgJ7FUYF0v4lr1ki0csq06OdlxKfugGzN0dSkxM/NfqCxYELK4KcaTOUOjTV6Dcng==}
-
   recyclerlistview@4.2.3:
     resolution: {integrity: sha512-STR/wj/FyT8EMsBzzhZ1l2goYirMkIgfV3gYEPxI3Kf3lOnu6f7Dryhyw7/IkQrgX5xtTcDrZMqytvteH9rL3g==}
     peerDependencies:
@@ -9313,15 +9313,15 @@ packages:
   rtl-detect@1.1.2:
     resolution: {integrity: sha512-PGMBq03+TTG/p/cRB7HCLKJ1MgDIi07+QU1faSjiYRfmY5UsAttV9Hs08jDAHVwcOwmVLcSJkpwyfXszVjWfIQ==}
 
-  rxdb-premium@17.4.0:
-    resolution: {integrity: sha512-zS9kwin2fldMWqSpp8G6qKFCM4p2fjmu/2elphm8M7p7OkXCZl3B5unG2stMFK8O5pLVEmWVgTxrYTaOJTOoNA==}
+  rxdb-premium@17.5.0:
+    resolution: {integrity: sha512-gPb8Cxpd5ku/RUm53wGOHfp2LFQIi/0JbWl7pNC6cQTNajU8e/49QNKtZMZnTm0otKqEwbKvioSezOI+SfaA/w==}
     peerDependencies:
-      rxdb: 17.4.0
+      rxdb: 17.5.0
       rxjs: '*'
 
-  rxdb@17.4.0:
-    resolution: {integrity: sha512-P/I9XpeJ/XS5SpDNoO94Y2cZprDOUhdE29Z7WtpFV2sMY3dYiFPvKj1TVQ/t7MAi6Mh8vjWpUe5srsMA5nEBwA==}
-    engines: {node: '>=18'}
+  rxdb@17.5.0:
+    resolution: {integrity: sha512-BRo5wYL8NHmQ3RwboINkq6czYzhHGIgRwXsQhYlq2rbGIRSGUbJ9jIW/DIo3tdMvcK4aN3UnkevdXw3CzW6KFA==}
+    engines: {node: '>=20'}
     peerDependencies:
       '@angular/core': '*'
       '@preact/signals-core': '*'
@@ -10419,6 +10419,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xcode@3.0.1:
     resolution: {integrity: sha512-kCz5k7J7XbJtjABOvkc5lJmkiDh8VhjVCGNiqdKCscmVpdVUpEAyXv1xmCLkQJ5dsHqx3IPO4XW+NTDhU/fatA==}
     engines: {node: '>=10.0.0'}
@@ -10482,8 +10494,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  z-schema@12.3.1:
-    resolution: {integrity: sha512-vSLA62BENIHrltcviPzxLyoPg+XxjKwS75w6PyN4gNVWFnobTIEYexLhL2086ulT7bELMH9zD07lSxcAgB6Gjw==}
+  z-schema@12.4.1:
+    resolution: {integrity: sha512-BkI5D+2t1GCC40dHAQEpBCy6CRbroWRypReYpk9q/p2vDCbbGm4wI126KiePnSv9ab7QMv6WMPt9kKm1+9XrkQ==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -11232,8 +11244,6 @@ snapshots:
       - supports-color
 
   '@babel/runtime@7.27.6': {}
-
-  '@babel/runtime@7.28.6': {}
 
   '@babel/runtime@7.29.7': {}
 
@@ -15776,9 +15786,9 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  broadcast-channel@7.3.0:
+  broadcast-channel@7.4.0:
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.7
       oblivious-set: 2.0.0
       p-queue: 6.6.2
       unload: 2.4.1
@@ -15970,7 +15980,7 @@ snapshots:
 
   commander@12.1.0: {}
 
-  commander@14.0.3:
+  commander@15.0.0:
     optional: true
 
   commander@2.20.3: {}
@@ -17669,11 +17679,13 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql-ws@5.16.2(graphql@16.14.2):
+  graphql-ws@6.2.1(graphql@17.0.2)(ws@8.21.3):
     dependencies:
-      graphql: 16.14.2
+      graphql: 17.0.2
+    optionalDependencies:
+      ws: 8.21.3
 
-  graphql@16.14.2: {}
+  graphql@17.0.2: {}
 
   handlebars@4.7.9:
     dependencies:
@@ -18614,7 +18626,7 @@ snapshots:
 
   jpeg-js@0.4.4: {}
 
-  js-base64@3.8.0: {}
+  js-base64@3.9.2: {}
 
   js-base64@3.9.4: {}
 
@@ -19073,8 +19085,6 @@ snapshots:
   mimic-fn@2.1.0: {}
 
   min-indent@1.0.1: {}
-
-  mingo@7.2.2: {}
 
   mingo@7.2.4: {}
 
@@ -19936,8 +19946,6 @@ snapshots:
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
 
-  reconnecting-websocket@4.4.0: {}
-
   recyclerlistview@4.2.3(react-native@0.88.0-rc.2(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.2(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
     dependencies:
       lodash.debounce: 4.0.8
@@ -20068,7 +20076,7 @@ snapshots:
 
   rtl-detect@1.1.2: {}
 
-  rxdb-premium@17.4.0(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2):
+  rxdb-premium@17.5.0(rxdb@17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -20076,7 +20084,7 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2)
+      rxdb: 17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -20084,7 +20092,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.3.0)(rxjs@7.8.2):
+  rxdb@17.5.0(patch_hash=d3ead17bb5c5d33cb56043ea14169d091b4bfb9c5e687829cb51dc319a961a61)(react@19.3.0)(rxjs@7.8.2):
     dependencies:
       '@babel/runtime': 7.29.7
       '@types/simple-peer': 9.11.9
@@ -20093,28 +20101,29 @@ snapshots:
       ajv-formats: 3.0.1(ajv@8.20.0)
       array-push-at-sort-position: 5.0.0
       as-typed: 1.3.2
-      broadcast-channel: 7.3.0
+      broadcast-channel: 7.4.0
       crypto-js: 4.2.0
       custom-idle-queue: 5.0.2
       dexie: 4.4.2
       event-reduce-js: 6.0.0
       get-graphql-from-jsonschema: 8.1.0
-      graphql: 16.14.2
-      graphql-ws: 5.16.2(graphql@16.14.2)
+      graphql: 17.0.2
+      graphql-ws: 6.2.1(graphql@17.0.2)(ws@8.21.3)
       is-my-json-valid: 2.20.6
-      js-base64: 3.8.0
+      js-base64: 3.9.2
       jsonschema-key-compression: 1.7.0
-      mingo: 7.2.2
+      mingo: 7.2.4
       oblivious-set: 2.0.0
-      reconnecting-websocket: 4.4.0
       rxjs: 7.8.2
       simple-peer: 9.11.1
-      ws: 8.21.0
-      z-schema: 12.3.1
+      ws: 8.21.3
+      z-schema: 12.4.1
     optionalDependencies:
       react: 19.3.0
     transitivePeerDependencies:
+      - '@fastify/websocket'
       - bufferutil
+      - crossws
       - supports-color
       - utf-8-validate
 
@@ -21208,6 +21217,8 @@ snapshots:
 
   ws@8.21.0: {}
 
+  ws@8.21.3: {}
+
   xcode@3.0.1:
     dependencies:
       simple-plist: 1.3.1
@@ -21255,13 +21266,13 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  z-schema@12.3.1:
+  z-schema@12.4.1:
     dependencies:
       punycode: 2.3.1
       safe-regex2: 5.1.1
       validator: 13.15.35
     optionalDependencies:
-      commander: 14.0.3
+      commander: 15.0.0
 
   zalgo-promise@1.0.48: {}
 

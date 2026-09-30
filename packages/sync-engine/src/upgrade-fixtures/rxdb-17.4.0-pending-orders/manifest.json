@@ -1,0 +1,520 @@
+{
+	"writer": {
+		"rxdb": "17.4.0",
+		"rxdbPremium": "17.4.0",
+		"sourceCommit": "b10836580bc8bb5ddb0d5f80b5b875de6b9c6d86"
+	},
+	"identity": {
+		"site": "https://upgrade-fixture.example.test",
+		"storeId": 7,
+		"cashierId": "till-1"
+	},
+	"databaseName": "pos_v5_faa4092e754e_s7_ctill-1",
+	"drainAtMs": 1790758800000,
+	"orders": [
+		{
+			"case": "a",
+			"uuid": "17400000-0000-4000-8000-000000000001",
+			"expected": "sent",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000001",
+				"remoteId": null,
+				"remoteKey": "",
+				"number": "",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "completed",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"status": "completed",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000001"
+						}
+					]
+				},
+				"sync": {
+					"revision": "",
+					"partial": false,
+					"source": "skeleton"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000105"
+					]
+				}
+			}
+		},
+		{
+			"case": "b",
+			"uuid": "17400000-0000-4000-8000-000000000002",
+			"expected": "sent",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000002",
+				"remoteId": null,
+				"remoteKey": "",
+				"number": "",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "processing",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"status": "processing",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000002"
+						}
+					]
+				},
+				"sync": {
+					"revision": "",
+					"partial": false,
+					"source": "skeleton"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000103"
+					]
+				}
+			}
+		},
+		{
+			"case": "c",
+			"uuid": "17400000-0000-4000-8000-000000000003",
+			"expected": "sent",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000003",
+				"remoteId": null,
+				"remoteKey": "",
+				"number": "",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "processing",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"status": "processing",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000003"
+						}
+					]
+				},
+				"sync": {
+					"revision": "",
+					"partial": false,
+					"source": "skeleton"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000104"
+					]
+				}
+			}
+		},
+		{
+			"case": "d",
+			"uuid": "17400000-0000-4000-8000-000000000004",
+			"expected": "sent",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000004",
+				"remoteId": "4104",
+				"remoteKey": "4104",
+				"number": "4104",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "processing",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"id": 4104,
+					"status": "processing",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000004"
+						}
+					]
+				},
+				"sync": {
+					"revision": "sha256:d-r1",
+					"partial": false,
+					"source": "woo-rest"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000106"
+					]
+				}
+			}
+		},
+		{
+			"case": "e",
+			"uuid": "17400000-0000-4000-8000-000000000005",
+			"expected": "unchanged",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000005",
+				"remoteId": null,
+				"remoteKey": "",
+				"number": "",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "pos-open",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"status": "pos-open",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000005"
+						}
+					]
+				},
+				"sync": {
+					"revision": "",
+					"partial": false,
+					"source": "skeleton"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000107"
+					]
+				}
+			}
+		},
+		{
+			"case": "f",
+			"uuid": "17400000-0000-4000-8000-000000000006",
+			"expected": "unchanged",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000006",
+				"remoteId": null,
+				"remoteKey": "",
+				"number": "",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "processing",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"status": "processing",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000006"
+						}
+					]
+				},
+				"sync": {
+					"revision": "",
+					"partial": false,
+					"source": "skeleton"
+				},
+				"local": {
+					"dirty": false,
+					"pendingMutationIds": []
+				}
+			}
+		},
+		{
+			"case": "g",
+			"uuid": "17400000-0000-4000-8000-000000000007",
+			"expected": "unchanged",
+			"stored": {
+				"posUserId": "",
+				"posStoreId": "",
+				"uuid": "17400000-0000-4000-8000-000000000007",
+				"remoteId": "4107",
+				"remoteKey": "4107",
+				"number": "4107",
+				"dateCreatedGmt": "2026-09-30T08:00:00",
+				"status": "processing",
+				"total": "12.50",
+				"customerId": 0,
+				"payload": {
+					"id": 4107,
+					"status": "processing",
+					"total": "12.50",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000007"
+						}
+					]
+				},
+				"sync": {
+					"revision": "sha256:g-r1",
+					"partial": false,
+					"source": "woo-rest"
+				},
+				"local": {
+					"dirty": true,
+					"pendingMutationIds": [
+						"17400000-0000-4000-8000-000000000101"
+					]
+				}
+			}
+		}
+	],
+	"queue": [
+		{
+			"case": "f",
+			"mutationId": "17400000-0000-4000-8000-000000000100",
+			"seq": 1,
+			"status": "rejected",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000006",
+			"operation": "create",
+			"outcome": "not-sent",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000100",
+				"collectionName": "orders",
+				"operation": "create",
+				"recordId": "17400000-0000-4000-8000-000000000006",
+				"origin": "existing",
+				"payload": {
+					"status": "processing",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000006"
+						}
+					]
+				},
+				"baseRevision": null,
+				"queuedAt": "2026-09-30T08:00:00.000Z",
+				"seq": 1,
+				"status": "rejected",
+				"claimedBy": "17400000-0000-4000-8000-000000000102",
+				"claimedUntil": "2026-09-30T08:01:00.000Z",
+				"rejectedStatus": 400,
+				"rejectedReason": "rest_invalid_email",
+				"rejectedMessage": "Invalid parameter(s): billing",
+				"rejectedAt": "2026-09-30T08:00:00.000Z"
+			}
+		},
+		{
+			"case": "g",
+			"mutationId": "17400000-0000-4000-8000-000000000101",
+			"seq": 2,
+			"status": "conflicted",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000007",
+			"operation": "update",
+			"outcome": "not-sent",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000101",
+				"collectionName": "orders",
+				"operation": "update",
+				"recordId": "17400000-0000-4000-8000-000000000007",
+				"origin": "existing",
+				"payload": {
+					"status": "completed",
+					"customer_note": "from 17.4.0",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000007"
+						}
+					]
+				},
+				"baseRevision": "sha256:g-r1",
+				"queuedAt": "2026-09-30T08:00:00.000Z",
+				"seq": 2,
+				"status": "conflicted",
+				"claimedBy": "17400000-0000-4000-8000-000000000102",
+				"claimedUntil": "2026-09-30T08:01:00.000Z",
+				"conflictDocument": {
+					"id": 4107
+				},
+				"conflictRevision": "sha256:g-r2"
+			}
+		},
+		{
+			"case": "b",
+			"mutationId": "17400000-0000-4000-8000-000000000103",
+			"seq": 3,
+			"status": "pending",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000002",
+			"operation": "create",
+			"outcome": "send-once",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000103",
+				"collectionName": "orders",
+				"operation": "create",
+				"recordId": "17400000-0000-4000-8000-000000000002",
+				"origin": "existing",
+				"payload": {
+					"status": "processing",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000002"
+						}
+					]
+				},
+				"baseRevision": null,
+				"queuedAt": "2026-09-30T08:00:01.000Z",
+				"seq": 3,
+				"status": "pending",
+				"claimedBy": "17400000-0000-4000-8000-000000000102",
+				"claimedUntil": "2026-09-30T08:01:01.000Z",
+				"attempts": 1,
+				"nextAttemptAt": "2026-09-30T08:00:01.939Z"
+			}
+		},
+		{
+			"case": "c",
+			"mutationId": "17400000-0000-4000-8000-000000000104",
+			"seq": 4,
+			"status": "claimed",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000003",
+			"operation": "create",
+			"outcome": "send-once",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000104",
+				"collectionName": "orders",
+				"operation": "create",
+				"recordId": "17400000-0000-4000-8000-000000000003",
+				"origin": "existing",
+				"payload": {
+					"status": "processing",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000003"
+						}
+					]
+				},
+				"baseRevision": null,
+				"queuedAt": "2026-09-30T08:00:02.000Z",
+				"seq": 4,
+				"status": "claimed",
+				"claimedBy": "dead-drain",
+				"claimedUntil": "2026-09-30T08:01:02.000Z"
+			}
+		},
+		{
+			"case": "a",
+			"mutationId": "17400000-0000-4000-8000-000000000105",
+			"seq": 5,
+			"status": "pending",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000001",
+			"operation": "create",
+			"outcome": "send-once",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000105",
+				"collectionName": "orders",
+				"operation": "create",
+				"recordId": "17400000-0000-4000-8000-000000000001",
+				"origin": "existing",
+				"payload": {
+					"status": "completed",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000001"
+						}
+					]
+				},
+				"baseRevision": null,
+				"queuedAt": "2026-09-30T08:00:02.000Z",
+				"seq": 5,
+				"status": "pending"
+			}
+		},
+		{
+			"case": "d",
+			"mutationId": "17400000-0000-4000-8000-000000000106",
+			"seq": 6,
+			"status": "pending",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000004",
+			"operation": "update",
+			"outcome": "send-once",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000106",
+				"collectionName": "orders",
+				"operation": "update",
+				"recordId": "17400000-0000-4000-8000-000000000004",
+				"origin": "existing",
+				"payload": {
+					"status": "completed",
+					"customer_note": "from 17.4.0",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000004"
+						}
+					]
+				},
+				"baseRevision": "sha256:d-r1",
+				"queuedAt": "2026-09-30T08:00:02.000Z",
+				"seq": 6,
+				"status": "pending"
+			}
+		},
+		{
+			"case": "e",
+			"mutationId": "17400000-0000-4000-8000-000000000107",
+			"seq": 7,
+			"status": "pending",
+			"entity": "orders",
+			"uuid": "17400000-0000-4000-8000-000000000005",
+			"operation": "create",
+			"outcome": "held",
+			"stored": {
+				"mutationId": "17400000-0000-4000-8000-000000000107",
+				"collectionName": "orders",
+				"operation": "create",
+				"recordId": "17400000-0000-4000-8000-000000000005",
+				"origin": "existing",
+				"payload": {
+					"status": "pos-open",
+					"meta_data": [
+						{
+							"key": "_woocommerce_pos_uuid",
+							"value": "17400000-0000-4000-8000-000000000005"
+						}
+					]
+				},
+				"baseRevision": null,
+				"queuedAt": "2026-09-30T08:00:02.000Z",
+				"seq": 7,
+				"status": "pending"
+			}
+		}
+	],
+	"serverSeed": {
+		"17400000-0000-4000-8000-000000000004": {
+			"id": 4104,
+			"revision": "sha256:d-r1"
+		}
+	}
+}

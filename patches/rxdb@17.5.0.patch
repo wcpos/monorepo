@@ -1,8 +1,8 @@
 diff --git a/dist/cjs/incremental-write.js b/dist/cjs/incremental-write.js
-index 2faeee563005b7574168b4a071de2e4aa273df82..217251beffe25cc63b7edec85430e4f376958c86 100644
+index 8c7c0d60f3a4b4615b5577c7bde7aad7bc579457..a6e958fc609341626972f80c8e17e894d4cea838 100644
 --- a/dist/cjs/incremental-write.js
 +++ b/dist/cjs/incremental-write.js
-@@ -49,13 +49,15 @@ var IncrementalWriteQueue = exports.IncrementalWriteQueue = /*#__PURE__*/functio
+@@ -51,13 +51,15 @@ var IncrementalWriteQueue = exports.IncrementalWriteQueue = /*#__PURE__*/functio
        return;
      }
      this.isRunning = true;
@@ -19,7 +19,7 @@ index 2faeee563005b7574168b4a071de2e4aa273df82..217251beffe25cc63b7edec85430e4f3
      this.queueByDocId = new Map();
      await Promise.all(Array.from(itemsById.entries()).map(async ([_docId, items]) => {
        var oldData = findNewestOfDocumentStates(items.map(i => i.lastKnownDocumentState));
-@@ -125,7 +127,20 @@ var IncrementalWriteQueue = exports.IncrementalWriteQueue = /*#__PURE__*/functio
+@@ -127,7 +129,20 @@ var IncrementalWriteQueue = exports.IncrementalWriteQueue = /*#__PURE__*/functio
          items.forEach(item => item.reject(rxError));
        }
      });
@@ -42,10 +42,10 @@ index 2faeee563005b7574168b4a071de2e4aa273df82..217251beffe25cc63b7edec85430e4f3
      /**
       * Always trigger another run
 diff --git a/dist/esm/incremental-write.js b/dist/esm/incremental-write.js
-index 700e212893db33bd301fc15837b92d1e3d1c4fc5..4104b80f264e79c8624b744788a13c8401cd2448 100644
+index 8e6aa5f2d492fdc87aa36d7c46d48ec599e1aed1..e503a170cd91a9f52573c40014d8f9504526eeb5 100644
 --- a/dist/esm/incremental-write.js
 +++ b/dist/esm/incremental-write.js
-@@ -41,13 +41,15 @@ export var IncrementalWriteQueue = /*#__PURE__*/function () {
+@@ -40,13 +40,15 @@ export class IncrementalWriteQueue {
        return;
      }
      this.isRunning = true;
@@ -62,7 +62,7 @@ index 700e212893db33bd301fc15837b92d1e3d1c4fc5..4104b80f264e79c8624b744788a13c84
      this.queueByDocId = new Map();
      await Promise.all(Array.from(itemsById.entries()).map(async ([_docId, items]) => {
        var oldData = findNewestOfDocumentStates(items.map(i => i.lastKnownDocumentState));
-@@ -117,7 +119,20 @@ export var IncrementalWriteQueue = /*#__PURE__*/function () {
+@@ -116,7 +118,20 @@ export class IncrementalWriteQueue {
          items.forEach(item => item.reject(rxError));
        }
      });

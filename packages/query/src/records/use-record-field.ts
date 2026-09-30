@@ -13,7 +13,7 @@ import type { RxDocument, RxState } from 'rxdb';
  * deep-equality dedupe, so RxDB's reactivity is consumed natively without wrappers, caches,
  * or per-render resubscription.
  *
- * Why this exists (verified against RxDB 17.4.0):
+ * Why this exists (verified against RxDB 17.5.0):
  *  - `doc.$` / `doc.get$()` are getters returning a FRESH observable object per access, and
  *    `useObservableEagerState` keys its subscription on observable identity — raw
  *    `get$`-into-hook resubscribes every render.
