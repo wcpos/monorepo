@@ -1484,13 +1484,11 @@ test('e2e-web-mini runs the suite against the mini store in parallel, never gati
 	assert.ok(mini, 'deploy.yml is missing the e2e-web-mini job');
 	assert.deepEqual(mini.needs, ['changes', 'deploy']);
 	assert.equal(mini['continue-on-error'], true);
-	// e2e's guard is `${{ !cancelled() && <needs succeeded> && <condition> }}`. Appending to
-	// that text would be a non-empty string, which GitHub reads as always true, so mini
-	// takes the bare condition and relies on the implicit success() for its needs.
-	const e2eCondition = e2e.if.match(
-		/^\$\{\{ !cancelled\(\) && needs\.changes\.result == 'success' && needs\.deploy\.result == 'success' && (.+) \}\}$/
-	)[1];
-	assert.equal(mini.if, `${e2eCondition} && needs.changes.outputs.lane == 'next'`);
+	const prefix = "!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && ";
+	const condition = e2e.if.replace(/^\$\{\{ /, '').replace(/ \}\}$/, '');
+	assert.ok(condition.startsWith(prefix));
+	const eligibility = condition.slice(prefix.length);
+	assert.equal(mini.if, `${eligibility} && needs.changes.outputs.lane == 'next'`);
 	assert.deepEqual(mini.strategy, e2e.strategy);
 	assert.equal(mini['runs-on'], 'ubuntu-latest');
 	assert.equal(mini['timeout-minutes'], 60);
