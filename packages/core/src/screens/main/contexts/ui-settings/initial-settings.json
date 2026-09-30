@@ -376,8 +376,8 @@
     "columns": [
       {
         "key": "status",
-        "flex": 1,
-        "align": "center",
+        "flex": 1.6,
+        "align": "left",
         "show": true,
         "hideLabel": false
       },

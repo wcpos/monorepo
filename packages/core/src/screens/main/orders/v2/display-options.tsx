@@ -36,11 +36,20 @@ export function DisplayOptions() {
 					focusColumns();
 				}}
 				align="end"
-				className="max-h-96 w-80 p-0"
+				className="max-h-96 w-96 p-0"
 			>
-				<View className="border-border flex-row items-center justify-between gap-2 border-b px-2">
-					<Text className="min-w-0 shrink font-semibold">{t('orders.order_settings')}</Text>
-					<Button variant="ghost" testID="orders-display-restore" onPress={() => void resetUI()}>
+				{/* The title yields to Restore: a long translation truncates the title, never the action. */}
+				<View className="border-border h-ctl flex-row items-center justify-between gap-2 border-b px-3">
+					<Text className="min-w-0 shrink font-semibold" numberOfLines={1}>
+						{t('orders.order_settings')}
+					</Text>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						testID="orders-display-restore"
+						onPress={() => void resetUI()}
+					>
 						{t('orders.restore_defaults')}
 					</Button>
 				</View>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View, type ViewInstance } from 'react-native';
+import { Platform, useWindowDimensions, View, type ViewInstance } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
-import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
+import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 
@@ -98,6 +98,9 @@ const DEFAULT_ORDER_SORT = {
 	field: 'date_created_gmt',
 	direction: 'desc',
 } as const;
+
+// The pane takes 480 px; under this width the remaining list is too narrow for the table.
+const ROWS_BESIDE_PANE_BELOW = 1280;
 
 function isOrderSortField(field: unknown): field is SortFieldsByCollection['orders'] {
 	return ORDER_SORT_FIELDS.some((sortField) => sortField === field);
@@ -251,6 +254,7 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 	const { bottom } = useSafeAreaInsets();
 	const t = useT();
 	const phone = useIsPhone();
+	const { width } = useWindowDimensions();
 	const { screenSize } = useTheme();
 	const { order: selected } = useLocalSearchParams<{ order?: string }>();
 	const router = useRouter();
@@ -295,13 +299,20 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 				{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 				<ErrorBoundary>
 					<Suspense fallback={<DataTableSkeleton id="orders" />}>
-						<OrdersList
-							binding={binding}
-							initialFilters={initialFilters}
-							onSelectedRow={(node) => {
-								selectedRow.current = node;
-							}}
-						/>
+						{/* Beside the pane the list has the pane's width left: below the desktop
+						    breakpoint nine columns cannot share it, so the list keeps the row grammar
+						    (number, customer, status, total) until the pane closes. */}
+						<DeviceScope
+							pointer={selected && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
+						>
+							<OrdersList
+								binding={binding}
+								initialFilters={initialFilters}
+								onSelectedRow={(node) => {
+									selectedRow.current = node;
+								}}
+							/>
+						</DeviceScope>
 					</Suspense>
 				</ErrorBoundary>
 			</View>

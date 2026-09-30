@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import isEqual from 'lodash/isEqual';
 
 import { Chip } from '@wcpos/components/chip';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
@@ -72,13 +71,14 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 	const storesResource = storeListResource(wpCredentials);
 
 	return (
-		<ScrollView
-			horizontal
-			showsHorizontalScrollIndicator={false}
-			className="shrink-0 grow-0"
-			contentContainerClassName="px-2 py-2"
-		>
-			<HStack className="gap-2">
+		// The products bar's frame: a plain wrapper sizes the row to its chips, so the
+		// horizontal ScrollView never grows into the table's space.
+		<View className="p-2">
+			<ScrollView
+				horizontal
+				showsHorizontalScrollIndicator={false}
+				contentContainerClassName="items-center gap-2"
+			>
 				<Chip
 					testID="order-filter-today"
 					label={t('orders.filter_today')}
@@ -125,7 +125,7 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 						<ButtonText>{t('orders.clear_all')}</ButtonText>
 					</Button>
 				)}
-			</HStack>
-		</ScrollView>
+			</ScrollView>
+		</View>
 	);
 }

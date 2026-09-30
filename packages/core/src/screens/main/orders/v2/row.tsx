@@ -40,13 +40,14 @@ export function OrderRow({
 				<View className="flex-row items-center gap-1">
 					<OrderStatusBadge status={order.status} />
 					<Text className="text-muted-foreground min-w-0 shrink text-sm" numberOfLines={1}>
-						·{' '}
-						{order.date_created_gmt
-							? phone
-								? day(order.date_created_gmt)
-								: dateTime(order.date_created_gmt)
-							: ''}{' '}
-						· {order.payment_method_title}
+						{[
+							order.date_created_gmt &&
+								(phone ? day(order.date_created_gmt) : dateTime(order.date_created_gmt)),
+							order.payment_method_title,
+						]
+							.filter(Boolean)
+							.map((part) => ` · ${part}`)
+							.join('')}
 					</Text>
 				</View>
 			</View>

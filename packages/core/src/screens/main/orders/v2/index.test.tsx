@@ -251,6 +251,7 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => mockPointer,
 	useIsPhone: () => mockPhone,
+	DeviceScope: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ order: mockSelected }),

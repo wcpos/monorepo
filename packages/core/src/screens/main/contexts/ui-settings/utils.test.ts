@@ -277,6 +277,6 @@ it('gives orders status room for its label while keeping stored order and visibi
 		hideLabel?: boolean;
 	}[];
 	expect(columns.slice(0, 2).map((c) => c.key)).toEqual(['number', 'status']);
-	expect(columns[1]).toMatchObject({ show: false, flex: 1, hideLabel: false });
+	expect(columns[1]).toMatchObject({ show: false, flex: 1.6, hideLabel: false });
 	expect(columns[1].width).toBeUndefined();
 });
