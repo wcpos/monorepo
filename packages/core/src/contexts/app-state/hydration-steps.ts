@@ -250,7 +250,7 @@ export type AuthTransportResolution =
 			useRestRouteParam: boolean;
 			useProtocolHeaders: boolean;
 	  }
-	| { ok: false; code: ErrorCode | null };
+	| { ok: false; code: ErrorCode | null; timedOut?: true };
 
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
@@ -534,6 +534,12 @@ async function finishHostBlock(
 	}
 	const code = classifyHostBlock(evidence);
 	if (code === null) {
+		if (evidence.echoesTimedOut) {
+			appLogger.warn('Authorization probes timed out — store too slow to answer', {
+				context: { wcposApiUrl },
+			});
+			return { ok: false, code: null, timedOut: true };
+		}
 		appLogger.warn('Authorization probes unreachable — store appears offline', {
 			context: { wcposApiUrl },
 		});
