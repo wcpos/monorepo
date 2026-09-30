@@ -2,6 +2,9 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import debounce from 'lodash/debounce';
+import cloneDeep from 'lodash/cloneDeep';
+import isEqual from 'lodash/isEqual';
+import set from 'lodash/set';
 import { FieldValues, UseFormReturn } from 'react-hook-form';
 
 import type { DebouncedFunc } from 'lodash';
@@ -56,6 +59,16 @@ function isTextValue(value: unknown): boolean {
  * receives it — while an ordinary re-render, whose new callback targets the same store,
  * is unaffected.
  */
+/**
+ * Primitives compare as strings so a formatting-only echo (2 vs "2") is not a change; anything
+ * else (the ui-settings column arrays) compares structurally so a real edit still writes.
+ */
+function isSameValue(a: unknown, b: unknown): boolean {
+	const primitive = (value: unknown) =>
+		value == null || ['string', 'number', 'boolean'].includes(typeof value);
+	return primitive(a) && primitive(b) ? String(a ?? '') === String(b ?? '') : isEqual(a, b);
+}
+
 export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,
@@ -93,18 +106,32 @@ export function useFormChangeHandler<T extends FieldValues>({
 	 * form-level update whose `name` is `undefined`. User-initiated edits always carry
 	 * a defined `name`, so the `if (name)` guard below skips reset/programmatic updates
 	 * without needing to intercept `form.reset`.
+	 *
+	 * A reset is not the only echo. When the reset's `values` land, RHF also emits a NAMED
+	 * event for every control that normalises its value on the way in (a select's key, a
+	 * numeric input's number) — five of them on the General settings page after one edit,
+	 * each carrying the value the store already holds. Those must not be written back, so a
+	 * named event whose value equals the last one seen for that field is not a change.
 	 */
 	React.useEffect(() => {
+		// A deep clone, not a spread: react-hook-form mutates its nested values in place on
+		// setValue, so a shared `columns` array would already hold the new value when compared.
+		const lastSeen: Record<string, unknown> = cloneDeep(
+			form.getValues() as Record<string, unknown>
+		);
 		const subscription = form.watch((values, { name }) => {
 			const debounced = debouncedRef.current;
 			// Only handle changes when a specific field is changed by the user.
 			// When `name` is undefined, it means the entire form was reset/set programmatically
 			if (!name) {
 				debounced?.cancel();
+				Object.assign(lastSeen, cloneDeep(values));
 				return;
 			}
 
 			const value = get(values, name);
+			if (isSameValue(value, get(lastSeen, name))) return;
+			set(lastSeen, name, cloneDeep(value));
 			const changes = { [name]: value } as unknown as Partial<T>;
 
 			// Debounce text inputs to avoid saving on every keystroke
