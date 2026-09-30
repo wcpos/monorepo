@@ -86,7 +86,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const handleSuccess = React.useCallback(
 		(document: Record<string, unknown>) => {
 			const payload = document.payload as Record<string, unknown> | undefined;
-			mutationLogger.success(t('common.saved_2', { id: payload?.id, title: collectionLabel }), {
+			// A create that is only queued has no store id yet: never "#undefined".
+			const hasId = payload?.id != null && payload.id !== '' && payload.id !== 0;
+			const message = hasId
+				? t('common.saved_2', { id: payload?.id, title: collectionLabel })
+				: t('common.saved', { name: collectionLabel });
+			mutationLogger.success(message, {
 				showToast: true,
 				context: {
 					documentId: payload?.id,
@@ -117,9 +122,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		async ({
 			data,
 			awaitRemoteId = false,
+			toast = true,
 		}: {
 			data: Record<string, unknown>;
 			awaitRemoteId?: boolean;
+			/** False when the caller announces the save itself, so the cashier sees one toast. */
+			toast?: boolean;
 		}) => {
 			if (!isWriteableCollection(collectionName)) {
 				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
@@ -195,7 +203,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					}
 					currentResident = refreshed;
 				}
-				handleSuccess(currentResident as unknown as Record<string, unknown>);
+				if (toast) handleSuccess(currentResident as unknown as Record<string, unknown>);
 				return currentResident;
 			} catch (error) {
 				handleError(error);

@@ -880,6 +880,8 @@
 	"pos_cart.discount_percent_invalid": "Enter a percentage above 0 and up to 100",
 	"pos_cart.discount_removed": "Discount removed",
 	"pos_cart.edit_customer_address": "Edit Customer Address",
+	"pos_cart.new_customer_not_saved_title": "{name} was not saved to the store",
+	"pos_cart.new_customer_not_saved": "The order keeps their addresses but stays a guest sale. Send the customer again from Store health to link it.",
 	"pos_cart.engine_warning_malformed_pos_data": "A line's saved price details couldn't be read, so its amount came from the totals already stored on it. Remove that line and add it again.",
 	"pos_cart.engine_warning_unknown_tax_rate_id": "This order uses a tax rate your store no longer has, so its tax may be wrong.",
 	"pos_cart.engine_warnings_title": "Check this order's amounts before taking payment",

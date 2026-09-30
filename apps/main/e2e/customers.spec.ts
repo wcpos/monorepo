@@ -102,9 +102,10 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		await dialog.getByTestId('customer-email-input').fill(`${probe}@example.com`);
 		await dialog.getByTestId('customer-form-save').click();
 
-		// The cart path awaits the Woo id before attaching the customer to the
-		// order, so the dialog closing IS the server round trip having completed —
-		// enqueue, push, ack, rematerialize. A failed create leaves it open.
+		// The cart attaches the customer from its local record without waiting
+		// for the Woo id (#1523), so the dialog closing is the enqueue and the
+		// attach having succeeded. A create that could not be queued leaves it open.
+		// The server round trip is covered by pos-offline-new-customer.spec.ts.
 		await expect(dialog).toBeHidden({ timeout: 30_000 });
 
 		// Read the pill addressed by testID; the probe token is the referent, not

@@ -16,6 +16,8 @@ const mockLoggerSuccess = jest.fn();
 const mockLoggerError = jest.fn();
 const mockReset = jest.fn();
 const mockOnOpenChange = jest.fn();
+const mockRecordCustomerLink = jest.fn();
+const mockStoreDB = { name: 'store-db' };
 let mockSubmitCustomer: SubmitCustomer | undefined;
 
 const currentOrderRecord = { uuid: 'order-1' };
@@ -65,6 +67,19 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ storeDB: mockStoreDB }),
+}));
+
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
+}));
+
+jest.mock('./new-customer-link', () => ({
+	...jest.requireActual('./new-customer-link'),
+	recordCustomerLink: (...args: unknown[]) => mockRecordCustomerLink(...args),
+}));
+
 jest.mock('../../components/customer/customer-form', () => ({
 	CustomerForm: ({ onSubmit }: { onSubmit: SubmitCustomer }) => {
 		mockSubmitCustomer = onSubmit;
@@ -98,19 +113,26 @@ describe.each([
 		mockSubmitCustomer = undefined;
 	});
 
-	it('attaches fields from the raw record payload to the current order', async () => {
+	// #1523: a born-local customer (no Woo id yet, as offline) is attached at once.
+	it('attaches a new customer immediately, as a guest with its addresses, without waiting on the network', async () => {
 		const payload = {
-			id: 37,
 			first_name: 'Ada',
-			billing: { city: 'London' },
+			billing: {
+				first_name: 'Ada',
+				last_name: 'Lovelace',
+				email: 'ada@example.com',
+				city: 'London',
+			},
 			shipping: { city: 'Oxford' },
 		};
 		const toJSON = jest.fn(() => ({ payload }));
 		mockCreate.mockResolvedValue({
+			uuid: 'customer-1',
 			payload,
-			getLatest: () => ({ payload }),
+			getLatest: () => ({ uuid: 'customer-1', payload }),
 			toJSON,
 		});
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
 
 		render(renderComponent());
 		expect(mockSubmitCustomer).toBeDefined();
@@ -119,17 +141,61 @@ describe.each([
 			await mockSubmitCustomer?.({ first_name: 'Ada' });
 		});
 
+		// The cart's own "{name} saved" is the one toast; the generic one would read "#undefined".
+		expect(mockCreate).toHaveBeenCalledWith({ data: { first_name: 'Ada' }, toast: false });
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: currentOrderRecord,
 			data: {
-				customer_id: payload.id,
+				customer_id: 0,
 				billing: payload.billing,
 				shipping: payload.shipping,
 			},
 		});
+		expect(mockRecordCustomerLink).toHaveBeenCalledWith(mockStoreDB, 'order-1', {
+			customerUuid: 'customer-1',
+			scopeId: 'scope-1',
+			identity: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
+			at: expect.any(String),
+		});
+		// The link is recorded only once the order carries the copied identity.
+		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
+			mockRecordCustomerLink.mock.invocationCallOrder[0]!
+		);
 		expect(mockFormat).toHaveBeenCalledWith(payload);
+		expect(mockLoggerError).not.toHaveBeenCalled();
 		expect(toJSON).not.toHaveBeenCalled();
 	});
+
+	it('keeps the form open and records no link when the create could not be queued', async () => {
+		// create() reports its own failure and resolves undefined.
+		mockCreate.mockResolvedValue(undefined);
+
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockRecordCustomerLink).not.toHaveBeenCalled();
+		expect(mockOnOpenChange).not.toHaveBeenCalled();
+	});
+});
+
+it('closes the controlled dialog as soon as the customer is attached', async () => {
+	const payload = { first_name: 'Ada', billing: { first_name: 'Ada' }, shipping: {} };
+	mockCreate.mockResolvedValue({
+		uuid: 'customer-1',
+		payload,
+		getLatest: () => ({ uuid: 'customer-1', payload }),
+	});
+	mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
+
+	render(<AddCustomerDialog open onOpenChange={mockOnOpenChange} />);
+	await act(async () => {
+		await mockSubmitCustomer?.({ first_name: 'Ada' });
+	});
+
+	expect(mockOnOpenChange).toHaveBeenCalledWith(false);
 });
 
 // monorepo#2284: a root `style={{ display: 'none' }}` landed on the panel and the dialog opened hidden.

@@ -39,6 +39,9 @@ jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 jest.mock('@wcpos/core/screens/main/pos/checkout/completion-journal-bridge', () => ({
 	SaleCompletionBridge: () => null,
 }));
+jest.mock('@wcpos/core/screens/main/pos/cart/new-customer-link-bridge', () => ({
+	NewCustomerLinkBridge: () => null,
+}));
 jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge', () => ({
 	TerminalPaymentsBridge: () => null,
 }));
