@@ -3,7 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { ClearLocalData } from './clear-local-data';
+import { ClearLocalData, RestartLockOverlay } from './clear-local-data';
+import { resetRestartLockForTests } from './restart-lock';
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -41,15 +42,23 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: passthrough,
 	AlertDialogTitle: passthrough,
 }));
+/**
+ * The overlay is rendered beside the trigger here the way the drawer layout mounts it in
+ * the app: it reads the module-level restart lock, not this component's state, so the
+ * freeze survives the trigger's host unmounting (a rail on rotation, a bar on navigation).
+ */
 const renderReset = () =>
 	render(
-		<ClearLocalData
-			trigger={(onPress) => (
-				<button data-testid="clear-all-local-data" onClick={onPress}>
-					Reset
-				</button>
-			)}
-		/>
+		<>
+			<ClearLocalData
+				trigger={(onPress) => (
+					<button data-testid="clear-all-local-data" onClick={onPress}>
+						Reset
+					</button>
+				)}
+			/>
+			<RestartLockOverlay />
+		</>
 	);
 /**
  * "Clear local data" must never destroy the databases under the mounted
@@ -76,6 +85,7 @@ describe('ClearLocalData', () => {
 	};
 
 	beforeEach(() => {
+		resetRestartLockForTests();
 		jest.clearAllMocks();
 		clearAllDB.mockResolvedValue({ success: true, message: 'cleared' });
 		mockPlatform.OS = 'web';
@@ -107,6 +117,37 @@ describe('ClearLocalData', () => {
 
 		expect(screen.getByTestId('clear-local-data-restart-overlay')).toBeTruthy();
 		expect(clearAllDB).not.toHaveBeenCalled();
+	});
+
+	it('keeps the restart overlay when the confirming host unmounts', async () => {
+		mockPlatform.OS = 'ios';
+		mockPlatform.isWeb = false;
+		mockPlatform.isNative = true;
+		scheduleClearLocalDataOnNextLoad.mockReturnValue(true);
+		reloadApp.mockReturnValue(false);
+
+		const { rerender } = render(
+			<>
+				<ClearLocalData
+					trigger={(onPress) => (
+						<button data-testid="clear-all-local-data" onClick={onPress}>
+							Reset
+						</button>
+					)}
+				/>
+				<RestartLockOverlay />
+			</>
+		);
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('clear-all-local-data'));
+		});
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('clear-all-local-data-confirm'));
+		});
+		// The rail that hosted the confirm is gone (a breakpoint change); the layout's overlay stays.
+		rerender(<RestartLockOverlay />);
+
+		expect(screen.getByTestId('clear-local-data-restart-overlay')).toBeTruthy();
 	});
 
 	it('refuses a direct clear on native when the flag cannot be scheduled', async () => {

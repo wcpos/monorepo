@@ -24,6 +24,7 @@ import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-cha
 import { useT } from '../../../../contexts/translations';
 import { reloadApp } from '../../../../utils/reload-app';
 import { countUnsentChanges, describeResetConfirm } from '../../hooks/use-unsent-changes';
+import { lockForRestart, useRestartLocked } from './restart-lock';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
@@ -32,13 +33,6 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 	const t = useT();
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */
 	const [confirmingReset, setConfirmingReset] = React.useState<UnsentChanges | null>(null);
-	/**
-	 * True once a clear is scheduled on a build that cannot restart itself
-	 * (production native, no expo-updates). The register must freeze behind an
-	 * overlay until the relaunch: anything sold after the confirm would be
-	 * silently destroyed by the pre-hydration clear on the next launch.
-	 */
-	const [restartRequired, setRestartRequired] = React.useState(false);
 
 	/**
 	 * Clearing local data destroys the durable mutation queue, so it destroys any
@@ -68,7 +62,9 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 			}
 			// Production native cannot restart itself (no expo-updates): the data
 			// stays intact until the relaunch, and the overlay keeps it that way.
-			setRestartRequired(true);
+			// The lock lives outside this component (`restart-lock.ts`) because the
+			// trigger's host — a rail, a bar — can unmount before the relaunch.
+			lockForRestart();
 			return;
 		}
 
@@ -131,21 +127,31 @@ export function ClearLocalData({ trigger }: { trigger: (onPress: () => void) => 
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-			{restartRequired ? (
-				<Portal name="clear-local-data-restart-overlay">
-					<View
-						testID="clear-local-data-restart-overlay"
-						className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3 p-6"
-					>
-						<Text className="text-lg font-bold">
-							{t('common.clear_all_local_data_restart_required')}
-						</Text>
-						<Text className="text-center">
-							{t('common.clear_all_local_data_restart_required_body')}
-						</Text>
-					</View>
-				</Portal>
-			) : null}
 		</>
+	);
+}
+
+/**
+ * The freeze after a scheduled reset that cannot restart the app. Mounted once by the
+ * drawer layout so it outlives whichever bar or rail hosted the confirm.
+ */
+export function RestartLockOverlay() {
+	const t = useT();
+	const locked = useRestartLocked();
+	if (!locked) return null;
+	return (
+		<Portal name="clear-local-data-restart-overlay">
+			<View
+				testID="clear-local-data-restart-overlay"
+				className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3 p-6"
+			>
+				<Text className="text-lg font-bold">
+					{t('common.clear_all_local_data_restart_required')}
+				</Text>
+				<Text className="text-center">
+					{t('common.clear_all_local_data_restart_required_body')}
+				</Text>
+			</View>
+		</Portal>
 	);
 }

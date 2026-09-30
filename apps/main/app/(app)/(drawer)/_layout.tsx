@@ -17,6 +17,7 @@ import {
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { Header } from '@wcpos/core/screens/main/components/header';
+import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
@@ -263,6 +264,7 @@ function DrawerLayoutContent() {
 		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
 			<View className="bg-background flex-1">
 				<ThemedSystemBars />
+				<RestartLockOverlay />
 				<ThemedDrawer
 					screenSize={screenSize}
 					t={t}
