@@ -553,6 +553,141 @@ jobs:
           path: apps/main/test-results/
           retention-days: 7
 
+  e2e-web-mini:
+    name: 🧪 E2E on mini store (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    needs: [changes, deploy]
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.lane == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
+        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
+    concurrency:
+      group: ${{ format('deploy-verify-mini-{0}-{1}', github.run_id, matrix.shardIndex) }}
+      cancel-in-progress: true
+    steps:
+      - name: 🛤 Check mini store configuration
+        id: gate
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          E2E_MINI_CASHIER_PASS: ${{ secrets.E2E_MINI_CASHIER_PASS }}
+        run: |
+          if [ -z "$TS_OAUTH_CLIENT_ID" ] || [ -z "$E2E_MINI_CASHIER_PASS" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The mini store is not configured"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 🏗 Setup repository
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: 🏗 Setup monorepo
+        if: steps.gate.outputs.ready == 'true'
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 💾 Cache Playwright browsers
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: 🎭 Install Playwright browsers
+        if: steps.gate.outputs.ready == 'true'
+        run: cd apps/main && npx playwright install chromium --only-shell
+
+      - name: 🔌 Join the tailnet
+        if: steps.gate.outputs.ready == 'true'
+        uses: tailscale/github-action@6cae46e2d796f265265cfcf628b72a32b4d7cade # v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: 🏥 Health check deployment
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          URL="${{ needs.deploy.outputs.deployment_url }}"
+          echo "Checking deployment at: $URL"
+
+          for i in {1..30}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: HTTP $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              # Verify the response contains expected app content
+              BODY=$(curl -s "$URL")
+              if echo "$BODY" | grep -q "WooCommerce POS\|wcpos\|expo"; then
+                echo "✅ Deployment is healthy and serving the app"
+                exit 0
+              else
+                echo "⚠️ Got 200 but content doesn't look like the app, retrying..."
+              fi
+            fi
+
+            sleep 10
+          done
+
+          echo "❌ Deployment health check failed after 30 attempts"
+          exit 1
+
+      - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+        if: steps.gate.outputs.ready == 'true'
+        id: e2e-tests
+        timeout-minutes: 55
+        run: |
+          cd apps/main
+          ONLY_SPECS='${{ needs.changes.outputs.only_specs }}'
+          if [ -n "$ONLY_SPECS" ]; then
+            SPECS=$(printf '%s' "$ONLY_SPECS" | sed 's/\./\\./g' | tr ' ' '|')
+            echo "::notice title=E2E narrowed to the changed specs::This PR changes only spec files, which cannot affect other specs. Running: $SPECS"
+          else
+            SPECS=$(node scripts/e2e-shard-plan.js "${{ matrix.shardIndex }}" "${{ matrix.shardTotal }}")
+            echo "Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} running: $SPECS"
+          fi
+          npx playwright test "$SPECS"
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
+          CI: true
+          E2E_STORE_URL_PRO: https://claudes-mac-mini.tail6a20e3.ts.net:8443
+          E2E_STORE_URL_FREE: https://claudes-mac-mini.tail6a20e3.ts.net:8443
+          E2E_SHARD_INDEX: ${{ matrix.shardIndex }}
+          E2E_LANE: ${{ needs.changes.outputs.lane }}
+          E2E_QUARANTINE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'only' || '' }}
+          E2E_CASHIER_PASS: ${{ secrets.E2E_MINI_CASHIER_PASS }}
+          E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_MINI_PRODUCT_WRITER_USER }}
+          E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_MINI_PRODUCT_WRITER_PASS }}
+
+      - name: 📊 Upload blob report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always() && steps.gate.outputs.ready == 'true'
+        with:
+          name: mini-blob-report-${{ matrix.shardIndex }}
+          path: apps/main/blob-report/
+          retention-days: 7
+
+      - name: 📸 Upload screenshots on failure
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: failure() && steps.gate.outputs.ready == 'true'
+        with:
+          name: mini-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}
+          path: apps/main/test-results/
+          retention-days: 7
+
   cold-start:
     name: 🥶 Cold-start E2E (thin local catalogue)
     needs: [changes, deploy]
