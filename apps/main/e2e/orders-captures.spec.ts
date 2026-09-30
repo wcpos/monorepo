@@ -30,13 +30,22 @@ async function capture(page: Page, info: TestInfo, state: string, settle = SETTL
 async function navigate(page: Page, route: 'settings' | 'orders') {
 	for (const id of ['orders-bar-menu', 'pos-drawer-open-button', 'drawer-open-button']) {
 		const button = page.getByTestId(id).locator('visible=true').first();
-		if (await button.isVisible()) {
+		// The bar renders a beat after the page: give each candidate a second, as the register
+		// captures do, instead of an instant isVisible() that misses it.
+		if (
+			await button.waitFor({ state: 'visible', timeout: 1_000 }).then(
+				() => true,
+				() => false
+			)
+		) {
 			await button.click({ force: true });
 			await page.waitForTimeout(600);
 			break;
 		}
 	}
-	await page.getByTestId(`drawer-item-${route}`).click();
+	const item = page.getByTestId(`drawer-item-${route}`);
+	await expect(item).toBeVisible({ timeout: 10_000 });
+	await item.click();
 }
 async function ensureSystemTheme(page: Page) {
 	await navigate(page, 'settings');
@@ -69,17 +78,9 @@ for (const [device, viewport] of Object.entries({
 					const escape = async () => {
 						await page.keyboard.press('Escape');
 					};
-					const closePopover = async () => {
-						if (device === 'phone') {
-							await page
-								.getByTestId(
-									/^(overlay-scrim|orders-display-options-scrim|order-filter-date-popover-scrim)$/
-								)
-								.locator('visible=true')
-								.last()
-								.click({ position: { x: 10, y: 10 } });
-						} else await escape();
-					};
+					// Escape closes the topmost overlay on every device; on the phone the pane is a
+					// dialog under the menu's sheet, so the caller re-checks the pane after a close.
+					const closePopover = escape;
 					const state = async (
 						name: string,
 						enter: () => Promise<void>,
@@ -125,7 +126,8 @@ for (const [device, viewport] of Object.entries({
 							},
 							closePopover
 						);
-						await page.getByTestId('order-pane-close').click();
+						const paneClose = page.getByTestId('order-pane-close');
+						if (await paneClose.isVisible()) await paneClose.click();
 					} else {
 						skipState(
 							'No orders in the active cashier/store scope: day headings, hover and pane states unavailable'

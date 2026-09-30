@@ -8,7 +8,7 @@ import isEqual from 'lodash/isEqual';
 import Animated, { FadeInRight, ReduceMotion } from 'react-native-reanimated';
 
 import { BEATS } from '@wcpos/components/lib/motion';
-import { Dialog, DialogContent } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
@@ -325,6 +325,9 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 							className="gap-0 p-0"
 							closeButtonProps={{ className: 'hidden' }}
 						>
+							{/* The pane's own bar is the visible title; the dialog needs one for its
+							    accessible name and the primitive's title check. */}
+							<DialogTitle className="hidden">{t('common.order')}</DialogTitle>
 							{pane}
 						</DialogContent>
 					</Dialog>

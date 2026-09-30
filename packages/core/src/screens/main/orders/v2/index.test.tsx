@@ -424,6 +424,7 @@ jest.mock('@wcpos/components/v2/dialog', () => ({
 	DialogContent: ({ children }: React.PropsWithChildren) => (
 		<div data-testid="phone-page">{children}</div>
 	),
+	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
