@@ -166,6 +166,10 @@ for (const [device, viewport] of Object.entries({
 					for (const section of ['theme', 'barcode-scanning', 'customer-display']) {
 						await state(section, () => openSection(page, section));
 					}
+					info.annotations.push({
+						type: 'skip-state',
+						description: 'loading: transient, it settles before a capture on a resident store',
+					});
 				});
 			});
 		}

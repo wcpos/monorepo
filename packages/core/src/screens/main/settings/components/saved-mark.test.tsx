@@ -61,6 +61,13 @@ it('supports a result label and switches to the latest saved field', () => {
 	expect(getByTestId('settings-saved-restore').textContent).toBe('Restored');
 	expect(queryByTestId('settings-saved-name')).toBeNull();
 });
+it('renders no mark and ignores writes on a page without a provider', () => {
+	const { getByText, queryByTestId } = render(<Marks />);
+	fireEvent.click(getByText('Save name'));
+	fireEvent.click(getByText('Restore'));
+	expect(queryByTestId('settings-saved-name')).toBeNull();
+	expect(queryByTestId('settings-saved-restore')).toBeNull();
+});
 it('disappears without a fade under reduced motion', () => {
 	mockReduced = true;
 	const { getByText, queryByTestId } = render(
