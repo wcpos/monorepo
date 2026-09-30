@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { patchUI, renderTable, reset, setSort, state } from './test-fixture';
 import { DataTableRow } from './rows';
@@ -35,8 +35,9 @@ it('coarse composes visible cells and a caller trailing slot in a pressable row,
 	expect(screen.getByTestId('cell-name')).toBeTruthy();
 	expect(screen.getByTestId('cell-price')).toBeTruthy();
 	expect(screen.queryByTestId('cell-actions')).toBeNull();
-	expect(screen.getByTestId('trailing')).toBeTruthy();
-	fireEvent.click(screen.getByTestId('data-table-row-uuid-1'));
+	// The row's testID holds its trailing control: specs find a row's `+` inside the row.
+	expect(within(screen.getByTestId('data-table-row-uuid-1')).getByTestId('trailing')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('cell-name'));
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
 it('keeps the pending search distinct from empty results', () => {

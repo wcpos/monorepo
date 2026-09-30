@@ -21,6 +21,7 @@ import {
 	storeRequestOptions,
 } from './fixtures';
 import {
+	checkoutSurfaceLocator,
 	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
 	newRunLabel,
@@ -249,7 +250,7 @@ for (const targetStoreId of storeTargets) {
 						await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
 							timeout: 60_000,
 						});
-						await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
+						await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 						// UUID IDs already exist; shared-store tab counts would include other cashiers' orders.
 						const orderTab = page.getByTestId(`open-order-tab-${envelope.recordId}`);
 						await expect(orderTab).toBeAttached({ timeout: 30_000 });
