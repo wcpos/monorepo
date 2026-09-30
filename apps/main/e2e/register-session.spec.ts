@@ -87,10 +87,12 @@ test('opens a register, records paid out, and undoes it', async ({ posPage: page
 	await page.getByTestId('movement-confirm').click();
 	await page.getByTestId('register-panel-movements').click();
 	await expect(page.getByTestId(/^movement-void-/)).toHaveCount(1);
-	// The toast animates while it is on screen and leaves after a few seconds; Playwright's
-	// stability wait can outlive it. Click as a cashier would: as soon as it is there.
-	await page.getByTestId('toast-undo').click({ force: true, timeout: 5_000 });
+	// No force: the toast shows over the modal panel, and a forced click at its point landed on the
+	// panel's edge instead, so the Undo a cashier could not press read as a timing problem (#2284).
+	await page.getByTestId('toast-undo').click();
 	await expect(page.getByTestId(/^movement-void-/)).toHaveCount(0);
+	// The row left because it was voided, not because the press dismissed the panel.
+	await expect(page.getByTestId('register-panel')).toBeVisible();
 	// Routes stay armed after the last assertion; a late fetch would otherwise abort the run.
 	await page.unrouteAll({ behavior: 'ignoreErrors' });
 });

@@ -13,6 +13,7 @@ import { OVERLAY_MOTION, OverlayShell, useOverlay } from '../../lib/overlay';
 import { usePortalContainer } from '../../lib/portal-container';
 import { cn } from '../../lib/utils';
 import { Text, TextClassContext } from '../../text';
+import { isToastTarget } from '../../toast/target';
 
 import type { OverlayPresentation } from '../../lib/overlay';
 import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
@@ -109,7 +110,15 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 }
 function DialogPanel(allProps: DialogContentProps) {
 	const { size = 'md', className, children, ...rest } = allProps;
-	const { closeLabel, closeButtonProps, onOpenAutoFocus, testID, ref, ...props } = rest;
+	const {
+		closeLabel,
+		closeButtonProps,
+		onOpenAutoFocus,
+		onInteractOutside,
+		testID,
+		ref,
+		...props
+	} = rest;
 	const {
 		className: closeButtonClassName,
 		iconClassName: closeIconClassName,
@@ -137,6 +146,12 @@ function DialogPanel(allProps: DialogContentProps) {
 						}
 					: onOpenAutoFocus
 			}
+			onInteractOutside={(event) => {
+				// A toast sits outside every dialog, yet its action can belong to one (the register
+				// panel's Undo): pressing it must not dismiss the dialog underneath (#2284).
+				if (isToastTarget(event.target)) event.preventDefault();
+				onInteractOutside?.(event);
+			}}
 			className={cn(
 				'bg-card border-border web:cursor-default z-60 max-h-full max-w-full gap-4 py-4',
 				byPresentation[presentation as DialogPresentation],
