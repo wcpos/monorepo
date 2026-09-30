@@ -1,11 +1,16 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
+import * as Alert from '@wcpos/components/alert-dialog';
+import { Button } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
+import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Form,
@@ -22,14 +27,15 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 import { useDocField } from '@wcpos/query';
 
+import { LockedRow } from './components/locked-row';
+import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './components/saved-mark';
+import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
-import { CountryCombobox } from '../components/country-state-select/country-combobox';
-import { StateFormInput } from '../components/country-state-select/state-forminput';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
@@ -80,7 +86,11 @@ export function GeneralSettings() {
 
 	return (
 		<Suspense>
-			<GeneralSettingsForm defaultCustomerResource={defaultCustomerResource} />
+			<CountriesProvider>
+				<SavedFieldProvider>
+					<GeneralSettingsForm defaultCustomerResource={defaultCustomerResource} />
+				</SavedFieldProvider>
+			</CountriesProvider>
 		</Suspense>
 	);
 }
@@ -90,7 +100,11 @@ function GeneralSettingsForm({
 }: {
 	defaultCustomerResource: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'];
 }) {
-	const { store } = useStoreSession();
+	const { store, site } = useStoreSession();
+	const countries = useCountries();
+	const markSaved = useMarkSaved();
+	const [restoreOpen, setRestoreOpen] = React.useState(false);
+	const [restoreFailed, setRestoreFailed] = React.useState(false);
 	const formData = useDocField(store, (latest) => {
 		return {
 			name: latest.name,
@@ -134,10 +148,20 @@ function GeneralSettingsForm({
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data: z.infer<typeof formSchema>) => {
-			await localPatch({ document: store, data });
+		async ({
+			store_country,
+			store_state,
+			store_city,
+			store_postcode,
+			...changes
+		}: Partial<z.infer<typeof formSchema>>) => {
+			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
+			// `localPatch` logs and toasts a failed write and resolves undefined.
+			const keys = savedKeys(store.getLatest?.() ?? store, changes);
+			const result = await localPatch({ document: store, data: changes });
+			if (result && keys.length > 0) markSaved(keys);
 		},
-		[localPatch, store]
+		[localPatch, store, markSaved]
 	);
 
 	useFormChangeHandler({
@@ -154,18 +178,11 @@ function GeneralSettingsForm({
 	});
 
 	/**
-	 * Get country code
-	 */
-	const countryCode = useWatch({
-		control: form.control,
-		name: 'store_country',
-		defaultValue: form.getValues('store_country'),
-	});
-
-	/**
 	 * Restore server settings
 	 */
 	const handleRestoreServerSettings = React.useCallback(async () => {
+		setRestoreOpen(false);
+		setRestoreFailed(false);
 		setLoading(true);
 		try {
 			const response = await http.get(`stores/${store.id}`);
@@ -176,9 +193,12 @@ function GeneralSettingsForm({
 				SERVER_OWNED_STORE_FIELDS
 			);
 			if (Object.keys(patch).length > 0) {
-				await localPatch({ document: store, data: patch as never });
+				const result = await localPatch({ document: store, data: patch as never });
+				if (!result) throw new Error('Restore: the local patch did not apply');
 			}
+			markSaved(['restore']);
 		} catch (error) {
+			setRestoreFailed(true);
 			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 			uiLogger[logLevel]('Failed to restore server settings', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
@@ -189,7 +209,7 @@ function GeneralSettingsForm({
 		} finally {
 			setLoading(false);
 		}
-	}, [http, localPatch, store]);
+	}, [http, localPatch, store, markSaved]);
 
 	/**
 	 *
@@ -203,50 +223,45 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="name"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.store_name')}>
-								<FormInput {...field} />
+							<SettingsRow name="name" label={t('settings.store_name')}>
+								<FormInput testID="settings-general-name" {...field} />
 							</SettingsRow>
 						)}
 					/>
-					<FormField
-						name="store_country"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_country')}>
-								<FormCombobox customComponent={CountryCombobox} {...field} disabled />
-							</SettingsRow>
+					<LockedRow
+						label={t('settings.store_base_country')}
+						value={decode(
+							countries.find(({ code }) => code === formData.store_country)?.name ?? ''
 						)}
+						testID="settings-general-locked-country"
 					/>
-					<FormField
-						name="store_state"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_state')}>
-								<FormInput
-									customComponent={StateFormInput}
-									{...field}
-									{...({ countryCode } as Record<string, unknown>)}
-									disabled
-								/>
-							</SettingsRow>
+					<LockedRow
+						label={t('settings.store_base_state')}
+						value={decode(
+							countries
+								.find(({ code }) => code === formData.store_country)
+								?.states?.find(({ code }) => code === formData.store_state)?.name ??
+								formData.store_state ??
+								''
 						)}
+						testID="settings-general-locked-state"
 					/>
-					<FormField
-						control={form.control}
-						name="store_city"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_city')}>
-								<FormInput {...field} disabled />
-							</SettingsRow>
-						)}
+					<LockedRow
+						label={t('settings.store_base_city')}
+						value={formData.store_city}
+						testID="settings-general-locked-city"
 					/>
-					<FormField
-						control={form.control}
-						name="store_postcode"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.store_base_postcode')}>
-								<FormInput {...field} disabled />
-							</SettingsRow>
-						)}
+					<LockedRow
+						label={t('settings.store_base_postcode')}
+						value={formData.store_postcode}
+						testID="settings-general-locked-postcode"
 					/>
+					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
+					{site.url ? (
+						<DocsLink href={`${site.url.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings`}>
+							{t('settings.store_locked_link')}
+						</DocsLink>
+					) : null}
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.localization')}>
@@ -254,7 +269,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="locale"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.language')}>
+							<SettingsRow name="locale" label={t('settings.language')}>
 								<FormSelect
 									customComponent={LanguageSelect}
 									value={value}
@@ -269,6 +284,7 @@ function GeneralSettingsForm({
 						name="default_customer"
 						render={({ field: { value, onChange, ...rest } }) => (
 							<SettingsRow
+								name="default_customer"
 								label={t('settings.default_customer')}
 								description={t('settings.default_customer_description')}
 							>
@@ -289,7 +305,11 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="default_customer_is_cashier"
 						render={({ field }) => (
-							<SettingsRow inline label={t('settings.default_customer_is_cashier')}>
+							<SettingsRow
+								name="default_customer_is_cashier"
+								inline
+								label={t('settings.default_customer_is_cashier')}
+							>
 								<FormSwitch {...field} />
 							</SettingsRow>
 						)}
@@ -301,7 +321,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="currency"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('common.currency')}>
+							<SettingsRow name="currency" label={t('common.currency')}>
 								<FormCombobox
 									customComponent={CurrencySelect}
 									value={value}
@@ -315,7 +335,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="currency_pos"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.currency_position')}>
+							<SettingsRow name="currency_pos" label={t('settings.currency_position')}>
 								<FormSelect
 									customComponent={CurrencyPositionSelect}
 									value={value}
@@ -329,7 +349,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.decimal_separator')}>
+							<SettingsRow name="price_decimal_sep" label={t('settings.decimal_separator')}>
 								<FormInput {...field} />
 							</SettingsRow>
 						)}
@@ -338,7 +358,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="price_num_decimals"
 						render={({ field: { value, ...rest } }) => (
-							<SettingsRow label={t('settings.number_of_decimals')}>
+							<SettingsRow name="price_num_decimals" label={t('settings.number_of_decimals')}>
 								<FormInput type="numeric" value={value ?? undefined} {...rest} />
 							</SettingsRow>
 						)}
@@ -347,7 +367,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.thousand_separator')}>
+							<SettingsRow name="price_thousand_sep" label={t('settings.thousand_separator')}>
 								<FormInput {...field} />
 							</SettingsRow>
 						)}
@@ -356,7 +376,7 @@ function GeneralSettingsForm({
 						control={form.control}
 						name="thousands_group_style"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.thousands_group_style')}>
+							<SettingsRow name="thousands_group_style" label={t('settings.thousands_group_style')}>
 								<FormSelect
 									customComponent={ThousandsStyleSelect}
 									value={value}
@@ -371,10 +391,45 @@ function GeneralSettingsForm({
 				<SettingsDangerZone
 					description={t('settings.restore_server_settings_description')}
 					buttonLabel={t('settings.restore_server_settings')}
-					onPress={handleRestoreServerSettings}
+					onPress={() => setRestoreOpen(true)}
 					loading={loading}
 					testID="settings-general-restore-server"
 				/>
+				<SavedMark name="restore" label={t('settings.restored')} />
+				{restoreFailed && (
+					<VStack>
+						<Text className="text-muted-foreground text-xs">{t('settings.restore_failed')}</Text>
+						<Button
+							variant="link"
+							testID="settings-general-restore-retry"
+							onPress={() => setRestoreOpen(true)}
+						>
+							<Text>{t('settings.try_again')}</Text>
+						</Button>
+					</VStack>
+				)}
+				<Alert.AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
+					<Alert.AlertDialogContent>
+						<Alert.AlertDialogHeader>
+							<Alert.AlertDialogTitle>{t('settings.restore_confirm_title')}</Alert.AlertDialogTitle>
+							<Alert.AlertDialogDescription>
+								{t('settings.restore_server_settings_description')}
+							</Alert.AlertDialogDescription>
+						</Alert.AlertDialogHeader>
+						<Alert.AlertDialogFooter>
+							<Alert.AlertDialogCancel testID="settings-general-restore-cancel">
+								{t('common.cancel')}
+							</Alert.AlertDialogCancel>
+							<Alert.AlertDialogAction
+								variant="destructive"
+								testID="settings-general-restore-confirm"
+								onPress={handleRestoreServerSettings}
+							>
+								{t('settings.restore_server_settings')}
+							</Alert.AlertDialogAction>
+						</Alert.AlertDialogFooter>
+					</Alert.AlertDialogContent>
+				</Alert.AlertDialog>
 			</VStack>
 		</Form>
 	);

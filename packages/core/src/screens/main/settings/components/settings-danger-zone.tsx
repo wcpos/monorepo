@@ -24,7 +24,7 @@ export function SettingsDangerZone({
 	testID,
 }: SettingsDangerZoneProps) {
 	return (
-		<View className="border-border/50 mt-2 gap-3 border-t pt-4 md:flex-row md:items-center md:justify-between">
+		<View className="border-border border-t-hairline mt-2 gap-3 pt-4 md:flex-row md:items-center md:justify-between">
 			<Text className="text-muted-foreground text-xs md:max-w-96 md:flex-1">{description}</Text>
 			<Button
 				variant="outline-destructive"
