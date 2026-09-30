@@ -175,27 +175,33 @@ export function DetailPanel() {
 	});
 	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
 	// the document would claim a whole period it does not hold, so Print waits for the lane.
-	const { binding: salesBinding } = useReportsBinding();
+	const { binding: salesBinding, refundsBinding } = useReportsBinding();
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const laneProgress = useObservableState(salesBinding.laneProgress$, null);
-	const waiting: 'store' | 'data' | 'orders' | 'templates' | 'no-template' | 'printer' | null =
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-09-30.
+	const refundLaneProgress = useObservableState(refundsBinding.laneProgress$, null);
+	const waiting:
+		'store' | 'data' | 'orders' | 'refunds' | 'templates' | 'no-template' | 'printer' | null =
 		!formats.store
 			? 'store'
 			: !ready
 				? 'data'
 				: laneProgress
 					? 'orders'
-					: !doc.templatesReady
-						? 'templates'
-						: doc.templates.length === 0
-							? 'no-template'
-							: doc.mismatchWarning
-								? 'printer'
-								: null;
+					: (detail === 'refunds' || grouped) && refundLaneProgress
+						? 'refunds'
+						: !doc.templatesReady
+							? 'templates'
+							: doc.templates.length === 0
+								? 'no-template'
+								: doc.mismatchWarning
+									? 'printer'
+									: null;
 	const waitingLabels = {
 		store: 'reports.print_waiting_store',
 		data: 'reports.print_waiting_data',
 		orders: 'reports.print_waiting_orders',
+		refunds: 'reports.print_waiting_refunds',
 		templates: 'reports.print_waiting_templates',
 		'no-template': 'reports.print_no_local_template',
 		printer: 'reports.print_printer_mismatch',

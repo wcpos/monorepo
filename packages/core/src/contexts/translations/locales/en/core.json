@@ -85,6 +85,7 @@
 	"reports.print_waiting_data": "Loading the report",
 	"reports.print_waiting_templates": "Loading templates",
 	"reports.print_waiting_orders": "Still loading orders for this range",
+	"reports.print_waiting_refunds": "Still loading refunds for this range",
 	"reports.print_printer_mismatch": "The saved printer cannot print this template",
 	"reports.print_no_local_template": "No template can print offline · manage templates in WP Admin",
 	"reports.print_failed": "Could not print. Try again.",

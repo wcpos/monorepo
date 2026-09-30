@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
 
@@ -20,7 +20,7 @@ import {
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 let mockZone = 'UTC';
-let mockLocalParents: object[] = [];
+let mockLocalParents: { uuid?: string }[] = [];
 const mockRuntime = { engine: {}, locale: 'en' };
 // The provider reads the viewed store's precision through useDocField; the app-state mock's
 // store is a plain object, so the field is read directly.
@@ -28,7 +28,7 @@ jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useQueryRuntime: () => mockRuntime,
 	observeEngineQuery: () =>
-		of({ hits: mockLocalParents.map((payload) => ({ record: { payload } })) }),
+		of({ hits: mockLocalParents.map((payload) => ({ record: { uuid: payload.uuid, payload } })) }),
 	useDocField: (doc: Record<string, unknown> | undefined, pick: (row: never) => unknown) =>
 		doc ? pick(doc as never) : undefined,
 }));
@@ -408,14 +408,27 @@ it('detail is device state, initially null', () => {
 });
 
 // Parent scope wins over a refund's metadata; absent parents require matching POS identity.
-function refundRoom(parents: object[], refunds: object[], store = '9') {
+function refundRoom(
+	parents: { uuid?: string; [key: string]: unknown }[],
+	refunds: object[],
+	store = '9',
+	options: { cashier?: number; orders?: { uuid: string; [key: string]: unknown }[] } = {}
+) {
 	mockLocalParents = parents;
 	const source = {
 		resource: new ObservableResource(
 			of({ hits: refunds.map((payload) => ({ record: { payload } })) })
 		),
 	};
-	const sales = { resource: new ObservableResource(of({ hits: [] })) };
+	const sales = {
+		resource: new ObservableResource(
+			of({
+				hits: (options.orders ?? []).map((payload) => ({
+					record: { uuid: payload.uuid, payload },
+				})),
+			})
+		),
+	};
 	function RefundProbe() {
 		const { periodRefunds } = useReportsData();
 		return (
@@ -429,12 +442,13 @@ function refundRoom(parents: object[], refunds: object[], store = '9') {
 			collection="orders"
 			initialPageSize={100}
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
-			initialFilters={{ store, register: 'front' }}
+			initialFilters={{ store, register: 'front', cashier: options.cashier }}
 		>
 			<ReportsScopeProvider>
 				<DataProvider binding={sales} comparisonBinding={sales} refundsBinding={source}>
 					<React.Suspense fallback={<RefundProbe />}>
 						<ReportsRefunds>
+							<Probe />
 							<RefundProbe />
 						</ReportsRefunds>
 					</React.Suspense>
@@ -495,4 +509,62 @@ it('local parents use created_via for the legacy POS store filter', async () => 
 		'woocommerce-pos'
 	);
 	expect(await screen.findByText('1')).toBeTruthy();
+});
+
+// Omitting cashier matching admits both local parents and orphan refunds from other cashiers.
+it('applies the cashier filter to period refunds', async () => {
+	const cashierIdentity = (cashier: string) => [
+		...identity('9'),
+		{ key: '_pos_user', value: cashier },
+	];
+	refundRoom(
+		[
+			{ id: 4, meta_data: cashierIdentity('7') },
+			{ id: 5, meta_data: cashierIdentity('8') },
+		],
+		[
+			{ id: 1, parent_id: 4, meta_data: cashierIdentity('8') },
+			{ id: 2, parent_id: 5, meta_data: cashierIdentity('7') },
+			{ id: 3, parent_id: 6, meta_data: cashierIdentity('7') },
+			{ id: 4, parent_id: 7, meta_data: cashierIdentity('8') },
+			{ id: 5, parent_id: 8, meta_data: identity('9') },
+		],
+		'9',
+		{ cashier: 7 }
+	);
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,3'));
+});
+
+// Exclusions must precede both held-order membership and the local-parent fallback.
+it.each([true, false])(
+	'excludes refunds whose parent was explicitly unticked (held: %s)',
+	async (held) => {
+		const parent = { id: 4, uuid: 'one', status: 'completed', meta_data: identity('9') };
+		refundRoom(
+			[parent, { id: 5, uuid: 'earlier', meta_data: identity('9') }],
+			[
+				{ id: 1, parent_id: 4 },
+				{ id: 2, parent_id: 5 },
+			],
+			'9',
+			{ orders: held ? [parent] : [] }
+		);
+		await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,2'));
+		fireEvent.click(screen.getByTestId('exclude-one'));
+		expect(screen.getByTestId('period-refunds').textContent).toBe('2');
+	}
+);
+
+it('normalizes the store-zero sentinel in the refund fallback', async () => {
+	refundRoom(
+		[],
+		[
+			{ id: 1, parent_id: 4, meta_data: identity('0') },
+			{ id: 2, parent_id: 5, meta_data: identity('9') },
+			{ id: 3, parent_id: 6, meta_data: identity('0', 'back') },
+			{ id: 4, parent_id: 7 },
+		],
+		'woocommerce-pos'
+	);
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1'));
 });

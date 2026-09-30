@@ -345,6 +345,7 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
 	const { refundsBinding } = useReportsBinding();
+	const { unselectedRowIds } = useReportsSelection();
 	const { filters } = useQueryState<'orders'>();
 	const result = useObservableSuspense(refundsBinding.resource);
 	const refunds = result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload);
@@ -369,7 +370,7 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const parents = new Map([
 		...(local?.hits.map(({ record }) => {
 			const order = record as EngineRecord<'orders'>;
-			return [order.payload.id, order.payload] as const;
+			return [order.payload.id, { ...order.payload, uuid: order.uuid }] as const;
 		}) ?? []),
 		...data.allOrders.map((order) => [order.id, order] as const),
 	]);
@@ -378,14 +379,17 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 		local &&
 		refunds.flatMap((refund) => {
 			const parent = parents.get(refund.parent_id);
+			if (parent && unselectedRowIds[parent.uuid]) return [];
 			const identity = wooMetaCarrier.readIdentity((parent ?? refund).meta_data);
 			const inRoom =
 				held.has(refund.parent_id) ||
 				((!filters.store ||
 					(parent && !/^\d+$/.test(String(filters.store))
 						? parent.created_via === filters.store
-						: identity.storeId === String(filters.store))) &&
-					(!filters.register || identity.registerId === filters.register));
+						: identity.storeId ===
+							String(filters.store === 'woocommerce-pos' ? 0 : filters.store))) &&
+					(!filters.register || identity.registerId === filters.register) &&
+					(!filters.cashier || identity.cashierId === String(filters.cashier)));
 			return inRoom ? [{ ...refund, parentNumber: parent?.number }] : [];
 		});
 	return (
