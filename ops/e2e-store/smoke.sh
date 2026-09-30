@@ -89,6 +89,17 @@ else
 			-H @- "$E2E_STORE_URL/wp-json/wcpos/v1/cashier/$user_id")"
 		if [ "$code" = 200 ]; then
 			pass "login: GET wcpos/v1/cashier/$user_id with the bearer token -> 200 $(jq -c '{id, username: (.username // null), stores: ((.stores // []) | length)}' "$tmp/cashier.json" 2>/dev/null)"
+			# With Pro active, the seed's three stores must reach the cashier
+			# (the test-only licence flag, README); the default store alone
+			# means the flag is missing and the pro multi-store specs are blind.
+			if wp plugin is-active woocommerce-pos-pro >/dev/null 2>&1; then
+				stores="$(jq '(.stores // []) | length' "$tmp/cashier.json" 2>/dev/null || echo 0)"
+				if [ "$stores" -ge 3 ]; then
+					pass "stores: Pro active, the cashier API lists $stores stores"
+				else
+					fail "stores: Pro active, but the cashier API lists $stores store(s), not 3 or more (is the test-only licence flag set?)"
+				fi
+			fi
 		else
 			fail "login: GET wcpos/v1/cashier/$user_id with the bearer token -> HTTP $code"
 		fi

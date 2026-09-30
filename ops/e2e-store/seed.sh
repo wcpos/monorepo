@@ -29,6 +29,7 @@ case "${1:-}" in
 		;;
 esac
 
+take_store_lock
 "$E2E_STORE_OPS_DIR/start.sh"
 [ -d "$E2E_STORE_HOME/plugins/woocommerce-pos" ] || "$E2E_STORE_OPS_DIR/fetch-plugins.sh"
 [ -s "$E2E_STORE_HOME/catalogue/products.json" ] || "$E2E_STORE_OPS_DIR/fetch-catalogue.sh"
@@ -52,7 +53,7 @@ store_in_keychain() {
 	if ! out="$(printf 'add-generic-password -U -s %s -a %s -l "%s %s" -w %s\n' \
 		"$E2E_KEYCHAIN_SERVICE" "$account" "$E2E_KEYCHAIN_SERVICE" "$account" "$password" |
 		security -i 2>&1)" || [ -n "$out" ]; then
-		log "keychain: write failed for $E2E_KEYCHAIN_SERVICE / $account; WordPress not changed"
+		log "keychain: write failed for $E2E_KEYCHAIN_SERVICE / $account; WordPress not changed (after --rotate-passwords, rerun WITH it)"
 		exit 1
 	fi
 	log "keychain: $E2E_KEYCHAIN_SERVICE / $account"
@@ -70,9 +71,11 @@ wp rewrite structure '/%postname%/' >/dev/null
 
 # 2. Plugins: whatever fetch-plugins.sh installed. Pro 2.x bundles the free
 #    plugin (vendor/wcpos/woocommerce-pos) and deactivates a standalone free
-#    plugin on load, so with Pro present only Pro is activated.
+#    plugin on load, so with Pro present only Pro is activated, and its
+#    test-only licence flag is set (README) so Pro lists its stores.
 if [ -d "$E2E_STORE_HOME/plugins/woocommerce-pos-pro" ]; then
 	wp plugin activate woocommerce woocommerce-pos-pro
+	wp eval-file /e2e-ops/seed/pro-licence.php
 else
 	log "woocommerce-pos-pro not present; seeding free only"
 	wp plugin activate woocommerce woocommerce-pos
