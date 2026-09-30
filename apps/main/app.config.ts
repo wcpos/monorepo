@@ -202,6 +202,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// menu itself remains reachable and the defaults can be re-enabled in
 			// its settings; see the plugin.
 			...(isDev ? ['./plugins/with-quiet-dev-menu'] : []),
+			// Dev-client builds cap Gradle at one worker: the 64-bit-only ABI list
+			// above was not enough on its own — EAS's medium Android worker still
+			// OOM-killed the daemon with several modules compiling C++ at once
+			// (EAS build ace57765, 2026-09-30). See the plugin for the numbers.
+			...(isDev ? ['./plugins/with-dev-gradle-workers'] : []),
 			[
 				'expo-camera',
 				{
