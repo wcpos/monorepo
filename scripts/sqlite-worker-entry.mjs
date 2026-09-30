@@ -9,6 +9,7 @@ import {
 	SQLITE_POOL_NAME,
 } from '../packages/database/src/adapters/storage/sqlite-pool.ts';
 import { getSQLiteBasicsOo1 } from './sqlite-basics-oo1.mjs';
+import { quietRecoveredConstraintWarnings } from './sqlite-quiet-constraint.mjs';
 
 const wasmUrl = new URL('sqlite3.wasm', self.location.href);
 // The plugin's worker cache-buster must select the matching wasm build too.
@@ -17,14 +18,15 @@ let ready;
 const sqliteBasics = getSQLiteBasicsOo1({
 	journalMode: 'WAL',
 	async openDb(name) {
-		ready ??= sqlite3InitModule({ locateFile: () => wasmUrl.href }).then((sqlite3) =>
-			sqlite3.installOpfsSAHPoolVfs({
+		ready ??= sqlite3InitModule({ locateFile: () => wasmUrl.href }).then((sqlite3) => {
+			quietRecoveredConstraintWarnings(sqlite3);
+			return sqlite3.installOpfsSAHPoolVfs({
 				name: SQLITE_POOL_NAME,
 				initialCapacity: SQLITE_POOL_INITIAL_CAPACITY,
 				SQLITE_POOL_FILES_PER_DATABASE,
 				SQLITE_POOL_GROWTH_STEP,
-			})
-		);
+			});
+		});
 		const pool = await ready;
 		if (pool.getFileCount() + SQLITE_POOL_FILES_PER_DATABASE > pool.getCapacity()) {
 			await pool.addCapacity(SQLITE_POOL_GROWTH_STEP);

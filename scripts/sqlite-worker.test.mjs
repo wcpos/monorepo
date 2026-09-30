@@ -5,6 +5,8 @@ import test from 'node:test';
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
+import { quietRecoveredConstraintWarnings } from './sqlite-quiet-constraint.mjs';
+
 const shipped = new URL('../apps/main/public/', import.meta.url);
 test('shipped SQLite worker carries the premium translation patch exactly once', async () => {
 	const worker = await readFile(new URL('sqlite.worker.js', shipped), 'utf8');
@@ -56,5 +58,40 @@ test('oo1 adapter enforces WAL, NORMAL, and boolean bindings', async () => {
 		await assert.rejects(basics.setPragma(memory, 'journal_mode', 'WAL'), /requested but memory/);
 	} finally {
 		await basics.close(memory);
+	}
+});
+test('recovered INSERT constraint failures are quiet; other step failures still warn (#2334)', async () => {
+	const sqlite3 = await sqlite3InitModule();
+	const originalWarn = sqlite3.config.warn;
+	const warnings = [];
+	sqlite3.config.warn = (...args) => warnings.push(args);
+	quietRecoveredConstraintWarnings(sqlite3);
+	const db = new sqlite3.oo1.DB(':memory:', 'c');
+	try {
+		db.exec('CREATE TABLE t (id TEXT PRIMARY KEY, u TEXT UNIQUE, n INTEGER CHECK (n >= 0))');
+		db.exec("INSERT INTO t VALUES ('a', 'x', 1)");
+
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('a', 'y', 1)"));
+		assert.deepEqual(warnings, []);
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('b', 'x', 1)"));
+		assert.deepEqual(warnings, []);
+
+		assert.throws(() => db.exec("INSERT INTO t VALUES ('b', 'y', -1)"));
+		assert.equal(warnings.length, 1);
+		assert.equal(warnings[0][0], 'sqlite3_step() rc=');
+		assert.equal(warnings[0][1], 275);
+		assert.match(warnings[0][4], /INSERT/);
+
+		db.exec("INSERT INTO t VALUES ('b', 'y', 1)");
+		assert.throws(() => db.exec("UPDATE t SET id='a' WHERE id='b'"));
+		assert.equal(warnings.length, 2);
+		assert.equal(warnings[1][1], 1555);
+
+		sqlite3.config.warn('other', 1);
+		assert.equal(warnings.length, 3);
+		assert.deepEqual(warnings[2], ['other', 1]);
+	} finally {
+		db.close();
+		sqlite3.config.warn = originalWarn;
 	}
 });

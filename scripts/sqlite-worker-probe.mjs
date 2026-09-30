@@ -33,6 +33,9 @@ const params = {
     const written = await instance.bulkWrite([{ document: { id: 'a', n: 42, _deleted: false,
       _attachments: {}, _rev: '1-a', _meta: { lwt: Date.now() } } }], 'probe');
     if (written.error.length) throw new Error(JSON.stringify(written.error));
+    const conflict = await instance.bulkWrite([{ document: { id: 'a', n: 42, _deleted: false,
+      _attachments: {}, _rev: '1-b', _meta: { lwt: Date.now() } } }], 'probe');
+    if (conflict.error.length !== 1 || conflict.error[0].status !== 409) throw new Error(JSON.stringify(conflict.error));
   }
   const read = async () => {
     const rows = await instance.findDocumentsById(['a'], false);
@@ -113,6 +116,10 @@ try {
 	console.log('Chromium:', browser.version());
 	const context = await browser.newContext();
 	const page = await context.newPage();
+	const stepWarnings = [];
+	page.on('console', (message) => {
+		if (message.text().includes('sqlite3_step()')) stepWarnings.push(message.text());
+	});
 	const pageErrors = [];
 	page.on('pageerror', (error) => pageErrors.push(error.message));
 	const requests = [];
@@ -144,6 +151,11 @@ try {
 		console.log(result.result + suffix);
 	};
 	await run('/');
+	assert.deepEqual(
+		stepWarnings,
+		[],
+		'recovered INSERT constraint failures must not reach the console (#2334)'
+	);
 	await run('/?read=persisted');
 	assert.ok(
 		requests.includes(origin + '/sqlite3.wasm?ver=probe'),
