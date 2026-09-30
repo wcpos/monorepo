@@ -21,18 +21,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "pos-open-orders-switching.spec.ts",
-			"title": "POS open-orders tab switching › cart contents follow the selected order tab across switches",
-			"group": "G2"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "pos-open-orders-switching.spec.ts",
-			"title": "POS open-orders tab switching › cart contents follow the selected order tab across switches",
-			"group": "G2"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-variations.spec.ts",
 			"title": "POS Variations › should render the variation image the server sent",
 			"group": "G2"
