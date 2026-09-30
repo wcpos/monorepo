@@ -602,6 +602,126 @@ describe('query bindings', () => {
 		);
 	});
 
+	const salesState: QueryStateOf<'orders'> = {
+		search: '',
+		filters: { store: '12', dateRange: { from: '2026-07-01', to: '2026-07-14' } },
+		sort: { field: 'date_created_gmt', direction: 'desc' },
+		limit: Number.MAX_SAFE_INTEGER,
+	};
+	// Removing option forwarding or memo identity loses the online residents on this transition.
+	it("a sales-scoped orders binding serves the store's POS orders and the site's online orders from a mixed resident set", async () => {
+		await engineDB.collections.orders.bulkInsert([
+			engineOrder({
+				uuid: 'local',
+				id: 1,
+				created_via: 'woocommerce-pos',
+				meta_data: [{ key: '_pos_store', value: '12' }],
+				date_created_gmt: '2026-07-02',
+			}),
+			engineOrder({
+				uuid: 'foreign',
+				id: 2,
+				created_via: 'woocommerce-pos',
+				meta_data: [{ key: '_pos_store', value: '13' }],
+				date_created_gmt: '2026-07-02',
+			}),
+			engineOrder({
+				uuid: 'checkout',
+				id: 3,
+				created_via: 'checkout',
+				date_created_gmt: '2026-07-02',
+			}),
+			engineOrder({ uuid: 'admin', id: 4, created_via: 'admin', date_created_gmt: '2026-07-02' }),
+		]);
+		const { result, rerender } = renderHook(
+			({ storeScope }: { storeScope: 'pos' | 'sales' }) =>
+				useCollectionBinding('orders', salesState, { storeScope }),
+			{ wrapper: Provider, initialProps: { storeScope: 'pos' } }
+		);
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['local'])
+		);
+		rerender({ storeScope: 'sales' });
+		await waitFor(() =>
+			expect(
+				current(result.current.resource)
+					?.hits.map((hit) => hit.id)
+					.sort()
+			).toEqual(['admin', 'checkout', 'local'])
+		);
+	});
+
+	it("a sales-scoped binding's demand key carries no store part and differs from the pos-scoped key", async () => {
+		const { result, rerender } = renderHook(
+			({ storeScope }: { storeScope: 'pos' | 'sales' }) =>
+				useCollectionBinding('orders', salesState, { storeScope }),
+			{ wrapper: Provider, initialProps: { storeScope: 'pos' } }
+		);
+		await firstValueFrom(result.current.total$);
+		expect(engine.coverageSubscribeCalls).toContainEqual({
+			collection: 'orders',
+			queryKey:
+				'orders:browser:status=all:store=12:after=1782864000:before=1783987200:search=:limit=all',
+		});
+		rerender({ storeScope: 'sales' });
+		await firstValueFrom(result.current.total$);
+		expect(engine.coverageSubscribeCalls).toContainEqual({
+			collection: 'orders',
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+		});
+		expect(engine.requireCalls.at(-1)).not.toHaveProperty('store');
+	});
+
+	// Dropping the target hides progress; borrowing either server count overstates the subset.
+	it("a superset lane still reports laneProgress and a complete verdict yields the local count as total, never the lane's total", async () => {
+		engine.setCensusTotal('orders', 203);
+		await engineDB.collections.orders.insert(
+			engineOrder({
+				uuid: 'online',
+				id: 1,
+				created_via: 'checkout',
+				date_created_gmt: '2026-07-02',
+			})
+		);
+		const target = {
+			collection: 'orders' as const,
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+		};
+		engine.setCoverageVerdict(target, {
+			total: 99,
+			source: 'lane',
+			complete: false,
+			fresh: true,
+			progress: { downloaded: 4, total: 99 },
+		});
+		const { result } = renderHook(
+			() => useCollectionBinding('orders', salesState, { storeScope: 'sales' }),
+			{ wrapper: Provider }
+		);
+		await waitFor(() => expect(current(result.current.resource)?.count).toBe(1));
+		const totals: (number | null)[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		expect(await firstValueFrom(result.current.laneProgress$)).toEqual({
+			downloaded: 4,
+			total: 99,
+		});
+		expect(totals.at(-1)).toBeNull();
+		act(() =>
+			engine.setCoverageVerdict(target, {
+				total: 99,
+				source: 'lane',
+				complete: true,
+				fresh: true,
+				progress: null,
+			})
+		);
+		await waitFor(() => expect(totals.at(-1)).toBe(1));
+		expect(await firstValueFrom(result.current.laneProgress$)).toBeNull();
+		expect(totals).not.toContain(99);
+		expect(totals).not.toContain(203);
+		subscription.unsubscribe();
+	});
+
 	/**
 	 * The lane rows themselves are the ENGINE's business — precedence, freshness and the
 	 * ranged-walk cursor are settled behind `coverageChanges` and covered against real storage

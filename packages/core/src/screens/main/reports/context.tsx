@@ -384,6 +384,7 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 			const inRoom =
 				held.has(refund.parent_id) ||
 				((!filters.store ||
+					(!filters.register && parent && parent.created_via !== 'woocommerce-pos') ||
 					(parent && !/^\d+$/.test(String(filters.store))
 						? parent.created_via === filters.store
 						: identity.storeId ===

@@ -412,7 +412,11 @@ function refundRoom(
 	parents: { uuid?: string; [key: string]: unknown }[],
 	refunds: object[],
 	store = '9',
-	options: { cashier?: number; orders?: { uuid: string; [key: string]: unknown }[] } = {}
+	options: {
+		register?: string | null;
+		cashier?: number;
+		orders?: { uuid: string; [key: string]: unknown }[];
+	} = {}
 ) {
 	mockLocalParents = parents;
 	const source = {
@@ -442,7 +446,11 @@ function refundRoom(
 			collection="orders"
 			initialPageSize={100}
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
-			initialFilters={{ store, register: 'front', cashier: options.cashier }}
+			initialFilters={{
+				store,
+				register: options.register === null ? undefined : (options.register ?? 'front'),
+				cashier: options.cashier,
+			}}
 		>
 			<ReportsScopeProvider>
 				<DataProvider binding={sales} comparisonBinding={sales} refundsBinding={source}>
@@ -461,6 +469,30 @@ const identity = (store: string, register = 'front') => [
 	{ key: '_pos_store', value: store },
 	{ key: '_wcpos_register', value: register },
 ];
+// Removing the non-POS parent branch loses refunds from sales made before this period.
+it('a refund of a local online parent outside the period joins the room when no register is selected', async () => {
+	refundRoom(
+		[{ id: 4, created_via: 'checkout', date_created_gmt: '2025-01-01', meta_data: identity('10') }],
+		[
+			{ id: 1, parent_id: 4 },
+			{ id: 2, parent_id: 5 },
+		],
+		'9',
+		{ register: null }
+	);
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1'));
+});
+it('a refund of a local online parent is dropped when a register is selected', async () => {
+	refundRoom([{ id: 4, created_via: 'checkout' }], [{ id: 1, parent_id: 4 }]);
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe(''));
+});
+it('a cashier scope excludes a local online parent even without a register', async () => {
+	refundRoom([{ id: 4, created_via: 'checkout' }], [{ id: 1, parent_id: 4 }], '9', {
+		register: null,
+		cashier: 7,
+	});
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe(''));
+});
 it('period refunds are scoped to the room by their parent order', async () => {
 	refundRoom(
 		[

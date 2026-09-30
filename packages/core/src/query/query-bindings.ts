@@ -163,14 +163,17 @@ function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
  * DELIBERATE superset, right for demand and wrong for a total. `isUnfiltered` re-admits the
  * reference collections, whose branch reports `represented: false` unconditionally even though
  * an unfiltered view of them maps exactly onto their `<collection>:all` lane.
+ * Only the explicitly marked Sales superset bypasses this gate for progress/completeness:
+ * a superset lane may prove completeness, never supply a count.
  */
 function coverageTargetFor(input: {
 	collection: SyncCollectionName;
 	handleQueryKey: string | null;
 	represented: boolean;
+	coverage: CompiledQuery['coverage'];
 	isUnfiltered: boolean;
 }): CoverageTarget | null {
-	if (!input.represented && !input.isUnfiltered) return null;
+	if (!input.represented && !input.isUnfiltered && input.coverage !== 'superset') return null;
 	if (input.handleQueryKey !== null) {
 		return { collection: input.collection, queryKey: input.handleQueryKey };
 	}
@@ -292,6 +295,7 @@ function useDemand(
 					collection: engineCollection,
 					handleQueryKey: handles.find((handle) => handle.queryKey !== null)?.queryKey ?? null,
 					represented: plan.represented,
+					coverage: compiled.coverage,
 					isUnfiltered,
 				})
 			);
@@ -570,23 +574,29 @@ function coverageProjection$(
 	engine: RxdbSyncEngine,
 	result$: Observable<QueryResult<RxCollection>>,
 	coverageTarget$: Observable<CoverageTarget | null>,
-	census$: Observable<number | null>
+	census$: Observable<number | null>,
+	coverage: CompiledQuery['coverage'] = 'exact'
 ): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
 		),
-		switchMap((target) => (target === null ? UNKNOWN_COVERAGE$ : observeCoverage(engine, target)))
+		switchMap((target) =>
+			(target === null ? UNKNOWN_COVERAGE$ : observeCoverage(engine, target)).pipe(
+				map((verdict) => ({ verdict, superset: target !== null && coverage === 'superset' }))
+			)
+		)
 	);
 	return combineLatest([
 		result$.pipe(map((result) => result.count ?? result.hits.length)),
 		verdict$,
 		census$,
 	]).pipe(
-		map(([localCount, verdict, censusTotal]) => {
+		map(([localCount, { verdict, superset }, censusTotal]) => {
 			// `censusTotal` is non-null only where the census honestly stands for this screen
 			// (see `censusScoped`) and has landed.
-			const serverTotal = censusTotal ?? verdict.total;
+			// A superset lane may prove completeness, never supply a count.
+			const serverTotal = superset ? null : (censusTotal ?? verdict.total);
 			if (serverTotal !== null) {
 				return { total: Math.max(serverTotal, localCount), laneProgress: verdict.progress };
 			}
@@ -698,8 +708,15 @@ function useEngineBinding(
 		[compiled.censusScoped, descriptor.collection, runtime.engine]
 	);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$, census$),
-		[census$, demand.coverageTarget$, result$, runtime.engine]
+		() =>
+			coverageProjection$(
+				runtime.engine,
+				result$,
+				demand.coverageTarget$,
+				census$,
+				compiled.coverage
+			),
+		[census$, demand.coverageTarget$, result$, runtime.engine, compiled.coverage]
 	);
 	const resource = useObservableResource(result$);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
@@ -734,12 +751,13 @@ function useEngineBinding(
 export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
 	state: QueryStateOf<C>,
-	options: { remoteIds?: readonly RemoteId[] } = {}
+	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
 ): QueryBinding {
 	const bindingId = React.useId();
 	const searchFields = searchFieldsFor(
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
+	const storeScope = options.storeScope ?? 'pos';
 	const remoteIdsKey = JSON.stringify(options.remoteIds ?? null);
 	const remoteIds = React.useMemo(
 		() => (remoteIdsKey === 'null' ? undefined : (JSON.parse(remoteIdsKey) as readonly RemoteId[])),
@@ -750,9 +768,10 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 			compileQuery(collection, state, {
 				id: bindingId,
 				targeted: remoteIds,
+				storeScope,
 				searchFields,
 			}),
-		[collection, state, remoteIds, searchFields, bindingId]
+		[collection, state, remoteIds, storeScope, searchFields, bindingId]
 	);
 	const engineDescriptor: EngineQueryDescriptor = {
 		collection: compiled.collection,
