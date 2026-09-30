@@ -51,9 +51,7 @@ export function FilterBar() {
 				<StockStatusPill />
 				<FeaturedPill />
 				<OnSalePill />
-				<Suspense>
-					<CategoryPill />
-				</Suspense>
+				<CategoryPill />
 				<Suspense>
 					<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
 				</Suspense>
