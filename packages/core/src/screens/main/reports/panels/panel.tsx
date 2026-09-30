@@ -19,7 +19,15 @@ import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-da
 import { useQueryState } from '../../../../query';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
-import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
+import {
+	cashiers,
+	categories,
+	channels,
+	registers,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from '../cards/aggregate';
 import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
@@ -129,6 +137,9 @@ export function DetailPanel() {
 			periodRefunds
 		),
 		cashiers: cashiers(totals),
+		channels: channels(selectedOrders, totals),
+		registers: registers(totals),
+		registerNames: names,
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,

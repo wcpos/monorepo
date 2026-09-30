@@ -18,6 +18,7 @@ import { LocalProductsContext, useLocalProducts } from './use-local-products';
 import { BrandsCard } from './brands';
 import { CardSkeleton } from './card';
 import { PaymentsCard } from './payments';
+import { WhereSoldCard } from './where-sold';
 import { CategoriesCard } from './categories';
 import { CashiersCard } from './cashiers';
 import { OrdersCard } from './orders';
@@ -28,6 +29,7 @@ import { RefundsCard } from './refunds';
 const cards = [
 	{ id: 'card-orders', name: 'reports.card_orders', Component: OrdersCard },
 	{ id: 'card-payments', name: 'reports.card_payments', Component: PaymentsCard },
+	{ id: 'card-where-sold', name: 'reports.card_where_sold', Component: WhereSoldCard },
 	{ id: 'card-products', name: 'reports.card_top_products', Component: TopProductsCard },
 	{ id: 'card-categories', name: 'reports.card_categories', Component: CategoriesCard },
 	{ id: 'card-brands', name: 'reports.card_brands', Component: BrandsCard },

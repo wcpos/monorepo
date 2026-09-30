@@ -13,18 +13,19 @@ beforeEach(() => {
 	mockState.from = mockState.to = '2026-07-15';
 });
 // Reordering or omitting a card, diverging labels and incorrect width buckets break these contracts.
-it('renders Orders, Payments, Top products, Categories, Cashiers, Where sold, Taxes and Refunds in that order', () => {
+it('renders Orders, Payments, Where sold, Top products, Categories, Cashiers, Taxes and Refunds in that order', () => {
 	render(<PeriodSection />);
 	const section = screen.getByTestId('reports-period-section');
 	expect(
 		Array.from(section.querySelectorAll('[data-testid]'))
 			.map((node) => node.getAttribute('data-testid'))
 			.filter((id) =>
-				/^card-(orders|payments|products|categories|cashiers|taxes|refunds)$/.test(id!)
+				/^card-(orders|payments|where-sold|products|categories|cashiers|taxes|refunds)$/.test(id!)
 			)
 	).toEqual([
 		'card-orders',
 		'card-payments',
+		'card-where-sold',
 		'card-products',
 		'card-categories',
 		'card-cashiers',
@@ -69,7 +70,7 @@ it('three columns on lg, two on md, one on sm', () => {
 		view.rerender(<PeriodSection />);
 		const row = screen.getByTestId('card-orders').parentElement!.parentElement!;
 		expect(row.children.length).toBe(columns);
-		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(7 / columns));
+		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(8 / columns));
 		expect(row.children[0].contains(screen.getByTestId('card-orders'))).toBe(true);
 	}
 });
@@ -87,7 +88,7 @@ it('shows skeletons while the viewed store is unknown', () => {
 	try {
 		render(<PeriodSection />);
 		expect(screen.getByTestId('reports-period-title').textContent).toContain('Today');
-		for (const id of ['orders', 'products', 'taxes', 'refunds']) {
+		for (const id of ['orders', 'where-sold', 'products', 'taxes', 'refunds']) {
 			expect(screen.getByTestId(`card-${id}-loading`).querySelectorAll('[aria-busy]')).toHaveLength(
 				2
 			);
@@ -128,4 +129,15 @@ it('every card head, Orders included, opens its panel', () => {
 	} finally {
 		spy.mockRestore();
 	}
+});
+
+it('the section renders Where sold after Payments', () => {
+	setOrders([{ total: '10', cost_of_goods_sold: {} }] as import('../context').ReportOrder[]);
+	render(<PeriodSection />);
+	const cards = screen
+		.getByTestId('reports-period-section')
+		.querySelectorAll('[data-testid$="-figure"]:not([data-testid*="-donut-"])');
+	expect(cards).toHaveLength(9);
+	expect(cards[1].getAttribute('data-testid')).toBe('card-payments-figure');
+	expect(cards[2].getAttribute('data-testid')).toBe('card-where-sold-figure');
 });
