@@ -3272,3 +3272,48 @@ test('sync packages publish from a verified trunk commit to GitHub Packages', ()
 		assert.doesNotMatch(JSON.stringify(step), /registry\.npmjs\.org|--provenance/);
 	}
 });
+
+test('native E2E dispatches accept only commits on main or next', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'build', '🔒 Validate trusted ref');
+	assert.equal(step.if, "github.event_name != 'pull_request'");
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-trusted-ref-'));
+	const clone = path.join(workspace, 'clone');
+	try {
+		const setup = runShell(
+			`set -e
+git init --bare --initial-branch=main origin.git
+git clone origin.git clone
+cd clone
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main
+git checkout -b next
+git -c user.name=t -c user.email=t@t commit --allow-empty -m next
+git checkout main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main-only
+git checkout -b stray main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m stray
+git push origin main next`,
+			{ cwd: workspace }
+		);
+		assert.equal(setup.status, 0, setup.stdout + setup.stderr);
+
+		for (const branch of ['main', 'next', 'stray']) {
+			const checkout = runShell(`git checkout ${branch}`, { cwd: clone });
+			assert.equal(checkout.status, 0, checkout.stdout + checkout.stderr);
+			const result = runShell(step.run, { cwd: clone });
+			if (branch === 'stray') {
+				assert.notEqual(result.status, 0, result.stdout + result.stderr);
+				assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+			} else {
+				assert.equal(result.status, 0, `${branch}: ${result.stdout}${result.stderr}`);
+			}
+		}
+
+		const spoof = runShell('git tag origin/next stray && git checkout stray', { cwd: clone });
+		assert.equal(spoof.status, 0, spoof.stdout + spoof.stderr);
+		const result = runShell(step.run, { cwd: clone });
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
