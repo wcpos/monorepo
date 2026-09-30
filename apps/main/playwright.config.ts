@@ -114,7 +114,10 @@ export default defineConfig<WcposTestOptions>({
 	testIgnore: /\.perf\.spec\.ts$/,
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 2 : 0,
+	// One retry on next: run 36682500606 had ~60 hard-failing specs x 3 attempts
+	// capping 4 of 6 shards at the 50-min globalTimeout, and next is where #2284's
+	// reds live. main keeps 2, because that is its release gate.
+	retries: process.env.CI ? (process.env.E2E_LANE === 'next' ? 1 : 2) : 0,
 	// Total store load is runs x shards x workers. With 4 shards and a deep PR
 	// queue, 4 workers/shard put ~100 concurrent browser sessions on one dev
 	// store and saturated its PHP pool (2026-08-19: every main-lane gate failed
