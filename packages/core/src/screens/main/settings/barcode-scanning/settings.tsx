@@ -31,7 +31,7 @@ import {
 	SCAN_SOUND_THEMES,
 	type ScanSoundTheme,
 } from '../../pos/products/scan-sound-themes';
-import { SavedFieldProvider, useMarkSaved } from '../components/saved-mark';
+import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from '../components/saved-mark';
 import { SettingsRow } from '../components/settings-row';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
@@ -99,11 +99,14 @@ function BarcodeSettingsForm() {
 	 */
 	const handleChange = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
-			await localPatch({
+			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
+			// `localPatch` logs and toasts a failed write and resolves undefined.
+			const keys = savedKeys(store.getLatest?.() ?? store, data);
+			const result = await localPatch({
 				document: store,
 				data,
 			});
-			markSaved(Object.keys(data));
+			if (result && keys.length > 0) markSaved(keys);
 		},
 		[localPatch, store, markSaved]
 	);
@@ -240,7 +243,10 @@ function BarcodeSettingsForm() {
 							name="barcode_scanning_sound_theme"
 							render={({ field }) => (
 								<VStack space="xs">
-									<Text className="text-sm font-medium">{t('settings.barcode_sound_theme')}</Text>
+									<HStack space="sm" className="items-center">
+										<Text className="text-sm font-medium">{t('settings.barcode_sound_theme')}</Text>
+										<SavedMark name="barcode_scanning_sound_theme" />
+									</HStack>
 									<RadioGroup value={field.value} onValueChange={field.onChange}>
 										{SCAN_SOUND_THEMES.map((theme) => (
 											<HStack key={theme} space="sm" className="items-center">
@@ -278,6 +284,7 @@ function BarcodeSettingsForm() {
 							render={({ field }) => (
 								<HStack space="sm" className="items-center">
 									<Text className="text-sm font-medium">{t('settings.barcode_sound_volume')}</Text>
+									<SavedMark name="barcode_scanning_sound_volume" />
 									<VStack className="flex-1 px-2">
 										<Slider
 											value={field.value}

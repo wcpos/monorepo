@@ -28,7 +28,7 @@ import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/s
 import { useDocField } from '@wcpos/query';
 
 import { LockedRow } from './components/locked-row';
-import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-mark';
+import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './components/saved-mark';
 import { CountriesProvider, useCountries } from '../../../contexts/countries';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
@@ -155,8 +155,11 @@ function GeneralSettingsForm({
 			store_postcode,
 			...changes
 		}: Partial<z.infer<typeof formSchema>>) => {
-			await localPatch({ document: store, data: changes });
-			markSaved(Object.keys(changes));
+			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
+			// `localPatch` logs and toasts a failed write and resolves undefined.
+			const keys = savedKeys(store.getLatest?.() ?? store, changes);
+			const result = await localPatch({ document: store, data: changes });
+			if (result && keys.length > 0) markSaved(keys);
 		},
 		[localPatch, store, markSaved]
 	);
@@ -190,7 +193,8 @@ function GeneralSettingsForm({
 				SERVER_OWNED_STORE_FIELDS
 			);
 			if (Object.keys(patch).length > 0) {
-				await localPatch({ document: store, data: patch as never });
+				const result = await localPatch({ document: store, data: patch as never });
+				if (!result) throw new Error('Restore: the local patch did not apply');
 			}
 			markSaved(['restore']);
 		} catch (error) {

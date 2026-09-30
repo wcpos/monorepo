@@ -49,8 +49,18 @@ export function SettingsRow({
 					<RowLabel>{label}</RowLabel>
 					{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
 				</View>
-				{children}
-				{name && <SavedMark name={name} />}
+				{/* The mark sits in the gap to the control's left, out of flow: the switch never moves. */}
+				<View className="relative">
+					{children}
+					{name && (
+						<View
+							pointerEvents="none"
+							className="absolute inset-y-0 right-full mr-3 justify-center"
+						>
+							<SavedMark name={name} />
+						</View>
+					)}
+				</View>
 			</Row>
 		);
 	}
@@ -62,9 +72,14 @@ export function SettingsRow({
 				{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
 			</View>
 			<View className="md:flex-1 md:flex-row md:justify-end">
-				<View className="w-full md:max-w-80">
+				<View className="relative w-full md:max-w-80">
 					{children}
-					{name && <SavedMark name={name} />}
+					{/* Out of flow, under the control's right edge, inside the row's padding: no height change. */}
+					{name && (
+						<View pointerEvents="none" className="absolute top-full right-0 mt-0.5">
+							<SavedMark name={name} />
+						</View>
+					)}
 				</View>
 			</View>
 		</Row>

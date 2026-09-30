@@ -20,7 +20,7 @@ jest.mock('@wcpos/components/label', () => ({
 }));
 jest.mock('@wcpos/components/form', () => ({ FormItem: () => null, FormLabel: () => null }));
 
-const mockLocalPatch = jest.fn().mockResolvedValue(undefined);
+const mockLocalPatch = jest.fn().mockResolvedValue({});
 const store: { theme: string; scale?: string } = { theme: 'light' };
 
 let mockTheme = 'light';
@@ -134,15 +134,23 @@ describe('theme tiles', () => {
 });
 
 it('marks Scale only after its patch resolves', async () => {
-	let resolve!: () => void;
+	let resolve!: (result: object) => void;
 	mockLocalPatch.mockReturnValueOnce(
-		new Promise<void>((done) => {
+		new Promise<object>((done) => {
 			resolve = done;
 		})
 	);
 	const { getByTestId, queryByTestId } = render(<ThemeSettings />);
 	fireEvent.click(getByTestId('settings-scale-compact'));
 	expect(queryByTestId('settings-saved-scale')).toBeNull();
-	await act(async () => resolve());
+	await act(async () => resolve({}));
 	expect(getByTestId('settings-saved-scale').textContent).toBe('settings.saved');
+});
+
+it('stays silent when the patch did not apply — localPatch logs a failed write and resolves undefined', async () => {
+	mockLocalPatch.mockResolvedValueOnce(undefined);
+	const { getByTestId, queryByTestId } = render(<ThemeSettings />);
+	await act(async () => fireEvent.click(getByTestId('settings-scale-compact')));
+	expect(mockLocalPatch).toHaveBeenCalled();
+	expect(queryByTestId('settings-saved-scale')).toBeNull();
 });

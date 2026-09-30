@@ -103,12 +103,18 @@ for (const [device, viewport] of Object.entries({
 					await state(
 						'general-saved',
 						async () => {
-							await nameInput.fill(`${originalName} capture`);
+							// Typed, not filled: `fill` dispatches one synthetic input event that the form's
+							// reactive `values` binding reverts before the debounced write fires.
+							await nameInput.click();
+							await nameInput.press('End');
+							await page.keyboard.type(' capture', { delay: 30 });
 							await expect(page.getByTestId('settings-saved-name')).toBeVisible();
 						},
 						async () => {
 							await expect(page.getByTestId('settings-saved-name')).toBeHidden();
-							await nameInput.fill(originalName);
+							await nameInput.click();
+							await nameInput.press('End');
+							for (let i = 0; i < ' capture'.length; i += 1) await nameInput.press('Backspace');
 							await expect(page.getByTestId('settings-saved-name')).toBeVisible();
 							await expect(page.getByTestId('settings-saved-name')).toBeHidden();
 						},

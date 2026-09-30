@@ -21,7 +21,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { LockedRow } from './components/locked-row';
-import { SavedFieldProvider, useMarkSaved } from './components/saved-mark';
+import { SavedFieldProvider, savedKeys, useMarkSaved } from './components/saved-mark';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -110,13 +110,16 @@ function TaxSettingsForm() {
 	 */
 	const handleChange = React.useCallback(
 		async (data: Partial<z.infer<typeof formSchema>>) => {
-			await localPatch({
+			// Only a genuine change is acknowledged (see `savedKeys`), and only when the patch applied:
+			// `localPatch` logs and toasts a failed write and resolves undefined.
+			const keys = savedKeys(store.getLatest?.() ?? store, data);
+			const result = await localPatch({
 				document: store,
 				data: Object.fromEntries(
 					Object.entries(data).filter(([key]) => Object.keys(formSchema.shape).includes(key))
 				),
 			});
-			markSaved(Object.keys(data));
+			if (result && keys.length > 0) markSaved(keys);
 		},
 		[localPatch, store, markSaved]
 	);

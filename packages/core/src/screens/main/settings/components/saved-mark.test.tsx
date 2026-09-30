@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
 
-import { SavedFieldProvider, SavedMark, useMarkSaved } from './saved-mark';
+import { SavedFieldProvider, savedKeys, SavedMark, useMarkSaved } from './saved-mark';
 const mockDuration = jest.fn((_duration: number) => 'fade');
 let mockReduced = false;
 jest.mock('react-native-reanimated', () => ({
@@ -72,4 +72,19 @@ it('disappears without a fade under reduced motion', () => {
 	act(() => jest.advanceTimersByTime(1200));
 	expect(queryByTestId('settings-saved-name')).toBeNull();
 	expect(mockDuration).not.toHaveBeenCalled();
+});
+
+describe('savedKeys', () => {
+	it('keeps only the keys whose value differs from the record, comparing as strings', () => {
+		const before = { name: 'Shop', price_num_decimals: 2, locale: 'es_ES', empty: undefined };
+		expect(savedKeys(before, { name: 'Shop two' })).toEqual(['name']);
+		// The form's reactive re-bind echoes a numeric input's number and a select's key unchanged.
+		expect(savedKeys(before, { price_num_decimals: '2' })).toEqual([]);
+		expect(savedKeys(before, { locale: 'es_ES' })).toEqual([]);
+		expect(savedKeys(before, { empty: '' })).toEqual([]);
+		expect(savedKeys(before, { name: 'Shop two', locale: 'es_ES' })).toEqual(['name']);
+	});
+	it('marks every key when there is no record to compare against', () => {
+		expect(savedKeys(undefined, { a: 1, b: 2 })).toEqual(['a', 'b']);
+	});
 });

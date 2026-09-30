@@ -154,8 +154,8 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 		async (value: string | undefined) => {
 			if (!value) return;
 			try {
-				await localPatch({ document: store, data: { scale: value } });
-				markSaved(['scale']);
+				const result = await localPatch({ document: store, data: { scale: value } });
+				if (result) markSaved(['scale']);
 			} catch (error) {
 				console.error('Failed to persist selected scale', error);
 			}
@@ -256,13 +256,13 @@ function ThemeSettingsContent() {
 	const handleThemeChange = React.useCallback(
 		async (themeName: string) => {
 			try {
-				await localPatch({
+				const result = await localPatch({
 					document: store,
 					data: { theme: themeName },
 				});
 
 				Uniwind.setTheme(themeName as any);
-				markSaved(['theme']);
+				if (result) markSaved(['theme']);
 			} catch (error) {
 				console.error('Failed to persist selected theme', error);
 			}

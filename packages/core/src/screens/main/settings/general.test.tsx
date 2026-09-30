@@ -167,6 +167,16 @@ it('strips all four server-owned address keys while retaining editable changes',
 	);
 	expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { name: 'Changed' } });
 });
+it('shows the failure line, not Restored, when the restore patch did not apply', async () => {
+	// A server city that differs from the stored one makes a non-empty patch, so localPatch runs.
+	mockGet.mockResolvedValueOnce({ data: { store_city: 'Leeds' } });
+	mockLocalPatch.mockResolvedValueOnce(undefined);
+	const { getByTestId, getByText, queryByTestId } = render(<GeneralSettings />);
+	fireEvent.click(getByTestId('settings-general-restore-server'));
+	await act(async () => fireEvent.click(getByTestId('settings-general-restore-confirm')));
+	expect(getByText('settings.restore_failed')).toBeTruthy();
+	expect(queryByTestId('settings-saved-restore')).toBeNull();
+});
 it('asks before restoring, and cancelling does not fetch or patch', () => {
 	const { getByTestId, queryByRole } = render(<GeneralSettings />);
 	fireEvent.click(getByTestId('settings-general-restore-server'));
