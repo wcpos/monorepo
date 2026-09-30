@@ -79,11 +79,11 @@ it('the phone sheet sits inside the scrim, not beside it', () => {
 	// leaned on the primitive's Overlay would land outside the scrim's justify-end box —
 	// below the app root, off-screen on a phone.
 	const primitive = jest.requireMock('@rn-primitives/select');
-	const keep = primitive.Overlay;
-	function SiblingOverlay({ children, ...p }: React.ComponentProps<typeof keep>) {
+	const Keep = primitive.Overlay;
+	function SiblingOverlay({ children, ...p }: React.ComponentProps<typeof Keep>) {
 		return (
 			<>
-				<keep {...p} data-testid="primitive-overlay" />
+				<Keep {...p} data-testid="primitive-overlay" />
 				{children}
 			</>
 		);
@@ -98,7 +98,7 @@ it('the phone sheet sits inside the scrim, not beside it', () => {
 		expect(within(screen.getByTestId('panel-scrim')).getByRole('dialog')).toBeTruthy();
 		expect(screen.queryByTestId('primitive-overlay')).toBeNull();
 	} finally {
-		primitive.Overlay = keep;
+		primitive.Overlay = Keep;
 	}
 });
 it('renders nothing for a closed inline sheet', () => {
