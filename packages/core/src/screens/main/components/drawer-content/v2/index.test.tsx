@@ -61,7 +61,7 @@ jest.mock('expo-router/drawer', () => {
 	};
 });
 
-jest.mock('../../header/notification-bell', () => ({
+jest.mock('../../notification-bell/notification-bell', () => ({
 	NotificationBell: () => <div data-testid="bell" />,
 }));
 jest.mock('./drawer-item', () => ({
@@ -76,7 +76,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
 }));
-jest.mock('../../header/user-avatar', () => ({ UserAvatar: () => <div data-testid="avatar" /> }));
+jest.mock('../../user-avatar', () => ({ UserAvatar: () => <div data-testid="avatar" /> }));
 jest.mock('../../../pos/cart/user-sheet', () => ({
 	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
 		open ? <div data-testid="user-sheet" data-root={String(portalHost === null)} /> : null,

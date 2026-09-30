@@ -31,10 +31,10 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
-jest.mock('../header/notification-bell', () => ({
+jest.mock('../notification-bell/notification-bell', () => ({
 	NotificationBell: ({ testID }: { testID: string }) => <button data-testid={testID} />,
 }));
-jest.mock('../header/user-avatar', () => ({ UserAvatar: () => null }));
+jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
 jest.mock('../../pos/cart/user-sheet', () => ({
 	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
 }));

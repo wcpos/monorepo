@@ -47,11 +47,11 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 jest.mock('react-native', () => ({ Pressable: passthrough, View: passthrough }));
 
 describe('NotificationPanelContent', () => {
-	it('keeps a touch-safe hit area on the compact mark-all-read action', () => {
+	it('keeps a touch-safe hit area on the sm mark-all-read action', () => {
 		render(<NotificationPanelContent />);
 
 		expect(
 			screen.getByRole('button', { name: 'common.mark_all_as_read' }).getAttribute('data-size')
-		).toBe('compact');
+		).toBe('sm');
 	});
 });

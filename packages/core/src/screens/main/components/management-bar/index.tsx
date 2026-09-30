@@ -15,8 +15,8 @@ import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { CashierSheetProvider, useCashierSheet } from '../../pos/cart/cashier-sheet-state';
 import { UserSheet } from '../../pos/cart/user-sheet';
-import { NotificationBell } from '../header/notification-bell';
-import { UserAvatar } from '../header/user-avatar';
+import { NotificationBell } from '../notification-bell/notification-bell';
+import { UserAvatar } from '../user-avatar';
 
 type Props = React.PropsWithChildren<{ title: string; testID: string; search: React.ReactNode }>;
 

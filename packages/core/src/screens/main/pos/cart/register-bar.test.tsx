@@ -8,7 +8,7 @@ import { RegisterBar } from './register-bar';
 jest.mock('expo-haptics', () => ({}));
 // The bar carries the notifications bell (language decision 42); its Popover primitive ships
 // untransformed JSX, so the bell is a stub here as it is in the rail test.
-jest.mock('../../components/header/notification-bell', () => ({
+jest.mock('../../components/notification-bell/notification-bell', () => ({
 	NotificationBell: ({ testID }: { testID?: string }) => <div data-testid={testID ?? 'bell'} />,
 }));
 
@@ -66,7 +66,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
-jest.mock('../../components/header/user-avatar', () => ({ UserAvatar: () => null }));
+jest.mock('../../components/user-avatar', () => ({ UserAvatar: () => null }));
 jest.mock('./switch-store-sheet', () => ({ SwitchStoreSheet: () => null }));
 jest.mock('./user-sheet', () => ({
 	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),

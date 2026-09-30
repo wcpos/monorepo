@@ -61,7 +61,7 @@ jest.mock('expo-router/drawer', () => {
 	};
 });
 
-jest.mock('../header/notification-bell', () => ({ NotificationBell: () => null }));
+jest.mock('../notification-bell/notification-bell', () => ({ NotificationBell: () => null }));
 jest.mock('./drawer-item-list', () => ({
 	DrawerItemList: () => null,
 }));

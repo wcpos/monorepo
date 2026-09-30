@@ -2,7 +2,8 @@ import * as React from 'react';
 import { Platform, View } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
-import { useCSSVariable } from 'uniwind';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
@@ -16,6 +17,7 @@ import {
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { Header } from '@wcpos/core/screens/main/components/header';
+import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
@@ -235,6 +237,11 @@ function ThemedDrawer({
 	);
 }
 
+function ThemedSystemBars() {
+	const { theme } = useUniwind();
+	return <SystemBars style={theme === 'light' ? 'dark' : 'light'} />;
+}
+
 function DrawerLayoutContent() {
 	const { screenSize } = useTheme();
 	const t = useT();
@@ -256,6 +263,8 @@ function DrawerLayoutContent() {
 	return (
 		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
 			<View className="bg-background flex-1">
+				<ThemedSystemBars />
+				<RestartLockOverlay />
 				<ThemedDrawer
 					screenSize={screenSize}
 					t={t}
