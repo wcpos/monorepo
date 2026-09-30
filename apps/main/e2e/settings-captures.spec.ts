@@ -51,7 +51,13 @@ async function openSettings(page: Page) {
 
 async function openSection(page: Page, section: string) {
 	const nav = page.getByTestId(`settings-nav-${section}`);
-	if (!(await nav.isVisible())) await page.getByTestId('settings-navigation-back').click();
+	// On the phone the item lives on the index; give a page transition a moment before
+	// concluding we are on a leaf and need the crumb (isVisible() answers at once).
+	const onIndexOrRail = await nav
+		.waitFor({ state: 'visible', timeout: 2_000 })
+		.then(() => true)
+		.catch(() => false);
+	if (!onIndexOrRail) await page.getByTestId('settings-navigation-back').click();
 	await nav.click();
 	await expect(page.getByTestId(`screen-settings-${section}`)).toBeVisible();
 }
@@ -129,7 +135,9 @@ for (const [device, viewport] of Object.entries({
 						() => page.getByTestId('settings-general-restore-cancel').click()
 					);
 					await state('tax', () => openSection(page, 'tax'));
-					await state('printing', () => openSection(page, 'printing'));
+					// The printers list waits up to 2 s for cloud printers before it renders anything
+					// (never an empty-state flash), so this state settles past that window.
+					await state('printing', () => openSection(page, 'printing'), undefined, 2_500);
 					let deleteCaptured = false;
 					const menus = page.getByTestId(/^printer-row-.*-menu$/);
 					for (const menu of await menus.all()) {

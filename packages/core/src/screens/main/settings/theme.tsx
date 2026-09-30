@@ -164,7 +164,11 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsRow label={t('settings.scale')} name="scale">
+		<SettingsRow
+			label={t('settings.scale')}
+			description={t('settings.scale.description')}
+			name="scale"
+		>
 			<SegmentedControl
 				segments={
 					SCALE_OPTIONS.map((option) => ({
@@ -279,7 +283,8 @@ function ThemeSettingsContent() {
 			>
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
 			</SettingsSection>
-			<SettingsSection title={t('settings.scale')} description={t('settings.scale.description')}>
+			{/* The row carries the label and the reason; a titled section would say Scale twice. */}
+			<SettingsSection>
 				<ScaleRow t={t} />
 			</SettingsSection>
 		</VStack>
