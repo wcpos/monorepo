@@ -1863,6 +1863,22 @@ test('the E2E test step tells playwright.config its lane (next retries once)', (
 	assert.equal(runStep.env.E2E_LANE, '${{ needs.changes.outputs.lane }}');
 });
 
+test('a quarantine-only dispatch refuses off next or not preview', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const refuse = workflow.jobs.changes.steps[0];
+	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off next or not preview');
+	for (const condition of [
+		'workflow_dispatch',
+		'inputs.quarantine_only',
+		"github.ref_name != 'next'",
+		"inputs.target != 'preview'",
+	]) {
+		assert.ok(refuse.if.includes(condition), condition);
+	}
+	assert.ok(refuse.run.includes('exit 1'));
+	assert.ok([workflow.jobs.deploy.needs].flat().includes('changes'));
+});
+
 test('the weekly quarantine-only run (#2284) tests next in one shard and reports to the issue', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const quarantine = "(github.event_name == 'schedule' || inputs.quarantine_only)";
