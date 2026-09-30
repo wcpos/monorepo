@@ -110,6 +110,10 @@ export function Chip({
 							event?.stopPropagation?.();
 							onClear();
 						}}
+						// A web Select trigger (`asChild`) opens from the ROOT's mouse pointerdown, which
+						// stopping the press never reaches: clearing a select pill also opened its menu
+						// over the screen (#2284). Enter/Space already stop at this press's own keydown.
+						onPointerDown={(event) => event.stopPropagation()}
 					>
 						<Icon name="xmark" size="sm" className="text-foreground" />
 					</Pressable>
