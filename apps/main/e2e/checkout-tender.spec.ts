@@ -38,6 +38,12 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 
+/**
+ * A ledger leg row, `checkout-leg-<id>`. Its timeline dot (`checkout-leg-dot-<id>`) and tip
+ * line (`checkout-leg-tip-<id>`) share the prefix, so a bare prefix counts one leg as two.
+ */
+const LEG_ROW = /^checkout-leg-(?!dot-|tip-)/;
+
 /** Methods the tender grid can actually drive: enabled, and captured by the app itself. */
 function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 	return descriptors.filter((method) => method.pos_enabled && method.capture?.mode === 'manual');
@@ -169,7 +175,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 60_000 })
 				.toBe(balance - part);
-			await expect(page.locator('[data-testid^="checkout-leg-"]')).toHaveCount(1);
+			await expect(page.getByTestId(LEG_ROW)).toHaveCount(1);
 
 			await page.getByTestId(`checkout-method-${second!.id}`).click();
 			// Pre-filled with the REMAINING balance, so the second leg closes the order.
@@ -437,7 +443,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 			await enterAmount(page, cash!.id, part);
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderA.orderId, 'record');
-			const ledgerRow = page.getByTestId('checkout-ledger').getByTestId(/^checkout-leg-/);
+			const ledgerRow = page.getByTestId('checkout-ledger').getByTestId(LEG_ROW);
 			await expect(ledgerRow).toHaveCount(1);
 			const legTestId = await ledgerRow.getAttribute('data-testid');
 			expect(legTestId).toMatch(/^checkout-leg-.+/);
@@ -514,7 +520,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 60_000 })
 				.toBe(balance - part);
-			const ledgerRow = page.locator('[data-testid^="checkout-leg-"]');
+			const ledgerRow = page.getByTestId(LEG_ROW);
 			await expect(ledgerRow).toHaveCount(1);
 			const ledgerTestId = await ledgerRow.getAttribute('data-testid');
 			expect(ledgerTestId, 'the cash ledger row must expose its stable row id').toMatch(
