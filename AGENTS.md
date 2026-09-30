@@ -28,7 +28,7 @@ Current local skills:
 
 ## Local Rules
 
-Before touching any screen, component or stylesheet, read `.claude/rules/design.mdc` — the owner's UI design rules (touch targets, one number one action, grid not wrap, state not explanation, motion, tokens, copy, definition of done). A UI PR that breaks one of them states the reason in its body.
+Before touching any screen, component or stylesheet, read `CODING_STANDARDS.md` § Design — the owner's UI design rules (touch targets, one number one action, grid not wrap, state not explanation, motion, tokens, copy, definition of done). A UI PR that breaks one of them states the reason in its body. `.claude/rules/design.mdc` is the pointer that loads for UI files.
 
 The consolidated local project rules live in `.claude/rules/project.mdc` and cover:
 
