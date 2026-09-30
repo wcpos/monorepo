@@ -64,9 +64,13 @@ export function DataTableRow<TData extends RowData>({
 	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
 	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
 	return (
-		<View className="border-border flex-row items-center border-b">
+		// The row's testID names the whole row, trailing control included, as the old table's
+		// did: specs find a row's `+` inside the row, so the id must not sit on the pressable alone.
+		<View
+			testID={testID ?? getRowTestID(item)}
+			className="border-border flex-row items-center border-b"
+		>
 			<Pressable
-				testID={testID ?? getRowTestID(item)}
 				// No `accessibilityRole="button"` by default: on web that renders a <button>, and the
 				// cells may carry their own controls (category chips, an edit icon), which may not
 				// nest in one. A caller whose row is the only control names it (`accessibilityLabel`).
