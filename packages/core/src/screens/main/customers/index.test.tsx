@@ -4,15 +4,20 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { ObservableResource } from 'observable-hooks';
 
 import { CustomersScreen } from './index';
 
 import type { QueryStateOf } from '../../../query';
 
+let mockCanCreate = true;
+const mockPush = jest.fn();
 const mockSync = jest.fn(async () => undefined);
 const mockBinding = {
-	resource: { kind: 'customers-resource' },
+	resource: new ObservableResource(
+		new BehaviorSubject({ hits: [], searchState: 'answered', searchActive: false })
+	),
 	active$: of(false),
 	total$: of(7),
 	sync: mockSync,
@@ -33,13 +38,14 @@ jest.mock('../../../query', () => {
 	};
 });
 
+jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/query', () => ({
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
 }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: jest.fn() }),
+	useRouter: () => ({ push: mockPush }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -73,9 +79,19 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
+	Suspense: React.Suspense,
 }));
-jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({
+		testID,
+		disabled,
+		onPress,
+	}: {
+		testID: string;
+		disabled: boolean;
+		onPress: () => void;
+	}) => <button data-testid={testID} disabled={disabled} onClick={onPress} />,
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -87,14 +103,14 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock('../components/data-table', () => ({
+jest.mock('../components/data-table/v2', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
 		return <div data-testid="customers-table" />;
 	},
 }));
-jest.mock('../components/data-table/skeleton', () => ({
-	DataTableSkeleton: () => null,
+jest.mock('../components/data-table/v2/skeleton', () => ({
+	DataTableSkeleton: ({ id }: { id: string }) => <div data-testid={`skeleton-${id}`} />,
 }));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
@@ -112,7 +128,7 @@ jest.mock('../contexts/pro-access', () => ({
 }));
 jest.mock('../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({
-		caps: { canCreateCustomers: true },
+		caps: { canCreateCustomers: mockCanCreate },
 		known: false,
 	}),
 }));
@@ -232,3 +248,89 @@ describe('CustomersScreen query-state wiring', () => {
 		});
 	});
 });
+
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => jest.useRealTimers());
+
+// The legacy string loses the recovery action.
+it('distinguishes an empty store from search results and clears search', () => {
+	render(<CustomersScreen />);
+	let empty = mockDataTableProps.noDataMessage as React.ReactElement<{
+		kind: string;
+		action?: { onPress: () => void };
+	}>;
+	expect(empty.props.kind).toBe('empty');
+	fireEvent.change(screen.getByTestId('search-customers'), { target: { value: 'missing' } });
+	act(() => jest.advanceTimersByTime(250));
+	empty = mockDataTableProps.noDataMessage as typeof empty;
+	expect(empty.props.kind).toBe('no-results');
+	act(() => empty.props.action!.onPress());
+	expect(latestState().search).toBe('');
+});
+
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({ children, search }: { children: React.ReactNode; search: React.ReactNode }) => (
+		<>
+			{search}
+			{children}
+		</>
+	),
+}));
+jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('./row', () => ({ CustomerRow: () => null }));
+jest.mock('./cells/date', () => ({ DateCell: () => null }));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('@wcpos/components/virtualized-list', () => ({
+	Item: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+it('shows a skeleton while the resource suspends', () => {
+	const resource = mockBinding.resource;
+	mockBinding.resource = new ObservableResource(new Subject());
+	render(<CustomersScreen />);
+	expect(screen.getByTestId('skeleton-customers')).toBeTruthy();
+	mockBinding.resource = resource;
+});
+it.each([
+	[true, true],
+	[false, false],
+	[false, true],
+])('keeps add rules for readOnly=%s capability=%s', (readOnly, canCreate) => {
+	mockReadOnly = readOnly;
+	mockCanCreate = canCreate;
+	render(<CustomersScreen />);
+	const button = screen.getByTestId('customers-add-button') as HTMLButtonElement;
+	expect(button.disabled).toBe(readOnly || !canCreate);
+	mockPush.mockClear();
+	fireEvent.click(button);
+	if (!readOnly && canCreate) expect(mockPush).toHaveBeenCalledWith({ pathname: '/customers/add' });
+	else expect(mockPush).not.toHaveBeenCalled();
+});
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+
+it('shows retained rows as searching only while results are pending', () => {
+	const original = mockBinding.resource;
+	const source = new BehaviorSubject({
+		hits: [{ id: 'one', record: { uuid: 'one' } }],
+		searchState: 'pending',
+		searchActive: true,
+	});
+	mockBinding.resource = new ObservableResource(source) as typeof original;
+	try {
+		const { unmount } = render(<CustomersScreen />);
+		expect(screen.getByTestId('customers-searching-line')).toBeTruthy();
+		act(() => source.next({ ...source.value, searchState: 'answered' }));
+		expect(screen.queryByTestId('customers-searching-line')).toBeNull();
+		unmount();
+	} finally {
+		mockBinding.resource = original;
+	}
+});
+
+jest.mock('@wcpos/components/docs-link', () => ({
+	DocsLink: ({ children }: React.PropsWithChildren) => children,
+}));

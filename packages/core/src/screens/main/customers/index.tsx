@@ -1,12 +1,14 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 
+import { useObservableSuspense } from 'observable-hooks';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { EmptyState } from '@wcpos/components/empty-state';
+import { usePointer } from '@wcpos/components/lib/device';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -17,14 +19,15 @@ import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Avatar } from './cells/avatar';
 import { CustomerEmail } from './cells/email';
-import { UISettingsForm } from './ui-settings-form';
+import { DisplayOptions } from './display-options';
+import { CustomerRow as CoarseRow } from './row';
+import { DateCell } from './cells/date';
+import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
-import { DataTable } from '../components/data-table';
-import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { RecordDateCell } from '../components/record-date-cell';
-import { UISettingsDialog } from '../components/ui-settings';
+import { DataTable } from '../components/data-table/v2';
+import { DataTableSkeleton } from '../components/data-table/v2/skeleton';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
@@ -46,8 +49,8 @@ const cells = {
 	shipping: Address,
 	actions: Actions,
 	email: CustomerEmail,
-	date_created_gmt: RecordDateCell,
-	date_modified_gmt: RecordDateCell,
+	date_created_gmt: DateCell,
+	date_modified_gmt: DateCell,
 };
 
 const CUSTOMERS_PAGE_SIZE = 10;
@@ -79,10 +82,19 @@ function getInitialCustomerSort(
 	};
 }
 
-function CustomersScreenContent() {
+function CustomersList({
+	binding,
+}: {
+	binding: ReturnType<typeof useCollectionBinding<'customers'>>;
+}) {
 	const state = useQueryState<'customers'>();
 	const actions = useQueryStateActions<'customers'>();
-	const binding = useCollectionBinding('customers', state);
+	const result = useObservableSuspense(binding.resource);
+	const deferredResult = React.useDeferredValue(result);
+	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
+	const emptyStore = !state.search;
+	const pointer = usePointer();
+	const t = useT();
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'customers'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -93,75 +105,114 @@ function CustomersScreenContent() {
 		}),
 		[actions]
 	);
+
+	return (
+		<>
+			{pending && <View testID="customers-searching-line" className="bg-primary h-0.5" />}
+			<View className={`flex-1 ${pending ? 'opacity-60' : ''}`}>
+				<DataTable<CustomerRow>
+					id="customers"
+					collectionName="customers"
+					binding={binding}
+					resource={binding.resource}
+					sort={state.sort}
+					actions={tableActions}
+					active$={binding.active$}
+					total$={binding.total$}
+					sync={binding.sync}
+					cells={cells}
+					estimatedItemSize={56}
+
+					renderItem={
+						pointer === 'coarse'
+							? ({ item }) => (
+									<VirtualizedList.Item>
+										<View testID={`data-table-row-${item.original.record.uuid}`}>
+											<CoarseRow record={item.original.record} />
+										</View>
+									</VirtualizedList.Item>
+								)
+							: undefined
+					}
+					noDataMessage={
+						<EmptyState
+							testID="no-data-message"
+							size="surface"
+							kind={emptyStore ? 'empty' : 'no-results'}
+							title={t(
+								emptyStore ? 'customers.no_customers_yet' : 'customers.nothing_matches_search'
+							)}
+							description={emptyStore ? t('customers.no_customers_yet_description') : undefined}
+							action={
+								emptyStore
+									? undefined
+									: {
+											label: t('customers.clear_search'),
+											onPress: () => {
+												actions.clearSearch();
+											},
+										}
+							}
+						/>
+					}
+				/>
+			</View>
+		</>
+	);
+}
+
+function CustomersScreenContent() {
+	const state = useQueryState<'customers'>();
+	const binding = useCollectionBinding('customers', state);
 	const t = useT();
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-
-	/**
-	 *
-	 */
 	return (
 		<View
 			testID="screen-customers"
-			className="h-full p-2"
-			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+			className="bg-background flex-1"
+			style={{ paddingBottom: bottom || undefined }}
 		>
-			<Card className="flex-1">
-				<CardHeader className="bg-card-header p-0">
-					<HStack className="p-2">
-						<QuerySearchInput
-							collectionName="customers"
-							placeholder={t('common.search_customers')}
-							className="flex-1"
-							testID="search-customers"
+			<ManagementBar
+				title={t('common.customers')}
+				testID="customers-bar"
+				search={
+					<QuerySearchInput
+						collectionName="customers"
+						placeholder={t('common.search_customers')}
+						testID="search-customers"
+					/>
+				}
+			>
+				<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
+					<CapabilityTooltipTrigger>
+						<IconButton
+							testID="customers-add-button"
+							name="userPlus"
+							onPress={() => router.push({ pathname: '/customers/add' })}
+							disabled={readOnly || !caps.canCreateCustomers}
 						/>
-						<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
-							<CapabilityTooltipTrigger>
-								<IconButton
-									testID="customers-add-button"
-									name="userPlus"
-									onPress={() => router.push({ pathname: '/customers/add' })}
-									disabled={readOnly || !caps.canCreateCustomers}
-								/>
-							</CapabilityTooltipTrigger>
-							<TooltipContent>
-								<Text>
-									{readOnly
-										? t('common.upgrade_to_pro')
-										: !caps.canCreateCustomers
-											? t('capability_hints.create_customers_admin_path')
-											: t('common.add_new_customer')}
-								</Text>
-							</TooltipContent>
-						</Tooltip>
-						<UISettingsDialog title={t('customers.customer_settings')}>
-							<UISettingsForm />
-						</UISettingsDialog>
-					</HStack>
-				</CardHeader>
-				<CardContent className="border-border flex-1 border-t p-0">
-					<ErrorBoundary>
-						<Suspense fallback={<DataTableSkeleton id="customers" />}>
-							<DataTable<CustomerRow>
-								id="customers"
-								collectionName="customers"
-								binding={binding}
-								resource={binding.resource}
-								sort={state.sort}
-								actions={tableActions}
-								active$={binding.active$}
-								total$={binding.total$}
-								sync={binding.sync}
-								cells={cells}
-								noDataMessage={t('common.no_customers_found')}
-								estimatedItemSize={100}
-							/>
-						</Suspense>
-					</ErrorBoundary>
-				</CardContent>
-			</Card>
+					</CapabilityTooltipTrigger>
+					<TooltipContent>
+						<Text>
+							{readOnly
+								? t('common.upgrade_to_pro')
+								: !caps.canCreateCustomers
+									? t('capability_hints.create_customers_admin_path')
+									: t('common.add_new_customer')}
+						</Text>
+					</TooltipContent>
+				</Tooltip>
+				<DisplayOptions />
+			</ManagementBar>
+
+			<ErrorBoundary>
+				<Suspense fallback={<DataTableSkeleton id="customers" />}>
+					<CustomersList binding={binding} />
+				</Suspense>
+			</ErrorBoundary>
 		</View>
 	);
 }
