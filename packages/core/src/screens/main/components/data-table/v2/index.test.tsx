@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { patchUI, renderTable, reset, setSort, state } from './test-fixture';
 import { DataTableRow } from './rows';
@@ -45,6 +46,23 @@ it('keeps the pending search distinct from empty results', () => {
 	renderTable();
 	expect(screen.getByTestId('search-pending-message').textContent).toBe('common.searching');
 	expect(screen.queryByTestId('no-data-message')).toBeNull();
+});
+it('an empty list shows skeleton rows while the collection is syncing, the empty state once it settles', () => {
+	state.result = { hits: [], searchActive: false, searchState: 'answered' };
+	const active$ = new BehaviorSubject(true);
+	renderTable({ active$, noDataMessage: <span data-testid="empty-state">No customers yet</span> });
+	expect(screen.getByTestId('data-table-syncing-rows')).toBeTruthy();
+	expect(screen.getAllByTestId('data-table-skeleton-name')).toHaveLength(5);
+	expect(screen.queryByTestId('empty-state')).toBeNull();
+	act(() => active$.next(false));
+	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
+	expect(screen.getByTestId('empty-state')).toBeTruthy();
+});
+it('a pending search says so even while the collection is syncing', () => {
+	state.result = { hits: [], searchActive: true, searchState: 'pending' };
+	renderTable({ active$: of(true) });
+	expect(screen.getByTestId('search-pending-message')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
 });
 it('unknown totals print only the loaded count', () => {
 	renderTable();
