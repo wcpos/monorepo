@@ -13,10 +13,10 @@ import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './ch
 import { resolveProbeAuthorization } from './probe-credential';
 import {
 	checkoutControl,
-	type CheckoutSurface,
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectPaymentBlocked,
 	expectRateSetParity,
 	expectTaxParity,
 	liveOrderTest as liveTest,
@@ -27,7 +27,6 @@ import {
 	processPayment,
 	readCartMoney,
 	readOrder,
-	showPaymentWebview,
 	stampRunLabel,
 } from './order-lifecycle';
 
@@ -61,27 +60,6 @@ function gatewaysResponse(page: Page) {
 	);
 	pending.catch(() => {});
 	return pending;
-}
-
-/**
- * With no payment link the store's payment page cannot load: the modal disables
- * Process, and the pane's Legacy tab shows the notice in place of the frame and
- * its button. `gatewaysLoaded` settles once the webview surface is on screen.
- */
-async function expectPaymentBlocked(
-	page: Page,
-	surface: CheckoutSurface,
-	gatewaysLoaded: Promise<unknown>,
-	timeout: number
-) {
-	const process = await showPaymentWebview(page, surface);
-	await gatewaysLoaded;
-	if (surface === 'modal') {
-		await expect(process).toBeDisabled({ timeout });
-		return;
-	}
-	await expect(page.getByTestId('checkout-payment-form-unavailable')).toBeVisible({ timeout });
-	await expect(process).toHaveCount(0);
 }
 
 /**

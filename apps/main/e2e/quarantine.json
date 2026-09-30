@@ -246,6 +246,12 @@
 			"file": "pos-filter-bar.spec.ts",
 			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
 			"group": "G6"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-filter-bar.spec.ts",
+			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
+			"group": "G6"
 		}
 	]
 }
