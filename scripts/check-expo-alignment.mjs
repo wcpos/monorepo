@@ -61,6 +61,25 @@ export function satisfies(version, range) {
 	return gMajor === 0 && gMinor === 0 && gPatch === wPatch;
 }
 
+// Native modules Expo versions with the SDK but omits from
+// bundledNativeModules.json, so `expo install --check` never mentions them.
+// expo-blob@57.0.1 survived the SDK 58 bump that way and killed every Android
+// launch of the `next` dev client in expo-modules-core's module init
+// (NoSuchMethodError: ReturnTypeKt.getIndirectConverter — a 57-era core API;
+// first Android device run, 2026-09-30). They are held to the installed SDK's
+// major, the only range Expo's own list would state for them.
+export const SDK_VERSIONED_UNLISTED = ['expo-blob'];
+
+export function withUnlistedSdkPackages(bundled, expoVersion, names = SDK_VERSIONED_UNLISTED) {
+	const major = /^(\d+)\./.exec(expoVersion)?.[1];
+	if (!major) return bundled;
+	const extra = {};
+	for (const name of names) {
+		if (!(name in bundled)) extra[name] = `^${major}.0.0`;
+	}
+	return { ...bundled, ...extra };
+}
+
 /**
  * Compare every importer's resolved versions against the prescribed ranges.
  * Returns [{ name, prescribed, version, importers: [path] }] sorted by name.
@@ -99,6 +118,8 @@ function main() {
 		);
 		process.exit(1);
 	}
+
+	bundled = withUnlistedSdkPackages(bundled, require('expo/package.json').version);
 
 	const lockfileText = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
 	const importers = parseImporters(lockfileText);

@@ -75,7 +75,7 @@
 	},
 	"peerDependencies": {
 		"expo-asset": "~58.0.8",
-		"expo-blob": "~57.0.1",
+		"expo-blob": "~58.0.2",
 		"expo-constants": "~58.0.8",
 		"expo-crypto": "~58.0.2",
 		"expo-localization": "~58.0.1",
