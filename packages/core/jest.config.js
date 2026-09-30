@@ -5,6 +5,17 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
+		// The rn-primitives builds ship JSX, so no suite could load one unmocked. A suite that
+		// needs the browser behaviour (hover versus press, monorepo#2284) loads the web build.
+		// Listed first: the first matching pattern wins.
+		'/node_modules/@rn-primitives/.+\\.js$': [
+			'babel-jest',
+			{
+				babelrc: false,
+				configFile: false,
+				plugins: ['@babel/plugin-transform-react-jsx', '@babel/plugin-transform-modules-commonjs'],
+			},
+		],
 		'^.+\\.js$': [
 			'babel-jest',
 			{
@@ -38,7 +49,7 @@ module.exports = {
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [
-		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/)',
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/)',
 	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
