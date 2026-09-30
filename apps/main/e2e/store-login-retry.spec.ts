@@ -47,6 +47,6 @@ test('an ordinary login failure is not retryable', () => {
 
 test('setup is staggered by shard only in CI', () => {
 	expect(setupStaggerMs(5, false)).toBe(0);
-	expect(setupStaggerMs(5, true)).toBe(50_000);
+	expect(setupStaggerMs(5, true)).toBe(150_000);
 	expect(setupStaggerMs(0, true)).toBe(0);
 });

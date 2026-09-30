@@ -1552,41 +1552,48 @@ test('cold-start verifies the deployed main artifact and participates in the gat
 	);
 });
 
-test('the E2E auth-state cache is shard- and lane-scoped', () => {
-	// Reused auth states are validated at boot in globalSetup (stale falls back
-	// to full auth), but a state restored for the WRONG shard or lane would
-	// validate fine and then run every spec against the wrong cashier slot or
-	// store. The key must therefore carry both dimensions.
-	const steps = readWorkflow('deploy.yml').jobs.e2e.steps;
-	const step = steps.find(
-		(candidate) => candidate.with && candidate.with.path === 'apps/main/e2e/auth-state.enc'
-	);
+test('one e2e-setup job logs in for the whole run and hands shards only ciphertext', () => {
+	// Six shards each logging in and syncing saturated dev-next (#2321), so the
+	// setup runs ONCE. Its state embeds cashier tokens and the repo is public.
+	const { jobs } = readWorkflow('deploy.yml');
+	const setup = jobs['e2e-setup'];
+	assert.ok(setup, 'deploy.yml lost the e2e-setup job');
+	assert.equal(setup.strategy, undefined, 'e2e-setup must run once, not as a matrix');
+	assert.ok([jobs.e2e.needs].flat().includes('e2e-setup'), 'e2e no longer waits for e2e-setup');
+	const run = setup.steps.find(({ id }) => id === 'setup');
+	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
-	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
-	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with.key, /needs\.changes\.outputs\.lane \|\| 'unknown'/);
-	assert.match(step.with['restore-keys'], /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with['restore-keys'], /needs\.changes\.outputs\.lane \|\| 'unknown'/);
-
-	// The snapshot embeds cashier access+refresh tokens and the repo is public:
-	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir
-	// and that both crypto steps are secret-gated.
+	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
+	const steps = [...setup.steps, ...jobs.e2e.steps];
 	assert.ok(
 		!steps.some(
 			(candidate) => candidate.with && String(candidate.with.path ?? '').includes('.auth-state')
 		),
-		'a cache step points at the PLAINTEXT auth state — credentials would reach the Actions cache'
+		'a cache or artifact step points at the PLAINTEXT auth state — credentials would leave the runner'
 	);
-	const decrypt = steps.find((candidate) => /Decrypt cached auth state/.test(candidate.name ?? ''));
-	const encrypt = steps.find((candidate) =>
-		/Encrypt auth state for cache/.test(candidate.name ?? '')
-	);
-	assert.ok(decrypt && encrypt, 'auth-state crypto steps missing');
-	for (const crypto of [decrypt, encrypt]) {
-		assert.match(crypto.if ?? '', /E2E_AUTH_CACHE_KEY/);
-		assert.match(crypto.run, /openssl enc/);
-	}
+	const upload = setup.steps.find(({ uses }) => uses?.startsWith('actions/upload-artifact@'));
+	assert.equal(upload.with.path, 'apps/main/e2e/auth-state.enc');
+	const encrypt = setup.steps.find(({ name }) => /Encrypt the shared auth state/.test(name ?? ''));
+	assert.match(encrypt.run, /openssl enc -aes-256-cbc -pbkdf2 -k "\$E2E_AUTH_CACHE_KEY"/);
 	assert.match(encrypt.run, /rm -rf e2e\/\.auth-state/);
+	// The per-day cache is gone, not left as a second mechanism that disagrees.
+	assert.ok(!steps.some((candidate) => candidate.with?.key?.includes('e2e-auth')));
+
+	// Without the key (forks) nothing logs in here and the shards set up alone.
+	assert.equal(run.if, "steps.key.outputs.present == 'true'");
+	assert.equal(upload.if, "steps.setup.outcome == 'success'");
+	assert.match(setup.outputs.state, /steps\.upload\.outcome == 'success' && 'ready'/);
+	const shardSteps = jobs.e2e.steps.filter(({ name }) => /shared auth state/.test(name ?? ''));
+	assert.equal(shardSteps.length, 2);
+	for (const step of shardSteps) {
+		assert.match(step.if, /^needs\.e2e-setup\.outputs\.state == 'ready'/);
+	}
+});
+
+test('shards stagger their first store request by 30s in CI', () => {
+	// 10s apart (#2303) still saturated dev-next; the #2321 ruling is 30s.
+	const source = readFileSync(path.join(ROOT, 'apps/main/e2e/store-login-retry.ts'), 'utf8');
+	assert.match(source, /return ci \? normalizedShardIndex \* 30_000 : 0;/);
 });
 
 test('the shared CI planner controls both change jobs without workflow path filters', () => {
@@ -1613,7 +1620,7 @@ test('the shared CI planner controls both change jobs without workflow path filt
 	const matrix = workflow.jobs.e2e.strategy.matrix;
 	assert.match(matrix.shardIndex, /only_specs != '' && '\[1\]'/);
 	assert.match(matrix.shardTotal, /only_specs != '' && '\[1\]'/);
-	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy']);
+	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy', 'e2e-setup']);
 });
 
 test('every direct script path has an explicit planner rule', () => {
