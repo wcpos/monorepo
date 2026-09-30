@@ -11,7 +11,7 @@ import {
 	tableFeatures,
 	useTable,
 } from '@tanstack/react-table';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { find } from 'lodash';
 
 import { usePointer } from '@wcpos/components/lib/device';
@@ -30,6 +30,7 @@ import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from '../list-footer';
 import { getRowTestID, DataTableRow as RowView } from './rows';
 import { ResizeHead } from './resize';
+import { DataTableSkeletonRows } from './skeleton';
 import { getColumnStyle } from '../index';
 
 import type { SortingChange } from '../sort-field';
@@ -112,6 +113,10 @@ type BindingProps<TSortField extends string> = {
 type Props<TData extends RowData, TSortField extends string> = CommonProps<TData> &
 	BindingProps<TSortField>;
 
+/** Skeleton rows shown in an empty list while the collection is still syncing: enough to read
+ *  as a table filling, few enough that a store with three coupons does not flash a page. */
+const SYNCING_SKELETON_ROWS = 5;
+
 function DataTable<TData extends RowData, TSortField extends string = string>(
 	props: Props<TData, TSortField>
 ) {
@@ -165,6 +170,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const t = useT();
 	const result = useObservableSuspense(resource);
 	const deferredResult = React.useDeferredValue(result);
+	const { active$ } = props;
+	const syncing = useObservableState(active$, false);
 
 	const columns = React.useMemo(
 		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
@@ -291,23 +298,39 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 					getItemType={getItemType}
 					onEndReachedThreshold={0.1}
 					onEndReached={handleEndReached}
-					ListEmptyComponent={() => (
-						<View className="justify-center p-6">
-							{/* "No results" may only ever mean the search ANSWERED with nothing.
-							    A pending search (index building, engine database not bound yet)
-							    says so instead — rendering the ordinary empty state there reads
-							    as "this record does not exist" (#1733). */}
-							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
-								<Text testID="search-pending-message">{t('common.searching')}</Text>
-							) : React.isValidElement(noDataMessage) ? (
-								noDataMessage
-							) : (
-								<Text testID="no-data-message">
-									{noDataMessage ? noDataMessage : t('common.no_results_found')}
-								</Text>
-							)}
-						</View>
-					)}
+					ListEmptyComponent={() => {
+						/* "No results" may only ever mean the search ANSWERED with nothing.
+						   A pending search (index building, engine database not bound yet)
+						   says so instead — rendering the ordinary empty state there reads
+						   as "this record does not exist" (#1733). */
+						const searchPending =
+							deferredResult.searchActive && deferredResult.searchState === 'pending';
+						/* An empty list while the collection is still pulling is not an empty
+						   store either: the footer's sync spinner is running, and "No customers
+						   yet" beside it told a fresh install it had no data while 5,454
+						   customers were on their way. Rows in flight look like rows in flight
+						   until the pull settles. */
+						if (syncing && !searchPending) {
+							return (
+								<View testID="data-table-syncing-rows">
+									<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+								</View>
+							);
+						}
+						return (
+							<View className="justify-center p-6">
+								{searchPending ? (
+									<Text testID="search-pending-message">{t('common.searching')}</Text>
+								) : React.isValidElement(noDataMessage) ? (
+									noDataMessage
+								) : (
+									<Text testID="no-data-message">
+										{noDataMessage ? noDataMessage : t('common.no_results_found')}
+									</Text>
+								)}
+							</View>
+						);
+					}}
 					ListFooterComponent={() =>
 						ListFooterComponent ? (
 							<ListFooterComponent active$={props.active$} />
