@@ -181,7 +181,6 @@ patchedDependencies:
   # synchronous copySync()/moveSync(), so the swap is a native copy and the commit an
   # atomic rename — the April 2026 fix (5e691a9df4, rxdb#8290) that the July engine
   # migration dropped. Drop this patch when expo-opfs does the same upstream.
-  expo-opfs@1.0.9: patches/expo-opfs@1.0.9.patch
   # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
   # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
   # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the
@@ -199,6 +198,7 @@ patchedDependencies:
   # Skia 2.13.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
   # Drop when Skia stops deep-importing react-native on web.
   "@shopify/react-native-skia@2.11.2": "patches/@shopify__react-native-skia@2.11.2.patch"
+  expo-modules-core@58.0.8: patches/expo-modules-core@58.0.8.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in

@@ -30,7 +30,7 @@
     "@wcpos/sync-core": "workspace:*",
     "@wcpos/utils": "workspace:*",
     "ajv": "^8.20.0",
-    "expo-opfs": "^1.0.9",
+    "expo-sqlite": "~58.0.6",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
