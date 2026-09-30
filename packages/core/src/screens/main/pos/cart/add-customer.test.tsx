@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { AddCustomerDialog, AddNewCustomer } from './add-customer';
 
@@ -132,5 +132,34 @@ describe.each([
 	});
 });
 
+// monorepo#2284: a root `style={{ display: 'none' }}` landed on the panel and the dialog opened hidden.
+it('the controlled dialog opens a panel that is not hidden', () => {
+	render(<AddCustomerDialog open onOpenChange={mockOnOpenChange} />);
+	expect(screen.getByTestId('add-customer-dialog').style.display).not.toBe('none');
+});
+
 jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));
+// The v2 root has no wrapper: a single-child root is `asChild`, so its own props land on the panel.
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	...jest.requireMock('@wcpos/components/dialog'),
+	Dialog: ({
+		children,
+		open: _open,
+		onOpenChange: _onOpenChange,
+		...rootProps
+	}: React.PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>) =>
+		React.Children.count(children) === 1 && React.isValidElement(children) ? (
+			React.cloneElement(children, rootProps)
+		) : (
+			<>{children}</>
+		),
+	DialogContent: ({
+		children,
+		testID,
+		style,
+	}: React.PropsWithChildren<{ testID?: string; style?: React.CSSProperties }>) => (
+		<div role="dialog" data-testid={testID} style={style}>
+			{children}
+		</div>
+	),
+}));
