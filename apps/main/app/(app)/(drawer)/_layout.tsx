@@ -93,8 +93,12 @@ function ThemedDrawer({
 				},
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
+			// Elements, not calls: called as functions the rails' hooks ran in the drawer's own
+			// fiber, so crossing `lg` swapped one hook list for another under the same fiber
+			// (React Compiler: "Expected a constant size argument for each invocation of
+			// useMemoCache … 39 but 22"). As elements the type changes and React remounts.
 			drawerContent={(props) =>
-				screenSize === 'lg' ? DrawerContentV2(props) : DrawerContent(props)
+				screenSize === 'lg' ? <DrawerContentV2 {...props} /> : <DrawerContent {...props} />
 			}
 		>
 			<Drawer.Screen
