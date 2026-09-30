@@ -181,7 +181,6 @@ type MaintenanceLaneDeps = {
 	 * maintenance/customer-trickle.ts.
 	 */
 	currentCustomerBrowseWindowKey?: () => string | null;
-	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	hostVisible?: () => boolean;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -780,9 +779,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -810,9 +806,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 		const result = await tickProductTrickle({
 			baseUrl: deps.syncBaseUrl,
@@ -845,9 +838,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined

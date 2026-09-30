@@ -672,9 +672,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'MULTI_TAB_LIMITED',
 		domain: 'CLIENT',
 		severity: 'warn',
-		actionHint: 'Nothing to do — one tab syncs for all.',
+		actionHint: 'Historical notice — no action is needed.',
 		dataSafety: 'no-impact',
-		summary: 'This browser lets only one tab send changes at a time.',
+		summary: 'Historical multi-tab syncing notice (1.10.x).',
 	},
 	AUTH111: {
 		code: 'AUTH111',

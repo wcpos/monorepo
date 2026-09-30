@@ -395,13 +395,6 @@
 		"introducedIn": "1.10.0"
 	},
 	{
-		"type": "engine.write-leader.degraded",
-		"domain": "SYNC",
-		"label": "This browser can only sync one tab at a time",
-		"description": "Only one browser tab sends changes at a time. Every tab keeps working from the same local data.",
-		"introducedIn": "1.10.0"
-	},
-	{
 		"type": "maintenance.lane.error",
 		"domain": "SYNC",
 		"label": "A background maintenance task failed",

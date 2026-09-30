@@ -93,7 +93,6 @@ export type SyncEventType =
 	| 'engine.reconnect.retick'
 	| 'engine.reset-needs-confirmation'
 	| 'engine.scope-switched'
-	| 'engine.write-leader.degraded'
 	// maintenance
 	| 'maintenance.lane.error'
 	| 'maintenance.lane.tick'
