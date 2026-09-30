@@ -10,6 +10,14 @@ import { useT } from '../../../contexts/translations';
 import { UISettingsColumnsOnlyForm } from './ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
+// Literal keys per page, so the translation check sees each one.
+const LABELS = {
+	orders: { open: 'orders.display_options', restore: 'orders.restore_defaults' },
+	products: { open: 'products.display_options', restore: 'products.restore_defaults' },
+	customers: { open: 'customers.display_options', restore: 'customers.restore_defaults' },
+	coupons: { open: 'coupons.display_options', restore: 'coupons.restore_defaults' },
+} as const;
+
 export function DisplayOptions({
 	id,
 	title,
@@ -36,7 +44,7 @@ export function DisplayOptions({
 				<IconButton
 					name="sliders"
 					testID={`${testID}-bar-display`}
-					aria-label={t(id === 'orders' ? 'orders.display_options' : 'products.display_options')}
+					aria-label={t(LABELS[id].open)}
 				/>
 			</PopoverTrigger>
 			<PopoverContent
@@ -60,7 +68,7 @@ export function DisplayOptions({
 						testID={`${testID}-display-restore`}
 						onPress={() => void resetUI()}
 					>
-						{t(id === 'orders' ? 'orders.restore_defaults' : 'products.restore_defaults')}
+						{t(LABELS[id].restore)}
 					</Button>
 				</View>
 				<ScrollView>
