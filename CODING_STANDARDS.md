@@ -75,7 +75,7 @@ Tests must be language-agnostic because demo stores may run in any locale.
 
 1. Prefer `getByTestId`; add `testID` props to components, which map to `data-testid` on web.
 2. Use structural locators such as `getByRole`, element counts, and attribute selectors.
-3. Avoid `getByText`; only use it for clicking dynamically-rendered list items, and document why in a comment.
+3. No `getByText`, dynamically rendered list items included — give each row an id-bearing `testID` (owner ruling 2026-10-01, resolving the older exception against the policy above).
 4. Verify network behavior with `waitForResponse` for API assertions rather than asserting translated text.
 5. Anchor text assertions to testID-located elements, e.g. `toContainText` on a `getByTestId` locator.
 
