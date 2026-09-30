@@ -656,6 +656,57 @@ describe('calculateOrderTotals — parity regressions', () => {
 			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.165' });
 		});
 
+		it('snaps the cart and shipping tax sum before dp rounding', () => {
+			const result = calculateOrderTotals({
+				...order,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						subtotal_tax: '0.105000',
+						total_tax: '0.105000',
+						taxes: [
+							{ id: 3, subtotal: '0.015000', total: '0.015000' },
+							{ id: 7, subtotal: '0.090000', total: '0.090000' },
+						],
+					},
+				],
+				shippingLines: [
+					{ total: '1.20', total_tax: '0.060000', taxes: [{ id: 7, total: '0.060000' }] },
+				],
+			});
+
+			// 0.105 + 0.06 = 0.16499999999999998; PHP rounds the midpoint up.
+			// WC total: round(3 + 1.20 + 0.105 + 0.06, 2) = 4.37.
+			expect(result).toMatchObject({
+				total_tax: '0.17',
+				cart_tax: '0.105',
+				shipping_tax: '0.06',
+				total: '4.37',
+			});
+		});
+
+		it('snaps a noisy total sum before dp rounding', () => {
+			const result = calculateOrderTotals({
+				...order,
+				lineItems: [
+					{
+						...order.lineItems[0],
+						subtotal: '1.130000',
+						total: '1.130000',
+						subtotal_tax: '0.105000',
+						total_tax: '0.105000',
+						taxes: [
+							{ id: 3, subtotal: '0.015000', total: '0.015000' },
+							{ id: 7, subtotal: '0.090000', total: '0.090000' },
+						],
+					},
+				],
+			});
+
+			// 1.13 + 0.105 + 0 = 1.2349999999999999; PHP pre-rounds to the 1.235 midpoint.
+			expect(result).toMatchObject({ total: '1.24', cart_tax: '0.105', shipping_tax: '0' });
+		});
+
 		it('snaps stacked taxes after a fixed_cart $5 coupon on an $8 line', () => {
 			// Coupon allocation is already reflected in the line's subtotal and total.
 			const result = calculateOrderTotals({

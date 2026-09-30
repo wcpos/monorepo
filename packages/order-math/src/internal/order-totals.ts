@@ -292,9 +292,14 @@ export function calculateOrderTotals(
 	// set_total_tax / set_total consume them. set_total_tax uses HALF_UP even for inclusive prices.
 	const roundedCartTax = roundHalfUp(fullPrecisionCartTax, getRoundingPrecision(dp));
 	const roundedShippingTax = roundHalfUp(fullPrecisionShippingTax, getRoundingPrecision(dp));
+	// PHP round() pre-rounds to 15 significant digits; snap both sums before dp rounding.
 	const roundedTotalTax = taxRoundAtSubtotal
-		? roundHalfUp(roundedCartTax + roundedShippingTax, dp)
-		: roundTaxTotal(roundedCartTax + roundedShippingTax, dp, pricesIncludeTax);
+		? roundHalfUp(roundHalfUp(roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)), dp)
+		: roundTaxTotal(
+				roundHalfUp(roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)),
+				dp,
+				pricesIncludeTax
+			);
 
 	return {
 		/**
@@ -312,7 +317,12 @@ export function calculateOrderTotals(
 		// rounding that can land a cent away from the store whenever the untaxed part
 		// of the sum is not itself at display decimals (a raw fee total is the common
 		// way in). `total_tax` stays its own rounded field, which is what WC stores.
-		total: String(roundHalfUp(total + roundedCartTax + roundedShippingTax, dp)),
+		total: String(
+			roundHalfUp(
+				roundHalfUp(total + roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)),
+				dp
+			)
+		),
 		total_tax: String(roundTaxTotal(roundedTotalTax, dp, pricesIncludeTax)),
 		tax_lines: filteredTaxLines,
 		/**
