@@ -59,9 +59,10 @@ function NavigationItems({
 				{...({ dataSet: { surface } } as object)}
 				className={cn(
 					'h-10 w-full flex-row items-center gap-3 rounded-md px-3',
-					lifted ? 'active:bg-card' : 'active:bg-primary/10',
-					pointer === 'fine' && (lifted ? 'web:hover:bg-card' : 'web:hover:bg-primary/10'),
-					selected && (lifted ? 'bg-card' : 'bg-primary/10')
+					// The card surface keeps the ghost button's exact treatment it had before.
+					lifted ? 'active:bg-card' : 'active:bg-muted web:hover:bg-muted',
+					lifted && pointer === 'fine' && 'web:hover:bg-card',
+					selected && (lifted ? 'bg-card' : 'bg-primary/10 web:hover:bg-primary/10')
 				)}
 			>
 				{item.icon ? (
@@ -80,7 +81,9 @@ function NavigationItems({
 							? lifted
 								? 'text-foreground'
 								: 'text-primary font-semibold'
-							: 'text-muted-foreground'
+							: lifted
+								? 'text-muted-foreground'
+								: 'text-foreground'
 					)}
 				>
 					{item.label}
