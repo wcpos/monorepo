@@ -4,11 +4,12 @@
 import * as React from 'react';
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 
 import { Text } from '@wcpos/components/text';
 
+import { SAVED_HOLD_MS, SavedFieldProvider, useMarkSaved } from './saved-mark';
 import { SettingsRow } from './settings-row';
 
 // The real Label pulls in @rn-primitives, which this jest environment cannot
@@ -36,6 +37,34 @@ jest.mock('@wcpos/components/form', () => {
 		},
 	};
 });
+
+let mockReduced = false;
+// The fade is reanimated's exit animation; the mock exposes which one the mark asked for.
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: {
+		View: ({ children, exiting }: React.PropsWithChildren<{ exiting?: string }>) => (
+			<div data-testid="saved-mark-motion" data-exiting={exiting ?? 'none'}>
+				{children}
+			</div>
+		),
+	},
+	FadeOut: { duration: (ms: number) => `fade-out:${ms}` },
+	useReducedMotion: () => mockReduced,
+}));
+jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+}));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+
+function MarkButton({ names }: { names: string[] }) {
+	const markSaved = useMarkSaved();
+	return <button data-testid="mark" onClick={() => markSaved(names)} />;
+}
 
 function WithForm({ children }: React.PropsWithChildren) {
 	const form = useForm({ defaultValues: { name: '' } });
@@ -79,5 +108,68 @@ describe('SettingsRow', () => {
 		expect(screen.getByTestId('form-label')).toHaveTextContent('Store name');
 		expect(screen.queryByTestId('plain-label')).not.toBeInTheDocument();
 		expect(screen.getByText('UK Store')).toBeInTheDocument();
+	});
+});
+
+describe('SettingsRow Saved mark', () => {
+	const renderRows = () =>
+		render(
+			<SavedFieldProvider>
+				<WithForm>
+					<SettingsRow name="name" label="Store name">
+						<Text>UK Store</Text>
+					</SettingsRow>
+					<SettingsRow name="locale" label="Language">
+						<Text>English</Text>
+					</SettingsRow>
+				</WithForm>
+				<MarkButton names={['name']} />
+			</SavedFieldProvider>
+		);
+
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockReduced = false;
+	});
+	afterEach(() => jest.useRealTimers());
+
+	it('shows Saved beside the written field only, then leaves after the hold', () => {
+		renderRows();
+		expect(screen.queryByTestId('settings-saved-name')).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByTestId('mark'));
+		expect(screen.getByTestId('settings-saved-name')).toHaveTextContent('settings.saved');
+		expect(screen.queryByTestId('settings-saved-locale')).not.toBeInTheDocument();
+
+		act(() => jest.advanceTimersByTime(SAVED_HOLD_MS - 1));
+		expect(screen.getByTestId('settings-saved-name')).toBeInTheDocument();
+		act(() => jest.advanceTimersByTime(1));
+		expect(screen.queryByTestId('settings-saved-name')).not.toBeInTheDocument();
+	});
+
+	it('fades out by opacity on the motion beat', () => {
+		renderRows();
+		fireEvent.click(screen.getByTestId('mark'));
+		expect(screen.getByTestId('saved-mark-motion')).toHaveAttribute('data-exiting', 'fade-out:220');
+	});
+
+	it('appears and disappears with no fade under reduce-motion', () => {
+		mockReduced = true;
+		renderRows();
+		fireEvent.click(screen.getByTestId('mark'));
+		expect(screen.getByTestId('saved-mark-motion')).toHaveAttribute('data-exiting', 'none');
+	});
+
+	it('renders no mark on a page without a provider', () => {
+		render(
+			<WithForm>
+				<SettingsRow name="name" label="Store name">
+					<Text>UK Store</Text>
+				</SettingsRow>
+				<MarkButton names={['name']} />
+			</WithForm>
+		);
+		fireEvent.click(screen.getByTestId('mark'));
+		expect(screen.queryByTestId('settings-saved-name')).not.toBeInTheDocument();
 	});
 });

@@ -5,7 +5,7 @@ import { useNavigation } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
 import { useIsPhone } from '@wcpos/components/lib/device';
-import { PageBar } from '@wcpos/components/page-bar';
+import { PageBar, type PageBarProps } from '@wcpos/components/page-bar';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 
@@ -18,7 +18,13 @@ import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
 
-type Props = React.PropsWithChildren<{ title: string; testID: string; search: React.ReactNode }>;
+type Props = React.PropsWithChildren<{
+	title: string;
+	testID: string;
+	// Absent on a page with nothing to search (Settings): the slot renders nothing.
+	search?: React.ReactNode;
+	back?: PageBarProps['back'];
+}>;
 
 export function ManagementBar(props: Props) {
 	const { site } = useStoreSession();
@@ -29,7 +35,7 @@ export function ManagementBar(props: Props) {
 	);
 }
 
-function ManagementBarContent({ title, testID, search, children }: Props) {
+function ManagementBarContent({ title, testID, search, back, children }: Props) {
 	const { screenSize } = useTheme();
 	const phone = useIsPhone();
 	const navigation = useNavigation();
@@ -50,6 +56,7 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 				title={title}
 				testID={testID}
 				status={badge}
+				back={back}
 				onMenu={
 					screenSize !== 'lg'
 						? {
@@ -59,7 +66,7 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 						: undefined
 				}
 			>
-				{!phone && <View className="max-w-80 min-w-0 flex-1">{search}</View>}
+				{!phone && search && <View className="max-w-80 min-w-0 flex-1">{search}</View>}
 				{children}
 				<NotificationBell testID={`${testID}-bell`} />
 				{screenSize !== 'lg' && (
@@ -73,7 +80,9 @@ function ManagementBarContent({ title, testID, search, children }: Props) {
 					</Button>
 				)}
 			</PageBar>
-			{phone && <View className="h-ctl border-border justify-center border-b px-2">{search}</View>}
+			{phone && search && (
+				<View className="h-ctl border-border justify-center border-b px-2">{search}</View>
+			)}
 			<UserSheet open={userOpen} onOpenChange={setUserOpen} />
 		</>
 	);

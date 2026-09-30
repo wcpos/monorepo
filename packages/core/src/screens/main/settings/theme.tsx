@@ -1,15 +1,17 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { SavedMark, useMarkSaved } from './components/saved-mark';
+import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -48,10 +50,15 @@ function ThemeOptionButton({
 			// min-h-40 clears the tallest possible card — icon + 2-line label cap
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
-			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border-2 p-3 ${
-				isActive ? 'border-primary' : 'border-border/60 web:hover:border-border'
+			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border p-3 ${
+				isActive ? 'border-primary' : 'border-border web:hover:border-muted-foreground'
 			}`}
 		>
+			{isActive && (
+				<View className="absolute top-2 right-2">
+					<Icon name="check" size="sm" className="text-primary" />
+				</View>
+			)}
 			<Icon
 				name={option.icon}
 				size="xl"
@@ -123,11 +130,14 @@ function ThemeGrid({
 			</VStack>
 
 			{/* Current theme status */}
-			<Text className="text-muted-foreground text-xs">
-				{hasAdaptiveThemes
-					? t('settings.following_system_theme')
-					: t('settings.current_theme', { theme: activeThemeLabel })}
-			</Text>
+			<HStack className="items-center gap-2">
+				<Text className="text-muted-foreground text-xs">
+					{hasAdaptiveThemes
+						? t('settings.following_system_theme')
+						: t('settings.current_theme', { theme: activeThemeLabel })}
+				</Text>
+				<SavedMark name="theme" />
+			</HStack>
 		</>
 	);
 }
@@ -138,40 +148,45 @@ const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 /**
  * The Scale row. The step itself reaches the screens through `ScaleProvider`,
  * which reads this field off the store document — nothing here touches a token.
- *
- * A toggle group until the segmented control lands in the primitives pass.
  */
 function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
+	const markSaved = useMarkSaved();
 	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
 
 	const handleScaleChange = React.useCallback(
-		async (value: string | undefined) => {
-			if (!value) return;
+		async (value: string) => {
 			try {
 				await localPatch({ document: store, data: { scale: value } });
+				markSaved('scale');
 			} catch (error) {
 				console.error('Failed to persist selected scale', error);
 			}
 		},
-		[localPatch, store]
+		[localPatch, markSaved, store]
 	);
 
+	const segments = SCALE_OPTIONS.map((option) => ({
+		value: option,
+		label: t(`settings.scale.${option}`),
+		testID: `settings-scale-${option}`,
+	})) as unknown as readonly [Segment, Segment, Segment, Segment];
+
 	return (
-		<ToggleGroup
-			type="single"
-			value={scale}
-			onValueChange={(value) => {
-				void handleScaleChange(value as string | undefined);
-			}}
+		<SettingsRow
+			name="scale"
+			label={t('settings.scale')}
+			description={t('settings.scale.description')}
 		>
-			{SCALE_OPTIONS.map((option) => (
-				<ToggleGroupItem key={option} value={option} testID={`settings-scale-${option}`}>
-					<Text>{t(`settings.scale.${option}`)}</Text>
-				</ToggleGroupItem>
-			))}
-		</ToggleGroup>
+			<SegmentedControl
+				segments={segments}
+				value={scale}
+				onValueChange={(value) => {
+					void handleScaleChange(value);
+				}}
+			/>
+		</SettingsRow>
 	);
 }
 
@@ -185,6 +200,7 @@ export function ThemeSettings() {
 	const t = useT();
 	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
+	const markSaved = useMarkSaved();
 
 	/**
 	 * Theme options following Uniwind's theming API
@@ -246,11 +262,12 @@ export function ThemeSettings() {
 				});
 
 				Uniwind.setTheme(themeName as any);
+				markSaved('theme');
 			} catch (error) {
 				console.error('Failed to persist selected theme', error);
 			}
 		},
-		[localPatch, store]
+		[localPatch, markSaved, store]
 	);
 
 	return (
@@ -262,7 +279,7 @@ export function ThemeSettings() {
 			>
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
 			</SettingsSection>
-			<SettingsSection title={t('settings.scale')} description={t('settings.scale.description')}>
+			<SettingsSection>
 				<ScaleRow t={t} />
 			</SettingsSection>
 		</VStack>

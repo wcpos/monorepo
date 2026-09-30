@@ -79,3 +79,26 @@ it('has no badge while available and keeps phone search under the bar', () => {
 	expect(screen.getByTestId('orders-bar').contains(screen.getByTestId('search'))).toBe(false);
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+it('renders no search slot when the page has nothing to search', () => {
+	mockPhone = true;
+	render(<ManagementBar title="Settings" testID="settings-bar" />);
+	expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+	// The phone strip under the bar is the search slot; with no search it is absent.
+	expect(screen.getByTestId('settings-bar').parentElement?.children).toHaveLength(1);
+});
+it('hands the back crumb to the page bar on a phone', () => {
+	mockPhone = true;
+	mockSize = 'sm';
+	const onPress = jest.fn();
+	render(
+		<ManagementBar
+			title="General"
+			testID="settings-bar"
+			back={{ label: 'Settings', onPress, testID: 'settings-navigation-back' }}
+		/>
+	);
+	expect(screen.queryByTestId('settings-bar-menu')).toBeNull();
+	fireEvent.click(screen.getByTestId('settings-navigation-back'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(screen.getByTestId('settings-bar-title').textContent).toBe('General');
+});

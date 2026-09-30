@@ -86,6 +86,61 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 
+const mockRemove = jest.fn().mockResolvedValue(undefined);
+const mockFindOne = jest.fn((_id: string) => ({
+	exec: () => Promise.resolve({ isBuiltIn: false, remove: mockRemove }),
+}));
+// Open renders its children; Cancel closes through the root, as the primitive does.
+jest.mock('@wcpos/components/alert-dialog', () => {
+	const ReactActual = jest.requireActual<typeof import('react')>('react');
+	const Close = ReactActual.createContext<(open: boolean) => void>(() => {});
+	function Pass({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	return {
+		AlertDialog: ({
+			open,
+			onOpenChange,
+			children,
+		}: {
+			open: boolean;
+			onOpenChange: (open: boolean) => void;
+			children?: React.ReactNode;
+		}) =>
+			open ? (
+				<Close.Provider value={onOpenChange}>
+					<div role="alertdialog">{children}</div>
+				</Close.Provider>
+			) : null,
+		AlertDialogContent: Pass,
+		AlertDialogHeader: Pass,
+		AlertDialogFooter: Pass,
+		AlertDialogTitle: Pass,
+		AlertDialogDescription: Pass,
+		AlertDialogCancel: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => {
+			const close = ReactActual.useContext(Close);
+			return (
+				<button type="button" data-testid={testID} onClick={() => close(false)}>
+					{children}
+				</button>
+			);
+		},
+		AlertDialogAction: ({
+			children,
+			testID,
+			onPress,
+		}: {
+			children?: React.ReactNode;
+			testID?: string;
+			onPress?: () => void;
+		}) => (
+			<button type="button" data-testid={testID} onClick={onPress}>
+				{children}
+			</button>
+		),
+	};
+});
+
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -212,7 +267,7 @@ jest.mock('../../../../contexts/app-state', () => {
 			collections: {
 				printer_profiles: {
 					find: () => ({ $: [cloudProfile] }),
-					findOne: jest.fn(),
+					findOne: (id: string) => mockFindOne(id),
 				},
 				template_printer_overrides: {
 					find: () => ({ $: { pipe: () => new Map<string, string>() } }),
@@ -403,4 +458,49 @@ it('shows a saved winspool queue alongside Print Dialog instead of the empty sta
 	render(<PrintingSettings />);
 	expect(screen.getByTestId('printer-row-pos80')).toBeInTheDocument();
 	expect(screen.queryByTestId('printers-empty-state')).not.toBeInTheDocument();
+});
+
+describe('Delete printer', () => {
+	const counter: PrinterProfile = {
+		...cloudProfile,
+		id: 'counter',
+		name: 'Counter',
+		connectionType: 'network',
+		address: '192.168.1.10',
+		isBuiltIn: false,
+	};
+
+	beforeEach(() => {
+		mockAvailableProfiles = { printers: [counter], isLoading: false };
+		mockFindOne.mockClear();
+		mockRemove.mockClear();
+	});
+
+	it('asks first, naming the printer, and Cancel deletes nothing', async () => {
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-counter-delete'));
+		expect(screen.getByRole('alertdialog')).toHaveTextContent('Delete Counter?');
+		expect(screen.getByRole('alertdialog')).toHaveTextContent(
+			'Receipts routed to it print with Auto instead.'
+		);
+		expect(mockFindOne).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByTestId('printer-row-counter-delete-cancel'));
+		expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+		await Promise.resolve();
+		expect(mockFindOne).not.toHaveBeenCalled();
+		expect(mockRemove).not.toHaveBeenCalled();
+	});
+
+	it('deletes the printer once confirmed', async () => {
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-counter-delete'));
+		fireEvent.click(screen.getByTestId('printer-row-counter-delete-confirm'));
+
+		await waitFor(() => expect(mockRemove).toHaveBeenCalledTimes(1));
+		expect(mockFindOne).toHaveBeenCalledWith('counter');
+		expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+	});
 });

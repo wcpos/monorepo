@@ -31,6 +31,8 @@ const store = {
 };
 
 jest.mock('react-native', () => ({ View: ({ children }: React.PropsWithChildren) => children }));
+// The Saved mark's fade; reanimated's ESM build does not load under this jest.
+jest.mock('./components/saved-mark', () => ({ useMarkSaved: () => () => {} }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-hook-form', () => ({ useForm: (options: unknown) => mockUseForm(options) }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: jest.fn() }));

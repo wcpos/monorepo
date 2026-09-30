@@ -208,6 +208,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="settings"
 				options={{
+					headerShown: false,
 					title: t('common.settings'),
 					drawerLabel: t('common.settings'),
 					drawerIcon: ({ focused }) => (

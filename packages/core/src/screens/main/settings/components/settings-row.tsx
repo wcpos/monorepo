@@ -4,8 +4,11 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 
 import { FormItem, FormLabel } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
+
+import { SavedMark } from './saved-mark';
 
 interface SettingsRowProps {
 	label: string;
@@ -15,6 +18,8 @@ interface SettingsRowProps {
 	 * other compact controls). Default rows go label-left on md+, stacked on sm.
 	 */
 	inline?: boolean;
+	/** The field this row writes; its Saved mark shows beside the label after a write. */
+	name?: string;
 	children: React.ReactNode;
 	testID?: string;
 }
@@ -24,19 +29,34 @@ interface SettingsRowProps {
  * No divider — rows separate by rhythm alone. Stacks label-above-control on
  * small screens with a full-width control.
  */
-export function SettingsRow({ label, description, inline, children, testID }: SettingsRowProps) {
+export function SettingsRow({
+	label,
+	description,
+	inline,
+	name,
+	children,
+	testID,
+}: SettingsRowProps) {
 	// Inside a react-hook-form <Form>, FormItem + FormLabel wire the label to its
 	// control. Screens without a form (customer display) have no provider, where
 	// FormLabel's useFormField() throws, so those rows fall back to a plain label.
 	const inForm = useFormContext() !== null;
 	const Row = inForm ? FormItem : View;
 	const RowLabel = inForm ? FormLabel : PlainLabel;
+	const title = name ? (
+		<HStack className="items-center gap-2">
+			<RowLabel>{label}</RowLabel>
+			<SavedMark name={name} />
+		</HStack>
+	) : (
+		<RowLabel>{label}</RowLabel>
+	);
 
 	if (inline) {
 		return (
-			<Row testID={testID} className="flex-row items-center justify-between gap-4 py-2.5">
+			<Row testID={testID} className="flex-row items-center justify-between gap-4 py-3">
 				<View className="flex-1 gap-0.5">
-					<RowLabel>{label}</RowLabel>
+					{title}
 					{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
 				</View>
 				{children}
@@ -45,9 +65,9 @@ export function SettingsRow({ label, description, inline, children, testID }: Se
 	}
 
 	return (
-		<Row testID={testID} className="gap-2 py-2.5 md:flex-row md:items-center md:gap-6">
+		<Row testID={testID} className="gap-2 py-3 md:flex-row md:items-center md:gap-6">
 			<View className="shrink-0 gap-0.5 md:w-64 lg:w-72">
-				<RowLabel>{label}</RowLabel>
+				{title}
 				{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
 			</View>
 			<View className="md:flex-1 md:flex-row md:justify-end">
