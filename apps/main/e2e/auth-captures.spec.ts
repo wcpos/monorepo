@@ -24,7 +24,9 @@ async function capture(page: Page, info: TestInfo, state: string, step: ScaleSte
 	// The output dir's name truncates the describe title, so the file carries the combination.
 	const combo = info.titlePath.find((title) => /^(tablet|phone)-/.test(title)) ?? 'unknown';
 	const path = info.outputPath(`${combo}--${state}.png`);
-	await page.screenshot({ path, fullPage: true });
+	// Viewport only: a full-page shot under `hasTouch` resets Chromium's touch emulation, so
+	// `(pointer: fine)` flips to true for every later state and the phone renders as a table.
+	await page.screenshot({ path });
 	await info.attach(`connect-captures-${state}`, { path, contentType: 'image/png' });
 	await style.evaluate((element) => element.parentNode?.removeChild(element));
 }
