@@ -6,10 +6,11 @@ import { Uniwind, useUniwind } from 'uniwind';
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -45,13 +46,15 @@ function ThemeOptionButton({
 			}}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
+			aria-selected={isActive}
 			// min-h-40 clears the tallest possible card — icon + 2-line label cap
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
-			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border-2 p-3 ${
-				isActive ? 'border-primary' : 'border-border/60 web:hover:border-border'
+			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border p-3 ${
+				isActive ? 'border-primary' : 'border-border'
 			}`}
 		>
+			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
 			<Icon
 				name={option.icon}
 				size="xl"
@@ -138,8 +141,6 @@ const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 /**
  * The Scale row. The step itself reaches the screens through `ScaleProvider`,
  * which reads this field off the store document — nothing here touches a token.
- *
- * A toggle group until the segmented control lands in the primitives pass.
  */
 function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
@@ -159,19 +160,21 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<ToggleGroup
-			type="single"
-			value={scale}
-			onValueChange={(value) => {
-				void handleScaleChange(value as string | undefined);
-			}}
-		>
-			{SCALE_OPTIONS.map((option) => (
-				<ToggleGroupItem key={option} value={option} testID={`settings-scale-${option}`}>
-					<Text>{t(`settings.scale.${option}`)}</Text>
-				</ToggleGroupItem>
-			))}
-		</ToggleGroup>
+		<SettingsRow label={t('settings.scale')} name="scale">
+			<SegmentedControl
+				segments={
+					SCALE_OPTIONS.map((option) => ({
+						value: option,
+						label: t(`settings.scale.${option}`),
+						testID: `settings-scale-${option}`,
+					})) as [Segment, Segment, Segment, Segment]
+				}
+				value={scale}
+				onValueChange={(value) => {
+					void handleScaleChange(value);
+				}}
+			/>
+		</SettingsRow>
 	);
 }
 

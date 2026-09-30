@@ -9,6 +9,7 @@ import { Text } from '@wcpos/components/text';
 
 interface SettingsRowProps {
 	label: string;
+	name?: string;
 	description?: string;
 	/**
 	 * Keep label and control on one line at every screen size (switches and
@@ -34,7 +35,7 @@ export function SettingsRow({ label, description, inline, children, testID }: Se
 
 	if (inline) {
 		return (
-			<Row testID={testID} className="flex-row items-center justify-between gap-4 py-2.5">
+			<Row testID={testID} className="flex-row items-center justify-between gap-4 py-3">
 				<View className="flex-1 gap-0.5">
 					<RowLabel>{label}</RowLabel>
 					{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}
@@ -45,7 +46,7 @@ export function SettingsRow({ label, description, inline, children, testID }: Se
 	}
 
 	return (
-		<Row testID={testID} className="gap-2 py-2.5 md:flex-row md:items-center md:gap-6">
+		<Row testID={testID} className="gap-2 py-3 md:flex-row md:items-center md:gap-6">
 			<View className="shrink-0 gap-0.5 md:w-64 lg:w-72">
 				<RowLabel>{label}</RowLabel>
 				{!!description && <Text className="text-muted-foreground text-xs">{description}</Text>}

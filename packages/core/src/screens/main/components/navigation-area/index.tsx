@@ -1,14 +1,17 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Redirect, usePathname, useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon, type IconName } from '@wcpos/components/icon';
+import { usePointer } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
 
 import { useTheme } from '../../../../contexts/theme';
+import { ManagementBar } from '../management-bar';
 
 import type { Href } from 'expo-router';
 
@@ -29,37 +32,40 @@ function NavigationItems({
 }) {
 	const pathname = usePathname();
 	const router = useRouter();
+	const pointer = usePointer();
 
 	return items.map((item) => {
 		const selected = pathname === item.href;
 
 		return (
-			<Button
+			<Pressable
 				key={item.href}
-				variant="ghost"
+				accessibilityRole="button"
 				testID={item.testID}
 				onPress={() => router.push(item.href)}
 				accessibilityState={{ selected }}
+				aria-selected={selected}
 				className={cn(
-					'h-10 w-full justify-start px-3',
-					selected && 'bg-primary/10 web:hover:bg-primary/10'
+					'active:bg-card h-10 w-full flex-row items-center gap-3 rounded-md px-3',
+					pointer === 'fine' && 'web:hover:bg-card',
+					selected && 'bg-card'
 				)}
 			>
-				<HStack className="w-full flex-1 items-center justify-between gap-3">
-					{item.icon ? (
-						<Icon
-							name={item.icon}
-							size="sm"
-							className={selected ? 'text-primary' : 'text-muted-foreground'}
-						/>
-					) : null}
-					<ButtonText className={cn('flex-1', selected && 'text-primary font-semibold')}>
-						{item.label}
-					</ButtonText>
-					{item.badge ? <View className="relative h-5 w-5">{item.badge}</View> : null}
-					{showChevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
-				</HStack>
-			</Button>
+				{item.icon ? (
+					<Icon
+						name={item.icon}
+						size="sm"
+						className={selected ? 'text-foreground' : 'text-muted-foreground'}
+					/>
+				) : null}
+				<Text
+					className={cn('flex-1 text-sm', selected ? 'text-foreground' : 'text-muted-foreground')}
+				>
+					{item.label}
+				</Text>
+				{item.badge ? <View className="relative h-5 w-5">{item.badge}</View> : null}
+				{showChevron ? <Icon name="chevronRight" className="text-muted-foreground" /> : null}
+			</Pressable>
 		);
 	});
 }
@@ -70,6 +76,8 @@ export function NavigationAreaLayout({
 	areaLabel,
 	testID,
 	screenTestID,
+	barTestID,
+	barNotice,
 	children,
 }: {
 	items: NavigationAreaItem[];
@@ -77,19 +85,41 @@ export function NavigationAreaLayout({
 	areaLabel: string;
 	testID: string;
 	screenTestID?: string;
+	barTestID?: string;
+	barNotice?: React.ReactNode;
 	children: React.ReactNode;
 }) {
 	const { screenSize } = useTheme();
 	const pathname = usePathname();
 	const router = useRouter();
+	const current = items.find((item) => pathname === item.href);
+	const phoneLeaf = screenSize === 'sm' && current;
+	const bar = barTestID ? (
+		<>
+			<ManagementBar
+				testID={barTestID}
+				title={phoneLeaf ? current.label : areaLabel}
+				back={
+					phoneLeaf
+						? {
+								label: areaLabel,
+								onPress: () => router.navigate(indexHref),
+								testID: `${testID}-back`,
+							}
+						: undefined
+				}
+			/>
+			{barNotice}
+		</>
+	) : null;
 
 	if (screenSize === 'sm') {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
-		const current = items.find((item) => pathname === item.href);
 		return (
-			<View testID={screenTestID} className="bg-card flex-1">
-				{current ? (
+			<View testID={screenTestID} className={cn('flex-1', barTestID ? 'bg-background' : 'bg-card')}>
+				{bar}
+				{current && !barTestID ? (
 					<HStack
 						testID={`${testID}-back`}
 						className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
@@ -108,11 +138,14 @@ export function NavigationAreaLayout({
 		);
 	}
 
-	return (
+	const content = (
 		<View testID={testID} className="flex-1 flex-row">
 			<View
 				testID={`${testID}-rail`}
-				className="border-border/50 bg-card w-56 shrink-0 gap-0.5 border-r p-3"
+				className={cn(
+					'border-border/50 w-56 shrink-0 gap-0.5 border-r p-3',
+					barTestID ? 'bg-background' : 'bg-card'
+				)}
 			>
 				<NavigationItems items={items} showChevron={false} />
 			</View>
@@ -120,6 +153,14 @@ export function NavigationAreaLayout({
 				{children}
 			</View>
 		</View>
+	);
+	return barTestID ? (
+		<View className="flex-1">
+			{bar}
+			{content}
+		</View>
+	) : (
+		content
 	);
 }
 
