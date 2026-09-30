@@ -1,0 +1,9 @@
+# MariaDB for the E2E store, sized to its 1 GiB container limit. The seeded
+# catalogue is a few hundred products, so a 384 MB buffer pool holds the
+# whole dataset with room for the 24 php-fpm connections.
+[mysqld]
+innodb_buffer_pool_size = 384M
+innodb_log_file_size = 64M
+max_connections = 60
+performance_schema = OFF
+skip-name-resolve
