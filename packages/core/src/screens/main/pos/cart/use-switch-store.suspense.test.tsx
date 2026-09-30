@@ -22,7 +22,17 @@ import { BehaviorSubject, Observable } from 'rxjs';
 
 import type { StoreDocument } from '@wcpos/database';
 
-import { UserMenu } from './user-menu';
+import { SwitchStoreSheet } from './switch-store-sheet';
+
+jest.mock('expo-haptics', () => ({}));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: passthrough,
+	DialogContent: passthrough,
+	DialogHeader: passthrough,
+	DialogTitle: passthrough,
+}));
+jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: passthrough }));
 
 let populateCalls = 0;
 let storesSource$: Observable<StoreDocument[]>;
@@ -133,6 +143,7 @@ jest.mock('react-native-reanimated', () => ({
 jest.mock('react-native', () => ({
 	Linking: { openURL: jest.fn() },
 	Text: passthrough,
+	ScrollView: passthrough,
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
 	),
@@ -161,7 +172,7 @@ const asyncStores = (): Observable<StoreDocument[]> =>
 const renderMenu = () =>
 	render(
 		<React.Suspense fallback={<div data-testid="route-fallback" />}>
-			<UserMenu />
+			<SwitchStoreSheet open onOpenChange={jest.fn()} />
 		</React.Suspense>
 	);
 
@@ -181,7 +192,7 @@ describe('user menu store switcher', () => {
 		await settle();
 
 		// The submenu renders one item per store; 'Two' can only be on screen if the resource
-		// resolved and StoreSubMenu committed.
+		// resolved and StoreRows committed.
 		expect(await screen.findByText('Two')).toBeTruthy();
 		expect(populateCalls).toBe(1);
 	});
@@ -196,7 +207,7 @@ describe('user menu store switcher', () => {
 		await settle();
 
 		expect(screen.queryByTestId('route-fallback')).toBeNull();
-		expect(screen.getByTestId('clear-all-local-data')).toBeTruthy();
+		expect(screen.getByText('register.switch_store')).toBeTruthy();
 		expect(screen.queryByText('Two')).toBeNull();
 	});
 });

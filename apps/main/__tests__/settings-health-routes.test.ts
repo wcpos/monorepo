@@ -53,9 +53,9 @@ describe('settings and Store health route structure', () => {
 	});
 
 	it('routes settings entry points to the new area', () => {
-		expect(
-			source('../../packages/core/src/screens/main/components/header/user-menu.tsx')
-		).toContain("router.push('/settings')");
+		expect(source('../../packages/core/src/screens/main/pos/cart/user-sheet.tsx')).toContain(
+			"router.push('/settings')"
+		);
 	});
 
 	it('renders the existing logs screen at the nested health route', () => {

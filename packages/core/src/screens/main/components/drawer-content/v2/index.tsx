@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
-import { UserAvatar } from '../../header/user-avatar';
+import { UserAvatar } from '../../user-avatar';
 import { requestRegisterPicker } from '../../../pos/cart/register-picker-request';
 import { UserSheet } from '../../../pos/cart/user-sheet';
 import { DrawerItem } from './drawer-item';

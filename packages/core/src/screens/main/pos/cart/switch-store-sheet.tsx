@@ -11,7 +11,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useSwitchStore } from '../../components/header/use-switch-store';
+import { useSwitchStore } from './use-switch-store';
 import { storeListResource } from '../../hooks/store-list-resource';
 import { usePanelSide } from '../contexts/overlay-side/v2';
 

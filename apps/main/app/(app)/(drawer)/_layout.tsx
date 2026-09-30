@@ -2,7 +2,8 @@ import * as React from 'react';
 import { Platform, View } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
-import { useCSSVariable } from 'uniwind';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
@@ -235,6 +236,11 @@ function ThemedDrawer({
 	);
 }
 
+function ThemedSystemBars() {
+	const { theme } = useUniwind();
+	return <SystemBars style={theme === 'light' ? 'dark' : 'light'} />;
+}
+
 function DrawerLayoutContent() {
 	const { screenSize } = useTheme();
 	const t = useT();
@@ -256,6 +262,7 @@ function DrawerLayoutContent() {
 	return (
 		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
 			<View className="bg-background flex-1">
+				<ThemedSystemBars />
 				<ThemedDrawer
 					screenSize={screenSize}
 					t={t}

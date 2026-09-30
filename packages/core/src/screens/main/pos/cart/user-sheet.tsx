@@ -6,6 +6,9 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs';
 
 import { Avatar, getInitials } from '@wcpos/components/avatar';
+import { Icon } from '@wcpos/components/icon';
+import { Platform } from '@wcpos/utils/platform';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Suspense } from '@wcpos/components/suspense';
@@ -24,6 +27,7 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePanelSide } from '../contexts/overlay-side/v2';
+import { ClearLocalData } from './clear-local-data';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -139,50 +143,121 @@ export function UserSheet({
 	const side = usePanelSide('shell');
 	const { registers } = useRegisterBinding();
 	const t = useT();
+	const router = useRouter();
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost={portalHost ?? undefined} testID="user-sheet">
-				<DialogHeader>
-					<DialogTitle>{displayName}</DialogTitle>
-				</DialogHeader>
-				{open && (
-					<ScrollView contentContainerClassName="grow px-4 pb-4">
-						<SalesToday />
-						<View testID="user-sheet-switch-user">
-							<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
-							<Suspense>
-								<UserRows />
-							</Suspense>
-							<AddUserButton site={site} hasExistingUsers compact />
-						</View>
-						{registers.length > 1 && onSwitchRegister && (
-							<View className="border-border border-b">
-								<Button
-									testID="user-sheet-switch-register"
-									variant="ghost"
-									className="min-h-row flex-row justify-start gap-2"
-									onPress={() => {
-										onOpenChange(false);
-										onSwitchRegister();
-									}}
-								>
-									{t('register.switch_register')}
-								</Button>
-							</View>
+		<ClearLocalData
+			trigger={(handleResetPress) => (
+				<Dialog open={open} onOpenChange={onOpenChange}>
+					<DialogContent
+						side={side}
+						size="lg"
+						portalHost={portalHost ?? undefined}
+						testID="user-sheet"
+					>
+						<DialogHeader>
+							<DialogTitle>{displayName}</DialogTitle>
+						</DialogHeader>
+						{open && (
+							<ScrollView contentContainerClassName="grow px-4 pb-4">
+								<SalesToday />
+								<View testID="user-sheet-switch-user">
+									<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
+									<Suspense>
+										<UserRows />
+									</Suspense>
+									<AddUserButton site={site} hasExistingUsers compact />
+								</View>
+								{registers.length > 1 && onSwitchRegister && (
+									<View className="border-border border-b">
+										<Button
+											testID="user-sheet-switch-register"
+											variant="ghost"
+											className="min-h-row flex-row justify-start gap-2"
+											onPress={() => {
+												onOpenChange(false);
+												onSwitchRegister();
+											}}
+										>
+											{t('register.switch_register')}
+										</Button>
+									</View>
+								)}
+								<View className="border-border mt-auto border-t pt-4">
+									<Button
+										testID="user-sheet-sign-out"
+										className="min-h-row"
+										variant="outline-destructive"
+										onPress={logout}
+									>
+										<Text className="text-destructive">{t('register.sign_out')}</Text>
+									</Button>
+								</View>
+								<View className="border-border mt-4 gap-2 border-t pt-4">
+									<Button
+										testID="user-sheet-settings"
+										variant="ghost-quiet"
+										className="min-h-row flex-row justify-start gap-2"
+										onPress={() => {
+											onOpenChange(false);
+											router.push('/settings');
+										}}
+									>
+										<Icon name="gear" className="text-muted-foreground" />
+										<Text>{t('common.settings')}</Text>
+									</Button>
+									<Button
+										testID="user-sheet-support"
+										variant="ghost-quiet"
+										className="min-h-row flex-row justify-start gap-2"
+										onPress={() => {
+											onOpenChange(false);
+											router.push('/support');
+										}}
+									>
+										<Icon name="commentQuestion" className="text-muted-foreground" />
+										<Text>{t('common.support')}</Text>
+									</Button>
+									{/* Web only, as the header's menu had them: a browser is where these two go. */}
+									{Platform.isWeb && (
+										<Button
+											testID="user-sheet-wp-admin"
+											variant="ghost-quiet"
+											className="min-h-row flex-row justify-start gap-2"
+											onPress={() => openExternalURL(`${site.home}/wp-admin`)}
+										>
+											<Icon name="wordpress" className="text-muted-foreground" />
+											<Text>{t('common.wordpress_admin')}</Text>
+										</Button>
+									)}
+									{Platform.isWeb && (
+										<Button
+											testID="user-sheet-desktop-app"
+											variant="ghost-quiet"
+											className="min-h-row flex-row justify-start gap-2"
+											onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
+										>
+											<Icon name="download" className="text-muted-foreground" />
+											<Text>{t('common.desktop_app')}</Text>
+										</Button>
+									)}
+									<Button
+										testID="user-sheet-clear-local-data"
+										variant="ghost-quiet"
+										className="min-h-row flex-row justify-start gap-2"
+										onPress={() => {
+											onOpenChange(false);
+											handleResetPress();
+										}}
+									>
+										<Icon name="trash" className="text-destructive" />
+										<Text className="text-destructive">{t('common.clear_all_local_data')}</Text>
+									</Button>
+								</View>
+							</ScrollView>
 						)}
-						<View className="border-border mt-auto border-t pt-4">
-							<Button
-								testID="user-sheet-sign-out"
-								className="min-h-row"
-								variant="outline-destructive"
-								onPress={logout}
-							>
-								<Text className="text-destructive">{t('register.sign_out')}</Text>
-							</Button>
-						</View>
-					</ScrollView>
-				)}
-			</DialogContent>
-		</Dialog>
+					</DialogContent>
+				</Dialog>
+			)}
+		/>
 	);
 }

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 
-import { SystemBars } from 'react-native-edge-to-edge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -148,12 +147,6 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						</View>
 					</HStack>
 				</View>
-				{/*
-				 * Status bar uses 'light' style (white icons) because sidebar is always dark
-				 * in all themes. This is handled by react-native-edge-to-edge which is
-				 * the recommended approach for Expo SDK 54+ edge-to-edge displays.
-				 */}
-				<SystemBars style="light" />
 				{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			</View>
 		</ErrorBoundary>

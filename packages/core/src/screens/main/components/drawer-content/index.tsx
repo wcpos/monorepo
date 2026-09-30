@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerItemList } from './drawer-item-list';
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
-import { NotificationBell } from '../header/notification-bell';
+import { NotificationBell } from '../notification-bell/notification-bell';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
