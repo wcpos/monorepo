@@ -14,15 +14,20 @@ let mockStage = 'cart';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
-jest.mock('./open-register-card', () => ({ OpenRegisterCard: () => null }));
+jest.mock('./open-register-card', () => ({
+	OpenRegisterCard: () => <div data-testid="open-register-card" />,
+}));
 jest.mock('./register-count', () => ({ RegisterCount: () => null }));
 jest.mock('./closure-sheet', () => ({ ClosureSheet: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ status: 'bound', registers: [] }),
 }));
-let mockSession: { session: unknown; sessionsOn: boolean } = { session: null, sessionsOn: false };
+let mockSession: { session: unknown; sessionsOn: boolean; loaded?: boolean } = {
+	session: null,
+	sessionsOn: false,
+};
 jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ ...mockSession, overdue: false }),
+	useRegisterSession: () => ({ loaded: true, ...mockSession, overdue: false }),
 }));
 jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { openOrdersPosition: mockPosition } }),
@@ -116,6 +121,30 @@ it('hides the open-order tabs while the register is closed or counting', () => {
 		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true };
 		rerender(<OpenOrders isColumn />);
 		expect(screen.getByTestId('open-orders')).toBeTruthy();
+	} finally {
+		mockSession = { session: null, sessionsOn: false };
+	}
+});
+
+it('shows neither the Open register card nor the cart until the session has loaded', () => {
+	mockIsNew = false;
+	mockStage = 'cart';
+	mockPosition = 'top';
+	mockSession = { session: null, sessionsOn: true, loaded: false };
+	try {
+		const { rerender } = render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('cart-column-loading')).toBeTruthy();
+		expect(screen.queryByTestId('open-register-card')).toBeNull();
+		expect(screen.queryByTestId('cart-header')).toBeNull();
+		expect(screen.queryByTestId('open-orders')).toBeNull();
+		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true, loaded: true };
+		rerender(<OpenOrders isColumn />);
+		expect(screen.queryByTestId('cart-column-loading')).toBeNull();
+		expect(screen.queryByTestId('open-register-card')).toBeNull();
+		expect(screen.getByTestId('cart-header')).toBeTruthy();
+		mockSession = { session: null, sessionsOn: true, loaded: true };
+		rerender(<OpenOrders isColumn />);
+		expect(screen.getByTestId('open-register-card')).toBeTruthy();
 	} finally {
 		mockSession = { session: null, sessionsOn: false };
 	}

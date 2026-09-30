@@ -317,6 +317,11 @@ export function useRegisterSession() {
 			new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute).getTime();
 	return {
 		session,
+		/**
+		 * `session` is null both for a closed register and before the combined query first
+		 * emits; only this tells them apart, so an open register never flashes as closed.
+		 */
+		loaded: !sessionsOn || data !== null,
 		movements: entries,
 		refusedMovements,
 		expected,

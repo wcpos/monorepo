@@ -39,6 +39,13 @@ import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-or
 
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
+const LOADING_ROWS = (
+	<View testID="cart-column-loading" className="gap-2 p-2">
+		{[0, 1, 2].map((row) => (
+			<Skeleton key={row} shape="row" />
+		))}
+	</View>
+);
 
 export function OpenOrders({
 	isColumn = false,
@@ -53,7 +60,9 @@ export function OpenOrders({
 	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
 	useCartSettlement();
 	const { status: bindingStatus } = useRegisterBinding();
-	const { sessionsOn, session, overdue } = useRegisterSession();
+	const { sessionsOn, session, loaded, overdue } = useRegisterSession();
+	// Until the session loads, an open register reads as closed; show neither card nor cart.
+	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
 	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
@@ -79,6 +88,7 @@ export function OpenOrders({
 	// Open register card or the count instead, the tabs go with it (Paul, 2026-09-29).
 	const cartShown =
 		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
+		!sessionLoading &&
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
 		!(session && session.status !== 'open');
 	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={NO_API} data={view} /> : null;
@@ -129,20 +139,14 @@ export function OpenOrders({
 							consumeRegisterPickerRequest();
 						}}
 					/>
+				) : sessionLoading ? (
+					LOADING_ROWS
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
 					<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
 				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (
-					<React.Suspense
-						fallback={
-							<View className="gap-2 p-2">
-								{[0, 1, 2].map((row) => (
-									<Skeleton key={row} shape="row" />
-								))}
-							</View>
-						}
-					>
+					<React.Suspense fallback={LOADING_ROWS}>
 						<ReceiptLedger uuid={receiptOrderUuid} />
 					</React.Suspense>
 				) : isColumn && !isNewOrder && stage === 'checkout' ? (
