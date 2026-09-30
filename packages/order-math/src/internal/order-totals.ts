@@ -311,7 +311,9 @@ export function calculateOrderTotals(
 		 * These properties are stored on the order document
 		 */
 		discount_total: String(roundHalfUp(discount_total, dp)),
-		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
+		discount_tax: String(
+			roundTaxTotal(roundHalfUp(discount_tax, WC_NORMALIZE_PRECISION), dp, pricesIncludeTax)
+		),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
 		shipping_tax: String(roundedShippingTax),
 		cart_tax: String(roundedCartTax),
