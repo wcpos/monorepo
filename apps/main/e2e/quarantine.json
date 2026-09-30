@@ -213,36 +213,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "reports.spec.ts",
-			"title": "Reports Page (Free) › should show upgrade overlay on Reports",
-			"group": "G5"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports.spec.ts",
-			"title": "Reports Page (Free) › should show View Demo button on upgrade overlay",
-			"group": "G5"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports.spec.ts",
-			"title": "Reports Page (Pro) › should show filter pills",
-			"group": "G5"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports.spec.ts",
-			"title": "Reports Page (Pro) › should show print button",
-			"group": "G5"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports.spec.ts",
-			"title": "Reports Page (Pro) › should show report content",
-			"group": "G5"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-filter-bar.spec.ts",
 			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
 			"group": "G6"
