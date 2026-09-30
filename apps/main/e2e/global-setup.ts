@@ -157,7 +157,8 @@ async function reuseValidAuthState(
 	stateName: string,
 	variant: StoreVariant,
 	storeUrl: string,
-	baseURL: string
+	baseURL: string,
+	trust = false
 ): Promise<string[] | null> {
 	const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
 	if (!fs.existsSync(statePath)) return null;
@@ -174,6 +175,10 @@ async function reuseValidAuthState(
 	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) {
 		fs.rmSync(statePath, { force: true });
 		return null;
+	}
+	if (trust) {
+		console.log(`[global-setup] Reusing ${stateName} state from this run's shared setup`);
+		return state.storeIds as string[];
 	}
 
 	const browser = await chromium.launch();
@@ -251,6 +256,15 @@ async function reuseValidAuthState(
 	}
 }
 
+// The e2e-setup job (#2321) makes every shard's states once per run. Only the run
+// attempt that made them skips the validating boot; a re-run's tokens may have aged.
+const SHARED_SETUP_MARKER = path.join(AUTH_STATE_DIR, 'shared-setup-run.txt');
+const RUN_ATTEMPT = `${process.env.GITHUB_RUN_ID}#${process.env.GITHUB_RUN_ATTEMPT}`;
+const sharedStateIsFromThisAttempt = () =>
+	!!process.env.GITHUB_RUN_ID &&
+	fs.existsSync(SHARED_SETUP_MARKER) &&
+	fs.readFileSync(SHARED_SETUP_MARKER, 'utf-8') === RUN_ATTEMPT;
+
 /**
  * Run auth for a single store variant, export state, and save to disk.
  *
@@ -279,20 +293,23 @@ async function setupVariant(
 		shardIndex?: number;
 		/** Open the POS against THIS store rather than whichever lists first. */
 		storeId?: string;
+		/** Take a well-formed saved state as is, without the validating boot. */
+		trust?: boolean;
 	} = {}
 ): Promise<string[]> {
 	const cashierAuth = getE2ECashierAuth(variant, options.shardIndex ?? 0);
 	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
 	lastSetupEvidence = '';
+
+	if (!options.coldStart) {
+		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL, options.trust);
+		if (reused) return reused;
+	}
+	// After the reuse checks, so in CI only the e2e-setup job logs it (#2321).
 	console.log(
 		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
 	);
-
-	if (!options.coldStart) {
-		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL);
-		if (reused) return reused;
-	}
 
 	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
@@ -446,13 +463,30 @@ async function globalSetup(config: FullConfig) {
 	// Create the state directory
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
+	// The e2e-setup job (no E2E_SHARD_INDEX, so no stagger): every shard in turn.
+	// Trusting what it just saved syncs the free user once, each pro cashier once.
+	const sharedShards = Number(process.env.E2E_SHARED_SETUP_SHARDS);
+	if (Number.isInteger(sharedShards) && sharedShards > 0) {
+		for (let index = 0; index < sharedShards; index++) await setupShard(baseURL, index, true);
+		fs.writeFileSync(SHARED_SETUP_MARKER, RUN_ATTEMPT);
+		return;
+	}
+	const trust = sharedStateIsFromThisAttempt();
+	if (process.env.CI && !trust) {
+		console.log('[global-setup] WARNING: no shared e2e-setup state (#2321); this shard logs in');
+	}
+	await setupShard(baseURL, shardIndex, trust);
+}
+
+async function setupShard(baseURL: string, shardIndex: number, trust: boolean) {
+	const opts = { shardIndex, trust };
 	// Auth both variants in sequence (parallel would contend on the same stores)
 	// Naming a free store is what turns the free matrix on, so it is also exactly
 	// when the free bootstrap is worth paying for — an OAuth plus catalogue sync.
 	if (FREE_STORE_URL) {
-		await setupVariantWithRetry('free', FREE_STORE_URL, baseURL, { shardIndex });
+		await setupVariantWithRetry('free', FREE_STORE_URL, baseURL, opts);
 	}
-	const proStoreIds = await setupVariantWithRetry('pro', PRO_STORE_URL, baseURL, { shardIndex });
+	const proStoreIds = await setupVariantWithRetry('pro', PRO_STORE_URL, baseURL, opts);
 
 	// One auth state PER store, so a spec can target the store its assertions
 	// need. The tax-parity specs are the reason this exists: a store's rate set

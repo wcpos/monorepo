@@ -238,6 +238,79 @@ jobs:
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
+  # One login + sync per cashier per run, serially: six shards doing it at once
+  # saturated dev-next three times on 2026-09-30 (#2321). It replaces the daily
+  # per-shard cache, which never hit (saved only on green jobs, per branch).
+  # Only ciphertext leaves the runner; without the key each shard sets up alone.
+  e2e-setup:
+    name: 🔑 E2E shared setup
+    needs: [changes, deploy]
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
+    steps:
+      - name: 🔑 Check for the auth-state key
+        id: key
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        run: echo "present=$([ -n "$E2E_AUTH_CACHE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 🎭 Install Playwright browsers
+        run: cd apps/main && npx playwright install chromium --only-shell
+
+      # globalSetup runs before tests load, so a grep matching nothing runs only
+      # the setup. If it fails, the shards set up by themselves, as before.
+      - name: 🔑 Log in and sync every shard's cashier, one at a time
+        id: setup
+        if: steps.key.outputs.present == 'true'
+        continue-on-error: true
+        timeout-minutes: 20
+        working-directory: apps/main
+        run: npx playwright test --pass-with-no-tests --grep '@e2e-shared-setup-runs-no-tests' --reporter=list
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
+          CI: true
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
+          # Must match the e2e matrix's shard count.
+          E2E_SHARED_SETUP_SHARDS: ${{ (needs.changes.outputs.only_specs != '' || github.event_name == 'schedule' || inputs.quarantine_only) && '1' || '6' }}
+          E2E_LANE: ${{ needs.changes.outputs.lane }}
+          E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
+
+      - name: 🔐 Encrypt the shared auth state
+        if: steps.key.outputs.present == 'true'
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
+        working-directory: apps/main
+        run: |
+          [ "$SETUP_OUTCOME" != "success" ] || tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
+          rm -rf e2e/.auth-state
+
+      - name: 📤 Upload the encrypted auth state
+        id: upload
+        if: steps.setup.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: e2e-auth-state
+          path: apps/main/e2e/auth-state.enc
+          if-no-files-found: error
+          retention-days: 1
+
   # E2E runs from concurrent PRs hit the shared dev store WITHOUT any
   # cross-run serialization. A global FIFO queue job lived here from
   # 2026-08-12 to 2026-08-18: with 2+ PRs active it starved every merge gate
@@ -256,8 +329,8 @@ jobs:
   # The e2e-gate below treats this skip as legitimate.
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    needs: [changes, deploy, e2e-setup]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -307,40 +380,24 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
-      - name: 📅 Cache date
-        id: cache-date
-        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
-
-      - name: 💾 Cache E2E auth state
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      # Without them (no key, failed setup) each shard logs in and syncs itself, loudly.
+      - name: 📥 Download the shared auth state
+        if: needs.e2e-setup.outputs.state == 'ready'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          # ONLY the encrypted archive is ever cached: the snapshot embeds the
-          # cashier's access + refresh tokens and this repo is public, so the
-          # plaintext state must never reach the Actions cache (review on
-          # #1297). Forks have no E2E_AUTH_CACHE_KEY — they skip decryption and
-          # pay full auth, which is also their secretless status quo.
-          #
-          # globalSetup validates a restored state by booting the app from it
-          # AND observing an authenticated 2xx from the store, falling back to
-          # full re-auth otherwise — the cache saves time, never poisons runs.
-          # Day-keyed so same-day runs hit the exact key and skip re-saving
-          # (bounds generations); restore-keys still serve older states, gated
-          # by the same validation.
-          path: apps/main/e2e/auth-state.enc
-          key: e2e-auth-v2-${{ runner.os }}-${{ needs.changes.outputs.lane || 'unknown' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
-          restore-keys: |
-            e2e-auth-v2-${{ runner.os }}-${{ needs.changes.outputs.lane || 'unknown' }}-shard${{ matrix.shardIndex }}-
+          name: e2e-auth-state
+          path: apps/main/e2e
 
-      - name: 🔓 Decrypt cached auth state
-        if: env.E2E_AUTH_CACHE_KEY != ''
+      - name: 🔓 Decrypt the shared auth state
+        if: needs.e2e-setup.outputs.state == 'ready' && env.E2E_AUTH_CACHE_KEY != ''
         env:
           E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
         working-directory: apps/main
         run: |
-          if [ -f e2e/auth-state.enc ]; then
-            mkdir -p e2e/.auth-state
-            openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || rm -rf e2e/.auth-state
-          fi
+          mkdir -p e2e/.auth-state
+          openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || { echo "::warning::Shared auth state did not decrypt; this shard sets up by itself"; rm -rf e2e/.auth-state; }
+          rm -f e2e/auth-state.enc
 
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
@@ -464,18 +521,6 @@ jobs:
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
-
-      - name: 🔐 Encrypt auth state for cache
-        if: always() && env.E2E_AUTH_CACHE_KEY != ''
-        env:
-          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
-        working-directory: apps/main
-        run: |
-          if [ -d e2e/.auth-state ]; then
-            tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
-          fi
-          # The plaintext must never reach the cache post-step or artifacts.
-          rm -rf e2e/.auth-state
 
       # Same probe again on failure: a store that was healthy at the start can
       # be saturated by the time the run fails, and that distinction is the

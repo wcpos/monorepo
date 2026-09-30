@@ -23,7 +23,8 @@ export function isStoreUnreachable(evidence: string): boolean {
 // Waits before the second and third attempts: at most 3 attempts in total.
 export const loginRetryDelaysMs = [15_000, 45_000];
 
-// Six shards' setups used to hit the store in the same second; 10s apart each.
+// Six shards' first store requests, 30s apart each (#2321). 10s (#2303) still
+// let their start saturate dev-next's ~6 php-fpm workers.
 export function setupStaggerMs(normalizedShardIndex: number, ci: boolean): number {
-	return ci ? normalizedShardIndex * 10_000 : 0;
+	return ci ? normalizedShardIndex * 30_000 : 0;
 }
