@@ -109,3 +109,60 @@ it('does not retarget a pending write to an onChange swapped in after the edit',
 	expect(editTime).toHaveBeenCalledWith({ viewMode: 'grid' });
 	expect(afterwards).not.toHaveBeenCalled();
 });
+
+/**
+ * After a store patch lands, the reset's `values` make react-hook-form emit a NAMED event per
+ * control that normalises its value, carrying the value the form already holds (five idempotent
+ * writes per edit on General, seen 2026-09-30). `setValue` with an equal value emits nothing in
+ * jsdom, so the sequence observed live is replayed through a stub form's watch callback.
+ */
+it('ignores a named event whose value equals the last one seen for that field', () => {
+	type Cb = (values: Record<string, unknown>, info: { name?: string }) => void;
+	let emit: Cb = () => {};
+	const values: Record<string, unknown> = {
+		name: 'Shop',
+		price_num_decimals: 2,
+		locale: 'es_ES',
+		columns: [{ show: true }],
+	};
+	const form = {
+		getValues: () => values,
+		watch: (cb: Cb) => {
+			emit = cb;
+			return { unsubscribe: () => {} };
+		},
+	} as unknown as Parameters<typeof useFormChangeHandler>[0]['form'];
+	const onChange = jest.fn();
+	function Stub() {
+		useFormChangeHandler({ form, onChange, debounceMs: 0 });
+		return null;
+	}
+	render(<Stub />);
+
+	// A nested edit first, made IN PLACE on the object getValues() returned — the way
+	// react-hook-form's setValue mutates _formValues. The seed must be a deep clone, or
+	// lastSeen already holds the new value and the edit is skipped.
+	act(() => {
+		(values.columns as { show: boolean }[])[0].show = false;
+		emit(values, { name: 'columns.0.show' });
+	});
+	expect(onChange).toHaveBeenCalledTimes(1);
+	expect(onChange).toHaveBeenLastCalledWith({ 'columns.0.show': false });
+
+	// The user's edit.
+	values.name = 'Shop two';
+	act(() => emit(values, { name: 'name' }));
+	expect(onChange).toHaveBeenCalledTimes(2);
+	expect(onChange).toHaveBeenLastCalledWith({ name: 'Shop two' });
+
+	// The store patch lands: a form-level reset, then the echoes — a numeric input's number as a
+	// string, a select's unchanged key — and the name and the nested field again.
+	act(() => {
+		emit(values, { name: undefined });
+		emit({ ...values, price_num_decimals: '2' }, { name: 'price_num_decimals' });
+		emit(values, { name: 'locale' });
+		emit(values, { name: 'name' });
+		emit(values, { name: 'columns.0.show' });
+	});
+	expect(onChange).toHaveBeenCalledTimes(2);
+});
