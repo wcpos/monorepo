@@ -6,7 +6,13 @@ import { useLayoutObservable, useObservableCallback } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
-import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
+import {
+	createWedgeDetector,
+	dedupeScans,
+	SCAN_DEDUP_WINDOW_MS,
+	type ScanEvent,
+	type WedgeDetector,
+} from '@wcpos/scanner';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 import { useDocField } from '@wcpos/query';
 
@@ -17,15 +23,21 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 // Runs at scan time (not render): wraps a detected code in the normalized event.
-function toWedgeScanEvent(code: unknown): ScanEvent {
-	return { code: String(code), source: { kind: 'wedge' }, timestamp: Date.now() };
+function toWedgeScanEvent(scan: { code: string; startedAtMs: number }): ScanEvent {
+	return { code: scan.code, source: { kind: 'wedge' }, timestamp: scan.startedAtMs };
 }
+
+// A wedge copy is timed from its burst's first key (the physical scan); every
+// other source is timed at receipt, because sources stamp on different clocks (#2263).
+const scanTimeOf = (event: ScanEvent) =>
+	event.source.kind === 'wedge' ? event.timestamp : Date.now();
 
 type BarcodeScanEvent = {
 	barcode: string;
 	callback: (barcode: string) => void;
 	/** The burst ended with an Enter/Tab terminator (see WedgeScanMeta). */
 	terminated: boolean;
+	startedAtMs: number;
 };
 
 const noopBarcodeCallback = () => {};
@@ -54,9 +66,9 @@ export const useBarcodeDetection = (
 
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
-		string,
+		{ code: string; startedAtMs: number },
 		BarcodeScanEvent,
-		[string, (barcode: string) => void, boolean]
+		[string, (barcode: string) => void, boolean, number]
 	>(
 		(event$) =>
 			event$.pipe(
@@ -73,12 +85,18 @@ export const useBarcodeDetection = (
 					});
 					return false;
 				}),
+				// options.callback runs per wedge burst, before the cross-source de-dup below (review nit on #2272).
 				tap(([event]) => {
 					event.callback(event.barcode);
 				}),
-				map(([event]) => event.barcode)
+				map(([event]) => ({ code: event.barcode, startedAtMs: event.startedAtMs }))
 			),
-		([barcode, eventCallback, terminated]) => ({ barcode, callback: eventCallback, terminated })
+		([barcode, callback, terminated, startedAtMs]) => ({
+			barcode,
+			callback,
+			terminated,
+			startedAtMs,
+		})
 	);
 
 	// Active scope as a stream for event-time gating below (a ref read inside
@@ -97,14 +115,16 @@ export const useBarcodeDetection = (
 	// latest settings and emitter without being recreated per render. Refs may
 	// not be written during render, so a sync effect keeps them fresh.
 	const settingsRef = React.useRef({ threshold: avgTimeInputThreshold, prefix, suffix });
-	const emitRef = React.useRef<(code: string, terminated: boolean) => void>(() => {});
+	const emitRef = React.useRef<(code: string, terminated: boolean, startedAtMs: number) => void>(
+		() => {}
+	);
 	// Ref-sync effect: mirrors the latest reactive values for event-time reads.
 	React.useEffect(() => {
 		settingsRef.current = { threshold: avgTimeInputThreshold, prefix, suffix };
 	}, [avgTimeInputThreshold, prefix, suffix]);
 	React.useEffect(() => {
-		emitRef.current = (code: string, terminated: boolean) =>
-			onBarcodeScan(code, callback, terminated);
+		emitRef.current = (code: string, terminated: boolean, startedAtMs: number) =>
+			onBarcodeScan(code, callback, terminated, startedAtMs);
 	}, [onBarcodeScan, callback]);
 
 	const detectorRef = React.useRef<WedgeDetector | null>(null);
@@ -117,7 +137,7 @@ export const useBarcodeDetection = (
 		if (detectorRef.current === null) {
 			detectorRef.current = createWedgeDetector({
 				getSettings: () => settingsRef.current,
-				onScan: (code, meta) => emitRef.current(code, meta.terminated),
+				onScan: (code, meta) => emitRef.current(code, meta.terminated, meta.startedAtMs),
 			});
 		}
 		detectorRef.current.handleKey(key);
@@ -188,30 +208,22 @@ export const useBarcodeDetection = (
 	 */
 	const attributed = useAttributedWedge(isActive);
 	const hub = useScanHub();
-	const barcode$ = React.useMemo(
+	const gatedScans$ = React.useMemo(
 		() =>
-			merge(
-				wedgeBarcode$,
-				attributed.scanEvents$.pipe(map((event) => event.code)),
-				hub.events$.pipe(map((event) => event.code))
-			).pipe(
+			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
 				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
 				// hub is shared; drop events here (#1409).
 				withLatestFrom(isActive$),
 				filter(([, active]) => active),
-				map(([code]) => code)
+				map(([event]) => event),
+				dedupeScans(SCAN_DEDUP_WINDOW_MS, scanTimeOf)
 			),
 		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
 	);
+	const barcode$ = React.useMemo(() => gatedScans$.pipe(map((event) => event.code)), [gatedScans$]);
 	const scanEvents$ = React.useMemo(
-		() =>
-			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
-				withLatestFrom(isActive$),
-				filter(([, active]) => active),
-				map(([event]) => event),
-				tap(() => markUserActivity())
-			),
-		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
+		() => gatedScans$.pipe(tap(() => markUserActivity())),
+		[gatedScans$]
 	);
 
 	/**

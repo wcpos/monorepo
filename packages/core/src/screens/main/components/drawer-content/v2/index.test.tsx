@@ -64,7 +64,9 @@ jest.mock('expo-router/drawer', () => {
 jest.mock('../../header/notification-bell', () => ({
 	NotificationBell: () => <div data-testid="bell" />,
 }));
-jest.mock('./drawer-item', () => ({ DrawerItem: () => null }));
+jest.mock('./drawer-item', () => ({
+	DrawerItem: ({ testID }: { testID: string }) => <div data-testid={testID} />,
+}));
 
 jest.mock('../version', () => ({ Version: () => <div data-testid="version" /> }));
 jest.mock('expo-router/react-navigation', () => ({ CommonActions: {}, DrawerActions: {} }));
@@ -168,9 +170,35 @@ describe('DrawerContent', () => {
 	});
 });
 
-it('renders avatar, bell and version and opens the cashier sheet on the root host', () => {
+it('renders avatar and version without a bell and opens the cashier sheet on the root host', () => {
 	render(<PlainCall {...drawerProps} />);
-	for (const id of ['avatar', 'bell', 'version']) expect(screen.getByTestId(id)).toBeTruthy();
+	for (const id of ['avatar', 'version']) expect(screen.getByTestId(id)).toBeTruthy();
+	expect(screen.queryByTestId('bell')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-root')).toBe('true');
+});
+
+it('groups Health, Settings and Support below the top POS item', () => {
+	const routes = ['(pos)', 'health', 'settings', 'support'].map((name) => ({ key: name, name }));
+	const props = {
+		...drawerProps,
+		state: { ...drawerProps.state, routes },
+		descriptors: Object.fromEntries(
+			routes.map(({ key }) => [
+				key,
+				{
+					options: key === 'health' ? { drawerItemStyle: [{ marginTop: 'auto' }] } : {},
+				},
+			])
+		),
+	} as unknown as DrawerContentComponentProps;
+	render(<PlainCall {...props} />);
+	expect(
+		screen.getByTestId('drawer-top-group').contains(screen.getByTestId('drawer-item-pos'))
+	).toBe(true);
+	const bottom = screen.getByTestId('drawer-bottom-group');
+	for (const name of ['health', 'settings', 'support']) {
+		expect(bottom.contains(screen.getByTestId(`drawer-item-${name}`))).toBe(true);
+	}
+	expect(bottom.contains(screen.getByTestId('drawer-item-pos'))).toBe(false);
 });

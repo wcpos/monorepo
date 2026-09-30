@@ -153,7 +153,9 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			 * Outline buttons
 			 */
 			outline: '',
-			'outline-primary': '',
+			// Rest: the primary word on a card; hovered/pressed the compound below flips it to the
+			// foreground as the fill arrives (an active filter pill).
+			'outline-primary': 'text-primary font-semibold',
 			'outline-secondary': '',
 			'outline-muted': '',
 			'outline-success': '',

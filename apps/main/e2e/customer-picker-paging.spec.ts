@@ -92,10 +92,10 @@ async function listIsScrolledToEnd(page: Page): Promise<boolean> {
 
 test.describe('POS customer picker', () => {
 	test('reaches past the first page as the list scrolls', async ({ posPage: page }) => {
-		// The cart opens on the guest pill; its clear affordance swaps in the picker, and the
-		// header opens the popover itself on the next frame. Clicking the trigger as well would
-		// TOGGLE it shut, so the click is a fallback for the frame never arriving.
-		await page.getByTestId('cart-customer-clear').click();
+		// The cart opens on the guest chip; a tap swaps in the picker, and the header opens the
+		// popover itself on the next frame. Clicking the trigger as well would TOGGLE it shut,
+		// so the click is a fallback for the frame never arriving.
+		await page.getByTestId('cart-customer-name').click();
 
 		const options = page.getByTestId(/^customer-select-option-/);
 		if (!(await becomesVisible(options.first(), 10_000))) {

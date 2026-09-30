@@ -3,7 +3,9 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Text } from '@wcpos/components/text';
@@ -36,6 +38,12 @@ export function OpenOrderTabs() {
 	const activeValue =
 		selectedReceiptOrder ??
 		((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid);
+	// A fresh cart is not an open order until its first line, but the cashier is on it: the
+	// board shows the current cart as a tab, so it is the last one here, before the +.
+	const freshCart =
+		activeValue === 'new'
+			? [{ id: 'new', record: currentOrderRecord as EngineRecord<'orders'> }]
+			: [];
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
 			if (receiptOrders.has(orderId)) {
@@ -78,17 +86,27 @@ export function OpenOrderTabs() {
 				if (id === activeValue) reveal(id);
 			}}
 			onPress={() => handleTabPress(id)}
-			className={`h-ctl active:bg-muted justify-center px-3 ${id === activeValue ? 'border-primary border-b-2' : ''}`}
+			className={`active:bg-muted h-13 justify-center px-3 ${id === activeValue ? 'border-primary border-b-2' : 'border-b-2 border-transparent'}`}
 		>
 			{content}
 		</Pressable>
 	);
 	return (
 		<>
-			<View className="bg-background flex-row items-center">
-				<Button variant="ghost" testID="open-orders-count" onPress={() => setListOpen(true)}>
-					<Text>{t('pos_cart.open_orders_count', { count: openOrders.length })}</Text>
-				</Button>
+			<View className="bg-card border-border flex-row items-stretch border-t">
+				<View className="border-border justify-center border-r">
+					<Button
+						variant="ghost"
+						className="h-ctl flex-row gap-1 px-2"
+						testID="open-orders-count"
+						accessibilityLabel={t('pos_cart.open_orders_count', { count: openOrders.length })}
+						onPress={() => setListOpen(true)}
+					>
+						{/* `children`, not `count`: the pill must read "0" when the strip is empty. */}
+						<Badge variant="muted">{String(openOrders.length)}</Badge>
+						<Icon name="chevronUp" size="sm" className="text-muted-foreground" />
+					</Button>
+				</View>
 				<View className="min-w-0 flex-1">
 					<ScrollView
 						ref={scroll}
@@ -102,7 +120,7 @@ export function OpenOrderTabs() {
 						}}
 						scrollEventThrottle={16}
 					>
-						{openOrders.map(({ id, record }) =>
+						{[...openOrders, ...freshCart].map(({ id, record }) =>
 							renderTab(id, <TabContent order={record} active={id === activeValue} phone={phone} />)
 						)}
 						{extraReceiptIds.map((uuid) =>
@@ -115,8 +133,10 @@ export function OpenOrderTabs() {
 							)
 						)}
 					</ScrollView>
-					<View pointerEvents="none" className="bg-background/80 absolute inset-y-0 left-0 w-2" />
-					<View pointerEvents="none" className="bg-background/80 absolute inset-y-0 right-0 w-2" />
+					{/* Translucent edge overlays are the RN equivalent of the prototype's fade. They
+					    stay inside the tabs' 12 px padding so a fully revealed amount is never washed. */}
+					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 left-0 w-3" />
+					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 right-0 w-3" />
 				</View>
 				<IconButton
 					name="chevronRight"
@@ -163,10 +183,20 @@ function TabContent({
 	active: boolean;
 	phone: boolean;
 }) {
+	const t = useT();
 	return (
-		<View className={`items-center gap-1 tabular-nums ${phone ? 'flex-row' : ''}`}>
-			<CartTabTitle order={order} />
-			<TabChip order={order} active={active} compact={phone} />
+		// tabular-nums on the wrapper: on web it reaches the status label's amounts (waiting for
+		// terminal, partly paid) so a tab does not change width as its numbers change.
+		<View
+			className={`tabular-nums ${phone ? 'flex-row items-center gap-1' : 'flex-col items-start gap-0'}`}
+		>
+			<CartTabTitle order={order} amountOnly active={active} />
+			<TabChip
+				order={order}
+				active={active}
+				compact={phone}
+				fallbackLabel={t('pos_cart.tab_cart')}
+			/>
 		</View>
 	);
 }

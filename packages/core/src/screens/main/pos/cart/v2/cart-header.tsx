@@ -59,8 +59,8 @@ export function CartHeader() {
 			{/* `min-w-0` and the shrinking wrapper: a long customer name truncates instead of
 			    pushing the add and settings controls off the row. */}
 			<HStack className="h-ctl min-w-0 flex-1">
-				<Text className="font-bold" numberOfLines={1}>
-					{t('common.customer')}:
+				<Text className="text-muted-foreground" numberOfLines={1}>
+					{t('common.customer')}
 				</Text>
 				<View className="min-w-0 shrink">
 					<ErrorBoundary>
@@ -74,8 +74,8 @@ export function CartHeader() {
 									<ButtonPill
 										testID="cart-customer-select"
 										size="xs"
-										leftIcon="user"
-										variant="muted"
+										rightIcon="chevronDown"
+										variant="outline"
 									>
 										<ButtonText>{t('common.select_customer')}</ButtonText>
 									</ButtonPill>

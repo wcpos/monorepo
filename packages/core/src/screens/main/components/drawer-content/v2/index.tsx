@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { CommonActions, DrawerActions } from 'expo-router/react-navigation';
 // SDK 56: expo-router vendors react-navigation; @react-navigation/drawer is no longer a dependency.
@@ -15,7 +15,6 @@ import { UserSheet } from '../../../pos/cart/user-sheet';
 import { DrawerItem } from './drawer-item';
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from '../panel-visibility';
 import { Version } from '../version';
-import { NotificationBell } from '../../header/notification-bell';
 
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
@@ -64,6 +63,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// flow starts): both show the same items. The panel says which it is.
 	const permanentPanelTestID = 'drawer-panel-permanent';
 	const panelTestID = drawerType === 'permanent' ? permanentPanelTestID : 'drawer-panel';
+	// The navigator's auto margin marks the start of the rail's bottom group.
+	const bottomIndex = props.state.routes.findIndex(
+		(route) =>
+			StyleSheet.flatten(props.descriptors[route.key].options.drawerItemStyle)?.marginTop === 'auto'
+	);
+	const split = bottomIndex < 0 ? props.state.routes.length : bottomIndex;
+	const groups = [props.state.routes.slice(0, split), props.state.routes.slice(split)];
 
 	return (
 		<>
@@ -90,39 +96,43 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 			>
 				<RailAvatar />
 				{/* `gap-2` keeps each item's hitSlop out of its neighbour's target. */}
-				<View className="gap-2">
-					{props.state.routes.map((route, i) => {
-						const focused = i === props.state.index;
-						const { title, drawerLabel, drawerIcon } = props.descriptors[route.key].options;
-						return (
-							<DrawerItem
-								key={route.key}
-								testID={`drawer-item-${route.name.replace(/[()]/g, '')}`}
-								label={
-									(drawerLabel !== undefined
-										? drawerLabel
-										: title !== undefined
-											? title
-											: route.name) as string
-								}
-								icon={drawerIcon as React.ComponentProps<typeof DrawerItem>['icon']}
-								focused={focused}
-								onPress={() =>
-									props.navigation.dispatch({
-										...(focused
-											? DrawerActions.closeDrawer()
-											: CommonActions.navigate({ name: route.name, merge: true })),
-										target: props.state.key,
-									})
-								}
-							/>
-						);
-					})}
-				</View>
-				<View className="mt-auto">
-					<NotificationBell showLabel={false} />
-					<Version />
-				</View>
+				{groups.map((routes, group) => (
+					<View key={group} className={group === 1 ? 'mt-auto' : undefined}>
+						<View
+							className="gap-2"
+							testID={group === 0 ? 'drawer-top-group' : 'drawer-bottom-group'}
+						>
+							{routes.map((route) => {
+								const focused = route.key === focusedRoute?.key;
+								const { title, drawerLabel, drawerIcon } = props.descriptors[route.key].options;
+								return (
+									<DrawerItem
+										key={route.key}
+										testID={`drawer-item-${route.name.replace(/[()]/g, '')}`}
+										label={
+											(drawerLabel !== undefined
+												? drawerLabel
+												: title !== undefined
+													? title
+													: route.name) as string
+										}
+										icon={drawerIcon as React.ComponentProps<typeof DrawerItem>['icon']}
+										focused={focused}
+										onPress={() =>
+											props.navigation.dispatch({
+												...(focused
+													? DrawerActions.closeDrawer()
+													: CommonActions.navigate({ name: route.name, merge: true })),
+												target: props.state.key,
+											})
+										}
+									/>
+								);
+							})}
+						</View>
+						{group === 1 && <Version />}
+					</View>
+				))}
 			</DrawerContentScrollView>
 		</>
 	);

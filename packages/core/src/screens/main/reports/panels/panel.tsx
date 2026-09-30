@@ -30,6 +30,8 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
+import { brands, cogsEnabled } from '../margin';
+import { useLocalCategories } from '../cards/use-local-categories';
 import { periodLabel } from '../date-button';
 import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
@@ -42,6 +44,8 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
 
 const PANEL_WIDTH = 480;
+// A report with the margin columns has six; at 480 they wrap their heads and their amounts.
+const WIDE_PANEL_WIDTH = 640;
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
 		{ allOrders, selectedOrders, totals } = useReportsData();
@@ -79,7 +83,17 @@ export function DetailPanel() {
 	const ids = selectedOrders.flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);
-	const products = useLocalProducts(detail === 'categories' ? ids : []);
+	const grouped = detail === 'products' || detail === 'categories' || detail === 'brands';
+	const products = useLocalProducts(grouped ? ids : []);
+	const tree = useLocalCategories(
+		detail === 'categories'
+			? (products ?? []).flatMap((product) =>
+					(product.categories ?? []).flatMap((category) =>
+						category.id == null ? [] : [category.id]
+					)
+				)
+			: []
+	);
 	const [error, setError] = React.useState('');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
@@ -88,10 +102,15 @@ export function DetailPanel() {
 	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
 	const ready =
 		formats.store &&
-		(detail !== 'categories' || products) &&
+		(!grouped || products) &&
+		(detail !== 'categories' || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
+		cogs: cogsEnabled(selectedOrders, products ?? []),
+		num_decimals: decimals,
+		categoryTree: tree,
+		brands: brands(selectedOrders, products ?? [], totals, decimals),
 		payments: tenders(selectedOrders, totals, decimals),
 		products: topProducts(selectedOrders, totals, decimals),
 		categories: categories(selectedOrders, products ?? [], totals, decimals),
@@ -110,6 +129,7 @@ export function DetailPanel() {
 			(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
 		),
 	});
+	const panelWidth = spec.head.length > 4 ? WIDE_PANEL_WIDTH : PANEL_WIDTH;
 	const title = t(`reports.panel_${detail}`);
 	const context = useClosureDocumentContext(storeId);
 	const document = buildReportDocument(
@@ -179,7 +199,7 @@ export function DetailPanel() {
 							right: 0,
 							top: 0,
 							bottom: 0,
-							width: PANEL_WIDTH,
+							width: panelWidth,
 							maxWidth: '100%',
 						}
 					: undefined
@@ -226,14 +246,19 @@ export function DetailPanel() {
 				style={phone ? { paddingBottom: bottom + 16 } : undefined}
 			>
 				<View className="flex-row items-center justify-between gap-3">
-					<Text className="min-w-0 flex-1 tabular-nums">
+					<Text
+						testID={spec.missing ? 'detail-panel-cost-missing' : undefined}
+						className="min-w-0 flex-1 tabular-nums"
+					>
 						{detail === 'orders'
 							? t(leftOut ? 'reports.orders_counted_left_out' : 'reports.orders_counted', {
 									n: formats.quantity(selectedOrders.length),
 									m: formats.quantity(includedOrders.length),
 								})
-							: t('reports.panel_status', {
-									count: formats.number(selectedOrders.length),
+							: t(spec.missing ? 'reports.cost_missing_status' : 'reports.panel_status', {
+									n: formats.quantity(spec.missing?.n),
+									m: formats.quantity(spec.missing?.m),
+									count: formats.quantity(selectedOrders.length),
 									total: formats.money(totals.total),
 								})}
 					</Text>
@@ -314,7 +339,7 @@ export function DetailPanel() {
 				style={
 					Platform.OS === 'web'
 						? { display: 'contents' }
-						: { width: PANEL_WIDTH, maxWidth: '100%', height: '100%' }
+						: { width: panelWidth, maxWidth: '100%', height: '100%' }
 				}
 				closeButtonProps={{
 					testID: 'detail-panel-close',

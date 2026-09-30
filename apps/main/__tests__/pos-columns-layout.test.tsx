@@ -15,6 +15,11 @@ let mockLayoutHandler:
 	((layout: number[], meta: { isUserInteraction: boolean }) => void) | undefined;
 let mockPosition: 'left' | 'right' = 'left';
 const mockPatchUI = jest.fn();
+let mockScreenSize = 'lg';
+let mockSegments: string[] = [];
+let mockSuspendedPane: 'products' | 'cart' | null = null;
+const mockPendingPane = new Promise<void>(() => {});
+const mockMarkInteractive = jest.fn();
 
 /**
  * `useUISettings` hands back a stable RxState container; `useDocField` is what subscribes a
@@ -37,9 +42,27 @@ const mockSubscribeUISettings = (listener: () => void) => {
 	};
 };
 
-jest.mock('expo-router', () => ({ useSegments: () => [] }));
+// Native press handling is unrelated to Suspense; avoid its lazy React import after resetModules.
+jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => ({
+	default: 'Pressable',
+}));
+jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
+// The EAS Observe marker needs the native module; the route's layout is what is under test.
+jest.mock('expo-observe', () => {
+	const react = jest.requireActual('react');
+	return {
+		ObserveInteractiveMarker: () => {
+			react.useEffect(() => {
+				mockMarkInteractive();
+			}, []);
+			return null;
+		},
+	};
+});
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
-jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/core/contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 jest.mock('@wcpos/query', () => {
 	const react = jest.requireActual('react');
 	return {
@@ -121,21 +144,50 @@ jest.mock(
 );
 jest.mock('@wcpos/core/screens/main/pos/products', () => ({ POSProducts: () => null }));
 // The columns route and the panel entry render the v2 products screen since the register switch.
-jest.mock('@wcpos/core/screens/main/pos/products/v2', () => ({ POSProducts: () => null }));
+jest.mock('@wcpos/core/screens/main/pos/products/v2', () => ({
+	POSProducts: () => {
+		if (mockSuspendedPane === 'products') throw mockPendingPane;
+		return null;
+	},
+}));
 jest.mock('../../../packages/core/src/screens/main/pos/products/v2', () => ({
-	POSProducts: () => null,
+	POSProducts: () => {
+		if (mockSuspendedPane === 'products') throw mockPendingPane;
+		return null;
+	},
 }));
 jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
 	POSProducts: () => null,
 }));
-jest.mock('@wcpos/core/screens/main/pos/cart', () => ({ OpenOrders: () => null }));
-jest.mock('../../../packages/core/src/screens/main/pos/cart', () => ({ OpenOrders: () => null }));
+jest.mock('@wcpos/core/screens/main/pos/cart', () => ({
+	OpenOrders: () => {
+		if (mockSuspendedPane === 'cart') throw mockPendingPane;
+		return null;
+	},
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/cart', () => ({
+	OpenOrders: () => {
+		if (mockSuspendedPane === 'cart') throw mockPendingPane;
+		return null;
+	},
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
-}));
+jest.mock('@wcpos/components/suspense', () => {
+	const react = jest.requireActual('react');
+	const { View } = jest.requireActual('react-native');
+	return {
+		Suspense: ({ children }: { children: React.ReactNode }) =>
+			react.createElement(
+				react.Suspense,
+				{
+					fallback: react.createElement(View, { testID: 'pane-fallback' }),
+				},
+				children
+			),
+	};
+});
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
 jest.mock('@wcpos/components/panels', () => {
@@ -188,6 +240,13 @@ function setPositionSetting(position: 'left' | 'right') {
 		mockUISettingsListeners.forEach((listener) => listener());
 	});
 }
+
+beforeEach(() => {
+	mockScreenSize = 'lg';
+	mockSegments = [];
+	mockSuspendedPane = null;
+	mockMarkInteractive.mockClear();
+});
 
 afterEach(() => {
 	if (view) act(() => view!.unmount());
@@ -246,4 +305,29 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 		act(() => mockLayoutHandler?.([70, 30], { isUserInteraction: false }));
 		expect(mockPatchUI).not.toHaveBeenCalled();
 	});
+});
+
+// A marker outside the active pane's Suspense boundary marks a fallback as interactive.
+describe('small POS columns interactive timing', () => {
+	it.each(['products', 'cart'] as const)(
+		'waits for the active %s pane even when the inactive pane is ready',
+		async (pane) => {
+			mockScreenSize = 'sm';
+			mockSegments = pane === 'cart' ? ['cart'] : [];
+			mockSuspendedPane = pane;
+			await act(async () => {
+				view = create(<ResizablePOSColumns />);
+			});
+
+			expect(view!.root.findAllByProps({ testID: 'pane-fallback' }).length).toBeGreaterThan(0);
+			expect(mockMarkInteractive).not.toHaveBeenCalled();
+
+			mockSuspendedPane = null;
+			await act(async () => {
+				view!.update(<ResizablePOSColumns />);
+			});
+			expect(view!.root.findAllByProps({ testID: 'pane-fallback' })).toHaveLength(0);
+			expect(mockMarkInteractive).toHaveBeenCalledTimes(1);
+		}
+	);
 });

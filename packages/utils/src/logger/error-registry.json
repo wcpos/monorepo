@@ -2237,5 +2237,26 @@
 		],
 		"evidence": "monorepo#2112 — 2026-09-16 Spanish Windows till stuck on 'useStoreSession must be called within an active store session' after a main-process storage failure (wcpos/electron#459)",
 		"introducedIn": "1.10.21"
+	},
+	{
+		"code": "CLIENT161",
+		"symbol": "REGISTER_TAB_NOT_OWNED",
+		"domain": "CLIENT",
+		"severity": "info",
+		"actionHint": "Follow the instructions on the register screen before continuing.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "This tab does not currently run the register, so it did not send a new payment request.",
+		"docsBody": "Only the active browser tab runs this register. This tab refused to start a new payment request because it does not currently own the register. This does not describe the outcome of any payment already in progress.",
+		"troubleshooting": [
+			"Wait for the register screen. Follow its instructions to continue in another tab, take over here, or reload the app.",
+			"Check the existing payment status before retrying a payment that had already started."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#2271 review F2",
+		"introducedIn": "2.0.0"
 	}
 ]

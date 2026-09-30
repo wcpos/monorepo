@@ -1,5 +1,6 @@
 import { hasPosRefundStamp, HISTORY_DAYS } from '@wcpos/sync-core';
 
+import { createRefundBrowseSchedulerFetcher } from './rx-scheduler-refund-browse-fetcher';
 import { materializeRefund } from '../materialization/record-materialization';
 import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
 import {
@@ -13,6 +14,12 @@ import type { LocalRefundDocument, WooRefundPayload } from '../collections/refun
 import type { SchedulerFetcher } from './replication-policy';
 
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
+	coverageRepository?: CollectionSchedulerInput<LocalRefundDocument>['coverageRepository'] &
+		Pick<
+			import('./rx-scheduler-order-fetcher').OrdersSchedulerCoverageRepository,
+			'recordCumulativeQueryResult' | 'readLocalLaneCoverage'
+		>;
+	refreshBrowseWindowKey?: string;
 	scope?: { storeId?: string | number };
 	repository: CollectionSchedulerInput<LocalRefundDocument>['repository'] & {
 		removeMany(documents: LocalRefundDocument[]): Promise<void>;
@@ -20,12 +27,45 @@ export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDo
 	heldParentIds(ids: number[]): Promise<Map<number, number[] | null>>;
 };
 
+export async function admitRefundPage(
+	input: RefundSchedulerFetcherInput,
+	rows: WooRefundPayload[]
+) {
+	const held = await input.heldParentIds([...new Set(rows.map((row) => row.parent_id))]);
+	const documents = rows
+		.filter((row) => {
+			const listed = held.get(row.parent_id);
+			if (listed !== undefined) return listed === null || listed.includes(row.id);
+			return hasPosRefundStamp(row.meta_data, input.scope);
+		})
+		.map((raw) => materializeRefund(raw).storedDocument);
+	let applied = (await input.repository.upsertMany(documents)) ?? documents;
+	if (applied.length > 0) {
+		const current = await input.heldParentIds([
+			...new Set(applied.map((doc) => doc.payload.parent_id)),
+		]);
+		const removed = applied.filter(({ payload }) => {
+			const listed = current.get(payload.parent_id);
+			if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
+			return !hasPosRefundStamp(payload.meta_data, input.scope);
+		});
+		if (removed.length > 0) {
+			await input.repository.removeMany(removed);
+			const removedIds = new Set(removed.map(({ uuid }) => uuid));
+			applied = applied.filter(({ uuid }) => !removedIds.has(uuid));
+		}
+	}
+	return applied;
+}
+
 /** One page per invocation preserves the runner's progress reporting and lease renewal. */
 export function createRefundsSchedulerFetcher(
 	input: RefundSchedulerFetcherInput
 ): SchedulerFetcher {
+	const browse = createRefundBrowseSchedulerFetcher(input);
 	const walks = new Map<string, { page: number; perPage: number; after: string; ids: string[] }>();
 	return async (task, context) => {
+		if (task.queryKey.startsWith('refunds:browser:')) return browse(task, context);
 		const lane = parseRefundLaneQueryKey(task.queryKey);
 		if (
 			task.collection !== 'refunds' ||
@@ -54,30 +94,7 @@ export function createRefundsSchedulerFetcher(
 		const response = await httpGet(input, `${input.baseUrl}/refunds?${query}`, context);
 		if (!response.ok) throw new Error(`Woo REST refunds request failed: ${response.status}`);
 		const rows = (await response.json()) as WooRefundPayload[];
-		const held = await input.heldParentIds([...new Set(rows.map((row) => row.parent_id))]);
-		const documents = rows
-			.filter((row) => {
-				const listed = held.get(row.parent_id);
-				if (listed !== undefined) return listed === null || listed.includes(row.id);
-				return hasPosRefundStamp(row.meta_data, input.scope);
-			})
-			.map((raw) => materializeRefund(raw).storedDocument);
-		let applied = (await input.repository.upsertMany(documents)) ?? documents;
-		if (applied.length > 0) {
-			const current = await input.heldParentIds([
-				...new Set(applied.map((doc) => doc.payload.parent_id)),
-			]);
-			const removed = applied.filter(({ payload }) => {
-				const listed = current.get(payload.parent_id);
-				if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
-				return !hasPosRefundStamp(payload.meta_data, input.scope);
-			});
-			if (removed.length > 0) {
-				await input.repository.removeMany(removed);
-				const removedIds = new Set(removed.map(({ uuid }) => uuid));
-				applied = applied.filter(({ uuid }) => !removedIds.has(uuid));
-			}
-		}
+		const applied = await admitRefundPage(input, rows);
 		const pageIds = applied.map((document) => document.uuid);
 		walk.ids.push(...pageIds);
 		// WooCommerce always sends the page count; a short page is the end only when it does not.

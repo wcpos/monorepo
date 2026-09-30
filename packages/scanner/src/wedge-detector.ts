@@ -24,6 +24,8 @@ export interface WedgeState {
 	detecting: boolean;
 	stack: string[];
 	lastTimeMs: number | null;
+	/** Time of the first key of the current burst's stack. */
+	startedAtMs: number | null;
 	/** Lowest folded average reached — the value a threshold suggestion must clear. */
 	minAvgGapMs: number;
 	/** An Enter/Tab arrived during the burst — the signature of a scanner terminator. */
@@ -36,6 +38,7 @@ export function createWedgeState(): WedgeState {
 		detecting: false,
 		stack: [],
 		lastTimeMs: null,
+		startedAtMs: null,
 		minAvgGapMs: Number.POSITIVE_INFINITY,
 		sawTerminator: false,
 	};
@@ -80,6 +83,7 @@ export function foldWedgeKey(
 		state.stack = [key];
 	}
 
+	if (state.stack.length === 1) state.startedAtMs = timeMs;
 	state.lastTimeMs = timeMs;
 	return state;
 }
@@ -135,6 +139,11 @@ export const WEDGE_END_OF_SCAN_MS = 150;
 export interface WedgeScanMeta {
 	/** The burst ended with an Enter/Tab terminator — scanners send one, typists rarely do. */
 	terminated: boolean;
+	/**
+	 * When the burst's first key arrived (the detector's clock): the physical scan time.
+	 * The emit itself is WEDGE_END_OF_SCAN_MS after the LAST key.
+	 */
+	startedAtMs: number;
 }
 
 export interface WedgeDetectorOptions {
@@ -198,11 +207,12 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 			if (state.detecting && now() - (state.lastTimeMs || 0) > current.threshold) {
 				const code = stripBoundary(state.stack, current);
 				const terminated = state.sawTerminator;
+				const startedAtMs = state.startedAtMs;
 				// Reset for the next burst (lastTimeMs is deliberately kept, as before).
 				const lastTimeMs = state.lastTimeMs;
 				state = createWedgeState();
 				state.lastTimeMs = lastTimeMs;
-				options.onScan(code, { terminated });
+				options.onScan(code, { terminated, startedAtMs: startedAtMs ?? now() });
 			}
 		}, WEDGE_END_OF_SCAN_MS);
 	};

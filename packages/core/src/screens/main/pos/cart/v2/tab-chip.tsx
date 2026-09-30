@@ -1,4 +1,5 @@
 import { StatusBadge } from '@wcpos/components/status-badge';
+import { Text } from '@wcpos/components/text';
 import { derive, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
@@ -19,11 +20,14 @@ export function TabChip({
 	active = false,
 	compact = false,
 	fallbackLabel,
+	fallbackIsStatus = false,
 }: {
 	order: EngineRecord<'orders'>;
 	active?: boolean;
 	compact?: boolean;
 	fallbackLabel?: string;
+	/** The fallback is a real order status (the open-orders list), not the strip's "Cart" word. */
+	fallbackIsStatus?: boolean;
 }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
@@ -59,12 +63,23 @@ export function TabChip({
 											: 'pos_checkout.chip_in_checkout'
 								)
 							: (fallbackLabel ?? null);
-	return label && !active ? (
+	if (!label) return null;
+	// Plain muted text, no dot: the active tab carries no chip (ledger line 6) but keeps its
+	// status word so every tab reads "amount over status"; and the fallback ("Cart") is not a
+	// status at all, so it never gets a dot on any tab.
+	if (active || (label === fallbackLabel && !fallbackIsStatus)) {
+		return compact ? null : (
+			<Text testID={`open-order-status-${order.uuid}`} className="text-muted-foreground text-sm">
+				{label}
+			</Text>
+		);
+	}
+	return (
 		<StatusBadge
 			testID={`open-order-chip-${order.uuid}`}
 			label={compact ? '' : label}
 			accessibilityLabel={label}
 			variant={saveState?.kind === 'rejected' ? 'error' : stage === 'receipt' ? 'success' : 'info'}
 		/>
-	) : null;
+	);
 }

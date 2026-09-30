@@ -1,13 +1,7 @@
 import * as React from 'react';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { useRecordField } from '@wcpos/query';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
@@ -39,18 +33,17 @@ export function Customer({
 	 */
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>
-				<ButtonPill
-					testID="cart-customer-name"
-					size="xs"
-					leftIcon="user"
-					removable={true}
-					removeTestID="cart-customer-clear"
-					onRemove={() => onShowCustomerSelect(true)}
-				>
-					<ButtonText>{name}</ButtonText>
-				</ButtonPill>
-			</DialogTrigger>
+			<ButtonPill
+				testID="cart-customer-name"
+				size="xs"
+				variant="outline"
+				rightIcon="chevronDown"
+				onPress={() => onShowCustomerSelect(true)}
+				// The order sheet has no address editor; keep it on long press.
+				onLongPress={() => setOpen(true)}
+			>
+				<ButtonText>{name}</ButtonText>
+			</ButtonPill>
 			<DialogContent side={side} testID="customer-address-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>

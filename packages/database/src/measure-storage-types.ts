@@ -1,14 +1,13 @@
 /**
- * One measured on-disk entry. On every platform the RxDB storage layer writes
- * one directory per (database, collection, schemaVersion) triple named
- * `rxdb-<db>-<collection>-<version>` ('/' encoded as '__'), so entry names are
- * classifiable without knowing which backend produced them. `legacy` marks
- * pre-filesystem storage remnants (Electron's SQLite files, native's SQLite
- * directory) that no current-generation database accounts for.
+ * One measured on-disk entry. Legacy filesystem entries use
+ * `rxdb-<db>-<collection>-<version>` names. SQLite pools are opaque and cannot
+ * be attributed per collection; `legacy` marks retired storage roots.
  */
 export type StorageFootprintEntry = {
 	name: string;
 	bytes: number;
+	/** Opaque pool: per-collection attribution is not available (#2242). */
+	root?: 'sqlite';
 	legacy?: boolean;
 };
 

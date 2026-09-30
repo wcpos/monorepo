@@ -28,6 +28,7 @@ import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contex
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { POSOverlaySideProvider } from '@wcpos/core/screens/main/pos/contexts/overlay-side';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
+import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
@@ -85,7 +86,8 @@ export default function POSLayout() {
 	 * there are too many edge cases, ie: cashier is not set, store is not set, etc.
 	 * For now, we'll just filter the results.
 	 */
-	const resource = useOpenOrdersResource(cashierID, storeID);
+	const { registerId } = useRegisterBinding();
+	const resource = useOpenOrdersResource(cashierID, storeID, registerId);
 
 	// Built HERE, above the Suspense below, and handed to the provider — the same shape as the
 	// open-orders resource above it and for the same reason: a resource built inside the

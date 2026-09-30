@@ -7,7 +7,7 @@
 		"dev:main": "turbo dev --filter=\"{./apps/main}...\"",
 		"dev:electron-renderer": "ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear",
 		"build": "turbo build",
-		"build:opfs-worker": "node scripts/build-opfs-worker.mjs",
+		"build:sqlite-worker": "node scripts/build-sqlite-worker.mjs",
 		"generate:error-codes": "node scripts/generate-error-codes.mjs",
 		"generate:event-labels": "node scripts/generate-event-labels.mjs",
 		"report:unused-error-codes": "node scripts/report-unused-error-codes.mjs",
@@ -44,6 +44,7 @@
 		"!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
 	},
 	"devDependencies": {
+		"@sqlite.org/sqlite-wasm": "3.53.4-build1",
 		"@vitest/coverage-v8": "4.1.10",
 		"esbuild": "0.28.2",
 		"eslint": "^9.39.5",

@@ -8,26 +8,27 @@
  */
 
 /**
- * Web storage engines, past and planned.
+ * Web storage engines, past and present.
  *
- * - `opfs-filesystem` — what ships today: rxdb-premium's abstract-filesystem
+ * - `opfs-filesystem` — the previous era: rxdb-premium's abstract-filesystem
  *   storage over OPFS, one dedicated worker PER TAB against the same files.
- * - `sqlite-sahpool` — the 2.0 target (monorepo#2137): SQLite wasm on the
+ * - `sqlite-sahpool` — the 2.0 engine (monorepo#2137): SQLite wasm on the
  *   official `@sqlite.org/sqlite-wasm` build over the `opfs-sahpool` VFS, in
  *   WAL, in ONE dedicated worker owned by the one live tab.
  */
 export type WebStorageEngine = 'opfs-filesystem' | 'sqlite-sahpool';
 
 /** The engine the web adapter runs right now. Changing this is the 2.0 migration. */
-export const WEB_STORAGE_ENGINE: WebStorageEngine = 'opfs-filesystem';
+export const WEB_STORAGE_ENGINE: WebStorageEngine = 'sqlite-sahpool';
+export const NATIVE_STORAGE_ENGINE = 'expo-sqlite';
 
 /**
  * The worker bundle each engine is served by. Kept beside the engine id so the
  * constant is load-bearing rather than decorative: changing the engine changes
  * which worker the page fetches.
  *
- * `opfs.worker.js` ships from `apps/main/public/` and inlines patched premium —
- * see `../../../../../apps/main/public/opfs.worker.js` and the repo's memory note
+ * `sqlite.worker.js` ships from `apps/main/public/` and inlines patched premium —
+ * see `../../../../../apps/main/public/sqlite.worker.js` and the repo's memory note
  * on verifying it by marker count.
  */
 export const WEB_WORKER_PATH_BY_ENGINE: Record<WebStorageEngine, string> = {
@@ -39,8 +40,7 @@ export const WEB_WORKER_PATH_BY_ENGINE: Record<WebStorageEngine, string> = {
  * The file name each engine's worker must have, wherever it is served from.
  *
  * `globalThis.opfsWorker` is set by the page bootstrap (`apps/main/app/+html.tsx`,
- * `apps/main/public/index.html`) and rewritten to a CDN URL by the published web
- * bundle, so an override is NORMAL and its directory is not ours to predict — but
+ * `apps/main/public/index.html`) or by the WordPress host (which may supply a CDN URL), so an override is NORMAL and its directory is not ours to predict — but
  * its BASENAME identifies which engine's worker it is. A stale override that still
  * names the previous engine's worker would load that engine while the rest of the
  * app, `multiInstance` included, is configured for the new one. `index.web.ts`

@@ -29,6 +29,7 @@ it('pushes only required top-level engine columns for every UI sort', () => {
 	const prices = ['price', 'regular_price', 'sale_price'] as const;
 	const stock = ['stock_quantity', 'stock_status'] as const;
 	const fields = {
+		refunds: ['date_created_gmt'],
 		products: [
 			'id',
 			'name',
@@ -1182,3 +1183,55 @@ it.each(['products', 'variations'] as const)(
 		expect(read.sort.map(({ enginePath }) => enginePath)).toEqual(['sortName', 'uuid']);
 	}
 );
+
+describe('refund query state', () => {
+	const state: QueryStateOf<'refunds'> = {
+		search: '',
+		filters: { dateRange: { from: '2026-09-01T00:00:00', to: '2026-09-03T00:00:00' } },
+		sort: { field: 'date_created_gmt', direction: 'desc' },
+		limit: Number.MAX_SAFE_INTEGER,
+	};
+	it('a refunds query-state with a date range becomes a refunds-browse requirement', () => {
+		const compiled = compileQuery('refunds', state, { id: 'report' });
+		expect(compiled.demand).toEqual([
+			{
+				id: 'report:refunds-browse',
+				collection: 'refunds',
+				kind: 'refunds-browse',
+				after: 1788220800,
+				before: 1788393600,
+				limit: 'all',
+				priority: 700,
+			},
+		]);
+		expect(compiled.represented).toBe(true);
+	});
+	it.each([
+		['2026-08-31T23:59:59', false],
+		['2026-09-01T00:00:00', true],
+		['2026-09-03T00:00:00', true],
+		['2026-09-03T00:00:01', false],
+	])('local refund date predicate includes both bounds: %s', (date, included) => {
+		const compiled = compileQuery('refunds', state, { id: 'report' });
+		expect(compiled.read.residual?.({ uuid: 'refund', payload: { date_created_gmt: date } })).toBe(
+			included
+		);
+	});
+	it('missing or invalid bounds never become a history walk', () => {
+		for (const filters of [{}, { dateRange: { from: 'invalid', to: '2026-09-03' } }]) {
+			const compiled = compileQuery('refunds', { ...state, filters }, { id: 'report' });
+			expect(compiled.demand).toEqual([]);
+			expect(compiled.represented).toBe(false);
+		}
+	});
+	it('does not claim unsupported search or finite ascending slices are represented', () => {
+		for (const update of [
+			{ search: 'text' },
+			{ limit: 10, sort: { field: 'date_created_gmt', direction: 'asc' } },
+		] as const) {
+			expect(compileQuery('refunds', { ...state, ...update }, { id: 'report' }).represented).toBe(
+				false
+			);
+		}
+	});
+});

@@ -28,7 +28,7 @@ export function Taxes({ totalTax, taxLines = [] }: Props) {
 	if (taxTotalDisplay === 'itemized') {
 		return (
 			<HStack>
-				<Text className="grow">{t('common.taxes')}:</Text>
+				<Text className="text-muted-foreground grow">{t('common.taxes')}</Text>
 				<VStack>
 					{taxLines.map((tax, index) => {
 						// tax_total and shipping_tax_total are separate, but we will display together
@@ -50,7 +50,7 @@ export function Taxes({ totalTax, taxLines = [] }: Props) {
 
 	return (
 		<HStack>
-			<Text className="grow">{t('common.total_tax')}:</Text>
+			<Text className="text-muted-foreground grow">{t('common.total_tax')}</Text>
 			<HStack>
 				<Text className="text-muted-foreground text-xs">{String(inclOrExcl)}</Text>
 				<Text>{format(parseFloat(totalTax) || 0)}</Text>

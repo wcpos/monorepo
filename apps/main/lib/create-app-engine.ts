@@ -31,14 +31,13 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
-	createWriteOutcomeBridge,
-	writeOutcomeChannelName,
+	type RxdbSyncEngine,
+	type StoreScopeIdentity,
 } from '@wcpos/sync-engine';
-import type {
-	RxdbSyncEngine,
-	ScopedWriteOutcomeBridge,
-	StoreScopeIdentity,
-} from '@wcpos/sync-engine';
+import {
+	REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE,
+	WEB_STORAGE_ENGINE,
+} from '@wcpos/database/adapters/storage/storage-engines';
 // Deep import ON PURPOSE: the ui-settings barrel carries the React provider
 // graph, which jest-expo's winter runtime refuses to require from this host
 // module. The helper file itself is dependency-light (JSON + @wcpos/query).
@@ -63,7 +62,6 @@ import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 import { clearUpdateRequired, reportUpdateRequired } from './update-required-gate';
-import { electWriteLeader } from './web-write-leader';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 const isWeb = Platform.isWeb;
@@ -99,7 +97,7 @@ export interface CreateAppSyncEngineOptions {
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	/** The initial store/cashier scope. */
 	scope: StoreScopeIdentity;
-	/** Non-web RxDB override. Web selects this from Web Locks support. */
+	/** Non-web RxDB override. Web uses the storage engine’s required value. */
 	multiInstance?: boolean;
 }
 
@@ -122,11 +120,6 @@ type MutableFetcherOptions = Pick<
 	| 'useRestRouteParam'
 	| 'useProtocolHeaders'
 >;
-type WriteLeaderState = {
-	current: ReturnType<typeof electWriteLeader> | null;
-	onUnavailable: () => void;
-};
-
 type CachedEngine = {
 	renderKey: string | null;
 	site: string;
@@ -146,28 +139,11 @@ type CachedEngine = {
 	fetcherScope: EngineFetcherScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
-	writeLeader?: WriteLeaderState;
-	/** Web multi-tab write-outcome feedback (#1209) — re-pointed at the new
-	 * scope's channel on every switch, exactly like the write lock. */
-	writeOutcomeBridge?: ScopedWriteOutcomeBridge;
 };
 
 let cachedEngine: CachedEngine | null = null;
 let legacyPurgeStarted = false;
 const pendingDisposals = new Map<string, Promise<void>>();
-
-function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
-	// The outcome bridge is namespaced by the same scope database as the lock, so
-	// it moves on the same beat: a tab left listening on the previous store's
-	// channel would hear outcomes for records it no longer holds.
-	entry.writeOutcomeBridge?.moveTo(writeOutcomeChannelName(databaseName));
-	if (!entry.writeLeader) return;
-	const previous = entry.writeLeader.current;
-	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`, {
-		onUnavailable: entry.writeLeader.onUnavailable,
-	});
-	previous?.dispose();
-}
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
@@ -313,12 +289,18 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	});
 	for (const key of disposalKeys) pendingDisposals.set(key, bounded);
 	void bounded.then(() => {
-		entry.writeLeader?.current?.dispose();
-		entry.writeOutcomeBridge?.close();
 		for (const key of disposalKeys) {
 			if (pendingDisposals.get(key) === bounded) pendingDisposals.delete(key);
 		}
 	});
+}
+
+/** Reuse the existing bounded disposal before the live-tab owner closes its pool. */
+export async function disposeAppSyncEngine(): Promise<void> {
+	const entry = cachedEngine;
+	cachedEngine = null;
+	if (entry) disposeCachedEngine(entry);
+	await Promise.all(pendingDisposals.values());
 }
 
 /**
@@ -435,8 +417,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
 	const e2eEngineLedgerObserver = createE2eEngineLedgerObserver();
-	const webLocksAvailable =
-		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
 
 	const emitTransport = (event: SyncEvent, durable = true): void => {
 		if (event.type === 'transport.request') {
@@ -510,37 +490,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		syncStatusObserver(event);
 	};
 
-	// When Web Locks cannot arbitrate leadership (absent, or a rejected request in
-	// a sandboxed/opaque/WebView context) the tab degrades to single-writer so it
-	// never becomes a follower that enqueues sales it can never drain. Surface it
-	// so a genuinely wedged multi-tab context is visible rather than silent.
-	const onWriteLeaderUnavailable = () =>
-		composeObservers(
-			appMetricsObserver,
-			guardedDiagnostics,
-			e2eEngineLedgerObserver
-		)({
-			type: 'engine.write-leader.degraded',
-			level: 'warn',
-			message:
-				'Web Locks unavailable; falling back to single-writer (multi-tab coherence disabled for this browser context)',
-		});
-	// #1209: web-only, for the same reason the write lock is — a single-window
-	// host (native, Electron) has no peer to tell, and its engine events already
-	// reach every consumer in-process.
-	const writeOutcomeBridge: ScopedWriteOutcomeBridge | undefined = isWeb
-		? createWriteOutcomeBridge()
-		: undefined;
-	writeOutcomeBridge?.moveTo(writeOutcomeChannelName(scopeDatabaseName(options.scope)));
-	const writeLeader: WriteLeaderState | undefined = isWeb
-		? {
-				current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`, {
-					onUnavailable: onWriteLeaderUnavailable,
-				}),
-				onUnavailable: onWriteLeaderUnavailable,
-			}
-		: undefined;
-
 	if (supersedesCachedEngine) {
 		// Defer the sync-status wipe instead of doing it now: this construction runs
 		// during render, but the outgoing store's persistence bridge flushes its final
@@ -597,9 +546,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				guardedDiagnostics,
 				e2eEngineLedgerObserver
 			),
-			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
-			...(writeLeader ? { writePlaneOwner: () => writeLeader.current?.isLeader() ?? false } : {}),
-			...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
+			multiInstance: isWeb
+				? REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE[WEB_STORAGE_ENGINE]
+				: (options.multiInstance ?? false),
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
@@ -639,8 +588,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		fetcherOptions,
 		fetcherScope,
 		clockSkew,
-		...(writeLeader ? { writeLeader } : {}),
-		...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 	};
 	cachedEngine = entry;
 	let publishedKey: string | null = cacheKey;
@@ -658,7 +605,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		fetcherScope.storeId = active?.identity.storeId ?? null;
 		clockSkew.generation += 1;
 		clockSkew.evaluated = false;
-		if (active) moveWriteLeader(entry, scopeDatabaseName(active.identity));
 		publishedKey = key;
 	});
 	return engine;

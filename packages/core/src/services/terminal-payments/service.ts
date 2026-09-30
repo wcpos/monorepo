@@ -1,3 +1,4 @@
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
@@ -211,9 +212,15 @@ export class TerminalPaymentsService {
 					? await this.options.resolveOrderId(orderUuid)
 					: entry.input.orderId;
 				if (this.stopped || !id) continue;
-				const response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
-					context: { provider_refs: refs },
-				});
+				let response: { data: unknown };
+				const release = holdLiveTab('payment');
+				try {
+					response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
+						context: { provider_refs: refs },
+					});
+				} finally {
+					release();
+				}
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
 				await this.options.mirror(orderUuid, data);
@@ -247,6 +254,11 @@ export class TerminalPaymentsService {
 					this.offline.delete(row.id);
 				}
 			} catch (error) {
+				if (error instanceof LiveTabNotOwnedError) {
+					this.stop();
+					logger.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+					return;
+				}
 				const willRetry =
 					!this.stopped &&
 					entry.timer === undefined &&

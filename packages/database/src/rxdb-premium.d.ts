@@ -25,10 +25,6 @@ declare module 'rxdb-premium/plugins/storage-memory-mapped' {
 	}): import('rxdb').RxStorage<Internals, InstanceCreationOptions>;
 }
 
-declare module 'rxdb-premium/plugins/storage-filesystem-expo' {
-	export function getRxStorageExpoAsync(): import('rxdb').RxStorage<unknown, unknown>;
-}
-
 declare module 'rxdb-premium/plugins/storage-sqlite' {
 	export * from 'rxdb/plugins/storage-sqlite';
 	export function getSQLiteBasicsNodeNative(

@@ -87,3 +87,31 @@ describe('RequirementHandle.queryKey', () => {
 		).toBeNull();
 	});
 });
+
+describe('refund browse lane identity', () => {
+	const base = {
+		id: 'first',
+		kind: 'refunds-browse',
+		collection: 'refunds',
+		after: 100,
+		before: 200,
+	} as const;
+	it('a refunds-browse key is the collection, the range and the normalised limit', () => {
+		expect(queryKeyFor({ ...base, limit: 101 })).toBe(
+			'refunds:browser:after=100:before=200:limit=200'
+		);
+		expect(queryKeyFor(base)).toBe('refunds:browser:after=100:before=200:limit=10');
+		expect(queryKeyFor({ ...base, after: 101 })).toBe(
+			'refunds:browser:after=101:before=200:limit=10'
+		);
+	});
+	it.each([20, 'all'] as const)(
+		'caller id, priority and sort do not change a refunds-browse key (limit=%s)',
+		(limit) => {
+			const first = { ...base, limit, orderby: 'date', order: 'desc' };
+			const second = { ...first, id: 'second', priority: 900, order: 'asc' };
+			expect(queryKeyFor(first)).toBe(`refunds:browser:after=100:before=200:limit=${limit}`);
+			expect(queryKeyFor(second)).toBe(queryKeyFor(first));
+		}
+	);
+});

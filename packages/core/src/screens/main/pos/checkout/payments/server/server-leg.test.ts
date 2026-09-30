@@ -1,6 +1,19 @@
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 import { createServerLeg } from './server-leg';
+
+jest.mock('@wcpos/database/live-tab', () => ({
+	...jest.requireActual('@wcpos/database/live-tab'),
+	holdLiveTab: jest.fn(),
+}));
+const releaseHold = jest.fn();
+beforeEach(() => {
+	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);
+	releaseHold.mockClear();
+});
 
 const epoch = Date.parse('2026-01-01T00:00:00Z');
 // Explicit wire fixture, including the legacy GMT date format without a zone suffix.
@@ -582,4 +595,40 @@ it('a stale mirror rejection cannot mutate the state after checkNow supersedes i
 	write.reject(new Error('old write'));
 	await tick();
 	expect(c.leg.getState()).toBe(state);
+});
+
+it.each(['success', 'rejection'])('holds only the awaited capture through %s', async (outcome) => {
+	const c = setup(true, { status: 'authorized' });
+	const pending = deferred<{ data: unknown }>();
+	c.queue('capture', () => {
+		expect(holdLiveTab).toHaveBeenCalledWith('payment');
+		expect(releaseHold).not.toHaveBeenCalled();
+		return pending.promise;
+	});
+	const capture = c.leg.capture();
+	expect(holdLiveTab).toHaveBeenCalledTimes(1);
+	expect(releaseHold).not.toHaveBeenCalled();
+	if (outcome === 'success') pending.resolve({ data: response({ status: 'captured' }) });
+	else pending.reject(new Error('transport failed'));
+	await capture;
+	expect(releaseHold).toHaveBeenCalledTimes(1);
+	c.leg.dispose();
+});
+
+it('abandons capture silently when the registry refuses ownership', async () => {
+	const c = setup(true, { status: 'authorized' });
+	jest.mocked(log.info).mockClear();
+	jest.mocked(holdLiveTab).mockImplementation(() => {
+		throw new LiveTabNotOwnedError();
+	});
+	await c.leg.capture();
+	await c.leg.capture();
+	await tick(10000);
+	expect(c.calls).toHaveLength(0);
+	expect(c.leg.getState().error).toBeNull();
+	expect(log.info).toHaveBeenCalledTimes(1);
+	expect(log.info).toHaveBeenCalledWith(expect.any(String), {
+		code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
+	});
+	c.leg.dispose();
 });

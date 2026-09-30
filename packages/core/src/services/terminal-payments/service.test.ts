@@ -1,3 +1,4 @@
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
@@ -17,6 +18,10 @@ import {
 	stopTerminalPaymentsService,
 	subscribeTerminalPaymentsServiceStart,
 } from './index';
+jest.mock('@wcpos/database/live-tab', () => ({
+	...jest.requireActual('@wcpos/database/live-tab'),
+	holdLiveTab: jest.fn(() => jest.fn()),
+}));
 
 const row: PaymentRow = {
 	id: 'leg',
@@ -874,4 +879,53 @@ it('does not enter an old store receipt when a pending local balance read finish
 	await jest.advanceTimersByTimeAsync(0);
 	expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
 	expect(c.completeOrder).not.toHaveBeenCalled();
+});
+
+it.each(['success', 'rejection'])(
+	'holds background external capture through %s',
+	async (outcome) => {
+		const release = jest.fn();
+		jest.mocked(holdLiveTab).mockReset().mockReturnValue(release);
+		const c = offlineSetup();
+		let settle!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			settle = resolve;
+		});
+		c.http.post.mockImplementation(async () => {
+			expect(holdLiveTab).toHaveBeenCalledWith('payment');
+			expect(release).not.toHaveBeenCalled();
+			await pending;
+			if (outcome === 'rejection') throw new Error('transport failed');
+			return { data: { payment: { ...deviceRow, status: 'captured' } } };
+		});
+		const flushing = c.service.flushOffline();
+		await Promise.resolve();
+		expect(holdLiveTab).toHaveBeenCalledTimes(1);
+		expect(release).not.toHaveBeenCalled();
+		settle();
+		await flushing;
+		expect(release).toHaveBeenCalledTimes(1);
+		c.service.stop();
+	}
+);
+
+it('abandons settlement without HTTP or retries when the registry refuses ownership', async () => {
+	const c = offlineSetup();
+	const logger = getLogger(['wcpos', 'payments', 'terminal']);
+	jest.mocked(logger.info).mockClear();
+	jest.mocked(logger.error).mockClear();
+	jest.mocked(holdLiveTab).mockImplementation(() => {
+		throw new LiveTabNotOwnedError();
+	});
+	await c.service.flushOffline();
+	await c.service.flushOffline();
+	await jest.advanceTimersByTimeAsync(60000);
+	expect(c.http.post).not.toHaveBeenCalled();
+	expect(c.schedule).not.toHaveBeenCalled();
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.info).toHaveBeenCalledTimes(1);
+	expect(logger.info).toHaveBeenCalledWith(expect.any(String), {
+		code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
+	});
+	c.service.stop();
 });

@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -56,10 +55,18 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 		[item.meta_data]
 	);
 	return (
-		<VStack className="w-full">
+		<VStack className="w-full gap-0">
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			<View className="w-full">
-				<EditableField value={item.name} onChangeText={(name) => updateLineItem(uuid, { name })} />
+				{/* Two lines: the name is what the cashier reads, and the amount columns hold
+				    their width at every scale step, so a long name wraps rather than truncates. */}
+				<EditableField
+					variant="ghost"
+					bold={false}
+					numberOfLines={2}
+					value={item.name}
+					onChangeText={(name) => updateLineItem(uuid, { name })}
+				/>
 			</View>
 			{rejectedItem && (
 				<Text className="text-destructive text-xs font-semibold">
@@ -70,26 +77,25 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			)}
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 			{metaData.length > 0 && (
-				<VStack space="xs">
-					{metaData.map((meta) => (
-						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
+				<Text className="text-muted-foreground text-sm leading-tight" numberOfLines={2}>
+					{metaData.map((meta, index) => (
+						<React.Fragment key={meta.id || meta.key || meta.display_key}>
+							{index > 0 && ' · '}
 							<Text
-								className="text-muted-foreground text-xs"
+								className="text-muted-foreground text-sm leading-tight"
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
-							{/* testID keyed by the attribute so E2E can assert this VALUE node
-							    (id + text must sit on one node: key and value are separate
-							    Texts, so no single node contains "Size: Small"). */}
+							{/* Keep the attribute selector on the value, not the whole subline. */}
 							<Text
-								className="text-xs"
+								className="text-muted-foreground text-sm leading-tight"
 								decodeHtml
 								testID={`cart-line-meta-${meta.display_key || meta.key}`}
 							>
 								{formatMetaDataValue(meta.display_value || meta.value)}
 							</Text>
-						</HStack>
+						</React.Fragment>
 					))}
-				</VStack>
+				</Text>
 			)}
 		</VStack>
 	);

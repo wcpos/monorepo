@@ -96,7 +96,7 @@ describe('topProducts', () => {
 				],
 			},
 		]);
-		expect(topProducts(rows, totals(rows))).toEqual([
+		expect(topProducts(rows, totals(rows))).toMatchObject([
 			{ key: 2, name: 'Variant', quantity: 1, amount: 6, share: 0.5 },
 			{ key: 'Custom', name: 'Custom', quantity: 1, amount: 3, share: 0.25 },
 			{ key: 1, name: 'Simple', quantity: 2, amount: 3, share: 0.25 },
@@ -392,7 +392,7 @@ describe('categories', () => {
 				totals(rows),
 				2
 			)
-		).toEqual({
+		).toMatchObject({
 			parts: [{ key: '8', label: 'First', amount: 12, quantity: 1.5, share: 1 }],
 			unknownLines: 0,
 			totalLines: 1,

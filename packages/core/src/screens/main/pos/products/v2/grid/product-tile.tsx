@@ -56,9 +56,23 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 		sku: payload.sku,
 		barcode: payload.barcode,
 		stockQuantity: payload.stock_quantity,
+		manageStock: payload.manage_stock,
+		lowStockAmount: payload.low_stock_amount,
 		costOfGoodsSold: payload.cost_of_goods_sold,
 	}));
 
+	// The pill counts what is left; nothing left is a status (the badge under the name), not "0 left".
+	const showStockPill =
+		gridFields.stock_quantity &&
+		fields.manageStock === true &&
+		Number.isFinite(fields.stockQuantity) &&
+		(fields.stockQuantity as number) > 0;
+	// Woo has no low-stock status: low is the product's own threshold (or a plugin's status).
+	const lowStock =
+		showStockPill &&
+		(stock === 'lowstock' ||
+			(typeof fields.lowStockAmount === 'number' &&
+				(fields.stockQuantity as number) <= fields.lowStockAmount));
 	const safeTaxStatus = (fields.taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
 	const showOnSale = gridFields.on_sale && fields.onSale;
@@ -112,6 +126,23 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 				testID={`${onDrill ? 'variable-product-tile' : 'product-tile'}-${record.remoteId ?? record.uuid}`}
 			>
 				<TileImage record={record} />
+				{showStockPill && (
+					<View
+						className={`absolute top-2 left-2 h-5 justify-center rounded-full px-2 ${lowStock ? 'bg-warning' : 'bg-foreground'}`}
+						testID={`product-tile-stock-${record.remoteId ?? record.uuid}`}
+					>
+						<Text
+							className={`text-xs font-bold ${lowStock ? 'text-warning-foreground' : 'text-background'}`}
+						>
+							{t('pos_products.n_left', { count: fields.stockQuantity as number })}
+						</Text>
+					</View>
+				)}
+				{onDrill && count <= 0 && (
+					<View className="bg-card absolute top-2 right-2 size-6 items-center justify-center rounded-full">
+						<Icon name="chevronRight" size="sm" className="text-muted-foreground" />
+					</View>
+				)}
 				{count > 0 && (
 					<View className="absolute top-2 right-2">
 						<InCartCount count={count} />
@@ -131,6 +162,9 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 								({ range, strikethrough }, index) =>
 									range && (
 										<View key={index} className="flex-row flex-wrap items-center gap-1">
+											{onDrill && range.min !== range.max && (
+												<Text className="text-muted-foreground">{t('common.from')}</Text>
+											)}
 											<PriceWithTax
 												price={range.min}
 												taxStatus={safeTaxStatus}
@@ -138,18 +172,6 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 												taxDisplay={taxDisplay}
 												strikethrough={strikethrough}
 											/>
-											{range.min !== range.max && (
-												<>
-													<Text className={strikethrough ? 'line-through' : undefined}>-</Text>
-													<PriceWithTax
-														price={range.max}
-														taxStatus={safeTaxStatus}
-														taxClass={fields.taxClass ?? ''}
-														taxDisplay={taxDisplay}
-														strikethrough={strikethrough}
-													/>
-												</>
-											)}
 										</View>
 									)
 							)}
@@ -170,7 +192,7 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 							{fields.categories.map((c: { name?: string }) => c.name ?? '').join(', ')}
 						</Text>
 					)}
-					{gridFields.stock_quantity && (
+					{gridFields.stock_quantity && !showStockPill && (
 						<StatusBadge
 							label={getLabel(stock ?? 'instock')}
 							variant={
@@ -178,7 +200,7 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 							}
 						/>
 					)}
-					{gridFields.stock_quantity && fields.stockQuantity != null && (
+					{gridFields.stock_quantity && !showStockPill && fields.stockQuantity != null && (
 						<Text className="text-muted-foreground text-xs">
 							{t('common.stock')}: {fields.stockQuantity}
 						</Text>
@@ -189,11 +211,6 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 						</Text>
 					) : null}
 				</VStack>
-			)}
-			{onDrill && (
-				<View className="items-end p-2">
-					<Icon name="chevronRight" />
-				</View>
 			)}
 		</Pressable>
 	);

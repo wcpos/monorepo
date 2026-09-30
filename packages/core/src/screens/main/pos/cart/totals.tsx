@@ -8,7 +8,6 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 
-import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
@@ -87,7 +86,7 @@ export function Totals() {
 			{hasTotals ? (
 				<VStack className="border-border bg-card border-t p-2">
 					<HStack testID="cart-subtotal">
-						<Text className="grow">{t('common.subtotal')}:</Text>
+						<Text className="text-muted-foreground grow">{t('common.subtotal')}</Text>
 						<Text className="tabular-nums">{format(displaySubtotal)}</Text>
 					</HStack>
 					{
@@ -124,7 +123,7 @@ export function Totals() {
 						// Fees
 						hasFee && (
 							<HStack>
-								<Text className="grow">{t('pos_cart.fees')}:</Text>
+								<Text className="text-muted-foreground grow">{t('pos_cart.fees')}</Text>
 								<Text className="tabular-nums">{format(displayFeeTotal)}</Text>
 							</HStack>
 						)
@@ -133,7 +132,7 @@ export function Totals() {
 						// Shipping
 						hasShipping && (
 							<HStack>
-								<Text className="grow">{t('common.shipping')}:</Text>
+								<Text className="text-muted-foreground grow">{t('common.shipping')}</Text>
 								<Text className="tabular-nums">{format(displayShippingTotal)}</Text>
 							</HStack>
 						)
@@ -153,14 +152,14 @@ export function Totals() {
 								return (
 									<HStack key={refund.id}>
 										<Text className="text-destructive grow">
-											{t('orders.refund')} #{refund.id}:
+											{t('orders.refund')} #{refund.id}
 										</Text>
 										<Text className="text-destructive tabular-nums">{format(-refundAmount)}</Text>
 									</HStack>
 								);
 							})}
 							<HStack className="border-border border-t border-dashed pt-1">
-								<Text className="grow font-bold">{t('orders.net_payment')}:</Text>
+								<Text className="grow font-bold">{t('orders.net_payment')}</Text>
 								<Text className="font-bold tabular-nums">{format(netPayment)}</Text>
 							</HStack>
 						</>
@@ -186,7 +185,6 @@ export function Totals() {
 			<Text testID="cart-discount-total" className="hidden">
 				{orderDiscountTotal ?? ''}
 			</Text>
-			<CustomerNote />
 		</>
 	);
 }

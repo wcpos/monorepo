@@ -53,7 +53,7 @@ export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 					)}
 				</>
 			)}
-			<Text className="text-right tabular-nums">{format(displayTotal || 0)}</Text>
+			<Text className="text-right font-semibold tabular-nums">{format(displayTotal || 0)}</Text>
 			{column.columnDef.meta?.show?.('tax') && (
 				<Text className="text-muted-foreground text-right text-sm tabular-nums">
 					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}

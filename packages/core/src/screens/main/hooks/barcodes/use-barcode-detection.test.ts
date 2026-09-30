@@ -377,6 +377,120 @@ describe('useBarcodeDetection', () => {
 		subscription.unsubscribe();
 	});
 
+	describe('cross-source de-dup (#2263)', () => {
+		it('a slow long wedge burst is still one scan when the device copy came first', () => {
+			avgThreshold$.next(40);
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					hubEvents$.next({ code: '1234567890123', source: { kind: 'hid-pos' }, timestamp: 1 });
+					for (const [index, key] of [...'1234567890123'].entries()) {
+						if (index > 0) jest.advanceTimersByTime(30);
+						document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+					}
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['1234567890123']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it.each([
+			{ name: 'one scan, two sources', structuredFirst: false },
+			{ name: 'structured source first', structuredFirst: true },
+		])('$name', ({ structuredFirst }) => {
+			const barcodes: string[] = [];
+			const events: ScanEvent[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+			const deviceEvent: ScanEvent = {
+				code: '12345678',
+				source: { kind: 'hid-pos' },
+				timestamp: 1,
+			};
+			try {
+				act(() => {
+					if (structuredFirst) hubEvents$.next(deviceEvent);
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					if (!structuredFirst) hubEvents$.next(deviceEvent);
+				});
+
+				expect({ barcodes, eventCount: events.length }).toEqual({
+					barcodes: ['12345678'],
+					eventCount: 1,
+				});
+			} finally {
+				barcodeSubscription.unsubscribe();
+				eventSubscription.unsubscribe();
+			}
+		});
+
+		it('emits a deliberate re-scan after the window', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			const deviceEvent: ScanEvent = {
+				code: '12345678',
+				source: { kind: 'hid-pos' },
+				timestamp: 1,
+			};
+			try {
+				act(() => {
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					hubEvents$.next(deviceEvent);
+					jest.advanceTimersByTime(501);
+					hubEvents$.next(deviceEvent);
+				});
+
+				expect(barcodes).toEqual(['12345678', '12345678']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it('passes different codes within the window', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					hubEvents$.next({ code: '11111111', source: { kind: 'hid-pos' }, timestamp: 1 });
+					hubEvents$.next({ code: '22222222', source: { kind: 'hid-pos' }, timestamp: 1 });
+				});
+
+				expect(barcodes).toEqual(['11111111', '22222222']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it('same source, same code, 300 ms apart counts twice', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					jest.advanceTimersByTime(300);
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['12345678', '12345678']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+	});
+
 	it('bridges attributed scans to barcode$ without duplicating scanEvents$', () => {
 		const barcodes: string[] = [];
 		const events: ScanEvent[] = [];
