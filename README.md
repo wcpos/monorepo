@@ -74,11 +74,11 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 
 One Expo codebase renders the POS everywhere; the difference between platforms is mostly the **data layer**, which adapts RxDB to each platform's best storage engine:
 
-| Platform             | Storage engine                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Web                  | OPFS (Origin Private File System), in a worker — migrating from IndexedDB                                    |
-| Desktop (Electron)   | Filesystem-node storage in the main process, reached over IPC; legacy SQLite-over-IPC is used for migrations |
-| Native (iOS/Android) | Expo filesystem storage                                                                                      |
+| Platform | Storage engine |
+| --- | --- |
+| Web | Premium SQLite wasm over OPFS SAHPool in a worker; one live tab per origin |
+| Desktop (Electron) | SQLite in the main process, reached over IPC |
+| Native (iOS/Android) | Premium SQLite over expo-sqlite in Documents/wcpos-sqlite |
 
 Querying and replication against the WooCommerce REST API live in `@wcpos/query`; printing (ESC/POS encoding, transports and receipt rendering) lives in `@wcpos/printer` and `@wcpos/receipt-renderer`. See the [Client Architecture](https://github.com/wcpos/wiki/blob/main/architecture/client.md) wiki page for a deeper dive.
 

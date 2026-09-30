@@ -10,7 +10,7 @@ import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
-import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
@@ -24,7 +24,7 @@ import { searchPlugin } from './search';
 /**
  * Important: setPremiumFlag must be before addRxPlugin is called
  */
-disableVersionCheck();
+// Version checking is live: bump rxdb and rxdb-premium together.
 setPremiumFlag();
 
 if (__DEV__) {

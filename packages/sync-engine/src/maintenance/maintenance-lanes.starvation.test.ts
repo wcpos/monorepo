@@ -70,7 +70,6 @@ async function starvationHarness(censusDatabase?: object) {
 		}),
 		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
-		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => nowMs,
 		isServerBackingOff: () => pressure || retryAfterActive,

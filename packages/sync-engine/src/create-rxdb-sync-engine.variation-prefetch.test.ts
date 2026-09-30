@@ -295,11 +295,9 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.dispose();
 	});
 
-	it('runs only while this tab owns the shared write plane', async () => {
-		let isLeader = false;
+	it('runs in the single storage owner', async () => {
 		let variationFetches = 0;
 		const engine = engineWith({
-			writePlaneOwner: () => isLeader,
 			fetcher: async (url) => {
 				if (new URL(url).searchParams.has('include')) variationFetches += 1;
 				return json([variationEnvelope(101, 10)]);
@@ -308,12 +306,6 @@ describe('variation-prefetch maintenance lane', () => {
 		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 
-		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'not-write-plane-owner',
-		});
-		expect(variationFetches).toBe(0);
-		isLeader = true;
 		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
 		expect(variationFetches).toBe(1);
 		await engine.dispose();

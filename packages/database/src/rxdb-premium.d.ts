@@ -11,7 +11,6 @@ declare module 'rxdb-premium/plugins/flexsearch' {
 }
 
 declare module 'rxdb-premium/plugins/shared' {
-	export function disableVersionCheck(): void;
 	export function setPremiumFlag(): void;
 }
 

@@ -40,13 +40,11 @@ function reloadPage(): void {
 }
 
 /**
- * Detects the OPFS/RxDB failure seen when a local collection file contains
- * malformed JSON. The worker wraps the SyntaxError in a requestRemote error.
+ * Detects RxDB storage failures caused by malformed document JSON. The worker wraps the SyntaxError in a requestRemote error.
  */
 export function isRecoverableLogsStorageError(error: unknown): boolean {
 	const text = stringifyError(error);
-	const hasRemoteStorageSignal =
-		text.includes('requestRemote') || text.includes('opfs.worker') || text.includes('JSON.parse');
+	const hasRemoteStorageSignal = text.includes('requestRemote') || text.includes('JSON.parse');
 	const hasJsonParseSignal =
 		text.includes('SyntaxError') &&
 		(text.includes('Expected') || text.includes('JSON') || text.includes('property name'));

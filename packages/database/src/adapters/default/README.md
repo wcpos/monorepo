@@ -2,81 +2,65 @@ Storage adapters for each platform.
 
 ## Web - SQLite SAHPool
 
-The web adapter runs SQLite wasm in a dedicated module worker over the OPFS SAHPool VFS, with exclusive locking, WAL, and synchronous NORMAL (#2242, #2144).
+The web adapter runs premium SQLite wasm in a dedicated module worker over the OPFS SAHPool VFS, with exclusive locking, WAL, and `synchronous=NORMAL` (#2242, #2144).
 
 ## Electron - SQLite IPC
 
 The Electron renderer uses an IPC bridge to SQLite in the main process.
 
-## Native - Expo Filesystem
+## Native - Expo SQLite
 
-The expo adapter uses the Expo Filesystem-backed storage implementation.
+The native adapter runs premium SQLite over `expo-sqlite` in `Documents/wcpos-sqlite`, with WAL and `synchronous=NORMAL`. This root is separate from both retired engines, so the SQLite cutover starts fresh without a database generation bump. Legacy-device purge, clear and measurement still account for old storage roots.
 
 ## Decision: `multiInstance` is a consequence of the storage engine
 
 **Status:** ruled, standing, in two eras.
 
-- **Era 1 — `opfs-filesystem` (previous era, retained on 1.10.x).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
-- **Era 2 — `sqlite-sahpool` (current 2.0 adapter).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137. **Web is `false`, switched with the engine.**
+- **Era 1 — `opfs-filesystem` (previous era, retained on `main` / 1.10.x).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
+- **Era 2 — `sqlite-sahpool` (current `next` / 2.0 adapter).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137; implemented by #2242 and #2271. **Web is `false`, switched with the engine.**
 
-The two values were never independent settings, so they are pinned as a **pair**: `adapters/storage/storage-engines.ts` declares the current engine and the `multiInstance` each engine requires, and `multi-instance-ruling.test.ts` asserts them together. Changing the engine without the flag, or the flag without the engine, fails that test and the failure names the half you forgot. Every earlier version of this pin asserted the literal `true`, and a literal can be argued with — it was re-proposed as `false` five times.
-
-**Which era applies to the lane you are on:** `main` / 1.10.x is Era 1 and stays there; `false` on web is still the #1049 data-loss path on that lane. This #2242 worktree selects Era 2; the change must not be backported to the Era 1 lane. Flipping the flag on `next` ahead of the engine reintroduces #1049.
+The two values are pinned as a **pair**: `adapters/storage/storage-engines.ts` declares the current engine and the `multiInstance` each engine requires, and `multi-instance-ruling.test.ts` asserts them together. Change both halves or neither. Never backport SQLite's flag to the filesystem-era lane.
 
 ## Era 1 — `opfs-filesystem`: historical web `true`
 
-| Platform | `multiInstance` | Why |
+| Platform | `multiInstance` | Historical reason |
 |---|---|---|
-| Web (`adapters/default/index.web.ts`, engine scope DBs in `apps/main/lib/create-app-engine.ts`) | `true` | Multi-tab of one store is first-class. |
-| Electron (`index.electron.ts`) | `false` | Every window proxies over IPC to one main-process storage. |
-| Native (`index.ts`) | `false` | One storage per app process. |
+| Web | `true` | Multiple live tabs shared local data. |
+| Electron | `false` | Every window proxied over IPC to one main-process storage. |
+| Native | `false` | One storage per app process. |
 
-In Era 1, cashiers open the POS in several tabs and do unexpected things. We support it rather than forbid it. On web, one tab wins a `navigator.locks` exclusive lease and owns the write plane (drain, conflict resolution, recovery). `multiInstance: true` is what makes that work: it gives the follower tabs a coherent read view over BroadcastChannel and gives RxDB's own leader election a single tab to run cleanup and recovery in. Two database paths exist on web and only one has a fallback: the engine-scope databases (`apps/main/lib/create-app-engine.ts`) set `multiInstance` from `webLocksAvailable`, so a browser without `navigator.locks` degrades them to single-writer `false` alongside the write-leader degrade. The user and store databases built from this adapter's `defaultConfig` are `true` unconditionally; they have no fallback, and none is planned, because without Web Locks there is no leader to gate recovery on either way. The temporary database is outside this ruling: it comes from the ephemeral adapter, which is in-memory and `multiInstance: false` on every platform.
+In the filesystem era, web tabs shared a coherent read view over BroadcastChannel. One tab owned the write plane through an exclusive Web Lock. The engine-scope databases had a degraded single-writer fallback when Web Locks were unavailable; user and store databases used `true` unconditionally. This is historical architecture, not the current SQLite host. The temporary database remains in-memory and `multiInstance: false` on every platform.
 
-## Why `false` on web is a data-loss path, not a fix
+### Why `false` was not a filesystem repair
 
-rxdb-premium's OPFS storage does not fence tabs. Each run takes a cross-tab `navigator.locks` lock and then releases its access handles, so a second tab's worker interleaves serially on the same files. With `multiInstance: false` declared, two tabs each believe they are the sole owner, and each can run a recovery that rewrites index rows while neither receives the other's changelog operations. #1049 put a wrapper-level recovery through two adversarial passes and both found real corruption on exactly this route: a stale peer's cleanup persisting stale rows over a repaired base, and an in-memory row refresh racing premium's unserialised broadcast subscriber. That is why #1049 was abandoned and #1057 moved the fix to the architecture layer.
+The old OPFS engine released its access handles between operations, allowing workers from different tabs to interleave on the same files. With `multiInstance: false`, each tab could repair index rows without receiving the other's changelog operations. #1049 found stale-peer cleanup and broadcast races on that route; #1057 addressed ownership instead of flipping the flag.
 
-## The recurring mistake
+The historical Sentry incidents 2JZ/2KB reported multi-instance repair refusals. Those refusals were not evidence that the adapter flag should be `false`. #1987 and #1995 patched changelog identity and sibling-index checks, with Electron companions #437/#438 and the `main` backport #2002. They did not supply ordering for out-of-order revisions of the same document. The filesystem patchers and targeted-recovery implementation are retired on `next`; this history is not SQLite repair guidance.
 
-The refusal `targeted recovery refused: multi-instance` shows up in Sentry on web (2JZ, 2KB). Every agent that reads `index.web.ts`, sees no flag, and assumes an omission then proposes `multiInstance: false`. That happened in #1043/#1045 (August), #1910 (2026-09-08), and twice more in September. The flag is not the defect.
+## Era 2 — `sqlite-sahpool`: one live web tab per origin
 
-The defect is the gate. #1057 removed the config-flag refusal from `scripts/opfs-targeted-recovery.mjs` because leader-only cleanup made it unnecessary. #1713 (2026-08-30/31) reintroduced it for hollow-row drops and stale secondary rows without reconciling with the leader-only design, and no review thread challenged it.
+SQLite uses the official `@sqlite.org/sqlite-wasm` build on the `opfs-sahpool` VFS in one dedicated worker. SAHPool holds exclusive OPFS access handles for the origin, so a second worker cannot install the same pool. The current live-tab protocol parks the second tab before it opens storage; it does not route its reads or writes through the owner.
 
-## What has been done about it (2026-09-11)
-
-- **The floor was fixed at the premium layer.** rxdb-premium applied broadcast changelog ops by position alone, so a late or duplicate `D` deleted whatever row now sat at that position — a healthy neighbour. That is what #1049 and the adversarial pass on #1982 both reproduced. #1987 adds `scripts/patch-rxdb-premium-changelog-identity.mjs`: ops are applied by index-string identity with a position fast path, so a `D` whose index string is no longer present is a no-op. A stale `D` whose string IS still present — the document was rewritten without changing that index's string — still removes the current row for that document; that is the documented limit, and it removes the right document's row, never a neighbour's. #1995 links each index to its siblings at creation and rejects a secondary-index `A`/`R` whose byte range differs from the primary index's current row, in O(1). Both are mirrored in wcpos/electron (#437, #438) and backported to `main` (#2002).
-- **What remains, and why it is upstream work.** If two tabs' batches for one document reach a third tab out of order, that document reverts to the older revision on that peer and can be left with two rows for itself: a stale secondary row, or — when the primary-index string changed between the two revisions and the newer batch's `A` landed on its fast path — a duplicate primary row that `metaIdMap` no longer points at, which `reconcileSecondaryIndexes` then refuses as `duplicate-primary-id`. An ordinary later write does not clear these (it only deletes the string it knows); an index rebuild does. No neighbour is touched. The receiver has no ordering signal: byte-range monotonicity breaks compaction propagation, and a same-document scan per secondary insert is O(n) on the boot replay. Closing it needs a revision or sequence in premium's op contract.
-- **The gate itself (#1982) is belt-and-braces.** With identity-checked ops, the leadership handoff double-drop is harmless. #1982 now also rechecks primary absence inside the cleanup lock on the stale-secondary path, tracks ownership per RxDatabase instance (a duplicate close no longer revokes the survivor), and awaits the worker's acknowledgement of a revocation before rxdb's elector dies. Until it lands, refused repairs on web leave a row unrepaired; they do not corrupt anything.
-
-## Era 2 — `sqlite-sahpool`: web is `false`, and multi-tab ends
-
-Ruled 2026-09-21 (#2146, under storage-engine map #2137). At 2.0 web runs SQLite — the official `@sqlite.org/sqlite-wasm` build on the `opfs-sahpool` VFS, in WAL — in one dedicated worker owned by the one live tab.
-
-The page constructs no Worker at import or metadata access. Its first storage open lazily constructs premium's `mode: 'one'` client; that client reuses one module worker across collection closes/reopens. `error` and `messageerror` feed the existing worker-lost degradation signal. The read/create watchdog terminates a condemned worker, releasing its pool handles; `terminate()` itself emits no error, so silent loss still needs the watchdog. Recovery is a page reload, not an in-tab worker restart. Existing write-outcome uncertainty remains: termination is not proof a pending write did not commit.
-
-**PR 3A boundary:** the engine, delivery, and lifecycle seams are implemented here. The cooperative ownership gate, parked screen, and takeover described below are PR 3B requirements, not yet implemented. Do not deploy this half alone as a complete multi-tab solution.
-
-**This is a consequence of the engine, not a change of mind about multi-tab.** `opfs-sahpool` holds exclusive OPFS access handles for the whole origin, and a second worker can never install the same pool. The shape Era 1 ships — every tab its own dedicated worker over the same files — is simply not available on SQLite. The only thing that was open is what a second tab does instead: route its storage calls into the first tab's worker, or be refused. **Refused.**
-
-| Platform | `multiInstance` | Why |
+| Platform | `multiInstance` | Current reason |
 |---|---|---|
-| Web | `false` | Exactly one live tab per store. A second tab never opens storage. |
-| Electron | `false` | Unchanged. |
-| Native | `false` | Unchanged. |
+| Web | `false` | Exactly one live tab per origin, including the user DB opened before store selection. |
+| Electron | `false` | Renderer storage calls reach the main process over IPC. |
+| Native | `false` | One storage per app process. |
 
-Era 1's ruling is **superseded, not overturned on its merits**. Its stated purpose was that cashiers open several tabs and do unexpected things, so we support it rather than forbid it — that is, *do not lose data* when they do. A take-over screen satisfies that: the second tab never opens a second storage, so #1049's route (two tabs each repairing the same file) cannot exist. What is given up is two live tills, which was never the thing asked for, and it is given up for durability plus roughly a hundredfold on the sync hot path (#2143, #2144).
+The ownership gate, parked screen and cooperative takeover are implemented (#2271):
 
-The PR 3B topology that must replace it, in one line each — full reasoning in #2146's resolution:
+- **Takeover is cooperative.** The second tab asks over BroadcastChannel. The holder closes its databases, terminates its worker, releases the Web Lock and parks. The requesting tab must acquire ownership before opening storage; it never steals the lock.
+- **Write holds are bounded by the 15-second takeover ceiling. Payment holds are never abandoned.** A payment must settle before handover, even if the write ceiling has elapsed.
+- **Storage teardown is bounded at 10 seconds.** It runs after holds permit handover; this is not a deadline for abandoning a payment.
+- **A dead or wedged worker requires a page reload**, not an in-tab worker restart or storage epoch.
 
-- **Take-over is cooperative.** The second tab asks over BroadcastChannel; the holder closes its databases, terminates its worker, releases the Web Lock and parks on the same "POS is open in another tab" screen. Stealing the lock is wrong: a stolen holder keeps running and keeps the files.
-- **Refusal is bounded** — only while a payment capture or a storage write is in flight, then the handover proceeds anyway.
-- **Recovery from a dead or wedged worker is a page reload**, because a dedicated worker is destroyed with its document. No in-place restart, no storage epoch (#891).
-- **`multiInstance: false` ships inside the engine migration**, never before it.
+The page constructs no Worker at import or metadata access. The first storage open lazily constructs premium's `mode: 'one'` client, which reuses one module worker across collection closes/reopens. Worker `error` and `messageerror` feed the degradation signal. The read/create watchdog terminates a condemned worker to release pool handles; `terminate()` itself emits no error. Termination does not prove that a pending write failed to commit.
+
+The current contract gives up multiple simultaneously live tabs, not the requirement to protect data when users open another tab. Local write outcomes remain in-process. Generic JSON errors, worker-loss handling and COL21 ledger reattachment remain; the retired filesystem repair markers do not trigger ledger resets.
 
 ## Guards
 
-- `index.web.ts` states `multiInstance` explicitly with a comment pointing at this section. No silent rxdb default.
-- `adapters/storage/storage-engines.ts` declares the current engine and the `multiInstance` each engine requires. It is the one place either is written down.
-- `adapters/default/multi-instance-ruling.test.ts` pins the **pair** — the flag against the current engine — for all three platforms, and fails with this rationale. Changing the engine without the flag goes red, and so does the reverse.
-- Any PR that touches `params.multiInstance` in `opfs-targeted-recovery.mjs`, the flag in an adapter, `storage-engines.ts`, or `patch-rxdb-premium-changelog-identity.mjs` must cite #1057, #1987, #2146 and this section.
+- `index.web.ts` states `multiInstance` explicitly; no silent RxDB default.
+- `adapters/storage/storage-engines.ts` records both eras and selects the current engine.
+- `adapters/default/multi-instance-ruling.test.ts` pins the engine/flag pair and platform flags.
+- Changes to an adapter's flag or `storage-engines.ts` must preserve the pair and cite #1057, #2146, #2242 and this Decision section.

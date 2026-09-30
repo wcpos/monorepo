@@ -11,7 +11,6 @@ import {
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
 import {
-	markLedgerReconciliationRefusalError,
 	withLedgerRecovery,
 	withSchedulerDrainLedgerRecovery,
 } from '../local-coverage/ledger-storage-recovery';
@@ -401,16 +400,12 @@ function createEngineSchedulerFetcherRegistry(
 				censusCollectionFromQueryKey(queryKey) === null
 					? QUERY_TOTAL_FRESH_FOR_MS
 					: (input.censusFreshForMs ?? QUERY_TOTAL_FRESH_FOR_MS);
-			try {
-				await queryTotalRepository.upsert({
-					queryKey,
-					totalMatchingRecords,
-					updatedAtMs,
-					freshUntilMs: updatedAtMs + freshForMs,
-				});
-			} catch (error) {
-				throw markLedgerReconciliationRefusalError(error);
-			}
+			await queryTotalRepository.upsert({
+				queryKey,
+				totalMatchingRecords,
+				updatedAtMs,
+				freshUntilMs: updatedAtMs + freshForMs,
+			});
 		}
 	};
 	const coverageRepository = {
