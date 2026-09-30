@@ -67,7 +67,7 @@ try {
 			assert.equal(Object.keys(packed.dependencies ?? {}).length, 0);
 		} else {
 			assert.equal(packed.dependencies['@wcpos/sync-core'], coreVersion);
-			assert.deepEqual(packed.peerDependencies, { rxdb: '17.4.0', 'rxdb-premium': '17.4.0' });
+			assert.deepEqual(packed.peerDependencies, { rxdb: '17.5.0', 'rxdb-premium': '17.5.0' });
 			assert.equal(packed.peerDependenciesMeta['rxdb-premium'].optional, true);
 		}
 		for (const file of entries.filter((entry) => entry.endsWith('.js'))) {
@@ -81,7 +81,7 @@ try {
 	const scratch = join(tempDir, 'scratch');
 	mkdirSync(scratch);
 	writeFileSync(join(scratch, 'package.json'), JSON.stringify({ name: 'sync-packages-smoke', private: true, type: 'module' }));
-	run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', ...tarballs, 'rxdb@17.4.0', 'rxdb-premium@17.4.0'], { cwd: scratch });
+	run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', ...tarballs, 'rxdb@17.5.0', 'rxdb-premium@17.5.0'], { cwd: scratch });
 	run('npm', ['rebuild', 'rxdb-premium'], { cwd: scratch });
 	assert.ok(existsSync(join(scratch, 'node_modules/rxdb-premium/plugins/shared')));
 	writeFileSync(join(scratch, 'smoke.mjs'), `

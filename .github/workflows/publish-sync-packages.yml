@@ -187,6 +187,6 @@ jobs:
             echo "Dry-run: $DRY_RUN"
             echo '~~~sh'
             echo '@wcpos:registry=https://npm.pkg.github.com'
-            echo "pnpm add @wcpos/sync-engine@$VERSION @wcpos/sync-core@$VERSION rxdb@17.4.0"
+            echo "pnpm add @wcpos/sync-engine@$VERSION @wcpos/sync-core@$VERSION rxdb@17.5.0"
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"

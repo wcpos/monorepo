@@ -99,7 +99,7 @@ Install from GitHub Packages with this line in your `.npmrc` and a token with
 @wcpos:registry=https://npm.pkg.github.com
 ```
 
-The required peer is `rxdb@17.4.0`. `rxdb-premium@17.4.0` is an optional peer;
+The required peer is `rxdb@17.5.0`. `rxdb-premium@17.5.0` is an optional peer;
 the engine never imports it, but the host needs it to enable the premium flag below.
 The published engine depends on the exact matching version of `@wcpos/sync-core`.
 The two packages are published in lockstep: if your host also depends on sync-core,
@@ -127,7 +127,7 @@ Abstract-filesystem storages below include OPFS and filesystem storage.
 
 | Patch | What it fixes | Applies when |
 | --- | --- | --- |
-| [`patches/rxdb@17.4.0.patch`](../../patches/rxdb@17.4.0.patch) | Keeps `IncrementalWriteQueue` in `dist/{cjs,esm}/incremental-write.js` from staying wedged with `isRunning` stuck after a failed bulk write. | Always |
+| [`patches/rxdb@17.5.0.patch`](../../patches/rxdb@17.5.0.patch) | Keeps `IncrementalWriteQueue` in `dist/{cjs,esm}/incremental-write.js` from staying wedged with `isRunning` stuck after a failed bulk write. | Always |
 | [`scripts/patch-rxdb-premium-resurrection-leak.mjs`](../../scripts/patch-rxdb-premium-resurrection-leak.mjs) | Prevents leaked index rows when a soft-deleted document is reinserted. | Abstract-filesystem storages |
 | [`scripts/patch-rxdb-premium-task-queue-containment.mjs`](../../scripts/patch-rxdb-premium-task-queue-containment.mjs) | Releases access handles and keeps the task queue usable after a storage task fails. | Abstract-filesystem storages |
 | [`scripts/patch-rxdb-premium-changelog-replay-safety.mjs`](../../scripts/patch-rxdb-premium-changelog-replay-safety.mjs) | Makes changelog compaction crash-safe and rebuilds corrupt derived indexes from `documents.json` on boot. | Abstract-filesystem storages |
