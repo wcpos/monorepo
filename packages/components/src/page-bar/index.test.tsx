@@ -114,17 +114,19 @@ it('phone back composes Breadcrumb and wins over the menu', () => {
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-it('wide window without a scope renders neither leading control', () => {
+it('wide window renders a supplied menu, but keeps back phone-only', () => {
+	const onPress = jest.fn();
 	expect(window.innerWidth).toBeGreaterThanOrEqual(640);
 	render(
 		<PageBar
 			testID="bar"
 			title="Products"
-			onMenu={{ label: 'Menu', onPress: jest.fn() }}
+			onMenu={{ label: 'Menu', onPress }}
 			back={{ label: 'Settings', onPress: jest.fn() }}
 		/>
 	);
-	expect(screen.queryByTestId('bar-menu')).toBeNull();
+	fireEvent.click(screen.getByTestId('bar-menu'));
+	expect(onPress).toHaveBeenCalledTimes(1);
 	expect(screen.queryByTestId('bar-back')).toBeNull();
 });
 

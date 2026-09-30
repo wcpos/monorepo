@@ -376,10 +376,10 @@
     "columns": [
       {
         "key": "status",
-        "width": 45,
-        "align": "center",
+        "flex": 1.6,
+        "align": "left",
         "show": true,
-        "hideLabel": true
+        "hideLabel": false
       },
       {
         "key": "number",

@@ -788,6 +788,14 @@
 	"orders.no_reason_provided": "No reason provided",
 	"orders.order_id": "Order ID",
 	"orders.order_not_found": "Order not found",
+	"orders.filter_today": "Today",
+	"orders.filter_my_sales": "My sales",
+	"orders.clear_all": "Clear all",
+	"orders.no_orders_yet": "No orders yet",
+	"orders.no_orders_yet_description": "Sales you take will appear here.",
+	"orders.nothing_matches_filters": "No orders match these filters",
+	"orders.clear_filters": "Clear filters",
+	"orders.date_range": "Date range",
 	"orders.order_settings": "Order Settings",
 	"orders.original_method_refund_lookup_failed": "Couldn't verify original payment method refunds. Cash refunds are still available.",
 	"orders.original_method_refund_unavailable": "Original payment method refunds are unavailable for this order.",
@@ -2447,5 +2455,12 @@
 	"reports.col_time": "Time",
 	"reports.col_reason": "Reason",
 	"reports.all_products": "All products",
-	"reports.no_rows_in_period": "Nothing in this period"
+	"reports.no_rows_in_period": "Nothing in this period",
+	"orders.display_options": "Display options",
+	"orders.restore_defaults": "Restore defaults",
+	"orders.print_receipt": "Print receipt",
+	"orders.close_order": "Close order",
+	"orders.order_actions": "Order actions",
+	"common.status_offline": "Offline",
+	"common.status_site_unreachable": "Site unreachable"
 }

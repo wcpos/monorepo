@@ -6,19 +6,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { RegisterPill } from './register-pill';
 import { QueryStateProvider, useQueryState } from '../../../../../query';
 
+jest.mock('expo-haptics', () => ({}));
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+
 jest.mock('../../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Front desk' }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-	ButtonPill: ({ children, onRemove }: { children: React.ReactNode; onRemove: () => void }) => (
-		<div data-testid="pill">
-			{children}
-			<button data-testid="remove" onClick={onRemove} />
-		</div>
-	),
-}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 const Selection = React.createContext<(option: { value: string; label: string }) => void>(
 	() => undefined
 );
@@ -56,10 +52,10 @@ it('selects a register by name and clears the filter', () => {
 			<FilterValue />
 		</QueryStateProvider>
 	);
-	expect(screen.getByTestId('pill').textContent).toBe('common.select_register');
+	expect(screen.getByTestId('order-filter-register').textContent).toBe('common.select_register');
 	fireEvent.click(screen.getByTestId('option'));
 	expect(screen.getByTestId('filter').textContent).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-	expect(screen.getByTestId('pill').textContent).toBe('Front desk');
-	fireEvent.click(screen.getByTestId('remove'));
+	expect(screen.getByTestId('order-filter-register').textContent).toBe('Front desk');
+	fireEvent.click(screen.getByTestId('order-filter-register-remove'));
 	expect(screen.getByTestId('filter').textContent).toBe('');
 });

@@ -25,7 +25,7 @@ jest.mock('@wcpos/components/text', () => ({
 			{children}
 		</span>
 	),
-	TextClassContext: require('react').createContext(undefined),
+	TextClassContext: React.createContext(undefined),
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
@@ -315,4 +315,22 @@ it('disables a server-identified unavailable row', () => {
 	fireEvent.click(screen.getByTestId('closure-row-local'));
 	expect(select).not.toHaveBeenCalled();
 	expect(screen.getByTestId('closure-unavailable-local')).toBeTruthy();
+});
+
+// The shared formatter must preserve the closure list's headings and time-only range.
+it('preserves Today, Yesterday and past headings with time-only rows', () => {
+	jest.setSystemTime(new Date('2026-09-17T01:00:00Z'));
+	render(
+		<ClosureList
+			rows={[
+				row('1', { business_day: '2026-09-16' }),
+				row('2', { business_day: '2026-09-15' }),
+				row('3', { business_day: '2026-09-12' }),
+			]}
+		/>
+	);
+	expect(screen.getByTestId('closure-day-2026-09-16').textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-09-15').textContent).toBe('Yesterday');
+	expect(screen.getByTestId('closure-day-2026-09-12').textContent).toBe('Saturday, 12 Sep 2026');
+	expect(screen.getByTestId('closure-row-1').textContent).toContain('03:00 → 18:00');
 });

@@ -23,7 +23,7 @@ export function Section({
 	last?: boolean;
 }) {
 	return (
-		<View className={`px-5 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
+		<View className={`px-4 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
 			{title ? (
 				<View className="mb-3 flex-row items-baseline justify-between">
 					{typeof title === 'string' ? (
