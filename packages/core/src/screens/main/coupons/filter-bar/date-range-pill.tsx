@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { isSameDay, isToday, isYesterday } from 'date-fns';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
@@ -25,7 +25,7 @@ export function DateRangePill() {
 
 	const label = React.useMemo(() => {
 		if (!isActive) {
-			return t('coupons.expiry_date');
+			return t('coupons.expires');
 		}
 
 		const from = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.from));
@@ -74,15 +74,14 @@ export function DateRangePill() {
 				ref={triggerRef}
 				asChild
 			>
-				<ButtonPill
-					size="xs"
-					leftIcon="calendarDays"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => clearFilter('dateRange')}
-				>
-					<ButtonText>{label}</ButtonText>
-				</ButtonPill>
+				<Chip
+					testID="filter-pill-date_expires_gmt"
+					clearTestID="filter-pill-remove-date_expires_gmt"
+					icon="calendarDays"
+					label={label}
+					on={isActive}
+					onClear={isActive ? () => clearFilter('dateRange') : undefined}
+				/>
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-2">
 				{/* Keyed by zone: the calendar seeds its selection from the store day at mount, so a

@@ -142,6 +142,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="coupons"
 				options={{
+					headerShown: false,
 					title: t('common.coupons'),
 					drawerLabel: t('common.coupons'),
 					drawerIcon: ({ focused }) => (
@@ -156,6 +157,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="customers"
 				options={{
+					headerShown: false,
 					title: t('common.customers'),
 					drawerLabel: t('common.customers'),
 					drawerIcon: ({ focused }) => (

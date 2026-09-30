@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import {
 	Select,
 	SelectContent,
@@ -39,19 +39,23 @@ export function DiscountTypePill() {
 			onValueChange={(option) => option && setFilter('discount_type', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="percent"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => clearFilter('discount_type')}
-				>
-					<ButtonText>{value?.label || t('coupons.discount_type')}</ButtonText>
-				</ButtonPill>
+				<Chip
+					testID="filter-pill-discount_type"
+					clearTestID="filter-pill-remove-discount_type"
+					icon="percent"
+					label={value?.label || t('coupons.discount_type')}
+					on={isActive}
+					onClear={isActive ? () => clearFilter('discount_type') : undefined}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
-					<SelectItem key={item.value} label={item.label} value={item.value} />
+					<SelectItem
+						testID={`coupon-filter-type-${item.value}`}
+						key={item.value}
+						label={item.label}
+						value={item.value}
+					/>
 				))}
 			</SelectContent>
 		</Select>

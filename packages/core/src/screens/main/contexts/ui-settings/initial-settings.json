@@ -494,8 +494,8 @@
       {
         "key": "active",
         "show": true,
-        "width": 46,
-        "hideLabel": true,
+        "flex": 1.4,
+        "hideLabel": false,
         "disableSort": true
       },
       {

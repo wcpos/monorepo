@@ -1,4 +1,1 @@
-import { withProAccess } from '@wcpos/core/screens/main/components/pro-guard';
-import { CouponsScreen } from '@wcpos/core/screens/main/coupons';
-
-export default withProAccess(CouponsScreen, 'coupons');
+export { CouponsScreen as default } from '@wcpos/core/screens/main/coupons';

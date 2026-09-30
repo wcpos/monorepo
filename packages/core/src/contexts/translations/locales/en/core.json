@@ -2462,5 +2462,19 @@
 	"orders.close_order": "Close order",
 	"orders.order_actions": "Order actions",
 	"common.status_offline": "Offline",
-	"common.status_site_unreachable": "Site unreachable"
+	"common.status_site_unreachable": "Site unreachable",
+	"customers.no_customers_yet": "No customers yet",
+	"customers.no_customers_yet_description": "Customers you add, and anyone who buys from you, will appear here.",
+	"customers.display_options": "Display options",
+	"customers.restore_defaults": "Restore defaults",
+	"coupons.no_coupons_yet": "No coupons yet",
+	"coupons.no_coupons_yet_description": "Coupons you create will appear here.",
+	"coupons.display_options": "Display options",
+	"coupons.restore_defaults": "Restore defaults",
+	"customers.nothing_matches_search": "No customers match your search",
+	"customers.clear_search": "Clear search",
+	"coupons.nothing_matches_filters": "No coupons match these filters",
+	"coupons.clear_filters": "Clear filters",
+	"coupons.clear_all": "Clear all",
+	"coupons.inactive": "Inactive"
 }

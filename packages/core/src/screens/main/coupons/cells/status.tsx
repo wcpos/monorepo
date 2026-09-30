@@ -1,4 +1,6 @@
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Pressable } from 'react-native';
+
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -24,12 +26,24 @@ export function Status({ row, table }: CellContext<{ record: EngineRecord<'coupo
 	const label = labelMap[status] ? t(labelMap[status]) : status;
 
 	return (
-		<ButtonPill
-			variant="ghost-primary"
-			size="xs"
+		<Pressable
+			testID={`coupon-status-${row.original.record.uuid}`}
+			accessibilityRole="button"
+			className="min-h-11 justify-center"
 			onPress={() => status && actions?.setFilter('status', status)}
 		>
-			<ButtonText numberOfLines={1}>{label}</ButtonText>
-		</ButtonPill>
+			<StatusBadge
+				label={label}
+				variant={
+					status === 'publish'
+						? 'success'
+						: status === 'draft'
+							? 'muted'
+							: status === 'pending'
+								? 'warning'
+								: 'default'
+				}
+			/>
+		</Pressable>
 	);
 }
