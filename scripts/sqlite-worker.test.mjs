@@ -95,3 +95,55 @@ test('recovered INSERT constraint failures are quiet; other step failures still 
 		sqlite3.config.warn = originalWarn;
 	}
 });
+const poolFake = ({ files, capacity }) => {
+	const calls = [];
+	return {
+		calls,
+		getFileCount: () => files,
+		getCapacity: () => capacity,
+		addCapacity: async (n) => {
+			calls.push(n);
+			capacity += n;
+			return capacity;
+		},
+	};
+};
+const poolLimits = { filesPerDatabase: 2, growthStep: 16, maxCapacity: 246 };
+test('pool capacity: room for one more database does not grow the pool', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 20, capacity: 22 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, []);
+});
+test('pool capacity: grows by one step under the cap', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 22, capacity: 22 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, [16]);
+});
+test('pool capacity: grows by a partial step up to the cap', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 240, capacity: 240 });
+	await ensurePoolCapacity(pool, poolLimits);
+	assert.deepEqual(pool.calls, [6]);
+});
+test('pool capacity: at the cap with no room rejects with SqlitePoolFullError', async () => {
+	const { ensurePoolCapacity } = await import('./sqlite-pool-capacity.mjs');
+	const pool = poolFake({ files: 246, capacity: 246 });
+	await assert.rejects(ensurePoolCapacity(pool, poolLimits), (error) => {
+		assert.equal(error.name, 'SqlitePoolFullError');
+		assert.match(error.message, /246/);
+		return true;
+	});
+	assert.deepEqual(pool.calls, []);
+});
+test('pool capacity: the cap sits below the 253-handle WebKit ceiling, in whole steps', async () => {
+	const { SQLITE_POOL_GROWTH_STEP, SQLITE_POOL_INITIAL_CAPACITY, SQLITE_POOL_MAX_CAPACITY } =
+		await import('../packages/database/src/adapters/storage/sqlite-pool.ts');
+	assert.ok(SQLITE_POOL_MAX_CAPACITY < 253);
+	assert.ok(SQLITE_POOL_MAX_CAPACITY > SQLITE_POOL_INITIAL_CAPACITY);
+	assert.equal(
+		(SQLITE_POOL_MAX_CAPACITY - SQLITE_POOL_INITIAL_CAPACITY) % SQLITE_POOL_GROWTH_STEP,
+		0
+	);
+});
