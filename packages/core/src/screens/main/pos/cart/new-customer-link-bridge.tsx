@@ -1,6 +1,9 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { BehaviorSubject, combineLatest, EMPTY, Observable } from 'rxjs';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+
+import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -24,6 +27,8 @@ import {
 	reconcileCustomerLink,
 } from './new-customer-link';
 
+import type { RxDatabase } from 'rxdb';
+
 const linkLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
 // One pass at a time across remounts: two passes stamping the same link would
@@ -40,6 +45,9 @@ let passes: Promise<void> = Promise.resolve();
  * runs on mount (acks that landed while nothing was listening), on every
  * journal change (a new link whose customer is already acknowledged), and on
  * every customer write outcome, and on every order ack (an order back from a resync).
+ * It also runs when a linked order's status, customer or unsent state changes:
+ * the gateway pay page adopts the paid order with no write event, and a held
+ * stamp that adoption retired must be sent again.
  */
 export function NewCustomerLinkBridge(): null {
 	const { storeDB } = useStoreSession();
@@ -67,8 +75,11 @@ export function NewCustomerLinkBridge(): null {
 				const document =
 					(await getTemporaryOrder(uuid)) ?? (await findEngineResident(runtime, 'orders', uuid));
 				if (!document) return null;
-				const { payload } = document.toMutableJSON() as { payload?: Record<string, unknown> };
-				return { document, payload: payload ?? {} };
+				const { payload, local } = document.toMutableJSON() as {
+					payload?: Record<string, unknown>;
+					local?: { dirty?: boolean };
+				};
+				return { document, payload: payload ?? {}, dirty: local?.dirty === true };
 			},
 			stampCustomer: async (document, customerId) =>
 				Boolean(
@@ -100,9 +111,16 @@ export function NewCustomerLinkBridge(): null {
 			now: () => Date.now(),
 		};
 
+		/** The orders the journal is waiting on, as the last pass read it. */
+		const linkedOrders = new BehaviorSubject<string[]>([]);
+
 		const pass = (rejectedCustomerUuid?: string) => {
 			passes = passes.then(async () => {
 				const links = await pendingCustomerLinks(storeDB);
+				const orderUuids = Object.keys(links).sort();
+				if (!disposed && orderUuids.join() !== linkedOrders.value.join()) {
+					linkedOrders.next(orderUuids);
+				}
 				for (const [orderUuid, link] of Object.entries(links)) {
 					if (disposed) return;
 					try {
@@ -137,6 +155,38 @@ export function NewCustomerLinkBridge(): null {
 		};
 
 		const journal = customerLinkChanges(storeDB).subscribe(() => pass());
+		const linkedResidents = combineLatest([
+			new Observable<RxDatabase | null>((subscriber) =>
+				runtime.engine.db$((database) => subscriber.next(database))
+			),
+			linkedOrders,
+		])
+			.pipe(
+				switchMap(([database, orderUuids]) => {
+					const orders = engineCollection(database, 'orders');
+					if (!orders || orderUuids.length === 0) return EMPTY;
+					return orders.find({ selector: { uuid: { $in: orderUuids } } }).$.pipe(
+						map((documents) =>
+							documents
+								.map((document) => {
+									const { uuid, payload, local } = document.toJSON();
+									return `${uuid}:${payload.status}:${payload.customer_id}:${local?.dirty}`;
+								})
+								.join('|')
+						),
+						distinctUntilChanged()
+					);
+				})
+			)
+			.subscribe({
+				next: () => pass(),
+				// The write events and the journal still run passes.
+				error: (error: unknown) => {
+					linkLogger.debug('Stopped watching cart customer link orders', {
+						context: { error: getErrorMessage(error) },
+					});
+				},
+			});
 		const unsubscribe = runtime.engine.events((event) => {
 			if (event.type === 'scope-switched') {
 				pass();
@@ -164,6 +214,7 @@ export function NewCustomerLinkBridge(): null {
 		return () => {
 			disposed = true;
 			journal.unsubscribe();
+			linkedResidents.unsubscribe();
 			unsubscribe();
 		};
 	}, [storeDB, runtime, localPatch, format, t]);

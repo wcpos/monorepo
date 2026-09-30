@@ -3,7 +3,7 @@
  */
 import { act, render } from '@testing-library/react';
 import cloneDeep from 'lodash/cloneDeep';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map, startWith, Subject } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
 
@@ -50,11 +50,15 @@ function residentDoc(collection: string, data: Record<string, unknown>) {
 		getLatest: () => doc,
 		incrementalModify: async (fn: (old: Record<string, unknown>) => Record<string, unknown>) => {
 			state = fn(cloneDeep(state));
+			residentChanges.next();
 			return doc;
 		},
 	};
 	return doc;
 }
+
+/** Ticks on every resident write, as an RxDB query's `$` re-emits. */
+const residentChanges = new Subject<void>();
 
 let listeners: Listener[] = [];
 let residents: Record<string, Map<string, Doc>> = {};
@@ -71,7 +75,19 @@ const scope = () => ({
 			...Object.fromEntries(
 				['orders', 'customers'].map((name) => [
 					name,
-					{ findOne: (id: string) => ({ exec: async () => residents[name]?.get(id) ?? null }) },
+					{
+						findOne: (id: string) => ({ exec: async () => residents[name]?.get(id) ?? null }),
+						find: ({ selector }: { selector: { uuid: { $in: string[] } } }) => ({
+							$: residentChanges.pipe(
+								startWith(undefined),
+								map(() =>
+									selector.uuid.$in
+										.map((id) => residents[name]?.get(id))
+										.filter((doc): doc is Doc => Boolean(doc))
+								)
+							),
+						}),
+					},
 				])
 			),
 			recordMutations: {
@@ -91,6 +107,10 @@ const mockRuntime = {
 		whenActive: async () => scope(),
 		status: () => ({ activeScopeId: 'scope-1' }),
 		write: (...args: unknown[]) => mockWrite(...args),
+		db$: (cb: (database: unknown) => void) => {
+			cb(scope().database);
+			return () => undefined;
+		},
 		events: (listener: Listener) => {
 			listeners.push(listener);
 			return () => {
@@ -310,7 +330,8 @@ describe('NewCustomerLinkBridge', () => {
 			customer_id: 91,
 			total: '10.00',
 		});
-		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
+		// Still an open cart, so the stamp is only held: the link stays until the store has it.
+		expect(Object.keys(await pendingCustomerLinks(mockStoreDB))).toEqual([ORDER]);
 	});
 
 	it('sends a follow-up update carrying the id when the order was already pushed as a guest', async () => {
@@ -517,6 +538,94 @@ describe('NewCustomerLinkBridge', () => {
 		expect(orderUpdates()).toEqual([
 			expect.objectContaining({ payload: expect.objectContaining({ customer_id: 91 }) }),
 		]);
+		expect(Object.keys(await pendingCustomerLinks(mockStoreDB))).toEqual([ORDER]);
+	});
+
+	it('acks after the pre-payment push on a gateway pay page: the stamp the paid snapshot retires is sent again after payment', async () => {
+		// The store's copy of the order. Only rows the drain sends reach it.
+		const server: Record<string, unknown> = { ...attachedOpenCart, id: 500 };
+		let sequence = 0;
+		// The engine's write path for an order update: a queued row, and the resident
+		// marked dirty until the store acknowledges it (write-intents).
+		mockWrite.mockImplementation(async (intent: Record<string, any>) => {
+			const mutationId = `m-order-${(sequence += 1)}`;
+			queue.push({
+				mutationId,
+				collectionName: intent.collection,
+				recordId: intent.recordId,
+				operation: intent.operation,
+				status: 'pending',
+				explicit: intent.explicit === true,
+				payload: intent.payload,
+			});
+			await residents.orders!.get(ORDER)!.incrementalModify((old) => ({
+				...old,
+				local: { dirty: true, pendingMutationIds: [mutationId] },
+			}));
+			return { mutationId, recordId: ORDER };
+		});
+		// The drain sends every releasable row. The open-cart hold keeps back a
+		// non-explicit row while the till holds the order as `pos-open`.
+		const drain = async () => {
+			const order = residents.orders!.get(ORDER)!;
+			const held = (row: Record<string, unknown>) =>
+				order.payload.status === 'pos-open' && !row.explicit && row.operation !== 'delete';
+			const sending = queue.filter((row) => row.recordId === ORDER && !held(row));
+			queue = queue.filter((row) => !sending.includes(row));
+			for (const row of sending) {
+				Object.assign(server, row.payload);
+				await order.incrementalModify((old) => ({
+					...old,
+					payload: { ...(old.payload as object), ...(row.payload as object) },
+					local: { dirty: false, pendingMutationIds: [] },
+				}));
+				emit({
+					type: 'write-acknowledged',
+					collection: 'orders',
+					recordId: ORDER,
+					mutationId: row.mutationId,
+					currentRevision: null,
+				});
+			}
+			await flush();
+		};
+
+		// Checkout pushed the cart explicitly before payment, as a guest: the
+		// customer's ack had not landed yet.
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		await linkOrderToCustomer();
+		render(<NewCustomerLinkBridge />);
+		await flush();
+
+		// The ack lands after that push, so the stamp is a held open-cart row.
+		await acknowledgeCustomer(91);
+		ackCustomerEvent();
+		await flush();
+		await drain();
+		expect(queue).toEqual([
+			expect.objectContaining({
+				operation: 'update',
+				payload: expect.objectContaining({ customer_id: 91 }),
+			}),
+		]);
+		expect(server.customer_id).toBe(0);
+
+		// The gateway takes payment and the pay page hands back the paid order. Adopting
+		// it retires the held row as moot (createOrderHeldRowDiscarder: the store settled
+		// the sale, the till still holds an unpaid open cart, and every row is a hold
+		// candidate), then upserts the store's document, which is still a guest.
+		Object.assign(server, { status: 'processing', date_paid_gmt: '2026-10-01T00:00:00' });
+		queue = queue.filter((row) => row.recordId !== ORDER || row.explicit);
+		await residents.orders!.get(ORDER)!.incrementalModify((old) => ({
+			...old,
+			payload: cloneDeep(server),
+			local: { dirty: false, pendingMutationIds: [] },
+		}));
+		await flush();
+		await drain();
+
+		expect(server).toMatchObject({ status: 'processing', customer_id: 91 });
+		expect(residents.orders!.get(ORDER)!.payload).toMatchObject({ customer_id: 91 });
 		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
 	});
 });

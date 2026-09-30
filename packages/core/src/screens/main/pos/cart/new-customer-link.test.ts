@@ -62,6 +62,7 @@ function deps(
 		stampResult?: boolean;
 		scopeId?: string;
 		queuedDelete?: boolean;
+		dirty?: boolean;
 		now?: number;
 	} = {}
 ) {
@@ -74,7 +75,11 @@ function deps(
 		findOrder: async () =>
 			state.order === null
 				? null
-				: { document, payload: state.order ?? { customer_id: 0, billing: BILLING } },
+				: {
+						document,
+						payload: state.order ?? { customer_id: 0, billing: BILLING },
+						dirty: state.dirty ?? false,
+					},
 		stampCustomer: async (doc, customerId) => {
 			stamps.push({ document: doc, customerId });
 			return state.stampResult ?? true;
@@ -101,7 +106,40 @@ describe('reconcileCustomerLink', () => {
 		const d = deps({ customer: { remoteId: 91 } });
 		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('stamped');
 		expect(d.stamps).toEqual([{ document: d.document, customerId: 91 }]);
-		expect(d.drops).toEqual([ORDER]);
+		// Written is not delivered: the link stays until the store holds the id.
+		expect(d.drops).toEqual([]);
+	});
+
+	it('keeps the link, without writing, while a stamped order is still an open cart', async () => {
+		// The stamp is a held open-cart row, which a paid snapshot can still retire unsent.
+		const d = deps({
+			customer: { remoteId: 91 },
+			order: { status: 'pos-open', customer_id: 91, billing: BILLING },
+		});
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('waiting');
+		expect(d.stamps).toEqual([]);
+		expect(d.drops).toEqual([]);
+	});
+
+	it('keeps the link, without writing, while the stamp on a paid order is unsent', async () => {
+		const d = deps({
+			customer: { remoteId: 91 },
+			order: { status: 'processing', customer_id: 91, billing: BILLING },
+			dirty: true,
+		});
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('waiting');
+		expect(d.stamps).toEqual([]);
+		expect(d.drops).toEqual([]);
+	});
+
+	it('stamps again a paid order that came back a guest, its held stamp retired unsent', async () => {
+		const d = deps({
+			customer: { remoteId: 91 },
+			order: { status: 'processing', customer_id: 0, billing: BILLING },
+		});
+		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('stamped');
+		expect(d.stamps).toEqual([{ document: d.document, customerId: 91 }]);
+		expect(d.drops).toEqual([]);
 	});
 
 	it('treats an absent billing email and an empty one as the same identity', async () => {
@@ -156,10 +194,14 @@ describe('reconcileCustomerLink', () => {
 		expect(d.stamps).toEqual([]);
 	});
 
-	it('is idempotent: a replay after the stamp landed writes nothing', async () => {
-		const d = deps({ customer: { remoteId: 91 }, order: { customer_id: 91, billing: BILLING } });
+	it('is idempotent: a replay after the stamp landed writes nothing, and settles the link', async () => {
+		const d = deps({
+			customer: { remoteId: 91 },
+			order: { status: 'processing', customer_id: 91, billing: BILLING },
+		});
 		await expect(reconcileCustomerLink(d.value, ORDER, link())).resolves.toBe('dropped');
 		expect(d.stamps).toEqual([]);
+		expect(d.drops).toEqual([ORDER]);
 	});
 
 	it('keeps a link whose customer or order is away, as a resync leaves them', async () => {

@@ -122,9 +122,12 @@ export function customerLinkChanges(storeDB: StoreDatabase) {
 }
 
 export type CustomerLinkOutcome =
-	/** The order now carries the customer's Woo id. */
+	/** The order now carries the customer's Woo id; the link stays until the store has it. */
 	| 'stamped'
-	/** Nothing to do yet: no id, another scope, or a stamp that failed and will be retried. */
+	/**
+	 * Nothing to do yet: no id, another scope, a stamp that failed and will be
+	 * retried, or a stamp the store does not hold yet.
+	 */
 	| 'waiting'
 	/** The link no longer applies (voided, cashier moved on, already stamped, expired). */
 	| 'dropped'
@@ -139,10 +142,14 @@ export interface CustomerLinkDeps {
 	activeScopeId(): string | null;
 	/** null when the customer is not resident; `remoteId` null until the create is acknowledged. */
 	findCustomer(customerUuid: string): Promise<{ remoteId: number | null } | null>;
-	/** The order as the cart holds it: the temporary template before its first line, else the resident. */
+	/**
+	 * The order as the cart holds it: the temporary template before its first line,
+	 * else the resident. `dirty` while the resident has writes the store has not
+	 * acknowledged.
+	 */
 	findOrder(
 		orderUuid: string
-	): Promise<{ document: unknown; payload: Record<string, unknown> } | null>;
+	): Promise<{ document: unknown; payload: Record<string, unknown>; dirty: boolean } | null>;
 	/**
 	 * True when the order has a delete in the write queue, whatever its state: a
 	 * void waiting to send, one in flight, or one the store refused.
@@ -158,8 +165,7 @@ export interface CustomerLinkDeps {
 
 /**
  * Settle one link. Idempotent: the stamp is an absolute `customer_id`, so a
- * replay after a crash between the stamp and the drop writes the same value
- * again, and a replay after the drop finds nothing to do.
+ * replay writes the same value again or finds it already there.
  *
  * The stamp is an ordinary, non-explicit order update enqueued after the
  * customer's ack, so it lands behind anything already queued for the order.
@@ -169,6 +175,14 @@ export interface CustomerLinkDeps {
  * "Online provenance must reach the store BEFORE payment"). An offline payment
  * rides the order write that moves the order off `pos-open`. Once the order is
  * paid, the stamp is a follow-up update that sets `customer_id` on the server copy.
+ *
+ * So a stamp is not delivered when it is written, and the link outlives it: it
+ * is dropped only once the order has left `pos-open` and the resident carries
+ * the id with nothing left to send, i.e. the store holds it. An ack that lands
+ * after the pre-payment push leaves the stamp held, and on the gateway pay page
+ * the adopted paid order retires held rows as moot (order-pull-guard's
+ * `createOrderHeldRowDiscarder`) and brings the order back as a guest. The kept
+ * link then stamps it again, as a follow-up update after payment.
  *
  * The stamp never writes to an order that is being voided. A delete in the
  * queue would absorb the stamp and turn into an update, which resurrects the
@@ -205,6 +219,12 @@ export async function reconcileCustomerLink(
 		const order = await deps.findOrder(orderUuid);
 		if (!order) return 'waiting';
 		const current = order.payload.customer_id as number | null | undefined;
+		if (current != null && Number(current) === customerId) {
+			// Stamped. A held stamp can still be retired unsent, so wait for the store.
+			if (order.payload.status === 'pos-open' || order.dirty) return 'waiting';
+			await deps.drop(orderUuid, link.at);
+			return 'dropped';
+		}
 		const guest = current == null || isGuestCustomer(current);
 		if (
 			!guest ||
@@ -220,7 +240,6 @@ export async function reconcileCustomerLink(
 			return 'dropped';
 		}
 		if (!(await deps.stampCustomer(order.document, customerId))) return 'waiting';
-		await deps.drop(orderUuid, link.at);
 		return 'stamped';
 	});
 }
