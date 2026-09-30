@@ -2,24 +2,6 @@
 	"issue": "https://github.com/wcpos/monorepo/issues/2284",
 	"entries": [
 		{
-			"project": "pro-authenticated",
-			"file": "checkout-device.spec.ts",
-			"title": "POS device capture with the simulated driver (live store) › approve",
-			"group": "G2"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "checkout-device.spec.ts",
-			"title": "POS device capture with the simulated driver (live store) › decline",
-			"group": "G2"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "checkout-tender.spec.ts",
-			"title": "POS two-pane checkout (live store) › preserves a partly paid cart while a second cart completes checkout",
-			"group": "G2"
-		},
-		{
 			"project": "free-authenticated",
 			"file": "orders.spec.ts",
 			"title": "Orders Page (Pro) › should navigate to Orders page and see order list",
@@ -86,18 +68,6 @@
 			"group": "G3"
 		},
 		{
-			"project": "pro-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 24129) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "pos-coupon-apply.spec.ts",
-			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
-			"group": "G3"
-		},
-		{
 			"project": "free-authenticated",
 			"file": "pos-coupon-checkout.spec.ts",
 			"title": "POS Cart - coupon checkout (live store — store 24128) › paying a couponed order applies the paid snapshot and clears its cart tab",
@@ -118,19 +88,7 @@
 		{
 			"project": "free-authenticated",
 			"file": "reports-closures.spec.ts",
-			"title": "phone › Free › locks historical dates without issuing a closures request",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
 			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "reports-closures.spec.ts",
-			"title": "tablet › Free › locks historical dates without issuing a closures request",
 			"group": "G3"
 		},
 		{
@@ -142,31 +100,13 @@
 		{
 			"project": "pro-authenticated",
 			"file": "reports-closures.spec.ts",
-			"title": "phone › Free › locks historical dates without issuing a closures request",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
 			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
 			"group": "G3"
 		},
 		{
 			"project": "pro-authenticated",
 			"file": "reports-closures.spec.ts",
-			"title": "tablet › Free › locks historical dates without issuing a closures request",
-			"group": "G3"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "reports-closures.spec.ts",
 			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
-			"group": "G3"
-		},
-		{
-			"project": "free-unauthenticated",
-			"file": "rest-route-transport.spec.ts",
-			"title": "connects and finds an owned product through query-form REST when path routes are blocked",
 			"group": "G3"
 		},
 		{
@@ -197,18 +137,6 @@
 			"project": "pro-authenticated",
 			"file": "search-terms.spec.ts",
 			"title": "preserves MY in cold and warm Georgian all-term searches",
-			"group": "G4"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "search-walk.spec.ts",
-			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
-			"group": "G4"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "search-walk.spec.ts",
-			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
 			"group": "G4"
 		},
 		{
