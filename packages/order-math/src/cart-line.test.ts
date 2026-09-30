@@ -1919,6 +1919,26 @@ describe('order-line per-rate tax is rounded ONCE at 6dp, as WC_Tax::round does 
 		});
 	});
 
+	it('a true 6dp midpoint still rounds up: 11.8885 × 5.5% = 0.6538675 → 0.653868', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rateOf('5.5000')],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 11.8885, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// The float product is 0.65386749999…; PHP's round() pre-rounds to 15 significant
+		// digits, sees the midpoint and rounds HALF_UP. A bare single round gives 0.653867.
+		expect(line.taxes).toEqual([{ id: 1, total: '0.653868', subtotal: '0.653868' }]);
+	});
+
 	it('inclusive €2.34 at 5.5% re-derives from the 6dp net and rounds once', () => {
 		const config = createCartConfig({
 			...baseConfig,
