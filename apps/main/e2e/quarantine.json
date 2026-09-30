@@ -1,0 +1,359 @@
+{
+	"issue": "https://github.com/wcpos/monorepo/issues/2284",
+	"entries": [
+		{
+			"project": "pro-authenticated",
+			"file": "checkout-device.spec.ts",
+			"title": "POS device capture with the simulated driver (live store) › approve",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "checkout-device.spec.ts",
+			"title": "POS device capture with the simulated driver (live store) › decline",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "checkout-tender.spec.ts",
+			"title": "POS two-pane checkout (live store) › cancels mid-split, listing the cash to return, and voids the leg",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "checkout-tender.spec.ts",
+			"title": "POS two-pane checkout (live store) › splits a payment across two tenders and the server records both legs",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "checkout-terminal.spec.ts",
+			"title": "POS terminal (server capture-mode) checkout (live store) › cancel is a request; a late capture wins",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-cart.spec.ts",
+			"title": "POS Cart › should add a product to the cart and show checkout button",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Cart - Multiple Orders › should create a new order via tab",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 24128) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-open-orders-switching.spec.ts",
+			"title": "POS open-orders tab switching › cart contents follow the selected order tab across switches",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-open-orders-switching.spec.ts",
+			"title": "POS open-orders tab switching › cart contents follow the selected order tab across switches",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variation-popover-states.spec.ts",
+			"title": "POS variation popover option states › a greyed option cannot be selected",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variation-popover-states.spec.ts",
+			"title": "POS variation popover option states › greys out a combination that does not exist once its partner is selected",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variation-popover-states.spec.ts",
+			"title": "POS variation popover option states › greys out an option whose every variation sits outside the Stock Status filter",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variation-popover-states.spec.ts",
+			"title": "POS variation popover option states › offers an unsellable combination; Add to Cart follows Avoid overselling",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variations-drill-in.spec.ts",
+			"title": "drills into variations, adds a line and returns to products",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should add multiple variations to cart",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "products.spec.ts",
+			"title": "Products in POS › should add product to cart in table view",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "register-session.spec.ts",
+			"title": "opens a register, records paid out, and undoes it",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "register-session.spec.ts",
+			"title": "opens a register, records paid out, and undoes it",
+			"group": "G2"
+		},
+		{
+			"project": "free-unauthenticated",
+			"file": "rest-route-transport.spec.ts",
+			"title": "connects and finds an owned product through query-form REST when path routes are blocked",
+			"group": "G2"
+		},
+		{
+			"project": "free-unauthenticated",
+			"file": "host-blocked-errors.spec.ts",
+			"title": "HOST141 warns when search-like ping requests are blocked without blocking connect",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 24128) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 578) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-coupon-apply.spec.ts",
+			"title": "POS Cart - coupon application parity (live store — store 24129) › applies a percent coupon through the cart and the server records the same money",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 24128) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 24129) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-coupon-checkout.spec.ts",
+			"title": "POS Cart - coupon checkout (live store — store 578) › paying a couponed order applies the paid snapshot and clears its cart tab",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "phone › Free › locks historical dates without issuing a closures request",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "phone › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G3"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-latency.spec.ts",
+			"title": "a single-word search meets the latency budgets on a slow host",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "finds a product when the typed words are reordered or separated",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "preserves MY in cold and warm Georgian all-term searches",
+			"group": "G4"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "finds a product when the typed words are reordered or separated",
+			"group": "G4"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-terms.spec.ts",
+			"title": "preserves MY in cold and warm Georgian all-term searches",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G4"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G4"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › Free › locks historical dates without issuing a closures request",
+			"group": "G5"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › Free › locks historical dates without issuing a closures request",
+			"group": "G5"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports-closures.spec.ts",
+			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
+			"group": "G5"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports.spec.ts",
+			"title": "Reports Page (Free) › should show upgrade overlay on Reports",
+			"group": "G5"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "reports.spec.ts",
+			"title": "Reports Page (Free) › should show View Demo button on upgrade overlay",
+			"group": "G5"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports.spec.ts",
+			"title": "Reports Page (Pro) › should show filter pills",
+			"group": "G5"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports.spec.ts",
+			"title": "Reports Page (Pro) › should show print button",
+			"group": "G5"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "reports.spec.ts",
+			"title": "Reports Page (Pro) › should show report content",
+			"group": "G5"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-filter-bar.spec.ts",
+			"title": "a quick filter authored in the editor applies and clears its conditions from the bar",
+			"group": "G6"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "orders.spec.ts",
+			"title": "Orders Page (Pro) › should show order actions menu",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "falls back to the legacy webview when supports_checkout=false",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout - real payment (live store) › completes payment and the server order matches what the cart sent",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout › should auto print receipt after checkout when enabled",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout › should cancel checkout and return to cart",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout › should disable payment when the server omits the payment link",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout › should open checkout modal",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "POS Checkout › should show order total in checkout",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-checkout.spec.ts",
+			"title": "uses the legacy webview for built-in POS gateways even when supports_checkout=true",
+			"group": "G7"
+		}
+	]
+}
