@@ -104,7 +104,7 @@ for (const [device, viewport] of Object.entries({
 						});
 					}
 					await state('general', () => openSection(page, 'general'));
-					const nameInput = page.getByTestId('screen-settings-general').locator('input').first();
+					const nameInput = page.getByTestId('settings-general-name');
 					const originalName = await nameInput.inputValue();
 					await state(
 						'general-saved',

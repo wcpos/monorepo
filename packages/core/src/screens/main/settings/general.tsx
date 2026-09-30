@@ -224,7 +224,7 @@ function GeneralSettingsForm({
 						name="name"
 						render={({ field }) => (
 							<SettingsRow name="name" label={t('settings.store_name')}>
-								<FormInput {...field} />
+								<FormInput testID="settings-general-name" {...field} />
 							</SettingsRow>
 						)}
 					/>
