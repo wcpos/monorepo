@@ -25,6 +25,24 @@ function readWorkflow(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'workflows', filename), 'utf8'));
 }
 
+function evaluateGuard(expression, { event_name, ref_name, quarantine_only, target }) {
+	const values = {
+		'github.event_name': event_name,
+		'github.ref_name': ref_name,
+		'inputs.quarantine_only': quarantine_only,
+		'inputs.target': target,
+	};
+	const rewritten = expression
+		.replace(/github\.event_name|github\.ref_name|inputs\.quarantine_only|inputs\.target/g, (reference) =>
+			JSON.stringify(values[reference])
+		)
+		.replace(/==|!=/g, (operator) => (operator === '==' ? '===' : '!=='));
+	const withoutStrings = rewritten.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '');
+	const identifiers = withoutStrings.match(/[A-Za-z_$][\w$]*/g) ?? [];
+	assert.deepEqual(identifiers.filter((identifier) => !['true', 'false', 'null'].includes(identifier)), []);
+	return new Function(`return (${rewritten});`)();
+}
+
 function readAction(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
 }
@@ -1867,13 +1885,16 @@ test('a quarantine-only dispatch refuses off next or not preview', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const refuse = workflow.jobs.changes.steps[0];
 	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off next or not preview');
-	for (const condition of [
-		'workflow_dispatch',
-		'inputs.quarantine_only',
-		"github.ref_name != 'next'",
-		"inputs.target != 'preview'",
+	for (const [caseName, values, expected] of [
+		['wrong target', { event_name: 'workflow_dispatch', ref_name: 'next', quarantine_only: true, target: 'production' }, true],
+		['wrong ref', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: true, target: 'preview' }, true],
+		['both wrong', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: true, target: 'production' }, true],
+		['allowed', { event_name: 'workflow_dispatch', ref_name: 'next', quarantine_only: true, target: 'preview' }, false],
+		['not quarantine', { event_name: 'workflow_dispatch', ref_name: 'main', quarantine_only: false, target: 'production' }, false],
+		['schedule', { event_name: 'schedule', ref_name: 'main', quarantine_only: null, target: null }, false],
+		['push', { event_name: 'push', ref_name: 'main', quarantine_only: null, target: null }, false],
 	]) {
-		assert.ok(refuse.if.includes(condition), condition);
+		assert.equal(evaluateGuard(refuse.if, values), expected, caseName);
 	}
 	assert.ok(refuse.run.includes('exit 1'));
 	assert.ok([workflow.jobs.deploy.needs].flat().includes('changes'));
