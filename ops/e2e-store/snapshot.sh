@@ -5,6 +5,7 @@
 
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+take_store_lock
 
 snapshot="$E2E_STORE_HOME/snapshot"
 tmp="$snapshot/.new"

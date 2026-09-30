@@ -56,6 +56,32 @@ log() {
 	printf '[e2e-store] %s\n' "$*" >&2
 }
 
+# One store-changing run at a time: seed.sh, reset.sh and snapshot.sh take this
+# mkdir lock (macOS has no flock), so a nightly reset cannot restore under a
+# seed's WP-CLI runs, nor a snapshot catch a half-seeded store. A holder that
+# died without its EXIT trap is detected by pid. Waits up to 30 minutes.
+E2E_STORE_LOCK="$E2E_STORE_HOME/.store.lock"
+take_store_lock() {
+	local i pid
+	for i in $(seq 1 360); do
+		if mkdir "$E2E_STORE_LOCK" 2>/dev/null; then
+			echo "$$" >"$E2E_STORE_LOCK/pid"
+			trap 'rm -rf "$E2E_STORE_LOCK"' EXIT
+			return 0
+		fi
+		pid="$(cat "$E2E_STORE_LOCK/pid" 2>/dev/null || true)"
+		if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+			log "lock: removing stale $E2E_STORE_LOCK (pid $pid is gone)"
+			rm -rf "$E2E_STORE_LOCK"
+			continue
+		fi
+		[ "$i" = 1 ] && log "lock: waiting for pid ${pid:-?} to release $E2E_STORE_LOCK"
+		sleep 5
+	done
+	log "lock: $E2E_STORE_LOCK still held after 30 minutes; giving up"
+	exit 1
+}
+
 colima_running() {
 	colima status --profile "$E2E_COLIMA_PROFILE" >/dev/null 2>&1
 }

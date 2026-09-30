@@ -6,6 +6,7 @@
 
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+take_store_lock
 
 snapshot="$E2E_STORE_HOME/snapshot"
 if [ ! -s "$snapshot/db.sql.gz" ] || [ ! -s "$snapshot/uploads.tar.gz" ]; then
@@ -29,5 +30,9 @@ rm -rf "$restore"
 
 # Object and opcache state from before the restore must not leak into it.
 compose restart wordpress >/dev/null
+# A snapshot taken before the test-only Pro licence flag existed lacks it.
+if [ -d "$E2E_STORE_HOME/plugins/woocommerce-pos-pro" ]; then
+	wp eval-file /e2e-ops/seed/pro-licence.php
+fi
 wp cache flush >/dev/null
 log "reset: done"
