@@ -31,7 +31,7 @@ import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
-import { ReportsProvider, ReportsScopeProvider, useReportsPeriod } from './context';
+import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
 import { HeroShell } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
@@ -97,6 +97,21 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		[state, comparisonFrom, comparisonTo]
 	);
 	const comparisonBinding = useCollectionBinding('orders', comparisonState);
+	const {
+		search,
+		limit,
+		filters: { dateRange },
+	} = state;
+	const refundsState = React.useMemo<QueryStateOf<'refunds'>>(
+		() => ({
+			search,
+			limit,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			filters: { dateRange },
+		}),
+		[search, limit, dateRange]
+	);
+	const refundsBinding = useCollectionBinding('refunds', refundsState);
 	const storeId = Number.isFinite(Number(state.filters.store))
 		? Number(state.filters.store)
 		: undefined;
@@ -169,8 +184,21 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 						</View>
 					}
 				>
-					<ReportsProvider binding={binding} comparisonBinding={comparisonBinding}>
-						<Reports title={title} />
+					<ReportsProvider
+						binding={binding}
+						comparisonBinding={comparisonBinding}
+						refundsBinding={refundsBinding}
+					>
+						<ErrorBoundary
+							FallbackComponent={() => <Reports title={title} />}
+							resetKeys={[refundsBinding, binding]}
+						>
+							<React.Suspense fallback={<Reports title={title} />}>
+								<ReportsRefunds>
+									<Reports title={title} />
+								</ReportsRefunds>
+							</React.Suspense>
+						</ErrorBoundary>
 					</ReportsProvider>
 				</Suspense>
 			</View>

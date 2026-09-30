@@ -3,7 +3,7 @@ import round from 'lodash/round';
 import { readLedger } from '@wcpos/order-math';
 
 import type { OrderLine } from '../margin';
-import type { ReportOrder, ReportsScope } from '../context';
+import type { RefundRow, ReportOrder, ReportsScope } from '../context';
 import type { calculateTotals } from '../report/utils';
 
 type Totals = ReturnType<typeof calculateTotals>;
@@ -46,26 +46,39 @@ export function statusCounts(orders: ReportOrder[], statusMode: ReportsScope['st
 		},
 	};
 }
-export function topProducts(orders: ReportOrder[], totals: Totals, num_decimals = 2) {
+export function topProducts(
+	orders: ReportOrder[],
+	totals: Totals,
+	num_decimals = 2,
+	refunds: RefundRow[] = [],
+	localProducts: LocalProduct[] = []
+) {
 	const products = new Map<
 		number | string,
 		{ key: number | string; name: string; quantity: number; amount: number; lines?: OrderLine[] }
 	>();
-	for (const order of orders)
-		for (const line of order.line_items ?? []) {
-			const key = line.variation_id || line.product_id || line.name || '';
-			const row = products.get(key) ?? {
-				key,
-				name: line.name || '',
-				quantity: 0,
-				amount: 0,
-				lines: [],
-			};
-			(row.lines ??= []).push(line);
-			row.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
-			row.amount += Number(line.total || 0) + Number(line.total_tax || 0);
-			products.set(key, row);
-		}
+	const localIds = new Set(localProducts.map((product) => product.id));
+	const refundLines = refunds.flatMap((refund) =>
+		(refund.line_items ?? []).map((line) =>
+			localIds.has(line.product_id ?? undefined)
+				? line
+				: { ...line, product_id: 0, variation_id: 0, name: '' }
+		)
+	);
+	for (const line of [...orders.flatMap((order) => order.line_items ?? []), ...refundLines]) {
+		const key = line.variation_id || line.product_id || line.name || '';
+		const row = products.get(key) ?? {
+			key,
+			name: line.name || '',
+			quantity: 0,
+			amount: 0,
+			lines: [],
+		};
+		(row.lines ??= []).push(line);
+		row.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
+		row.amount += Number(line.total || 0) + Number(line.total_tax || 0);
+		products.set(key, row);
+	}
 	return [...products.values()]
 		.map((row) => ({
 			...row,
@@ -114,12 +127,21 @@ export function taxesByRate(orders: ReportOrder[], totals: Totals, num_decimals 
 		gross: totals.total,
 	};
 }
-export function refundsSummary(orders: ReportOrder[], totals: Totals, num_decimals = 2) {
-	const kept = round(totals.total - totals.refundTotal, num_decimals);
+export function refundsSummary(
+	refunds: RefundRow[],
+	totals: Totals,
+	num_decimals = 2,
+	orderCount = 0
+) {
+	const refunded = round(
+		refunds.reduce((sum, refund) => sum + Math.abs(Number(refund.amount ?? refund.total ?? 0)), 0),
+		num_decimals
+	);
+	const kept = round(totals.total - refunded, num_decimals);
 	return {
-		refunded: totals.refundTotal,
-		ordersWithRefunds: orders.filter((order) => order.refunds?.length).length,
-		orders: orders.length,
+		refunded,
+		ordersWithRefunds: new Set(refunds.map((refund) => refund.parent_id)).size,
+		orders: orderCount,
 		kept,
 		keptShare: totals.total ? kept / totals.total : null,
 	};
@@ -226,7 +248,8 @@ export function categories(
 	totals: Totals,
 	num_decimals = 2,
 	group: (product: LocalProduct) => Group | undefined = (product) => product.categories?.[0],
-	emptyKey = 'uncategorised'
+	emptyKey = 'uncategorised',
+	refunds: RefundRow[] = []
 ) {
 	const directory = new Map(products.map((product) => [product.id, product]));
 	const parts = new Map<
@@ -235,7 +258,7 @@ export function categories(
 	>();
 	let unknownLines = 0,
 		totalLines = 0;
-	for (const order of orders)
+	for (const order of [...orders, ...refunds])
 		for (const line of order.line_items ?? []) {
 			const product = directory.get(line.product_id ?? undefined),
 				category = product ? group(product) : undefined;

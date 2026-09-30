@@ -6,7 +6,7 @@ import round from 'lodash/round';
 import { categories } from './cards/aggregate';
 
 import type { LocalProduct } from './cards/aggregate';
-import type { ReportOrder } from './context';
+import type { RefundRow, ReportOrder } from './context';
 
 export type OrderLine = Omit<
 	NonNullable<ReportOrder['line_items']>[number],
@@ -29,16 +29,16 @@ export function marginOf(lines: OrderLine[], num_decimals = 2) {
 		const value = lineCost(line),
 			quantity = Number.isFinite(line.quantity) ? line.quantity! : 0;
 		net += Number(line.total || 0);
-		items += quantity;
+		items += Math.abs(quantity);
 		if (value === null) {
 			missing++;
-			missingItems += quantity;
+			missingItems += Math.abs(quantity);
 		} else {
 			cost += value;
 			costedNet += Number(line.total || 0);
 		}
 	}
-	// Partial rows report profit only on sales whose cost is known, never assume free stock.
+	// Partial rows report profit only on lines whose cost is known, never assume free stock.
 	const profit = round(costedNet - cost, num_decimals);
 	return {
 		net: round(net, num_decimals),
@@ -80,7 +80,8 @@ export function brands(
 	orders: ReportOrder[],
 	products: LocalProduct[],
 	totals: Parameters<typeof categories>[2],
-	num_decimals = 2
+	num_decimals = 2,
+	refunds: RefundRow[] = []
 ) {
 	return categories(
 		orders,
@@ -88,6 +89,7 @@ export function brands(
 		totals,
 		num_decimals,
 		(product) => product.brands?.[0],
-		'nobrand'
+		'nobrand',
+		refunds
 	);
 }

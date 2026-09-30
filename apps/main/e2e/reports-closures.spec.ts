@@ -181,6 +181,22 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 					const url = new URL(request.url());
 					if (url.origin !== new URL(getStoreUrl(testInfo)).origin) return route.fallback();
 					const path = wcposRestRoute(request.url());
+					if (
+						request.method() === 'GET' &&
+						path === '/wcpos/v2/refunds' &&
+						url.searchParams.has('after')
+					) {
+						return route.fulfill({
+							status: 200,
+							headers: {
+								'access-control-allow-origin': '*',
+								'x-wp-total': '0',
+								'x-wp-totalpages': '0',
+								'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
+							},
+							json: [],
+						});
+					}
 					// A local midnight sale in each requested range makes the Sales comparison
 					// deterministic, including on an empty store. No order writes reach the server.
 					if (
@@ -473,6 +489,8 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
 	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
+	// The refund amount is zero regardless of store currency or locale.
+	await expect(page.getByTestId('card-refunds-refunded')).toHaveText(/^[^1-9]*0[^1-9]*$/);
 	await expect(page.getByTestId('card-payments')).toBeVisible();
 	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
 	// No COGS on the stub order; its custom line joins no catalogue product.

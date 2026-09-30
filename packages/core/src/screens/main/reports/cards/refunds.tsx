@@ -12,15 +12,16 @@ import { Legend, ProportionalBar, StatGrid } from './primitives';
 export function RefundsCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData();
+		{ selectedOrders, totals, periodRefunds } = useReportsData();
 	const { storeId } = useReportsPeriod(),
-		{ store, money, percent } = useReportFormats(storeId);
+		{ store, money, percent, quantity } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
 	const summary = React.useMemo(
-		() => refundsSummary(selectedOrders, totals, decimals),
-		[selectedOrders, totals, decimals]
+		() => refundsSummary(periodRefunds ?? [], totals, decimals, selectedOrders.length),
+		[selectedOrders.length, totals, decimals, periodRefunds]
 	);
-	if (!store) return <CardSkeleton testID="card-refunds" name={t('reports.card_refunds')} />;
+	if (!store || !periodRefunds)
+		return <CardSkeleton testID="card-refunds" name={t('reports.card_refunds')} />;
 	return (
 		<ReportCard
 			onOpen={() => setDetail('refunds')}
@@ -37,7 +38,10 @@ export function RefundsCard() {
 					},
 					{
 						label: t('common.orders'),
-						value: t('reports.n_of_m', { n: summary.ordersWithRefunds, m: summary.orders }),
+						value: t('reports.n_of_m', {
+							n: quantity(summary.ordersWithRefunds),
+							m: quantity(summary.orders),
+						}),
 						testID: 'card-refunds-orders',
 					},
 					{
