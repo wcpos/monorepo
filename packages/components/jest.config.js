@@ -5,6 +5,16 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'jsdom',
 	transform: {
+		// The rn-primitives builds ship JSX; a suite that needs the browser behaviour (the
+		// popover's outside press, monorepo#2313) loads the web build, as @wcpos/core does.
+		'/node_modules/@rn-primitives/.+\\.js$': [
+			'babel-jest',
+			{
+				babelrc: false,
+				configFile: false,
+				plugins: ['@babel/plugin-transform-react-jsx', '@babel/plugin-transform-modules-commonjs'],
+			},
+		],
 		'^.+\\.(ts|tsx)$': [
 			'ts-jest',
 			{
@@ -16,6 +26,7 @@ module.exports = {
 			},
 		],
 	},
+	transformIgnorePatterns: ['node_modules/(?!@rn-primitives/)'],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,

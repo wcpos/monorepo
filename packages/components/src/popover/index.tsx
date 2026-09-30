@@ -30,13 +30,15 @@ function PopoverContent({
 	const phone = useIsPhone();
 	const presentation = phone ? 'bottom' : 'anchored';
 	const { open, onOpenChange } = useRootContext();
+	const close = () => onOpenChange(false);
 	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
 	const shell = (
 		<OverlayShell
 			presentation={presentation}
 			open={open}
 			Scrim={PopoverPrimitive.Overlay}
-			onDismiss={phone ? () => onOpenChange(false) : undefined}
+			onDismiss={phone ? close : undefined}
+			onOutsidePress={phone ? undefined : close}
 			testID={props.testID}
 		>
 			<TextClassContext.Provider value="text-foreground">
