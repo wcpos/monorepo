@@ -92,6 +92,8 @@ const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 const COLD_START_ENABLED = /^(1|true)$/i.test(process.env.E2E_COLD_START || '');
 const COLD_SPEC = /\.cold\.spec\.ts$/;
 const LIVE_SPEC = /\.live\.spec\.ts$/;
+// The e2e job's timeout-minutes is 60; stopping Playwright at 50 leaves setup and teardown room so it can write the blob, html and json reports before GitHub kills the job (#2253: every shard was cut off at 60 min and uploaded nothing).
+const CI_GLOBAL_TIMEOUT_MS = 50 * 60 * 1000;
 
 /**
  * Playwright configuration for WCPOS E2E tests
@@ -131,6 +133,7 @@ export default defineConfig<WcposTestOptions>({
 			]
 		: 'html',
 	timeout: 180_000,
+	globalTimeout: process.env.CI ? CI_GLOBAL_TIMEOUT_MS : undefined,
 
 	use: {
 		baseURL: process.env.BASE_URL || 'http://localhost:8081',
