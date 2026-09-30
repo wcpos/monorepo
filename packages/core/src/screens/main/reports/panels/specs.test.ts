@@ -1,5 +1,13 @@
 import { createTestT } from '../../../../../jest/translate';
-import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
+import {
+	cashiers,
+	categories,
+	channels,
+	registers,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from '../cards/aggregate';
 import { calculateTotals } from '../report/utils';
 import { brands } from '../margin';
 import { panelSpec } from './specs';
@@ -14,6 +22,9 @@ function inputs(orders: ReportOrder[]) {
 		products: topProducts(orders, totals),
 		categories: categories(orders, [], totals),
 		cashiers: cashiers(totals),
+		channels: channels(orders, totals),
+		registers: registers(orders, totals),
+		registerNames: {},
 		taxes: taxesByRate(orders, totals),
 		orders,
 		totals,
@@ -235,4 +246,53 @@ it('rounded totals sum their displayed rows at the store precision', () => {
 	] as ReportOrder[]);
 	const spec = panelSpec('products', data);
 	expect(spec.totalRaw.slice(3)).toEqual([0, 2, 100]);
+});
+
+// Footers must describe their rows, not unrelated period totals; names must never expose ids.
+it('channels spec: a row per channel, total sums its rows', () => {
+	const data = inputs([
+		{ total: '6', created_via: 'woocommerce-pos' },
+		{ total: '4', created_via: 'checkout' },
+	] as ReportOrder[]);
+	data.totals.total = 999;
+	const spec = panelSpec('channels', data);
+	expect(spec.keys).toEqual(['channel', 'orders', 'amount', 'share']);
+	expect(spec.head).toEqual(['Channel', 'Orders', 'Amount', 'Share']);
+	expect(spec.rows.map((row) => row.cells)).toEqual([
+		['In store', '1', '£6.00', '60.0%'],
+		['Online', '1', '£4.00', '40.0%'],
+	]);
+	expect(spec.total).toEqual(['Total', '2', '£10.00', '100.0%']);
+	expect(spec.totalRaw).toEqual(['Total', 2, 10, 100]);
+	expect(spec.types).toEqual(['text', 'number', 'money', 'number']);
+	expect(panelSpec('channels', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+});
+it('registers spec: names through registerNames, unknown fallback', () => {
+	const data = inputs([]);
+	data.registers = [
+		{ key: 'front', orders: 2, amount: 6, share: 0.6 },
+		{ key: 'unresolved-id', orders: 1, amount: 4, share: 0.4 },
+	];
+	const spec = panelSpec('registers', { ...data, registerNames: { front: 'Front' } });
+	expect(spec.keys).toEqual(['register', 'orders', 'avg_order', 'amount']);
+	expect(spec.head).toEqual(['Register', 'Orders', 'Avg order', 'Amount']);
+	expect(spec.rows.map((row) => row.cells)).toEqual([
+		['Front', '2', '£3.00', '£6.00'],
+		['Unknown', '1', '£4.00', '£4.00'],
+	]);
+	expect(spec.total).toEqual(['Total', '3', '£3.33', '£10.00']);
+	expect(spec.totalRaw).toEqual(['Total', 3, 10 / 3, 10]);
+	expect(spec.types).toEqual(['text', 'number', 'money', 'money']);
+	expect(panelSpec('registers', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+});
+it('registers spec: the online and no-register remainders are named rows, never Unknown', () => {
+	const data = inputs([]);
+	data.registers = [
+		{ key: 'front', orders: 1, amount: 6, share: 0.6 },
+		{ key: 'online', orders: 1, amount: 3, share: 0.3 },
+		{ key: 'unregistered', orders: 1, amount: 1, share: 0.1 },
+	];
+	const spec = panelSpec('registers', { ...data, registerNames: { front: 'Front' } });
+	expect(spec.rows.map((row) => row.cells[0])).toEqual(['Front', 'Online', 'No register']);
+	expect(spec.total).toEqual(['Total', '3', '£3.33', '£10.00']);
 });

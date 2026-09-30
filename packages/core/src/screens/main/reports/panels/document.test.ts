@@ -1,5 +1,13 @@
 import { createTestT } from '../../../../../jest/translate';
-import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
+import {
+	cashiers,
+	categories,
+	channels,
+	registers,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from '../cards/aggregate';
 import { calculateTotals } from '../report/utils';
 import { buildReportDocument } from './document';
 import { panelSpec } from './specs';
@@ -24,6 +32,9 @@ const inputs = {
 	products: topProducts(orders, totals),
 	categories: categories(orders, [], totals),
 	cashiers: cashiers(totals),
+	channels: channels(orders, totals),
+	registers: registers(orders, totals),
+	registerNames: {},
 	taxes: taxesByRate(orders, totals),
 	cashierNames: {},
 	formats: {
@@ -102,6 +113,8 @@ it("every panel's totals lists the column keys in order", () => {
 		'products',
 		'categories',
 		'cashiers',
+		'channels',
+		'registers',
 		'taxes',
 		'refunds',
 	] as const) {

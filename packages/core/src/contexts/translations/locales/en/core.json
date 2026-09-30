@@ -2476,5 +2476,17 @@
 	"coupons.nothing_matches_filters": "No coupons match these filters",
 	"coupons.clear_filters": "Clear filters",
 	"coupons.clear_all": "Clear all",
-	"coupons.inactive": "Inactive"
+	"coupons.inactive": "Inactive",
+	"reports.channels": "Channels",
+	"reports.registers": "Registers",
+	"reports.card_where_sold": "Where sold",
+	"reports.n_channels_one": "{n} channel",
+	"reports.n_channels_other": "{n} channels",
+	"reports.n_registers_one": "{n} register",
+	"reports.n_registers_other": "{n} registers",
+	"reports.in_store": "In store",
+	"reports.panel_channels": "Channels",
+	"reports.panel_registers": "Registers",
+	"common.channel": "Channel",
+	"reports.no_register_row": "No register"
 }

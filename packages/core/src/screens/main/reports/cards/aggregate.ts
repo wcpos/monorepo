@@ -1,6 +1,7 @@
 import round from 'lodash/round';
 
 import { readLedger } from '@wcpos/order-math';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import type { OrderLine } from '../margin';
 import type { RefundRow, ReportOrder, ReportsScope } from '../context';
@@ -213,14 +214,30 @@ export function channels(orders: ReportOrder[], totals: Totals) {
 		.filter((row) => row.orders > 0)
 		.sort((a, b) => b.amount - a.amount);
 }
-export function registers(totals: Totals) {
-	return totals.registerArray
-		.map((row) => ({
+/**
+ * The period's sales by register, plus the orders no register stamped so the parts always sum
+ * to the period total: an online order (the store scope includes them under All registers,
+ * roadmap#332 ruling A) has no register, and a POS order from before registers has none either.
+ */
+export function registers(orders: ReportOrder[], totals: Totals) {
+	const rest = { online: { amount: 0, orders: 0 }, unregistered: { amount: 0, orders: 0 } };
+	for (const order of orders) {
+		if (wooMetaCarrier.readIdentity(order.meta_data).registerId) continue;
+		const part = order.created_via === 'woocommerce-pos' ? rest.unregistered : rest.online;
+		part.amount += Number(order.total || 0);
+		part.orders += 1;
+	}
+	return [
+		...totals.registerArray.map((row) => ({
 			key: row.registerId,
 			amount: row.totalAmount,
 			orders: row.totalOrders,
-			share: totals.total ? row.totalAmount / totals.total : 0,
-		}))
+		})),
+		...Object.entries(rest)
+			.filter(([, part]) => part.orders > 0)
+			.map(([key, part]) => ({ key, ...part })),
+	]
+		.map((row) => ({ ...row, share: totals.total ? row.amount / totals.total : 0 }))
 		.sort((a, b) => b.amount - a.amount);
 }
 export function cashiers(totals: Totals) {

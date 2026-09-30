@@ -6,7 +6,15 @@ import { refundsSummary } from '../cards/aggregate';
 import { chainLabel, cogsEnabled, lineCost, marginOf } from '../margin';
 
 import type { brands, CategoryTree } from '../margin';
-import type { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
+import type {
+	cashiers,
+	categories,
+	channels,
+	registers,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from '../cards/aggregate';
 import type { DetailId, RefundRow, ReportOrder } from '../context';
 import type { calculateTotals } from '../report/utils';
 import type { useReportFormats } from '../use-report-formats';
@@ -27,6 +35,9 @@ type Inputs = {
 	categoryTree?: CategoryTree;
 	cogs?: boolean;
 	num_decimals?: number;
+	channels: ReturnType<typeof channels>;
+	registers: ReturnType<typeof registers>;
+	registerNames: Record<string, string>;
 	payments: ReturnType<typeof tenders>;
 	products: ReturnType<typeof topProducts>;
 	categories: ReturnType<typeof categories>;
@@ -60,6 +71,8 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 	const count = number(orders.length),
 		amount = money(totals.total);
 	const keys = {
+		channels: ['channel', 'orders', 'amount', 'share'],
+		registers: ['register', 'orders', 'avg_order', 'amount'],
 		payments: ['method', 'orders', 'amount', 'share'],
 		products: ['product', 'qty', 'amount'],
 		categories: ['category', 'qty', 'amount', 'share'],
@@ -272,6 +285,42 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 					grouping.reduce((sum, row) => sum + row.amount, 0),
 					'',
 				]
+			);
+		}
+		case 'channels':
+		case 'registers': {
+			const byChannel = id === 'channels';
+			const rows = byChannel ? inputs.channels : inputs.registers;
+			const n = rows.reduce((sum, row) => sum + row.orders, 0);
+			const sum = rows.reduce((sum, row) => sum + row.amount, 0);
+			const totalShare = rows.reduce((sum, row) => sum + row.share, 0);
+			return spec(
+				byChannel
+					? ['common.channel', 'common.orders', 'common.amount', 'reports.col_share']
+					: ['common.register', 'common.orders', 'reports.col_avg_order', 'common.amount'],
+				rows.map((row) => {
+					const name = byChannel
+						? t(row.key === 'store' ? 'reports.in_store' : 'common.online')
+						: row.key === 'online'
+							? t('common.online')
+							: row.key === 'unregistered'
+								? t('reports.no_register_row')
+								: inputs.registerNames[row.key] || unknown;
+					const average = row.orders ? row.amount / row.orders : 0;
+					return {
+						key: row.key,
+						raw: byChannel
+							? [name, row.orders, row.amount, row.share * 100]
+							: [name, row.orders, average, row.amount],
+						cells: byChannel
+							? [name, number(row.orders), money(row.amount), share(row.share)]
+							: [name, number(row.orders), money(average), money(row.amount)],
+					};
+				}),
+				byChannel
+					? [total, number(n), money(sum), share(totalShare)]
+					: [total, number(n), money(n ? sum / n : 0), money(sum)],
+				byChannel ? [total, n, sum, totalShare * 100] : [total, n, n ? sum / n : 0, sum]
 			);
 		}
 		case 'cashiers':

@@ -73,7 +73,16 @@ export interface ReportsData {
 }
 
 export type DetailId =
-	'orders' | 'payments' | 'products' | 'categories' | 'brands' | 'cashiers' | 'taxes' | 'refunds';
+	| 'orders'
+	| 'payments'
+	| 'products'
+	| 'categories'
+	| 'brands'
+	| 'cashiers'
+	| 'taxes'
+	| 'refunds'
+	| 'channels'
+	| 'registers';
 
 export interface ReportsScope {
 	detail: DetailId | null;

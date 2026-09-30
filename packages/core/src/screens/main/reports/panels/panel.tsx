@@ -18,8 +18,19 @@ import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use
 import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useQueryState } from '../../../../query';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useRegisterNames } from '../../../../services/register/use-register-names';
-import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
+import {
+	useRegisterNames,
+	useRegisterNamesReady,
+} from '../../../../services/register/use-register-names';
+import {
+	cashiers,
+	categories,
+	channels,
+	registers,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from '../cards/aggregate';
 import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
@@ -71,6 +82,7 @@ export function DetailPanel() {
 	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
 	const registerId = useQueryState<'orders'>().filters.register;
 	const names = useRegisterNames(storeId),
+		registerNamesReady = useRegisterNamesReady(storeId),
 		binding = useRegisterBinding();
 	const register = registerId
 		? names[registerId] ||
@@ -105,7 +117,8 @@ export function DetailPanel() {
 		(detail !== 'refunds' || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		(detail !== 'categories' || tree) &&
-		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory);
+		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
+		(detail !== 'registers' || registerNamesReady);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
 		cogs:
@@ -129,6 +142,9 @@ export function DetailPanel() {
 			periodRefunds
 		),
 		cashiers: cashiers(totals),
+		channels: channels(selectedOrders, totals),
+		registers: registers(selectedOrders, totals),
+		registerNames: names,
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
 		unselectedRowIds,
