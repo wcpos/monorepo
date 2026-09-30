@@ -1445,7 +1445,7 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
-test('both lanes run four E2E shards', () => {
+test('both lanes run six E2E shards', () => {
 	// The two-shard main cap (2026-08-18) guarded dev-pro write capacity, but
 	// the feared load was the per-test catalogue re-sync removed in #1288.
 	// Shard count divides the same test list — it can never change coverage.
@@ -1453,8 +1453,8 @@ test('both lanes run four E2E shards', () => {
 
 	// The DEFAULT arm — what an ordinary PR runs. (A spec-only PR deliberately
 	// narrows to one shard; that arm is pinned in the scope-narrowing test.)
-	assert.match(matrix.shardIndex, /\|\| '\[1, 2, 3, 4\]'/);
-	assert.match(matrix.shardTotal, /\|\| '\[4\]'/);
+	assert.match(matrix.shardIndex, /\|\| '\[1, 2, 3, 4, 5, 6\]'/);
+	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
 });
 
 test('cold-start verifies the deployed main artifact and participates in the gate', () => {

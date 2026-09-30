@@ -244,18 +244,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Four shards on BOTH lanes. The two-shard main cap (2026-08-18) guarded
+        # Six shards on BOTH lanes. The two-shard main cap (2026-08-18) guarded
         # dev-pro's write capacity, but the load it feared was the per-test
         # catalogue re-sync removed in #1288 — post-fix, four shards' store
-        # traffic is below the old two-shard baseline. Cross-run safety stays
-        # the specs' job (run-private probes); cashier slots 1-16 exist on
-        # every dev store.
+        # traffic is below the old two-shard baseline. Four became six (#2291):
+        # the #2253 pair hit Playwright's 50-minute cap on shards 2 and 4 with
+        # about 120 specs unrun per side. Six still fit each 8-slot cashier
+        # band (PR 1-8, other runs 9-16). Cross-run safety stays the specs' job
+        # (run-private probes); cashier slots 1-16 exist on every dev store.
         # A narrowed (spec-only) run uses ONE shard on purpose. Splitting two
         # spec files across four shards would leave shards with nothing to run,
         # and a shard that runs zero tests still exits 0 — a green that means
         # nothing. One shard cannot produce that.
-        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4]') }}
-        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[4]') }}
+        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
+        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[6]') }}
     concurrency:
       group: ${{ github.ref == 'refs/heads/main' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
       cancel-in-progress: true
