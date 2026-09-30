@@ -27,6 +27,16 @@ function isTextValue(value: unknown): boolean {
 }
 
 /**
+ * Primitives compare as strings so a formatting-only echo (2 vs "2") is not a change; anything
+ * else (the ui-settings column arrays) compares structurally so a real edit still writes.
+ */
+function isSameValue(a: unknown, b: unknown): boolean {
+	const primitive = (value: unknown) =>
+		value == null || ['string', 'number', 'boolean'].includes(typeof value);
+	return primitive(a) && primitive(b) ? String(a ?? '') === String(b ?? '') : isEqual(a, b);
+}
+
+/**
  * Hook to handle form field changes and persist them.
  *
  * Best practice: Use `values` prop in useForm instead of `defaultValues` + useEffect reset:
@@ -59,16 +69,6 @@ function isTextValue(value: unknown): boolean {
  * receives it — while an ordinary re-render, whose new callback targets the same store,
  * is unaffected.
  */
-/**
- * Primitives compare as strings so a formatting-only echo (2 vs "2") is not a change; anything
- * else (the ui-settings column arrays) compares structurally so a real edit still writes.
- */
-function isSameValue(a: unknown, b: unknown): boolean {
-	const primitive = (value: unknown) =>
-		value == null || ['string', 'number', 'boolean'].includes(typeof value);
-	return primitive(a) && primitive(b) ? String(a ?? '') === String(b ?? '') : isEqual(a, b);
-}
-
 export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,

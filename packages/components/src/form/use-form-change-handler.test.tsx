@@ -139,25 +139,30 @@ it('ignores a named event whose value equals the last one seen for that field', 
 	}
 	render(<Stub />);
 
+	// A nested edit first, made IN PLACE on the object getValues() returned — the way
+	// react-hook-form's setValue mutates _formValues. The seed must be a deep clone, or
+	// lastSeen already holds the new value and the edit is skipped.
+	act(() => {
+		(values.columns as { show: boolean }[])[0].show = false;
+		emit(values, { name: 'columns.0.show' });
+	});
+	expect(onChange).toHaveBeenCalledTimes(1);
+	expect(onChange).toHaveBeenLastCalledWith({ 'columns.0.show': false });
+
 	// The user's edit.
 	values.name = 'Shop two';
 	act(() => emit(values, { name: 'name' }));
-	expect(onChange).toHaveBeenCalledWith({ name: 'Shop two' });
+	expect(onChange).toHaveBeenCalledTimes(2);
+	expect(onChange).toHaveBeenLastCalledWith({ name: 'Shop two' });
 
 	// The store patch lands: a form-level reset, then the echoes — a numeric input's number as a
-	// string, a select's unchanged key — and the name itself again.
+	// string, a select's unchanged key — and the name and the nested field again.
 	act(() => {
 		emit(values, { name: undefined });
 		emit({ ...values, price_num_decimals: '2' }, { name: 'price_num_decimals' });
 		emit(values, { name: 'locale' });
 		emit(values, { name: 'name' });
+		emit(values, { name: 'columns.0.show' });
 	});
-	expect(onChange).toHaveBeenCalledTimes(1);
-
-	// A nested field that really changes still writes; the same array re-sent does not.
-	act(() => emit({ ...values, columns: [{ show: false }] }, { name: 'columns.0.show' }));
-	expect(onChange).toHaveBeenCalledTimes(2);
-	expect(onChange).toHaveBeenLastCalledWith({ 'columns.0.show': false });
-	act(() => emit({ ...values, columns: [{ show: false }] }, { name: 'columns.0.show' }));
 	expect(onChange).toHaveBeenCalledTimes(2);
 });
