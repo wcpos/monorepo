@@ -32,6 +32,7 @@ import {
 	TEARDOWN_CREDENTIAL_TIMEOUT_MS,
 } from './probe-credential';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import { quarantineGate } from './quarantine';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -1184,6 +1185,7 @@ export function listStoreIds(variant: StoreVariant = 'pro'): string[] {
 }
 
 export const authenticatedTest = base.extend<{
+	quarantineGate: void;
 	posPage: Page;
 	storeAuthorization: () => StoreAuthorization | null;
 	/**
@@ -1197,6 +1199,7 @@ export const authenticatedTest = base.extend<{
 	 */
 	targetStoreId: string | null;
 }>({
+	quarantineGate,
 	targetStoreId: [null, { option: true }],
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
