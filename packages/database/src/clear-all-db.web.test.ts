@@ -1,3 +1,10 @@
+const mockCloseDatabases = jest.fn(async () => undefined);
+const mockTerminateWorker = jest.fn();
+jest.mock('./plugins/rx-database-registry', () => ({
+	closeRegisteredDatabases: mockCloseDatabases,
+}));
+jest.mock('./adapters/storage/index.web', () => ({ terminateStorageWorker: mockTerminateWorker }));
+
 const cachedRequests = [
 	{ url: 'https://example.com/image-1.jpg' },
 	{ url: 'https://example.com/image-2.jpg' },
@@ -31,6 +38,41 @@ describe('clearAllDB web', () => {
 			configurable: true,
 			value: { open: mockCacheOpen },
 		});
+	});
+
+	it('closes databases, releases the worker handles, then removes only app roots', async () => {
+		const removeEntry = jest.fn(async () => {
+			expect(mockCloseDatabases).toHaveBeenCalledTimes(1);
+			expect(mockTerminateWorker).toHaveBeenCalledTimes(1);
+		});
+		const { SQLITE_POOL_DIRECTORY } = await import('./adapters/storage/sqlite-pool');
+		Object.defineProperty(navigator, 'storage', {
+			value: {
+				getDirectory: async () => ({
+					async *[Symbol.asyncIterator]() {
+						for (const name of [SQLITE_POOL_DIRECTORY, 'rxdb-wcposusers_v6-sites-0', 'unrelated'])
+							yield [name, {}];
+					},
+					removeEntry,
+				}),
+			},
+		});
+		const { clearAllDB } = await import('./clear-all-db.web');
+		await expect(clearAllDB()).resolves.toMatchObject({ databasesDeleted: 2 });
+		expect(removeEntry.mock.calls).toEqual([
+			[SQLITE_POOL_DIRECTORY, { recursive: true }],
+			['rxdb-wcposusers_v6-sites-0', { recursive: true }],
+		]);
+		expect(mockCloseDatabases.mock.invocationCallOrder[0]).toBeLessThan(
+			mockTerminateWorker.mock.invocationCallOrder[0]
+		);
+	});
+
+	it('does not terminate or delete if closing a database fails', async () => {
+		mockCloseDatabases.mockRejectedValueOnce(new Error('close failed'));
+		const { clearAllDB } = await import('./clear-all-db.web');
+		await expect(clearAllDB()).rejects.toThrow('close failed');
+		expect(mockTerminateWorker).not.toHaveBeenCalled();
 	});
 
 	it('deletes every cached image during local-data reset', async () => {

@@ -22,7 +22,7 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 // Revert: route till reports through the report fallback instead of the shared closure envelope.
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 let mockAutoOpen = false;
 const mockOpenDrawer = jest.fn(async () => undefined);
 const print = jest.fn<Promise<boolean | undefined>, []>(async () => true);
@@ -242,3 +242,5 @@ it.each([
 		})
 	);
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

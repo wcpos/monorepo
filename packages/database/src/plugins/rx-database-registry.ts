@@ -1,5 +1,5 @@
 import type { RxDatabaseBase, RxPlugin } from 'rxdb';
-type RegisteredDatabase = Pick<RxDatabaseBase<unknown, unknown>, 'name' | 'onClosed'>;
+type RegisteredDatabase = Pick<RxDatabaseBase<unknown, unknown>, 'name' | 'onClosed' | 'close'>;
 type MutableOnClosed = { onClosed: (() => void) | undefined };
 const openDatabasesByName = new Map<string, Set<RegisteredDatabase>>();
 export const rxDatabaseRegistryPlugin: RxPlugin = {
@@ -18,7 +18,7 @@ export const rxDatabaseRegistryPlugin: RxPlugin = {
 				databases.add(database);
 
 				const originalOnClosed = database.onClosed;
-				// Deliberate rxdb-17.4.0 internals reach, version-pinned by the registry test.
+				// Deliberate rxdb-17.5.0 internals reach, version-pinned by the registry test.
 				const mutableDatabase = database as unknown as MutableOnClosed;
 				mutableDatabase.onClosed = () => {
 					const registered = openDatabasesByName.get(database.name);
@@ -44,4 +44,17 @@ export function forceFreeDatabaseRegistration(databaseName: string): boolean {
 		freed = true;
 	}
 	return freed;
+}
+
+/** Finish live writes/close before a local-data reset terminates the web worker. */
+export async function closeRegisteredDatabases(): Promise<void> {
+	await Promise.all(
+		[...openDatabasesByName.values()].flatMap((databases) =>
+			[...databases].map((database) => database.close())
+		)
+	);
+}
+
+export function getRegisteredDatabaseNames(): string[] {
+	return [...openDatabasesByName.keys()];
 }

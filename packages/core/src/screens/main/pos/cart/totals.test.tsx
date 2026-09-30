@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Totals } from './totals';
 
@@ -18,6 +18,7 @@ import { Totals } from './totals';
  * `0.00`) when the order has not settled one. A spec must be able to tell "no
  * total yet" from "a total of zero".
  */
+const mockRemoveCoupon = jest.fn();
 let orderPayload: Record<string, unknown> = {};
 let couponLines: {
 	code?: string;
@@ -45,23 +46,27 @@ jest.mock('@wcpos/components/vstack', () => {
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/button', () => {
+jest.mock('@wcpos/components/chip', () => {
 	const React = jest.requireActual('react');
-	const { Text } = jest.requireActual('react-native');
 	// Expose the remove control's accessible name so the label assertions can see it.
-	function ButtonPill({
-		removeAccessibilityLabel,
-		children,
+	function Chip({
+		clearLabel,
+		label,
+		onClear,
 	}: {
-		removeAccessibilityLabel?: string;
-		children?: React.ReactNode;
+		clearLabel?: string;
+		label: string;
+		onClear: () => void;
 	}) {
-		return React.createElement('div', { 'aria-label': removeAccessibilityLabel }, children);
+		return React.createElement(
+			'button',
+			{ 'aria-label': clearLabel, onClick: onClear, 'data-testid': 'coupon-chip' },
+			label
+		);
 	}
-	return { ButtonPill, ButtonText: Text };
+	return { Chip };
 });
 
-jest.mock('./totals/customer-note', () => ({ CustomerNote: () => null }));
 jest.mock('./totals/taxes', () => ({ Taxes: () => null }));
 
 jest.mock('../../../../contexts/translations', () => {
@@ -105,7 +110,7 @@ jest.mock('../hooks/use-cart-lines', () => ({
 	useCartLines: () => ({ coupon_lines: couponLines }),
 }));
 jest.mock('../hooks/use-remove-coupon', () => ({
-	useRemoveCoupon: () => ({ removeCoupon: jest.fn() }),
+	useRemoveCoupon: () => ({ removeCoupon: mockRemoveCoupon }),
 }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { payload: orderPayload } }),
@@ -172,4 +177,13 @@ it.each([
 	expect(screen.getByLabelText(`Remove ${label}`)).toBeTruthy();
 	expect(screen.getByText('SAVE10')).toBeTruthy();
 	expect(screen.queryByText('pos-discount')).toBeNull();
+});
+
+it('has no visible Total row and clears a coupon chip', () => {
+	couponLines = [{ code: 'SAVE10', discount: '1' }];
+	render(<Totals />);
+	expect(screen.queryByText(/^Total:?$/)).toBeNull();
+	expect(screen.getByTestId('cart-subtotal')).toBeTruthy();
+	fireEvent.click(screen.getByLabelText('Remove coupon SAVE10'));
+	expect(mockRemoveCoupon).toHaveBeenCalledWith('SAVE10');
 });

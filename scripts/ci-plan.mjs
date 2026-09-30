@@ -101,6 +101,7 @@ export function classify(file) {
 	if (/^\.github\/workflows\/[^/]+\.yml$/.test(file)) return 'workflow';
 	if (file.startsWith('.github/actions/') || file.startsWith('.github/scripts/'))
 		return 'github-shared';
+	// Includes build-sqlite-worker.mjs and the SQLite worker source/probe: full web coverage.
 	if (file.startsWith('scripts/')) return 'scripts';
 	if (file === 'apps/web') return 'submodule';
 	return 'fallback';

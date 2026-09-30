@@ -268,11 +268,9 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
-	it('runs only while this tab owns the shared write plane', async () => {
-		let isLeader = false;
+	it('runs in the single storage owner', async () => {
 		let customerFetches = 0;
 		const engine = engineWith({
-			writePlaneOwner: () => isLeader,
 			fetcher: async () => {
 				customerFetches += 1;
 				return json([]);
@@ -280,12 +278,6 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		await engine.ready;
 
-		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'not-write-plane-owner',
-		});
-		expect(customerFetches).toBe(0);
-		isLeader = true;
 		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
 			status: 'ran',
 		});

@@ -8,6 +8,9 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 
 import { UserSheet, useSalesToday } from './user-sheet';
 
+jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+
+let mockStoreId = 2;
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
 	{
@@ -37,7 +40,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin }),
 	useStoreSession: () => ({
 		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier' },
-		store: { id: 2 },
+		store: { id: mockStoreId },
 		site: { uuid: 'site', populateResource: () => ({}) },
 		logout: jest.fn(),
 	}),
@@ -53,7 +56,7 @@ jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: ()
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [] }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
@@ -97,25 +100,33 @@ it('switches credentials without retaining the previous cashier authentication o
 });
 afterEach(() => requestStateManager.reset());
 
-it('sums local completed orders for this cashier, store and device-local day', async () => {
-	const { result } = renderHook(() => useSalesToday());
-	await waitFor(() => expect(result.current).toBe(20));
-	const descriptor = mockObserve.mock.calls[0][2] as { selector: { date_created_gmt: unknown } };
-	expect(descriptor).toMatchObject({
-		collection: 'orders',
-		selector: {
-			status: 'completed',
-			$and: [
-				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-				{ meta_data: { $elemMatch: { key: '_pos_store', value: '2' } } },
-			],
-		},
-	});
-	const today = new Date();
-	const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-	const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-	expect(descriptor.selector.date_created_gmt).toEqual({
-		$gte: start.toISOString().slice(0, -5),
-		$lt: end.toISOString().slice(0, -5),
-	});
-});
+it.each([
+	[2, '2'],
+	[0, 'woocommerce-pos'],
+] as const)(
+	'sums local completed orders for store %s and device-local day',
+	async (storeId, posStoreId) => {
+		mockStoreId = storeId;
+		mockObserve.mockClear();
+		const { result } = renderHook(() => useSalesToday());
+		await waitFor(() => expect(result.current).toBe(20));
+		const descriptor = mockObserve.mock.calls[0][2] as { selector: { date_created_gmt: unknown } };
+		expect(descriptor).toMatchObject({
+			collection: 'orders',
+			selector: {
+				status: 'completed',
+				posUserId: '7',
+				posStoreId,
+			},
+		});
+		const today = new Date();
+		const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+		const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+		expect(descriptor.selector.date_created_gmt).toEqual({
+			$gte: start.toISOString().slice(0, -5),
+			$lt: end.toISOString().slice(0, -5),
+		});
+	}
+);
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

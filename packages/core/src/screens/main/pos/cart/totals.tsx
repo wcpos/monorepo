@@ -1,6 +1,6 @@
 import toNumber from 'lodash/toNumber';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { getNetPaymentTotal, refundValue } from '@wcpos/order-math';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -8,7 +8,6 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 
-import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
@@ -85,13 +84,13 @@ export function Totals() {
 	return (
 		<>
 			{hasTotals ? (
-				<VStack className="border-border bg-muted/40 border-t p-2">
+				<VStack className="border-border bg-card border-t p-2">
 					<HStack testID="cart-subtotal">
-						<Text className="grow">{t('common.subtotal')}:</Text>
-						<Text>{format(displaySubtotal)}</Text>
+						<Text className="text-muted-foreground grow">{t('common.subtotal')}</Text>
+						<Text className="tabular-nums">{format(displaySubtotal)}</Text>
 					</HStack>
 					{
-						// Coupon pills
+						// Coupon chips
 						coupon_lines.map((coupon) => {
 							const code = coupon.code;
 							const intent = readQuickDiscountIntent(coupon);
@@ -103,23 +102,19 @@ export function Totals() {
 								inclOrExcl === 'incl' ? couponDiscount + couponDiscountTax : couponDiscount;
 							return (
 								<HStack key={code}>
-									<ButtonPill
-										size="xs"
-										variant="attention"
-										leftIcon="badgePercent"
-										removable
-										onRemove={() => removeCoupon(code)}
-										removeAccessibilityLabel={
+									<Chip
+										icon="badgePercent"
+										label={label}
+										onClear={() => removeCoupon(code)}
+										clearLabel={
 											intent
 												? t('pos_cart.remove_discount_label', { label })
 												: `Remove coupon ${code}`
 										}
 										className="grow-0"
-									>
-										<ButtonText>{label}</ButtonText>
-									</ButtonPill>
+									/>
 									<Text className="grow" />
-									<Text>{format(-1 * displayCouponDiscount)}</Text>
+									<Text className="tabular-nums">{format(-1 * displayCouponDiscount)}</Text>
 								</HStack>
 							);
 						})
@@ -128,8 +123,8 @@ export function Totals() {
 						// Fees
 						hasFee && (
 							<HStack>
-								<Text className="grow">{t('pos_cart.fees')}:</Text>
-								<Text>{format(displayFeeTotal)}</Text>
+								<Text className="text-muted-foreground grow">{t('pos_cart.fees')}</Text>
+								<Text className="tabular-nums">{format(displayFeeTotal)}</Text>
 							</HStack>
 						)
 					}
@@ -137,8 +132,8 @@ export function Totals() {
 						// Shipping
 						hasShipping && (
 							<HStack>
-								<Text className="grow">{t('common.shipping')}:</Text>
-								<Text>{format(displayShippingTotal)}</Text>
+								<Text className="text-muted-foreground grow">{t('common.shipping')}</Text>
+								<Text className="tabular-nums">{format(displayShippingTotal)}</Text>
 							</HStack>
 						)
 					}
@@ -157,15 +152,15 @@ export function Totals() {
 								return (
 									<HStack key={refund.id}>
 										<Text className="text-destructive grow">
-											{t('orders.refund')} #{refund.id}:
+											{t('orders.refund')} #{refund.id}
 										</Text>
-										<Text className="text-destructive">{format(-refundAmount)}</Text>
+										<Text className="text-destructive tabular-nums">{format(-refundAmount)}</Text>
 									</HStack>
 								);
 							})}
 							<HStack className="border-border border-t border-dashed pt-1">
-								<Text className="grow font-bold">{t('orders.net_payment')}:</Text>
-								<Text className="font-bold">{format(netPayment)}</Text>
+								<Text className="grow font-bold">{t('orders.net_payment')}</Text>
+								<Text className="font-bold tabular-nums">{format(netPayment)}</Text>
 							</HStack>
 						</>
 					)}
@@ -190,7 +185,6 @@ export function Totals() {
 			<Text testID="cart-discount-total" className="hidden">
 				{orderDiscountTotal ?? ''}
 			</Text>
-			<CustomerNote />
 		</>
 	);
 }

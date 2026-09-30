@@ -20,7 +20,7 @@ import {
 } from '@wcpos/components/select';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
@@ -48,6 +48,7 @@ const gridFieldsSchema = z.object({
 
 export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
+	variationsStyle: z.enum(['drill', 'inline']).optional(),
 	position: z.enum(['left', 'right']),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
@@ -110,23 +111,41 @@ export function UISettingsForm() {
 						render={({ field: { value, onChange } }) => (
 							<View className="gap-1 px-1">
 								<Text>{getUILabel('viewMode')}</Text>
-								<Select
-									value={{
-										value,
-										label: value === 'grid' ? t('common.grid') : t('common.table'),
-									}}
-									onValueChange={(val) => onChange(val?.value || 'table')}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder={getUILabel('viewMode')} />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectGroup>
-											<SelectItem label={t('common.grid')} value="grid" />
-											<SelectItem label={t('common.table')} value="table" />
-										</SelectGroup>
-									</SelectContent>
-								</Select>
+								<SegmentedControl
+									value={value}
+									onValueChange={onChange}
+									segments={
+										[
+											{ value: 'grid', label: t('common.grid'), testID: 'view-mode-grid' },
+											{ value: 'table', label: t('common.table'), testID: 'view-mode-table' },
+										] satisfies [Segment, Segment]
+									}
+								/>
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="variationsStyle"
+						render={({ field: { value, onChange } }) => (
+							<View className="gap-1 px-1">
+								<Text>{t('pos_products.variations_style')}</Text>
+								<SegmentedControl
+									value={value ?? 'drill'}
+									onValueChange={onChange}
+									segments={[
+										{
+											value: 'drill',
+											label: t('pos_products.variations_open_in_place'),
+											testID: 'products-variations-style-drill',
+										},
+										{
+											value: 'inline',
+											label: t('pos_products.variations_popover_and_rows'),
+											testID: 'products-variations-style-inline',
+										},
+									]}
+								/>
 							</View>
 						)}
 					/>
@@ -136,18 +155,24 @@ export function UISettingsForm() {
 						render={({ field: { value, onChange } }) => (
 							<View className="gap-1 px-1">
 								<Text>{getUILabel('position')}</Text>
-								<ToggleGroup
-									type="single"
+								<SegmentedControl
 									value={value}
 									onValueChange={(val) => onChange(val || value)}
-								>
-									<ToggleGroupItem value="left" testID="panel-position-left">
-										<Text>{t('pos_products.products_left')}</Text>
-									</ToggleGroupItem>
-									<ToggleGroupItem value="right" testID="panel-position-right">
-										<Text>{t('pos_products.products_right')}</Text>
-									</ToggleGroupItem>
-								</ToggleGroup>
+									segments={
+										[
+											{
+												value: 'left',
+												label: t('pos_products.products_left'),
+												testID: 'panel-position-left',
+											},
+											{
+												value: 'right',
+												label: t('pos_products.products_right'),
+												testID: 'panel-position-right',
+											},
+										] satisfies [Segment, Segment]
+									}
+								/>
 							</View>
 						)}
 					/>
@@ -196,18 +221,24 @@ export function UISettingsForm() {
 							render={({ field: { value, onChange } }) => (
 								<View className="gap-1">
 									<Text>{getUILabel('sortDirection')}</Text>
-									<ToggleGroup
-										type="single"
+									<SegmentedControl
 										value={value}
 										onValueChange={(val) => onChange(val || value)}
-									>
-										<ToggleGroupItem value="asc" testID="sort-direction-asc">
-											<Text>{t('common.ascending')}</Text>
-										</ToggleGroupItem>
-										<ToggleGroupItem value="desc" testID="sort-direction-desc">
-											<Text>{t('common.descending')}</Text>
-										</ToggleGroupItem>
-									</ToggleGroup>
+										segments={
+											[
+												{
+													value: 'asc',
+													label: t('common.ascending'),
+													testID: 'sort-direction-asc',
+												},
+												{
+													value: 'desc',
+													label: t('common.descending'),
+													testID: 'sort-direction-desc',
+												},
+											] satisfies [Segment, Segment]
+										}
+									/>
 								</View>
 							)}
 						/>

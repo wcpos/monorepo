@@ -37,16 +37,16 @@
     "@wcpos/sync-core": "workspace:*"
   },
   "peerDependencies": {
-    "rxdb": "17.4.0",
-    "rxdb-premium": "17.4.0"
+    "rxdb": "17.5.0",
+    "rxdb-premium": "17.5.0"
   },
   "peerDependenciesMeta": {
     "rxdb-premium": { "optional": true }
   },
   "devDependencies": {
     "@wcpos/utils": "workspace:*",
-    "rxdb": "17.4.0",
-    "rxdb-premium": "17.4.0",
+    "rxdb": "17.5.0",
+    "rxdb-premium": "17.5.0",
     "vitest": "^4.1.10"
   }
 }

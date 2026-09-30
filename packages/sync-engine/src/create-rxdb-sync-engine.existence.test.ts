@@ -119,7 +119,9 @@ describe('existence maintenance lanes through the public facade', () => {
 				const product = (id: number, dirty = false) => ({
 					uuid: `p${id}`,
 					remoteId: remoteId(id),
+					remoteKey: String(remoteId(id) ?? ''),
 					price: 1,
+					sortName: '',
 					stockStatus: 'instock',
 					type: 'simple',
 					categoryIds: [],
@@ -251,7 +253,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.products as never, {
 			uuid: 'p10',
 			remoteId: remoteId(10),
+			remoteKey: String(remoteId(10) ?? ''),
 			price: 1,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -265,8 +269,11 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.variations as never, {
 			uuid: 'v11',
 			remoteId: remoteId(11),
+			remoteKey: String(remoteId(11) ?? ''),
 			parentRemoteId: remoteId(10),
+			parentRemoteKey: String(remoteId(10) ?? ''),
 			price: 1,
+			sortName: '',
 			stockStatus: 'instock',
 			attributes: [],
 			stockQuantity: null,
@@ -276,19 +283,24 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.customers as never, {
 			uuid: 'c20',
 			remoteId: remoteId(20),
+			remoteKey: String(remoteId(20) ?? ''),
 			payload: { id: 20 },
 			...common,
 		});
 		await seed(db.customers as never, {
 			uuid: 'c21',
 			remoteId: remoteId(21),
+			remoteKey: String(remoteId(21) ?? ''),
 			payload: { id: 21 },
 			sync: common.sync,
 			local: { dirty: true, pendingMutationIds: ['m'] },
 		});
 		const order = (id: number, dirty = false) => ({
+			posUserId: '',
+			posStoreId: '',
 			uuid: `o${id}`,
 			remoteId: remoteId(id),
+			remoteKey: String(remoteId(id) ?? ''),
 			number: String(id),
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',
@@ -394,7 +406,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.products as never, {
 			uuid: productId,
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 7,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -426,7 +440,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		const product = (id: number, status: string, dirty = false) => ({
 			uuid: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
 			remoteId: remoteId(id),
+			remoteKey: String(remoteId(id) ?? ''),
 			price: id,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -483,7 +499,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		const product = (id: number, dirty = false) => ({
 			uuid: `p${id}`,
 			remoteId: remoteId(id),
+			remoteKey: String(remoteId(id) ?? ''),
 			price: id,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -500,8 +518,11 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.variations as never, {
 			uuid: 'v93',
 			remoteId: remoteId(93),
+			remoteKey: String(remoteId(93) ?? ''),
 			parentRemoteId: remoteId(91),
+			parentRemoteKey: String(remoteId(91) ?? ''),
 			price: 1,
+			sortName: '',
 			stockStatus: 'instock',
 			attributes: [],
 			stockQuantity: null,
@@ -511,12 +532,16 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.customers as never, {
 			uuid: 'c94',
 			remoteId: remoteId(94),
+			remoteKey: String(remoteId(94) ?? ''),
 			payload: { id: 94 },
 			...common,
 		});
 		await seed(db.orders as never, {
+			posUserId: '',
+			posStoreId: '',
 			uuid: 'o95',
 			remoteId: remoteId(95),
+			remoteKey: String(remoteId(95) ?? ''),
 			number: '95',
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',
@@ -565,7 +590,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(oldDb.products as never, {
 			uuid: 'p40',
 			remoteId: remoteId(40),
+			remoteKey: String(remoteId(40) ?? ''),
 			price: 1,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -621,7 +648,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(oldDb.products as never, {
 			uuid: 'p40',
 			remoteId: remoteId(40),
+			remoteKey: String(remoteId(40) ?? ''),
 			price: 1,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -664,8 +693,11 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		let db = e.active()!.database.collections;
 		const order = {
+			posUserId: '',
+			posStoreId: '',
 			uuid: '00000000-0000-4000-8000-000000000077',
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			number: '77',
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',

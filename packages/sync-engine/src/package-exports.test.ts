@@ -21,11 +21,6 @@ describe('package exports', () => {
 				// The Store health panel must decide "does discard delete this record?"
 				// from the SAME rule the engine enforces (#832 follow-up, R7b).
 				'rejectionSuggestsServerRecord',
-				// The host opens and names the cross-tab write-outcome channel (#1209)
-				// — web-only, scoped per store database, moved on a scope switch — so
-				// the factory and the naming rule are both part of the public door.
-				'createWriteOutcomeBridge',
-				'writeOutcomeChannelName',
 				// The app's engine fetcher hydrates census/query-total responses
 				// through the same body-envelope seam the engine uses internally
 				// (B9, hostile-headers program) — one unwrap rule, two seams.
@@ -53,6 +48,7 @@ describe('package exports', () => {
 		expect(Object.keys(testing).sort()).toEqual([
 			'createEngineHarness',
 			'customerBrowseWindowQueryKeyFromDimensions',
+			'engineCollectionCreators',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',
 			'existenceManifestSchema',
@@ -60,6 +56,7 @@ describe('package exports', () => {
 			'memoryStringStore',
 			'orderBrowserQueryKey',
 			'productBrowseWindowQueryKeyFromDimensions',
+			'refundBrowserQueryKey',
 			'remoteId',
 			'schedulerTaskStateKey',
 			'schedulerTaskStateSchema',

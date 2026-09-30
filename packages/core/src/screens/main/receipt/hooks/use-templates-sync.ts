@@ -144,11 +144,15 @@ export function syncTemplates(
 export function useTemplatesSync(
 	type: 'receipt' | 'report' | 'closure' = 'receipt',
 	storeId?: number
-): void {
+): { synced: boolean } {
 	const runtime = useQueryRuntime();
 	const httpClient = useRestHttpClient();
 	const collection = runtime.localDB.collections.templates;
 	const key = `${type}:${storeId ?? ''}`;
+	const [settled, setSettled] = React.useState<{
+		key: string;
+		collection: typeof collection;
+	} | null>(null);
 
 	// A sync deferred while the window was hidden re-runs on wake — otherwise the
 	// receipt modal shows no templates until the next remount. Only a deferred sync
@@ -164,7 +168,22 @@ export function useTemplatesSync(
 		[collection, key]
 	);
 
+	// Publish readiness when the external sync settles, including a failed first request.
 	React.useEffect(() => {
-		if (collection) void syncTemplates(collection, httpClient, type, storeId);
-	}, [collection, httpClient, wakeTick, type, storeId]);
+		if (!collection) return;
+		// A run that settles after the scope moved on must not overwrite the current scope's
+		// readiness (two keyed runs can finish out of order); it is simply ignored.
+		let current = true;
+		const settle = () => {
+			if (!current) return;
+			setSettled((previous) =>
+				previous?.key === key && previous.collection === collection ? previous : { key, collection }
+			);
+		};
+		void syncTemplates(collection, httpClient, type, storeId).then(settle, settle);
+		return () => {
+			current = false;
+		};
+	}, [collection, httpClient, wakeTick, type, storeId, key]);
+	return { synced: settled?.key === key && settled.collection === collection };
 }

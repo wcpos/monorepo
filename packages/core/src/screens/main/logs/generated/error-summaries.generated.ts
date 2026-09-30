@@ -144,6 +144,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.AUTH321');
 		case 'AUTH331':
 			return t('health.logs.error_summary.AUTH331');
+		case 'AUTH341':
+			return t('health.logs.error_summary.AUTH341');
 		case 'AUTH411':
 			return t('health.logs.error_summary.AUTH411');
 		case 'AUTH421':
@@ -214,6 +216,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CLIENT151');
 		case 'AUTH131':
 			return t('health.logs.error_summary.AUTH131');
+		case 'CLIENT161':
+			return t('health.logs.error_summary.CLIENT161');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

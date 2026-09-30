@@ -16,7 +16,8 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { withProAccess } from '../components/pro-guard';
+import { UpgradeNotice } from '../components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import {
 	calendarDate,
@@ -26,9 +27,12 @@ import {
 	zoneOptions,
 } from '../../../hooks/use-store-day';
 import { HeaderLeft } from '../components/header/left';
-import { PageBar } from './page-bar';
+import { Bar, CashierButton } from './bar';
+import { DateButton } from './date-button';
+import { TillStrip } from './till-strip';
 import { Closures } from './closures';
-import { ReportsProvider } from './context';
+import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
+import { HeroShell } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
@@ -76,11 +80,38 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-const GuardedReports = withProAccess(Reports, 'reports');
 function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
+	const { comparisonFilter } = useReportsPeriod();
+	// The binding is compiled from the state object's identity: keep the comparison state stable
+	// across renders so the resource (and its Suspense) is rebuilt only when a bound changes.
+	const { from: comparisonFrom, to: comparisonTo } = comparisonFilter;
+	const comparisonState = React.useMemo(
+		() => ({
+			...state,
+			filters: { ...state.filters, dateRange: { from: comparisonFrom, to: comparisonTo } },
+		}),
+		[state, comparisonFrom, comparisonTo]
+	);
+	const comparisonBinding = useCollectionBinding('orders', comparisonState);
+	const {
+		search,
+		limit,
+		filters: { dateRange },
+	} = state;
+	const refundsState = React.useMemo<QueryStateOf<'refunds'>>(
+		() => ({
+			search,
+			limit,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			filters: { dateRange },
+		}),
+		[search, limit, dateRange]
+	);
+	const refundsBinding = useCollectionBinding('refunds', refundsState);
 	const storeId = Number.isFinite(Number(state.filters.store))
 		? Number(state.filters.store)
 		: undefined;
@@ -128,13 +159,46 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};
+	const title = (
+		<DateButton
+			scope={scope}
+			onScopeChange={select}
+			storeId={scope.storeId}
+			lockedScopeName={t('reports.earlier_days')}
+		/>
+	);
 	return (
 		<>
-			<PageBar room="sales" onRoomChange={onRoomChange} scope={scope} onScopeChange={select} />
+			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
+			{/* The till strip is outside the date: it always shows the till now, and is the way into Closures. */}
+			<View className="pt-3">
+				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
+			</View>
 			<View className="min-h-0 flex-1">
-				<Suspense>
-					<ReportsProvider binding={binding}>
-						<GuardedReports />
+				{/* The date button stays available while the orders load: it is the only way out of a
+				    slow or stuck range, so the loading shell carries the same title row. */}
+				<Suspense
+					fallback={
+						<View className="px-2">
+							<HeroShell title={title} />
+						</View>
+					}
+				>
+					<ReportsProvider
+						binding={binding}
+						comparisonBinding={comparisonBinding}
+						refundsBinding={refundsBinding}
+					>
+						<ErrorBoundary
+							FallbackComponent={() => <Reports title={title} />}
+							resetKeys={[refundsBinding, binding]}
+						>
+							<React.Suspense fallback={<Reports title={title} />}>
+								<ReportsRefunds>
+									<Reports title={title} />
+								</ReportsRefunds>
+							</React.Suspense>
+						</ErrorBoundary>
 					</ReportsProvider>
 				</Suspense>
 			</View>
@@ -148,20 +212,34 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
-	const { presets, rangeToFilter } = useStoreDay();
+	const binding = useRegisterBinding();
+	const { license } = useAppInfo();
+	const { presets, rangeToFilter, timezone } = useStoreDay();
 	const cashierScopeID = String(wpCredentials?.id);
 	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
+	// Free sees today only, so its query is keyed by the store day and re-keyed at the store's
+	// midnight: left open overnight, the page must not keep serving yesterday behind locked controls.
+	const storeToday = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
+	const [, rollover] = React.useReducer((n: number) => n + 1, 0);
+	// The timer is an external system: it fires once at the end of the store day to re-render.
+	React.useEffect(() => {
+		if (license?.isPro) return;
+		const wait = Math.max(1_000, presets().today.to.getTime() - Date.now() + 1_000);
+		const id = setTimeout(rollover, wait);
+		return () => clearTimeout(id);
+	}, [license?.isPro, presets, storeToday]);
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
-		status: 'completed',
+		...(!license?.isPro && { register: binding.registerId || 'unbound' }),
 		dateRange: rangeToFilter(presets().today),
-		cashier: cashierScopeID,
 		store: storeScopeID,
 	};
 	const initialSort = getInitialReportSort(uiSettings.sortBy, uiSettings.sortDirection);
 
 	return (
 		<QueryStateProvider
-			key={`${cashierScopeID}:${storeScopeID}`}
+			// The plan is part of the key: a licence that drops to Free remounts the query on
+			// today and the bound register instead of keeping a Pro-chosen scope alive.
+			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : `free:${binding.registerId || 'unbound'}:${storeToday}:${timezone}`}`}
 			collection="orders"
 			initialPageSize={REPORTS_ALL_RESULTS_LIMIT}
 			initialSort={initialSort}
@@ -169,7 +247,9 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScreenContent onRoomChange={onRoomChange} />
+					<ReportsScopeProvider>
+						<ReportsScreenContent onRoomChange={onRoomChange} />
+					</ReportsScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
@@ -177,6 +257,9 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 }
 
 function ReportsShell() {
+	const t = useT();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	const { top } = useSafeAreaInsets();
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -212,21 +295,37 @@ function ReportsShell() {
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
 	return (
-		<View className="flex-1">
+		// The safe-area inset sits above everything, so the Free strip never slides under the status bar.
+		<View className="flex-1" style={{ paddingTop: top }}>
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			<ErrorBoundary>
 				<Suspense>
 					{room === 'sales' ? (
 						<SalesScreen onRoomChange={setRoom} />
 					) : (
 						<>
-							<PageBar
-								room={room}
-								initialLockedPeriod={lockedClosure}
-								initialHistoryLimit={outsideHistory}
-								onRoomChange={setRoom}
+							<Bar
+								room="closures"
+								onBack={() => setRoom('sales')}
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
+							<View
+								testID="reports-scope-row"
+								className="flex-row items-center justify-between gap-2 px-4 py-2"
+							>
+								<DateButton
+									scope={scope}
+									onScopeChange={setSelection}
+									storeId={scope.storeId}
+									// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
+									key={license?.isPro ? 'pro' : 'free'}
+									lockedScopeName={t('reports.earlier_closures')}
+									initialLockedPeriod={lockedClosure}
+									initialHistoryLimit={outsideHistory}
+								/>
+								<CashierButton scope={scope} onScopeChange={setSelection} />
+							</View>
 							<Closures
 								scope={scope}
 								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}

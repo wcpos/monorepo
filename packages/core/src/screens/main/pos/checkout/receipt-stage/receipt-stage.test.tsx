@@ -97,6 +97,7 @@ jest.mock('react-native-reanimated', () => ({
 	withTiming: jest.fn((value: number) => value),
 	withDelay: jest.fn((_delay: number, value: number) => value),
 	cancelAnimation: jest.fn(),
+	Easing: { bezier: jest.fn() },
 }));
 jest.mock('react-native-svg', () => ({
 	__esModule: true,
@@ -393,24 +394,22 @@ it('renders a complete tick and surface without animation when motion is reduced
 	expect(AccessibilityInfo.isReduceMotionEnabled).toHaveBeenCalledTimes(1);
 	expect(withTiming).not.toHaveBeenCalled();
 	expect(withDelay).not.toHaveBeenCalled();
-	expect(
-		screen.getByTestId('checkout-paid').querySelector('path')?.getAttribute('stroke-dashoffset')
-	).toBe('0');
+	expect(screen.getByTestId('receipt-paid-disc')).toBeTruthy();
 	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('1');
 });
-it('starts the pop and delayed tick when motion is allowed', async () => {
+it('waits for the preference before stamping the disc when motion is allowed', async () => {
 	let resolvePreference!: (enabled: boolean) => void;
 	jest
 		.mocked(AccessibilityInfo.isReduceMotionEnabled)
 		.mockImplementationOnce(() => new Promise<boolean>((resolve) => (resolvePreference = resolve)));
 	render(<ReceiptStage orderUuid="paid" compact />);
 	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('0');
+	expect(withTiming).not.toHaveBeenCalled();
 	await act(async () => {
 		resolvePreference(false);
 	});
-	expect(withTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: 400 }));
-	expect(withTiming).toHaveBeenCalledWith(0, expect.objectContaining({ duration: 450 }));
-	expect(withDelay).toHaveBeenCalledWith(150, expect.anything());
+	expect(withTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: 380 }));
+	expect(withDelay).not.toHaveBeenCalled();
 });
 it.each([false, true])('only sends a success haptic on native = %s', async (native) => {
 	Platform.isNative = native;
@@ -431,4 +430,27 @@ it('still allows finishing when native haptics reject', async () => {
 	});
 	fireEvent.click(screen.getByTestId('receipt-new-sale'));
 	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+});
+
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({
+		children,
+		testID,
+		className,
+		style,
+	}: React.PropsWithChildren<{
+		testID?: string;
+		className?: string;
+		style?: React.CSSProperties;
+	}>) => (
+		<div data-testid={testID} className={className} style={style}>
+			{children}
+		</div>
+	),
+}));
+it('paints the paid surface neutrally and the success disc semantically', () => {
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.getByTestId('checkout-paid').className).toContain('bg-card');
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
 });

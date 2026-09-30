@@ -203,7 +203,7 @@ export function startSearchReadiness(options: {
 					SearchableCollection | undefined;
 				if (!collection) return Promise.resolve();
 				const { searchFields, documentSnapshot } = initializationOptionsFor(name);
-				return catalogueSearchBlobFor(collection, searchFields, documentSnapshot).ready.catch(
+				return catalogueSearchBlobFor(collection, searchFields, documentSnapshot, name).ready.catch(
 					() => undefined
 				);
 			})

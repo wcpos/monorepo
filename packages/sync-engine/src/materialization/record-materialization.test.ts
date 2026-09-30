@@ -64,6 +64,7 @@ describe('record materialization seam', () => {
 		expect(stamped.storedDocument).toMatchObject({
 			uuid: uuid,
 			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
 			price: 12.34,
 			sync: { revision: 'server-r' },
 		});
@@ -113,7 +114,9 @@ describe('record materialization seam', () => {
 		).toMatchObject({
 			uuid,
 			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
 			parentRemoteId: remoteId(3),
+			parentRemoteKey: String(remoteId(3) ?? ''),
 			attributes: [],
 			local: { dirty: false, pendingMutationIds: [] },
 		});
@@ -122,6 +125,7 @@ describe('record materialization seam', () => {
 		).toMatchObject({
 			uuid,
 			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		expect(materializeUpsertRefresh({ id: 7 } as never).storedDocument).toMatchObject({
@@ -130,7 +134,12 @@ describe('record materialization seam', () => {
 		});
 		expect(
 			materializeLocalOnly({ id: 7, status: 'processing', meta_data } as never).storedDocument
-		).toMatchObject({ uuid: uuid, remoteId: remoteId(7), payload: { status: 'processing' } });
+		).toMatchObject({
+			uuid: uuid,
+			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
+			payload: { status: 'processing' },
+		});
 	});
 
 	it('strips object order meta display fields while preserving typed values and strings', () => {
@@ -220,3 +229,22 @@ it('materializes an empty sessionId when a refund has no session stamp', () => {
 		materializeRefund({ id: 18, parent_id: 3, date_created_gmt: '2026-09-16' }).storedDocument
 	).toHaveProperty('sessionId', '');
 });
+
+// A missing mirror makes indexed reconciliation silently miss these server records.
+it.each(['products', 'variations', 'customers', 'orders', 'references', 'taxRates'] as const)(
+	'materializes the remote key for %s',
+	(collection) => {
+		const payload = { id: 7, parent_id: 3, meta_data };
+		const result =
+			collection === 'orders'
+				? materializeLocalOnly(payload)
+				: collection === 'references'
+					? materializeGreedyPrunable(payload)
+					: collection === 'taxRates'
+						? materializeUpsertRefresh(payload)
+						: materializeTargeted(collection, payload);
+		expect(result.storedDocument).toMatchObject({ remoteId: '7', remoteKey: '7' });
+		if (collection === 'variations')
+			expect(result.storedDocument).toMatchObject({ parentRemoteKey: '3' });
+	}
+);

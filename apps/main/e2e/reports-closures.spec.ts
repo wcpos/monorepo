@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { expect, type Page } from '@playwright/test';
 
+import orderFixture from '../../../packages/core/jest/__fixtures__/order.json';
 import en from '../../../packages/core/src/contexts/translations/locales/en/core.json';
 import serverDocument from '../../../packages/core/src/services/register-session/__fixtures__/closure.json';
 import {
@@ -180,6 +181,94 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 					const url = new URL(request.url());
 					if (url.origin !== new URL(getStoreUrl(testInfo)).origin) return route.fallback();
 					const path = wcposRestRoute(request.url());
+					if (
+						request.method() === 'GET' &&
+						path === '/wcpos/v2/refunds' &&
+						url.searchParams.has('after')
+					) {
+						return route.fulfill({
+							status: 200,
+							headers: {
+								'access-control-allow-origin': '*',
+								'x-wp-total': '0',
+								'x-wp-totalpages': '0',
+								'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
+							},
+							json: [],
+						});
+					}
+					// A local midnight sale in each requested range makes the Sales comparison
+					// deterministic, including on an empty store. No order writes reach the server.
+					if (
+						request.method() === 'GET' &&
+						path === '/wcpos/v2/orders' &&
+						url.searchParams.has('after')
+					) {
+						const stamp = url.searchParams.get('after')!.slice(0, 19);
+						const id = 9_000_000 + Math.floor(Date.parse(`${stamp}Z`) / 86_400_000);
+						const hex = id.toString(16);
+						const excluded = (url.searchParams.get('exclude') ?? '')
+							.split(',')
+							.includes(String(id));
+						return route.fulfill({
+							status: 200,
+							headers: {
+								'access-control-allow-origin': '*',
+								'x-wp-total': excluded ? '0' : '1',
+								'x-wp-totalpages': '1',
+								'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
+							},
+							json: excluded
+								? []
+								: [
+										{
+											...orderFixture,
+											id,
+											number: String(id),
+											created_via: 'woocommerce-pos',
+											status: 'completed',
+											currency: 'USD',
+											total: '10.00',
+											total_tax: '0.00',
+											customer_id: 0,
+											date_created: stamp,
+											date_created_gmt: stamp,
+											date_modified: stamp,
+											date_modified_gmt: stamp,
+											line_items: [
+												{
+													id: 1,
+													product_id: null,
+													name: 'Report probe',
+													quantity: 1,
+													total: '10.00',
+													total_tax: '0.00',
+												},
+											],
+											tax_lines: [],
+											refunds: [],
+											meta_data: [
+												{
+													id: 1,
+													key: '_woocommerce_pos_uuid',
+													value: `${hex.padStart(8, '0')}-0000-4000-8000-${hex.padStart(12, '0')}`,
+												},
+												{
+													id: 2,
+													key: '_wcpos_register',
+													value: url.searchParams.get('pos_register') ?? registerId,
+												},
+												{
+													id: 3,
+													key: '_pos_store',
+													value: url.searchParams.get('pos_store') ?? '0',
+												},
+											],
+										},
+									],
+						});
+					}
+
 					// Discovery is deliberately overridden at page level, before the fixture's
 					// context-level Pro mask. Preserve actual plugin compatibility information.
 					if (
@@ -376,7 +465,88 @@ async function openClosures(page: Page) {
 	}
 	await expect(page.getByTestId('drawer-item-reports')).toBeVisible();
 	await page.getByTestId('drawer-item-reports').click();
-	await page.getByTestId('reports-room-closures').click();
+	await expect(page.getByTestId('reports-bar')).toBeVisible();
+	await expect(page.getByTestId('reports-scope')).toBeVisible();
+	await expect(page.getByTestId('hero-total')).toBeVisible();
+	// The delta line is a figure or the no-comparison dash; its wording is the catalogue's.
+	await expect(page.getByTestId('hero-delta')).toHaveText(/\S/);
+	await page.getByTestId('hero-chip-status').click();
+	await expect(page.getByTestId('hero-status-menu')).toBeVisible();
+	await page.getByTestId('hero-status-all').click();
+	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/border-primary/);
+	await page.getByTestId('hero-chip-status-clear').click();
+	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/border-primary/);
+	await page.getByTestId('hero-chip-compare').click();
+	await expect(page.getByTestId('hero-compare-menu')).toBeVisible();
+	await page.getByTestId('hero-compare-yesterday').click();
+	await page.getByTestId('hero-chart-toggle-run').click();
+	await expect(page.getByTestId('hero-chart-toggle-run')).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByTestId('hero-chart-comparison-total')).toBeVisible();
+	await page.getByTestId('hero-chart-toggle-hour').click();
+	await expect(page.getByTestId('hero-chart-toggle-hour')).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByTestId('hero-chart-comparison-total')).toHaveCount(0);
+	await expect(page.getByTestId('reports-period-title')).toBeVisible();
+	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
+	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
+	await expect(page.getByTestId('card-taxes')).toBeVisible();
+	// The refund amount is zero regardless of store currency or locale.
+	await expect(page.getByTestId('card-refunds-refunded')).toHaveText(/^[^1-9]*0[^1-9]*$/);
+	await expect(page.getByTestId('card-payments')).toBeVisible();
+	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
+	// No COGS on the stub order; its custom line joins no catalogue product.
+	await expect(page.getByTestId('card-brands')).toHaveCount(0);
+	await page.getByTestId('card-products-open').click();
+	await expect(page.getByTestId('detail-products')).toBeVisible();
+	await expect(page.getByTestId('detail-products-head-cost')).toHaveCount(0);
+	if ((page.viewportSize()?.width ?? 0) < 640) await page.getByTestId('detail-panel-back').click();
+	else await page.getByTestId('detail-panel-close').click();
+	await page.getByTestId('card-taxes-open').click();
+	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
+	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
+	// The stub has no templates route: Print must be usable or visibly explain its wait.
+	await expect(async () => {
+		const print = page.getByTestId('detail-panel-print');
+		await expect(print).toBeVisible();
+		if (await print.isEnabled()) return;
+		const waiting = page.getByTestId('detail-panel-print-waiting');
+		await expect(waiting).toBeVisible();
+		await expect(waiting).toHaveText(/\S/);
+	}).toPass();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+		await expect(page.getByTestId('hero-total')).toBeVisible();
+	} else {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await expect(page.getByTestId('detail-panel-body')).toHaveCount(0);
+	await page.getByTestId('card-orders-open').click();
+	await expect(page.getByTestId('orders-list')).toBeVisible();
+	// The stub answers every range with one order, so a row is there; an empty period would
+	// have nothing to untick and the chip walk would not apply.
+	const firstTick = page.getByTestId(/^orders-panel-tick-(?!all$)/).first();
+	await expect(firstTick).toBeVisible();
+	await firstTick.click();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+	}
+	// The chip's number is in its label; it carries no count pill.
+	await expect(page.getByTestId('hero-chip-left-out')).toBeVisible();
+	await expect(page.getByTestId('hero-chip-left-out')).toContainText('1');
+	if ((page.viewportSize()?.width ?? 0) >= 640) {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await page.getByTestId('hero-chip-left-out-clear').click();
+	await expect(page.getByTestId('hero-chip-left-out')).toHaveCount(0);
+
+	await page.getByTestId('reports-scope').click();
+	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByTestId('reports-till')).toBeVisible();
+	await page.getByTestId('till-closures').click();
+	await expect(page.getByTestId('reports-closures')).toBeVisible();
+	await page.getByTestId('reports-back-sales').click();
+	await expect(page.getByTestId('till-closures')).toBeVisible();
+	await page.getByTestId('till-closures').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
 }
 
@@ -485,13 +655,11 @@ for (const viewport of viewports) {
 				await page.getByTestId('reports-period').click();
 				await expect(page.getByTestId('reports-period-today')).not.toHaveClass(/opacity-50/);
 				for (const [period, scopeName] of [
-					['previous', en['reports.earlier_closures']],
 					['yesterday', en['reports.earlier_closures']],
 					['thisWeek', en['reports.earlier_closures']],
 					['lastWeek', en['reports.earlier_closures']],
 					['thisMonth', en['reports.earlier_closures']],
 					['lastMonth', en['reports.earlier_closures']],
-					['custom', en['reports.custom_ranges']],
 				]) {
 					const option = page.getByTestId(`reports-period-${period}`);
 					await expect(option).toHaveClass(/opacity-50/);

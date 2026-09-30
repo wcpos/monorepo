@@ -36,6 +36,7 @@ function createEngineDouble(
 		for (const cb of dbListeners) cb({});
 	};
 	return {
+		ready: Promise.resolve(),
 		dispose: jest.fn(dispose),
 		scope: {
 			// A resolved switch means the engine ACTIVATED the scope (db$ fired);
@@ -65,6 +66,8 @@ function loadCreateAppEngine(
 	initiallyActive = true
 ) {
 	jest.resetModules();
+	const purgeLegacyDatabases = jest.fn(async () => undefined);
+	jest.doMock('@wcpos/database/purge-legacy-db', () => ({ purgeLegacyDatabases }));
 	const appMetricsObserver = jest.fn();
 	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
@@ -82,34 +85,6 @@ function loadCreateAppEngine(
 	const markStorageTerminallyFailed = jest.fn((_databaseName: string, _reason: string) => true);
 	const forceFreeDatabaseRegistration = jest.fn((_databaseName: string) => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
-	const writeLeaders: {
-		isLeader: jest.Mock<boolean>;
-		dispose: jest.Mock<void>;
-	}[] = [];
-	const electWriteLeader = jest.fn(() => {
-		const leader = { isLeader: jest.fn(() => true), dispose: jest.fn() };
-		writeLeaders.push(leader);
-		return leader;
-	});
-	const writeOutcomeBridges: {
-		moveTo: jest.Mock<void, [string | null]>;
-		close: jest.Mock<void>;
-		publish: jest.Mock<void>;
-		subscribe: jest.Mock;
-	}[] = [];
-	const createWriteOutcomeBridge = jest.fn(() => {
-		const bridge = {
-			moveTo: jest.fn(),
-			close: jest.fn(),
-			publish: jest.fn(),
-			subscribe: jest.fn(() => () => undefined),
-		};
-		writeOutcomeBridges.push(bridge);
-		return bridge;
-	});
-	const writeOutcomeChannelName = jest.fn(
-		(databaseName: string) => `wcpos-write-outcomes:${databaseName}`
-	);
 	const createRxdbSyncEngine = jest.fn(
 		(
 			_ports: {
@@ -128,9 +103,7 @@ function loadCreateAppEngine(
 				databaseOpenBarrier?: Promise<void>;
 				diagnostics?: typeof appMetricsObserver;
 				multiInstance?: boolean;
-				writePlaneOwner?: () => boolean;
 				holdAutomaticTicks?: () => boolean;
-				writeOutcomeBridge?: { moveTo: (name: string | null) => void };
 			},
 			scope: ScopeIdentity
 		) => {
@@ -142,12 +115,10 @@ function loadCreateAppEngine(
 
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
-		createWriteOutcomeBridge,
 		setSyncEngineLogger,
 		// The engine fetcher hydrates 2xx responses through this seam (B9); an
 		// identity stub keeps these engine-lifecycle tests transport-free.
 		hydrateResponse: jest.fn(async (response: Response) => response),
-		writeOutcomeChannelName,
 	}));
 	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
 		virtual: true,
@@ -155,7 +126,6 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/utils/platform', () => ({
 		Platform: { isWeb: platformIsWeb },
 	}));
-	jest.doMock('./web-write-leader', () => ({ electWriteLeader }));
 	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
 		markStorageTerminallyFailed,
 	}));
@@ -181,6 +151,7 @@ function loadCreateAppEngine(
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	return {
 		createAppSyncEngine,
+		purgeLegacyDatabases,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
 		createRxdbSyncEngine,
@@ -196,10 +167,6 @@ function loadCreateAppEngine(
 		markStorageTerminallyFailed,
 		forceFreeDatabaseRegistration,
 		getDatabaseEpoch,
-		electWriteLeader,
-		writeLeaders,
-		createWriteOutcomeBridge,
-		writeOutcomeBridges,
 	};
 }
 
@@ -671,7 +638,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(createRxdbSyncEngine).toHaveBeenCalledTimes(1);
 	});
 
-	it('publishes header, leadership and outcome channel at activation before switch settlement', async () => {
+	it('publishes header at activation before switch settlement without peer channels', async () => {
 		// Before activation the outgoing scope's lanes may still be running and
 		// must keep their own header; after it, the incoming open's hydrate,
 		// seed and prime must carry the new one.
@@ -684,24 +651,16 @@ describe('createAppSyncEngine scope cache', () => {
 		first = createEngineDouble(undefined, async (identity) => {
 			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
 			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
-			expect(electWriteLeader).toHaveBeenCalledTimes(1);
 			first.activate(identity);
-			expect(electWriteLeader).toHaveBeenCalledTimes(2);
-			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
-				`wcpos-write-outcomes:${scopeDatabaseName(identity)}`
-			);
 			await ports.fetcher?.(
 				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
 			);
 			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
 		});
-		const {
-			createAppSyncEngine,
-			switchAppEngineScope,
-			createRxdbSyncEngine,
-			electWriteLeader,
-			writeOutcomeBridges,
-		} = loadCreateAppEngine(() => first, true);
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first,
+			true
+		);
 		try {
 			createAppSyncEngine(BASE_OPTIONS);
 			ports = createRxdbSyncEngine.mock.calls[0]![0];
@@ -914,15 +873,12 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
-	it('collection-reset emissions do not re-elect leadership or reset clock-skew evaluation', async () => {
+	it('collection-reset emissions preserve clock-skew evaluation without peer channels', async () => {
 		const first = createEngineDouble();
-		const {
-			createAppSyncEngine,
-			createRxdbSyncEngine,
-			networkWarn,
-			electWriteLeader,
-			writeOutcomeBridges,
-		} = loadCreateAppEngine(() => first, true);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine(
+			() => first,
+			true
+		);
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
@@ -937,8 +893,6 @@ describe('createAppSyncEngine scope cache', () => {
 			first.activate({ ...BASE_OPTIONS.scope, site: 'HTTP://STORE.EXAMPLE.TEST/' });
 			await fetcher('https://store.example.test/wp-json/wcpos/v2/orders');
 			expect(networkWarn).toHaveBeenCalledTimes(1);
-			expect(electWriteLeader).toHaveBeenCalledTimes(1);
-			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenCalledTimes(1);
 		} finally {
 			now.mockRestore();
 			fetch.mockRestore();
@@ -1273,31 +1227,23 @@ describe('createAppSyncEngine scope cache', () => {
 			}
 		}
 
-		it('construction publishes the allocation scope’s header and elects leadership once', async () => {
+		it('construction publishes the allocation scope’s header', async () => {
 			const first = createEngineDouble();
-			const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader, writeOutcomeBridges } =
-				loadCreateAppEngine(() => first, true, false);
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(
+				() => first,
+				true,
+				false
+			);
 			createAppSyncEngine(BASE_OPTIONS);
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
-			expect(createRxdbSyncEngine.mock.calls[0]![0].writePlaneOwner?.()).toBe(true);
-			expect(electWriteLeader).toHaveBeenCalledTimes(1);
-			expect(electWriteLeader).toHaveBeenCalledWith(
-				`wcpos-write-leader:${scopeDatabaseName(BASE_OPTIONS.scope)}`,
-				expect.any(Object)
-			);
-			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenCalledWith(
-				`wcpos-write-outcomes:${scopeDatabaseName(BASE_OPTIONS.scope)}`
-			);
 			first.activate(BASE_OPTIONS.scope);
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
-			expect(electWriteLeader).toHaveBeenCalledTimes(1);
-			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenCalledTimes(1);
 		});
 
 		it('null activation clears a previously published header', async () => {
 			const first = createEngineDouble();
 			const engines = [first, createEngineDouble()];
-			const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader } = loadCreateAppEngine(
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(
 				() => engines.shift()!,
 				true
 			);
@@ -1307,7 +1253,6 @@ describe('createAppSyncEngine scope cache', () => {
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBeNull();
 			createAppSyncEngine(OTHER_SITE_OPTIONS);
 			first.activate(BASE_OPTIONS.scope);
-			expect(electWriteLeader).toHaveBeenCalledTimes(2);
 		});
 
 		it('sends the constructed scope store', async () => {
@@ -1886,115 +1831,71 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
-	it('enables multi-instance and threads elected ownership on web', () => {
+	it('uses single-instance SQLite on web without elected ownership', () => {
 		Object.defineProperty(globalThis, 'navigator', {
 			configurable: true,
 			value: { locks: {} },
 		});
-		const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader } = loadCreateAppEngine(
-			undefined,
-			true
-		);
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(undefined, true);
 
 		createAppSyncEngine(BASE_OPTIONS);
 
 		const ports = createRxdbSyncEngine.mock.calls[0]![0];
-		expect(ports.multiInstance).toBe(true);
-		expect(ports.writePlaneOwner?.()).toBe(true);
-		expect(electWriteLeader).toHaveBeenCalledWith(
-			`wcpos-write-leader:${scopeDatabaseName(BASE_OPTIONS.scope)}`,
-			expect.objectContaining({ onUnavailable: expect.any(Function) })
-		);
+		expect(ports.multiInstance).toBe(false);
 	});
 
-	it('moves the web leadership lock when the cached engine switches scope', async () => {
-		Object.defineProperty(globalThis, 'navigator', {
-			configurable: true,
-			value: { locks: {} },
-		});
-		const { createAppSyncEngine, electWriteLeader, writeLeaders } = loadCreateAppEngine(
-			undefined,
-			true
-		);
-		createAppSyncEngine(BASE_OPTIONS);
-		const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
-
-		createAppSyncEngine({ ...BASE_OPTIONS, scope: targetScope });
-		await Promise.resolve();
-
-		expect(writeLeaders[0]?.dispose).toHaveBeenCalledTimes(1);
-		expect(electWriteLeader).toHaveBeenLastCalledWith(
-			`wcpos-write-leader:${scopeDatabaseName(targetScope)}`,
-			expect.objectContaining({ onUnavailable: expect.any(Function) })
-		);
-	});
-
-	it('opens the write-outcome channel for the scope and moves it on a switch (#1209)', async () => {
-		Object.defineProperty(globalThis, 'navigator', {
-			configurable: true,
-			value: { locks: {} },
-		});
-		const { createAppSyncEngine, createRxdbSyncEngine, writeOutcomeBridges } = loadCreateAppEngine(
-			undefined,
-			true
-		);
-		createAppSyncEngine(BASE_OPTIONS);
-
-		// One bridge, injected as the engine port and pointed at this store's channel.
-		expect(writeOutcomeBridges).toHaveLength(1);
-		expect(createRxdbSyncEngine.mock.calls[0]![0].writeOutcomeBridge).toBe(writeOutcomeBridges[0]);
-		expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
-			`wcpos-write-outcomes:${scopeDatabaseName(BASE_OPTIONS.scope)}`
-		);
-
-		const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
-		createAppSyncEngine({ ...BASE_OPTIONS, scope: targetScope });
-		await Promise.resolve();
-
-		// It follows the lock, or a tab keeps hearing the previous store's outcomes.
-		expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
-			`wcpos-write-outcomes:${scopeDatabaseName(targetScope)}`
-		);
-	});
-
-	it('opens no write-outcome channel off the web (#1209)', () => {
-		const { createAppSyncEngine, createRxdbSyncEngine, createWriteOutcomeBridge } =
-			loadCreateAppEngine(undefined, false);
-
-		createAppSyncEngine(BASE_OPTIONS);
-
-		// Native and Electron are single-window: in-process events already reach
-		// every consumer, so there is no peer to tell.
-		expect(createWriteOutcomeBridge).not.toHaveBeenCalled();
-		expect(createRxdbSyncEngine.mock.calls[0]![0].writeOutcomeBridge).toBeUndefined();
-	});
-
-	it('keeps single-instance behavior and emits diagnostics when Web Locks are unavailable', () => {
+	it('keeps SQLite single-instance when Web Locks are unavailable', () => {
 		Object.defineProperty(globalThis, 'navigator', {
 			configurable: true,
 			value: {},
 		});
-		const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader, appMetricsObserver } =
-			loadCreateAppEngine(undefined, true);
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(undefined, true);
 
 		createAppSyncEngine({ ...BASE_OPTIONS, multiInstance: true });
 
 		const ports = createRxdbSyncEngine.mock.calls[0]![0];
 		expect(ports.multiInstance).toBe(false);
-		expect(ports.writePlaneOwner?.()).toBe(true);
-		// The degraded diagnostic is now the election module's responsibility (it
-		// fires onUnavailable — see web-write-leader.test.ts). Verify the host wires
-		// it: the callback it handed to electWriteLeader emits the warning.
-		const electArgs = electWriteLeader.mock.calls[0] as unknown as [
-			string,
-			{ onUnavailable: () => void },
-		];
-		electArgs[1].onUnavailable();
-		expect(appMetricsObserver).toHaveBeenCalledWith(
-			expect.objectContaining({
-				type: 'engine.write-leader.degraded',
-				level: 'warn',
-			})
+	});
+});
+
+describe('legacy database purge', () => {
+	it('runs once after readiness, never blocks the open or the next engine', async () => {
+		let ready!: () => void;
+		const engine = createEngineDouble();
+		engine.ready = new Promise<void>((resolve) => {
+			ready = resolve;
+		});
+		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		purgeLegacyDatabases.mockImplementation(() => new Promise(() => {}));
+		expect(createAppSyncEngine(BASE_OPTIONS)).toBe(engine);
+		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
+		ready();
+		await engine.ready;
+		await Promise.resolve();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		createAppSyncEngine(OTHER_SITE_OPTIONS);
+		await Promise.resolve();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+	});
+
+	it('logs a rejected purge without failing readiness', async () => {
+		const { createAppSyncEngine, purgeLegacyDatabases, networkError } = loadCreateAppEngine();
+		purgeLegacyDatabases.mockRejectedValue(new Error('purge failed'));
+		const engine = createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).resolves.toBeUndefined();
+		await Promise.resolve();
+		expect(networkError).toHaveBeenCalledWith(
+			'Failed to purge legacy databases',
+			expect.any(Object)
 		);
+	});
+
+	it('does not purge when engine readiness fails', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		engine.ready = Promise.reject(new Error('open failed'));
+		createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).rejects.toThrow('open failed');
+		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
 	});
 });

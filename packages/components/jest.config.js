@@ -31,6 +31,12 @@ module.exports = {
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.ts'],
 	moduleNameMapper: {
 		'^react-native$': 'react-native-web',
+		// react-native-svg's web elements import `@react-native/assets-registry/registry`, a package
+		// React Native 0.88 no longer depends on and whose 0.88 build is ESM, which this CommonJS
+		// runner cannot load. These suites already run react-native as react-native-web, so use its
+		// CommonJS build of the same registry. Drop when react-native-svg imports the registry from
+		// `react-native/asset-registry`.
+		'^@react-native/assets-registry/registry$': 'react-native-web/dist/cjs/modules/AssetRegistry',
 	},
 	globals: {
 		__DEV__: true,

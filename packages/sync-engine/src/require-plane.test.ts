@@ -1,3 +1,4 @@
+import { newRxError } from 'rxdb';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -186,12 +187,12 @@ describe('forced resident refresh requires its own completion', () => {
 		}
 	});
 
-	it('releases a forced resident refresh when its drain rebuilds the ledger', async () => {
+	it('releases a forced resident refresh when its drain aborts after COL21', async () => {
 		const { harness } = await residentHarness();
-		// Fail the storage read, not the drain: exercise the real rebuild and aborted tick.
+		// Fail the storage read, not the drain: exercise the real reattachment and aborted tick.
 		const read = vi
 			.spyOn(RxSchedulerTaskStateRepository.prototype, 'readRunnable')
-			.mockRejectedValueOnce(new Error('index reconciliation refused: invalid index'));
+			.mockRejectedValueOnce(newRxError('COL21', { collection: 'schedulerTaskStates' }));
 		try {
 			await expect(
 				harness.engine.require({ ...residentRequirement, forceRefresh: true }).ready
@@ -199,7 +200,7 @@ describe('forced resident refresh requires its own completion', () => {
 				action: 'released',
 				reason: 'local sync bookkeeping was rebuilt mid-drain',
 			});
-			expect(await harness.collection('schedulerTaskStates').count().exec()).toBe(0);
+			expect(await harness.collection('schedulerTaskStates').count().exec()).toBeGreaterThan(0);
 		} finally {
 			read.mockRestore();
 			await harness.dispose();

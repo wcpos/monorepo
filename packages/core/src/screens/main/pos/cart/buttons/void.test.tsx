@@ -417,3 +417,12 @@ it('stamps the original register through the real writer when binding switches d
 jest.mock('../../contexts/current-order/temporary-order', () => ({}));
 
 jest.mock('../../../../../hooks/use-local-date', () => ({}));
+
+it('closes the sheet synchronously before starting the existing void flow', () => {
+	const before = jest.fn(() => expect(mockEngine.write).not.toHaveBeenCalled());
+	mockEngine.write.mockClear();
+	render(<VoidButton onBeforeVoid={before} />);
+	fireEvent.click(screen.getByTestId('void-button'));
+	expect(before).toHaveBeenCalledTimes(1);
+	expect(mockEngine.write).toHaveBeenCalled();
+});

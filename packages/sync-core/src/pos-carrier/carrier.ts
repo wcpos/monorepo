@@ -22,10 +22,14 @@ export interface PosCarrier {
 	taxBasedOnOverride(meta: MetaDataEntry[] | undefined): string | null;
 	lineUuid(line: { meta_data?: MetaDataEntry[] }): string | null;
 	ensureLineUuid<L extends { meta_data?: MetaDataEntry[] }>(line: L, mintUuid: () => string): L;
-	identityFilter(identity: { cashierId?: string; storeId?: string }): Record<string, unknown>;
+	identityFilter(identity: {
+		cashierId?: string;
+		storeId?: string;
+		registerId?: string;
+	}): Record<string, unknown>;
 	decodeIdentityFilter(
 		selector: Record<string, unknown>
-	): { cashierId?: string; storeId?: string } | null;
+	): { cashierId?: string; storeId?: string; registerId?: string } | null;
 }
 
 /**
@@ -57,22 +61,47 @@ function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string
 	return null;
 }
 
+/**
+ * The identity is STAMPED as a string, but `readIdentity` (via `scalarMetaValue`) also
+ * accepts an integer a server-side writer left behind. A condition that reaches storage
+ * cannot coerce, so a numeric-looking identity matches both spellings (#2249 review).
+ */
 function identityCondition(key: string, value: string): Record<string, unknown> {
-	return { meta_data: { $elemMatch: { key, value } } };
+	const spellings = /^\d+$/.test(value) ? { $in: [value, Number(value)] } : value;
+	return { meta_data: { $elemMatch: { key, value: spellings } } };
 }
 
 function decodeSingleIdentityCondition(
 	selector: Record<string, unknown>
-): { cashierId?: string; storeId?: string } | null {
+): { cashierId?: string; storeId?: string; registerId?: string } | null {
 	const metaData = selector.meta_data;
 	if (metaData === null || typeof metaData !== 'object') return null;
 	const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
 	if (elemMatch === null || typeof elemMatch !== 'object') return null;
-	const { key, value } = elemMatch as Record<string, unknown>;
+	const { key, value: spellings } = elemMatch as Record<string, unknown>;
+	const value =
+		spellings !== null &&
+		typeof spellings === 'object' &&
+		Array.isArray((spellings as { $in?: unknown }).$in)
+			? (spellings as { $in: unknown[] }).$in.find((entry) => typeof entry === 'string')
+			: spellings;
 	if (typeof value !== 'string') return null;
 	if (key === POS_META_KEYS.user) return { cashierId: value };
 	if (key === POS_META_KEYS.store) return { storeId: value };
+	if (key === POS_META_KEYS.register) return { registerId: value };
 	return null;
+}
+
+/** Indexed spelling of the carrier identity; no store attribution is the empty string. */
+export function identityColumns(identity: Pick<PosIdentity, 'cashierId' | 'storeId'>) {
+	return { posUserId: identity.cashierId ?? '', posStoreId: identity.storeId ?? '' };
+}
+
+export function identityColumnFilter(identity: { cashierId?: string; storeId?: string }) {
+	return {
+		...(identity.cashierId === undefined ? {} : { posUserId: identity.cashierId }),
+		...(identity.storeId === undefined ? {} : { posStoreId: identity.storeId }),
+	};
 }
 
 export const wooMetaCarrier: PosCarrier = {
@@ -157,6 +186,9 @@ export const wooMetaCarrier: PosCarrier = {
 			identity.storeId === undefined
 				? undefined
 				: identityCondition(POS_META_KEYS.store, identity.storeId),
+			identity.registerId === undefined
+				? undefined
+				: identityCondition(POS_META_KEYS.register, identity.registerId),
 		].filter((condition): condition is Record<string, unknown> => condition !== undefined);
 		if (conditions.length === 0) return {};
 		if (conditions.length === 1) return conditions[0];
@@ -168,13 +200,14 @@ export const wooMetaCarrier: PosCarrier = {
 		if (single) return single;
 		if (Object.keys(selector).length === 0) return {};
 		if (!Array.isArray(selector.$and)) return null;
-		const identity: { cashierId?: string; storeId?: string } = {};
+		const identity: { cashierId?: string; storeId?: string; registerId?: string } = {};
 		for (const condition of selector.$and) {
 			if (condition === null || typeof condition !== 'object') return null;
 			const decoded = decodeSingleIdentityCondition(condition as Record<string, unknown>);
 			if (!decoded) return null;
 			if (decoded.cashierId !== undefined) identity.cashierId = decoded.cashierId;
 			if (decoded.storeId !== undefined) identity.storeId = decoded.storeId;
+			if (decoded.registerId !== undefined) identity.registerId = decoded.registerId;
 		}
 		return identity;
 	},

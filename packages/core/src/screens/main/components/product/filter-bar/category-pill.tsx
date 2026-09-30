@@ -76,7 +76,8 @@ export function CategoryPill() {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-categories"
 					removable={isActive}
 					removeTestID="filter-pill-remove-categories"

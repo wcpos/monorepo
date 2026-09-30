@@ -13,6 +13,8 @@ import Animated, {
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
+import { StatusBadge } from '@wcpos/components/status-badge';
+import { SPINNER } from '@wcpos/components/lib/motion';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { toMinor } from '@wcpos/order-math';
@@ -155,7 +157,7 @@ export function TerminalLegView({
 	};
 	if (leg.outcome === 'captured' && leg.settlement?.finishingError) {
 		return (
-			<ScrollView className="bg-sidebar flex-1">
+			<ScrollView className="bg-card flex-1">
 				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
 			</ScrollView>
 		);
@@ -164,88 +166,83 @@ export function TerminalLegView({
 	return (
 		<ScrollView
 			testID="checkout-terminal-leg"
-			className="bg-sidebar flex-1"
+			className="bg-card flex-1"
 			contentContainerClassName="grow items-center gap-4 pb-4"
 		>
 			<HStack className="w-full flex-wrap justify-between gap-2">
 				{leg.orderNumber ? (
-					<Text className="text-sidebar-foreground/70 text-xs">
+					<Text className="text-muted-foreground text-xs">
 						{t('common.order')} #{leg.orderNumber} ·{' '}
 						{t('coupons.items_summary', { n: flow.lines.length })}
 					</Text>
 				) : null}
-				<Text className="text-sidebar-foreground/70 text-xs" decodeHtml>
+				<Text className="text-muted-foreground text-xs" decodeHtml>
 					{flow.plan ? flow.planLabel : t('pos_checkout.payment_n_of', { n: 1, ways: 1 })}
 				</Text>
 			</HStack>
 			<View className="min-h-4 flex-1" />
-			<Text className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
 				{t('pos_checkout.on_the_terminal')}
 			</Text>
 			<Text
-				className={`text-sidebar-foreground font-bold tabular-nums ${screenSize === 'sm' ? 'text-5xl' : 'text-7xl'}`}
+				className={`text-foreground font-bold tabular-nums ${screenSize === 'sm' ? 'text-5xl' : 'text-7xl'}`}
 			>
 				{format(toMinor(row.amount, flow.dp))}
 			</Text>
-			<Text
+			<StatusBadge
 				testID="checkout-terminal-status"
-				className={`text-center ${failed || leg.captureFailed ? 'text-destructive' : 'text-sidebar-foreground/70'}`}
-			>
-				{status}
-			</Text>
+				label={status}
+				variant={failed || leg.captureFailed ? 'error' : 'muted'}
+			/>
 			{leg.unstable && action === 'cancel' ? (
 				<Text className="text-warning text-sm">{t('pos_checkout.connection_unstable')}</Text>
 			) : null}
 			{!final ? <TerminalRing reduceMotion={reduceMotion} /> : null}
-			<VStack className="bg-sidebar-foreground/10 w-full max-w-md rounded-2xl p-4" space="md">
+			<VStack className="bg-muted w-full max-w-md rounded-2xl p-4" space="md">
 				<HStack className="flex-wrap items-center justify-between gap-2">
-					<Text className="text-sidebar-foreground/70 shrink text-xs" decodeHtml>
+					<Text className="text-muted-foreground shrink text-xs" decodeHtml>
 						{method?.title ?? row.method_id} · {readerLabel}
 					</Text>
 					<HStack className="items-center gap-1">
 						{connected ? (
 							<>
 								<View className="bg-success size-2 rounded-full" />
-								<Text className="text-sidebar-foreground/70 text-xs lowercase">
+								<Text className="text-muted-foreground text-xs lowercase">
 									{t('pos_checkout.reader_connected')}
 								</Text>
 							</>
 						) : null}
 						{row.capture_mode === 'device' && driverStatus.reader?.battery != null ? (
-							<Text className="text-sidebar-foreground/70 text-xs">
+							<Text className="text-muted-foreground text-xs">
 								{t('pos_checkout.reader_battery_percent', { battery: driverStatus.reader.battery })}
 							</Text>
 						) : null}
 					</HStack>
 				</HStack>
-				<HStack className="gap-0">
+				<View>
 					{steps.map((label, index) => (
-						<View key={label} className="flex-1 items-center gap-2">
-							{index < 3 ? (
-								<View className="bg-sidebar-foreground/15 absolute top-[13px] left-1/2 h-px w-full" />
-							) : null}
-							<View
-								className={`size-[26px] items-center justify-center rounded-full ${index === currentStep ? 'bg-sidebar-foreground/15' : ''}`}
-							>
+						<HStack key={label} className="min-h-row items-stretch gap-2">
+							<View className="items-center gap-1 pt-2">
 								<View
 									testID={`checkout-terminal-step-${index}`}
 									aria-selected={index === currentStep}
-									className={`size-[14px] rounded-full ${reduceMotion ? '' : 'web:transition-all web:duration-200 web:ease-out'} ${index < currentStep ? 'bg-success' : index === currentStep ? 'border-sidebar-foreground scale-110 border-2 opacity-100' : 'border-sidebar-foreground/70 border opacity-30'}`}
+									className={`size-2 rounded-full ${index <= currentStep ? 'bg-success' : 'bg-muted'}`}
 								/>
+								{index < 3 ? <View className="bg-border w-px flex-1" /> : null}
 							</View>
 							<Text
-								className={`text-center text-xs ${index === currentStep ? 'text-sidebar-foreground font-semibold' : 'text-sidebar-foreground/70'}`}
+								className={`text-sm ${index === currentStep ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}
 							>
 								{label}
 							</Text>
-						</View>
+						</HStack>
 					))}
-				</HStack>
+				</View>
 			</VStack>
 			<HStack className="flex-wrap justify-center gap-2">
 				{action === 'capture' ? (
 					<Button
-						variant="sidebar-solid"
+						variant="default"
 						size="lg"
 						testID="checkout-terminal-capture-retry"
 						onPress={flow.retryTerminalCapture}
@@ -264,7 +261,7 @@ export function TerminalLegView({
 					(row.capture_mode !== 'device' ||
 						('resumed' in leg && leg.resumed && row.status === 'authorized'))) ? (
 					<Button
-						variant="sidebar-quiet"
+						variant="outline"
 						size="lg"
 						testID="checkout-terminal-cancel"
 						disabled={action === 'cancelling'}
@@ -276,7 +273,7 @@ export function TerminalLegView({
 				) : null}
 				{action === 'release' ? (
 					<Button
-						variant="sidebar-quiet"
+						variant="outline"
 						size="lg"
 						testID="checkout-terminal-release"
 						onPress={flow.releaseTerminalLeg}
@@ -287,7 +284,7 @@ export function TerminalLegView({
 				{action === 'final' ? (
 					<>
 						<Button
-							variant="sidebar-solid"
+							variant="default"
 							size="lg"
 							testID="checkout-terminal-retry"
 							onPress={flow.retryTerminalLeg}
@@ -295,7 +292,7 @@ export function TerminalLegView({
 							<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
 						</Button>
 						<Button
-							variant="sidebar-quiet"
+							variant="outline"
 							size="lg"
 							testID="checkout-terminal-another"
 							onPress={flow.dismissTerminalLeg}
@@ -306,13 +303,11 @@ export function TerminalLegView({
 				) : null}
 			</HStack>
 			{action === 'release' ? (
-				<Text className="text-sidebar-foreground/70 text-sm">
-					{t('pos_checkout.release_explainer')}
-				</Text>
+				<Text className="text-muted-foreground text-sm">{t('pos_checkout.release_explainer')}</Text>
 			) : null}
 			<Collapsible open={open} onOpenChange={setOpen}>
 				<CollapsibleTrigger testID="checkout-terminal-log-toggle">
-					<Text className="text-sidebar-foreground/70 text-center">
+					<Text className="text-muted-foreground text-center">
 						{open ? t('pos_checkout.hide_log') : t('pos_checkout.show_log')}
 					</Text>
 				</CollapsibleTrigger>
@@ -320,7 +315,7 @@ export function TerminalLegView({
 					{events.map((event, i) => (
 						<Text
 							key={`${event.t}-${i}`}
-							className={`font-mono text-xs ${event.level === 'error' ? 'text-destructive' : event.level === 'warning' ? 'text-warning' : 'text-sidebar-foreground/70'}`}
+							className={`font-mono text-xs ${event.level === 'error' ? 'text-destructive' : event.level === 'warning' ? 'text-warning' : 'text-muted-foreground'}`}
 						>
 							{lines[i]}
 						</Text>
@@ -329,7 +324,7 @@ export function TerminalLegView({
 					{Platform.isNative || canCopy ? (
 						<Button
 							size="sm"
-							variant="sidebar-quiet"
+							variant="outline"
 							className="self-start"
 							testID="checkout-terminal-log-copy"
 							onPress={() => void copy()}
@@ -349,14 +344,14 @@ function TerminalRing({ reduceMotion }: { reduceMotion: boolean }) {
 	// Reanimated owns a UI-thread animation; start/stop it with this mounted ring.
 	React.useEffect(() => {
 		if (reduceMotion) return;
-		rotation.value = withRepeat(withTiming(360, { duration: 1000, easing: Easing.linear }), -1);
+		rotation.value = withRepeat(withTiming(360, { duration: SPINNER, easing: Easing.linear }), -1);
 		return () => cancelAnimation(rotation);
 	}, [reduceMotion, rotation]);
 	const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
 	return (
 		<Animated.View
 			testID="checkout-terminal-ring"
-			className="border-sidebar-foreground/15 border-t-sidebar-foreground/80 size-[112px] rounded-full border-[6px]"
+			className="border-border border-t-primary size-28 rounded-full border-4"
 			style={style}
 		/>
 	);

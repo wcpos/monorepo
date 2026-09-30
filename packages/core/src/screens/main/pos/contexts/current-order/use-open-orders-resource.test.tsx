@@ -2,9 +2,16 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
+import { fillWithDefaultSettings, getQueryMatcher, normalizeMangoQuery } from 'rxdb';
 import { BehaviorSubject, map, of } from 'rxjs';
 
+import { OPEN_ORDERS_SORT, openOrdersSelector } from '@wcpos/query';
+import { POS_META_KEYS } from '@wcpos/sync-core';
+import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
+
 import { useOpenOrdersResource } from './use-open-orders-resource';
+
+import type { RxJsonSchema } from 'rxdb';
 
 type EngineDocument = Record<string, unknown> & {
 	uuid: string;
@@ -48,11 +55,15 @@ function order(
 	remoteId: number,
 	dateCreatedGmt: string,
 	cashierId: number,
-	storeId: number
+	storeId: number,
+	registerId?: string
 ) {
 	const document: EngineDocument = {
+		posUserId: String(cashierId),
+		posStoreId: String(storeId),
 		uuid,
 		remoteId: String(remoteId),
+		remoteKey: String(String(remoteId) ?? ''),
 		status: 'pos-open',
 		dateCreatedGmt,
 		payload: {
@@ -62,23 +73,51 @@ function order(
 			meta_data: [
 				{ key: '_pos_user', value: String(cashierId) },
 				{ key: '_pos_store', value: String(storeId) },
+				...(registerId ? [{ key: POS_META_KEYS.register, value: registerId }] : []),
 			],
 		},
 	};
 	return {
 		...document,
+		dateCreatedGmt,
 		$: of(document),
 		collection: { name: 'orders' },
-		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId),
+		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId, registerId),
 		toJSON: () => document,
 	};
 }
 
-function databaseWith<T>(orders$: BehaviorSubject<T[]>): FakeDatabase {
+const ORDERS_SCHEMA = fillWithDefaultSettings(
+	engineSyncCollectionCreators().orders.schema as RxJsonSchema<Record<string, unknown>>
+);
+
+/**
+ * The cashier/store scope and the creation order are the STORAGE's (#2242), so the fake
+ * collection answers `find` the way storage would: rxdb's own matcher over the selector it
+ * was given, in `dateCreatedGmt` order. The seam test in the query package runs the
+ * same selector against real engines; this fake only has to honour it.
+ */
+function databaseWith<T extends ReturnType<typeof order>>(
+	orders$: BehaviorSubject<T[]>
+): FakeDatabase {
 	return {
 		collections: {
 			orders: {
-				find: jest.fn(() => ({ $: orders$.asObservable() })),
+				find: jest.fn(({ selector }: { selector: Record<string, unknown> }) => {
+					const matches = getQueryMatcher(
+						ORDERS_SCHEMA,
+						normalizeMangoQuery(ORDERS_SCHEMA, { selector: selector as never })
+					);
+					return {
+						$: orders$.pipe(
+							map((records) =>
+								records
+									.filter((record) => matches(record as never))
+									.sort((a, b) => String(a.dateCreatedGmt).localeCompare(String(b.dateCreatedGmt)))
+							)
+						),
+					};
+				}),
 			},
 		},
 	};
@@ -96,19 +135,24 @@ describe('useOpenOrdersResource', () => {
 		databaseSubscribers.clear();
 	});
 
-	it('reactively filters pos-open orders by cashier/store, sorts records, and rebinds scopes', () => {
+	it('reads pos-open orders scoped by cashier/store in storage order, and rebinds scopes', () => {
 		const orders$ = new BehaviorSubject([
-			order('late', 3, '2026-07-14T12:00:00', 7, 2),
+			order('late', 3, '2026-07-14T12:00:00', 7, 2, 'register-b'),
 			order('wrong-store', 4, '2026-07-14T09:00:00', 7, 9),
-			order('early', 2, '2026-07-14T10:00:00', 7, 2),
+			order('early', 2, '2026-07-14T10:00:00', 7, 2, 'register-a'),
 			order('wrong-cashier', 5, '2026-07-14T08:00:00', 8, 2),
 		]);
 		const firstDatabase = databaseWith(orders$);
 		activeDatabase = firstDatabase;
-		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
+		const initialProps: { registerId: string | null } = { registerId: null };
+		const { result, rerender } = renderHook(
+			({ registerId }: { registerId: string | null }) => useOpenOrdersResource(7, 2, registerId),
+			{ initialProps }
+		);
 
 		expect(firstDatabase.collections.orders.find).toHaveBeenCalledWith({
-			selector: { status: { $in: ['pos-open', 'pos-partial', 'pending'] } },
+			selector: openOrdersSelector(7, 2),
+			sort: OPEN_ORDERS_SORT,
 		});
 		expect(result.current.read().map((hit) => [hit.id, hit.record.uuid])).toEqual([
 			['early', 'early'],
@@ -118,6 +162,12 @@ describe('useOpenOrdersResource', () => {
 		act(() => {
 			orders$.next([...orders$.value, order('new', 6, '2026-07-14T13:00:00', 7, 2)]);
 		});
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['early', 'late', 'new']);
+		rerender({ registerId: 'register-a' });
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['early']);
+		rerender({ registerId: 'register-b' });
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['late']);
+		rerender({ registerId: null });
 		expect(result.current.read().map((hit) => hit.id)).toEqual(['early', 'late', 'new']);
 
 		const nextOrders$ = new BehaviorSubject([order('next-scope', 10, '2026-07-14T14:00:00', 7, 2)]);
@@ -189,6 +239,14 @@ describe('useOpenOrdersResource', () => {
 		}
 	});
 
+	it('does not query when the cashier is unavailable', () => {
+		const database = databaseWith(new BehaviorSubject([order('open', 1, '2026-01-01', 7, 2)]));
+		activeDatabase = database;
+		const { result } = renderHook(() => useOpenOrdersResource(undefined, 2));
+		expect(result.current.read()).toEqual([]);
+		expect(database.collections.orders.find).not.toHaveBeenCalled();
+	});
+
 	it('resolves to no resident open orders when the engine database is unavailable', () => {
 		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
 
@@ -199,21 +257,7 @@ describe('useOpenOrdersResource', () => {
 it('keeps the active order reachable when a leg changes its status', () => {
 	const record = order('live', 42, '2026-09-07T12:00:00', 7, 2);
 	const orders$ = new BehaviorSubject([record]);
-	const database = databaseWith(orders$);
-	database.collections.orders.find.mockImplementation(
-		({ selector }: { selector: { status: string | { $in: string[] } } }) => ({
-			$: orders$.pipe(
-				map((records) =>
-					records.filter((item) =>
-						typeof selector.status === 'string'
-							? item.status === selector.status
-							: selector.status.$in.includes(item.status)
-					)
-				)
-			),
-		})
-	);
-	activeDatabase = database;
+	activeDatabase = databaseWith(orders$);
 	const { result } = renderHook(() => useOpenOrdersResource(7, 2));
 	for (const status of ['pos-open', 'pending', 'pos-partial']) {
 		act(() => orders$.next([{ ...record, status, payload: { ...record.payload, status } }]));

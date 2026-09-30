@@ -133,18 +133,24 @@ export function useEngineRecordsByWooId<C extends EngineRecordCollectionName>(
 						return of([] as EngineRecord<C>[]);
 					}
 
-					return collection.find({ selector: { remoteId: { $in: stableRemoteIds } } }).$.pipe(
-						map((records) => {
-							const order = new Map(stableWooIds.map((id, index) => [id, index]));
-							return [...records].sort((a, b) => {
-								const aId = a.remoteId === null ? undefined : wooIdOf(a.remoteId);
-								const bId = b.remoteId === null ? undefined : wooIdOf(b.remoteId);
-								const aOrder = aId === undefined ? undefined : order.get(aId);
-								const bOrder = bId === undefined ? undefined : order.get(bId);
-								return (aOrder ?? Number.MAX_SAFE_INTEGER) - (bOrder ?? Number.MAX_SAFE_INTEGER);
-							});
+					return collection
+						.find({
+							selector: {
+								[collectionName === 'refunds' ? 'remoteId' : 'remoteKey']: { $in: stableRemoteIds },
+							},
 						})
-					);
+						.$.pipe(
+							map((records) => {
+								const order = new Map(stableWooIds.map((id, index) => [id, index]));
+								return [...records].sort((a, b) => {
+									const aId = a.remoteId === null ? undefined : wooIdOf(a.remoteId);
+									const bId = b.remoteId === null ? undefined : wooIdOf(b.remoteId);
+									const aOrder = aId === undefined ? undefined : order.get(aId);
+									const bOrder = bId === undefined ? undefined : order.get(bId);
+									return (aOrder ?? Number.MAX_SAFE_INTEGER) - (bOrder ?? Number.MAX_SAFE_INTEGER);
+								});
+							})
+						);
 				})
 			);
 		}

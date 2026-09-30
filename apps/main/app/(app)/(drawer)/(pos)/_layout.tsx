@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
@@ -28,12 +28,13 @@ import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contex
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { POSOverlaySideProvider } from '@wcpos/core/screens/main/pos/contexts/overlay-side';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
+import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'index',
+	anchor: 'index',
 };
 
 export default function POSLayout() {
@@ -85,7 +86,8 @@ export default function POSLayout() {
 	 * there are too many edge cases, ie: cashier is not set, store is not set, etc.
 	 * For now, we'll just filter the results.
 	 */
-	const resource = useOpenOrdersResource(cashierID, storeID);
+	const { registerId } = useRegisterBinding();
+	const resource = useOpenOrdersResource(cashierID, storeID, registerId);
 
 	// Built HERE, above the Suspense below, and handed to the provider — the same shape as the
 	// open-orders resource above it and for the same reason: a resource built inside the
@@ -143,7 +145,7 @@ function POSStack() {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUniwind();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	const registerPOSContainer = React.useCallback((node: View | null) => {
+	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
 

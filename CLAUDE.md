@@ -129,7 +129,7 @@ E2E specs must pass against **any** store — never against one store's remember
 
 ## Standing rulings
 
-- **Web `multiInstance` is `true`. Do not flip it.** Multi-tab of one store is first-class (#1057, closes #1045/#1055). `false` on web is a proven data-loss path (#1049). If Sentry shows `targeted recovery refused: multi-instance` on web, the defect is the gate in `opfs-targeted-recovery.mjs`, not the flag. Read the Decision section of `packages/database/src/adapters/default/README.md` before touching either.
+- **Web `multiInstance` is pinned to the storage engine, never set on its own.** On `next` (2.0) the engine is `sqlite-sahpool` and the flag is `false` with one live tab per origin (#2242, #2271); on `main` (1.10.x) the engine is `opfs-filesystem` and the flag is `true` (#1057). The pair is enforced by `multi-instance-ruling.test.ts`; change both halves or neither, and never backport one lane's flag to the other. Read the Decision section of `packages/database/src/adapters/default/README.md` first.
 
 ## Branch lanes
 

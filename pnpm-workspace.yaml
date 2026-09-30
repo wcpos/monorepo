@@ -43,25 +43,22 @@ minimumReleaseAgeExclude:
   - "@react-native/virtualized-lists"
   - "@expo/config-types"
 overrides:
-  "expo": "~57.0.13"
-  "@expo/dom-webview": "57.0.1"
+  "expo": "~58.0.0-preview.8"
+  "expo-modules-core": "~58.0.8"
+  "@expo/dom-webview": "~58.0.1"
   "lightningcss": "1.30.1"
   "uniwind": "1.11.0"
-  "react": "19.2.3"
-  "react-dom": "19.2.3"
-  "react-native": "0.86.2"
-  # Expo SDK 57 prescribes 4.5.1. Held at 4.5.5 (same 4.5 line, same worklets 0.10.x peer): 4.5.3
-  # ships software-mansion/react-native-reanimated#9527, which stops a settled animation reverting
-  # to a stale value after a JS-thread stall (#9965) - the drawer-reappears-at-open class (#1691,
-  # #1797). 4.6.x needs worklets 0.12, outside expo-modules-core 57's peer range; do not float there.
-  # Keep transitive auto-installed peers on the same native runtime.
-  "react-native-reanimated": "4.5.5"
+  "react": "19.3.0"
+  "react-dom": "19.3.0"
+  "react-native": "0.88.0-rc.2"
+  # Keep transitive auto-installed peers on the SDK native runtime.
+  "react-native-reanimated": "4.7.0"
   # expo-router floats ^4.2.2; pin so the patch below has one target. 4.2.10 carries upstream's
   # useLayoutEffect toggle (react-navigation#13186) and the accessibility-hiding animated props.
   "react-native-drawer-layout": "4.2.10"
   "react-native-edge-to-edge": "^1.6.2"
-  "react-native-gesture-handler": "~2.32.0"
-  "react-native-safe-area-context": "~5.7.0"
+  "react-native-gesture-handler": "~3.2.1"
+  "react-native-safe-area-context": "~5.9.1"
   # react-native-calendars lists moment as an OPTIONAL dependency and requires it
   # inside a try/catch, which Metro treats as an optional require: absent, it is
   # skipped; present, it is bundled. The lock had never resolved it, and every
@@ -163,6 +160,17 @@ patchedDependencies:
   # for a dropped index; the render path skips that key and `validateItemSize` drops the
   # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
+  # Removes the web ViewStyle/TextStyle augmentation and the PressableProps.style
+  # redeclaration from expo's `types/react-native-web.d.ts`: under RN 0.88's Strict API the
+  # style interfaces cannot be extended, so every `StyleProp<ViewStyle>` stops being
+  # assignable to a View's `style` (expo/expo#50504 and #50524). The file enters the program
+  # through the CLI-generated, gitignored `apps/main/expo-env.d.ts`, which `expo start`
+  # rewrites, so it cannot be fixed there. Our sources use no web-only style key; className
+  # and `hovered` are kept. Exact key on purpose: a range would need a prerelease floor, and
+  # pnpm 11 fails the install loudly when a patch is unused, which is the reminder to
+  # regenerate it at the SDK 58 stable bump. Drop it when Expo's file no longer augments
+  # the style interfaces.
+  "expo@58.0.0-preview.8": "patches/expo@58.0.0-preview.8.patch"
   # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
   # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
   # then on close() delete the original, read the whole swap back and rewrite it. The
@@ -173,7 +181,6 @@ patchedDependencies:
   # synchronous copySync()/moveSync(), so the swap is a native copy and the commit an
   # atomic rename — the April 2026 fix (5e691a9df4, rxdb#8290) that the July engine
   # migration dropped. Drop this patch when expo-opfs does the same upstream.
-  expo-opfs@1.0.9: patches/expo-opfs@1.0.9.patch
   # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
   # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
   # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the
@@ -185,8 +192,18 @@ patchedDependencies:
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
-  rxdb@17.4.0: patches/rxdb@17.4.0.patch
+  # Backports pubkey/rxdb#9026: IncrementalWriteQueue.triggerRun() has no try/finally.
+  # rxdb 17.5.0 still lacks it; drop this patch when upstream ships the fix.
+  rxdb@17.5.0: patches/rxdb@17.5.0.patch
+  # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
+  # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
+  # Skia 2.13.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
+  # Drop when Skia stops deep-importing react-native on web.
+  "@shopify/react-native-skia@2.11.2": "patches/@shopify__react-native-skia@2.11.2.patch"
+  expo-modules-core@58.0.8: patches/expo-modules-core@58.0.8.patch
+  expo-observe@58.0.11: patches/expo-observe@58.0.11.patch
+  expo-app-metrics@58.0.9: patches/expo-app-metrics@58.0.9.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
-  # The resurrection-index-leak fix for it lives in
-  # scripts/patch-rxdb-premium-resurrection-leak.mjs (root postinstall).
+  # The SQLite query-translation fix for it lives in
+  # scripts/patch-rxdb-premium-sqlite-query-translation.mjs (root postinstall).

@@ -14,6 +14,7 @@ export {
 	type EngineStatus,
 	type CustomerBrowseDimensions,
 	type OrderBrowseDimensions,
+	type RefundBrowseDimensions,
 	type ProductBrowseDimensions,
 	type RequirementHandle,
 	type RxdbSyncEngine,
@@ -31,15 +32,6 @@ export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
 } from './transport/response-envelope';
-/** Web multi-tab write-outcome feedback (#1209) — the host opens the channel
- * (named per scope database, re-pointed on a scope switch) and injects it as the
- * `writeOutcomeBridge` port. */
-export {
-	createWriteOutcomeBridge,
-	type ScopedWriteOutcomeBridge,
-	type WriteOutcomeBridge,
-	writeOutcomeChannelName,
-} from './write-path/write-outcome-bridge';
 export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
 /** The open-cart hold (see the module essay): the drain wiring and the health
  * counters must decide "is this row held?" by the same rule, never by two. The

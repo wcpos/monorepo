@@ -52,13 +52,33 @@ function PanelResizeHandle({
 		<PanelPrimitives.PanelResizeHandle {...handleProps}>
 			<View
 				className={cn(
-					'web:transition-colors rounded-full',
+					'web:transition-colors items-center justify-center rounded-full',
 					direction === 'horizontal'
 						? 'web:cursor-ew-resize h-12 w-1'
 						: 'web:cursor-ns-resize h-1 w-12',
 					dragging ? 'bg-primary' : hovered ? 'bg-muted-foreground' : 'bg-border'
 				)}
-			/>
+			>
+				<View className="items-center gap-1">
+					{[0, 1, 2].map((dot) => (
+						<View
+							key={dot}
+							className={cn(
+								'size-1 rounded-full',
+								// The dots must contrast with the bar under them (border / muted-foreground / primary),
+								// so each state paints them in the opposite tone.
+								dragging
+									? 'bg-primary-foreground opacity-100'
+									: hovered
+										? 'bg-background opacity-100'
+										: pointer === 'coarse'
+											? 'bg-muted-foreground opacity-60'
+											: 'bg-muted-foreground opacity-0'
+							)}
+						/>
+					))}
+				</View>
+			</View>
 		</PanelPrimitives.PanelResizeHandle>
 	);
 }

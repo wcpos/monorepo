@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
 
 /**
  *
@@ -53,6 +54,7 @@ export default function ResizablePOSColumns() {
 					<Suspense>
 						<ErrorBoundary>
 							<POSProducts />
+							{activeTab === 'products' && <ObserveInteractiveMarker />}
 						</ErrorBoundary>
 					</Suspense>
 				</View>
@@ -60,6 +62,7 @@ export default function ResizablePOSColumns() {
 					<Suspense>
 						<ErrorBoundary>
 							<OpenOrders />
+							{activeTab === 'cart' && <ObserveInteractiveMarker />}
 						</ErrorBoundary>
 					</Suspense>
 				</View>
@@ -101,6 +104,9 @@ export default function ResizablePOSColumns() {
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<POSColumns />
+			{/* The logged-in entry screen: time-to-interactive is the till's mount, the
+			    moment after hydration the cashier first sees the register (lib/observe.ts). */}
+			<ObserveInteractiveMarker />
 		</View>
 	);
 }

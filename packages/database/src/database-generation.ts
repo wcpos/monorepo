@@ -1,1 +1,1 @@
-export const DATABASE_GENERATION = 'v6';
+export const DATABASE_GENERATION = 'v7';

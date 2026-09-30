@@ -99,7 +99,7 @@ export function AddDiscount() {
 				<DialogAction
 					disabled={form.formState.isSubmitting}
 					testID="add-discount-submit"
-					onPress={onAdd}
+					onPress={() => void onAdd()}
 				>
 					{t('pos_cart.add_discount')}
 				</DialogAction>

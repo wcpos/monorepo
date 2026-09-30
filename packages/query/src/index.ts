@@ -53,3 +53,13 @@ export { startSearchReadiness } from './search-readiness';
 export { declareRequirements, runResetRefill } from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';
+
+export { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
+export { OPEN_ORDER_STATUSES, OPEN_ORDERS_SORT, openOrdersSelector } from './open-orders-scope';
+
+export {
+	projectionReaderFor,
+	registerProjectionReader,
+	storageQueryProjectionReader,
+} from './projection-read';
+export type { ProjectionCollection, ProjectionReader, ProjectionRow } from './projection-read';

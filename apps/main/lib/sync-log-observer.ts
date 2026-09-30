@@ -644,13 +644,6 @@ export const CONFORMANCE_TABLE = {
 	},
 	// decided: invisible — scheduling a catch-up tick after reconnect is internal narration.
 	'engine.reconnect.retick': INVISIBLE,
-	// decided: visible — single-tab-only syncing explains multi-tab degradation.
-	'engine.write-leader.degraded': {
-		operationType: 'sync.lifecycle',
-		outcome: 'unknown',
-		code: ERROR_CODES.MULTI_TAB_LIMITED,
-		didWork: () => true,
-	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
 	'maintenance.lane.error': {
 		operationType: 'sync.lane',

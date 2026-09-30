@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { type LayoutChangeEvent, View, type ViewStyle } from 'react-native';
 
-import { Gesture, GestureDetector, type PanGesture } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type LegacyPanGesture } from 'react-native-gesture-handler';
 import Animated, {
 	useAnimatedReaction,
 	useAnimatedStyle,
@@ -25,7 +25,7 @@ const uiLogger = getLogger(['wcpos', 'ui', 'dnd']);
  * Context for providing the pan gesture to DragHandle components
  */
 interface DragHandleContextValue {
-	panGesture: PanGesture;
+	panGesture: LegacyPanGesture;
 	setHasDragHandle: (value: boolean) => void;
 }
 

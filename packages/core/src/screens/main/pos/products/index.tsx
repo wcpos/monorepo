@@ -7,9 +7,12 @@ import { useObservableRef } from 'observable-hooks';
 import { type ExpandedState } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { EmptyState } from '@wcpos/components/empty-state';
+import { Skeleton, skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
@@ -27,8 +30,8 @@ import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
 import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
-import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
-import { oppositeOverlaySide, usePOSOverlaySide } from '../contexts/overlay-side';
+import { POS_PRODUCTS_MIN_PAGE_SIZE, TABLE_ROW_PX, TILE_TEXT_BLOCK_PX } from './fit-page-size';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 import { UISettingsForm } from './ui-settings-form';
 import { POSFilterBar } from './filter-bar/pos-filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
@@ -142,15 +145,31 @@ function TableFooter(props: BindingDataTableFooterProps) {
 /**
  *
  */
+/**
+ * True when no filter narrows the list beyond the provider's initial filters: every key
+ * either equals its initial value or is empty (unset, an empty string, an empty list).
+ */
+export function filtersAtBaseline(
+	filters: Record<string, unknown>,
+	initialFilters: Record<string, unknown>
+): boolean {
+	return Object.entries(filters).every(([key, value]) => {
+		if (key in initialFilters) return JSON.stringify(value) === JSON.stringify(initialFilters[key]);
+		return value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+	});
+}
+
 function POSProductsContent({
 	isColumn = false,
 	showOutOfStock,
+	initialFilters,
 }: {
 	isColumn?: boolean;
 	showOutOfStock: boolean;
+	initialFilters: Record<string, unknown>;
 }) {
-	const side = usePOSOverlaySide();
-	const { session } = useRegisterSession();
+	const side = usePanelSide('products');
+	const { session, sessionsOn } = useRegisterSession();
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -204,6 +223,56 @@ function POSProductsContent({
 	const [scannerOpen, setScannerOpen] = React.useState(false);
 	const t = useT();
 	const handleProductsLayout = useFitPageSize(actions.setPageSize, viewMode, gridColumns);
+	const [body, setBody] = React.useState({ width: 0, height: 0 });
+	// "No products yet" only when nothing narrows the baseline: no search and no filter beyond the
+	// initial ones (published, and in stock unless the setting shows out-of-stock). Any other zero
+	// is "nothing matches", with the way out (#308 rule 4).
+	const emptyStore = !state.search && filtersAtBaseline(state.filters, initialFilters);
+	const noDataMessage = (
+		<EmptyState
+			testID="no-data-message"
+			size="surface"
+			kind={emptyStore ? 'empty' : 'no-results'}
+			title={t(
+				emptyStore ? 'pos_products.no_products_yet' : 'pos_products.nothing_matches_filters'
+			)}
+			description={emptyStore ? t('pos_products.no_products_yet_description') : undefined}
+			action={
+				emptyStore
+					? undefined
+					: {
+							label: t('pos_products.clear_filters'),
+							onPress: () => {
+								actions.resetFilters();
+								actions.clearSearch();
+							},
+						}
+			}
+		/>
+	);
+	const loading = (
+		<View className="gap-2 p-2">
+			{Array.from(
+				{
+					length: skeletonCount(
+						body.height,
+						viewMode === 'grid' ? body.width / gridColumns + TILE_TEXT_BLOCK_PX : TABLE_ROW_PX
+					),
+				},
+				(_, row) => (
+					<View key={row} className="flex-row gap-2">
+						{Array.from({ length: viewMode === 'grid' ? gridColumns : 1 }, (_, column) => (
+							<Skeleton
+								key={column}
+								shape={viewMode === 'grid' ? 'tile' : 'row'}
+								className="flex-1"
+							/>
+						))}
+					</View>
+				)
+			)}
+		</View>
+	);
 
 	/**
 	 * Barcode
@@ -303,11 +372,7 @@ function POSProductsContent({
 									onToggle={() => setScannerOpen((open) => !open)}
 								/>
 								<ViewModeToggle />
-								<UISettingsDialog
-									side={oppositeOverlaySide(side)}
-									portalHost="pos"
-									title={t('common.product_settings')}
-								>
+								<UISettingsDialog side={side} portalHost="pos" title={t('common.product_settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>
@@ -329,15 +394,31 @@ function POSProductsContent({
 					</ErrorBoundary>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
+					{(session?.status === 'counting' || (!session && sessionsOn)) && (
+						<Text className="text-muted-foreground px-2 text-sm">
+							{t(
+								session?.status === 'counting'
+									? 'pos_products.counting_items_after_count'
+									: 'pos_products.price_check_only_until_open'
+							)}
+						</Text>
+					)}
 					<View
 						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
 						testID="register-products"
-						onLayout={handleProductsLayout}
+						onLayout={(event) => {
+							handleProductsLayout(event);
+							setBody(event.nativeEvent.layout);
+						}}
 					>
 						<ErrorBoundary>
-							<Suspense>
+							<Suspense fallback={loading}>
 								{viewMode === 'grid' ? (
-									<ProductGrid binding={binding} actions={tableActions} />
+									<ProductGrid
+										binding={binding}
+										actions={tableActions}
+										noDataMessage={noDataMessage}
+									/>
 								) : (
 									<DataTable<ProductRow>
 										id="pos-products"
@@ -351,7 +432,7 @@ function POSProductsContent({
 										sync={binding.sync}
 										renderItem={renderItem}
 										cellsForRow={cellsForRow}
-										noDataMessage={t('common.no_products_found')}
+										noDataMessage={noDataMessage}
 										estimatedItemSize={100}
 										TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
 										getItemType={(row) => row.original.record.payload.type}
@@ -383,7 +464,11 @@ export function POSProducts({ isColumn = false }) {
 			initialSort={initialSort}
 			initialFilters={initialFilters}
 		>
-			<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
+			<POSProductsContent
+				isColumn={isColumn}
+				showOutOfStock={showOutOfStock}
+				initialFilters={initialFilters}
+			/>
 		</QueryStateProvider>
 	);
 }

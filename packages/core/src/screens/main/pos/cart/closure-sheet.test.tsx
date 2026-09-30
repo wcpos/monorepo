@@ -8,7 +8,15 @@ import { ClosureSheet } from './closure-sheet';
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
-const closure = { number: 1, unsynced_count: 2, printed_at: null } as never;
+const closure = {
+	number: 1,
+	unsynced_count: 2,
+	printed_at: null,
+	closed_at: '2026-09-29T10:00:00Z',
+} as never;
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ store: { name: 'UK Store' } }),
+}));
 const print = jest.fn(async () => '2026-09-12T10:00:00Z');
 jest.mock('../../../../services/register-session/use-session-report', () => ({
 	useSessionReport: () => ({ print, previewProps: {}, isOffline: true }),
@@ -21,13 +29,17 @@ jest.mock('react-native-reanimated', () => ({
 	default: { View: jest.requireActual('react-native').View },
 	ZoomIn: { duration: () => ({ reduceMotion: () => undefined }) },
 	ReduceMotion: { System: 'system' },
+	Easing: { bezier: jest.fn(), linear: jest.fn() },
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en' }) }));
 jest.mock('@wcpos/components/button', () => ({
+	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
 		children,
 		onPress,
@@ -77,11 +89,30 @@ jest.mock('@wcpos/components/icon', () => ({
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
+	DialogContent: jest.requireActual('react-native').View,
+	DialogHeader: jest.requireActual('react-native').View,
+	DialogFooter: jest.requireActual('react-native').View,
+	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
+it('opens without an empty text node or print error', () => {
+	const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		render(
+			<ClosureSheet
+				closure={closure}
+				counted="463.30"
+				expected="480.80"
+				blind={false}
+				onDone={jest.fn()}
+			/>
+		);
+		expect(screen.queryByTestId('closure-print-error')).toBeNull();
+		expect(error).not.toHaveBeenCalledWith(expect.stringContaining('Unexpected text node: .'));
+	} finally {
+		error.mockRestore();
+	}
+});
 it('shows figures and dismisses with Done', () => {
 	const onDone = jest.fn();
 	render(
@@ -134,6 +165,7 @@ it('updates the title to the server number once acknowledged', () => {
 		number: 1,
 		server_number: null as number | null,
 		printed_at: null,
+		closed_at: '2026-09-29T10:00:00Z',
 		unsynced_count: 0,
 	};
 	const view = render(
@@ -157,3 +189,5 @@ it('updates the title to the server number once acknowledged', () => {
 	);
 	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

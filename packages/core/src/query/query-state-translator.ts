@@ -17,7 +17,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
-import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
+import { identityColumnFilter, remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
@@ -37,6 +37,9 @@ const mappedEntry = (mapping: WireField, operator: Operator = 'value'): MappedFi
 });
 
 export const FILTER_TRANSLATORS = {
+	refunds: {
+		dateRange: mappedEntry(collectionMap.refunds.fields.date_created_gmt, 'date-range'),
+	},
 	products: {
 		categories: mappedEntry(collectionMap.products.fields.categories, 'taxonomy-many'),
 		tags: mappedEntry(collectionMap.products.fields.tags, 'taxonomy-many'),
@@ -82,7 +85,9 @@ export function normalizeQuerySortField(
 	field: unknown
 ): string | undefined {
 	if (typeof field !== 'string') return undefined;
-	return collection === 'products' ? (sortAliasFor(collection, field) ?? field) : field;
+	return collection === 'products' && field !== 'name'
+		? (sortAliasFor(collection, field) ?? field)
+		: field;
 }
 
 const SYNC_KIND_PREFIX = 'wcpos.sync';
@@ -99,8 +104,8 @@ const notSyncCategory = {
 	],
 };
 
-// displayKind's actor test is `actor && (actor.id !== undefined || actor.name
-// !== undefined)` — a null actor or a role-only actor is NOT an action row, so
+// displayKind's actor test is `actor && (actor.id != null || actor.name
+// != null)` — a null actor or a role-only actor is NOT an action row, so
 // the selectors probe the identifying fields, not the object.
 const hasActingActor = {
 	$or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }],
@@ -231,23 +236,21 @@ function compileReadFilter(
 	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
-		const identityFilter = wooMetaCarrier.identityFilter({
+		const identityFilter = identityColumnFilter({
 			cashierId: String(id),
 		});
 		return {
-			prefilter: { [mapping.enginePath]: identityFilter.meta_data },
+			prefilter: identityFilter,
 			matches: (document) => String(actual(document)) === String(id),
 		};
 	}
 	if (operator === 'store') {
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
-		const identityFilter = wooMetaCarrier.identityFilter({
+		const identityFilter = identityColumnFilter({
 			storeId: String(value),
 		});
 		return {
-			prefilter: numeric
-				? { [mapping.enginePath]: identityFilter.meta_data }
-				: { 'payload.created_via': value },
+			prefilter: numeric ? identityFilter : { 'payload.created_via': value },
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
 				if (!numeric) return payload?.created_via === value;
@@ -302,6 +305,7 @@ function requirementId(id: string, kind: EngineRequirement['kind']): string {
 		search: 'search',
 		refresh: 'reference-refresh',
 		'orders-browse': 'orders-browse',
+		'refunds-browse': 'refunds-browse',
 		'product-browse': 'products-browse-window',
 		'customer-browse': 'customers-browse-window',
 		'refunds-by-parent': 'refunds-by-parent',
@@ -357,7 +361,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
 		readFilters.push({
-			prefilter: { [idMapping.enginePath]: { $in: targeted } },
+			prefilter: { remoteKey: { $in: targeted } },
 			matches: (document) => {
 				const remoteId = remoteIdOrNull(mappedValue(idMapping, document));
 				return remoteId !== null && targeted.includes(remoteId);
@@ -466,7 +470,25 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		!options.residual &&
 		active.every(({ translator }) => translator.mapping.wireFace !== 'local-only') &&
 		(!search || collection === 'orders');
-	if (collection === 'orders') {
+	if (collection === 'refunds') {
+		const filters = state.filters as FiltersOf<'refunds'>;
+		const after = orderRangeBoundSeconds(filters.dateRange?.from);
+		const before = orderRangeBoundSeconds(filters.dateRange?.to);
+		const limit = state.limit === Number.MAX_SAFE_INTEGER ? 'all' : state.limit;
+		represented &&=
+			limit === 'all' || (uiSortField === 'date_created_gmt' && state.sort.direction === 'desc');
+		if (after === undefined || before === undefined || after > before) represented = false;
+		else
+			demand.push({
+				id: requirementId(options.id, 'refunds-browse'),
+				collection: 'refunds',
+				kind: 'refunds-browse',
+				after,
+				before,
+				limit,
+				priority: 700,
+			});
+	} else if (collection === 'orders') {
 		const wooOrderby = wooOrderbyFor('orders', uiSortField);
 		const dimensions: OrderBrowseDimensions = {
 			...(state.limit !== undefined ? { limit: state.limit } : {}),

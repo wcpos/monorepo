@@ -2,6 +2,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
+import { getStoreUrl, openOrderSheet, tryAddProductBySku } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
 import {
 	assertDiscriminating,
@@ -9,7 +10,6 @@ import {
 	type GuardLine,
 	linesOf,
 } from './money-oracle-guards';
-import { getStoreUrl, tryAddProductBySku } from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
@@ -233,6 +233,7 @@ async function saveAndCapture(
 	});
 	saved.catch(() => {});
 
+	await openOrderSheet(page);
 	await page.getByTestId('save-to-server-button').click();
 	const response = await saved;
 	expect(response.status(), 'save to server must succeed').toBeLessThan(400);
@@ -436,6 +437,7 @@ function assertSaleParity(sale: SavedSale, page: Page, underTest: string, label:
  * reconciliation that raises it has already run.
  */
 async function expectNoBanner(page: Page, label: string, divergence: () => string[]) {
+	await openOrderSheet(page);
 	await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 	const logged = divergence();
 	await expect(
@@ -523,7 +525,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 * published products used either — the classes were live and unreachable. Every
 	 * money assertion the suite had ever made ran on the standard class alone.
 	 *
-	 * This is also the shape the v1.11.0 quick-discount work needs (wcpos/roadmap#91):
+	 * This is also the shape the 2.0.0 quick-discount work needs (wcpos/roadmap#91):
 	 * the whole correctness argument for moving till discounts to `percent` coupons is
 	 * that they allocate pro rata by value across tax classes, and that claim cannot be
 	 * tested on a single-class basket.

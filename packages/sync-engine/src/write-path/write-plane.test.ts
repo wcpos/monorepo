@@ -13,10 +13,7 @@ import { remoteId } from '../testing';
 
 import type { RxDatabase } from 'rxdb';
 
-async function fixture(
-	assertUsable: () => void = () => undefined,
-	isWritePlaneOwner: () => boolean = () => true
-) {
+async function fixture(assertUsable: () => void = () => undefined) {
 	const database = {} as RxDatabase;
 	const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 	const queuePort = vi.fn(() => queue);
@@ -39,7 +36,6 @@ async function fixture(
 		diagnostics: () => undefined,
 		onStatusChanged: () => undefined,
 		connectivity: () => 'online',
-		isWritePlaneOwner,
 		emitWriteEvent: () => undefined,
 		persistOrderRepull: async () => undefined,
 		repullOrdersNow: async () => undefined,
@@ -98,7 +94,6 @@ describe('write-plane queue identity', () => {
 			diagnostics: () => undefined,
 			onStatusChanged: () => undefined,
 			connectivity: () => 'online',
-			isWritePlaneOwner: () => true,
 			emitWriteEvent: () => undefined,
 			persistOrderRepull: async () => undefined,
 			repullOrdersNow: async () => undefined,
@@ -114,17 +109,6 @@ describe('write-plane queue identity', () => {
 		expect((await queueFor(database).pending()).map(({ mutationId }) => mutationId)).toEqual([
 			'module-queue-write',
 		]);
-	});
-});
-
-describe('write-plane ownership', () => {
-	it('returns the exact no-op drain report for a follower', async () => {
-		const { plane } = await fixture(
-			() => undefined,
-			() => false
-		);
-
-		expect(await plane.tick()).toStrictEqual({ lane: 'write-drain', status: 'ran', pushed: 0 });
 	});
 });
 
@@ -178,7 +162,6 @@ describe('write-plane status notifications', () => {
 			diagnostics: () => undefined,
 			onStatusChanged,
 			connectivity: () => 'online',
-			isWritePlaneOwner: () => true,
 			emitWriteEvent: () => undefined,
 			persistOrderRepull: async () => undefined,
 			repullOrdersNow: async () => void (await manager.closeScope('scope-1')),

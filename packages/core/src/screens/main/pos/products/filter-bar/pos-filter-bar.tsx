@@ -75,7 +75,7 @@ export function POSFilterBar() {
 				<TooltipTrigger asChild>
 					<ButtonPill
 						size="xs"
-						variant="muted"
+						variant="outline"
 						leftIcon="sliders"
 						testID="filter-bar-customize"
 						onPress={() => router.push('/(app)/(modals)/filter-bar')}

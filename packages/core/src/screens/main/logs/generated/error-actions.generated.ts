@@ -138,6 +138,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.AUTH321');
 		case 'AUTH331':
 			return t('health.logs.error_action.AUTH331');
+		case 'AUTH341':
+			return t('health.logs.error_action.AUTH341');
 		case 'AUTH411':
 			return t('health.logs.error_action.AUTH411');
 		case 'AUTH421':
@@ -208,6 +210,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CLIENT151');
 		case 'AUTH131':
 			return t('health.logs.error_action.AUTH131');
+		case 'CLIENT161':
+			return t('health.logs.error_action.CLIENT161');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

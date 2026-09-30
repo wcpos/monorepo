@@ -18,6 +18,11 @@ import { initialTenderState } from '../tender/tender-state';
 import type { LedgerView } from '../tender/use-ledger-view';
 import type { TenderFlow } from '../tender/use-tender-flow';
 
+jest.mock('expo-haptics', () => ({
+	impactAsync: jest.fn(),
+	ImpactFeedbackStyle: { Light: 'light' },
+}));
+
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
@@ -69,9 +74,20 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 // The receipt stage's finishing-error notice links to docs; keep expo-linking out of jsdom.
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
+let mockLineItems: unknown[] = [];
+let mockTaxDisplayCart: 'excl' | 'incl' = 'excl';
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
+		select({
+			payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: mockLineItems },
+		}),
+	useDocField: (_doc: unknown, select: (value: unknown) => unknown) =>
+		select({ tax_display_cart: mockTaxDisplayCart }),
+}));
+// The ledger reads the store's tax display through app-state; the real provider pulls
+// expo-crypto (ESM) into jest, so it is stubbed here as tab-chip.test.tsx does.
+jest.mock('../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: {} }),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -100,7 +116,7 @@ jest.mock('react-native-reanimated', () => ({
 	withTiming: (value: number) => value,
 	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
-	Easing: { linear: (value: number) => value },
+	Easing: { bezier: jest.fn(), linear: (value: number) => value },
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -182,6 +198,8 @@ function mountColumn() {
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockNumber = '1187';
+	mockLineItems = [];
+	mockTaxDisplayCart = 'excl';
 	resetCheckoutMode();
 	enterCheckout('order-1');
 	mockFlow = makeFlow();
@@ -255,6 +273,27 @@ it('reads the ledger independently, with balance only in the tender header', () 
 	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('$50.00');
 	expect(screen.getByTestId('checkout-ledger-header').textContent).toContain('Guest');
 });
+it('lays each ledger line under the stilled head: qty, name, unit price, total per tax display', () => {
+	mockLineItems = [
+		{
+			id: 7,
+			name: 'Belt &amp; Buckle',
+			quantity: 2,
+			total: '110.00',
+			total_tax: '9.80',
+			meta_data: [],
+		},
+	];
+	const { unmount } = render(<CheckoutLedger order={order} />);
+	expect(screen.getByTestId('checkout-ledger-qty-7').textContent).toBe('2');
+	expect(screen.getByTestId('checkout-ledger-price-7').textContent).toBe('$55.00');
+	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$110.00');
+	expect(screen.queryByText(/2 ×/)).toBeNull();
+	unmount();
+	mockTaxDisplayCart = 'incl';
+	render(<CheckoutLedger order={order} />);
+	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$119.80');
+});
 it('owns Android hardware back only while mounted', () => {
 	const os = jest.replaceProperty(Platform, 'OS', 'android');
 	let back: Parameters<typeof BackHandler.addEventListener>[1] | undefined;
@@ -319,3 +358,20 @@ it('shows a title skeleton while saving an unnumbered order', () => {
 	rerender(<CheckoutColumn order={order} />);
 	expect(screen.queryByTestId('checkout-title-skeleton')).toBeNull();
 });
+
+it('keeps both segment selectors and removes the redundant order title', () => {
+	mountColumn();
+	expect(screen.getByTestId('checkout-tab-payments')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('checkout-tab-legacy'));
+	expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'set-tab', tab: 'legacy' });
+	expect(screen.queryByText('pos_checkout.checkout_order')).toBeNull();
+});
+
+jest.mock('uniwind', () => ({
+	useCSSVariable: (name: string) =>
+		name === '--spacing-tile' ? 64 : name === '--spacing-ctl' ? 44 : 'currentColor',
+}));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle: 'circle' }));
+jest.mock('../../../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => '14:04' }),
+}));

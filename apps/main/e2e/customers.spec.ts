@@ -29,15 +29,20 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should open customer address dialog when clicking customer name', async ({
+	test('opens the customer picker on a tap and the address editor on a long press', async ({
 		posPage: page,
 	}) => {
 		const customerPill = page.getByTestId('cart-customer-name');
 		await expect(customerPill).toBeVisible({ timeout: 15_000 });
+		// The chip is a dropdown: a tap swaps in the picker (its trigger replaces the chip).
 		await customerPill.click();
+		await expect(page.getByTestId('cart-customer-select')).toBeVisible({ timeout: 15_000 });
+		await page.keyboard.press('Escape');
 
-		// Should open the Edit Customer Address dialog
-		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+		// The address editor stays on a long press until it has a home in the order sheet.
+		await expect(customerPill).toBeVisible({ timeout: 15_000 });
+		await customerPill.click({ delay: 700 });
+		await expect(page.getByTestId('customer-address-dialog')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

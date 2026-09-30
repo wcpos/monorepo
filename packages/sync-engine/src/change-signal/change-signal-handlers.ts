@@ -224,7 +224,7 @@ async function removeByWooIds(
 	const collection = collectionOf(ctx, name);
 	const remoteIds = wooIds.map((id) => mintRemoteId(id, `${name} tombstone id`));
 	const docs = await collection
-		.find({ selector: { [wooIdField]: { $in: remoteIds } } as never })
+		.find({ selector: { remoteKey: { $in: remoteIds } } as never })
 		.exec();
 	const protectedRemoteIds = new Set<RemoteId>();
 	const removable: string[] = [];

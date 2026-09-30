@@ -11,6 +11,9 @@ export async function ensureTableView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
 	const tableHeader = page.getByTestId('data-table-header-name').first();
 	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
+	// The v2 table renders no sortable header on a coarse pointer and no popover button under
+	// the drill-in style; its list root is the one indicator every rendering shares.
+	const tableScroller = page.getByTestId('data-table-scroller-products').first();
 
 	// Check if table indicators are already present (wait up to 2s for visibility).
 	// Note: isVisible({ timeout }) is deprecated in Playwright v1.40+ and silently ignores timeout.
@@ -24,7 +27,12 @@ export async function ensureTableView(page: Page) {
 				await tableHeader.waitFor({ state: 'visible', timeout: 500 });
 				return true;
 			} catch {
-				return false;
+				try {
+					await tableScroller.waitFor({ state: 'visible', timeout: 500 });
+					return true;
+				} catch {
+					return false;
+				}
 			}
 		}
 	})();
@@ -40,7 +48,8 @@ export async function ensureTableView(page: Page) {
 		.poll(
 			async () =>
 				(await tableHeader.isVisible().catch(() => false)) ||
-				(await variablePopoverButton.isVisible().catch(() => false)),
+				(await variablePopoverButton.isVisible().catch(() => false)) ||
+				(await tableScroller.isVisible().catch(() => false)),
 			{ timeout: 15_000 }
 		)
 		.toBeTruthy();

@@ -33,6 +33,7 @@ const schema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 64 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: String({ type: ['string', 'null'], maxLength: 64 } ?? ''),
 		payload: { type: 'object', additionalProperties: true },
 	},
 	required: ['uuid'],
@@ -59,6 +60,7 @@ async function insertRow(uuid = 'row-1'): Promise<RxDocument<Shape>> {
 	return collection.insert({
 		uuid,
 		remoteId: null,
+		remoteKey: '',
 		payload: { total: '10.00', note: 'first', nested: { qty: 1 } },
 	});
 }
@@ -79,7 +81,7 @@ async function writePayload(
 
 /**
  * Wrap the collection's event stream so document subscriptions are countable: every
- * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.4.0 —
+ * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.5.0 —
  * `rx-document.ts` builds the per-document stream from `collection.eventBulks$`).
  */
 function countEventStreamSubscriptions(target: RxCollection<Shape>): { count: () => number } {

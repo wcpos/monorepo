@@ -8,7 +8,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 
 ## Lines
 
-1. Restricts hover styling to web so it does not apply unconditionally on iOS or Android — evidence: `1eabc2c781 2026-05-02 fix(theming): reduce Uniwind theme transition cancellations on native`, code: "web:group-hover:cursor-ew-resize" in `packages/components/src/panels/index.tsx:53`.
+1. Restricts hover styling to web so it does not apply unconditionally on iOS or Android — evidence: `1eabc2c781 2026-05-02 fix(theming): reduce Uniwind theme transition cancellations on native`, code: "web:group-hover:cursor-ew-resize" in `packages/components/src/panels/index.tsx:53`. **preserved** — `index.tsx`, with a centred three-dot grip: faint on coarse pointers, hover-visible on fine pointers, primary while dragging.
 2. Exposes the wrapped handle’s enlarged coarse/fine-pointer hit targets through `hitTargetSize` — evidence: `748bcffff1 2026-08-28 feat(resizable-panels): hit target, double-tap reset, web keyboard + ARIA`, code: "hitTargetSize," in `packages/components/src/panels/index.tsx:28`.
 3. Exposes the wrapped handle’s double-tap reset with a `disableDoubleTap` opt-out — evidence: `748bcffff1 2026-08-28 feat(resizable-panels): hit target, double-tap reset, web keyboard + ARIA`, code: "disableDoubleTap," in `packages/components/src/panels/index.tsx:27`.
 4. Inherits web keyboard resizing and separator ARIA semantics from the wrapped handle — evidence: `748bcffff1 2026-08-28 feat(resizable-panels): hit target, double-tap reset, web keyboard + ARIA`.

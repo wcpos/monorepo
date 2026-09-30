@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { type TextInput, View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 
@@ -15,29 +15,49 @@ import {
 } from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 export function RegisterAmount({
 	currencyOptions,
+	variant = 'underline',
 	...props
 }: {
 	currencyOptions?: CurrencyFormatOptions;
+	/** `box`: one framed field with the currency inside it (the closed register); movements keep the underline. */
+	variant?: 'underline' | 'box';
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
-	ref?: React.Ref<TextInput>;
+	ref?: React.Ref<TextInputInstance>;
 }) {
 	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
+	if (variant === 'box') {
+		return (
+			<Input.Root className="h-tile">
+				{!!prefix && (
+					<Input.Left>
+						<Text className="text-amt text-muted-foreground tabular-nums">{prefix}</Text>
+					</Input.Left>
+				)}
+				<Input.InputField {...props} type="decimal" className="text-amt tabular-nums" />
+				{!!suffix && (
+					<Input.Right className="pr-3">
+						<Text className="text-amt text-muted-foreground tabular-nums">{suffix}</Text>
+					</Input.Right>
+				)}
+			</Input.Root>
+		);
+	}
 	return (
-		<View className="flex-row items-center self-start">
-			{!!prefix && <Text className="text-[32px] tabular-nums">{prefix}</Text>}
+		<View className="min-h-row border-border flex-row items-center self-start border-b">
+			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
 			<Input
 				{...props}
 				type="decimal"
-				className="h-14 w-40"
-				inputClassName="text-[32px] tabular-nums"
+				className="h-tile w-40"
+				inputClassName="text-amt tabular-nums"
 			/>
-			{!!suffix && <Text className="text-[32px] tabular-nums">{suffix}</Text>}
+			{!!suffix && <Text className="text-amt tabular-nums">{suffix}</Text>}
 		</View>
 	);
 }
@@ -59,7 +79,7 @@ export function MovementSheet({
 	const busyRef = React.useRef(false);
 	const [error, setError] = React.useState('');
 	const t = useT();
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
 	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
 	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';
@@ -85,13 +105,14 @@ export function MovementSheet({
 	};
 	return (
 		<Dialog open={!!type} onOpenChange={onOpenChange}>
-			<DialogContent side={side} portalHost="pos">
+			<DialogContent side={side} size="lg" portalHost="pos">
 				<DialogTitle>{type ? t(`register.${type}`) : ''}</DialogTitle>
 				{type !== 'no_sale' && (
 					<RegisterAmount testID="movement-amount" value={amount} onChangeText={setAmount} />
 				)}
 				<Input
 					testID="movement-reason"
+					className="min-h-row border-border"
 					placeholder={t('register.reason')}
 					value={reason}
 					onChangeText={setReason}

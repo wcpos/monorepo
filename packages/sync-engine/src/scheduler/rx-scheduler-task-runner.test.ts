@@ -659,11 +659,11 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(result.failed).toBe(1);
 	});
 
-	it('marks a primary-collection reconciliation refusal failed with retry backoff', async () => {
+	it('marks a primary-collection JSON error failed with retry backoff', async () => {
 		const runnable = state();
 		const repository = createRepository([runnable]);
 		const fetcher = vi.fn(async () => {
-			throw new SyntaxError('index reconciliation refused: unsorted-primary');
+			throw new SyntaxError('Unexpected token in document JSON');
 		});
 
 		const result = await runPersistedSchedulerTasks({

@@ -7,12 +7,14 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface Props {
 	order: EngineRecord<'orders'>;
+	amountOnly?: boolean;
+	active?: boolean;
 }
 
 /**
  *
  */
-export function CartTabTitle({ order }: Props) {
+export function CartTabTitle({ order, amountOnly = false, active = false }: Props) {
 	const total = useRecordField(order, (record) => record.payload.total);
 	const refunds = useRecordField(order, (record) => record.payload.refunds);
 	const currencySymbol = useRecordField(order, (record) => record.payload.currency_symbol);
@@ -21,5 +23,17 @@ export function CartTabTitle({ order }: Props) {
 
 	const displayTotal = getNetPaymentTotal(total, refunds);
 
-	return <Text>{t('pos_cart.cart', { order_total: format(displayTotal || 0) })}</Text>;
+	return (
+		<Text
+			className={
+				amountOnly
+					? `tabular-nums ${active ? 'text-foreground font-semibold' : 'text-muted-foreground font-medium'}`
+					: undefined
+			}
+		>
+			{amountOnly
+				? format(displayTotal || 0)
+				: t('pos_cart.cart', { order_total: format(displayTotal || 0) })}
+		</Text>
+	);
 }

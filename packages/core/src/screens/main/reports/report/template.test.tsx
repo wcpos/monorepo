@@ -41,6 +41,9 @@ jest.mock('./utils', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => {
+	// The session site is one stable document: the report's cashier scope memoises its
+	// credentials directory on it (empty here: Everyone).
+	const site = { populate$: () => new BehaviorSubject([]) };
 	const useAppState = () => ({
 		store: {
 			id: 9,
@@ -51,6 +54,7 @@ jest.mock('../../../../contexts/app-state', () => {
 			price_num_decimals$: new BehaviorSubject(2),
 		},
 		wpCredentials: { id: 7, toJSON: () => ({ id: 7 }) },
+		site,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });
@@ -75,9 +79,18 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../hooks/use-number-format', () => ({
 	useNumberFormat: () => ({ format: String }),
 }));
-const REPORTS = { selectedOrders: [] };
+// One data object, built on first use (after the register fixture below exists); its
+// registerArray is that fixture by reference, so the register-totals case can grow it.
+let mockReports:
+	| { selectedOrders: never[]; totals: unknown; periodRefunds?: import('../context').RefundRow[] }
+	| undefined;
 jest.mock('../context', () => ({
-	useReportsData: () => REPORTS,
+	useReportsData: () =>
+		(mockReports ??= {
+			selectedOrders: [],
+			totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+		}),
+	useReportsScope: () => ({ cashierName: undefined }),
 }));
 
 describe('ZReport query-state dates', () => {
@@ -109,6 +122,7 @@ describe('ZReport query-state dates', () => {
 });
 
 jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Front desk' }),
 }));
 
@@ -146,4 +160,34 @@ describe('native register totals block', () => {
 		]);
 		mockRegisterTotals.length = 0;
 	});
+});
+
+it("the refund row reads the period's refunds when known", () => {
+	mockReports = {
+		selectedOrders: [],
+		totals: jest.requireMock('./utils').calculateTotals(),
+		periodRefunds: [{ id: 1, parent_id: 4, date_created_gmt: '', amount: '12' }],
+	};
+	const view = render(
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={10}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+		>
+			<ZReport />
+		</QueryStateProvider>
+	);
+	expect(screen.getByText('-12')).toBeTruthy();
+	mockReports.periodRefunds = [];
+	view.rerender(
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={10}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+		>
+			<ZReport />
+		</QueryStateProvider>
+	);
+	expect(screen.queryByText('-12')).toBeNull();
+	mockReports = undefined;
 });

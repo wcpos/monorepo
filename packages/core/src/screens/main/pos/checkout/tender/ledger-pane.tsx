@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
@@ -9,6 +10,7 @@ import { toMinor } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { statusLabelKey, statusVariant } from './labels';
+import { useLocalDate } from '../../../../../hooks/use-local-date';
 import { useT } from '../../../../../contexts/translations';
 
 import type { LedgerView } from './use-ledger-view';
@@ -155,6 +157,12 @@ export function BalanceHeadline({
 
 export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['format'] }) {
 	const t = useT();
+	const { formatDate } = useLocalDate();
+	const firstPending = view.rows.find((row) => row.status === 'pending');
+	const settled = view.rows.filter(
+		(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+	);
+	const lastTime = settled.at(-1)?.events?.[0]?.t;
 
 	if (view.rows.length === 0) {
 		return (
@@ -164,9 +172,38 @@ export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['
 
 	return (
 		<VStack space="xs" testID="checkout-ledger">
+			<Text className="text-sm tabular-nums">
+				{t('pos_checkout.paid_and_left', {
+					paid: format(view.paidMinor),
+					left: format(view.balanceMinor),
+				})}
+			</Text>
+			<View className="bg-muted h-1 flex-row overflow-hidden rounded-full">
+				<View className="bg-primary" style={{ flex: view.paidMinor }} />
+				<View style={{ flex: view.balanceMinor }} />
+			</View>
 			{view.rows.map((row) => (
-				<LedgerLeg key={row.id} row={row} view={view} format={format} />
+				<HStack key={row.id} className="gap-2">
+					<View className="items-center gap-1 pt-3">
+						<View
+							testID={`checkout-leg-dot-${row.id}`}
+							className={`size-2 rounded-full ${row.status === 'captured' ? 'bg-success' : row.status === 'failed' || row.status === 'voided' ? 'bg-destructive' : 'bg-warning'}`}
+						/>
+						<View className="bg-border w-px flex-1" />
+					</View>
+					<View className="flex-1">
+						<LedgerLeg row={row} view={view} format={format} next={row === firstPending} />
+					</View>
+				</HStack>
 			))}
+			{/* A zero balance with nothing settled (every leg failed or voided) is not paid. */}
+			{view.balanceMinor === 0 && settled.length > 0 ? (
+				<Text className="text-success text-sm">
+					{lastTime
+						? t('pos_checkout.paid_in_full_at', { time: formatDate(new Date(lastTime), 'p') })
+						: t('pos_checkout.paid_in_full')}
+				</Text>
+			) : null}
 		</VStack>
 	);
 }
@@ -175,27 +212,28 @@ function LedgerLeg({
 	row,
 	view,
 	format,
+	next,
 }: {
+	next: boolean;
 	row: PaymentRow;
 	view: LedgerView;
 	format: (minor: number) => string;
 }) {
 	const t = useT();
+	const { formatDate } = useLocalDate();
+	const time = row.events?.[0]?.t;
 	const title = view.tiles.find(({ method }) => method.id === row.method_id)?.method.title;
 	// Only cash carries a tendered figure, and only then is change worth a line.
-	const tendered = row.tendered
-		? {
-				tendered: format(toMinor(row.tendered, view.dp)),
-				change: format(toMinor(row.change ?? 0, view.dp)),
-			}
-		: null;
+	const tendered =
+		row.kind === 'cash' && row.tendered
+			? {
+					tendered: format(toMinor(row.tendered, view.dp)),
+					change: format(toMinor(row.change ?? 0, view.dp)),
+				}
+			: null;
 
 	return (
-		<VStack
-			space="xs"
-			testID={`checkout-leg-${row.id}`}
-			className="border-border bg-background rounded-md border p-2"
-		>
+		<VStack space="xs" testID={`checkout-leg-${row.id}`} className="border-border border-b py-2">
 			<HStack className="items-center justify-between gap-2">
 				<Text className="flex-1 text-sm font-medium" decodeHtml>
 					{title ?? row.method_id}
@@ -203,6 +241,14 @@ function LedgerLeg({
 				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
 				<StatusBadge label={t(statusLabelKey(row.status))} variant={statusVariant(row.status)} />
 			</HStack>
+			{time ? (
+				<Text className="text-muted-foreground text-xs tabular-nums">
+					{formatDate(new Date(time), 'p')}
+				</Text>
+			) : null}
+			{next ? (
+				<Text className="text-muted-foreground text-xs">{t('pos_checkout.next_leg')}</Text>
+			) : null}
 			{row.tip && toMinor(row.tip, view.dp) > 0 ? (
 				<Text testID={`checkout-leg-tip-${row.id}`} className="text-muted-foreground text-xs">
 					{t('pos_checkout.leg_tip', { amount: format(toMinor(row.tip, view.dp)) })}

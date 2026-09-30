@@ -19,14 +19,17 @@ jest.mock('rxdb-premium/plugins/storage-worker', () => ({ getRxStorageWorker: ()
 	virtual: true,
 });
 jest.mock('rxdb/plugins/electron', () => ({ getRxStorageIpcRenderer: () => rawStorage }));
-jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
-	getRxStorageExpoAsync: () => rawStorage,
+jest.mock('rxdb-premium/plugins/storage-sqlite', () => ({
+	getRxStorageSQLite: () => rawStorage,
+	getSQLiteBasicsExpoSQLiteAsync: () => ({}),
 }));
-jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
-	withTargetedOpfsRecovery: (storage: unknown) => storage,
+jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
+jest.mock('../storage/sqlite-root', () => ({
+	NATIVE_SQLITE_ROOT: { uri: 'document-dir/wcpos-sqlite' },
 }));
 jest.mock('../../plugins/wrapped-error-handler-storage', () => ({
 	wrappedErrorHandlerStorage: () => errorHandledStorage,
+	reportStorageWorkerLost: jest.fn(),
 }));
 jest.mock('rxdb/plugins/validate-z-schema', () => ({
 	wrappedValidateZSchemaStorage: () => ({ name: 'validated-storage' }),
@@ -68,7 +71,15 @@ describe('storage timing probe wiring per platform adapter', () => {
 			const { storage } = await import(modulePath);
 
 			expect(mockWithStorageTimingProbe.mock.calls).toEqual([
-				[rawStorage, 'raw'],
+				[
+					_platform === 'web'
+						? expect.objectContaining({
+								name: 'worker',
+								createStorageInstance: expect.any(Function),
+							})
+						: rawStorage,
+					'raw',
+				],
 				[errorHandledStorage, 'wrapped'],
 			]);
 			expect(storage).toEqual({ name: 'probed:wrapped', storage: errorHandledStorage });

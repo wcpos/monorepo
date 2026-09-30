@@ -249,11 +249,9 @@ describe('product-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
-	it('runs only while this tab owns the shared write plane', async () => {
-		let isLeader = false;
+	it('runs in the single storage owner', async () => {
 		let productFetches = 0;
 		const engine = engineWith({
-			writePlaneOwner: () => isLeader,
 			fetcher: async () => {
 				productFetches += 1;
 				return json([]);
@@ -261,12 +259,6 @@ describe('product-trickle maintenance lane', () => {
 		});
 		await engine.ready;
 
-		await expect(engine.sync('product-trickle')).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'not-write-plane-owner',
-		});
-		expect(productFetches).toBe(0);
-		isLeader = true;
 		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
 		expect(productFetches).toBe(1);
 		await engine.dispose();
@@ -466,7 +458,9 @@ describe('product-trickle maintenance lane', () => {
 		await scope.database.collections.products.insert({
 			uuid: productUuid(77),
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 12.5,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],

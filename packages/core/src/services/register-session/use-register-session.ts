@@ -30,7 +30,7 @@ import { useStoreDay } from '../../hooks/use-store-day';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
-import { deriveExpected } from './expected';
+import { deriveDrawerTerms, deriveExpected } from './expected';
 import * as actions from './session-store';
 import {
 	useCashMovementCollection,
@@ -288,17 +288,22 @@ export function useRegisterSession() {
 		entries.some((row) => row.sync_status !== 'synced') ||
 		orders.some(({ record }) => record.local.dirty);
 	const accountingOrders = data?.orders.hits ?? [];
+	const drawerInput = session
+		? {
+				session,
+				movements: entries,
+				// Each row keeps its order, so a split cash payment counts as one cash sale.
+				ledgerRowsBySession: accountingOrders.flatMap(({ record }) =>
+					readLedger(record.payload.meta_data).map((row) => ({ ...row, order: record.uuid }))
+				),
+				refundRecords: data?.refundRecords,
+			}
+		: undefined;
+	const terms = drawerInput ? deriveDrawerTerms(drawerInput) : undefined;
 	const expected = session
 		? !localPending && session.server_expected
 			? session.server_expected
-			: deriveExpected({
-					session,
-					movements: entries,
-					ledgerRowsBySession: accountingOrders.flatMap(({ record }) =>
-						readLedger(record.payload.meta_data)
-					),
-					refundRecords: data?.refundRecords,
-				})
+			: deriveExpected(drawerInput!)
 		: {};
 	const now = new Date();
 	const [hour, minute] = String(closeTime ?? '')
@@ -315,6 +320,7 @@ export function useRegisterSession() {
 		movements: entries,
 		refusedMovements,
 		expected,
+		terms,
 		varianceThreshold,
 		unsyncedCount:
 			orders.filter(({ record }) => record.local.dirty).length +

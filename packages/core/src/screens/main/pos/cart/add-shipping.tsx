@@ -174,7 +174,7 @@ export function AddShipping() {
 				<DialogAction
 					disabled={form.formState.isSubmitting}
 					testID="add-to-cart-submit"
-					onPress={onAdd}
+					onPress={() => void onAdd()}
 				>
 					{t('common.add_to_cart')}
 				</DialogAction>

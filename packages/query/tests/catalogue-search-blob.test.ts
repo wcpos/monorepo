@@ -1,3 +1,4 @@
+import { fillWithDefaultSettings } from 'rxdb';
 import { firstValueFrom, skip, Subject } from 'rxjs';
 
 import {
@@ -5,6 +6,7 @@ import {
 	SEARCH_FIXTURE_TRAPS,
 	searchFixtureExpectedIds,
 } from '@wcpos/sync-core/testing';
+import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { catalogueSearchBlobFor } from '../src/catalogue-search-blob';
 import { searchTerms } from '../src/search-match';
@@ -13,15 +15,29 @@ import type { EngineRxDocument } from '../src/engine-adapter/execute-query';
 import type { RxChangeEvent } from 'rxdb';
 
 const fields = ['name', 'sku', 'barcode'];
+const PRODUCT_SCHEMA = fillWithDefaultSettings(engineSyncCollectionCreators().products.schema);
 const snapshot = (document: EngineRxDocument) => document.toJSON();
-const document = (id: string, name: string, sku = '', barcode = '') =>
-	({ primary: id, toJSON: () => ({ name, sku, barcode }) }) as EngineRxDocument;
+/** An engine-shaped row as the projection read returns it (the blob never sees an RxDocument). */
+const document = (uuid: string, name: string, sku = '', barcode = '') => ({
+	uuid,
+	payload: { name, sku, barcode },
+	_deleted: false,
+});
 
-function fakeCollection(documents: EngineRxDocument[] = []) {
+/**
+ * The blob reads through the projection seam (`storageInstance.query`), never `find()`
+ * (#2242): the fake exposes only what that seam needs, so a blob that reached for
+ * `find` would throw here.
+ */
+function fakeCollection(documents: Record<string, unknown>[] = []) {
+	const query = jest.fn(async () => ({ documents }));
 	return {
 		$: new Subject<RxChangeEvent<Record<string, unknown>>>(),
-		find: jest.fn(() => ({ exec: async () => documents })),
+		schema: { jsonSchema: PRODUCT_SCHEMA, primaryPath: 'uuid' },
+		storageInstance: { query },
+		database: {} as never,
 		onClose: [] as (() => void)[],
+		query,
 	};
 }
 
@@ -40,7 +56,7 @@ describe('catalogue search blob', () => {
 		const collection = fakeCollection(
 			SEARCH_FIXTURE_PRODUCTS.map((p) => document(String(p.id), p.name, p.sku, p.barcode))
 		);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot);
+		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		try {
 			await blob.ready;
 			expect(blob.search(searchTerms(query)).sort()).toEqual(
@@ -54,7 +70,7 @@ describe('catalogue search blob', () => {
 
 	it('applies insert, update and delete events before notifying searches', async () => {
 		const collection = fakeCollection();
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot);
+		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		const results: string[][] = [];
 		const subscription = blob.changes$.subscribe(() => results.push(blob.search(['coffee'])));
 		await blob.ready;
@@ -76,14 +92,13 @@ describe('catalogue search blob', () => {
 
 	it('replays changes received during the initial read over the loaded rows', async () => {
 		const collection = fakeCollection();
-		let finish!: (documents: EngineRxDocument[]) => void;
-		collection.find.mockReturnValue({
-			exec: () =>
-				new Promise((resolve) => {
-					finish = resolve;
-				}),
-		});
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot);
+		let finish!: (documents: Record<string, unknown>[]) => void;
+		collection.query.mockReturnValue(
+			new Promise((resolve) => {
+				finish = (documents) => resolve({ documents });
+			})
+		);
+		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		collection.$.next(change('UPDATE', 'old', 'Tea'));
 		collection.$.next(change('DELETE', 'deleted', 'Coffee'));
 		collection.$.next(change('INSERT', 'new', 'Coffee'));
@@ -96,14 +111,14 @@ describe('catalogue search blob', () => {
 
 	it('shares the blob until close, then unsubscribes and creates a fresh one', async () => {
 		const collection = fakeCollection([document('one', 'Coffee')]);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot);
+		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		await blob.ready;
-		expect(catalogueSearchBlobFor(collection, fields, snapshot)).toBe(blob);
-		expect(collection.find).toHaveBeenCalledTimes(1);
+		expect(catalogueSearchBlobFor(collection, fields, snapshot, 'products')).toBe(blob);
+		expect(collection.query).toHaveBeenCalledTimes(1);
 		collection.onClose.forEach((close) => close());
 		expect(collection.$.observed).toBe(false);
 		expect(blob.search(['coffee'])).toEqual([]);
-		const fresh = catalogueSearchBlobFor(collection, fields, snapshot);
+		const fresh = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		expect(fresh).not.toBe(blob);
 		await fresh.ready;
 		fresh.dispose();
@@ -113,12 +128,8 @@ describe('catalogue search blob', () => {
 	it('propagates initial read errors through both readiness and changes', async () => {
 		const collection = fakeCollection();
 		const error = new Error('storage read failed');
-		collection.find.mockReturnValue({
-			exec: async () => {
-				throw error;
-			},
-		});
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot);
+		collection.query.mockRejectedValue(error);
+		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
 		await Promise.all([
 			expect(blob.ready).rejects.toBe(error),
 			expect(firstValueFrom(blob.changes$)).rejects.toBe(error),

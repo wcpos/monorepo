@@ -74,6 +74,9 @@ export async function expectCartAddMeasurement(
 		).toBeLessThanOrEqual(budgetMs);
 	} finally {
 		rawSample = (await readSample().catch(() => null)) ?? rawSample ?? null;
+		console.log(
+			`[cart-add-timing] project=${testInfo.project.name} retry=${testInfo.retry} durationMs=${rawSample?.durationMs ?? 'none'} budgetMs=${budgetMs} status=${rawSample?.status ?? 'none'}`
+		);
 		await testInfo.attach('cart-add-performance', {
 			body: JSON.stringify({
 				metric: 'dom-add-intent-to-cart-quantity',

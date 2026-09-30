@@ -105,5 +105,13 @@ function TooltipContent({
 	);
 }
 
-export { Tooltip, TooltipContent, TooltipTrigger };
+/**
+ * Web only in effect (see `index.web.tsx`): a native trigger without press handlers is
+ * already a plain View, so there is nothing to scope here.
+ */
+function TooltipPassiveTriggers({ children }: { children: React.ReactNode }) {
+	return <>{children}</>;
+}
+
+export { Tooltip, TooltipContent, TooltipPassiveTriggers, TooltipTrigger };
 export type { TooltipProps, TooltipContentProps, TooltipTriggerProps } from './types';

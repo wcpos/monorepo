@@ -204,7 +204,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.close')}</DialogClose>
-				<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
+				<DialogAction onPress={() => void onSave()}>{t('common.save')}</DialogAction>
 			</DialogFooter>
 		</Form>
 	);

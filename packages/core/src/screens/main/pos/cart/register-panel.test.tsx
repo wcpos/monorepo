@@ -6,6 +6,8 @@ import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
@@ -75,7 +77,7 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
 }));
@@ -135,6 +137,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogTitle: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<h2 data-testid={testID}>{children}</h2>
 	),
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
@@ -295,7 +298,7 @@ it('says nothing about refused movements when every row is delivered', () => {
 it('Close register starts counting and dismisses the panel', async () => {
 	const onOpenChange = jest.fn();
 	render(<RegisterPanel open onOpenChange={onOpenChange} />);
-	fireEvent.click(screen.getByTestId('register-panel-close'));
+	fireEvent.click(screen.getByTestId('register-panel-close-register'));
 	await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 	expect(startCounting).toHaveBeenCalled();
 });
@@ -397,3 +400,5 @@ it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
 		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
 	}
 );
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

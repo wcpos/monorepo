@@ -17,7 +17,7 @@ export function OnSalePill() {
 		<ButtonPill
 			leftIcon="badgeDollar"
 			size="xs"
-			variant={isActive ? undefined : 'muted'}
+			variant={isActive ? 'outline-primary' : 'outline'}
 			onPress={() => actions.setFilter('on_sale', true)}
 			testID="filter-pill-on_sale"
 			removable={isActive}

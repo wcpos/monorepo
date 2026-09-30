@@ -1,49 +1,58 @@
 import React from 'react';
-import { View } from 'react-native';
 
+import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
+import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
 export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boolean) => void }) {
 	const t = useT();
 
-	/**
-	 * Pick a random message index once on mount (impure Math.random must not run
-	 * during render). The text itself is derived from `t` so it stays translated.
-	 */
-	const [messageIndex] = React.useState(() => Math.floor(Math.random() * 6));
-
-	const upgradeToProText = React.useMemo(() => {
-		const texts = [
-			t('common.upgrade_to_pro_for_more_features'),
-			t('common.enjoy_more_with_pro_–_upgrade'),
-			t('common.go_pro_and_enjoy_exclusive_benefits'),
-			t('common.support_our_development_–_upgrade_to'),
-			t('common.support_our_work_–_go_pro'),
-			t('common.support_future_updates_–_get_pro'),
-		];
-		return texts[messageIndex];
-	}, [t, messageIndex]);
+	const { screenSize } = useTheme();
+	const isPhone = screenSize === 'sm';
+	const openPro = () => openExternalURL('https://wcpos.com/pro');
 
 	return (
-		<HStack testID="upgrade-notice-banner" className="bg-attention">
-			<View className="grow justify-center p-0 pl-7">
+		<HStack
+			testID="upgrade-notice-banner"
+			className="bg-warn-bg border-warning/45 min-h-10 items-center gap-2.5 border-b pr-2 pl-4"
+		>
+			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
+			    assistive tech and its contrast is not load-bearing. */}
+			<Icon name="star" size="sm" className="text-warning" aria-hidden />
+			<Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
+				<Text className="font-semibold">{t('pro.strip_title')}</Text>
+				{!isPhone && <> {t('pro.strip_body')}</>}
+			</Text>
+			{!isPhone && (
 				<Text
-					className="text-attention-foreground mx-auto text-sm"
+					testID="upgrade-notice-more"
+					className="text-muted-foreground text-sm underline"
 					variant="link"
-					onPress={() => openExternalURL('https://wcpos.com/pro')}
+					onPress={openPro}
 				>
-					{upgradeToProText}
+					{t('pro.strip_more')}
 				</Text>
-			</View>
+			)}
+			{/* Compact look, 44 pt target: 36 px tall plus 4 px of hit slop each side. */}
+			<Button
+				testID="upgrade-notice-upgrade"
+				size="sm"
+				hitSlop={{ top: 4, bottom: 4 }}
+				onPress={openPro}
+			>
+				{t('common.upgrade_to_pro')}
+			</Button>
 			<IconButton
+				testID="upgrade-notice-dismiss"
 				name="xmark"
 				size="sm"
-				iconClassName="text-attention-foreground"
+				accessibilityLabel={t('pro.strip_dismiss')}
 				onPress={() => setShowUpgrade(false)}
 			/>
 		</HStack>

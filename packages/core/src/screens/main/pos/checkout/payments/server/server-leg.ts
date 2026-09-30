@@ -1,3 +1,6 @@
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
 	OrderPaymentSummary,
 	PaymentEvent,
@@ -185,19 +188,30 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
-			const response =
-				route === 'status'
-					? await deps.get(url)
-					: await deps.post(
-							url,
-							route === 'intent'
-								? { payment: input.row, context: { reader: input.reader } }
-								: route === 'capture'
-									? { context: {} }
-									: { reason }
-						);
+			let response: { data: unknown };
+			const release = route === 'capture' ? holdLiveTab('payment') : undefined;
+			try {
+				response =
+					route === 'status'
+						? await deps.get(url)
+						: await deps.post(
+								url,
+								route === 'intent'
+									? { payment: input.row, context: { reader: input.reader } }
+									: route === 'capture'
+										? { context: {} }
+										: { reason }
+							);
+			} finally {
+				release?.();
+			}
 			data = response.data as ServerLegResponse;
 		} catch (error) {
+			if (error instanceof LiveTabNotOwnedError) {
+				stop();
+				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
 			intentInFlight = false;
 			if (current(seq)) await handleError(error, route, seq);
 			return;

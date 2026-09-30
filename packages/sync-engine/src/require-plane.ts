@@ -61,12 +61,14 @@ import {
 	parseCustomerBrowseWindowDescriptor,
 	parseOrderBrowserSchedulerDescriptor,
 	parseProductBrowseWindowDescriptor,
+	parseRefundBrowserSchedulerDescriptor,
 	type PersistedSchedulerTaskOutcomeKind,
 	type PersistedSchedulerTaskRunnerResult,
 	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKeyFromDimensions,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
+	refundBrowserQueryKey,
 	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
@@ -77,6 +79,7 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundBrowseSchedulerTask,
 	seedRefundParentLane,
 	seedRefundWindowLane,
 	seedTargetedOrderSchedulerTask,
@@ -162,6 +165,12 @@ type EngineRequirementCommon = {
 	forceRefresh?: boolean;
 };
 
+export type RefundBrowseDimensions = {
+	after: number;
+	before: number;
+	limit?: number | 'all';
+};
+
 export type OrderBrowseDimensions = {
 	/** WooCommerce order status, or 'all'. Default 'all'. */
 	status?: string;
@@ -238,6 +247,7 @@ export type EngineRequirement = EngineRequirementCommon &
 				orderby?: string;
 				order?: 'asc' | 'desc';
 		  }
+		| ({ kind: 'refunds-browse'; collection: 'refunds' } & RefundBrowseDimensions)
 		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
 		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
 		| ({ kind: 'customer-browse'; collection: 'customers' } & CustomerBrowseDimensions)
@@ -322,7 +332,7 @@ type InternalRequirement =
 	| EngineRequirement
 	| (EngineRequirementCommon & {
 			kind: 'query';
-			collection: 'orders' | 'products' | 'customers';
+			collection: 'orders' | 'products' | 'customers' | 'refunds';
 			queryKey: string;
 	  });
 
@@ -732,7 +742,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	): Promise<RemoteId[]> {
 		const collection = db.collections[d.collection] as RxCollection;
 		const docs = await collection
-			.find({ selector: { [d.wooIdField]: { $in: remoteIds } } as never })
+			.find({ selector: { remoteKey: { $in: remoteIds } } as never })
 			.exec();
 		const present = new Set(
 			docs
@@ -935,6 +945,30 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					dedupedReason: 'refund lane refreshed within the dedupe window',
 					fetchedReason: 'drained refund refresh',
 					freshReason: 'refund lane refreshed within the dedupe window',
+				});
+			}
+
+			if (item.requirement.collection === 'refunds' && item.requirement.kind === 'query') {
+				const requirement = item.requirement;
+				const descriptor = parseRefundBrowserSchedulerDescriptor(requirement.queryKey);
+				if (!descriptor)
+					throw new Error(`require: unsupported refund query ${requirement.queryKey}`);
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedRefundBrowseSchedulerTask({
+							descriptor,
+							database,
+							nowMs: deps.now?.() ?? Date.now(),
+							completedDedupeForMs: requirement.forceRefresh ? 0 : undefined,
+						}),
+					}),
+					...(requirement.forceRefresh
+						? { drain: { refreshBrowseWindowKey: requirement.queryKey } }
+						: {}),
+					droppedMessage: 'require: scope moved mid-refund query (writes dropped)',
+					activeReason: 'refund query refresh already in progress',
+					fetchedReason: `drained refund query ${requirement.queryKey}`,
+					freshReason: 'refund query refreshed within the dedupe window',
 				});
 			}
 
@@ -1649,7 +1683,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// swallowed, so a window that stops growing is legible in the logs as well as in
 			// the grid's footer count (which stops climbing with it).
 			if (
-				(requirement.kind === 'orders-browse' || requirement.kind === 'product-browse') &&
+				(requirement.kind === 'orders-browse' ||
+					requirement.kind === 'refunds-browse' ||
+					requirement.kind === 'product-browse') &&
 				typeof requirement.limit === 'number' &&
 				requirement.limit > BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT
 			) {
@@ -1666,6 +1702,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					return refundParentQueryKey(requirement.parentRemoteId);
 				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+				if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
 					// window the grid is showing even when that window was served entirely from
@@ -1698,6 +1735,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// the parser-based internal queued path used by the durable scheduler.
 			const queuedRequirement: InternalRequirement =
 				requirement.kind === 'orders-browse' ||
+				requirement.kind === 'refunds-browse' ||
 				requirement.kind === 'product-browse' ||
 				requirement.kind === 'customer-browse'
 					? {

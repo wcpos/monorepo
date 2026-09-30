@@ -1,14 +1,15 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	becomesVisible,
 	getStoreUrl,
 	isRouteTeardownError,
 	isWcposRestRoute,
+	openOrderSheet,
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
 	expectFullPrecision,
@@ -196,9 +197,11 @@ test.describe('POS Cart - Order Actions', () => {
 	test('should save order to server', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
+		await openOrderSheet(page);
 		await page.getByTestId('save-to-server-button').click();
 
 		// Wait for the save button to finish loading (loading state resolves when save completes)
+		await openOrderSheet(page);
 		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({
 			timeout: 30_000,
 		});

@@ -16,8 +16,10 @@ export function EditableField({
 	onChangeText,
 	editable = true,
 	bold = true,
+	variant = 'outline',
+	numberOfLines = 1,
 	...props
-}: InputProps & { bold?: boolean }) {
+}: InputProps & { bold?: boolean; variant?: 'outline' | 'ghost'; numberOfLines?: number }) {
 	const [editing, setEditing] = React.useState(false);
 	// Internal editing value - separate from controlled prop
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
@@ -92,12 +94,20 @@ export function EditableField({
 	 */
 	return (
 		<Button
-			variant="outline"
-			className="max-w-full items-start"
+			variant={variant}
+			className={
+				variant === 'ghost'
+					? '-mx-1 h-auto min-h-9 max-w-full items-start justify-start px-1 py-1.5'
+					: 'max-w-full items-start'
+			}
 			onPress={() => setEditing(true)}
 			disabled={!editable}
 		>
-			<ButtonText className={bold ? 'font-bold' : undefined} numberOfLines={1} decodeHtml>
+			<ButtonText
+				className={bold ? 'font-bold' : variant === 'ghost' ? 'font-normal' : undefined}
+				numberOfLines={numberOfLines}
+				decodeHtml
+			>
 				{editValue}
 			</ButtonText>
 		</Button>

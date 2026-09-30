@@ -39,6 +39,7 @@ import {
 	ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
+	remoteKeyFor,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
@@ -128,7 +129,7 @@ function parseBareArray(body: unknown): WooPayload[] {
 	return body as WooPayload[];
 }
 
-// The plugin has emitted bare variation arrays since 1.11.0.
+// The plugin has emitted bare variation arrays since 2.0.0.
 // Each record carries its own identity and revision stamp.
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
 	if (!Array.isArray(body)) {
@@ -374,13 +375,15 @@ function ackBookkeeping(options: {
 					// the ack's status/total past the pending-successor guard.
 					if (grafted !== residentPayload) identityPatch = { payload: grafted };
 				}
+				const remoteId =
+					ack.mutation.operation === 'create'
+						? (remoteIdOrNull(ack.remoteId) ?? data[remoteIdField])
+						: data[remoteIdField];
 				return {
 					...data,
 					...(adopting && adoptionPatch ? adoptionPatch : identityPatch),
-					[remoteIdField]:
-						ack.mutation.operation === 'create'
-							? (remoteIdOrNull(ack.remoteId) ?? data[remoteIdField])
-							: data[remoteIdField],
+					[remoteIdField]: remoteId,
+					remoteKey: remoteKeyFor(remoteId as string | null),
 					sync: {
 						...sync,
 						revision: ack.currentRevision ?? sync.revision,
@@ -509,7 +512,9 @@ function createWriteFacet(input: {
 					throw new Error(`Engine scope database is missing collection "${input.collection}"`);
 				}
 				assertBulkSuccess(
-					await collection.bulkUpsert([document] as never[]),
+					await collection.bulkUpsert([
+						{ ...document, remoteKey: remoteKeyFor(document.remoteId as string | null) },
+					] as never[]),
 					`write facet ${input.collection} upsert`
 				);
 			}),

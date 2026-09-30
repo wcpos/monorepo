@@ -93,37 +93,7 @@
   "packages/core/src/screens/main/pos/cart/cells/fee-name.tsx": {
     "grid/grid-cols-*": 2
   },
-  "packages/core/src/screens/main/pos/cart/closure-sheet.tsx": {
-    "arbitrary-px": 1,
-    "duration-literal": 1
-  },
-  "packages/core/src/screens/main/pos/cart/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/pos/cart/movement-sheet.tsx": {
-    "arbitrary-px": 3
-  },
-  "packages/core/src/screens/main/pos/cart/register-panel.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/column/checkout-column.tsx": {
-    "arbitrary-px": 2
-  },
-  "packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage.tsx": {
-    "arbitrary-px": 1,
-    "duration-literal": 2
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/tender-pane.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/terminal-leg-view.tsx": {
-    "arbitrary-px": 5,
-    "duration-literal": 2
-  },
   "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/pos/products/index.tsx": {
     "bare-Suspense": 1
   },
   "packages/core/src/screens/main/pos/products/scan-sound-themes.ts": {
@@ -146,7 +116,7 @@
     "hover:": 2
   },
   "packages/core/src/screens/main/reports/index.tsx": {
-    "bare-Suspense": 3
+    "bare-Suspense": 2
   },
   "packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
     "duration-literal": 3

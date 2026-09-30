@@ -15,6 +15,7 @@ jest.mock('@wcpos/query', () => ({
 const engineRecord = (remoteId: string, payload: Record<string, unknown>) => ({
 	uuid: `record-${remoteId}`,
 	remoteId,
+	remoteKey: String(remoteId ?? ''),
 	payload,
 });
 

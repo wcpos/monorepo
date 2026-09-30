@@ -212,24 +212,41 @@ export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearc
 
 // Byte-exact per-dist literals: keep everything outside these rewrites untouched.
 // These installed dists have two indexing add sites: boot replay and live events.
-export const DISTS = [
+/**
+ * 17.5.0 has the same code at every anchor, so the same derivation below applies. Its esm
+ * build emits RxFulltextSearch as a native class (close is a method; its body still ends
+ * `await this.queue}`), and cjs gains babel's defineProperty helper for the class fields.
+ * The minifier renamed the locals: esm live index `r` (the RxFulltextSearch constructor
+ * parameter), destination `r` (the local in addFulltextSearch), handler text `n`;
+ * cjs live index `s`, destination `n`, handler text `s`, splice before `var c=`.
+ */
+const DISTS_17_5_0 = [
 	{
 		dist: 'esm',
-		liveBefore: 's.add(e.id,e.searchable)',
+		liveBefore: 'r.add(e.id,e.searchable)',
 		replayBefore: 'o.add(e.id,e.searchable)',
-		pipelineBefore: 'l=await a.collection.addPipeline({destination:s,',
-		destination: 's',
-		appendBefore: 'i.push({id:o,searchable:r})}var l=',
+		pipelineBefore: 'l=await t.collection.addPipeline({destination:r,',
+		destination: 'r',
+		appendBefore: 'i.push({id:o,searchable:n})}var l=',
 	},
 	{
 		dist: 'cjs',
-		liveBefore: 'n.add(e.id,e.searchable)',
+		liveBefore: 's.add(e.id,e.searchable)',
 		replayBefore: 'l.add(e.id,e.searchable)',
-		pipelineBefore: 'h=await e.collection.addPipeline({destination:c,',
-		destination: 'c',
-		appendBefore: 'i.push({id:s,searchable:n})}var o=',
+		pipelineBefore: 'h=await e.collection.addPipeline({destination:n,',
+		destination: 'n',
+		appendBefore: 'i.push({id:o,searchable:s})}var c=',
 	},
-].map(({ dist, liveBefore, replayBefore, pipelineBefore, appendBefore, destination }) => ({
+];
+
+const withRewrites = ({
+	dist,
+	liveBefore,
+	replayBefore,
+	pipelineBefore,
+	appendBefore,
+	destination,
+}) => ({
 	dist,
 	liveBefore,
 	liveAfter: `${MARKER}(${liveBefore[0]},e.id,e.searchable)`,
@@ -249,7 +266,16 @@ export const DISTS = [
 	closeBefore: 'this.subs.forEach((e=>e.unsubscribe())),await this.queue}',
 	closeAfter:
 		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0,this.index.__wcposPersistedDigests&&this.index.__wcposPersistedDigests.clear(),this.index.__wcposPersistedDigestBytes=0}',
-}));
+});
+
+// Anchors per rxdb-premium release. The postinstall picks the set for the installed
+// version and fails on any other, so a new release is re-derived against the
+// churn test, never guessed. Drop a release's set when the pin leaves it.
+const DISTS_BY_VERSION = {
+	'17.5.0': DISTS_17_5_0.map(withRewrites),
+};
+const INSTALLED_VERSION = require('rxdb-premium/package.json').version;
+export const DISTS = DISTS_BY_VERSION[INSTALLED_VERSION];
 
 // Validate every dist before writing any, as in the changelog-identity patcher.
 export function preparePatch(path, anchors) {
@@ -306,6 +332,12 @@ function commitPatches(prepared) {
 }
 
 function main() {
+	if (DISTS === undefined) {
+		throw new Error(
+			`rxdb-premium ${INSTALLED_VERSION} has no anchor set in patch-rxdb-premium-flexsearch-churn.mjs — ` +
+				're-derive this patch against the churn test'
+		);
+	}
 	const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
 	const prepared = DISTS.map(({ dist, ...anchors }) => {
 		const path = join(packageRoot, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`);

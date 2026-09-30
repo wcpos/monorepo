@@ -24,18 +24,18 @@
     "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix"
   },
   "peerDependencies": {
-    "expo-file-system": "~57.0.4"
+    "expo-file-system": "~58.0.3"
   },
   "dependencies": {
     "@wcpos/sync-core": "workspace:*",
     "@wcpos/utils": "workspace:*",
     "ajv": "^8.20.0",
-    "expo-opfs": "^1.0.9",
+    "expo-sqlite": "~58.0.6",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
-    "rxdb": "17.4.0",
-    "rxdb-premium": "17.4.0",
+    "rxdb": "17.5.0",
+    "rxdb-premium": "17.5.0",
     "rxjs": "7.8.2",
     "uuid": "^14.0.2"
   },

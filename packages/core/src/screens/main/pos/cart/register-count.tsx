@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
@@ -47,7 +47,7 @@ export function DenominationTile({
 			testID={`den-tile-${value}`}
 			accessibilityRole="button"
 			accessibilityLabel={format(Number(value))}
-			className="border-border bg-muted active:bg-accent h-14 flex-1 flex-row items-center justify-center gap-1 rounded-md border"
+			className="border-border bg-muted active:bg-accent size-tile items-center justify-center gap-1 rounded-lg border"
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
 			delayLongPress={400}
@@ -64,7 +64,9 @@ export function DenominationTile({
 				if (!held.current) add(1);
 			}}
 		>
-			<Text className="tabular-nums">{format(Number(value))}</Text>
+			<Text className="max-w-full text-sm tabular-nums" numberOfLines={1} adjustsFontSizeToFit>
+				{format(Number(value))}
+			</Text>
 			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
 				{count}
 			</Text>
@@ -116,13 +118,31 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		}
 	};
 	return (
-		<ScrollView className="bg-card flex-1 rounded-md" contentContainerClassName="gap-3 p-4">
-			<Text className="min-h-11">
-				{t('register.close_register_title', { name: binding.registerName })}
-			</Text>
-			<Text>{t('register.cash_counted_float_included')}</Text>
+		<ScrollView
+			className="flex-1"
+			contentContainerClassName="gap-4 px-4 py-5"
+			keyboardShouldPersistTaps="handled"
+		>
+			<View className="flex-row items-center">
+				<Text className="text-muted-foreground flex-1">
+					{t('register.close_register_title', { name: binding.registerName })}
+				</Text>
+				<Button
+					testID="count-back"
+					variant="ghost"
+					size="sm"
+					// Compact look, 44 pt target: 36 px tall plus 4 px of hit slop each side.
+					hitSlop={{ top: 4, bottom: 4 }}
+					disabled={busy}
+					onPress={() => attempt(actions.backToSelling)}
+				>
+					{t('register.back_to_selling')}
+				</Button>
+			</View>
+			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
 			<RegisterAmount
 				testID="count-amount"
+				variant="box"
 				value={amount}
 				onChangeText={(value) => {
 					setPieces({});
@@ -130,33 +150,49 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				}}
 			/>
 			{!blind && valid && (
-				<View className="min-h-11 flex-row items-center gap-2">
-					<Text testID="count-variance" className="tabular-nums">
-						{t('register.expected_line', { amount: format(Number(expected.cash ?? '0')) })} ·{' '}
-						{varianceText(variance, format, t)}
+				<View className="min-h-row flex-row items-center justify-between">
+					<Text className="text-muted-foreground">
+						{t('register.expected_line', { amount: format(Number(expected.cash ?? '0')) })}
 					</Text>
-					{variance === 0 && (
-						<View testID="count-exact">
-							<Icon name="check" className="text-success" />
-						</View>
-					)}
+					<View className="flex-row items-center gap-2">
+						<Text
+							testID="count-variance"
+							className={`font-semibold tabular-nums ${variance < 0 ? 'text-destructive' : variance === 0 ? 'text-success' : 'text-foreground'}`}
+						>
+							{varianceText(variance, format, t)}
+						</Text>
+						{variance === 0 && (
+							<View testID="count-exact">
+								<Icon name="check" className="text-success" />
+							</View>
+						)}
+					</View>
 				</View>
 			)}
 			{needsManager && (
-				<Text testID="count-manager-line" className="text-warning min-h-11">
-					{session?.approval_required
-						? t('register.approval_needed')
-						: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}
-				</Text>
+				<View className="bg-warning/10 min-h-ctl flex-row items-center gap-2 rounded-lg px-3">
+					<Icon name="lock" className="text-warning" />
+					<Text testID="count-manager-line" className="text-warning flex-1">
+						{session?.approval_required
+							? t('register.approval_needed')
+							: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}
+					</Text>
+				</View>
 			)}
-			<Button
-				testID="count-denominations"
-				variant="ghost"
-				className="min-h-11"
-				onPress={() => setNotesOpen(!notesOpen)}
-			>
-				{t('register.count_by_denominations')}
-			</Button>
+			<View className="border-border border-t">
+				<Button
+					testID="count-denominations"
+					variant="ghost"
+					className="min-h-ctl flex-row justify-start gap-2 px-0"
+					onPress={() => setNotesOpen(!notesOpen)}
+				>
+					<Icon
+						name={notesOpen ? 'chevronDown' : 'chevronRight'}
+						className="text-muted-foreground"
+					/>
+					<ButtonText>{t('register.count_by_denominations')}</ButtonText>
+				</Button>
+			</View>
 			{notesOpen && (
 				<View className="gap-2">
 					{Array.from({ length: Math.ceil(faces.length / 4) }, (_, row) => (
@@ -184,7 +220,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					<Button
 						testID="count-clear"
 						variant="ghost"
-						className="min-h-11 self-end"
+						className="min-h-row self-end"
 						onPress={() => {
 							setPieces({});
 							setCash('0.00');
@@ -194,14 +230,20 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					</Button>
 				</View>
 			)}
-			<Button
-				testID="count-other-tenders"
-				variant="ghost"
-				className="min-h-11"
-				onPress={() => setTendersOpen(!tendersOpen)}
-			>
-				{t('register.other_tenders')}
-			</Button>
+			<View className="border-border border-t">
+				<Button
+					testID="count-other-tenders"
+					variant="ghost"
+					className="min-h-ctl flex-row justify-start gap-2 px-0"
+					onPress={() => setTendersOpen(!tendersOpen)}
+				>
+					<Icon
+						name={tendersOpen ? 'chevronDown' : 'chevronRight'}
+						className="text-muted-foreground"
+					/>
+					<ButtonText>{t('register.other_tenders')}</ButtonText>
+				</Button>
+			</View>
 			{tendersOpen &&
 				Object.keys(expected)
 					.filter((method) => method !== 'cash')
@@ -220,23 +262,22 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						</View>
 					))}
 			{unsyncedCount > 0 && (
-				<Text testID="count-unsynced" className="text-muted-foreground min-h-11">
+				<Text testID="count-unsynced" className="text-muted-foreground min-h-row">
 					{t('register.unsynced_sales', { count: unsyncedCount })}
 				</Text>
 			)}
-			{!!error && <Text testID="count-error">{error}</Text>}
-			<Button
-				testID="count-back"
-				variant="outline"
-				className="min-h-11"
-				disabled={busy}
-				onPress={() => attempt(actions.backToSelling)}
-			>
-				{t('register.back_to_selling')}
-			</Button>
+			{!!error && (
+				<Text testID="count-error" className="text-destructive">
+					{error}
+				</Text>
+			)}
+			{approving && (
+				<ApproveSheet counted={counted} onClosed={completed} onOpenChange={setApproving} />
+			)}
 			<Button
 				testID="count-close"
-				className="min-h-14"
+				size="xl"
+				className="w-full"
 				loading={busy}
 				disabled={
 					!valid || Object.values(others).some((value) => value !== '' && !validAmount(value))
@@ -260,9 +301,6 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			>
 				{t(needsManager ? 'register.approve_and_close' : 'register.close_and_print')}
 			</Button>
-			{approving && (
-				<ApproveSheet counted={counted} onClosed={completed} onOpenChange={setApproving} />
-			)}
 		</ScrollView>
 	);
 }

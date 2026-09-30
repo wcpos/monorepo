@@ -34,11 +34,11 @@
   },
   "peerDependencies": {
     "@react-native-community/netinfo": "^12.0.1",
-    "react": "~19.2.3",
-    "react-dom": "~19.2.3",
-    "react-native": "~0.86.0",
-    "react-native-gesture-handler": "~2.32.0",
-    "react-native-reanimated": "~4.5.0"
+    "react": "~19.3.0",
+    "react-dom": "~19.3.0",
+    "react-native": "~0.88.0-rc.2",
+    "react-native-gesture-handler": "~3.2.1",
+    "react-native-reanimated": "4.7.0"
   },
   "dependencies": {
     "@wcpos/utils": "workspace:*",
@@ -54,10 +54,10 @@
     "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.25",
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "jest": "^30.5.2",
-    "react-native": "0.86.2",
-    "react-test-renderer": "19.2.3",
+    "react-native": "0.88.0-rc.2",
+    "react-test-renderer": "19.3.0",
     "ts-jest": "^29.4.12"
   }
 }

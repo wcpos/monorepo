@@ -39,7 +39,7 @@ function persistConsent(consent: TelemetryConsent): void {
 	try {
 		const marker = consentMarkerFile();
 		if (consent === 'allowed') {
-			marker.write('allowed');
+			marker.writeSync('allowed');
 		} else if (marker.exists) {
 			marker.delete();
 		}
@@ -67,7 +67,7 @@ function initialize(): void {
 	let id = file.exists ? file.textSync() : '';
 	if (!id) {
 		id = globalThis.crypto.randomUUID();
-		file.write(id);
+		file.writeSync(id);
 	}
 	Sentry.setUser({ id });
 }

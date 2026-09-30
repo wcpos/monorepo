@@ -13,6 +13,15 @@ import { initialTenderState } from './tender-state';
 
 import type { TenderFlow } from './use-tender-flow';
 
+// Keep the real date formatter; locale lookup must not hydrate an app/database in jsdom.
+jest.mock('../../../../../hooks/use-locale', () => ({ useLocale: () => ({ shortCode: 'en' }) }));
+
+jest.mock('uniwind', () => ({
+	useCSSVariable: (name: string) =>
+		name === '--spacing-tile' ? 64 : name === '--spacing-ctl' ? 44 : 'currentColor',
+}));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle: 'circle' }));
+
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
 const mockFinishSale = jest.fn();

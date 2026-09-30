@@ -17,7 +17,7 @@ import {
 } from '@wcpos/components/select';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import {
 	TreeCombobox,
 	TreeComboboxContent,
@@ -292,21 +292,27 @@ function ConditionValueEditor({
 	}
 	if (condition.field === 'on_sale' || condition.field === 'featured') {
 		return (
-			<ToggleGroup
-				type="single"
+			<SegmentedControl
 				value={condition.value ? 'yes' : 'no'}
 				testID={`quick-filter-toggle-${condition.field}`}
 				onValueChange={(value) =>
 					value && onChange({ field: condition.field, value: value === 'yes' })
 				}
-			>
-				<ToggleGroupItem value="yes" testID={`quick-filter-toggle-${condition.field}-yes`}>
-					<Text>{t('common.yes')}</Text>
-				</ToggleGroupItem>
-				<ToggleGroupItem value="no" testID={`quick-filter-toggle-${condition.field}-no`}>
-					<Text>{t('common.no')}</Text>
-				</ToggleGroupItem>
-			</ToggleGroup>
+				segments={
+					[
+						{
+							value: 'yes',
+							label: t('common.yes'),
+							testID: `quick-filter-toggle-${condition.field}-yes`,
+						},
+						{
+							value: 'no',
+							label: t('common.no'),
+							testID: `quick-filter-toggle-${condition.field}-no`,
+						},
+					] satisfies [Segment, Segment]
+				}
+			/>
 		);
 	}
 	if (condition.field === 'stock_status') {
@@ -486,8 +492,7 @@ export function QuickFilterEditor({
 					</SelectContent>
 				</Select>
 				{draft.sort && (
-					<ToggleGroup
-						type="single"
+					<SegmentedControl
 						value={draft.sort.direction}
 						testID="quick-filter-sort-direction"
 						onValueChange={(direction) =>
@@ -498,14 +503,21 @@ export function QuickFilterEditor({
 									: value
 							)
 						}
-					>
-						<ToggleGroupItem value="asc" testID="quick-filter-sort-direction-asc">
-							<Text>{t('common.ascending')}</Text>
-						</ToggleGroupItem>
-						<ToggleGroupItem value="desc" testID="quick-filter-sort-direction-desc">
-							<Text>{t('common.descending')}</Text>
-						</ToggleGroupItem>
-					</ToggleGroup>
+						segments={
+							[
+								{
+									value: 'asc',
+									label: t('common.ascending'),
+									testID: 'quick-filter-sort-direction-asc',
+								},
+								{
+									value: 'desc',
+									label: t('common.descending'),
+									testID: 'quick-filter-sort-direction-desc',
+								},
+							] satisfies [Segment, Segment]
+						}
+					/>
 				)}
 			</VStack>
 			<QuickFilterPreview draft={draft} />

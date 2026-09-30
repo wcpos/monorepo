@@ -19,13 +19,16 @@ import { useReportsBinding } from './context';
  * it disappears on its own: the binding stops reporting progress the moment the lane's
  * continuation cursor is cleared, which is exactly when the range is complete.
  */
-export function ReportsSyncProgress() {
-	const { binding } = useReportsBinding();
+export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comparison' } = {}) {
+	const { binding, comparisonBinding } = useReportsBinding();
+	const source = lane === 'comparison' ? comparisonBinding : binding;
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const progress = useObservableState(binding.laneProgress$, null);
+	const progress = useObservableState(source.laneProgress$, null);
 	const t = useT();
 
 	if (!progress) return null;
+	// The comparison lane's download: its figures are not final until it ends.
+	const comparison = lane === 'comparison';
 
 	const percent =
 		progress.total === null || progress.total <= 0
@@ -34,13 +37,18 @@ export function ReportsSyncProgress() {
 
 	return (
 		<View
-			testID="reports-sync-progress"
-			className="border-border bg-muted/40 mx-2 mb-1 gap-1 rounded-md border px-2 py-1"
+			testID={comparison ? 'reports-comparison-sync-progress' : 'reports-sync-progress'}
+			className={`border-border bg-muted/40 gap-1 rounded-md border px-2 py-1 ${comparison ? '' : 'mx-2 mb-1'}`}
 		>
 			<Text testID="reports-sync-progress-label" className="text-muted-foreground text-sm">
 				{progress.total === null
-					? t('reports.downloading_orders_unknown_total', { downloaded: progress.downloaded })
-					: t('reports.downloading_orders', {
+					? t(
+							comparison
+								? 'reports.comparison_downloading_unknown_total'
+								: 'reports.downloading_orders_unknown_total',
+							{ downloaded: progress.downloaded }
+						)
+					: t(comparison ? 'reports.comparison_downloading' : 'reports.downloading_orders', {
 							downloaded: progress.downloaded,
 							total: progress.total,
 						})}

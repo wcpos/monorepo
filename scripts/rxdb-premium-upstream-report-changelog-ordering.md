@@ -82,10 +82,10 @@ The same shape arises without any duplicate whenever a receiver's rows are
 stale relative to the sender's (for example after a receiver rebuilt its
 indexes from `documents.json`, which emits no changelog operations).
 
-## What we ship as a workaround
+## What we shipped as a filesystem-era workaround
 
-A postinstall patch (`scripts/patch-rxdb-premium-changelog-identity.mjs` in the
-wcpos/monorepo repository) rewrites `runChangelogOperation` in both dists:
+A former postinstall patch (`scripts/patch-rxdb-premium-changelog-identity.mjs` in the
+wcpos/monorepo repository) rewrote `runChangelogOperation` in both dists:
 
 - `D`: match by index string (unique per document; the write path's delete
   carries the old string with the new byte range, so bytes cannot be part of a

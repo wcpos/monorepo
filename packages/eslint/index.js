@@ -386,11 +386,6 @@ export const config = [
 		ignores: [
 			// Git submodules manage their own linting.
 			'apps/web/**',
-			// Targeted recovery is vendored three ways, and the electron copy lives in
-			// another repository. Never let eslint --fix break their byte identity.
-			// Matched by filename, not path: packages lint with `eslint src` from
-			// their own directory, so a repo-relative pattern silently misses.
-			'**/opfs-targeted-recovery*.mjs',
 		],
 	},
 	eslintPluginPrettierRecommended,
@@ -400,9 +395,9 @@ export const config = [
 		// codegen and CI checks that legitimately use Node globals. Without this they
 		// report `'Buffer' is not defined` once the prettier glob covers them.
 		files: ['**/*.{mjs,cjs}'],
-		// These modules form the browser-bundled OPFS worker graph, so Node globals
+		// These modules form the browser-bundled storage worker graph, so Node globals
 		// must remain unavailable even though they use the `.mjs` extension.
-		ignores: ['**/opfs-worker-entry.mjs', '**/opfs-targeted-recovery*.mjs'],
+		ignores: ['**/sqlite-worker-entry.mjs', '**/sqlite-basics-oo1.mjs'],
 		languageOptions: {
 			globals: {
 				Buffer: 'readonly',

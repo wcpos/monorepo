@@ -12,7 +12,7 @@ import { FocusedSkiaWeb } from '../../components/focused-skia-web';
  * NOTE: wrap this component in memo to stop the Cannot read properties of null (reading 'rangeMin') error
  * https://github.com/Shopify/react-native-skia/issues/1629
  */
-export const Chart = React.memo(() => {
+export const Chart = React.memo(({ comparison = false }: { comparison?: boolean }) => {
 	return (
 		<FocusedSkiaWeb
 			opts={{
@@ -20,6 +20,7 @@ export const Chart = React.memo(() => {
 					`https://cdn.jsdelivr.net/npm/canvaskit-wasm@${version}/bin/full/${file}`,
 			}}
 			getComponent={() => import('./chart')}
+			componentProps={{ comparison }}
 			fallback={<Text>Loading Chart...</Text>}
 		/>
 	);

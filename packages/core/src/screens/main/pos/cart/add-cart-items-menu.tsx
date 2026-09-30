@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -24,12 +24,12 @@ import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 type DialogType = 'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'coupon' | null;
 
 export function AddCartItemsMenu() {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const t = useT();
 	const { license } = useAppInfo();
 	const isPro = license?.isPro ?? false;

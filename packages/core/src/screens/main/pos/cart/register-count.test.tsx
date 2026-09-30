@@ -11,8 +11,9 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
+	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
 		children,
 		onPress,
@@ -119,7 +120,10 @@ afterEach(() => jest.useRealTimers());
 it('shows short and exact with check', () => {
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('463.30');
-	expect(screen.getByTestId('count-variance').textContent).toBe('Expected £480.80 · −£17.50 short');
+	expect(screen.getByTestId('count-variance').textContent).toBe('−£17.50 short');
+	expect(screen.getByTestId('count-variance').parentElement?.parentElement?.textContent).toContain(
+		'Expected £480.80'
+	);
 	enter('480.80');
 	expect(screen.getByTestId('count-variance').textContent).toContain('Exact');
 	expect(screen.getByTestId('count-exact')).toBeTruthy();
@@ -226,3 +230,5 @@ it.each([
 	render(<RegisterCount onClosed={jest.fn()} />);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

@@ -22,7 +22,10 @@ export function remoteId(value: number): RemoteId {
 
 // Host schema-canary fixtures. This is deliberately the exact sync-collection
 // recipe the engine opens, without exposing package-private descriptors.
-export { engineSyncCollectionCreators } from './collections/engine-collections';
+export {
+	engineSyncCollectionCreators,
+	engineCollectionCreators,
+} from './collections/engine-collections';
 export {
 	createEngineHarness,
 	type CapturedEngineTimers,
@@ -83,7 +86,7 @@ export {
 	existenceManifestSchema,
 	type ExistenceManifestDocument,
 } from './local-coverage/existence-manifest-schema';
-export { orderBrowserQueryKey } from './scheduler';
+export { orderBrowserQueryKey, refundBrowserQueryKey } from './scheduler';
 export { searchLaneQueryKey } from './require-plane';
 export {
 	customerBrowseWindowQueryKeyFromDimensions,

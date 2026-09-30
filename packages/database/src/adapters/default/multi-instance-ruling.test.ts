@@ -10,7 +10,7 @@
  *
  * Two eras, both live in this file (see the Decision section of ./README.md):
  *
- * - `opfs-filesystem` (today) → web `true`. Ruling 2026-08-06 (#1057). Every tab
+ * - `opfs-filesystem` (the previous filesystem era) → web `true`. Ruling 2026-08-06 (#1057). Every tab
  *   opens its own storage over the same files; `true` keeps followers coherent
  *   and gives RxDB one leader for cleanup/recovery. `false` here is the proven
  *   data-loss path of #1049.
@@ -22,6 +22,7 @@
  */
 
 import {
+	NATIVE_STORAGE_ENGINE,
 	REQUIRED_MULTI_INSTANCE_ELECTRON,
 	REQUIRED_MULTI_INSTANCE_NATIVE,
 	REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE,
@@ -35,7 +36,11 @@ const errorHandledStorage = { name: 'error-handled-storage' };
 const validatedStorage = { name: 'validated-storage' };
 
 jest.mock('../storage', () => ({ getNativeNewStorage: () => rawStorage }));
-jest.mock('../storage/index.web', () => ({ getWebNewStorage: () => rawStorage }));
+jest.mock('../storage/index.web', () => ({
+	getWebNewStorage: () => rawStorage,
+	onStorageWorkerLost: jest.fn(),
+	terminateStorageWorker: jest.fn(),
+}));
 jest.mock('../storage/index.electron', () => ({ getElectronNewStorage: () => rawStorage }));
 jest.mock('../../plugins/wrapped-error-handler-storage', () => ({
 	wrappedErrorHandlerStorage: () => errorHandledStorage,
@@ -68,6 +73,7 @@ describe('multiInstance is pinned to the storage engine (#1057 2026-08-06, #2146
 		expect(REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE['sqlite-sahpool']).toBe(false);
 	});
 
+	// #2242: desktop stays single-instance under node:sqlite.
 	it('electron is false — one main-process storage behind IPC, in every era', async () => {
 		const { defaultConfig } = await import('./index.electron');
 
@@ -75,11 +81,11 @@ describe('multiInstance is pinned to the storage engine (#1057 2026-08-06, #2146
 		expect(REQUIRED_MULTI_INSTANCE_ELECTRON).toBe(false);
 	});
 
-	it('native is false — one storage per app process, in every era', async () => {
+	it('native pins expo-sqlite to one storage per app process', async () => {
 		const { defaultConfig } = await import('./index');
 
 		expect(defaultConfig.multiInstance).toBe(REQUIRED_MULTI_INSTANCE_NATIVE);
-		expect(REQUIRED_MULTI_INSTANCE_NATIVE).toBe(false);
+		expect([NATIVE_STORAGE_ENGINE, defaultConfig.multiInstance]).toEqual(['expo-sqlite', false]);
 	});
 
 	it('every adapter states the flag explicitly rather than inheriting rxdb’s default', async () => {

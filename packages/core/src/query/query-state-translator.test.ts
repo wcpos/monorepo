@@ -1,5 +1,7 @@
 import { orderBrowserQueryKey } from '@wcpos/query/testing';
+import { engineCollectionNameFor } from '@wcpos/query/collection-map';
 import { mintRemoteId } from '@wcpos/sync-core';
+import { engineCollectionCreators, engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import {
 	compileQuery,
@@ -9,7 +11,8 @@ import {
 	translateLogsQueryState,
 } from './query-state-translator';
 
-import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
+import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
+import type { RxJsonSchema } from 'rxdb';
 
 type ExhaustiveFilterMap = {
 	[C in Exclude<CollectionKey, 'logs'>]: { [F in keyof FiltersOf<C>]-?: unknown };
@@ -18,6 +21,111 @@ type ExhaustiveFilterMap = {
 // This assignment is intentionally part of the compile gate: adding a FiltersOf field
 // without a translator entry makes this suite fail before it can run.
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
+
+// Required keys cannot be absent. Nullable is allowed: null precedes all values on both engines.
+it('pushes only required top-level engine columns for every UI sort', () => {
+	type Collection = Exclude<CollectionKey, 'logs'>;
+	const dated = ['date_created_gmt', 'date_modified_gmt'] as const;
+	const prices = ['price', 'regular_price', 'sale_price'] as const;
+	const stock = ['stock_quantity', 'stock_status'] as const;
+	const fields = {
+		refunds: ['date_created_gmt'],
+		products: [
+			'id',
+			'name',
+			'sku',
+			'barcode',
+			'sortable_price',
+			'total_sales',
+			'menu_order',
+			'type',
+			...prices,
+			...stock,
+			...dated,
+		],
+		orders: [
+			'status',
+			'number',
+			'customer_id',
+			'total',
+			'date_completed_gmt',
+			'date_paid_gmt',
+			'payment_method',
+			...dated,
+		],
+		coupons: [
+			'code',
+			'amount',
+			'discount_type',
+			'status',
+			'usage_count',
+			'date_expires_gmt',
+			...dated,
+		],
+		'products/categories': ['id', 'name'],
+		'products/brands': ['id', 'name'],
+		'products/tags': ['id', 'name'],
+		variations: ['id', 'name', 'sku', 'menu_order', ...prices, ...stock, ...dated],
+		customers: ['id', 'first_name', 'last_name', 'email', 'role', 'username', ...dated],
+		'tax-rates': ['id', 'name', 'country', 'state', 'priority', 'rate', 'class', 'order'],
+	} satisfies { [C in Collection]: SortFieldOf<C>[] };
+	const creators = engineSyncCollectionCreators();
+	const violations: string[] = [];
+	for (const [name, { schema }] of Object.entries(engineCollectionCreators())) {
+		const typed = schema as RxJsonSchema<Record<string, unknown>>;
+		for (const index of typed.indexes ?? [])
+			for (const path of typeof index === 'string' ? [index] : index) {
+				const parts = path.split('.');
+				let node = typed;
+				for (const part of parts) {
+					if (!node.required?.includes(part)) violations.push(`${name}.${path}: not required`);
+					node = node.properties[part] as RxJsonSchema<Record<string, unknown>>;
+				}
+				if (typeof node.type !== 'string' || node.type === 'null')
+					violations.push(`${name}.${path}: nullable`);
+			}
+	}
+	for (const name of [
+		'orders',
+		'products',
+		'variations',
+		'customers',
+		'taxRates',
+		'categories',
+		'brands',
+		'tags',
+		'coupons',
+	] as const) {
+		const schema = creators[name].schema as RxJsonSchema<Record<string, unknown>>;
+		if (!schema.indexes?.includes('remoteKey')) violations.push(`${name}: missing remoteKey index`);
+	}
+
+	for (const collection of Object.keys(fields) as Collection[]) {
+		const legacy = collection === 'tax-rates' ? 'taxes' : collection;
+		const schema = creators[engineCollectionNameFor(legacy)].schema as RxJsonSchema<
+			Record<string, unknown>
+		>;
+		for (const field of fields[collection]) {
+			const { read } = compileQuery(
+				collection,
+				{
+					search: '',
+					filters: {},
+					sort: { field, direction: 'asc' },
+					limit: 10,
+				},
+				{ id: 'sort-schema-pin' }
+			);
+			if (!read.sortPushable) continue;
+			for (const { enginePath } of read.sort) {
+				const property = enginePath === undefined ? undefined : schema.properties[enginePath];
+				if (!property || !schema.required?.includes(enginePath!))
+					violations.push(`${collection}.${field} -> ${enginePath}`);
+			}
+		}
+	}
+	expect(violations).toEqual([]);
+});
 
 describe('query-state translator', () => {
 	// Remove the refunds-by-parent suffix: re-declaration produces an undefined requirement id.
@@ -45,6 +153,7 @@ describe('query-state translator', () => {
 		]);
 	});
 	it.each([
+		['name', 'name'],
 		['price', 'sortable_price'],
 		['regular_price', 'regular_price'],
 		['sale_price', 'sale_price'],
@@ -266,10 +375,10 @@ describe('query-state translator', () => {
 				{ status: 'processing' },
 				{ customerId: 42 },
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+					posUserId: '7',
 				},
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+					posStoreId: '3',
 				},
 				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
@@ -303,10 +412,10 @@ describe('query-state translator', () => {
 			prefilter: {
 				$and: [
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+						posUserId: '7',
 					},
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+						posStoreId: '3',
 					},
 					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 				],
@@ -772,7 +881,7 @@ describe('query-state translator', () => {
 
 		expect(compiled.demand).toEqual([]);
 		expect(compiled.represented).toBe(false);
-		expect(compiled.read.prefilter).toEqual({ remoteId: { $in: [] } });
+		expect(compiled.read.prefilter).toEqual({ remoteKey: { $in: [] } });
 	});
 
 	it('states the picker sort on a reference refresh when the wire can express it (#1347)', () => {
@@ -1052,5 +1161,77 @@ it('translates the register into both metadata reads and browse demand', () => {
 	expect(compiled.demand[0]).toMatchObject({ registerId: register });
 	expect(compiled.read.prefilter).toEqual({
 		'payload.meta_data': { $elemMatch: { key: '_wcpos_register', value: register } },
+	});
+});
+
+it.each(['products', 'variations'] as const)(
+	'bounds the default %s grid in storage',
+	(collection) => {
+		const { read } = compileQuery(
+			collection,
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'name', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'default-grid' }
+		);
+		expect(read.sortPushable).toBe(true);
+		expect(read.limit).toBe(10);
+		expect(Number.isFinite(read.limit)).toBe(true);
+		expect(read.sort.map(({ enginePath }) => enginePath)).toEqual(['sortName', 'uuid']);
+	}
+);
+
+describe('refund query state', () => {
+	const state: QueryStateOf<'refunds'> = {
+		search: '',
+		filters: { dateRange: { from: '2026-09-01T00:00:00', to: '2026-09-03T00:00:00' } },
+		sort: { field: 'date_created_gmt', direction: 'desc' },
+		limit: Number.MAX_SAFE_INTEGER,
+	};
+	it('a refunds query-state with a date range becomes a refunds-browse requirement', () => {
+		const compiled = compileQuery('refunds', state, { id: 'report' });
+		expect(compiled.demand).toEqual([
+			{
+				id: 'report:refunds-browse',
+				collection: 'refunds',
+				kind: 'refunds-browse',
+				after: 1788220800,
+				before: 1788393600,
+				limit: 'all',
+				priority: 700,
+			},
+		]);
+		expect(compiled.represented).toBe(true);
+	});
+	it.each([
+		['2026-08-31T23:59:59', false],
+		['2026-09-01T00:00:00', true],
+		['2026-09-03T00:00:00', true],
+		['2026-09-03T00:00:01', false],
+	])('local refund date predicate includes both bounds: %s', (date, included) => {
+		const compiled = compileQuery('refunds', state, { id: 'report' });
+		expect(compiled.read.residual?.({ uuid: 'refund', payload: { date_created_gmt: date } })).toBe(
+			included
+		);
+	});
+	it('missing or invalid bounds never become a history walk', () => {
+		for (const filters of [{}, { dateRange: { from: 'invalid', to: '2026-09-03' } }]) {
+			const compiled = compileQuery('refunds', { ...state, filters }, { id: 'report' });
+			expect(compiled.demand).toEqual([]);
+			expect(compiled.represented).toBe(false);
+		}
+	});
+	it('does not claim unsupported search or finite ascending slices are represented', () => {
+		for (const update of [
+			{ search: 'text' },
+			{ limit: 10, sort: { field: 'date_created_gmt', direction: 'asc' } },
+		] as const) {
+			expect(compileQuery('refunds', { ...state, ...update }, { id: 'report' }).represented).toBe(
+				false
+			);
+		}
 	});
 });

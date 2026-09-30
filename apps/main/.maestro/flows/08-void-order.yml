@@ -141,6 +141,12 @@ appId: com.wcpos.main.dev
       text: "${output.amountRe}"
     timeout: 30000
 - tapOn:
+    id: "order-meta-button"
+- extendedWaitUntil:
+    visible:
+      id: "order-meta-dialog"
+    timeout: 15000
+- tapOn:
     id: "void-button"
 # The voided order leaves the tab strip and the cart falls back to a fresh
 # empty order. Do not retry this destructive tap: while the server delete is

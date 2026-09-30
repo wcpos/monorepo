@@ -7,7 +7,7 @@
 		"dev:main": "turbo dev --filter=\"{./apps/main}...\"",
 		"dev:electron-renderer": "ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear",
 		"build": "turbo build",
-		"build:opfs-worker": "node scripts/build-opfs-worker.mjs",
+		"build:sqlite-worker": "node scripts/build-sqlite-worker.mjs",
 		"generate:error-codes": "node scripts/generate-error-codes.mjs",
 		"generate:event-labels": "node scripts/generate-event-labels.mjs",
 		"report:unused-error-codes": "node scripts/report-unused-error-codes.mjs",
@@ -33,7 +33,7 @@
 		"expo:install": "pnpm --filter main exec expo install",
 		"extract:translations": "node scripts/extract-js-strings.js",
 		"translations:check": "node scripts/extract-js-strings.js --check",
-		"postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs && node scripts/patch-rxdb-premium-task-queue-containment.mjs && node scripts/patch-rxdb-premium-changelog-replay-safety.mjs && node scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs && node scripts/patch-rxdb-premium-changes-file-salvage.mjs && node scripts/patch-rxdb-premium-changelog-identity.mjs && node scripts/patch-rxdb-premium-flexsearch-churn.mjs",
+		"postinstall": "node scripts/patch-rxdb-premium-flexsearch-churn.mjs && node scripts/patch-rxdb-premium-sqlite-query-translation.mjs",
 		"prepare": "git config core.hooksPath .githooks",
 		"virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
 		"virtual-printer:secure": "pnpm --filter @wcpos/virtual-printer start -- --scenario secure-printing",
@@ -44,15 +44,16 @@
 		"!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
 	},
 	"devDependencies": {
+		"@sqlite.org/sqlite-wasm": "3.53.4-build1",
 		"@vitest/coverage-v8": "4.1.10",
 		"esbuild": "0.28.2",
 		"eslint": "^9.39.5",
-		"expo": "~57.0.13",
+		"expo": "~58.0.0-preview.8",
 		"glob": "^13.0.6",
 		"lint-staged": "^17.5.1",
 		"prettier-plugin-tailwindcss": "^0.8.1",
-		"rxdb": "17.4.0",
-		"rxdb-premium": "17.4.0",
+		"rxdb": "17.5.0",
+		"rxdb-premium": "17.5.0",
 		"yaml": "2.9.1"
 	},
 	"dependencies": {

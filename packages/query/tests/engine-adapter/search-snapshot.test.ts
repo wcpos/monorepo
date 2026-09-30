@@ -37,6 +37,7 @@ describe('legacySearchSnapshot', () => {
 			document: {
 				uuid: 'product-uuid',
 				remoteId: '101',
+				remoteKey: '101',
 				payload: { name: 'Golden coffee', sku: 'GOLD-COFFEE', barcode: '101010' },
 			},
 			expected: {
@@ -52,6 +53,7 @@ describe('legacySearchSnapshot', () => {
 			document: {
 				uuid: 'variation-uuid',
 				remoteId: '102',
+				remoteKey: '102',
 				payload: {
 					sku: 'GOLD-COFFEE-L',
 					barcode: '102102',
@@ -74,6 +76,7 @@ describe('legacySearchSnapshot', () => {
 			document: {
 				uuid: 'order-uuid',
 				remoteId: '103',
+				remoteKey: '103',
 				payload: {
 					number: '103',
 					billing: {
@@ -103,6 +106,7 @@ describe('legacySearchSnapshot', () => {
 			document: {
 				uuid: 'customer-uuid',
 				remoteId: '104',
+				remoteKey: '104',
 				payload: {
 					first_name: 'Grace',
 					last_name: 'Hopper',
@@ -141,7 +145,12 @@ describe('legacySearchSnapshot', () => {
 			] as const
 		).map(([collection, kind, remoteId, name]) => ({
 			collection,
-			document: { uuid: `${kind}-uuid`, remoteId, payload: { name } },
+			document: {
+				uuid: `${kind}-uuid`,
+				remoteId,
+				remoteKey: String(remoteId ?? ''),
+				payload: { name },
+			},
 			expected: { name, uuid: `${kind}-uuid`, id: Number(remoteId) },
 		})),
 		{
@@ -149,6 +158,7 @@ describe('legacySearchSnapshot', () => {
 			document: {
 				uuid: 'coupon-uuid',
 				remoteId: '108',
+				remoteKey: '108',
 				payload: { code: 'GOLDEN', description: 'Golden coupon' },
 			},
 			expected: {
@@ -168,6 +178,7 @@ describe('legacySearchSnapshot', () => {
 		const result = snapshot('orders', {
 			uuid: 'o-1',
 			remoteId: '77',
+			remoteKey: '77',
 			payload: {
 				id: 77,
 				number: '77',
@@ -183,6 +194,7 @@ describe('legacySearchSnapshot', () => {
 		const result = snapshot('products', {
 			uuid: 'p-1',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { name: 'Chai Tea', sku: 'CHAI' },
 		} as EngineDocument);
 		expect(result.id).toBe(42);
@@ -194,6 +206,7 @@ describe('legacySearchSnapshot', () => {
 		const result = snapshot('products', {
 			uuid: 'p-2',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 999, name: 'Stale' },
 		} as EngineDocument);
 		expect(result.id).toBe(42);
@@ -203,6 +216,7 @@ describe('legacySearchSnapshot', () => {
 		const result = snapshot('orders', {
 			uuid: 'o-2',
 			remoteId: null,
+			remoteKey: '',
 			payload: { number: 'draft' },
 		} as never);
 		expect(result.number).toBe('draft');
@@ -214,6 +228,7 @@ describe('legacySearchSnapshot', () => {
 		const withAttributes = snapshot('variations', {
 			uuid: 'v-1',
 			remoteId: '43',
+			remoteKey: '43',
 			payload: {
 				sku: 'CHAI-L',
 				attributes: [
@@ -227,6 +242,7 @@ describe('legacySearchSnapshot', () => {
 		const withoutAttributes = snapshot('variations', {
 			uuid: 'v-2',
 			remoteId: '44',
+			remoteKey: '44',
 			payload: { sku: 'CHAI-S' },
 		} as EngineDocument);
 		expect('attributes' in withoutAttributes).toBe(false);

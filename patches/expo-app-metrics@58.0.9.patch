@@ -1,0 +1,33 @@
+diff --git a/expo-module.config.json b/expo-module.config.json
+index 1655297f3193fdb72415c87028072399667f7f22..1b198b0346221b3ec4d6177ef9c4c935b2187031 100644
+--- a/expo-module.config.json
++++ b/expo-module.config.json
+@@ -1,15 +1,19 @@
+ {
+-  "platforms": ["apple", "android"],
++  "platforms": [
++    "apple",
++    "android"
++  ],
+   "apple": {
+-    "modules": ["AppMetricsModule"],
+-    "appDelegateSubscribers": ["AppMetricsAppDelegateSubscriber"]
++    "modules": [
++      "AppMetricsModule"
++    ],
++    "appDelegateSubscribers": [
++      "AppMetricsAppDelegateSubscriber"
++    ]
+   },
+   "android": {
+-    "modules": ["expo.modules.appmetrics.AppMetricsModule"],
+-    "publication": {
+-      "groupId": "expo.modules.appmetrics",
+-      "artifactId": "expo.modules.appmetrics",
+-      "repository": "local-maven-repo"
+-    }
++    "modules": [
++      "expo.modules.appmetrics.AppMetricsModule"
++    ]
+   }
+ }

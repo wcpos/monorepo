@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
@@ -94,6 +95,13 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
+	const preparationRef = React.useRef(new AbortController());
+	// The gate unmounts checkout on handover: cancel preparation, never an in-flight capture.
+	React.useEffect(() => {
+		const controller = new AbortController();
+		preparationRef.current = controller;
+		return () => controller.abort();
+	}, []);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderId = orderData.id;
@@ -177,7 +185,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	);
 
 	const startCheckout = React.useCallback(async () => {
-		if (!orderId || !gatewayResolved) return;
+		const { signal } = preparationRef.current;
+		if (signal.aborted || !orderId || !gatewayResolved) return;
 		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 		setLoading(true);
 		setError(null);
@@ -187,7 +196,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const gateways = await refetch();
 			resolvedGateway = gateways.find((item) => item.id === gatewayId) || null;
 		}
-		if (!resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
+		if (signal.aborted || !resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
 			setLoading(false);
 			return;
 		}
@@ -219,6 +228,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 						online: true,
 					});
 			} catch (error) {
+				if (signal.aborted) return;
+				if (error instanceof LiveTabNotOwnedError) throw error;
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(checkoutLogger, t);
 					return;
@@ -235,9 +246,15 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			}
 
-			await http.post(`payment-gateways/${resolvedGateway.id}/bootstrap`, {
-				context: { order_id: orderId },
-			});
+			if (signal.aborted) return;
+			await http.post(
+				`payment-gateways/${resolvedGateway.id}/bootstrap`,
+				{
+					context: { order_id: orderId },
+				},
+				{ signal }
+			);
+			if (signal.aborted) return;
 
 			// Recheck after bootstrap without resetting the completion journal via prepareSale.
 			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
@@ -249,25 +266,32 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			// the gateway and the client cannot recall it — see the PR body.
 			if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 
-			const response = await http.post(
-				`orders/${orderId}/checkout`,
-				{
-					gateway_id: resolvedGateway.id,
-					action: 'start',
-					payment_data: {},
-				},
-				{
-					headers: {
-						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
-							orderId,
-							resolvedGateway.id,
-							checkoutAttemptIdRef.current
-						),
+			if (signal.aborted) return;
+			let state: CheckoutState;
+			const release = holdLiveTab('payment');
+			try {
+				const response = await http.post(
+					`orders/${orderId}/checkout`,
+					{
+						gateway_id: resolvedGateway.id,
+						action: 'start',
+						payment_data: {},
 					},
-				}
-			);
+					{
+						headers: {
+							'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
+								orderId,
+								resolvedGateway.id,
+								checkoutAttemptIdRef.current
+							),
+						},
+					}
+				);
 
-			let state = (response?.data || {}) as CheckoutState;
+				state = (response?.data || {}) as CheckoutState;
+			} finally {
+				release();
+			}
 			let attempts = 0;
 			while (!isTerminalCheckoutStatus(state.status) && !state.terminal) {
 				attempts += 1;
@@ -308,6 +332,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (signal.aborted) return;
+			if (err instanceof LiveTabNotOwnedError) {
+				preparationRef.current.abort();
+				checkoutLogger.info(err.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
 			if (err instanceof RegisterSessionRequiredError) {
 				return presentSessionRequired(checkoutLogger, t);
 			}

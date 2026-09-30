@@ -49,7 +49,6 @@ async function skipHarness(overrides?: {
 		variationPrefetchStateFor: () => ({ get: async () => null, set: async () => undefined }),
 		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: overrides?.hasPendingInteractiveWork ?? (() => false),
-		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => 1_000,
 	});

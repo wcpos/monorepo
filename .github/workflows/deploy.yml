@@ -91,7 +91,7 @@ jobs:
       # `codex/tender-pane-surface`) therefore ran a next-lane app against
       # dev-free/dev-pro, a plugin generation older than the app supports; 126
       # cases passed against the wrong store and the one that could not
-      # (the quick-discount coupon line, a 1.11.0 server feature) was read as a
+      # (the quick-discount coupon line, a 2.0.0 server feature) was read as a
       # plugin bug (roadmap#277). A run that belongs to neither trunk has NO
       # store; the e2e job refuses it before spending a runner on it.
       #
@@ -161,6 +161,11 @@ jobs:
       - name: 🌐 Export apps/main for web
         timeout-minutes: 20
         working-directory: apps/main
+        env:
+          # Preview deploys are the web E2E target: expose the live-tab hold hook
+          # (`__wcposLiveTabHold`, live-tab-gate.web.tsx) so live-tab.spec.ts can
+          # exercise the write-deferral ceiling. Production exports never get it.
+          EXPO_PUBLIC_WCPOS_E2E: ${{ (github.event_name == 'pull_request' || github.event.inputs.target == 'preview') && '1' || '' }}
         run: pnpm expo export --platform web --output-dir ./build
 
       - name: 🚀 Deploy preview
@@ -372,6 +377,8 @@ jobs:
 
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
+        # backstop behind playwright.config's 50-min globalTimeout; keeps the always() report uploads inside the 60-min job
+        timeout-minutes: 55
         # Not `--shard`: that splits by TEST COUNT, which on run 31429108622 gave
         # every shard exactly 26 tests and workloads of 64s .. 473s — the gate
         # waits for the 473s one. e2e-shard-plan bin-packs whole spec files by

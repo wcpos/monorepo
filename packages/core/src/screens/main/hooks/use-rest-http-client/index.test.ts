@@ -111,11 +111,11 @@ describe('useRestHttpClient methods', () => {
 		const onUpdateRequired = mockUseHttpClient.mock.calls.at(-1)?.[1];
 		expect(onUpdateRequired).toEqual(expect.any(Function));
 		if (!onUpdateRequired) throw new Error('update-required callback was not registered');
-		onUpdateRequired({ minProtocol: 2, pluginVersion: '1.11.0', status: 426 });
+		onUpdateRequired({ minProtocol: 2, pluginVersion: '2.0.0', status: 426 });
 
 		expect(currentUpdateRequired(mockSite.wp_api_url)).toEqual({
 			minProtocol: 2,
-			pluginVersion: '1.11.0',
+			pluginVersion: '2.0.0',
 			status: 426,
 		});
 	});

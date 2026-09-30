@@ -12,6 +12,7 @@ import {
 	isStorageDegraded,
 	isStorageWorkerFailure,
 	noteStorageWriteDeadlinePassed,
+	reportStorageWorkerLost,
 	resetReportedCleanupFailures,
 	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
@@ -351,40 +352,6 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalled();
 		});
 
-		it('should re-throw for requestRemote errors', async () => {
-			const recoveryDocumentId = 'customers:search=Acme "West"\\priority: high';
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						error: {
-							message: `Unexpected token; targeted recovery failed for ${recoveryDocumentId}: no-valid-document`,
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const storage = createMockStorage(instance);
-			const wrapped = wrappedErrorHandlerStorage({ storage });
-			const wrappedInstance = await wrapped.createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['1'], false)).rejects.toThrow(
-				'could not requestRemote'
-			);
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						collectionName: 'test-collection',
-						documentId: '1',
-						recoveryDocumentId,
-						recoveryFailure: 'no-valid-document',
-					}),
-				})
-			);
-		});
-
 		it('should preserve a requestRemote error with a malformed envelope', async () => {
 			const error = new Error('could not requestRemote: {"error":');
 			const instance = createMockStorageInstance({
@@ -399,37 +366,6 @@ describe('wrappedErrorHandlerStorage', () => {
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					code: 'SYNC999',
-				})
-			);
-		});
-
-		it('should not classify a recovery document ID containing 409 as a conflict', async () => {
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						params: [['409'], false],
-						error: {
-							message: 'Unexpected token; targeted recovery failed for 409: no-valid-document',
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const wrappedInstance = await wrappedErrorHandlerStorage({
-				storage: createMockStorage(instance),
-			}).createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['409'], false)).rejects.toBe(error);
-			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						recoveryDocumentId: '409',
-						recoveryFailure: 'no-valid-document',
-					}),
 				})
 			);
 		});
@@ -1236,6 +1172,35 @@ describe('wrappedErrorHandlerStorage', () => {
 			}).createStorageInstance({ databaseName } as any);
 		}
 
+		it('reports worker events for every database and before the first instance', async () => {
+			reportStorageWorkerLost(undefined, 'script load failed');
+			expect(isStorageDegraded()).toBe(true);
+			clearStorageDegradation();
+			const first = await wrap('events-first', { close: jest.fn(async () => undefined) });
+			const second = await wrap('events-second', { close: jest.fn(async () => undefined) });
+			reportStorageWorkerLost(undefined, 'worker crashed');
+			expect(isStorageDegraded('events-first')).toBe(true);
+			expect(isStorageDegraded('events-second')).toBe(true);
+			await first.close();
+			await second.close();
+		});
+
+		it.each(['query', 'createStorageInstance'])('calls onCondemn for silent %s', async (method) => {
+			const onCondemn = jest.fn();
+			const instance = createMockStorageInstance({
+				query: jest.fn(() => new Promise<never>(() => undefined)),
+			});
+			const storage = createMockStorage(instance);
+			if (method === 'createStorageInstance') storage.createStorageInstance = pending() as never;
+			const wrapped = wrappedErrorHandlerStorage({ storage, onCondemn });
+			const opening = wrapped.createStorageInstance({ databaseName: 'condemn-db' } as never);
+			const call = method === 'query' ? (await opening).query({} as never) : opening;
+			const assertion = expect(call).rejects.toMatchObject({ name: 'StorageWorkerTimeoutError' });
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
+			await assertion;
+			expect(onCondemn).toHaveBeenCalledTimes(1);
+		});
+
 		it('trips the latch when an RPC never comes back', async () => {
 			const wrappedInstance = await wrap('dead-worker-db', {
 				query: pending(),
@@ -1859,3 +1824,29 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 	});
 });
+
+test.each(['resolve', 'reject'] as const)(
+	'a pending bulkWrite holds write until %s',
+	async (settlement) => {
+		let settle!: () => void;
+		const pending = new Promise<never>((resolve, reject) => {
+			settle = () =>
+				settlement === 'resolve' ? resolve(undefined as never) : reject(new Error('write failed'));
+		});
+		const release = jest.fn();
+		const onWrite = jest.fn(() => release);
+		const storage = wrappedErrorHandlerStorage({
+			storage: createMockStorage(createMockStorageInstance({ bulkWrite: () => pending })),
+			onWrite,
+		});
+		const instance = await storage.createStorageInstance({
+			databaseName: 'hold-write',
+		} as Parameters<typeof storage.createStorageInstance>[0]);
+		const result = instance.bulkWrite([], 'hold-test').catch(() => undefined);
+		expect(onWrite).toHaveBeenCalledTimes(1);
+		expect(release).not.toHaveBeenCalled();
+		settle();
+		await result;
+		expect(release).toHaveBeenCalledTimes(1);
+	}
+);

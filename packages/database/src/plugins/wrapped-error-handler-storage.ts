@@ -1,3 +1,8 @@
+/**
+ * The storage-call deadline policy this wrapper implements is written down once, in
+ * ./STORAGE-CALL-DEADLINE-POLICY.md; every platform adapter cites it and
+ * ../adapters/default/error-handler-wrapping.test.ts pins that each one is wrapped here.
+ */
 import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -23,6 +28,7 @@ type InFlightCall = {
 	kill: () => void;
 };
 type InstanceLatchState = {
+	onCondemn?: () => void;
 	databaseName: string;
 	/**
 	 * Carried purely so a diagnostic can name the collection that stalled.
@@ -446,6 +452,13 @@ function latchDegradedStorage(
 	publishDegradedStorage();
 }
 
+/** Worker events have no RPC envelope, including failures before the first open. */
+export function reportStorageWorkerLost(databaseName: string | undefined, message: string): void {
+	const names = databaseName ? [databaseName] : [...instancesByDatabaseName.keys()];
+	if (names.length === 0) names.push('storage-worker');
+	for (const name of names) latchDegradedStorage(name, 'createStorageInstance', message);
+}
+
 /**
  * Runs `call` under the dead-worker deadline, independent of any instance state.
  * Shared by the per-RPC watchdog and by database creation, which has no instance
@@ -512,18 +525,6 @@ function createWatchdog(
 	};
 }
 
-const TARGETED_RECOVERY =
-	/targeted recovery failed for (.+): (missing-primary-row|missing-index-row|no-valid-document|index-mismatch|recovered-document-too-large)/;
-function getTargetedRecovery(message: string): RegExpMatchArray | null {
-	if (!message.startsWith('could not requestRemote: {')) return null;
-	try {
-		const workerMessage = JSON.parse(message.slice('could not requestRemote: '.length))?.error
-			?.message;
-		return typeof workerMessage === 'string' ? workerMessage.match(TARGETED_RECOVERY) : null;
-	} catch {
-		return null;
-	}
-}
 /**
  * Classify an error from the RxDB storage layer and log it appropriately.
  * Returns true if the error was handled (callers may provide a fallback value).
@@ -535,11 +536,9 @@ function handleStorageError(
 	context: Record<string, unknown> = {}
 ): boolean {
 	const message = error instanceof Error ? error.message : String(error);
-	const targetedRecovery = getTargetedRecovery(message);
-	const candidate = targetedRecovery ? '' : message;
 
 	// CONFLICT errors (409) -- typically harmless, retried on next sync cycle
-	if (candidate.includes('CONFLICT') || candidate.includes('409')) {
+	if (message.includes('CONFLICT') || message.includes('409')) {
 		storageLogger.warn(`Write conflict in ${methodName}`, {
 			code: ERROR_CODES.RECORD_CONFLICT,
 			context: {
@@ -551,9 +550,9 @@ function handleStorageError(
 
 	// Schema validation errors (COL22)
 	if (
-		candidate.includes('COL22') ||
-		candidate.includes('schema validation') ||
-		candidate.includes('schema mismatch')
+		message.includes('COL22') ||
+		message.includes('schema validation') ||
+		message.includes('schema mismatch')
 	) {
 		storageLogger.warn(`Schema validation failed in ${methodName}`, {
 			code: ERROR_CODES.SCHEMA_MISMATCH,
@@ -565,7 +564,7 @@ function handleStorageError(
 	}
 
 	// IndexedDB key errors (null ID)
-	if (candidate.includes('No key or key range specified') || candidate.includes('No valid key')) {
+	if (message.includes('No key or key range specified') || message.includes('No valid key')) {
 		storageLogger.warn(`Invalid key in ${methodName}`, {
 			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: {
@@ -612,8 +611,6 @@ function handleStorageError(
 					remoteErrorName: remoteError.name,
 					remoteErrorMessage: remoteError.message,
 					remoteErrorCode: remoteError.code,
-					recoveryDocumentId: targetedRecovery?.[1],
-					recoveryFailure: targetedRecovery?.[2],
 				},
 			}
 		);
@@ -789,9 +786,10 @@ async function raceStorageCall<T>(
 		return Promise.race([underlying, killed]);
 	}
 
-	const watchdog = createWatchdog(methodName, (error) =>
-		noteStorageWorkerFailure(state, methodName, error)
-	);
+	const watchdog = createWatchdog(methodName, (error) => {
+		noteStorageWorkerFailure(state, methodName, error);
+		state.onCondemn?.();
+	});
 	return Promise.race([underlying, killed, watchdog.expiry]).finally(watchdog.disarm);
 }
 
@@ -834,7 +832,9 @@ export function markStorageTerminallyFailed(databaseName: string, reason: string
  */
 function wrapStorageInstance<RxDocType>(
 	instance: RxStorageInstance<RxDocType, any, any, any>,
-	databaseName: string
+	databaseName: string,
+	onCondemn?: () => void,
+	onWrite?: () => () => void
 ): RxStorageInstance<RxDocType, any, any, any> {
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
@@ -900,6 +900,7 @@ function wrapStorageInstance<RxDocType>(
 
 	const state: InstanceLatchState = {
 		databaseName,
+		onCondemn,
 		collectionName: instance.collectionName,
 		failureReason: null,
 		inFlight: new Set(),
@@ -912,7 +913,14 @@ function wrapStorageInstance<RxDocType>(
 	instancesByDatabaseName.set(databaseName, instances);
 
 	const bulkWrite = instance.bulkWrite.bind(instance);
-	instance.bulkWrite = (...args) => raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+	instance.bulkWrite = async (...args) => {
+		const release = onWrite?.();
+		try {
+			return await raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+		} finally {
+			release?.();
+		}
+	};
 	const findDocumentsById = instance.findDocumentsById.bind(instance);
 	instance.findDocumentsById = (...args) =>
 		raceStorageCall(state, 'findDocumentsById', () => findDocumentsById(...args));
@@ -969,8 +977,12 @@ function wrapStorageInstance<RxDocType>(
  */
 export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 	storage,
+	onCondemn,
+	onWrite,
 }: {
 	storage: RxStorage<Internals, InstanceCreationOptions>;
+	onCondemn?: () => void;
+	onWrite?: () => () => void;
 }): RxStorage<Internals, InstanceCreationOptions> {
 	return {
 		name: 'error-handler-' + storage.name,
@@ -983,9 +995,10 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 			// instance in existence to arm a read against and nothing to show the
 			// cashier. Failing instead surfaces as a bootstrap error the engine
 			// already knows how to report.
-			const watchdog = createWatchdog('createStorageInstance', (error) =>
-				latchDegradedStorage(params.databaseName, 'createStorageInstance', error)
-			);
+			const watchdog = createWatchdog('createStorageInstance', (error) => {
+				latchDegradedStorage(params.databaseName, 'createStorageInstance', error);
+				onCondemn?.();
+			});
 			let instance: RxStorageInstance<RxDocType, Internals, InstanceCreationOptions, unknown>;
 			try {
 				instance = await Promise.race([storage.createStorageInstance(params), watchdog.expiry]);
@@ -993,7 +1006,7 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 				watchdog.disarm();
 			}
 			noteStorageCompletion();
-			return wrapStorageInstance(instance, params.databaseName);
+			return wrapStorageInstance(instance, params.databaseName, onCondemn, onWrite);
 		},
 	};
 }

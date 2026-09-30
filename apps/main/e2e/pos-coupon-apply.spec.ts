@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { type APIRequestContext, expect, request as playwrightRequest } from '@playwright/test';
 
+import { getStoreVariant, listStoreIds, openOrderSheet, storeRequestOptions } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
-import { getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
@@ -207,6 +207,7 @@ for (const targetStoreId of storeTargets) {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});
+					await openOrderSheet(page);
 					await page.getByTestId('save-to-server-button').click();
 					const response = await saved;
 					expect(response.status(), 'couponed save must succeed').toBeLessThan(400);
@@ -323,6 +324,7 @@ for (const targetStoreId of storeTargets) {
 					// completes, so the reconciliation that raises this banner has run before
 					// we assert it is down — asserting straight after the response would pass
 					// on the pre-reconciliation rendering.
+					await openOrderSheet(page);
 					await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 					await expect(
 						page.getByTestId('order-totals-changed-banner'),

@@ -9,6 +9,7 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
+import { DrawerContent as DrawerContentV2 } from '@wcpos/core/screens/main/components/drawer-content/v2';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
@@ -22,7 +23,7 @@ import { useNavigationBackground } from '../../../components/use-navigation-back
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: '(pos)',
+	anchor: '(pos)',
 };
 
 /**
@@ -90,7 +91,9 @@ function ThemedDrawer({
 				},
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
-			drawerContent={DrawerContent}
+			drawerContent={(props) =>
+				screenSize === 'lg' ? DrawerContentV2(props) : DrawerContent(props)
+			}
 		>
 			<Drawer.Screen
 				name="(pos)"

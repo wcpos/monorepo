@@ -14,6 +14,7 @@ const buttonVariants = cva('items-center justify-center rounded-lg', {
 	variants: {
 		variant: {
 			default: 'web:hover:bg-muted active:bg-muted',
+			outline: 'border-border web:hover:bg-muted active:bg-muted border',
 			primary: 'web:hover:bg-primary/15 active:bg-primary/15',
 			muted: 'web:hover:bg-muted/15 active:bg-muted/15',
 			destructive: 'web:hover:bg-destructive/15 active:bg-destructive/15',
@@ -86,7 +87,7 @@ function IconButton({
 		>
 			<Icon
 				name={name}
-				variant={variant}
+				variant={variant === 'outline' ? 'default' : variant}
 				size={size}
 				loading={loading}
 				className={cn(

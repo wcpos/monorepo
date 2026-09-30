@@ -540,7 +540,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#294",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT121",
@@ -563,7 +563,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT201",
@@ -608,7 +608,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT221",
@@ -628,7 +628,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT301",
@@ -1122,7 +1122,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT999",
@@ -1356,7 +1356,7 @@
 			"This browser (or a private window) lacks the tab-coordination feature the POS prefers, so it falls back to a single syncing tab. No fix is needed."
 		],
 		"logSources": [],
-		"evidence": "monorepo#1137 inventory: engine.write-leader.degraded",
+		"evidence": "Retired on 2.0 by monorepo#2242; retained for published CLIENT121 documentation and 1.10.x log decoding.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -1447,6 +1447,25 @@
 		],
 		"evidence": "monorepo: 1.9.x plugin exposes wcpos/v1 only; client requires wcpos/v2",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "AUTH341",
+		"symbol": "SITE_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Update the WCPOS plugin on the copy, or remove the saved store first.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This store reports the same identity as a store already saved on this device.",
+		"docsBody": "The two stores share one identity because one is a copy of the other, such as a staging clone. Ask the site administrator to update the WCPOS plugin on the copy to give it its own identity. Removing the saved store and connecting again also works.",
+		"troubleshooting": [
+			"Ask the site administrator to update the WCPOS plugin on the copy, then connect again.",
+			"Alternatively, remove the saved store from this device before connecting the copy."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#385: staging clones report the saved live store's uuid",
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "AUTH411",
@@ -2218,5 +2237,26 @@
 		],
 		"evidence": "monorepo#2112 — 2026-09-16 Spanish Windows till stuck on 'useStoreSession must be called within an active store session' after a main-process storage failure (wcpos/electron#459)",
 		"introducedIn": "1.10.21"
+	},
+	{
+		"code": "CLIENT161",
+		"symbol": "REGISTER_TAB_NOT_OWNED",
+		"domain": "CLIENT",
+		"severity": "info",
+		"actionHint": "Follow the instructions on the register screen before continuing.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "This tab does not currently run the register, so it did not send a new payment request.",
+		"docsBody": "Only the active browser tab runs this register. This tab refused to start a new payment request because it does not currently own the register. This does not describe the outcome of any payment already in progress.",
+		"troubleshooting": [
+			"Wait for the register screen. Follow its instructions to continue in another tab, take over here, or reload the app.",
+			"Check the existing payment status before retrying a payment that had already started."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#2271 review F2",
+		"introducedIn": "2.0.0"
 	}
 ]

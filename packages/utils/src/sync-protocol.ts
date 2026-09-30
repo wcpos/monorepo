@@ -1,5 +1,5 @@
 /**
- * Sending this value is the client's claim that it tolerates the 1.11.0 boundary
+ * Sending this value is the client's claim that it tolerates the 2.0.0 boundary
  * wire shapes; the server gates the sync surface on it (wcpos/woocommerce-pos#1752).
  */
 export const SYNC_PROTOCOL_VERSION = 2;
