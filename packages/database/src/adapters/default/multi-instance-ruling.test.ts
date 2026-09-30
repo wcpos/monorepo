@@ -10,7 +10,7 @@
  *
  * Two eras, both live in this file (see the Decision section of ./README.md):
  *
- * - `opfs-filesystem` (today) → web `true`. Ruling 2026-08-06 (#1057). Every tab
+ * - `opfs-filesystem` (the previous filesystem era) → web `true`. Ruling 2026-08-06 (#1057). Every tab
  *   opens its own storage over the same files; `true` keeps followers coherent
  *   and gives RxDB one leader for cleanup/recovery. `false` here is the proven
  *   data-loss path of #1049.

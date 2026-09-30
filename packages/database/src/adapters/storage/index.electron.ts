@@ -25,6 +25,6 @@ export function getElectronNewStorage() {
 		ipcRenderer: getIpcRenderer(),
 	});
 	// 'raw' here is the IPC client: one round trip to the main process plus the
-	// filesystem storage's own work there. Nothing in the renderer can split those two.
+	// SQLite storage's own work there. Nothing in the renderer can split those two.
 	return STORAGE_TIMING_PROBE_ENABLED ? withStorageTimingProbe(rawStorage, 'raw') : rawStorage;
 }
