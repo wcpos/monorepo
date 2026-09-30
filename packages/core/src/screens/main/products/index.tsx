@@ -53,6 +53,7 @@ export function ProductsScreen() {
 						collection="products"
 						initialPageSize={PRODUCTS_PAGE_SIZE}
 						initialSort={initialSort}
+						initialFilters={{ status: 'publish' }}
 					>
 						<Suspense>
 							<Products />

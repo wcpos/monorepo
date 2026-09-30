@@ -27,7 +27,7 @@ import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { type POSOverlaySide, usePOSOverlaySide } from '../../pos/contexts/overlay-side';
 
-type ColumnsOnlySettingsID = 'coupons' | 'customers' | 'orders' | 'reports-orders';
+type ColumnsOnlySettingsID = 'products' | 'coupons' | 'customers' | 'orders' | 'reports-orders';
 
 const columnsOnlyFormSchema = z.object({
 	...columnsFormSchema.shape,

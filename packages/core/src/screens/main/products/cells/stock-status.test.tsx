@@ -3,19 +3,22 @@
  */
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { StockStatus } from './stock-status';
 
-const mockButtonPill = jest.fn();
+jest.mock('expo-haptics', () => ({}));
+jest.mock('@wcpos/components/button', () => ({ ButtonPill: () => null }));
+
+const mockStatusBadge = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: { payload: unknown }, select: (value: unknown) => unknown) =>
 		select(record),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: (props: Record<string, unknown>) => {
-		mockButtonPill(props);
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: (props: Record<string, unknown>) => {
+		mockStatusBadge(props);
 		return null;
 	},
 }));
@@ -35,10 +38,10 @@ function renderCell(product: Record<string, unknown>) {
 			renderValue={jest.fn()}
 		/>
 	);
-	return { setFilter, props: mockButtonPill.mock.calls.at(-1)?.[0] };
+	return { setFilter, props: mockStatusBadge.mock.calls.at(-1)?.[0] };
 }
 
-afterEach(() => mockButtonPill.mockReset());
+afterEach(() => mockStatusBadge.mockReset());
 
 describe('StockStatus cell', () => {
 	it('tracks a local quantity edit instead of the stale server flag', () => {
@@ -50,8 +53,8 @@ describe('StockStatus cell', () => {
 			stock_status: 'instock',
 			backorders: 'no',
 		});
-		expect(props.variant).toBe('ghost-destructive');
-		expect(props.children).toBe('outofstock');
+		expect(props.variant).toBe('error');
+		expect(props.label).toBe('outofstock');
 	});
 
 	it('shows the server flag verbatim when stock is not managed', () => {
@@ -60,17 +63,28 @@ describe('StockStatus cell', () => {
 			stock_quantity: 0,
 			stock_status: 'lowstock',
 		});
-		expect(props.variant).toBe('ghost-warning');
-		expect(props.children).toBe('lowstock');
+		expect(props.variant).toBe('warning');
+		expect(props.label).toBe('lowstock');
 	});
 
 	it('filters by the displayed status on press', () => {
-		const { props, setFilter } = renderCell({
+		const { setFilter } = renderCell({
 			manage_stock: true,
 			stock_quantity: 5,
 			stock_status: 'outofstock',
 		});
-		(props.onPress as () => void)();
+		fireEvent.click(screen.getByTestId('product-stock-status'));
 		expect(setFilter).toHaveBeenCalledWith('stock_status', 'instock');
 	});
+});
+
+it.each([
+	['instock', 'success'],
+	['lowstock', 'warning'],
+	['onbackorder', 'warning'],
+	['outofstock', 'error'],
+	['unknown', 'default'],
+])('maps %s to %s', (stock_status, variant) => {
+	const { props } = renderCell({ manage_stock: false, stock_status });
+	expect(props.variant).toBe(variant);
 });

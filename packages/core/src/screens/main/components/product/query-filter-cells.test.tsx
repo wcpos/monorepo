@@ -86,3 +86,5 @@ describe('product filter cells', () => {
 		);
 	});
 });
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
