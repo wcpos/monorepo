@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { mockPhone, mockRoot } from '../dropdown-menu/sheet.test-utils';
 import * as C from './index';
@@ -72,6 +72,34 @@ it('keeps the anchored item data-testid mapping', () => {
 	);
 	expect(screen.getByTestId('primitive-content')).toBeInTheDocument();
 	expect(screen.getByTestId('anchored')).toHaveClass('pl-8');
+});
+it('the phone sheet sits inside the scrim, not beside it', () => {
+	// The primitive's web Overlay renders its Pressable childless and emits the children as
+	// SIBLINGS; the harness mock keeps them inside. Replay the real shape here: a sheet that
+	// leaned on the primitive's Overlay would land outside the scrim's justify-end box —
+	// below the app root, off-screen on a phone.
+	const primitive = jest.requireMock('@rn-primitives/select');
+	const Keep = primitive.Overlay;
+	function SiblingOverlay({ children, ...p }: React.ComponentProps<typeof Keep>) {
+		return (
+			<>
+				<Keep {...p} data-testid="primitive-overlay" />
+				{children}
+			</>
+		);
+	}
+	primitive.Overlay = SiblingOverlay;
+	try {
+		render(
+			<C.SelectContent inline testID="panel">
+				<C.SelectItem testID="a" value="a" label="A" />
+			</C.SelectContent>
+		);
+		expect(within(screen.getByTestId('panel-scrim')).getByRole('dialog')).toBeTruthy();
+		expect(screen.queryByTestId('primitive-overlay')).toBeNull();
+	} finally {
+		primitive.Overlay = Keep;
+	}
 });
 it('renders nothing for a closed inline sheet', () => {
 	mockRoot.open = false;
