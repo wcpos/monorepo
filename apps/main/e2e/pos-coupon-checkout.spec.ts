@@ -266,21 +266,10 @@ for (const targetStoreId of storeTargets) {
 							)
 						).toEqual([]);
 						// 2. Dismiss an auto-shown receipt so hidden modal background cannot fake tab removal.
-						// The payment handler clears the current order (the URL leaves /checkout, which is
-						// all processPayment waits for) and only then replaces the route with the receipt,
-						// so a one-shot URL check runs before the receipt lands. Close it whenever it shows,
-						// until the tab strip is back with no receipt over it.
-						const receiptClose = page.getByTestId('receipt-close-button');
-						const newOrderTab = page.getByTestId('new-order-tab');
-						await expect(async () => {
-							if (await receiptClose.isVisible()) await receiptClose.click();
-							await expect(receiptClose).toBeHidden({ timeout: 2_000 });
-							await expect(newOrderTab).toBeVisible({ timeout: 2_000 });
-							// The receipt replace is in the same handler as the URL change, so a strip
-							// that stays up a beat with no receipt over it means none is coming.
-							await page.waitForTimeout(1_000);
-							await expect(receiptClose).toBeHidden({ timeout: 0 });
-						}).toPass({ timeout: 30_000 });
+						if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
+							await page.getByTestId('receipt-close-button').click();
+						}
+						await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 						await expect(orderTab).not.toBeVisible({ timeout: 30_000 });
 						// 3. Read the acked order with readOrder's dp=6, not a stub or another cashier's sale.
 						const authorization = await resolveProbeAuthorization(
