@@ -656,6 +656,27 @@ describe('calculateOrderTotals — parity regressions', () => {
 			expect(result).toMatchObject({ total_tax: '0.17', total: '3.17', cart_tax: '0.165' });
 		});
 
+		it('normalizes tax and total sums to exactly 6dp in a 5-decimal store', () => {
+			const result = calculateOrderTotals({
+				...order,
+				dp: 5,
+				lineItems: [
+					{
+						subtotal: '1.00000',
+						total: '1.00000',
+						subtotal_tax: '0.1234549',
+						total_tax: '0.1234549',
+						taxes: [{ id: 3, subtotal: '0.1234549', total: '0.1234549' }],
+					},
+				],
+				taxRates: [{ id: 3, name: 'Sales tax', rate: '12.34549', compound: false }],
+			});
+
+			// WC: normalize(0.1234549) = 0.123455; round(0.123455, 5) = 0.12346.
+			// WC: normalize(1.1234549) = 1.123455; round(1.123455, 5) = 1.12346.
+			expect(result).toMatchObject({ total_tax: '0.12346', total: '1.12346' });
+		});
+
 		it('snaps the cart and shipping tax sum before dp rounding', () => {
 			const result = calculateOrderTotals({
 				...order,

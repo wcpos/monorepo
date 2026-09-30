@@ -8,6 +8,10 @@ import type {
 	TaxRateInput as TaxRateDocument,
 } from '../types';
 
+// WC NumberUtil::normalize() rounds to the constant WC_ROUNDING_PRECISION (always 6),
+// unlike wc_get_rounding_precision() = max(dp + 2, 6) (NumberUtil.php:23-33, WC 10.8.1).
+const WC_NORMALIZE_PRECISION = 6;
+
 interface Props {
 	lineItems?: LineItem[];
 	shippingLines?: ShippingLine[];
@@ -295,9 +299,9 @@ export function calculateOrderTotals(
 	// WC 10.1+ NumberUtil::round() normalizes to 6dp (WC_ROUNDING_PRECISION) before rounding to dp
 	// (set_total_tax, set_total), so both sums are snapped to 6dp here too.
 	const roundedTotalTax = taxRoundAtSubtotal
-		? roundHalfUp(roundHalfUp(roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)), dp)
+		? roundHalfUp(roundHalfUp(roundedCartTax + roundedShippingTax, WC_NORMALIZE_PRECISION), dp)
 		: roundTaxTotal(
-				roundHalfUp(roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)),
+				roundHalfUp(roundedCartTax + roundedShippingTax, WC_NORMALIZE_PRECISION),
 				dp,
 				pricesIncludeTax
 			);
@@ -320,7 +324,7 @@ export function calculateOrderTotals(
 		// way in). `total_tax` stays its own rounded field, which is what WC stores.
 		total: String(
 			roundHalfUp(
-				roundHalfUp(total + roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)),
+				roundHalfUp(total + roundedCartTax + roundedShippingTax, WC_NORMALIZE_PRECISION),
 				dp
 			)
 		),
