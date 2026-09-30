@@ -1,4 +1,5 @@
 import { calculateTaxes } from '../money/calculate-taxes';
+import { getRoundingPrecision } from '../money/precision';
 import { normalizeTaxClass } from '../tax-class';
 
 import type { CartConfig } from '../../config';
@@ -15,6 +16,11 @@ import type { CartConfig } from '../../config';
  *
  * Rate-filter and early-return order match the hook exactly: class filter, then
  * shipping filter, then the calcTaxes / tax_status / no-rates gate.
+ *
+ * `orderItem`: the amount is an order line's ex-tax total, which WooCommerce re-derives
+ * with `WC_Tax::calc_tax( get_total(), rates, false )` and rounds ONCE per rate at
+ * `wc_get_rounding_precision()` (#2344). Inclusive amounts keep the cart-space precision:
+ * WooCommerce never computes an order item's tax from its gross.
  */
 export function calculateTaxesForValue(
 	args: {
@@ -23,6 +29,7 @@ export function calculateTaxesForValue(
 		taxClass?: string | null;
 		amountIncludesTax: boolean;
 		shipping?: boolean;
+		orderItem?: boolean;
 	},
 	config: CartConfig
 ): { total: number; taxes: { id: number; total: number }[] } {
@@ -47,5 +54,7 @@ export function calculateTaxesForValue(
 		rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],
 		amountIncludesTax: args.amountIncludesTax,
 		dp: config.dp,
+		perRatePrecision:
+			args.orderItem && !args.amountIncludesTax ? getRoundingPrecision(config.dp) : undefined,
 	});
 }

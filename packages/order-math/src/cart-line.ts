@@ -391,6 +391,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 			taxClass: lineItem.tax_class ?? '',
 			taxStatus: tax_status,
 			amountIncludesTax: pricesIncludeTax,
+			orderItem: true,
 		},
 		config
 	);
@@ -401,6 +402,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 			taxClass: lineItem.tax_class ?? '',
 			taxStatus: tax_status,
 			amountIncludesTax: pricesIncludeTax,
+			orderItem: true,
 		},
 		config
 	);
@@ -425,14 +427,9 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		const netTotal6 = roundHalfUp(totalExclTax, roundingPrecision);
 		const netSubtotal6 = roundHalfUp(subtotalExclTax, roundingPrecision);
 		const taxClass = lineItem.tax_class ?? '';
-		totalTaxResult = calculateTaxesForValue(
-			{ amount: netTotal6, amountIncludesTax: false, taxClass, taxStatus: tax_status },
-			config
-		);
-		subtotalTaxResult = calculateTaxesForValue(
-			{ amount: netSubtotal6, amountIncludesTax: false, taxClass, taxStatus: tax_status },
-			config
-		);
+		const reDerive = { amountIncludesTax: false, taxClass, taxStatus: tax_status, orderItem: true };
+		totalTaxResult = calculateTaxesForValue({ ...reDerive, amount: netTotal6 }, config);
+		subtotalTaxResult = calculateTaxesForValue({ ...reDerive, amount: netSubtotal6 }, config);
 	}
 
 	// total_tax / subtotal_tax come from the STORED per-rate array, never from the raw
@@ -543,6 +540,7 @@ function computeFeeLine(
 			taxClass: feeLine.tax_class,
 			taxStatus: feeLine.tax_status ?? 'taxable',
 			amountIncludesTax: prices_include_tax,
+			orderItem: true,
 		},
 		config
 	);
@@ -613,6 +611,7 @@ function computeShippingLine(
 			taxStatus: inherited === NO_SHIPPING_TAX ? 'none' : tax_status,
 			amountIncludesTax,
 			shipping: true,
+			orderItem: true,
 		},
 		config
 	);
