@@ -268,6 +268,22 @@ it('distinguishes an empty store from search results and clears search', () => {
 	expect(latestState().search).toBe('');
 });
 
+// The guard and the licence hook pull app-state → expo-crypto (ESM), which CI's Node 22 jest
+// cannot require; local Node 24 can, so the mock is what keeps the suite green in CI.
+jest.mock('../components/pro-guard', () => ({
+	withProAccess: (Component: React.ComponentType<object>, page: string) =>
+		function Guarded(props: object) {
+			return (
+				<div data-testid={`guard-${page}`}>
+					<Component {...props} />
+				</div>
+			);
+		},
+}));
+jest.mock('../../../hooks/use-app-info', () => ({
+	// The bar reads the licence for its `+`; the tests drive it through the same flag.
+	useAppInfo: () => ({ license: { isPro: !mockReadOnly } }),
+}));
 jest.mock('../components/management-bar', () => ({
 	ManagementBar: ({ children, search }: { children: React.ReactNode; search: React.ReactNode }) => (
 		<>
