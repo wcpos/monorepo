@@ -6,6 +6,7 @@ import { useIsPhone } from '../lib/device';
 import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+import { isToastTarget } from '../toast/target';
 
 const Popover = PopoverPrimitive.Root;
 
@@ -20,6 +21,7 @@ function PopoverContent({
 	sideOffset = 4,
 	portalHost,
 	inline,
+	onInteractOutside,
 	children,
 	...props
 }: Omit<PopoverPrimitive.ContentProps, 'side'> & {
@@ -58,6 +60,12 @@ function PopoverContent({
 							className
 						)}
 						{...props}
+						onInteractOutside={(event) => {
+							// A toast sits outside the popover, yet its action can belong to it: as a
+							// dialog does (#2284), a press on the toast leaves the popover open (#2313).
+							if (isToastTarget(event.target)) event.preventDefault();
+							onInteractOutside?.(event);
+						}}
 					>
 						{children}
 					</PopoverPrimitive.Content>
