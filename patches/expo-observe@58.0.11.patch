@@ -1,0 +1,33 @@
+diff --git a/expo-module.config.json b/expo-module.config.json
+index e1363b4a41d0bd7ea04b5130966e5aec46114766..576a10deafdd4ad27363a8277ee126e2c0bf3ac6 100644
+--- a/expo-module.config.json
++++ b/expo-module.config.json
+@@ -1,15 +1,19 @@
+ {
+-  "platforms": ["apple", "android"],
++  "platforms": [
++    "apple",
++    "android"
++  ],
+   "apple": {
+-    "modules": ["ObserveModule"],
+-    "appDelegateSubscribers": ["ObserveAppDelegateSubscriber"]
++    "modules": [
++      "ObserveModule"
++    ],
++    "appDelegateSubscribers": [
++      "ObserveAppDelegateSubscriber"
++    ]
+   },
+   "android": {
+-    "modules": ["expo.modules.observe.ObserveModule"],
+-    "publication": {
+-      "groupId": "expo.modules.observe",
+-      "artifactId": "expo.modules.observe",
+-      "repository": "local-maven-repo"
+-    }
++    "modules": [
++      "expo.modules.observe.ObserveModule"
++    ]
+   }
+ }
