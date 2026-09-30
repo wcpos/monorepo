@@ -161,6 +161,11 @@ jobs:
       - name: 🌐 Export apps/main for web
         timeout-minutes: 20
         working-directory: apps/main
+        env:
+          # Preview deploys are the web E2E target: expose the live-tab hold hook
+          # (`__wcposLiveTabHold`, live-tab-gate.web.tsx) so live-tab.spec.ts can
+          # exercise the write-deferral ceiling. Production exports never get it.
+          EXPO_PUBLIC_WCPOS_E2E: ${{ (github.event_name == 'pull_request' || github.event.inputs.target == 'preview') && '1' || '' }}
         run: pnpm expo export --platform web --output-dir ./build
 
       - name: 🚀 Deploy preview

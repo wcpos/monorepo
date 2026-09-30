@@ -5,18 +5,22 @@ import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness'
 import { TAKEOVER_DEFER_CEILING_MS } from '../../../packages/database/src/live-tab/live-tab.web';
 
 test('a write defers takeover, then the ceiling allows it to proceed', async ({
-	page,
+	posPage: page,
 	context,
 }) => {
+	// The hold hook is exposed only by dev bundles and previews exported with
+	// EXPO_PUBLIC_WCPOS_E2E=1 (deploy.yml sets it for preview deploys). A production
+	// bundle lacks it by design; that is a declared-missing capability, so skip.
+	const hasHold = await page.evaluate(
+		() => typeof (globalThis as { __wcposLiveTabHold?: unknown }).__wcposLiveTabHold === 'function'
+	);
+	test.skip(!hasHold, '__wcposLiveTabHold is absent: not a dev or E2E-enabled web bundle');
 	const second = await context.newPage();
 	try {
 		await page.evaluate(() => {
-			const runtime = globalThis as typeof globalThis & {
-				__wcposLiveTabHold?: (reason: 'write') => () => void;
-			};
-			if (!runtime.__wcposLiveTabHold)
-				throw new Error('This spec requires a dev or E2E-enabled web bundle');
-			runtime.__wcposLiveTabHold('write'); // Deliberately unreleased: exercises the ceiling, not a race.
+			(
+				globalThis as typeof globalThis & { __wcposLiveTabHold: (reason: 'write') => () => void }
+			).__wcposLiveTabHold('write'); // Deliberately unreleased: exercises the ceiling, not a race.
 		});
 		await second.goto(page.url());
 		await second.getByTestId('parked-tab-take-over').click();
@@ -37,7 +41,7 @@ test('a write defers takeover, then the ceiling allows it to proceed', async ({
 });
 
 test('an unanswered request explains how to continue, but closing the holder still grants ownership', async ({
-	page,
+	posPage: page,
 	context,
 	browserName,
 }) => {
@@ -63,15 +67,18 @@ test('an unanswered request explains how to continue, but closing the holder sti
 			timeout: 60_000,
 		});
 	} finally {
-		if (!page.isClosed()) await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
-		await cdp.detach();
+		// The holder is closed on the happy path; a CDP session cannot be detached from a closed page.
+		if (!page.isClosed()) {
+			await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
+			await cdp.detach();
+		}
 		await second.close();
 	}
 });
 
 // Same context is essential: both pages share the origin's OPFS and Web Locks.
 test('second tab parks, takes over, and the former holder can take it back', async ({
-	page,
+	posPage: page,
 	context,
 }) => {
 	const second = await context.newPage();
