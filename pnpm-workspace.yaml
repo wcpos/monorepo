@@ -201,7 +201,9 @@ patchedDependencies:
   # Drop when Skia stops deep-importing react-native on web.
   "@shopify/react-native-skia@2.11.2": "patches/@shopify__react-native-skia@2.11.2.patch"
   expo-modules-core@58.0.8: patches/expo-modules-core@58.0.8.patch
+  expo-observe@58.0.11: patches/expo-observe@58.0.11.patch
+  expo-app-metrics@58.0.9: patches/expo-app-metrics@58.0.9.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
-  # The resurrection-index-leak fix for it lives in
-  # scripts/patch-rxdb-premium-resurrection-leak.mjs (root postinstall).
+  # The SQLite query-translation fix for it lives in
+  # scripts/patch-rxdb-premium-sqlite-query-translation.mjs (root postinstall).

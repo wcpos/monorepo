@@ -30,7 +30,6 @@ import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	DERIVABLE_METADATA_COLLECTIONS,
 	engineCollectionCreators,
-	resetDerivableMetadataCollection,
 } from '../collections/engine-collections';
 
 import type {
@@ -303,8 +302,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			/* telemetry never breaks coverage */
 		}
 	};
-	// All five stores are derivable and rebuild as one unit: a refusal in any family
-	// intentionally drops the query-total bookkeeping along with coverage/scheduler state.
+	// Reattach missing derivable collections after COL21 without dropping storage.
 	registerLedgerRecovery({
 		database,
 		rebuild: async (reason, trigger, kind) => {
@@ -320,14 +318,10 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 				);
 				const lanes = database.collections.coverageLanes;
 				if (lanes) lanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
-			} else {
-				for (const name of DERIVABLE_METADATA_COLLECTIONS) {
-					await resetDerivableMetadataCollection(database, name);
-				}
 			}
 			observe({
-				type: kind === 'reattach' ? 'coverage.ledger-reattached' : 'coverage.ledger-rebuilt',
-				level: kind === 'reattach' ? 'info' : 'warn',
+				type: 'coverage.ledger-reattached',
+				level: 'info',
 				fields: { reason, trigger },
 			});
 		},

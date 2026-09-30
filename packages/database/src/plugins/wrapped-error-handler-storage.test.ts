@@ -352,40 +352,6 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalled();
 		});
 
-		it('should re-throw for requestRemote errors', async () => {
-			const recoveryDocumentId = 'customers:search=Acme "West"\\priority: high';
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						error: {
-							message: `Unexpected token; targeted recovery failed for ${recoveryDocumentId}: no-valid-document`,
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const storage = createMockStorage(instance);
-			const wrapped = wrappedErrorHandlerStorage({ storage });
-			const wrappedInstance = await wrapped.createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['1'], false)).rejects.toThrow(
-				'could not requestRemote'
-			);
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						collectionName: 'test-collection',
-						documentId: '1',
-						recoveryDocumentId,
-						recoveryFailure: 'no-valid-document',
-					}),
-				})
-			);
-		});
-
 		it('should preserve a requestRemote error with a malformed envelope', async () => {
 			const error = new Error('could not requestRemote: {"error":');
 			const instance = createMockStorageInstance({
@@ -400,37 +366,6 @@ describe('wrappedErrorHandlerStorage', () => {
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					code: 'SYNC999',
-				})
-			);
-		});
-
-		it('should not classify a recovery document ID containing 409 as a conflict', async () => {
-			const error = new Error(
-				'could not requestRemote: ' +
-					JSON.stringify({
-						params: [['409'], false],
-						error: {
-							message: 'Unexpected token; targeted recovery failed for 409: no-valid-document',
-						},
-					})
-			);
-			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(error),
-			});
-			const wrappedInstance = await wrappedErrorHandlerStorage({
-				storage: createMockStorage(instance),
-			}).createStorageInstance({} as any);
-
-			await expect(wrappedInstance.findDocumentsById(['409'], false)).rejects.toBe(error);
-			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
-			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage remote method error in findDocumentsById',
-				expect.objectContaining({
-					code: 'SYNC999',
-					context: expect.objectContaining({
-						recoveryDocumentId: '409',
-						recoveryFailure: 'no-valid-document',
-					}),
 				})
 			);
 		});

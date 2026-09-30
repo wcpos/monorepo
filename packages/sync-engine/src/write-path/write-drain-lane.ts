@@ -446,12 +446,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const row = doc?.toJSON() as { sync?: { revision?: string } } | undefined;
 								return row?.sync?.revision;
 							},
-							// LEADER-SIDE ANNIHILATION (#1059): drop the local resident when the
+							// DRAIN-TIME ANNIHILATION (#1059): drop the local resident when the
 							// drain cancels a never-pushed create→delete chain. `onDeleteAck` is
 							// exactly "the record is gone, remove the local doc" (it does one
 							// `doc.remove()`, no server round-trip) — the same net local effect as
-							// enqueue-time annihilation's `resident.remove()`. Only runs on the
-							// leader: this lane ticks only when writePlaneOwner() is true.
+							// enqueue-time annihilation's `resident.remove()`.
 							removeResident: async (mutation, signal) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) return; // enqueue guards this; nothing to remove otherwise

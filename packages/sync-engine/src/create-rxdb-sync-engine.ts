@@ -148,7 +148,6 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
-import type { WriteOutcomeBridge } from './write-path/write-outcome-bridge';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -291,20 +290,6 @@ export type RxdbSyncEnginePorts = {
 	 * propagation via BroadcastChannel). Default false; apps/main selects the
 	 * value for its current platform. */
 	multiInstance?: boolean;
-	/** Web multi-tab: true only while this engine owns the write plane. Followers
-	 * still read, but do not drain or mutate existing queue rows. Default true. */
-	writePlaneOwner?: () => boolean;
-	/**
-	 * Web multi-tab: the cross-tab write-outcome bridge (#1209). Since #1057 only
-	 * the leader drains, and engine events are in-process — so without this a
-	 * FOLLOWER tab's `awaitWriteOutcome` waits on an event that can only fire in
-	 * the leader's window and every outcome-dependent behaviour degrades to
-	 * optimistic-only off-leader. With it, each outcome the leader emits is
-	 * republished to peers and re-emitted there. Feedback plumbing ONLY: the
-	 * leader stays the sole writer. Absent (native, Electron, a degraded
-	 * single-writer web context) ⇒ in-process events exactly as before.
-	 */
-	writeOutcomeBridge?: WriteOutcomeBridge;
 	intervals?: Partial<EngineIntervals>;
 	/** Host-executed query-total fetch. The query-total retry lane arms ONLY
 	 * when this port is provided (the engine cannot guess the host's total
@@ -601,12 +586,7 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5).
-	 *
-	 * On web these outcomes cross tabs when the host supplies `writeOutcomeBridge`
-	 * (#1209): the LEADER drains, and every peer re-emits what it publishes, so an
-	 * `awaitWriteOutcome` caller in a follower tab settles with the leader's real
-	 * verdict instead of timing out. */
+	 * write facet (orders today) — anything else throws (invariant 5). */
 	write(intent: WriteIntent): Promise<{
 		mutationId: string;
 		recordId: string;
@@ -755,7 +735,6 @@ export function createRxdbSyncEngine(
 ): RxdbSyncEngine {
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
-	const writePlaneOwner = ports.writePlaneOwner ?? (() => true);
 	// A ledger rebuild replaces the derivable collections, and live coverage
 	// subscriptions hold handles to the dropped ones (coverage-changes.ts opens
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
@@ -1384,16 +1363,6 @@ export function createRxdbSyncEngine(
 		if (event.type === 'query-total-cache') censusPublisher.publish();
 	};
 
-	// CROSS-TAB WRITE OUTCOMES (#1209). A peer's outcome enters at the subscriber
-	// fan-out, NOT at `emitWriteEvent`: that funnel carries #1082's auto-revert,
-	// which must run once and only in the leader (a follower's `resolveConflict`
-	// refuses outright). Entering here also makes an echo impossible — a received
-	// event is never re-published.
-	const unsubscribeWriteOutcomeBridge = ports.writeOutcomeBridge?.subscribe((event) => {
-		if (disposed) return;
-		emitEngineEvent(event);
-	});
-
 	// `activeDatabase` is read lazily: the hub outlives every scope, and a reset re-emits the
 	// SAME database with fresh collections, so it must resolve through the accessor each time.
 	const coverageChangeHub = createCoverageChangeHub({
@@ -1793,14 +1762,8 @@ export function createRxdbSyncEngine(
 				return 'offline';
 			}
 		},
-		isWritePlaneOwner: writePlaneOwner,
 		emitWriteEvent: (event) => {
 			emitEngineEvent(event);
-			// #1209: the same outcome, to the other tabs. AFTER the local emit, so a
-			// slow or broken channel can never delay this window's own feedback, and
-			// only for outcomes THIS instance produced — a bridged event never comes
-			// back through here.
-			ports.writeOutcomeBridge?.publish(event);
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
 				return;
 			}
@@ -1917,7 +1880,6 @@ export function createRxdbSyncEngine(
 			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
 			: {}),
 		currentCustomerBrowseWindowKey: requirePlane.lastCustomerBrowseQueryKey,
-		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
 			: {}),
@@ -2142,14 +2104,6 @@ export function createRxdbSyncEngine(
 		enabled: () => mode === 'auto' && !disposed,
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
-	// A FOLLOWER tab's enqueue arrives here (see write() below) — only the
-	// leader's drain tick does work, so only the leader spends the nudge. A
-	// follower receiving a peer's nudge stays quiet: its own tick would no-op,
-	// and if leadership later moves here the interval timer still backstops.
-	const unsubscribeDrainNudgeBridge = ports.writeOutcomeBridge?.subscribeDrainNudge(() => {
-		if (disposed || !writePlaneOwner()) return;
-		writeDrainNudge.nudge();
-	});
 
 	const cadenceController = createCadenceController({
 		mode,
@@ -2369,13 +2323,6 @@ export function createRxdbSyncEngine(
 			// An annihilated delete never enqueued anything — nothing to drain.
 			if (!receipt.annihilated) {
 				writeDrainNudge.nudge();
-				// A follower's drain tick is a no-op (write-plane.ts leader gate), so
-				// the LEADER must hear about this enqueue or the shared queue waits
-				// out the leader's interval. In auto mode, the local nudge stays armed
-				// regardless — leadership can move to this tab before the timer fires.
-				if (mode === 'auto' && !writePlaneOwner()) {
-					ports.writeOutcomeBridge?.publishDrainNudge();
-				}
 			}
 			return receipt;
 		},
@@ -2597,12 +2544,6 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			changeSignalLane.stopActivation();
-			// Detach from the cross-tab bridge synchronously (#1209): the host owns
-			// the channel and may keep it for the successor engine, so a stale
-			// subscription would fan a peer's outcome into a disposed instance's
-			// subscribers.
-			unsubscribeWriteOutcomeBridge?.();
-			unsubscribeDrainNudgeBridge?.();
 			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			writeDrainNudge.dispose();

@@ -412,3 +412,38 @@ describe('categories', () => {
 		});
 	});
 });
+
+// Using embedded refunds, counting refund rows as orders, or joining by the sale date breaks these.
+it("refunded sums the period's refunds, not the orders' embedded ones", () => {
+	const rows = orders([{ total: '100', refunds: [{ total: '-90' }] }]);
+	expect(
+		refundsSummary(
+			[{ id: 1, parent_id: 4, date_created_gmt: '2026-07-15', amount: '12' }],
+			totals(rows),
+			2,
+			rows.length
+		)
+	).toMatchObject({ refunded: 12, kept: 88, keptShare: 0.88 });
+});
+it('orders counts distinct parents', () => {
+	expect(
+		refundsSummary(
+			[
+				{ id: 1, parent_id: 4, date_created_gmt: '', amount: '2' },
+				{ id: 2, parent_id: 4, date_created_gmt: '', total: '-3' },
+				{ id: 3, parent_id: 5, date_created_gmt: '', amount: '4' },
+			],
+			totals([]),
+			2,
+			7
+		)
+	).toMatchObject({ refunded: 9, ordersWithRefunds: 2, orders: 7 });
+});
+it("a refund made today for last week's order counts today", () => {
+	expect(
+		refundsSummary(
+			[{ id: 1, parent_id: 99, date_created_gmt: '2026-07-15', amount: '15' }],
+			totals([])
+		)
+	).toMatchObject({ refunded: 15, ordersWithRefunds: 1 });
+});

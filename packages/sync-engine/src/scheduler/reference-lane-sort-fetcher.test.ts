@@ -193,12 +193,12 @@ describe('reference lane sorted greedy fetches', () => {
 	it('lets a repository failure escape the verification guard and fail the task', async () => {
 		const repo = repository();
 		repo.listServerSourcedAbsent.mockResolvedValue([{ uuid: uuidFor(99), wooId: 99 }]);
-		// The page upsert succeeds; the survivor upsert hits a storage refusal. Only
+		// The page upsert succeeds; the survivor upsert hits a storage failure. Only
 		// the WIRE leg is fail-safe — storage failures must fail the task so the
-		// scheduler retries and tagged refusals reach their recovery handlers.
+		// scheduler can retry.
 		repo.upsertMany
 			.mockResolvedValueOnce(undefined)
-			.mockRejectedValueOnce(new Error('index reconciliation refused: pending rows'));
+			.mockRejectedValueOnce(new Error('storage write failed'));
 		const diagnostics = vi.fn();
 		const fetcher = vi
 			.fn()
@@ -212,7 +212,7 @@ describe('reference lane sorted greedy fetches', () => {
 		});
 
 		await expect(run(task('categories:all:orderby=name:order=desc'))).rejects.toThrow(
-			'index reconciliation refused'
+			'storage write failed'
 		);
 		expect(repo.pruneServerSourcedAbsentByUuids).not.toHaveBeenCalled();
 		expect(diagnostics).not.toHaveBeenCalled();

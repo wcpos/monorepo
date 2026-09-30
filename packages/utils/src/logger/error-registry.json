@@ -1356,7 +1356,7 @@
 			"This browser (or a private window) lacks the tab-coordination feature the POS prefers, so it falls back to a single syncing tab. No fix is needed."
 		],
 		"logSources": [],
-		"evidence": "monorepo#1137 inventory: engine.write-leader.degraded",
+		"evidence": "Retired on 2.0 by monorepo#2242; retained for published CLIENT121 documentation and 1.10.x log decoding.",
 		"introducedIn": "1.10.0"
 	},
 	{

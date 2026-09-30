@@ -2,11 +2,12 @@ import round from 'lodash/round';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
+import { refundsSummary } from '../cards/aggregate';
 import { chainLabel, cogsEnabled, lineCost, marginOf } from '../margin';
 
 import type { brands, CategoryTree } from '../margin';
 import type { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
-import type { DetailId, ReportOrder } from '../context';
+import type { DetailId, RefundRow, ReportOrder } from '../context';
 import type { calculateTotals } from '../report/utils';
 import type { useReportFormats } from '../use-report-formats';
 
@@ -21,6 +22,7 @@ export type PanelSpec = {
 	align: ('left' | 'right')[];
 };
 type Inputs = {
+	periodRefunds?: RefundRow[];
 	brands?: ReturnType<typeof brands>;
 	categoryTree?: CategoryTree;
 	cogs?: boolean;
@@ -32,7 +34,7 @@ type Inputs = {
 	taxes: ReturnType<typeof taxesByRate>;
 	orders: ReportOrder[];
 	unselectedRowIds?: Record<string, boolean>;
-	orderTime?: (order: ReportOrder) => string;
+	orderTime?: (order: Pick<ReportOrder, 'date_created_gmt'>) => string;
 	totals: ReturnType<typeof calculateTotals>;
 	cashierNames: Record<string, string>;
 	formats: Pick<ReturnType<typeof useReportFormats>, 'money' | 'number' | 'quantity' | 'percent'>;
@@ -64,7 +66,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		brands: ['brand', 'qty', 'amount', 'share'],
 		cashiers: ['cashier', 'orders', 'avg_order', 'amount'],
 		taxes: ['rate', 'net', 'tax', 'gross'],
-		refunds: ['order', 'reason', 'amount'],
+		refunds: ['order', 'time', 'reason', 'amount'],
 		orders: ['order', 'time', 'cashier', 'paid_by', 'total', 'counted'],
 	}[id];
 	const types = keys.map((key): PanelSpec['types'][number] =>
@@ -222,12 +224,12 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				// The rows carry line totals; the order total would add shipping and fees they do not.
 				[
 					t('reports.all_products'),
-					quantity(totals.totalItemsSold),
+					quantity(products.reduce((sum, row) => sum + row.quantity, 0)),
 					money(products.reduce((sum, row) => sum + row.amount, 0)),
 				],
 				[
 					t('reports.all_products'),
-					totals.totalItemsSold,
+					products.reduce((sum, row) => sum + row.quantity, 0),
 					products.reduce((sum, row) => sum + row.amount, 0),
 				]
 			);
@@ -260,11 +262,16 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				})),
 				[
 					total,
-					quantity(totals.totalItemsSold),
+					quantity(grouping.reduce((sum, row) => sum + row.quantity, 0)),
 					money(grouping.reduce((sum, row) => sum + row.amount, 0)),
 					'',
 				],
-				[total, totals.totalItemsSold, grouping.reduce((sum, row) => sum + row.amount, 0), '']
+				[
+					total,
+					grouping.reduce((sum, row) => sum + row.quantity, 0),
+					grouping.reduce((sum, row) => sum + row.amount, 0),
+					'',
+				]
 			);
 		}
 		case 'cashiers':
@@ -309,29 +316,24 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				[total, money(taxes.net), money(taxes.tax), money(taxes.gross)],
 				[total, taxes.net, taxes.tax, taxes.gross]
 			);
-		case 'refunds':
-			return {
-				...spec(
-					['common.order', 'reports.col_reason', 'common.amount'],
-					orders.flatMap((order) =>
-						(order.refunds ?? []).map((refund, index) => ({
-							key: `${order.uuid}-${refund.id ?? index}`,
-							raw: [
-								order.number ? `#${order.number}` : unknown,
-								refund.reason || '—',
-								Math.abs(Number(refund.total || 0)),
-							],
-							cells: [
-								order.number ? `#${order.number}` : unknown,
-								refund.reason || '—',
-								money(Math.abs(Number(refund.total || 0))),
-							],
-						}))
-					),
-					[t('reports.refunded'), '', money(totals.refundTotal)],
-					[t('reports.refunded'), '', totals.refundTotal]
-				),
-				align: ['left', 'left', 'right'],
-			};
+		case 'refunds': {
+			const refunds = inputs.periodRefunds ?? [];
+			const refunded = refundsSummary(refunds, totals, inputs.num_decimals).refunded;
+			return spec(
+				['common.order', 'reports.col_time', 'reports.col_reason', 'common.amount'],
+				refunds.map((refund) => {
+					const amount = Math.abs(Number(refund.amount ?? refund.total ?? 0));
+					const cells = [
+						`#${refund.parentNumber || orders.find((order) => order.id === refund.parent_id)?.number || refund.parent_id}`,
+						inputs.orderTime?.(refund) || unknown,
+						refund.reason || '—',
+						money(amount),
+					];
+					return { key: refund.id, cells, raw: [cells[0], cells[1], cells[2], amount] };
+				}),
+				[t('reports.refunded'), '', '', money(refunded)],
+				[t('reports.refunded'), '', '', refunded]
+			);
+		}
 	}
 }

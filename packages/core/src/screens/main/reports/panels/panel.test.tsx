@@ -4,7 +4,13 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { mockCredentials, mockProducts, mockState, setOrders } from '../cards/test-utils';
-import { mockLaneProgress, mockPrintDocument, preparePanel, room } from './test-utils';
+import {
+	mockLaneProgress,
+	mockPrintDocument,
+	mockRefundLaneProgress,
+	preparePanel,
+	room,
+} from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
@@ -13,6 +19,8 @@ import type * as Context from '../context';
 
 beforeEach(() => {
 	preparePanel();
+	mockLaneProgress.next(null);
+	mockRefundLaneProgress.next(null);
 	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
 	mockPrintDocument.templatesReady = true;
 	mockPrintDocument.documentError = null;
@@ -211,4 +219,33 @@ it('a phone total with the margin columns keeps its amount beside the margin', (
 		'All productsQty1Amount£100.00Cost£25.00Profit£75.00Margin %75.0%'
 	);
 	mockState.screenSize = 'lg';
+});
+
+// A first local refund emission is not evidence that all refund pages have arrived.
+it.each(['refunds', 'products', 'categories', 'brands'])(
+	'waits for refund download progress before printing panels: %s',
+	async (panel) => {
+		mockRefundLaneProgress.next({ received: 40, total: 100 });
+		setOrders([
+			{ uuid: 'a', status: 'completed', total: '10', cost_of_goods_sold: {} },
+		] as Context.ReportOrder[]);
+		room();
+		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
+		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+			'Still loading refunds for this range'
+		);
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		expect(mockPrintDocument.print).not.toHaveBeenCalled();
+		await act(async () => mockRefundLaneProgress.next(null));
+		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		await waitFor(() => expect(mockPrintDocument.print).toHaveBeenCalledTimes(1));
+	}
+);
+it('does not wait for refund downloads when printing payments', () => {
+	mockRefundLaneProgress.next({ received: 40, total: null });
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 });

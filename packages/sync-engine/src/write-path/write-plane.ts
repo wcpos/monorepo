@@ -48,7 +48,6 @@ type WritePlaneDeps = {
 	diagnostics: SyncObserver;
 	onStatusChanged: () => void;
 	connectivity: () => 'online' | 'offline' | 'degraded';
-	isWritePlaneOwner: () => boolean;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent | WriteSupersededEvent) => void;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -151,7 +150,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						mintUuid: deps.mintUuid,
 						now: () => new Date(deps.now()).toISOString(),
 						observe: deps.diagnostics,
-						canCoalesce: deps.isWritePlaneOwner(),
+						canCoalesce: true,
 					});
 					await onQueueChanged(database);
 				});
@@ -198,20 +197,8 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 			});
 		},
 		conflicts: conflictResolution.conflicts,
-		resolveConflict: (mutationId, resolution) => {
-			if (!deps.isWritePlaneOwner()) {
-				const error = new Error(
-					'resolveConflict: another tab is the active window completing this — switch to it, or wait for it to finish'
-				);
-				error.name = 'WritePlaneFollowerError';
-				return Promise.reject(error);
-			}
-			return conflictResolution.resolveConflict(mutationId, resolution);
-		},
+		resolveConflict: conflictResolution.resolveConflict,
 		tick: (signal) => {
-			if (!deps.isWritePlaneOwner()) {
-				return Promise.resolve({ lane: 'write-drain', status: 'ran', pushed: 0 });
-			}
 			const run = drainChain.then(
 				() => drainLane.tick(signal),
 				() => drainLane.tick(signal)

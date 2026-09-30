@@ -1,5 +1,3 @@
-import { isLedgerReconciliationRefusalError } from '../local-coverage/ledger-storage-recovery';
-
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
 import type { FetchTask, FetchTaskResult, SchedulerFetcher } from './replication-policy';
 import type { CompleteOrRequeueOutcome } from './rx-scheduler-task-state-repository';
@@ -467,13 +465,6 @@ export async function runPersistedSchedulerTasks(
 				}
 				throw error;
 			}
-
-			// A tagged ledger refusal is not a task failure: the derivable ledger
-			// (including this runner's own claim rows) is about to be rebuilt, so
-			// marking the task failed would write into the store the rebuild drops.
-			// Rethrow so withSchedulerDrainLedgerRecovery aborts the whole tick
-			// cleanly (#956; #1187 review).
-			if (isLedgerReconciliationRefusalError(error)) throw error;
 
 			const failedAtMs = currentTime(input);
 			const failed = await input.repository.markFailed(

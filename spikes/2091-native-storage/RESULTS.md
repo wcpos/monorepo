@@ -3,6 +3,11 @@
 **Simulator/emulator checks are not evidence for the native storage decision.**
 Run the physical-device checklist in [DEVICE-RUN.md](DEVICE-RUN.md), then fill these answers.
 
+**Frozen filesystem baseline:** reproducing the measured filesystem rows requires the
+pre-cleanup `origin/next` checkout at `a1ff7f907ac0b4bc3a703b55fdf9ce27bef87f86`
+and its premium dist with 47 lines containing `__wcpos`. The current root no longer
+installs those filesystem patches; `install.mjs` intentionally retains that baseline gate.
+
 ## Leg 1 — semantics
 
 On both physical devices (iPad Pro 12.9 2018 on iPadOS 26.6.2, Pixel 10 on Android 17) the

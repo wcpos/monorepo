@@ -68,7 +68,6 @@ export const SYNC_EVENT_TYPES = [
 	'engine.reconnect.retick',
 	'engine.reset-needs-confirmation',
 	'engine.scope-switched',
-	'engine.write-leader.degraded',
 	'maintenance.lane.error',
 	'maintenance.lane.tick',
 	'payment.authorized-offline',
@@ -647,16 +646,6 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Switched to another store',
 		descriptionKey: 'health.logs.event_description.engine_scope_switched',
 		description: 'You switched stores, so the POS now syncs the new store.',
-		introducedIn: '1.10.0',
-	},
-	'engine.write-leader.degraded': {
-		type: 'engine.write-leader.degraded',
-		domain: 'SYNC',
-		key: 'health.logs.event.engine_write_leader_degraded',
-		label: 'This browser can only sync one tab at a time',
-		descriptionKey: 'health.logs.event_description.engine_write_leader_degraded',
-		description:
-			'Only one browser tab sends changes at a time. Every tab keeps working from the same local data.',
 		introducedIn: '1.10.0',
 	},
 	'maintenance.lane.error': {

@@ -749,15 +749,6 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('renders single-tab write leadership as a visible lifecycle warning', () => {
-		observer.observe(event({ type: 'engine.write-leader.degraded', level: 'warn' }));
-
-		expect(rows[0]).toMatchObject({
-			level: 'warn',
-			terminal: { operationType: 'sync.lifecycle', outcome: 'unknown' },
-		});
-	});
-
 	it('promotes barcode selector hydration failure to a visible warning', () => {
 		observer.observe(
 			event({

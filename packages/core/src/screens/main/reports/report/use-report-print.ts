@@ -16,6 +16,7 @@ import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { usePrint } from '../../hooks/use-print';
+import { refundsSummary } from '../cards/aggregate';
 import { useReportsData, useReportsScope } from '../context';
 import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
@@ -37,7 +38,7 @@ export function useReportPrint(storeId?: number) {
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
-	const { selectedOrders, totals } = useReportsData();
+	const { selectedOrders, totals, periodRefunds } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);
@@ -62,7 +63,7 @@ export function useReportPrint(storeId?: number) {
 	 */
 	const {
 		total,
-		refundTotal,
+		refundTotal: embeddedRefundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,
@@ -73,6 +74,10 @@ export function useReportPrint(storeId?: number) {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = totals;
+	const refundTotal =
+		periodRefunds === undefined
+			? embeddedRefundTotal
+			: refundsSummary(periodRefunds, totals, viewed?.price_num_decimals).refunded;
 	// Printing waits for the viewed store's document (a report on another store must not print
 	// under the till's name) and for the store's register list only while it can still arrive
 	// (online, not yet read, not failed) and the document will print a by-register section
