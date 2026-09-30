@@ -160,7 +160,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
+		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} testID="add-customer-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>

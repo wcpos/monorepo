@@ -97,11 +97,7 @@ export function AddCartItemsMenu() {
 			)}
 
 			{openDialog === 'misc-product' && (
-				<Dialog
-					open
-					onOpenChange={(open) => !open && setOpenDialog(null)}
-					style={{ display: 'none' }}
-				>
+				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 					<DialogContent side={side} testID="add-misc-product-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
@@ -114,11 +110,7 @@ export function AddCartItemsMenu() {
 			)}
 
 			{(openDialog === 'fee' || openDialog === 'discount') && (
-				<Dialog
-					open
-					onOpenChange={(open) => !open && setOpenDialog(null)}
-					style={{ display: 'none' }}
-				>
+				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 					<DialogContent
 						side={side}
 						testID={openDialog === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'}
@@ -136,11 +128,7 @@ export function AddCartItemsMenu() {
 			)}
 
 			{openDialog === 'shipping' && (
-				<Dialog
-					open
-					onOpenChange={(open) => !open && setOpenDialog(null)}
-					style={{ display: 'none' }}
-				>
+				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 					<DialogContent side={side} testID="add-shipping-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
@@ -153,11 +141,7 @@ export function AddCartItemsMenu() {
 			)}
 
 			{openDialog === 'coupon' && (
-				<Dialog
-					open
-					onOpenChange={(open) => !open && setOpenDialog(null)}
-					style={{ display: 'none' }}
-				>
+				<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 					<DialogContent side={side} size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_coupon')}</DialogTitle>
