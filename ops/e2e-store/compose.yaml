@@ -1,8 +1,16 @@
 # Lane-`next` web E2E store: nginx + php-fpm WordPress + MariaDB, on the Mac mini.
 #
-# Runs in its own colima profile (`e2e-store`, 4 CPU / 4 GiB; see lib.sh), so
-# the per-container caps below add up to less than the VM. nginx listens on
-# loopback only; `tailscale serve --https=8443` publishes it to the tailnet.
+# Runs in its own colima profile (`e2e-store`, 4 CPU / 4 GiB; see lib.sh), and
+# the VM is the hard ceiling for the host. Inside it:
+#   memory: db 768m + php 2g + nginx 128m = 2.9 GiB, 3.4 GiB while a wpcli
+#     run (512m) is up. The guest has 3.8 GiB, of which its kernel, dockerd,
+#     containerd and the lima agent hold about 0.35 GiB, so the caps fit and a
+#     busy container is OOM-killed inside its own cgroup, never the guest.
+#   CPU: 1.5 + 3 + 0.5 (+1 wpcli) deliberately oversubscribes the 4 vCPUs. A
+#     CPU cap only throttles, so the overlap lets php use 3 CPUs while the db
+#     is idle, and cannot exhaust anything.
+# nginx listens on loopback only; `tailscale serve --https=8443` publishes it
+# to the tailnet.
 #
 # State lives outside the repo, under ${E2E_STORE_HOME} (~/e2e-store):
 #   data/mysql    MariaDB datadir
@@ -54,7 +62,7 @@ services:
       timeout: 5s
       retries: 10
     cpus: 1.5
-    mem_limit: 1g
+    mem_limit: 768m
 
   wordpress:
     image: wordpress:php8.3-fpm
@@ -72,7 +80,7 @@ services:
       - ./php-fpm.conf:/usr/local/etc/php-fpm.d/zz-e2e.conf:ro
       - ./php.ini:/usr/local/etc/php/conf.d/zz-e2e.ini:ro
     cpus: 3
-    mem_limit: 2560m
+    mem_limit: 2g
 
   nginx:
     image: nginx:1.27-alpine

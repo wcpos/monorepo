@@ -37,7 +37,18 @@ WP_CLI::line( 'categories: ' . wp_count_terms( array( 'taxonomy' => 'product_cat
 WP_CLI::line( 'tags: ' . wp_count_terms( array( 'taxonomy' => 'product_tag', 'hide_empty' => false ) ) );
 WP_CLI::line( 'coupons: ' . $count_posts( 'shop_coupon' ) );
 WP_CLI::line( 'users: cashier=' . $role_count( 'cashier' ) . ' shop_manager=' . $role_count( 'shop_manager' ) . ' administrator=' . $role_count( 'administrator' ) . ' customer=' . $role_count( 'customer' ) );
-WP_CLI::line( 'wcpos stores: ' . ( post_type_exists( 'wcpos_store' ) ? $count_posts( 'wcpos_store' ) : 'n/a (free)' ) );
+if ( is_plugin_active( 'woocommerce-pos-pro/woocommerce-pos-pro.php' ) ) {
+	// Counted directly: wp_count_posts() is empty for a post type that is not
+	// registered, and Pro leaves wcpos_store unregistered until licensed.
+	$license = get_option( 'woocommerce_pos_pro_settings_license', array() );
+	$stores  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'wcpos_store' AND post_status = 'publish'" );
+	WP_CLI::line(
+		'wcpos stores: ' . $stores
+		. ( empty( $license['activated'] ) ? ' (Pro licence not activated: the cashier API lists only the default store)' : '' )
+	);
+} else {
+	WP_CLI::line( 'wcpos stores: n/a (free)' );
+}
 WP_CLI::line( 'plugins: ' . implode( ' ', array_map( static fn( $file ) => dirname( $file ) . '@' . get_plugin_data( WP_PLUGIN_DIR . '/' . $file, false, false )['Version'], get_option( 'active_plugins' ) ) ) );
 WP_CLI::line( sprintf( 'currency: %s, prices include tax: %s, tax based on: %s', get_option( 'woocommerce_currency' ), get_option( 'woocommerce_prices_include_tax' ), get_option( 'woocommerce_tax_based_on' ) ) );
 foreach ( $rates as $rate ) {

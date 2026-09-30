@@ -28,9 +28,21 @@ foreach ( $coupons as $spec ) {
 	WP_CLI::log( "coupon: created {$spec['code']}" );
 }
 
-if ( ! post_type_exists( 'wcpos_store' ) ) {
+// Pro 2.x registers the wcpos_store post type (and the filters that list stores
+// to the cashier API) only once its licence reads `activated`, so the post type
+// is no test of whether Pro is active. Detect the plugin, then register the
+// post type for this process if the licence gate skipped it.
+$stores_service = 'WCPOS\WooCommercePOSPro\Services\Stores';
+if ( ! class_exists( $stores_service ) ) {
 	WP_CLI::log( 'stores: woocommerce-pos-pro not active; skipped (the free plugin has one implicit store)' );
 	return;
+}
+if ( ! post_type_exists( 'wcpos_store' ) ) {
+	$stores_service::instance();
+}
+$license = get_option( 'woocommerce_pos_pro_settings_license', array() );
+if ( empty( $license['activated'] ) ) {
+	WP_CLI::warning( 'stores: Pro licence not activated; the stores are created, but the cashier API lists only the default store until it is' );
 }
 
 // One store per tax regime settings.php creates, each taxing from its own address.
@@ -77,3 +89,14 @@ foreach ( $stores as $store ) {
 	}
 	WP_CLI::log( "store: created {$store['title']} (#$id)" );
 }
+$store_ids = get_posts(
+	array(
+		'post_type'   => 'wcpos_store',
+		'post_status' => 'any',
+		'fields'      => 'ids',
+		'numberposts' => -1,
+		'orderby'     => 'ID',
+		'order'       => 'ASC',
+	)
+);
+WP_CLI::log( sprintf( 'stores: %d (#%s)', count( $store_ids ), implode( ', #', $store_ids ) ) );
