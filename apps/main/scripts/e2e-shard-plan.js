@@ -85,7 +85,7 @@ function buildPlan(shardTotal) {
 const args = process.argv.slice(2);
 
 if (args[0] === '--plan') {
-	const shardTotal = Number(args[1] || 4);
+	const shardTotal = Number(args[1] || 6);
 	const { shards, weighted, fallback } = buildPlan(shardTotal);
 	const unmeasured = weighted.filter((w) => !w.measured);
 	console.log(`Plan for ${shardTotal} shards (median fallback ${fallback}s):\n`);
