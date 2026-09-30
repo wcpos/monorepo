@@ -437,6 +437,8 @@ jobs:
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
           E2E_SHARD_INDEX: ${{ matrix.shardIndex }}
+          # playwright.config gives the next lane one retry and main two.
+          E2E_LANE: ${{ needs.changes.outputs.lane }}
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}

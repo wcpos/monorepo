@@ -1852,6 +1852,15 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 });
 
+test('the E2E test step tells playwright.config its lane (next retries once)', () => {
+	const runStep = findStep(
+		readWorkflow('deploy.yml'),
+		'e2e',
+		'🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})'
+	);
+	assert.equal(runStep.env.E2E_LANE, '${{ needs.changes.outputs.lane }}');
+});
+
 test('the E2E lane is resolved once and a run outside both trunks gets no store', () => {
 	// The old inline expression defaulted every run it did not recognise to the
 	// main-lane stores. A PR whose base was a feature branch stacked on `next`
