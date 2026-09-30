@@ -99,6 +99,25 @@ export const isAsleepBlock = (error: unknown): boolean =>
 	(error as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.ASLEEP;
 
 /**
+ * Options for the pre-flight check.
+ */
+export interface CanProceedOptions {
+	/**
+	 * Whether the request carries credentials. Default true.
+	 *
+	 * A request that sends no token cannot be fixed *or* broken by re-authentication,
+	 * so the `authFailed` latch is irrelevant to it. This matters because the latch is
+	 * process-wide: on 2026-08-25 a saved store whose refresh token had expired latched
+	 * `authFailed` during boot, and the *site discovery* probe on the Connect screen —
+	 * an anonymous HEAD to a completely different host — was rejected before it reached
+	 * the network. The cashier saw "Site does not seem to be a WordPress site" and had
+	 * no way back in: connecting to a new store is exactly what you do when the old
+	 * session is dead.
+	 */
+	authenticated?: boolean;
+}
+
+/**
  * Result of pre-flight check
  */
 interface CanProceedResult {
@@ -235,11 +254,12 @@ class RequestStateManager {
 	 * 1. Sleeping - App is in background, don't queue more requests
 	 * 2. Offline - No point trying if there's no network
 	 * 3. Auth Failed - No point trying if we need re-authentication
+	 *    (skipped for unauthenticated requests, which re-auth cannot affect)
 	 * 4. Paused - System is in recovery mode
 	 *
 	 * @returns Object with `ok` boolean and optional error details
 	 */
-	checkCanProceed(): CanProceedResult {
+	checkCanProceed({ authenticated = true }: CanProceedOptions = {}): CanProceedResult {
 		// Don't queue new requests while app is sleeping
 		// This prevents pile-up during sleep
 		if (this.isSleeping) {
@@ -260,7 +280,7 @@ class RequestStateManager {
 			};
 		}
 
-		if (this.authFailed) {
+		if (this.authFailed && authenticated) {
 			return {
 				ok: false,
 				reason: 'Please log in to continue',
