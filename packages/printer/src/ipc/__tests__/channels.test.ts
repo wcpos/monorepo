@@ -26,4 +26,8 @@ describe('Electron IPC channel allowlists', () => {
 	it('allows the telemetry consent channel used by the renderer', () => {
 		expect(SEND_CHANNELS).toContain('telemetry-consent');
 	});
+
+	it('allows the window colour scheme channel that tints the desktop window controls', () => {
+		expect(SEND_CHANNELS).toContain('window-color-scheme');
+	});
 });

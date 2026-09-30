@@ -23,6 +23,38 @@
         flex: 1;
       }
     </style>
+    <!--
+      Desktop (Electron) only. The shell hides the native title bar, so the top strip of the
+      page — the height Chromium reports for its Window Controls Overlay, which the app
+      reserves as top inset (components/desktop-window-chrome.electron.tsx) — is the handle
+      for moving the window. Chromium builds the drag region geometrically: the union of
+      `drag` boxes minus every `no-drag` box, whatever is painted on top. So anything that can
+      be tapped is opted out, or a sheet's close button, a toast or a list scrolled up into
+      the strip would move the window instead. Inert in a browser tab: `titlebar-area-height`
+      is undefined there (0px strip) and `app-region` only has meaning under a Window
+      Controls Overlay.
+    -->
+    <style id="desktop-window-drag-region">
+      #window-drag-region {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: env(titlebar-area-height, 0px);
+        pointer-events: none;
+        -webkit-app-region: drag;
+        app-region: drag;
+      }
+      /* Everything tappable — except what cannot take a pointer: a closed drawer's
+         full-window scrim stays laid out with an inline `pointer-events: none`, and a
+         no-drag box that size would carve the strip away. (`app-region: none` does not
+         undo an earlier `no-drag` in Chromium, so the exclusion has to be in the selector.) */
+      :is(button, a[href], input, select, textarea, [tabindex],
+          [role="dialog"], [role="menu"], [role="listbox"], [data-sonner-toaster]):not([style*="pointer-events: none"]) {
+        -webkit-app-region: no-drag;
+        app-region: no-drag;
+      }
+    </style>
     <script>
       // only define opfsWorker when _not_ running under Electron
       if (!navigator.userAgent.includes('Electron')) {
@@ -36,6 +68,8 @@
     <noscript>
       You need to enable JavaScript to run this app.
     </noscript>
+    <!-- Desktop window drag handle; see the style block in <head>. -->
+    <div id="window-drag-region"></div>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
   </body>

@@ -41,7 +41,9 @@ async function capture(page: Page, info: TestInfo, state: string, settle: number
 	if (settle) await page.waitForTimeout(settle);
 	const combo = info.titlePath.find((title) => /^(tablet|phone)-/.test(title)) ?? 'unknown';
 	const path = info.outputPath(`${combo}--${state}.png`);
-	await page.screenshot({ path, fullPage: true });
+	// Viewport only: a full-page shot under `hasTouch` resets Chromium's touch emulation, so
+	// `(pointer: fine)` flips to true for every later state and the phone renders as a table.
+	await page.screenshot({ path });
 	await info.attach(`register-captures-${state}`, { path, contentType: 'image/png' });
 	const header = page.getByTestId('checkout-ledger-header');
 	return (await header.isVisible()) ? (await header.boundingBox())?.y : undefined;
@@ -130,7 +132,7 @@ for (const [device, viewport] of Object.entries({
 							// What the screen showed when the state could not be reached: the run's
 							// diagnosis, not a capture (the board builder ignores `--skipped`).
 							const path = info.outputPath(`${name}--skipped.png`);
-							await page.screenshot({ path, fullPage: true }).catch(() => undefined);
+							await page.screenshot({ path }).catch(() => undefined);
 							await info.attach(`skipped-${name}`, { path, contentType: 'image/png' });
 						} finally {
 							await unscale();

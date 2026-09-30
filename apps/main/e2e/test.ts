@@ -27,10 +27,13 @@
  */
 import { test as base, expect } from '@playwright/test';
 
+import { quarantineGate } from './quarantine';
+
 /** Keeps one noisy error from burying the rest of the report. */
 const MAX_REPORTED = 20;
 
-export const test = base.extend<{ appErrorWatcher: void }>({
+export const test = base.extend<{ quarantineGate: void; appErrorWatcher: void }>({
+	quarantineGate, // before appErrorWatcher, so a quarantined test never opens its page
 	appErrorWatcher: [
 		async ({ page }, use, testInfo) => {
 			const errors = new Set<string>();

@@ -65,12 +65,21 @@ export function DataTableHeader({
 				return (
 					<HStack
 						className="gap-1"
+						// The Pressable's alignItems shrink-wraps this row, so without a cap the
+						// label is never narrower than its text and overflows the next column
+						// ("NÚMERO DE PEDIDOCLIENTE" at 1024 in Spanish). Capped, the label
+						// shrinks and truncates like a non-sortable header's plain Text.
+						style={{ maxWidth: '100%' }}
 						// E2E's only observable for "the sort actually applied": header clicks
 						// resolve locally (some collections never put orderby on the wire), so
 						// specs steering the sort need a DOM signal, not a network one.
 						testID={isSorted ? `data-table-sort-${columnId}-${sortDirection}` : undefined}
 					>
-						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
+						<Text
+							className={'text-muted-foreground font-medium'}
+							style={{ flexShrink: 1 }}
+							numberOfLines={1}
+						>
 							{header}
 						</Text>
 						{showIcon && (

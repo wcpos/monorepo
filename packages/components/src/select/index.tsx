@@ -296,6 +296,9 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 			</SelectSheetItem>
 		);
 
+	// On web the Radix item is a DOM node: `testID` must not reach it (React warns on the
+	// unknown attribute), `data-testid` carries the id instead. Native keeps `testID`.
+	const { testID, ...item } = props;
 	return (
 		<SelectPrimitive.Item
 			className={cn(
@@ -303,8 +306,8 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
-			{...props}
-			{...webTestID(props.testID)}
+			{...item}
+			{...(Platform.OS === 'web' ? webTestID(testID) : { testID })}
 		>
 			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
 				<SelectPrimitive.ItemIndicator>

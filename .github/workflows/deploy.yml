@@ -26,6 +26,13 @@ on:
         description: Skip E2E tests
         type: boolean
         default: false
+      quarantine_only:
+        description: Run only e2e/quarantine.json's tests on next, then comment on #2284 (target=preview)
+        type: boolean
+        default: false
+  # Weekly quarantine-only run of `next` (#2284). Schedules run from main; checkouts pin `next`.
+  schedule:
+    - cron: '17 22 * * 0'
   push:
     branches: [main]
   pull_request:
@@ -97,11 +104,11 @@ jobs:
       #
       # `inputs.lane` wins when a human dispatches: base_ref is empty and
       # ref_name is the feature branch, so `auto` cannot see the lane of a
-      # feature branch and must not guess one either.
+      # feature branch and must not guess one either. A quarantine-only run is always `next`.
       - name: 🛤 Resolve E2E lane
         id: lane
         env:
-          INPUT_LANE: ${{ inputs.lane }}
+          INPUT_LANE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'next' || inputs.lane }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           REF_NAME: ${{ github.ref_name }}
@@ -128,8 +135,9 @@ jobs:
     # one running + one pending job per group and REPLACES the pending one when
     # a third arrives — so a superseded deploy is dropped before `eas deploy`
     # ever starts, and the ledger reads that as superseded, not red.
+    # A schedule carries the main ref but previews `next`: no main group, no turbo cache save.
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
       cancel-in-progress: false
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
@@ -138,6 +146,7 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -147,7 +156,7 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           # main saves the day's turbo cache from the full build; PRs restore read-only.
-          cache-save: ${{ github.ref == 'refs/heads/main' }}
+          cache-save: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' }}
 
       # A wedged turbo build has no timeout of its own: on 2026-09-02 two PR
       # deploys (runs 33664427747, 33687923179) sat in this step for 40–75 min
@@ -165,12 +174,12 @@ jobs:
           # Preview deploys are the web E2E target: expose the live-tab hold hook
           # (`__wcposLiveTabHold`, live-tab-gate.web.tsx) so live-tab.spec.ts can
           # exercise the write-deferral ceiling. Production exports never get it.
-          EXPO_PUBLIC_WCPOS_E2E: ${{ (github.event_name == 'pull_request' || github.event.inputs.target == 'preview') && '1' || '' }}
+          EXPO_PUBLIC_WCPOS_E2E: ${{ (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event.inputs.target == 'preview') && '1' || '' }}
         run: pnpm expo export --platform web --output-dir ./build
 
       - name: 🚀 Deploy preview
         id: deploy-preview
-        if: github.event_name == 'pull_request' || github.event.inputs.target == 'preview'
+        if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event.inputs.target == 'preview'
         working-directory: apps/main
         run: |
           # Deploy and capture output
@@ -211,7 +220,7 @@ jobs:
       - name: 📝 Get deployment URL
         id: get-url
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event.inputs.target }}" = "preview" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.target }}" = "preview" ]; then
             echo "url=${{ steps.deploy-preview.outputs.preview_url }}" >> $GITHUB_OUTPUT
             echo "is_production=false" >> $GITHUB_OUTPUT
           else
@@ -255,11 +264,11 @@ jobs:
         # A narrowed (spec-only) run uses ONE shard on purpose. Splitting two
         # spec files across four shards would leave shards with nothing to run,
         # and a shard that runs zero tests still exits 0 — a green that means
-        # nothing. One shard cannot produce that.
-        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
-        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[6]') }}
+        # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
+        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
+        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
       cancel-in-progress: true
     steps:
       # First, before any setup: a run that belongs to neither trunk has no
@@ -278,6 +287,7 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
           fetch-depth: 0
           submodules: false
 
@@ -439,6 +449,8 @@ jobs:
           E2E_SHARD_INDEX: ${{ matrix.shardIndex }}
           # playwright.config gives the next lane one retry and main two.
           E2E_LANE: ${{ needs.changes.outputs.lane }}
+          # `only` runs just the tests in e2e/quarantine.json (#2284); empty keeps them fixme'd.
+          E2E_QUARANTINE: ${{ (github.event_name == 'schedule' || inputs.quarantine_only) && 'only' || '' }}
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
@@ -707,7 +719,7 @@ jobs:
     if: always() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
+      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
       cancel-in-progress: true
     outputs:
       result: ${{ needs.e2e.result }}
@@ -784,6 +796,41 @@ jobs:
             playwright-report/
             test-results.json
           retention-days: 30
+
+  # Tells #2284 which quarantined tests now pass, so entries cannot rot. No gate reads it.
+  quarantine-report:
+    name: 🧫 Quarantine report
+    needs: [e2e-report]
+    if: always() && needs.e2e-report.result == 'success' && (github.event_name == 'schedule' || inputs.quarantine_only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: merged-report
+
+      - name: 💬 Comment the quarantined specs that passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          node apps/main/scripts/e2e-quarantine-check.mjs --report merged-report/test-results.json > report.txt 2>&1
+          status=$?
+          set -e
+          cat report.txt
+          # 0: none passed; 1: some passed, named at the end; anything else is a broken report.
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          headline=$([ "$status" -eq 0 ] && echo 'none passed.' || echo 'some PASSED; remove their entries.')
+          printf 'Quarantine-only run %s: %s\n\n```\n%s\n```\n' "$RUN_URL" "$headline" "$(cat report.txt)" > comment.md
+          gh issue comment "$(jq -r .issue apps/main/e2e/quarantine.json)" --body-file comment.md
 
   comment:
     name: 💬 PR Comment

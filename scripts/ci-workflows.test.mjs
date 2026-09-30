@@ -1312,7 +1312,9 @@ test('the shared setup action saves one turbo cache entry per OS per day, from m
 			}
 		}
 	}
-	assert.deepEqual(savers, ["deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}"]);
+	assert.deepEqual(savers, [
+		"deploy.yml:deploy=${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' }}",
+	]);
 });
 
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
@@ -1859,6 +1861,33 @@ test('the E2E test step tells playwright.config its lane (next retries once)', (
 		'🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})'
 	);
 	assert.equal(runStep.env.E2E_LANE, '${{ needs.changes.outputs.lane }}');
+});
+
+test('the weekly quarantine-only run (#2284) tests next in one shard and reports to the issue', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const quarantine = "(github.event_name == 'schedule' || inputs.quarantine_only)";
+	assert.deepEqual(workflow.on.schedule, [{ cron: '17 22 * * 0' }]);
+	assert.equal(workflow.on.workflow_dispatch.inputs.quarantine_only.type, 'boolean');
+	const lane = findStep(workflow, 'changes', '🛤 Resolve E2E lane').env.INPUT_LANE;
+	assert.equal(lane, `\${{ ${quarantine} && 'next' || inputs.lane }}`);
+	const { env } = workflow.jobs.e2e.steps.find(({ name }) => name?.startsWith('🧪 Run E2E'));
+	assert.equal(env.E2E_QUARANTINE, `\${{ ${quarantine} && 'only' || '' }}`);
+	for (const axis of Object.values(workflow.jobs.e2e.strategy.matrix)) {
+		assert.ok(axis.includes(`|| ${quarantine} && '[1]' ||`), axis);
+	}
+	// Schedules run from the default branch: pin `next`, deploy a preview, skip main's groups.
+	for (const job of ['deploy', 'e2e', 'quarantine-report']) {
+		const checkout = workflow.jobs[job].steps.find(({ uses }) => uses?.includes('checkout@'));
+		assert.equal(checkout.with.ref, "${{ github.event_name == 'schedule' && 'next' || '' }}", job);
+	}
+	for (const job of ['deploy', 'e2e', 'e2e-report']) {
+		assert.match(workflow.jobs[job].concurrency.group, /main' && github\.event_name != 'schedule'/);
+	}
+	assert.match(findStep(workflow, 'deploy', '🚀 Deploy preview').if, /event_name == 'schedule'/);
+	// Only the commenting job may write issues.
+	const report = workflow.jobs['quarantine-report'];
+	assert.deepEqual(report.permissions, { contents: 'read', issues: 'write' });
+	assert.equal(report.if, `always() && needs.e2e-report.result == 'success' && ${quarantine}`);
 });
 
 test('the E2E lane is resolved once and a run outside both trunks gets no store', () => {
@@ -3095,7 +3124,10 @@ test('sync packages publish from a verified trunk commit to GitHub Packages', ()
 		assert.ok(publishSteps.indexOf(publishOrder[i - 1]) < publishSteps.indexOf(publishOrder[i]));
 	}
 	for (const step of publishSteps) {
-		assert.doesNotMatch(step.uses ?? '', /^(actions\/checkout@|\.\/\.github\/actions\/setup-monorepo$)/);
+		assert.doesNotMatch(
+			step.uses ?? '',
+			/^(actions\/checkout@|\.\/\.github\/actions\/setup-monorepo$)/
+		);
 		if (step.name !== '📝 Summary') {
 			assert.doesNotMatch(step.run ?? '', /\bpnpm\s+(install|i|add|rebuild|exec|run|pack)\b/);
 			assert.doesNotMatch(step.run ?? '', /npm install|npm ci|npm rebuild/);
