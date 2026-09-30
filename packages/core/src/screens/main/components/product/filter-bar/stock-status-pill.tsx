@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { decode } from 'html-entities';
+
+import { Chip } from '@wcpos/components/chip';
 import {
 	Select,
 	SelectContent,
@@ -42,18 +44,19 @@ export function StockStatusPill() {
 			onValueChange={(option) => option && actions.setFilter('stock_status', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="warehouseFull"
-					rightIcon={isActive ? undefined : 'chevronDown'}
-					variant={isActive ? 'outline-primary' : 'outline'}
+				<Chip
+					icon="warehouseFull"
+					on={isActive}
 					testID="filter-pill-stock_status"
-					removable={isActive}
-					removeTestID="filter-pill-remove-stock_status"
-					onRemove={() => actions.clearFilter('stock_status')}
-				>
-					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>
-				</ButtonPill>
+					clearTestID="filter-pill-remove-stock_status"
+					onClear={isActive ? () => actions.clearFilter('stock_status') : undefined}
+					clearLabel={t('common.remove')}
+					label={decode(
+						value?.label ||
+							items.find((item) => item.value === 'instock')?.label ||
+							t('common.stock_status')
+					)}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (

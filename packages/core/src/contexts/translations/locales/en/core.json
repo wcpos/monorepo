@@ -1,4 +1,8 @@
 {
+  "products.no_products_yet": "No products yet",
+  "products.no_products_yet_description": "Products you add to the store will appear here.",
+  "products.display_options": "Display options",
+  "products.restore_defaults": "Restore defaults",
 	"reports.card_brands": "Brands",
 	"reports.panel_brands": "Sales by brand",
 	"reports.n_brands_one": "{n} brand",

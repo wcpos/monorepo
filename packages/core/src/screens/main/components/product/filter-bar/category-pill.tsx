@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
+import { decode } from 'html-entities';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import type { EngineRecord } from '@wcpos/query';
+import { Chip } from '@wcpos/components/chip';
 import {
 	TreeCombobox,
 	TreeComboboxContent,
@@ -17,23 +17,6 @@ import { useT } from '../../../../../contexts/translations';
 import { useEngineRecordsByWooId } from '../../../hooks/use-engine-document';
 import { CategoryTreeLoader } from '../category-select';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
-
-function CategoryPillLabel({
-	resource,
-	fallbackLabel,
-}: {
-	resource: ObservableResource<EngineRecord<'categories'>[]>;
-	fallbackLabel: string;
-}) {
-	const selected = useObservableSuspense(resource);
-	const displayText = React.useMemo(() => {
-		if (selected.length === 0) return fallbackLabel;
-		if (selected.length === 1) return selected[0].payload.name;
-		return `${selected[0].payload.name} +${selected.length - 1}`;
-	}, [fallbackLabel, selected]);
-
-	return <ButtonText decodeHtml>{displayText}</ButtonText>;
-}
 
 /**
  *
@@ -55,6 +38,10 @@ export function CategoryPill() {
 	}, [activeCategoryIds, options, t]);
 
 	const isActive = activeCategoryIds.length > 0;
+	const records = useObservableSuspense(selectedCategoriesResource);
+	const label = records.length
+		? `${records[0].payload.name}${records.length > 1 ? ` +${records.length - 1}` : ''}`
+		: t('common.category');
 
 	const handleChange = React.useCallback(
 		(newSelection: Option[]) => {
@@ -73,23 +60,15 @@ export function CategoryPill() {
 	return (
 		<TreeCombobox options={options} multiple value={selected} onValueChange={handleChange}>
 			<TreeComboboxTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="folder"
-					rightIcon={isActive ? undefined : 'chevronDown'}
-					variant={isActive ? 'outline-primary' : 'outline'}
+				<Chip
+					icon="folder"
+					on={isActive}
 					testID="filter-pill-categories"
-					removable={isActive}
-					removeTestID="filter-pill-remove-categories"
-					onRemove={handleRemove}
-				>
-					<React.Suspense fallback={<ButtonText>{t('common.loading')}</ButtonText>}>
-						<CategoryPillLabel
-							resource={selectedCategoriesResource}
-							fallbackLabel={t('common.category')}
-						/>
-					</React.Suspense>
-				</ButtonPill>
+					clearTestID="filter-pill-remove-categories"
+					onClear={isActive ? handleRemove : undefined}
+					clearLabel={t('common.remove')}
+					label={decode(label)}
+				/>
 			</TreeComboboxTrigger>
 			<TreeComboboxContent
 				searchPlaceholder={t('common.search_categories')}

@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { Pressable } from 'react-native';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -27,30 +28,41 @@ export function StockStatus({
 		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
 	};
 
-	const variant = React.useMemo(() => {
-		switch (stockStatus) {
-			case 'instock':
-				return 'ghost-success';
-			case 'outofstock':
-				return 'ghost-destructive';
-			case 'onbackorder':
-				return 'ghost-warning';
-			case 'lowstock':
-				return 'ghost-warning';
-			default:
-				return 'ghost';
-		}
-	}, [stockStatus]);
-
 	return (
-		<ButtonPill
-			size="xs"
-			variant={variant}
+		<Pressable
+			testID="product-stock-status"
+			accessibilityRole="button"
+			accessibilityLabel={getLabel(stockStatus ?? '')}
+			className="min-h-11 justify-center"
 			onPress={() => {
 				if (stockStatus) meta.actions.setFilter('stock_status', stockStatus);
 			}}
 		>
-			{getLabel(stockStatus ?? '')}
-		</ButtonPill>
+			<ProductStockBadge status={stockStatus} />
+		</Pressable>
+	);
+}
+
+export function ProductStockBadge({
+	status,
+	quantity,
+}: {
+	status?: string;
+	quantity?: number | null;
+}) {
+	const { getLabel } = useStockStatusLabel();
+	const variant =
+		status === 'instock'
+			? 'success'
+			: status === 'outofstock'
+				? 'error'
+				: status === 'lowstock' || status === 'onbackorder'
+					? 'warning'
+					: 'default';
+	return (
+		<StatusBadge
+			variant={variant}
+			label={`${quantity == null ? '' : `${quantity} · `}${getLabel(status ?? '')}`}
+		/>
 	);
 }

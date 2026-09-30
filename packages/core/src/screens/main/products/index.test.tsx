@@ -4,7 +4,8 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { ObservableResource } from 'observable-hooks';
 
 import { ProductsScreen } from './index';
 import { cellsForRow } from './products';
@@ -14,7 +15,9 @@ import { VariableProductImage } from '../components/product/variable-image';
 import type { QueryStateOf } from '../../../query';
 
 const mockBinding = {
-	resource: { kind: 'relational-products-resource' },
+	resource: new ObservableResource(
+		new BehaviorSubject({ hits: [], searchActive: false, searchState: 'answered' })
+	),
 	active$: of(false),
 	total$: of(31),
 	sync: jest.fn(async () => undefined),
@@ -70,18 +73,18 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('../components/data-table', () => ({
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
+jest.mock('../components/data-table/v2', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
-		return <div data-testid="products-table" />;
+		return <div data-testid="products-table">{props.noDataMessage as React.ReactNode}</div>;
 	},
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
 }));
-jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () => null }));
+jest.mock('../components/data-table/v2/skeleton', () => ({
+	DataTableSkeleton: () => <div data-testid="skeleton-products" />,
+}));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -169,7 +172,7 @@ describe('ProductsScreen query-state wiring', () => {
 
 		expect(latestState()).toEqual({
 			search: '',
-			filters: { categories: [], tags: [], brands: [] },
+			filters: { status: 'publish', categories: [], tags: [], brands: [] },
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		});
@@ -235,4 +238,97 @@ describe('ProductsScreen query-state wiring', () => {
 		render(<ProductsScreen />);
 		expect(latestState().sort).toEqual({ field: 'type', direction: 'desc' });
 	});
+});
+
+it('keeps the management bar outside the Pro body and never invents an add button', () => {
+	render(<ProductsScreen />);
+	const bar = screen.getByTestId('products-bar');
+	const body = screen.getByTestId('products-body');
+	expect(body.contains(bar)).toBe(false);
+	expect(screen.queryByTestId('products-add-button')).toBeNull();
+});
+
+jest.mock('expo-haptics', () => ({}));
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({
+		children,
+		search,
+		testID,
+	}: React.PropsWithChildren<{ search: React.ReactNode; testID: string }>) => (
+		<div data-testid={testID}>
+			{search}
+			{children}
+		</div>
+	),
+}));
+jest.mock('../components/display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('../components/pro-guard', () => ({
+	withProAccess: (Body: React.ComponentType) =>
+		function Guard() {
+			return (
+				<div data-testid="pro-body">
+					<Body />
+				</div>
+			);
+		},
+}));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('./row', () => ({ ProductRow: () => null, VariableRow: () => null }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/virtualized-list', () => ({
+	Item: ({ children }: React.PropsWithChildren) => children,
+}));
+it('shows an empty store and clears both search and filters from no results', () => {
+	jest.useFakeTimers();
+	render(<ProductsScreen />);
+	expect(screen.getByTestId('no-data-message').textContent).toContain('products.no_products_yet');
+	const actions = mockDataTableProps.actions as {
+		setFilter: (key: string, value: unknown) => void;
+	};
+	act(() => actions.setFilter('featured', true));
+	fireEvent.change(screen.getByTestId('search-products'), { target: { value: 'missing' } });
+	act(() => jest.advanceTimersByTime(250));
+	expect(screen.getByTestId('no-data-message').textContent).toContain(
+		'pos_products.nothing_matches_filters'
+	);
+	fireEvent.click(screen.getByText('pos_products.clear_filters'));
+	expect(latestState().search).toBe('');
+	expect(latestState().filters).toEqual({
+		status: 'publish',
+		categories: [],
+		tags: [],
+		brands: [],
+	});
+	jest.useRealTimers();
+});
+it('renders the skeleton inside the guard while the bar remains reachable', () => {
+	const resource = mockBinding.resource;
+	mockBinding.resource = new ObservableResource(new Subject());
+	render(<ProductsScreen />);
+	expect(screen.getByTestId('skeleton-products')).toBeTruthy();
+	expect(screen.getByTestId('products-bar')).toBeTruthy();
+	expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-body'))).toBe(true);
+	expect(screen.getByTestId('pro-body').contains(screen.getByTestId('products-bar'))).toBe(false);
+	mockBinding.resource = resource;
+});
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
+
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+
+it('shows the searching line only while a pending search retains rows', () => {
+	const resource = mockBinding.resource;
+	const results = new BehaviorSubject({
+		hits: [{} as never],
+		searchActive: true,
+		searchState: 'pending',
+	});
+	mockBinding.resource = new ObservableResource(results);
+	render(<ProductsScreen />);
+	expect(screen.getByTestId('products-searching-line')).toBeTruthy();
+	act(() => results.next({ hits: [], searchActive: true, searchState: 'answered' }));
+	expect(screen.queryByTestId('products-searching-line')).toBeNull();
+	mockBinding.resource = resource;
 });

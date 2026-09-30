@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { decode } from 'html-entities';
+
+import { Chip } from '@wcpos/components/chip';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
@@ -14,17 +16,15 @@ export function OnSalePill() {
 	const t = useT();
 
 	return (
-		<ButtonPill
-			leftIcon="badgeDollar"
-			size="xs"
-			variant={isActive ? 'outline-primary' : 'outline'}
+		<Chip
+			icon="badgeDollar"
+			on={isActive}
 			onPress={() => actions.setFilter('on_sale', true)}
 			testID="filter-pill-on_sale"
-			removable={isActive}
-			removeTestID="filter-pill-remove-on_sale"
-			onRemove={() => actions.clearFilter('on_sale')}
-		>
-			<ButtonText>{t('common.on_sale')}</ButtonText>
-		</ButtonPill>
+			clearTestID="filter-pill-remove-on_sale"
+			onClear={isActive ? () => actions.clearFilter('on_sale') : undefined}
+			clearLabel={t('common.remove')}
+			label={decode(t('common.on_sale'))}
+		/>
 	);
 }

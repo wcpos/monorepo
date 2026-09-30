@@ -64,3 +64,6 @@ describe('selected category labels', () => {
 		mockSelectedResource.destroy();
 	});
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
