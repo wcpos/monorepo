@@ -1,0 +1,123 @@
+# Lane-`next` web E2E store: nginx + php-fpm WordPress + MariaDB, on the Mac mini.
+#
+# Runs in its own colima profile (`e2e-store`, 4 CPU / 4 GiB; see lib.sh), and
+# the VM is the hard ceiling for the host. Inside it:
+#   memory: db 768m + php 2g + nginx 128m = 2.9 GiB, 3.4 GiB while a wpcli
+#     run (512m) is up. The guest has 3.8 GiB, of which its kernel, dockerd,
+#     containerd and the lima agent hold about 0.35 GiB, so the caps fit and a
+#     busy container is OOM-killed inside its own cgroup, never the guest.
+#   CPU: 1.5 + 3 + 0.5 (+1 wpcli) deliberately oversubscribes the 4 vCPUs. A
+#     CPU cap only throttles, so the overlap lets php use 3 CPUs while the db
+#     is idle, and cannot exhaust anything.
+# nginx listens on loopback only; `tailscale serve --https=8443` publishes it
+# to the tailnet.
+#
+# State lives outside the repo, under ${E2E_STORE_HOME} (~/e2e-store):
+#   data/mysql    MariaDB datadir
+#   data/uploads  wp-content/uploads
+#   plugins/      read-only plugin tree filled by fetch-plugins.sh
+# WordPress core is image content, kept in the `wp-core` named volume.
+#
+# Image tags are pinned away from the production VPS tags on purpose
+# (mariadb:11.4, never mariadb:11).
+
+name: e2e-store
+
+x-wp-env: &wp-env
+  WORDPRESS_DB_HOST: db
+  WORDPRESS_DB_NAME: wordpress
+  WORDPRESS_DB_USER: wordpress
+  # Loopback-only database on a tailnet-only E2E store; not a secret.
+  WORDPRESS_DB_PASSWORD: e2e-store-db
+  WORDPRESS_TABLE_PREFIX: wp_
+  E2E_STORE_URL: ${E2E_STORE_URL:?set by lib.sh}
+  WORDPRESS_CONFIG_EXTRA: |
+    // The public URL is the tailnet HTTPS listener; TLS ends at tailscale serve.
+    define( 'WP_HOME', getenv( 'E2E_STORE_URL' ) );
+    define( 'WP_SITEURL', getenv( 'E2E_STORE_URL' ) );
+    $$_SERVER['HTTPS'] = 'on';
+    // Plugins come from fetch-plugins.sh, mounted read-only beside wp-content/plugins.
+    define( 'WP_PLUGIN_DIR', '/var/www/html/wp-content/e2e-plugins' );
+    define( 'WP_PLUGIN_URL', getenv( 'E2E_STORE_URL' ) . '/wp-content/e2e-plugins' );
+    define( 'DISALLOW_FILE_MODS', true );
+    define( 'AUTOMATIC_UPDATER_DISABLED', true );
+    define( 'WP_ENVIRONMENT_TYPE', 'staging' );
+
+services:
+  db:
+    image: mariadb:11.4
+    container_name: e2e-store-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: e2e-store-db
+      MARIADB_ROOT_PASSWORD: e2e-store-root
+    volumes:
+      - ${E2E_STORE_HOME:?set by lib.sh}/data/mysql:/var/lib/mysql
+      - ./mariadb.cnf:/etc/mysql/conf.d/zz-e2e.cnf:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    cpus: 1.5
+    mem_limit: 768m
+
+  wordpress:
+    image: wordpress:php8.3-fpm
+    container_name: e2e-store-php
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *wp-env
+    volumes:
+      - wp-core:/var/www/html
+      - ${E2E_STORE_HOME}/data/uploads:/var/www/html/wp-content/uploads
+      - ${E2E_STORE_HOME}/plugins:/var/www/html/wp-content/e2e-plugins:ro
+      - ./e2e-store-mu.php:/var/www/html/wp-content/mu-plugins/e2e-store.php:ro
+      - ./php-fpm.conf:/usr/local/etc/php-fpm.d/zz-e2e.conf:ro
+      - ./php.ini:/usr/local/etc/php/conf.d/zz-e2e.ini:ro
+    cpus: 3
+    mem_limit: 2g
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: e2e-store-nginx
+    restart: unless-stopped
+    depends_on:
+      - wordpress
+    ports:
+      - "127.0.0.1:${E2E_STORE_LOCAL_PORT:-18443}:80"
+    volumes:
+      - wp-core:/var/www/html:ro
+      - ${E2E_STORE_HOME}/data/uploads:/var/www/html/wp-content/uploads:ro
+      - ${E2E_STORE_HOME}/plugins:/var/www/html/wp-content/e2e-plugins:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    cpus: 0.5
+    mem_limit: 128m
+
+  # WP-CLI for seed/snapshot/reset; never started by `up`.
+  wpcli:
+    image: wordpress:cli-php8.3
+    profiles: ["tools"]
+    user: "33:33"
+    environment:
+      <<: *wp-env
+      HOME: /tmp
+    volumes:
+      - wp-core:/var/www/html
+      - ${E2E_STORE_HOME}/data/uploads:/var/www/html/wp-content/uploads
+      - ${E2E_STORE_HOME}/plugins:/var/www/html/wp-content/e2e-plugins:ro
+      - ./e2e-store-mu.php:/var/www/html/wp-content/mu-plugins/e2e-store.php:ro
+      - ${E2E_STORE_HOME}/catalogue:/e2e-catalogue:ro
+      - ./:/e2e-ops:ro
+      - ${E2E_FIXTURE_SCRIPTS:?set by lib.sh}:/e2e-scripts:ro
+    working_dir: /var/www/html
+    cpus: 1
+    mem_limit: 512m
+
+volumes:
+  wp-core:
+    name: e2e-store-wp-core

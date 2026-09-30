@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Nightly restore of the seeded snapshot at 03:17 local, so a day's leftover
+     probe records never accumulate. install.sh fills in __E2E_STORE_HOME__. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.kilbot.e2e-store-reset</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__E2E_STORE_HOME__/ops/reset.sh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>3</integer>
+		<key>Minute</key>
+		<integer>17</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>__E2E_STORE_HOME__/logs/reset.log</string>
+	<key>StandardErrorPath</key>
+	<string>__E2E_STORE_HOME__/logs/reset.log</string>
+</dict>
+</plist>

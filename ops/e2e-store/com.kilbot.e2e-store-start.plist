@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Brings the E2E store back after a reboot or login. install.sh fills in
+     __E2E_STORE_HOME__ and loads it; start.sh is idempotent. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.kilbot.e2e-store-start</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__E2E_STORE_HOME__/ops/start.sh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>__E2E_STORE_HOME__/logs/start.log</string>
+	<key>StandardErrorPath</key>
+	<string>__E2E_STORE_HOME__/logs/start.log</string>
+</dict>
+</plist>
