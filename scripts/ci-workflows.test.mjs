@@ -3047,3 +3047,63 @@ test('pnpm never installs on its own before a script (verifyDepsBeforeRun lives 
 	const npmrc = path.join(ROOT, '.npmrc');
 	if (existsSync(npmrc)) assert.doesNotMatch(readFileSync(npmrc, 'utf8'), /verify-deps-before-run/);
 });
+
+test('sync packages publish from a verified trunk commit to GitHub Packages', () => {
+	const workflow = readWorkflow('publish-sync-packages.yml');
+	assert.deepEqual(Object.keys(workflow.on).sort(), ['push', 'workflow_dispatch']);
+	assert.deepEqual(workflow.on.push.tags, ['sync-packages-v*']);
+	assert.deepEqual(workflow.permissions, {});
+	assert.deepEqual(workflow.jobs.build.permissions, { contents: 'read' });
+	assert.deepEqual(workflow.jobs.publish.permissions, {
+		packages: 'write',
+		'id-token': 'write',
+		attestations: 'write',
+	});
+	assert.equal(workflow.jobs.publish.needs, 'build');
+	const checkout = findStep(workflow, 'build', '🏗 Setup repository');
+	assert.equal(checkout.with['persist-credentials'], false);
+
+	const buildSteps = workflow.jobs.build.steps;
+	const buildOrder = [
+		'🛡 Require a merged trunk commit',
+		'🏗 Setup monorepo',
+		'✏️ Stamp version',
+		'🧪 Verify packages',
+		'📦 Pack tarballs',
+		'📤 Upload tarballs',
+	].map((name) => findStep(workflow, 'build', name));
+	for (let i = 1; i < buildOrder.length; i++) {
+		assert.ok(buildSteps.indexOf(buildOrder[i - 1]) < buildSteps.indexOf(buildOrder[i]));
+	}
+	const publishSteps = workflow.jobs.publish.steps;
+	const publishOrder = [
+		'📥 Download tarballs',
+		'🔏 Attest build provenance',
+		'🚀 Publish @wcpos/sync-core',
+		'🚀 Publish @wcpos/sync-engine',
+	].map((name) => findStep(workflow, 'publish', name));
+	for (let i = 1; i < publishOrder.length; i++) {
+		assert.ok(publishSteps.indexOf(publishOrder[i - 1]) < publishSteps.indexOf(publishOrder[i]));
+	}
+	for (const step of publishSteps) {
+		assert.doesNotMatch(step.uses ?? '', /^(actions\/checkout@|\.\/\.github\/actions\/setup-monorepo$)/);
+		if (step.name !== '📝 Summary') {
+			assert.doesNotMatch(step.run ?? '', /\bpnpm\s+(install|i|add|rebuild|exec|run|pack)\b/);
+			assert.doesNotMatch(step.run ?? '', /npm install|npm ci|npm rebuild/);
+		}
+	}
+
+	const setup = findStep(workflow, 'build', '🏗 Setup monorepo');
+	assert.ok(!Object.hasOwn(setup.with, 'expo-token'));
+	const verify = findStep(workflow, 'build', '🧪 Verify packages');
+	assert.equal(verify.run, 'node scripts/check-sync-packages-publish.mjs');
+	assert.equal(verify.env.RXDB_PREMIUM, '${{ secrets.RXDB_LICENSE_KEY }}');
+	for (const name of ['🚀 Publish @wcpos/sync-core', '🚀 Publish @wcpos/sync-engine']) {
+		const publish = findStep(workflow, 'publish', name);
+		assert.match(publish.run, /--registry https:\/\/npm\.pkg\.github\.com/);
+		assert.equal(publish.env.NODE_AUTH_TOKEN, '${{ secrets.GITHUB_TOKEN }}');
+	}
+	for (const step of Object.values(workflow.jobs).flatMap((job) => job.steps)) {
+		assert.doesNotMatch(JSON.stringify(step), /registry\.npmjs\.org|--provenance/);
+	}
+});

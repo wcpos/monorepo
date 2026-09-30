@@ -1,25 +1,51 @@
 {
   "name": "@wcpos/sync-engine",
-  "private": true,
+  "version": "0.1.0-next.0",
+  "license": "MIT",
+  "description": "RxDB synchronization engine for WCPOS.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wcpos/monorepo.git",
+    "directory": "packages/sync-engine"
+  },
   "type": "module",
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts"
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "main": "dist/src/index.js",
+    "types": "dist/src/index.d.ts",
+    "exports": {
+      ".": { "types": "./dist/src/index.d.ts", "default": "./dist/src/index.js" },
+      "./testing": { "types": "./dist/src/testing.d.ts", "default": "./dist/src/testing.js" }
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/fix-dist-esm-specifiers.mjs dist",
+    "clean": "rm -rf dist",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "prepublishOnly": "echo 'Publish with .github/workflows/publish-sync-packages.yml (pnpm pack, then npm publish <tarball>): a direct publish ships src/ and workspace: ranges.' >&2 && exit 1",
     "test": "vitest run",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@wcpos/sync-core": "workspace:*",
-    "rxdb": "17.5.0"
+    "@wcpos/sync-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "rxdb": "17.5.0",
+    "rxdb-premium": "17.5.0"
+  },
+  "peerDependenciesMeta": {
+    "rxdb-premium": { "optional": true }
   },
   "devDependencies": {
     "@wcpos/utils": "workspace:*",
+    "rxdb": "17.5.0",
     "rxdb-premium": "17.5.0",
     "vitest": "^4.1.10"
   }
