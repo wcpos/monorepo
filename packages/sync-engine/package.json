@@ -14,7 +14,7 @@
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts"
   },
-  "files": ["dist"],
+  "files": ["dist", "NOTICE"],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "main": "dist/src/index.js",
