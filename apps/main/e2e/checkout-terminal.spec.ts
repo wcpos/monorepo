@@ -12,7 +12,12 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { getStoreVariant, navigateToPage, wcposRestRoute } from './fixtures';
+import {
+	getStoreVariant,
+	navigateToPage,
+	pinAppLanguageToEnglish,
+	wcposRestRoute,
+} from './fixtures';
 import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
@@ -86,6 +91,10 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 	// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
 	liveTest.beforeEach(async ({}, testInfo) => {
 		liveTest.skip(getStoreVariant(testInfo) !== 'pro', 'terminal checkout smoke runs on Pro');
+	});
+	// Status sentences below come from the English catalog, so pin this device's app language to English; the store's language is untouched.
+	liveTest.beforeEach(async ({ posPage: page }) => {
+		await pinAppLanguageToEnglish(page);
 	});
 
 	liveTest(
