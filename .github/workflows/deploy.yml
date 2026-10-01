@@ -256,6 +256,7 @@ jobs:
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
       queue: ${{ steps.queue.outcome }}
+      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
     steps:
       - name: 🔑 Check for the auth-state key
         id: key
@@ -394,12 +395,14 @@ jobs:
       # A next-lane shard may touch dev-next only after e2e-setup's queue step
       # admitted this run (cancelled or timed out reads as not admitted).
       - name: 🚦 Refuse dev-next without the queue
-        if: needs.changes.outputs.lane == 'next' && needs.e2e-setup.outputs.queue != 'success'
+        if: needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
         env:
           QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
+          QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           SETUP_RESULT: ${{ needs.e2e-setup.result }}
         run: |
-          echo "::error::The dev-next queue did not admit this run (queue=${QUEUE_OUTCOME:-<none>}, e2e-setup=$SETUP_RESULT). Refusing to load dev-next alongside another E2E run."
+          echo "::error::The dev-next queue did not admit this run (queue=${QUEUE_OUTCOME:-<none>}, e2e-setup=$SETUP_RESULT). Refusing to load dev-next alongside another E2E run. Queue attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
           exit 1
 
       - name: 🏗 Setup repository

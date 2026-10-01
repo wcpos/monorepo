@@ -1688,6 +1688,8 @@ test('deploy.yml queues next-lane setup before every store request', () => {
 	}
 	assert.equal(setup.permissions.actions, 'read');
 	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
+	assert.equal(setup.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}");
 	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
 });
 
@@ -1696,12 +1698,28 @@ test('deploy.yml shards refuse dev-next without queue admission as their second 
 	const steps = workflow.jobs.e2e.steps;
 	const refuse = findStep(workflow, 'e2e', '🚦 Refuse dev-next without the queue');
 	assert.equal(steps.indexOf(refuse), 1);
-	assert.equal(refuse.if, "needs.changes.outputs.lane == 'next' && needs.e2e-setup.outputs.queue != 'success'");
+	assert.equal(refuse.if,
+		"needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))");
+	assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.e2e-setup.outputs.queue_attempt }}');
+	assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
+	assert.match(refuse.run, /Re-run all jobs/);
 	assert.match(refuse.run, /exit 1/);
 	for (const [index, step] of steps.entries()) {
 		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(refuse) < index);
 	}
 });
+
+for (const [runAttempt, queueAttempt, expected] of [[1, '1', false], [2, '1', true], [2, '2', false]]) {
+	test(`deploy.yml queue admission for attempt ${runAttempt} with admitted attempt ${queueAttempt}`, () => {
+		const refuse = findStep(readWorkflow('deploy.yml'), 'e2e', '🚦 Refuse dev-next without the queue');
+		const expression = refuse.if
+			.replace(/needs\.changes\.outputs\.lane/g, "'next'")
+			.replace(/needs\.e2e-setup\.outputs\.queue_attempt/g, JSON.stringify(queueAttempt))
+			.replace(/needs\.e2e-setup\.outputs\.queue/g, "'success'")
+			.replace(/format\('\{0\}', github\.run_attempt\)/g, JSON.stringify(String(runAttempt)));
+		assert.equal(evaluateGuard(expression, {}), expected);
+	});
+}
 
 test('the main lane and mini store are not queued', () => {
 	const deploy = readWorkflow('deploy.yml');
@@ -1728,7 +1746,23 @@ test('e2e-native.yml queues immediately before seeding the store', () => {
 	assert.equal(build.steps.indexOf(queue) + 1,
 		build.steps.indexOf(findStep(workflow, 'build', '🌱 Seed test store')));
 	assert.equal(build.permissions.actions, 'read');
+	assert.equal(build.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}");
 });
+
+for (const jobName of ['android', 'ios']) {
+	test(`e2e-native.yml ${jobName} refuses stale queue admission before checkout`, () => {
+		const workflow = readWorkflow('e2e-native.yml');
+		const refuse = findStep(workflow, jobName, '🚦 Refuse dev-next without the queue');
+		assert.equal(workflow.jobs[jobName].steps.indexOf(refuse), 0);
+		assert.equal(refuse.if,
+			`${findStep(workflow, 'build', QUEUE_STEP_NAME).if} && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)`);
+		assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.build.outputs.queue_attempt }}');
+		assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
+		assert.match(refuse.run, /Re-run all jobs/);
+		assert.match(refuse.run, /exit 1/);
+	});
+}
 
 test('the dev-next queue never uses concurrency groups or serialises web shards', () => {
 	const deploy = readWorkflow('deploy.yml');
@@ -2905,7 +2939,8 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 		// Both classes of a platform run at once (owner rulings 2026-09-01/02).
 		assert.equal(job.strategy['max-parallel'], 2);
 		assert.equal(job.name, `${emoji} ${platform} (\${{ matrix.device.name }})`);
-		const [workflowCheckout, targetCheckout] = job.steps;
+		const [queueRefuse, workflowCheckout, targetCheckout] = job.steps;
+		assert.equal(queueRefuse.name, '🚦 Refuse dev-next without the queue');
 		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
 		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
 		assert.equal(targetCheckout.name, '🏗 Checkout revision under test');
