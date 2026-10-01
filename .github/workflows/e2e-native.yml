@@ -83,6 +83,9 @@ on:
 #    PRs run at the same time. The FIFO device turnstile (2026-08-30 →
 #    2026-09-03) made every PR wait for every other run's suite; store
 #    capacity is dev-pro's php-fpm worker count, not a queue here.
+#  - Except dev-next (Front desk ruling B, 2026-10-01): a run whose store is
+#    dev-next queues in the build job's `🚦 Queue for dev-next` step, shared
+#    with deploy.yml, and holds the store until the run completes.
 #  - workflow_dispatch and attempt>1 re-runs keep run-unique groups: a
 #    deliberate human/bot run must not be killed by the next merge.
 concurrency:
@@ -378,6 +381,18 @@ jobs:
             exit 1
           fi
           echo "::notice::EAS development builds this UTC month: $COUNT / $BUILD_CEILING; PR build authorised ($SLOTS more)."
+
+      # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait for
+      # every other web or native run that holds it, before the seed. This run
+      # then holds the store until it completes — through the device jobs,
+      # whose Metro-driven logins and syncs are spread over up to two hours.
+      - name: 🚦 Queue for dev-next
+        id: queue
+        if: env.E2E_STORE_URL == 'https://dev-next.wcpos.com'
+        timeout-minutes: 250
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
       # store, so seed once before this run's matrix fans out. PR runs are not

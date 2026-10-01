@@ -18,6 +18,7 @@ import test from 'node:test';
 import { parse, parseAllDocuments } from 'yaml';
 
 import { classify } from './ci-plan.mjs';
+import { QUEUE_STEP_NAME, QUEUE_WORKFLOWS } from './wait-devnext-free.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -1639,7 +1640,8 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	assert.ok(jobs.e2e.if.slice(4, -3).startsWith("!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && "));
 	const run = setup.steps.find(({ id }) => id === 'setup');
 	assert.equal(run['timeout-minutes'], 20);
-	assert.ok(run['timeout-minutes'] < setup['timeout-minutes']);
+	assert.ok(run['timeout-minutes'] < 30);
+	assert.match(setup['timeout-minutes'], /\|\| 30 \}\}$/);
 	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
 	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
@@ -1668,6 +1670,97 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	for (const step of shardSteps) {
 		assert.match(step.if, /^needs\.e2e-setup\.outputs\.state == 'ready'/);
 	}
+});
+
+test('deploy.yml queues next-lane setup before every store request', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const setup = workflow.jobs['e2e-setup'];
+	const queue = findStep(workflow, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.id, 'queue');
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
+	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
+	assert.equal(typeof queue['timeout-minutes'], 'number');
+	const queueIndex = setup.steps.indexOf(queue);
+	assert.ok(queueIndex < setup.steps.findIndex(({ id }) => id === 'setup'));
+	for (const [index, step] of setup.steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(queueIndex < index);
+	}
+	assert.equal(setup.permissions.actions, 'read');
+	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
+	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
+});
+
+test('deploy.yml shards refuse dev-next without queue admission as their second step', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const steps = workflow.jobs.e2e.steps;
+	const refuse = findStep(workflow, 'e2e', '🚦 Refuse dev-next without the queue');
+	assert.equal(steps.indexOf(refuse), 1);
+	assert.equal(refuse.if, "needs.changes.outputs.lane == 'next' && needs.e2e-setup.outputs.queue != 'success'");
+	assert.match(refuse.run, /exit 1/);
+	for (const [index, step] of steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(refuse) < index);
+	}
+});
+
+test('the main lane and mini store are not queued', () => {
+	const deploy = readWorkflow('deploy.yml');
+	const queue = findStep(deploy, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.doesNotMatch(queue.if, /\|\|/);
+	const mini = deploy.jobs['e2e-web-mini'];
+	assert.ok(!mini.steps.some(({ name }) => name === QUEUE_STEP_NAME));
+	assert.deepEqual(mini.needs, ['changes', 'deploy']);
+	const native = readWorkflow('e2e-native.yml');
+	assert.equal(findStep(native, 'build', QUEUE_STEP_NAME).if,
+		"env.E2E_STORE_URL == 'https://dev-next.wcpos.com'");
+	assert.match(native.env.E2E_STORE_URL, /github\.base_ref == 'main'.*github\.ref_name == 'main'.*inputs\.ref == 'main'\)\) && 'https:\/\/dev-pro\.wcpos\.com'/);
+});
+
+test('e2e-native.yml queues immediately before seeding the store', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const build = workflow.jobs.build;
+	const queue = findStep(workflow, 'build', QUEUE_STEP_NAME);
+	assert.equal(queue.id, 'queue');
+	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
+	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
+	assert.equal(typeof queue['timeout-minutes'], 'number');
+	assert.equal(build.steps.indexOf(queue) + 1,
+		build.steps.indexOf(findStep(workflow, 'build', '🌱 Seed test store')));
+	assert.equal(build.permissions.actions, 'read');
+});
+
+test('the dev-next queue never uses concurrency groups or serialises web shards', () => {
+	const deploy = readWorkflow('deploy.yml');
+	assert.match(deploy.jobs.e2e.concurrency.group, /matrix\.shardIndex/);
+	assert.match(deploy.jobs.e2e.concurrency.group, /github\.run_id/);
+	for (const workflow of [deploy, readWorkflow('e2e-native.yml')]) {
+		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
+			if (concurrency) assert.doesNotMatch(concurrency.group, /dev-next|devnext|queue/i);
+		}
+	}
+});
+
+test('no cancelling concurrency group spans the web and native workflows', () => {
+	for (const filename of QUEUE_WORKFLOWS) {
+		const workflow = readWorkflow(filename);
+		const prefix = filename === 'deploy.yml' ? 'deploy-' : 'native-';
+		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
+			if (!concurrency) continue;
+			const { group } = concurrency;
+			const literals = group.includes('${{')
+				? [...group.matchAll(/'((?:deploy|native)[-\w{}]*)'/g)].map((match) => match[1])
+				: [group];
+			assert.ok(literals.length > 0, `${filename}: no group-name literal in ${group}`);
+			assert.ok(literals.every((literal) => literal.startsWith(prefix)), `${filename}: ${group}`);
+		}
+	}
+});
+
+test('both workflows share the queue step name and workflow list', () => {
+	assert.deepEqual(QUEUE_WORKFLOWS, ['deploy.yml', 'e2e-native.yml']);
+	assert.equal(findStep(readWorkflow('deploy.yml'), 'e2e-setup', QUEUE_STEP_NAME).name, QUEUE_STEP_NAME);
+	assert.equal(findStep(readWorkflow('e2e-native.yml'), 'build', QUEUE_STEP_NAME).name, QUEUE_STEP_NAME);
 });
 
 test('shards stagger their first store request by 30s in CI', () => {
