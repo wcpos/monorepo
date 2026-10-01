@@ -6,6 +6,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 import { useDocField } from '@wcpos/query';
 
+import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
@@ -102,8 +103,6 @@ export const useAddVariation = () => {
 			// returned success should be the updated order
 			if (success) {
 				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
-					// Scan-driven adds toast via the scan-feedback module instead.
-					showToast: !options?.silent,
 					context: {
 						variationId: variation.id,
 						productId: parent.id,
@@ -111,6 +110,8 @@ export const useAddVariation = () => {
 						orderId: currentOrderRecord.payload.id,
 					},
 				});
+				// Scan-driven adds toast via the scan-feedback module instead.
+				if (!options?.silent) showAddedToCartToast(t, parent.name);
 				return true;
 			} else {
 				reportCartFailure(cartLogger, 'Failed to add product to cart', {
