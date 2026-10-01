@@ -12,7 +12,8 @@ import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
+
+import { POSProductsPane } from '../../../../../components/pos-products-pane';
 
 /**
  *
@@ -53,8 +54,10 @@ export default function ResizablePOSColumns() {
 				<View style={{ flex: 1, display: activeTab === 'products' ? 'flex' : 'none' }}>
 					<Suspense>
 						<ErrorBoundary>
-							<POSProducts />
-							{activeTab === 'products' && <ObserveInteractiveMarker />}
+							{/* Phones reach this fallback via /cart after a sale, so keep the same register bar as (tabs). */}
+							<POSProductsPane>
+								{activeTab === 'products' && <ObserveInteractiveMarker />}
+							</POSProductsPane>
 						</ErrorBoundary>
 					</Suspense>
 				</View>

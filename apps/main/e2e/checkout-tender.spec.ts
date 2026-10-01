@@ -16,7 +16,7 @@ import { expect, type Page } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
-import { addCheckoutProbeProductAgain } from './checkout-probe';
+import { addCheckoutProbeProductAgain, checkoutProbeAddControl } from './checkout-probe';
 import {
 	clickAndExpectPaymentWrite,
 	type Descriptor,
@@ -28,7 +28,7 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { getStoreVariant } from './fixtures';
+import { ensureRegisterOpen, getStoreVariant } from './fixtures';
 import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
@@ -36,7 +36,9 @@ import {
 	readCartMoney,
 	readOrder,
 	stampRunLabel,
+	type TrackedOrder,
 } from './order-lifecycle';
+import { searchAndWaitForServer, type SearchProbe } from './search-probe';
 
 /**
  * A ledger leg row, `checkout-leg-<id>`. Its timeline dot (`checkout-leg-dot-<id>`) and tip
@@ -60,6 +62,36 @@ async function enterAmount(page: Page, methodId: string, amountMinor: number): P
 	await expect
 		.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 10_000 })
 		.toBe(amountMinor);
+}
+
+/** On a phone the cart and the products grid are separate tabs; only the shown one is visible. */
+async function showPhoneTab(page: Page, tab: 'products' | 'cart'): Promise<void> {
+	await page.getByTestId(`pos-tab-${tab}`).filter({ visible: true }).click();
+}
+
+/**
+ * `newOrderAtCheckout` at phone width: the same run-private probe, run label and checkout,
+ * with the register card and cart on the Cart tab and the search on the Products tab.
+ */
+async function newPhoneOrderAtCheckout(
+	page: Page,
+	trackOrder: (order: TrackedOrder) => void,
+	probe: SearchProbe | null
+): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy' }> {
+	liveTest.skip(!probe, 'product-writer credentials are unavailable');
+	await showPhoneTab(page, 'cart');
+	await ensureRegisterOpen(page);
+	await showPhoneTab(page, 'products');
+	await searchAndWaitForServer(page, page.getByTestId('search-products'), 'products', probe!.token);
+	const add = checkoutProbeAddControl(page);
+	expect(add, 'the run-private probe must carry its row testID').not.toBeNull();
+	await add!.click({ timeout: 30_000 });
+	await showPhoneTab(page, 'cart');
+	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	const label = newRunLabel();
+	await stampRunLabel(page, label);
+	await readCartMoney(page);
+	return openCheckout(page, (order) => trackOrder({ ...order, label }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -564,4 +596,59 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			).toBe('pos-open');
 		}
 	);
+
+	liveTest.describe('on a phone', () => {
+		liveTest.use({ viewport: { width: 390, height: 844 } });
+
+		// New sale replaces to /cart, which lands on the (columns) phone fallback, not (tabs).
+		liveTest(
+			'keeps the register bar on the Products tab after New sale (#2363)',
+			async (
+				{ posPage: page, trackOrder, storeAuthorization, request, runPrivateSimpleProducts },
+				testInfo
+			) => {
+				liveTest.slow();
+				const drawerButton = page
+					.getByTestId('pos-products-tab')
+					.filter({ visible: true })
+					.getByTestId('pos-drawer-open-button');
+				await expect(
+					drawerButton,
+					'the phone Products tab starts with its register bar'
+				).toBeVisible({ timeout: 30_000 });
+
+				const { orderId, mode } = await newPhoneOrderAtCheckout(
+					page,
+					trackOrder,
+					runPrivateSimpleProducts?.[0] ?? null
+				);
+				const { descriptors } = await requireTenderCheckout(
+					request,
+					testInfo,
+					storeAuthorization,
+					mode
+				);
+				const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+				liveTest.skip(!cash, 'store declares no manual cash method');
+
+				const balance = await readAmountMinor(page, 'checkout-balance');
+				await page.getByTestId(`checkout-method-${cash!.id}`).click();
+				await expect
+					.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
+					.toBe(balance);
+				await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+				await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
+				await page.getByTestId('receipt-new-sale').click();
+				await expect(page.getByTestId('checkout-receipt-stage')).toBeHidden({ timeout: 30_000 });
+
+				await showPhoneTab(page, 'products');
+				await expect(
+					drawerButton,
+					'#2363: after New sale the phone Products tab must keep its register bar drawer button'
+				).toBeVisible({ timeout: 30_000 });
+				await drawerButton.click();
+				await expect(page.getByTestId('drawer-item-pos')).toBeVisible({ timeout: 15_000 });
+			}
+		);
+	});
 });
