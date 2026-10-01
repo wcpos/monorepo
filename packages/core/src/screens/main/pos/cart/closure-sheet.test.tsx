@@ -153,6 +153,7 @@ it('shows the minted number offline, prints and acknowledges the printed time', 
 		/>
 	);
 	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 1 written');
+	expect(screen.getByTestId('closure-number').textContent).toBe('1');
 	expect(screen.getByTestId('closure-unsynced')).toBeTruthy();
 	fireEvent.click(screen.getByTestId('closure-print'));
 	await waitFor(() =>

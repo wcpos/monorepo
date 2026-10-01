@@ -727,9 +727,7 @@ export async function authenticateWithStore(
 	}
 
 	// Submit login form
-	const logInButton = loginPage.locator(
-		'#wp-submit, #wcpos-submit, button:has-text("Log In"), input[value="Log In"]'
-	);
+	const logInButton = loginPage.locator('#wp-submit, #wcpos-submit');
 	await expect(logInButton.first()).toBeVisible({ timeout: 15_000 });
 	await logInButton.first().click();
 
@@ -990,6 +988,27 @@ export async function navigateToPage(
 	await expect(drawerItem).toBeVisible({ timeout: 10_000 });
 	await drawerItem.click();
 	await page.waitForTimeout(2_000);
+}
+
+/**
+ * Pin THIS device's app language to English through the General settings combobox,
+ * then return to POS. `locale` is server-owned but app-editable: the edit stays in the
+ * local database and never syncs, so the store's own language is never changed.
+ * Only for specs whose referent is a status sentence with no value-bearing testID.
+ */
+export async function pinAppLanguageToEnglish(page: Page): Promise<void> {
+	await navigateToPage(page, 'settings');
+	await expect(page.getByTestId('screen-settings-general')).toBeVisible({ timeout: 10_000 });
+	await page.getByTestId('language-select-trigger').click();
+	const combobox = page.getByTestId('language-combobox-content');
+	await expect(combobox).toBeVisible({ timeout: 10_000 });
+	await page.getByTestId('language-search-input').fill('en_US');
+	const option = combobox.getByTestId('language-option-en_US');
+	await expect(option).toBeVisible({ timeout: 10_000 });
+	await option.click();
+	await expect(combobox).toBeHidden({ timeout: 10_000 });
+	await navigateToPage(page, 'pos');
+	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 15_000 });
 }
 
 export interface HydrateAuthenticatedPageOptions {
