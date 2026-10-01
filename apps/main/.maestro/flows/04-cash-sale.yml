@@ -177,6 +177,15 @@ env:
     when:
       true: "${output.checkoutMode === 'tender'}"
     commands:
+      # Store-agnostic: a store may list a non-cash tile first, and the first
+      # enabled tile is preselected. Select cash when its tile is shown.
+      - runFlow:
+          when:
+            visible:
+              id: 'checkout-tile-pos_cash'
+          commands:
+            - tapOn:
+                id: 'checkout-tile-pos_cash'
       - extendedWaitUntil:
           visible:
             id: 'checkout-quick-exact'
