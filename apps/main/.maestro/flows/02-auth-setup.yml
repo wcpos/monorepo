@@ -407,6 +407,10 @@ env:
     visible:
       id: 'search-products'
     timeout: 240000
+# The first POS mount is where `next` raises its runtime-permission dialogs on
+# Android; answer them before anything taps the POS (see the subflow).
+- runFlow:
+    file: ../subflows/answer-android-permission-dialogs.yml
 # The demo catalog defaults to an In-Stock filter that can hide products.
 - runFlow:
     when:

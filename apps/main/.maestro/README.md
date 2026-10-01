@@ -165,7 +165,10 @@ app's code.
     `launchApp` re-grants every manifest permission through `pm grant` first
     and the emulator's package manager can hang on one call for 47 minutes
     while the flow still reports `[Passed]` (run 33808415134). `relaunch-app.yml`
-    encodes this; do not call `launchApp` on Android elsewhere.
+    encodes this; do not call `launchApp` on Android elsewhere. The flip side:
+    nothing grants runtime permissions on Android, so a dialog the app raises
+    stays up until a flow answers it; flow 02 answers `next`'s location and
+    Nearby devices prompts once (`answer-android-permission-dialogs.yml`).
 11. **Flow 01/02 wrap `openLink` in a retry.** After `clearState` reinstalls
     the app, a link issued before the OS has registered the install is dropped
     with exit 0 or throws a timeout. Seen on both platforms; it cannot
@@ -277,6 +280,9 @@ Known classes, by what the screenshot shows:
 | Android flow 02 launcher home screen right after login; `store-option-.*` not visible; logcat `onBackKeyPressed()` then a CLOSE transition on the app's task, no app `showSoftInput` since the return from the auth tab | The post-login `hideKeyboard` (Back on Android) ran with no keyboard up: `next`'s connect screen unmounts the URL input once a site is saved (connect.tsx) | Flow 02 runs that `hideKeyboard` only while `store-url-input` is visible (#2242)                                              | drop the call on `main`, where the input is re-focused and the keyboard does cover the store list |
 | iOS phone flow 04 `process-payment-button` never enabled, but the dialog shows method tiles, quick amounts and a keypad (not an empty body); app log has no `Payment form did not load` | Store serves v2 payment-methods, so checkout is the tender flow, which has no `process-payment-button`; its commit `checkout-commit` sits under the keypad | Flow 04 branches on `checkout-tab-payments` vs `process-payment-button`; tender path taps `checkout-quick-exact`, scrolls to `checkout-commit`, finishes on `receipt-new-sale` (#2242) | read it as the WKWebView stall above; raise the 180 s wait       |
 | iPad flow 04 `checkout-dialog` not visible after ~60 s; the products column shows the tender pane (tiles, keypad, commit) with the cart still on the right | Tablet checkout is inline: the register switch (#2233) renders `checkout-tender-pane` in the products panel and no modal mounts | Flow 04's mode wait accepts the inline pane (`checkout-tab-payments`) (#2242)                                                 | wait longer for the dialog                                       |
+| Android flow 02/04 `Element not found: filter-pill-remove-stock_status` right after the `when` saw it; ❌ frame is "Allow WCPOS to access this device's location?"; logcat `START … REQUEST_PERMISSIONS … GrantPermissionsActivity` on every cold start | `next`'s Stripe Terminal bridge asks for location and Nearby devices when the POS mounts (store advertises Stripe Terminal); `openLink` relaunches never pre-grant | `answer-android-permission-dialogs.yml`, called by flow 02 after the first POS mount; the grant survives `stopApp` (#2242) | pre-grant with `launchApp` (rule 10); select the buttons by resource-id (the testID lint rejects non-app ids) |
+| Phone/md flow 05 `drawer-item-pos is not visible`; `drawer-open-button` block SKIPPED | `next` hides the drawer header; each screen carries its own menu button (`pos-drawer-open-button`, `<bar>-menu`) | `open-drawer.yml` taps whichever is on screen (#2242) | add a wait; tap a coordinate |
+| iOS phone flow 05 as above, and the Products tab has no register bar at all (search row at the top) after flow 04's `receipt-new-sale` | App bug on `next`, open: after New sale the Products tab remounts without its register bar, the Cart tab keeps its own (run 36898140001, screen.mp4 17:41:45 → 17:43:38) | Not handled; flow 05 stays red on iOS phone until the app is fixed | route flow 05 through the Cart tab's bar to hide it |
 
 When a red matches none of these, the thing to produce is a new row: the
 signature, the mechanism with the evidence that established it, and where the
@@ -363,3 +369,4 @@ add its case in the same PR.
   the class has changed and the row above is stale. Beware: `maestro.log`
   repeats each retry block's command metadata on every evaluation, so grep for
   the output form of the line, not bare `WCPOS_E2E`.
+- **iOS phone, `next`:** the Products tab loses its register bar (hamburger, place, bell, avatar) after a sale's New sale, so the drawer cannot be opened from Products until relaunch; flow 05 is red on that lane until it is fixed (run 36898140001; triage in the #2242 round-2 PR).
