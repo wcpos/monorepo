@@ -600,9 +600,9 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 	liveTest.describe('on a phone', () => {
 		liveTest.use({ viewport: { width: 390, height: 844 } });
 
-		// New sale replaces to /cart, which lands on the (columns) phone fallback, not (tabs).
+		// New sale must land on Products with its register bar and keep that tab across the drawer.
 		liveTest(
-			'keeps the register bar on the Products tab after New sale (#2363)',
+			'lands on the phone Products tab after New sale and keeps it across a drawer round trip (#2363)',
 			async (
 				{ posPage: page, trackOrder, storeAuthorization, request, runPrivateSimpleProducts },
 				testInfo
@@ -641,13 +641,27 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				await page.getByTestId('receipt-new-sale').click();
 				await expect(page.getByTestId('checkout-receipt-stage')).toBeHidden({ timeout: 30_000 });
 
-				await showPhoneTab(page, 'products');
+				await expect(
+					page.getByTestId('search-products').filter({ visible: true }),
+					'#2363: New sale must land on the phone Products tab'
+				).toBeVisible({ timeout: 30_000 });
 				await expect(
 					drawerButton,
 					'#2363: after New sale the phone Products tab must keep its register bar drawer button'
 				).toBeVisible({ timeout: 30_000 });
 				await drawerButton.click();
 				await expect(page.getByTestId('drawer-item-pos')).toBeVisible({ timeout: 15_000 });
+				await page.getByTestId('drawer-item-orders').click();
+				await expect(page.getByTestId('screen-orders')).toBeVisible({ timeout: 60_000 });
+				await page.getByTestId('orders-bar-menu').filter({ visible: true }).click();
+				await expect(page.getByTestId('drawer-item-pos')).toBeInViewport({ timeout: 15_000 });
+				await page.getByTestId('drawer-item-pos').click();
+				// On web the closed drawer stays in the DOM off-screen, so check the viewport.
+				await expect(page.getByTestId('drawer-item-pos')).not.toBeInViewport({ timeout: 15_000 });
+				await expect(
+					page.getByTestId('search-products').filter({ visible: true }),
+					'#2363: returning to POS through the drawer must keep the Products tab'
+				).toBeVisible({ timeout: 60_000 });
 			}
 		);
 	});

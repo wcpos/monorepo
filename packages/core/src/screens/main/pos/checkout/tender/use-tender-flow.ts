@@ -28,6 +28,7 @@ import {
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
+import { returnToTill } from '../till-route';
 import { completionMetaFor, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -876,7 +877,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				else {
 					leaveCheckout(order.uuid);
 					setCurrentOrderID('');
-					if (screenSize === 'sm') router.replace({ pathname: '/cart' });
+					if (screenSize === 'sm') returnToTill(router, true, 'products');
 				}
 			}
 		};
@@ -1004,7 +1005,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
-			if (screenSize === 'sm') router.replace({ pathname: '/cart' });
+			if (screenSize === 'sm') returnToTill(router, true, 'cart');
 		} catch (error) {
 			logger.error(t('pos_checkout.void_failed'), {
 				code: ERROR_CODES.PAYMENT_VOID_REFUSED,

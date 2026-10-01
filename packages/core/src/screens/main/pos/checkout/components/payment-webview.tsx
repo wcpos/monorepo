@@ -16,6 +16,8 @@ import {
 	RegisterSessionRequiredError,
 } from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
+import { returnToTill } from '../till-route';
+import { useTheme } from '../../../../../contexts/theme';
 import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
@@ -127,6 +129,7 @@ export function PaymentWebview({
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
+	const { screenSize } = useTheme();
 	const ctx = useSaleContext();
 	const { sessionsOn } = ctx;
 	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
@@ -424,7 +427,7 @@ export function PaymentWebview({
 						params: { orderId: order.uuid },
 					});
 				} else {
-					router.replace({ pathname: '/cart' });
+					returnToTill(router, screenSize === 'sm', 'products');
 				}
 				adoptSnapshot(serverOrder, false);
 				await completeOrderFlow({
@@ -468,6 +471,7 @@ export function PaymentWebview({
 			ctx.dp,
 			uiSettings.autoShowReceipt,
 			router,
+			screenSize,
 			adoptSnapshot,
 			setLoading,
 			setCurrentOrderID,
@@ -545,9 +549,7 @@ export function PaymentWebview({
 							params: { orderId: order.uuid },
 						});
 					} else {
-						router.replace({
-							pathname: '/cart',
-						});
+						returnToTill(router, screenSize === 'sm', 'products');
 					}
 					adoptSnapshot(payload, true);
 					await completeOrderFlow({
@@ -572,6 +574,7 @@ export function PaymentWebview({
 			orderNumber,
 			orderId,
 			router,
+			screenSize,
 			order,
 			completeOrderFlow,
 			ctx.dp,

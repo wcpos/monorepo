@@ -27,6 +27,8 @@ import { type PaymentFrameStatus, PaymentWebview } from './components/payment-we
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { TenderCheckout } from './tender/tender-checkout';
+import { returnToTill } from './till-route';
+import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -89,6 +91,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const orderNumber = orderData.number;
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const router = useRouter();
+	const { screenSize } = useTheme();
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
@@ -282,7 +285,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 					{showStockRejection ? (
 						<ModalAction
 							testID="return-to-cart-button"
-							onPress={() => router.replace({ pathname: '/cart' })}
+							onPress={() => returnToTill(router, screenSize === 'sm', 'cart')}
 						>
 							{t('pos_checkout.return_to_cart')}
 						</ModalAction>

@@ -6,6 +6,7 @@ import { type EngineRecord } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
 import { leaveCheckout } from '../checkout-mode';
+import { returnToTill } from '../till-route';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { completeSale, type SaleOutcome } from '../sale-completion';
@@ -41,21 +42,21 @@ export function useCompleteOrderFlow(
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
 				setCurrentOrderID('');
-				router.replace(
-					uiSettings.autoShowReceipt
-						? {
-								pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-								params: { orderId: order.uuid },
-							}
-						: { pathname: '/cart' }
-				);
+				if (uiSettings.autoShowReceipt) {
+					router.replace({
+						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+						params: { orderId: order.uuid },
+					});
+				} else {
+					returnToTill(router, screenSize === 'sm', 'products');
+				}
 				return;
 			}
 
 			if (!uiSettings.autoShowReceipt) {
 				leaveCheckout(order.uuid);
 				setCurrentOrderID('');
-				if (screenSize === 'sm') router.replace({ pathname: '/cart' });
+				if (screenSize === 'sm') returnToTill(router, true, 'products');
 			}
 		},
 		[ctx, receiptHost, order, router, screenSize, setCurrentOrderID, uiSettings.autoShowReceipt]

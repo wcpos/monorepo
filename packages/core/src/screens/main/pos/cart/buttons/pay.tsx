@@ -24,6 +24,7 @@ import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { type CheckoutRejection, useCheckoutSave } from '../../checkout/hooks/use-checkout-save';
 import { showOrderRefusedToast } from '../../checkout/refusal-toast';
+import { returnToTill } from '../../checkout/till-route';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -100,7 +101,7 @@ export function PayButton() {
 		// A save that fails or is blocked puts the cashier back at the cart to retry.
 		const abandon = () => {
 			leaveCheckout(uuid);
-			if (tenderFlow && screenSize === 'sm') router.replace('/cart');
+			if (tenderFlow && screenSize === 'sm') returnToTill(router, true, 'cart');
 		};
 
 		try {

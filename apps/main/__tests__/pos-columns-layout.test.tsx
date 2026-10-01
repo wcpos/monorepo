@@ -374,6 +374,44 @@ describe('phone Products pane (#2363)', () => {
 	});
 });
 
+describe('phone columns tab across a drawer round trip (#2363)', () => {
+	const cartSegments = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart'];
+	const paneDisplays = () =>
+		view!.root
+			.findAll((node) => typeof node.type === 'string' && node.props.style?.display)
+			.map((node) => node.props.style.display);
+
+	it('keeps Products active after leaving POS through the drawer and returning', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('left');
+		expect(paneDisplays()).toEqual(['none', 'flex']);
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(orders)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+	});
+
+	it('still switches to Cart on an in-POS move onto /cart', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('left');
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(pos)', '(columns)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['none', 'flex']);
+	});
+});
+
 // A marker outside the active pane's Suspense boundary marks a fallback as interactive.
 describe('small POS columns interactive timing', () => {
 	it.each(['products', 'cart'] as const)(
