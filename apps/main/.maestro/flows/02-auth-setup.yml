@@ -363,9 +363,17 @@ env:
 # in run 33074068139 logged in fine and then failed exactly there. Dismiss it
 # before asserting the stores. Android-scoped because hideKeyboard is broken
 # on iOS (see above) — if iOS shows the same overlay, its artifacts will say so.
+# Only while that input is on screen: `next`'s connect screen unmounts it once
+# a site is saved (connect.tsx, `(siteCount === 0 || showAddress)`), so there is
+# no keyboard to hide, and Android's hideKeyboard is a Back that closes the app
+# (README §3 rule 9). Both Android lanes of run 36882430308 ended on the
+# launcher exactly here. `main`'s connect screen always renders the input, so
+# on that lane the step still runs.
 - runFlow:
     when:
       platform: Android
+      visible:
+        id: 'store-url-input'
     commands:
       - hideKeyboard
 # Select the first store and open the POS (store rows tagged in PR #730).
