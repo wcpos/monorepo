@@ -3,6 +3,7 @@ import * as React from 'react';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { TitleBarStripProvider } from '@wcpos/core/contexts/title-bar-strip';
 import type { TypedIpcRenderer, WindowColorScheme } from '@wcpos/printer/ipc-channels';
 
 /**
@@ -33,6 +34,54 @@ function readTitleBarHeight(): number {
 	const overlay = getWindowControlsOverlay();
 	if (!overlay?.visible) return 0;
 	return Math.round(overlay.getTitlebarAreaRect().height);
+}
+/** The strip's area clear of the OS controls, as `left:width:height` so the store compares by value. */
+function readTitleBarArea(): string {
+	const overlay = getWindowControlsOverlay();
+	if (!overlay?.visible) return '0:0:0';
+	const rect = overlay.getTitlebarAreaRect();
+	return `${Math.round(rect.x)}:${Math.round(rect.width)}:${Math.round(rect.height)}`;
+}
+function useTitleBarArea(): { left: number; width: number; height: number } {
+	const area = React.useSyncExternalStore(
+		subscribeToTitleBarGeometry,
+		readTitleBarArea,
+		() => '0:0:0'
+	);
+	return React.useMemo(() => {
+		const [left, width, height] = area.split(':').map(Number);
+		return { left, width, height };
+	}, [area]);
+}
+/**
+ * The strip is the till's topmost row on the desktop: the register bar portals into
+ * this node (core's `TitleBarStripPortal`). It sits over the drag region, sized to the
+ * title-bar area so it never covers the traffic lights or the Windows controls; its
+ * buttons are `no-drag` by the global rule in public/index.html.
+ */
+function TitleBarStripHost({ children }: React.PropsWithChildren) {
+	const { left, width, height } = useTitleBarArea();
+	const [node, setNode] = React.useState<HTMLElement | null>(null);
+	const value = React.useMemo(() => ({ node: height > 0 ? node : null, height }), [node, height]);
+	return (
+		<TitleBarStripProvider value={value}>
+			{children}
+			<div
+				ref={setNode}
+				data-testid="title-bar-strip"
+				style={{
+					position: 'fixed',
+					top: 0,
+					left,
+					width,
+					height,
+					zIndex: 40,
+					display: height > 0 ? 'flex' : 'none',
+					flexDirection: 'column',
+				}}
+			/>
+		</TitleBarStripProvider>
+	);
 }
 
 function subscribeToTitleBarGeometry(onChange: () => void): () => void {
@@ -87,7 +136,7 @@ export function DesktopWindowChrome({ children }: React.PropsWithChildren) {
 	return (
 		<TitleBarInsets>
 			<WindowColorSchemeSync />
-			{children}
+			<TitleBarStripHost>{children}</TitleBarStripHost>
 		</TitleBarInsets>
 	);
 }
