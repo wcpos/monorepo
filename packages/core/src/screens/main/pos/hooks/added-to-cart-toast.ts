@@ -21,7 +21,7 @@ const resetCount = () => {
 
 /**
  * Shows, or updates, the one added-to-cart toast. The first add names the product; later adds
- * while it is open show a running count with the latest product's name.
+ * while it is open show a running count of items, without a name.
  *
  * The count also resets when the duration has passed since the last add, because closing callbacks
  * do not fire when the toaster itself goes away.
@@ -36,9 +36,7 @@ export function showAddedToCartToast(t: ReturnType<typeof useT>, name: string | 
 		id: ADDED_TO_CART_TOAST_ID,
 		type: 'success',
 		title:
-			count > 1
-				? t('common.added_to_cart_count', { count, name })
-				: t('common.added_to_cart', { name }),
+			count > 1 ? t('common.added_to_cart_count', { count }) : t('common.added_to_cart', { name }),
 		duration: ADDED_TO_CART_DURATION,
 		onDismiss: resetCount,
 		onAutoClose: resetCount,

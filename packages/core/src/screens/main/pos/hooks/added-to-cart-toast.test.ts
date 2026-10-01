@@ -45,16 +45,25 @@ describe('showAddedToCartToast', () => {
 		expect(shown(1).id).toBe(shown(0).id);
 	});
 
-	it('names the first add, and counts later adds with the latest name', () => {
+	it('names the first add, and counts later adds without a name', () => {
 		showAddedToCartToast(t, 'Beanie');
 		showAddedToCartToast(t, 'Cap');
 		showAddedToCartToast(t, 'Hoodie');
 
 		expect(shown(0).title).toBe('common.added_to_cart {"name":"Beanie"}');
-		expect(shown(1).title).toBe('common.added_to_cart_count {"count":2,"name":"Cap"}');
-		expect(shown(2).title).toBe('common.added_to_cart_count {"count":3,"name":"Hoodie"}');
+		expect(shown(1).title).toBe('common.added_to_cart_count {"count":2}');
+		expect(shown(2).title).toBe('common.added_to_cart_count {"count":3}');
 		// Compact: a title only, never a second line.
 		expect(shown(2).description).toBeUndefined();
+	});
+
+	it('counts the same product added three times as three items', () => {
+		showAddedToCartToast(t, 'Beanie');
+		showAddedToCartToast(t, 'Beanie');
+		showAddedToCartToast(t, 'Beanie');
+
+		expect(shown(0).title).toBe('common.added_to_cart {"name":"Beanie"}');
+		expect(shown(2).title).toBe('common.added_to_cart_count {"count":3}');
 	});
 
 	it('starts the count again after the toast auto-closes', () => {
@@ -82,7 +91,7 @@ describe('showAddedToCartToast', () => {
 		jest.setSystemTime(Date.now() + ADDED_TO_CART_DURATION + 1);
 		showAddedToCartToast(t, 'Hoodie');
 
-		expect(shown(1).title).toBe('common.added_to_cart_count {"count":2,"name":"Cap"}');
+		expect(shown(1).title).toBe('common.added_to_cart_count {"count":2}');
 		expect(shown(2).title).toBe('common.added_to_cart {"name":"Hoodie"}');
 	});
 });
