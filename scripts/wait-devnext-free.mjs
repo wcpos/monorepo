@@ -101,12 +101,10 @@ export async function waitForDevNext({
 }
 
 async function main() {
-	const {
-		GITHUB_RUN_ID,
-		GITHUB_REPOSITORY,
-		GH_TOKEN,
-		GITHUB_API_URL = 'https://api.github.com',
-	} = process.env;
+	const GITHUB_RUN_ID = process.env.GITHUB_RUN_ID;
+	const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY;
+	const GH_TOKEN = process.env.GH_TOKEN;
+	const GITHUB_API_URL = process.env.GITHUB_API_URL ?? 'https://api.github.com';
 	if (!GITHUB_RUN_ID || !GITHUB_REPOSITORY || !GH_TOKEN) {
 		console.log('::error::GITHUB_RUN_ID, GITHUB_REPOSITORY and GH_TOKEN are required');
 		process.exitCode = 1;
