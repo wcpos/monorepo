@@ -59,6 +59,7 @@ it('joins public metadata into a decoded subline while keeping value-only select
 	render(<ProductName {...props} />);
 	const colour = screen.getByTestId('cart-line-meta-Colour');
 	const size = screen.getByTestId('cart-line-meta-Size');
+	expect(screen.getByTestId('cart-line-meta').textContent).toContain('Size: L');
 	expect(colour.textContent).toBe('Natural & cream');
 	expect(size.textContent).toBe('L');
 	expect(colour.parentElement).toBe(size.parentElement);

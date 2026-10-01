@@ -77,7 +77,12 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			)}
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 			{metaData.length > 0 && (
-				<Text className="text-muted-foreground text-sm leading-tight" numberOfLines={2}>
+				/* Native merges nested Text, so Maestro sees only the outer testID. */
+				<Text
+					className="text-muted-foreground text-sm leading-tight"
+					numberOfLines={2}
+					testID="cart-line-meta"
+				>
 					{metaData.map((meta, index) => (
 						<React.Fragment key={meta.id || meta.key || meta.display_key}>
 							{index > 0 && ' · '}
