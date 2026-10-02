@@ -5,6 +5,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
@@ -150,13 +151,13 @@ export const useAddProduct = () => {
 			// returned success should be the updated order
 			if (success) {
 				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
-					// Scan-driven adds toast via the scan-feedback module instead.
-					showToast: !options?.silent,
 					context: {
 						productId: product.id,
 						productName: product.name,
 					},
 				});
+				// Scan-driven adds toast via the scan-feedback module instead.
+				if (!options?.silent) showAddedToCartToast(t, product.name);
 				return true;
 			} else {
 				if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') timing?.cancelCartAddTiming(timingSequence);

@@ -331,6 +331,8 @@
 	"common.add_new_customer": "Add new customer",
 	"common.add_to_cart": "Add to Cart",
 	"common.added_to_cart": "{name} added to cart",
+	"common.added_to_cart_count_one": "{count} item added to cart",
+	"common.added_to_cart_count_other": "{count} items added to cart",
 	"common.address_1": "Address 1",
 	"common.address_2": "Address 2",
 	"common.addresses": "Addresses",
