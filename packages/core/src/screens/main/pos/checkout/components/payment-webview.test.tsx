@@ -21,6 +21,7 @@ let webViewMounts = 0;
 const mockPostMessage = jest.fn();
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
@@ -96,7 +97,9 @@ jest.mock('observable-hooks', () => ({
 	// Return the synchronous default; the component only needs the resolved value.
 	useObservableState: (_observable: unknown, defaultValue: unknown) => defaultValue,
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({

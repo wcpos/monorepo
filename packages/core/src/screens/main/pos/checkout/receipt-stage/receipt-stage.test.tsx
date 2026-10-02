@@ -19,6 +19,7 @@ jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() 
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 let mockPrintedTo: string | null = null;
 let mockAutoPrint = false;
@@ -70,7 +71,9 @@ jest.mock('../column/use-checkout-back', () => ({
 		mockBack = back;
 	},
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(''),
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -322,7 +325,8 @@ it.each(['receipt-no-receipt', 'receipt-new-sale'])(
 		fireEvent.click(screen.getByTestId(testID));
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(2);
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+		expect(mockReplace).not.toHaveBeenCalled();
 	}
 );
 it('finishes on Android hardware back', () => {
@@ -330,7 +334,8 @@ it('finishes on Android hardware back', () => {
 	act(() => mockBack());
 	expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-	expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+	expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+	expect(mockReplace).not.toHaveBeenCalled();
 });
 
 it('shows the paid headline and joined methods with only captured payments counted', () => {

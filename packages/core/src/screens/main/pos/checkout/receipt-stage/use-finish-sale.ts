@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { finishReceipt } from '../checkout-mode';
+import { returnToTill } from '../till-route';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 
 export function useFinishSale(orderUuid: string, compact: boolean) {
@@ -11,6 +12,6 @@ export function useFinishSale(orderUuid: string, compact: boolean) {
 	return React.useCallback(() => {
 		finishReceipt(orderUuid);
 		setCurrentOrderID('');
-		if (compact) router.replace({ pathname: '/cart' });
+		if (compact) returnToTill(router, true, 'products');
 	}, [orderUuid, compact, setCurrentOrderID, router]);
 }

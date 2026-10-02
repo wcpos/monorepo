@@ -58,6 +58,7 @@ jest.mock('observable-hooks', () => ({
 }));
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
+jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));

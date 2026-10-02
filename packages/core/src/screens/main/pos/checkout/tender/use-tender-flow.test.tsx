@@ -134,6 +134,7 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 const mockLocalPatch = jest.fn();
 const mockBlockIfDegraded = jest.fn();
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockInfo = jest.fn();
 const mockError = jest.fn();
 const mockWarn = jest.fn();
@@ -260,7 +261,9 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	// The hook calls getLogger() at module scope, before this file's consts are
@@ -833,7 +836,7 @@ describe('useTenderFlow', () => {
 		);
 		expect(mockVoidPayments).toHaveBeenCalledWith(order);
 		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)/cart');
 	});
 
 	it('stays put when a provider reports a failed void', async () => {

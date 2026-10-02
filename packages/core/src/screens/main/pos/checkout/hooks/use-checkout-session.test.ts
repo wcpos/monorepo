@@ -24,6 +24,7 @@ const mockCheckoutInfo = jest.fn();
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -37,7 +38,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace }),
+	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
@@ -260,6 +261,7 @@ describe('useCheckoutSession', () => {
 			if (refresh === 'synchronously thrown') {
 				expect(release).not.toHaveBeenCalled();
 				expect(mockReplace).not.toHaveBeenCalled();
+				expect(mockDismissTo).not.toHaveBeenCalled();
 				expect(result.current.error).toBe('refresh failed');
 				expect(mockCheckoutError).toHaveBeenCalledWith(
 					'refresh failed',
@@ -267,7 +269,8 @@ describe('useCheckoutSession', () => {
 				);
 			} else {
 				expect(release).toHaveBeenCalledTimes(1);
-				expect(mockReplace).toHaveBeenCalled();
+				expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+				expect(mockReplace).not.toHaveBeenCalled();
 				expect(mockCheckoutError).not.toHaveBeenCalled();
 				expect(result.current.error).toBeNull();
 			}
