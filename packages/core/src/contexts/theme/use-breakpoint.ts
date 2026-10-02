@@ -1,20 +1,15 @@
 import { useWindowDimensions } from 'react-native';
 
-// Define the possible breakpoints
-export type Breakpoint = 'sm' | 'md' | 'lg';
+import { isPhoneWindow } from '@wcpos/components/lib/device';
 
-// Helper function to compute breakpoint based on width
-const getBreakpoint = (width: number): Breakpoint => {
-	if (width >= 1024) {
-		return 'lg';
-	} else if (width < 640) {
-		return 'sm';
-	} else {
-		return 'md';
-	}
-};
+/**
+ * Two layouts and nothing in between (owner, 2026-10-02): `sm` is the phone layout (tabs),
+ * `lg` is the navigation rail with the register's two columns. The boundary lives in
+ * `@wcpos/components/lib/device`.
+ */
+export type Breakpoint = 'sm' | 'lg';
 
 export const useBreakpoint = (): Breakpoint => {
-	const { width } = useWindowDimensions();
-	return getBreakpoint(width);
+	const window = useWindowDimensions();
+	return isPhoneWindow(window) ? 'sm' : 'lg';
 };
