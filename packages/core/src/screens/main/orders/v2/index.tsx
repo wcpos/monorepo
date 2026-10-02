@@ -5,14 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 import isEqual from 'lodash/isEqual';
-import Animated, { FadeInRight, ReduceMotion } from 'react-native-reanimated';
 
-import { BEATS } from '@wcpos/components/lib/motion';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/device';
+import { SlideOver } from '@wcpos/components/slide-over';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 
@@ -256,7 +255,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	const t = useT();
 	const phone = useIsPhone();
 	const { width } = useWindowDimensions();
-	const { screenSize } = useTheme();
+	const { roomy } = useTheme();
 	const { order: selected } = useLocalSearchParams<{ order?: string }>();
 	const router = useRouter();
 	const selectedRow = React.useRef<ViewInstance>(null);
@@ -264,7 +263,10 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 		router.setParams({ order: undefined });
 		if (Platform.OS === 'web') selectedRow.current?.focus();
 	};
-	const pane = selected ? <OrderPane key={selected} selected={selected} onClose={close} /> : null;
+	// The pane that is leaving keeps the order it showed until it has slid out.
+	const [shown, setShown] = React.useState(selected);
+	if (selected && selected !== shown) setShown(selected);
+	const pane = shown ? <OrderPane key={shown} selected={shown} onClose={close} /> : null;
 	return (
 		<View
 			testID="orders-body"
@@ -300,8 +302,9 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 					</Suspense>
 				</ErrorBoundary>
 			</View>
-			{pane &&
-				(phone ? (
+			{phone ? (
+				selected &&
+				pane && (
 					<Dialog route onClose={close}>
 						<DialogContent
 							side="right"
@@ -315,16 +318,19 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 							{pane}
 						</DialogContent>
 					</Dialog>
-				) : (
-					<Animated.View
-						entering={FadeInRight.duration(BEATS.ordersPane.duration)
-							.easing(BEATS.ordersPane.easing)
-							.reduceMotion(ReduceMotion.System)}
-						className={`border-border bg-card border-l ${screenSize === 'lg' ? 'w-120' : 'w-2/5 max-w-110'}`}
-					>
-						{pane}
-					</Animated.View>
-				))}
+				)
+			) : (
+				// The pane slides out of the right edge, solid, and back into it. Its frame holds
+				// the pane's place beside the list until it has left.
+				<SlideOver
+					open={Boolean(selected)}
+					from="right"
+					className={roomy ? 'w-120' : 'w-2/5 max-w-110'}
+					coverClassName="border-border bg-card border-l"
+				>
+					{pane}
+				</SlideOver>
+			)}
 		</View>
 	);
 }

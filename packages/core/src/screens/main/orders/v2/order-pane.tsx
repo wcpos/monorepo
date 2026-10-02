@@ -2,7 +2,11 @@ import * as React from 'react';
 import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useObservableSuspense } from 'observable-hooks';
+import {
+	type ObservableResource,
+	useObservableEagerState,
+	useObservableSuspense,
+} from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -37,21 +41,35 @@ type OrderPayload = EngineRecord<'orders'>['payload'];
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
 export function OrderPane(props: Props) {
+	const resource = useEngineRecord('orders', props.selected);
+	// The record is local and answers within a frame, but not during the first render.
+	// Suspending on it commits the fallback, and React holds a committed fallback for 300 ms:
+	// a grey block in the pane for the whole of its slide. Awaited here instead, the swap is
+	// immediate (see `pos/products/v2/variations-pane.tsx`).
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
+	const answered = useObservableEagerState(resource.valueRef$$) !== undefined;
+	const skeleton = <View testID="order-pane-skeleton" className="bg-muted m-4 h-48 rounded" />;
 	return (
 		<View testID="order-pane" className="min-h-0 flex-1">
 			<ErrorBoundary key={props.selected}>
-				<React.Suspense
-					fallback={<View testID="order-pane-skeleton" className="bg-muted m-4 h-48 rounded" />}
-				>
-					<OrderPaneContent {...props} />
-				</React.Suspense>
+				{answered ? (
+					<React.Suspense fallback={skeleton}>
+						<OrderPaneContent {...props} resource={resource} />
+					</React.Suspense>
+				) : (
+					skeleton
+				)}
 			</ErrorBoundary>
 		</View>
 	);
 }
 
-function OrderPaneContent({ selected, onClose }: Props) {
-	const order = useObservableSuspense(useEngineRecord('orders', selected));
+function OrderPaneContent({
+	selected,
+	onClose,
+	resource,
+}: Props & { resource: ObservableResource<EngineRecord<'orders'> | null> }) {
+	const order = useObservableSuspense(resource);
 	const payload = useRecordField(order, (record) => record.payload);
 	const t = useT();
 	const router = useRouter();
@@ -59,7 +77,11 @@ function OrderPaneContent({ selected, onClose }: Props) {
 	const { format } = useCurrencyFormat({ currencySymbol: payload?.currency_symbol });
 	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
 	const focusClose = React.useCallback((node: ViewInstance | null) => {
-		if (Platform.OS === 'web') node?.focus();
+		// The pane is still sliding in when its close button mounts. A plain focus makes the
+		// browser scroll the frame that clips the pane to reveal the button, and the pane jumps.
+		if (Platform.OS === 'web') {
+			(node as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+		}
 	}, []);
 	const close = (
 		<IconButton

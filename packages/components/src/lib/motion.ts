@@ -14,13 +14,18 @@ export const STAMP = 380;
 export const SPINNER = 1000;
 export const INDETERMINATE = 1100;
 
-export const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
-export const EASE_CSS = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+// The control points, for the three forms a curve is needed in: a Reanimated easing (shared
+// values, layout animations), a CSS string (web keyframes) and Reanimated's `cubicBezier()`
+// (CSS transitions, which the browser runs off the main thread).
+export const EASE_POINTS = [0.2, 0.7, 0.2, 1] as const;
+export const EASE = Easing.bezier(...EASE_POINTS);
+export const EASE_CSS = `cubic-bezier(${EASE_POINTS.join(', ')})`;
 export const EASE_BEAT = Easing.bezier(0.2, 0.9, 0.3, 1.1);
 // Leaving: speed up into the edge. The shared ease slows down at the end, and a surface that
 // leaves on it creeps as a sliver at the edge for its last frames (filmed 2026-10-01).
-export const EASE_EXIT = Easing.bezier(0.4, 0, 1, 1);
-export const EASE_EXIT_CSS = 'cubic-bezier(0.4, 0, 1, 1)';
+export const EASE_EXIT_POINTS = [0.4, 0, 1, 1] as const;
+export const EASE_EXIT = Easing.bezier(...EASE_EXIT_POINTS);
+export const EASE_EXIT_CSS = `cubic-bezier(${EASE_EXIT_POINTS.join(', ')})`;
 
 type Beat = {
 	name: string;

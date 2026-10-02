@@ -3,50 +3,37 @@ import type { ViewProps } from 'react-native';
 
 import { act, render, screen } from '@testing-library/react';
 
-type TimingCall = { toValue: number; config: unknown; done?: (finished: boolean) => void };
-const mockTimings: TimingCall[] = [];
-const mockShared: { value: number }[] = [];
-const mockStyles: (() => { transform: { translateY: string }[] })[] = [];
-
-const flatten = (style: unknown): Record<string, unknown> =>
-	Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
+type CoverStyle = {
+	transform: { translateX?: string; translateY?: string }[];
+	transitionProperty: string;
+	transitionDuration: number;
+	transitionTimingFunction: string;
+	pointerEvents: string;
+};
+let mockCover: CoverStyle;
+let mockReduced = false;
 
 jest.mock('react-native', () => ({
 	View: ({ children, testID }: ViewProps) => <div data-testid={testID}>{children}</div>,
 }));
-jest.mock('react-native-worklets', () => ({
-	scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args),
-}));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
-		View: ({ children, style }: ViewProps) => (
-			<div data-testid="cover" data-pointer={flatten(style).pointerEvents as string}>
-				{children}
-			</div>
-		),
+		View: ({ children, style }: ViewProps) => {
+			mockCover = style as unknown as CoverStyle;
+			return <div data-testid="cover">{children}</div>;
+		},
 	},
-	Easing: { bezier: (...points: number[]) => points.join() },
-	ReduceMotion: { System: 'system' },
-	useAnimatedStyle: (factory: (typeof mockStyles)[number]) => {
-		mockStyles.push(factory);
-		return {};
-	},
-	useSharedValue: (value: number) => {
-		const shared = React.useRef({ value }).current;
-		if (!mockShared.includes(shared)) mockShared.push(shared);
-		return shared;
-	},
-	withTiming: (toValue: number, config: unknown, done?: (finished: boolean) => void) => {
-		mockTimings.push({ toValue, config, done });
-		return toValue;
-	},
+	Easing: { bezier: () => 'ease' },
+	cubicBezier: (...points: number[]) => points.join(),
+	useReducedMotion: () => mockReduced,
 }));
 
 // eslint-disable-next-line import/first
 import { SlideOver } from './index';
 
-function Stage({ open, from = 'bottom' }: { open: boolean; from?: 'top' | 'bottom' }) {
+type Edge = 'top' | 'bottom' | 'left' | 'right';
+function Stage({ open, from = 'bottom' }: { open: boolean; from?: Edge }) {
 	return (
 		<SlideOver open={open} from={from} testID="frame">
 			<span data-testid="content">orders</span>
@@ -54,21 +41,24 @@ function Stage({ open, from = 'bottom' }: { open: boolean; from?: 'top' | 'botto
 	);
 }
 
+let frames: FrameRequestCallback[] = [];
+const nextFrame = () => act(() => frames.splice(0).forEach((callback) => callback(0)));
+
 beforeEach(() => {
-	mockTimings.length = 0;
-	mockShared.length = 0;
-	mockStyles.length = 0;
-	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-		callback(0);
-		return 1;
+	mockReduced = false;
+	frames = [];
+	jest.useFakeTimers();
+	jest
+		.spyOn(window, 'requestAnimationFrame')
+		.mockImplementation((callback) => frames.push(callback));
+	jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+		frames = [];
 	});
 });
-afterEach(() => jest.restoreAllMocks());
-
-const finish = (toValue: number, finished = true) =>
-	act(() => {
-		mockTimings.filter((call) => call.toValue === toValue).at(-1)!.done!(finished);
-	});
+afterEach(() => {
+	jest.useRealTimers();
+	jest.restoreAllMocks();
+});
 
 it('renders nothing while closed', () => {
 	render(<Stage open={false} />);
@@ -76,47 +66,65 @@ it('renders nothing while closed', () => {
 	expect(screen.queryByTestId('content')).toBeNull();
 });
 
-it('opens by sliding in and stays mounted, taking no presses, until it has slid out', () => {
-	const { rerender } = render(<Stage open={false} />);
-	rerender(<Stage open />);
-	expect(screen.getByTestId('content')).toBeTruthy();
-	expect(mockTimings.at(-1)!.toValue).toBe(1);
-	expect(screen.getByTestId('cover').dataset.pointer).toBe('auto');
+it.each([
+	['bottom', 'translateY', '100%'],
+	['top', 'translateY', '-100%'],
+	['right', 'translateX', '100%'],
+	['left', 'translateX', '-100%'],
+] as const)(
+	'a cover from the %s is parked outside its frame for one frame, then lands',
+	(from, axis, parked) => {
+		const { rerender } = render(<Stage open={false} from={from} />);
+		rerender(<Stage open from={from} />);
+		// Painted parked first: the transition needs a position to start from.
+		expect(mockCover.transform).toEqual([{ [axis]: parked }]);
+		nextFrame();
+		expect(mockCover.transform).toEqual([{ [axis]: '0%' }]);
+		// Only the transform moves, over the pane beat on the shared ease.
+		expect(mockCover).toMatchObject({
+			transitionProperty: 'transform',
+			transitionDuration: 280,
+			transitionTimingFunction: '0.2,0.7,0.2,1',
+			pointerEvents: 'auto',
+		});
+	}
+);
 
+it('leaves faster, speeding up into its edge, and stays mounted until it has left', () => {
+	const { rerender } = render(<Stage open />);
+	nextFrame();
 	rerender(<Stage open={false} />);
-	expect(mockTimings.at(-1)!.toValue).toBe(0);
-	// It leaves faster than it arrives, on a curve that speeds up into the edge.
-	expect(mockTimings.at(-1)!.config).toMatchObject({ duration: 200, easing: '0.4,0,1,1' });
+	expect(mockCover.transform).toEqual([{ translateY: '100%' }]);
+	expect(mockCover).toMatchObject({
+		transitionDuration: 200,
+		transitionTimingFunction: '0.4,0,1,1',
+		// A cover that is leaving takes no presses.
+		pointerEvents: 'none',
+	});
+	act(() => void jest.advanceTimersByTime(199));
 	expect(screen.getByTestId('content')).toBeTruthy();
-	expect(screen.getByTestId('cover').dataset.pointer).toBe('none');
-	finish(0);
+	act(() => void jest.advanceTimersByTime(1));
 	expect(screen.queryByTestId('content')).toBeNull();
 });
 
 it('a close interrupted by a reopen leaves the cover mounted', () => {
 	const { rerender } = render(<Stage open />);
+	nextFrame();
 	rerender(<Stage open={false} />);
+	act(() => void jest.advanceTimersByTime(100));
 	rerender(<Stage open />);
-	// The cancelled close reports `finished: false`; it must not unmount what is reopening.
-	finish(0, false);
+	act(() => void jest.advanceTimersByTime(500));
+	nextFrame();
 	expect(screen.getByTestId('content')).toBeTruthy();
+	expect(mockCover.transform).toEqual([{ translateY: '0%' }]);
 });
 
-it.each([
-	['bottom', '100%'],
-	['top', '-100%'],
-] as const)('a cover from the %s starts a full height outside its frame', (from, parked) => {
-	render(<Stage open from={from} />);
-	const [progress] = mockShared;
-	const style = mockStyles.at(-1)!;
-
-	progress.value = 0;
-	expect(style().transform[0].translateY).toBe(parked);
-	progress.value = 1;
-	expect(parseFloat(style().transform[0].translateY)).toBe(0);
-	// Clamped: an extrapolated bezier never lifts the cover off the edge it came from.
-	progress.value = 1.05;
-	expect(parseFloat(style().transform[0].translateY)).toBe(0);
-	progress.value = -0.05;
-	expect(style().transform[0].translateY).toBe(parked);
+it('does not travel under reduce-motion', () => {
+	mockReduced = true;
+	const { rerender } = render(<Stage open />);
+	nextFrame();
+	expect(mockCover.transitionDuration).toBe(0);
+	rerender(<Stage open={false} />);
+	act(() => void jest.advanceTimersByTime(0));
+	expect(screen.queryByTestId('content')).toBeNull();
 });
