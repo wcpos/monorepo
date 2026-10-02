@@ -164,6 +164,7 @@ it('hides a leaving detail from the accessibility tree and gives focus back to w
 	const stage = (detail: string | null) => (
 		<>
 			<button data-testid="opener" />
+			<input data-testid="search" />
 			<PaneStack detail={detail} renderDetail={(value) => <span>{value}</span>}>
 				<span>root</span>
 			</PaneStack>
@@ -178,4 +179,10 @@ it('hides a leaving detail from the accessibility tree and gives focus back to w
 	// Still on stage for the pop, but already gone to a screen reader.
 	expect(screen.getByTestId('detail-pane').getAttribute('aria-hidden')).toBe('true');
 	expect(document.activeElement).toBe(screen.getByTestId('opener'));
+	// Focus that moved somewhere live before the pop (typing in a search field closed the
+	// detail) stays where it is.
+	rerender(stage('variations'));
+	screen.getByTestId('search').focus();
+	rerender(stage(null));
+	expect(document.activeElement).toBe(screen.getByTestId('search'));
 });
