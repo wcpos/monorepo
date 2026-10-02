@@ -20,7 +20,7 @@ import type { SlotEntryProps } from '../../../extensions/slots';
  * as `data`/`api` — not what a first-party component may reach for inside itself.
  */
 function ProductsPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {
-	return React.createElement(POSProducts, { isColumn: true });
+	return React.createElement(POSProducts);
 }
 
 function CartPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {

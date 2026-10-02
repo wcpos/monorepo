@@ -1,10 +1,8 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
-import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 
-import { EASE, PANE } from '@wcpos/components/lib/motion';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -24,7 +22,13 @@ import { SKU } from '../cells/sku';
 import { COGS } from '../cells/cogs';
 import { ProductVariationImage } from '../../../components/product/variation-image';
 
-type Props = { parent: EngineRecord<'products'>; viewMode: string; stockStatus?: string };
+type Props = { parent: EngineRecord<'products'>; stockStatus?: string };
+
+// The footer's sync button already turns while the variations refresh. The list's own
+// loading band would add and remove a strip under the rows on every drill-in.
+function NoListFooter() {
+	return null;
+}
 
 export function VariationsPane({ parent, ...props }: Props) {
 	const state = useQueryState<'variations'>();
@@ -34,8 +38,19 @@ export function VariationsPane({ parent, ...props }: Props) {
 	// The popover's bounded, logged refresh retry: a first refresh that hangs or returns
 	// nothing during a transient failure must not leave the default drill-in pane empty.
 	useVariationsRefresh(binding);
+	// The query answers within a frame of mounting, but not during the first render. Suspending
+	// on it commits the fallback, and React holds a committed fallback for 300 ms before
+	// revealing what replaces it: a third of a second of placeholder over rows that were ready
+	// almost at once. So the first answer is awaited here, outside Suspense, where the swap is
+	// immediate — and lands while the pane is still off-stage.
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-01.
+	const answered = useObservableEagerState(binding.resource.valueRef$$) !== undefined;
+	// As many skeleton rows as the parent has variations: if the answer is slow, the rows that
+	// replace them land in the same places and the pane does not reflow.
+	const skeleton = <DataTableSkeleton id="pos-products" rowCount={variationIds.length || 1} />;
+	if (!answered) return skeleton;
 	return (
-		<Suspense fallback={<DataTableSkeleton id="pos-products" />}>
+		<Suspense fallback={skeleton}>
 			<VariationsTable parent={parent} binding={binding} {...props} />
 		</Suspense>
 	);
@@ -44,7 +59,6 @@ export function VariationsPane({ parent, ...props }: Props) {
 function VariationsTable({
 	parent,
 	binding,
-	viewMode,
 	stockStatus,
 }: Props & { binding: ReturnType<typeof useCollectionBinding<'variations'>> }) {
 	const state = useQueryState<'variations'>();
@@ -84,22 +98,13 @@ function VariationsTable({
 				image: ProductVariationImage,
 				actions: () => null,
 			}}
-			renderItem={({ item, index }) => (
+			// The rows travel with their pane; none of them animates on its own.
+			renderItem={({ item }) => (
 				<VirtualizedList.Item>
-					<Animated.View
-						entering={
-							viewMode === 'grid'
-								? FadeIn.delay(index * 22)
-										.duration(PANE)
-										.easing(EASE)
-										.reduceMotion(ReduceMotion.System)
-								: undefined
-						}
-					>
-						<VariationRow item={item} parent={parent} />
-					</Animated.View>
+					<VariationRow item={item} parent={parent} />
 				</VirtualizedList.Item>
 			)}
+			ListFooterComponent={NoListFooter}
 			TableFooterComponent={(props) => (
 				<ProductsFooter {...props} count={hits.length} total$={total$}>
 					<Text className="text-muted-foreground text-sm" numberOfLines={1}>

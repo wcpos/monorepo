@@ -8,6 +8,7 @@ import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { SlideOver } from '@wcpos/components/slide-over';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -20,7 +21,7 @@ import { CartTabTitle } from '../tab-title';
 import { OpenOrdersList } from './open-orders-list';
 import { TabChip } from './tab-chip';
 
-export function OpenOrderTabs() {
+export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bottom' }) {
 	const { currentOrderRecord, openOrders, setCurrentOrderID } = useCurrentOrder();
 	useResumeTerminalLegsForOrders(openOrders.map(({ record }) => record));
 	const t = useT();
@@ -30,6 +31,8 @@ export function OpenOrderTabs() {
 		(uuid) => !openOrders.some((order) => order.id === uuid)
 	);
 	const [listOpen, setListOpen] = React.useState(false);
+	// Where the strip sits in the cart column: the list covers the cart on the far side of it.
+	const [strip, setStrip] = React.useState({ y: 0, height: 0 });
 	const scroll = React.useRef<React.ElementRef<typeof ScrollView>>(null);
 	const positions = React.useRef(new Map<string, number>());
 	const tabs = React.useRef(new Map<string, React.ElementRef<typeof Pressable>>());
@@ -85,7 +88,10 @@ export function OpenOrderTabs() {
 				positions.current.set(id, nativeEvent.layout.x);
 				if (id === activeValue) reveal(id);
 			}}
-			onPress={() => handleTabPress(id)}
+			onPress={() => {
+				handleTabPress(id);
+				setListOpen(false);
+			}}
 			className={`active:bg-muted h-13 justify-center px-3 ${id === activeValue ? 'border-primary border-b-2' : 'border-b-2 border-transparent'}`}
 		>
 			{content}
@@ -93,18 +99,33 @@ export function OpenOrderTabs() {
 	);
 	return (
 		<>
-			<View className="bg-card border-border flex-row items-stretch border-t">
+			<View
+				className="bg-card border-border flex-row items-stretch border-t"
+				onLayout={({ nativeEvent: { layout } }) => {
+					setStrip((was) =>
+						was.y === layout.y && was.height === layout.height
+							? was
+							: { y: layout.y, height: layout.height }
+					);
+				}}
+			>
 				<View className="border-border justify-center border-r">
 					<Button
 						variant="ghost"
 						className="h-ctl flex-row gap-1 px-2"
 						testID="open-orders-count"
 						accessibilityLabel={t('pos_cart.open_orders_count', { count: openOrders.length })}
-						onPress={() => setListOpen(true)}
+						aria-expanded={listOpen}
+						onPress={() => (listOpen ? closeList() : setListOpen(true))}
 					>
 						{/* `children`, not `count`: the pill must read "0" when the strip is empty. */}
 						<Badge variant="muted">{String(openOrders.length)}</Badge>
-						<Icon name="chevronUp" size="sm" className="text-muted-foreground" />
+						{/* The chevron points the way the list will travel. */}
+						<Icon
+							name={listOpen === (position === 'bottom') ? 'chevronDown' : 'chevronUp'}
+							size="sm"
+							className="text-muted-foreground"
+						/>
 					</Button>
 				</View>
 				<View className="min-w-0 flex-1">
@@ -163,14 +184,25 @@ export function OpenOrderTabs() {
 					/>
 				</View>
 			</View>
-			{listOpen && (
+			{/* The list comes out of the strip and covers the cart beside it; the strip stays put. */}
+			<SlideOver
+				open={listOpen}
+				from={position}
+				className="absolute inset-x-0 z-50"
+				style={
+					position === 'bottom'
+						? { top: 0, height: strip.y }
+						: { top: strip.y + strip.height, bottom: 0 }
+				}
+				coverClassName="bg-background"
+			>
 				<OpenOrdersList
 					orders={openOrders}
 					activeValue={activeValue}
 					onSelect={handleTabPress}
 					onClose={closeList}
 				/>
-			)}
+			</SlideOver>
 		</>
 	);
 }

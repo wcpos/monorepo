@@ -28,8 +28,14 @@ export function Breadcrumb({
 	const backRef = React.useRef<ViewInstance>(null);
 	const focusOnMount = React.useRef(autoFocus);
 	// Drill-in focus is a mount action, never a response to changing parents.
+	// `preventScroll`: a crumb mounts inside a pane that is still off-stage, and a browser
+	// scrolls a focused element into view — which would yank the stage sideways mid-slide.
 	React.useEffect(() => {
-		if (focusOnMount.current) backRef.current?.focus();
+		if (focusOnMount.current) {
+			(backRef.current as { focus: (options?: { preventScroll: boolean }) => void } | null)?.focus({
+				preventScroll: true,
+			});
+		}
 	}, []);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const separator = (

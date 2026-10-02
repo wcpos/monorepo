@@ -96,3 +96,8 @@ Accounting mismatches: cart line 10 belongs to `checkout-ledger.tsx`, not the ed
 
 2. Synchronize the editable note when the order’s note changes using previous-value comparison during render — avoids stale note text without a state-synchronizing effect — evidence: `pos/cart/totals/customer-note.tsx:29–31`, “Keep the textarea value in sync with order.customer_note.” — platform: all. **Status: n/a — the note is edited in the order sheet (decision 44).**
 3. Hide empty notes; edit an existing note inline and trim/persist it on blur or submit before leaving editing — preserves the lightweight inline-note workflow — evidence: `pos/cart/totals/customer-note.tsx:41–54,70–77` _(inferred — no explicit evidence)_ — platform: all. **Status: n/a — the note is edited in the order sheet (decision 44).**
+
+## pos/cart/v2 (added after seeding)
+
+1. The open-orders list slides out of the tab strip on `SlideOver` and covers the cart on the far side of it (up when the strip is at the bottom, down when it is at the top); the strip stays visible, its count button toggles the list with a chevron pointing the way the list will travel, and pressing a tab closes it — evidence: owner, 2026-10-01 ("slide up really nicely… springing from the cart tabs to cover the cart"); the list previously replaced the whole column, strip included, with no motion; filmed frame by frame, rows present from the first frame; test `tabs.test.tsx`: “opens the list from the strip, and the count button or a tab closes it again”. The current row is focused with `preventScroll`, or the browser scrolls the clipping frame mid-slide. — platform: all (filmed on web).
+

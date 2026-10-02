@@ -25,7 +25,7 @@ export function OpenOrdersList({
 }) {
 	const t = useT();
 	return (
-		<View testID="open-orders-list" className="bg-background absolute inset-0 z-50">
+		<View testID="open-orders-list" className="flex-1">
 			<View className="h-ctl border-border flex-row items-center justify-between border-b px-2">
 				<Text>{t('pos_cart.open_orders')}</Text>
 				<IconButton
@@ -75,7 +75,12 @@ function OrderRow({
 	const billing = payload.billing;
 	const focusCurrent = React.useCallback(
 		(node: React.ElementRef<typeof Pressable> | null) => {
-			if (selected) node?.focus();
+			// The row is focused while its list is still sliding in: without `preventScroll` the
+			// browser scrolls the clipping frame to bring it into view and the slide jumps.
+			if (selected)
+				(node as { focus?: (options?: FocusOptions) => void } | null)?.focus?.({
+					preventScroll: true,
+				});
 		},
 		[selected]
 	);

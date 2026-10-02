@@ -170,6 +170,17 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   settles, the *Paid* stamp lands, a capture gets a short haptic on native. That is the joy.
 - Respect reduce-motion. No confetti, no mascots, no emoji in the UI, no animation for its own
   sake.
+- Anything that moves is smooth, and a beat is a pleasure (owner, 2026-10-01): "fun, smooth and
+  joyful", so that adding to the cart is worth doing just to watch it land. In practice:
+  - Animate only `transform` and `opacity`, with Reanimated shared values, on every platform.
+  - Whatever slides keeps what it slides over on stage: both move as one (`PaneStack`), or the
+    cover comes out of an edge and goes back into it (`SlideOver`). Nothing animates on mount.
+  - What arrives is complete on its first visible frame: no skeleton, spinner or late image
+    inside a moving surface. A beat fires for the cashier's own action, never because a row was
+    recycled or another order came into view.
+  - A beat may use a spring and run past 250 ms (the in-cart count settles in about half a
+    second) because nobody waits on it; it must pick up from where it is when tapped again.
+  - Film it before calling it done: record the frames and read them one by one.
 
 #### 7. Calm colour, semantic tokens
 - Use the semantic tokens in `apps/main/global.css` (`bg-background`, `bg-card`, `text-muted-foreground`,

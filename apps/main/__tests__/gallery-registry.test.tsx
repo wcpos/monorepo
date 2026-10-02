@@ -40,6 +40,8 @@ const registered = [
 	'notice',
 	'breadcrumb',
 	"'page-bar': pageBar",
+	"'pane-stack': paneStack",
+	"'slide-over': slideOver",
 	"'v2-dialog': dialogV2",
 	'chip',
 	'keypad',

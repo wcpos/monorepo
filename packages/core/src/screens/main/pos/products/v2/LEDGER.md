@@ -68,7 +68,13 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 ## Ruled deviations
 
 - Resize is session-local: persistence needs a hydration rule change in `ui-settings/utils.ts`, deferred.
-- The drill-in pane renders variation rows in both view modes; grid entry staggers those rows.
+- The drill-in pane renders variation rows in both view modes, and in both it is a push on `PaneStack`: the products stay mounted and drift off as the pane travels over them (decision 32's motion). The grid's row stagger (decision 39) is struck — owner, 2026-10-01: the past screen slides off together as one, nothing lands row by row. Evidence: `@wcpos/components/pane-stack` ledger.
 - `TaxBasedOn` remains the existing hover-card display. The grid retains its own footer.
 - The existing shared settings dialog and its footer Close/Restore actions are unchanged.
 - Stock filtering uses the source’s `matchesStockStatusFilter` on resident variation hits; the variations query has no stock-status field. Parent variation IDs remain the footer denominator, floored at the displayed count.
+
+## In-cart count (added 2026-10-01)
+
+1. An add lands on the product's in-cart count: the new number rolls in from below over the old one (`BEAT`), the badge swells to 1.3 in 90 ms and a loose spring settles it through a dip. There is no ring or glow: a ring splashing out of the badge was built and struck the same day (owner: "a bit too much"). A count that goes down rolls back the other way with no landing. Only `transform` and `opacity` animate; reduce-motion skips all of it — evidence: owner, 2026-10-01 ("an extra drop going into a bucket… fun, smooth, and joyful"); the badge previously appeared and changed with no motion; filmed frame by frame on web, including three adds 120 ms apart, which carry on from the bounce in flight; `rows/in-cart-count.test.tsx`. A spring asked to go from 1 to 1 with only a starting velocity did not move at all, hence the explicit swell.
+2. The count stays mounted while it is zero (rendering the row's `+`, or nothing on a tile) so that it sees the first add; a count that differs because the list recycled the row for another product, or because another open order came into view, moves nothing — evidence: tests "a different product or a different order is not an add" and "shows what stands in for it while the cart holds none, and moves nothing on mount".
+
