@@ -172,6 +172,11 @@ it('fine keeps the hover area under the pointer while the row bounces', () => {
 	const reach = screen.getByTestId('cart-line-total-hover-reach');
 	expect(screen.getByTestId('cart-line-total').contains(reach)).toBe(true);
 	expect(parseFloat(reach.style.right)).toBeLessThanOrEqual(-22);
+	// Opened, the reach would overhang Edit's left edge and take its presses.
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(screen.queryByTestId('cart-line-total-hover-reach')).toBeNull();
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(screen.getByTestId('cart-line-total-hover-reach')).toBeTruthy();
 });
 it('fine: a hover-out bound before the press does not close the opened strip', () => {
 	mockPointer = 'fine';

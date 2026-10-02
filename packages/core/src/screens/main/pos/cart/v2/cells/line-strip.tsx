@@ -155,7 +155,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				}}
 			>
 				{content}
-				{pointer === 'fine' ? (
+				{/* Closed only: on an opened row the reach would overhang Edit's left edge and take its presses. */}
+				{pointer === 'fine' && !open ? (
 					<View
 						testID="cart-line-total-hover-reach"
 						className="absolute inset-y-0 left-0"
