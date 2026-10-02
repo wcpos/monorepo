@@ -55,8 +55,8 @@ on:
 #   `cold-start` coalesce — a newer main run cancels an OLDER run's
 #   verification, so a merge burst verifies only the artifact that is live.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
-# newer SHA. There is deliberately NO cross-run store serialization — see the
-# comment above e2e.
+# newer SHA. There is deliberately NO cross-run store serialization except the
+# dev-next queue — see the comment above e2e.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -247,9 +247,16 @@ jobs:
     needs: [changes, deploy]
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The queue step lists runs.
+    permissions:
+      contents: read
+      actions: read
+    # The queue may wait up to 4 h on next; main keeps 30.
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 290 || 30 }}
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
+      queue: ${{ steps.queue.outcome }}
+      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
     steps:
       - name: 🔑 Check for the auth-state key
         id: key
@@ -270,6 +277,17 @@ jobs:
 
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install chromium --only-shell
+
+      # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait here,
+      # before the first dev-next request, until no other web or native run
+      # holds it. The shards refuse to start if this did not succeed.
+      - name: 🚦 Queue for dev-next
+        id: queue
+        if: needs.changes.outputs.lane == 'next'
+        timeout-minutes: 250
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
 
       # globalSetup runs before tests load, so a grep matching nothing runs only
       # the setup. If it fails, the shards set up by themselves, as before.
@@ -321,6 +339,13 @@ jobs:
   # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
   # spec flakes under concurrency, fix THAT spec's isolation; do not
   # reintroduce a cross-run mutex here.
+  # Exception, dev-next only (Front desk ruling B, 2026-10-01): six web shards
+  # and two native dispatches together saturated its six php-fpm workers
+  # (1,898 499s, every device failed at the connect screen). Next-lane runs
+  # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
+  # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
+  # scheduled runs reach dev-next — PRs to next skip this suite — so the
+  # queue cannot starve a merge gate. The main lane is not queued.
   # PRs targeting `next` skip the web E2E suite (owner ruling 2026-09-03):
   # the dev lane is where performance and behaviour are explored by hand on
   # dev-next, and the store cannot serve several PR runs at once (six php-fpm
@@ -365,6 +390,19 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           echo "::error::No E2E lane for this run (event=$EVENT_NAME base_ref=${BASE_REF:-<none>} ref_name=$REF_NAME). Web E2E runs only for main or next: retarget the PR at a trunk, or dispatch with the 'lane' input set. Refusing to guess a store."
+          exit 1
+
+      # A next-lane shard may touch dev-next only after e2e-setup's queue step
+      # admitted this run (cancelled or timed out reads as not admitted).
+      - name: 🚦 Refuse dev-next without the queue
+        if: needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
+        env:
+          QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
+          QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SETUP_RESULT: ${{ needs.e2e-setup.result }}
+        run: |
+          echo "::error::The dev-next queue did not admit this run (queue=${QUEUE_OUTCOME:-<none>}, e2e-setup=$SETUP_RESULT). Refusing to load dev-next alongside another E2E run. Queue attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
           exit 1
 
       - name: 🏗 Setup repository

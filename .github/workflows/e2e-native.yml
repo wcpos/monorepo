@@ -83,6 +83,9 @@ on:
 #    PRs run at the same time. The FIFO device turnstile (2026-08-30 →
 #    2026-09-03) made every PR wait for every other run's suite; store
 #    capacity is dev-pro's php-fpm worker count, not a queue here.
+#  - Except dev-next (Front desk ruling B, 2026-10-01): a run whose store is
+#    dev-next queues in the build job's `🚦 Queue for dev-next` step, shared
+#    with deploy.yml, and holds the store until the run completes.
 #  - workflow_dispatch and attempt>1 re-runs keep run-unique groups: a
 #    deliberate human/bot run must not be killed by the next merge.
 concurrency:
@@ -151,6 +154,7 @@ jobs:
       android_devices: ${{ steps.resolve.outputs.android_devices }}
       ios_devices: ${{ steps.resolve.outputs.ios_devices }}
       variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
+      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
     steps:
       - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -379,6 +383,18 @@ jobs:
           fi
           echo "::notice::EAS development builds this UTC month: $COUNT / $BUILD_CEILING; PR build authorised ($SLOTS more)."
 
+      # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait for
+      # every other web or native run that holds it, before the seed. This run
+      # then holds the store until it completes — through the device jobs,
+      # whose Metro-driven logins and syncs are spread over up to two hours.
+      - name: 🚦 Queue for dev-next
+        id: queue
+        if: env.E2E_STORE_URL == 'https://dev-next.wcpos.com'
+        timeout-minutes: 250
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
+
       # Seed ONCE, before the matrix fans out: the four test jobs share one
       # store, so seed once before this run's matrix fans out. PR runs are not
       # serialized across PRs; residual cross-run seed contention is accepted
@@ -485,6 +501,15 @@ jobs:
         # — see the build job's android_devices output for the rationale.
         device: ${{ fromJSON(needs.build.outputs.android_devices) }}
     steps:
+      - name: 🚦 Refuse dev-next without the queue
+        if: env.E2E_STORE_URL == 'https://dev-next.wcpos.com' && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)
+        env:
+          QUEUE_ATTEMPT: ${{ needs.build.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          echo "::error::The dev-next queue did not admit this run (queue_attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT). Refusing to load dev-next alongside another E2E run. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
+          exit 1
+
       - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -1017,6 +1042,15 @@ jobs:
         # — see the build job's ios_devices output for the rationale.
         device: ${{ fromJSON(needs.build.outputs.ios_devices) }}
     steps:
+      - name: 🚦 Refuse dev-next without the queue
+        if: env.E2E_STORE_URL == 'https://dev-next.wcpos.com' && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)
+        env:
+          QUEUE_ATTEMPT: ${{ needs.build.outputs.queue_attempt }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          echo "::error::The dev-next queue did not admit this run (queue_attempt=${QUEUE_ATTEMPT:-<none>}, current attempt=$RUN_ATTEMPT). Refusing to load dev-next alongside another E2E run. A partial re-run must use \"Re-run all jobs\" so the queue runs again."
+          exit 1
+
       - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
