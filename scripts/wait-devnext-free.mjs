@@ -10,6 +10,7 @@
  * A successful queue step holds the store until its whole run completes,
  * covering web shards and the native device phase. PRs targeting next skip
  * both suites, so PR runs cannot reach dev-next and are skipped in API scans.
+ * Push runs are skipped too: both workflows push only on main, never dev-next.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
@@ -57,7 +58,12 @@ export async function waitForDevNext({
 		try {
 			const runs = [];
 			for (const run of await listRuns()) {
-				if (Number(run.id) === Number(ownRunId) || run.event === 'pull_request') continue;
+				if (
+					Number(run.id) === Number(ownRunId) ||
+					run.event === 'pull_request' ||
+					run.event === 'push'
+				)
+					continue;
 				runs.push({
 					id: Number(run.id),
 					state: queueState(await listJobs(run.id)),
