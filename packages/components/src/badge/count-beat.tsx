@@ -13,7 +13,7 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 
-import { BEAT, EASE } from '../lib/motion';
+import { BEAT, COUNT_FADE, COUNT_SWELL, EASE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
@@ -31,14 +31,14 @@ export const COUNT_MOTION: CountMotion = 'bounce';
 // second). Both legs start from wherever the badge is, so a change that lands mid-bounce
 // carries on from there.
 const SWELL = 1.3;
-const SWELL_TIMING = { duration: 90, easing: EASE, reduceMotion: ReduceMotion.System };
+const SWELL_TIMING = { duration: COUNT_SWELL, easing: EASE, reduceMotion: ReduceMotion.System };
 const SETTLE = { stiffness: 380, damping: 11, mass: 0.6, reduceMotion: ReduceMotion.System };
 // It grows taller than it grows wide, and dips shorter than narrow: soft, not a rigid zoom.
 const SIDEWAYS = 0.55;
 const ROLL = { duration: BEAT, easing: EASE, reduceMotion: ReduceMotion.System };
 // `bounce`: the old number is gone before the swell peaks and the new one arrives at the
 // peak, so there is a number on the badge for the whole way down.
-const FADE = { duration: 170, easing: Easing.linear, reduceMotion: ReduceMotion.System };
+const FADE = { duration: COUNT_FADE, easing: Easing.linear, reduceMotion: ReduceMotion.System };
 const WAS_GONE_BY = 0.45;
 const NOW_FADES_IN = [0.3, 0.8];
 // The new number overshoots further than the badge that carries it.

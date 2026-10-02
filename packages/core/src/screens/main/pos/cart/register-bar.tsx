@@ -77,7 +77,7 @@ function RegisterBarContent({
 		<HStack
 			testID={strip ? 'register-bar-strip' : undefined}
 			className={
-				strip ? 'h-10 flex-1 gap-2 px-2' : 'bg-background border-border h-12 gap-2 border-b px-2'
+				strip ? 'flex-1 gap-2 px-2' : 'bg-background border-border h-12 gap-2 border-b px-2'
 			}
 		>
 			{screenSize !== 'lg' && (
@@ -85,6 +85,7 @@ function RegisterBarContent({
 					variant="ghost"
 					className="h-11 w-11 p-0"
 					testID="pos-drawer-open-button"
+					aria-label={t('common.menu')}
 					onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
 				>
 					<Icon name="bars" />

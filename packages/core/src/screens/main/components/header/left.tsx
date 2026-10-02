@@ -6,6 +6,7 @@ import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 
 import { useTheme } from '../../../../contexts/theme';
+import { useT } from '../../../../contexts/translations';
 
 /**
  * Header left button - uses sidebar-foreground for icons/text since
@@ -13,6 +14,7 @@ import { useTheme } from '../../../../contexts/theme';
  */
 export function HeaderLeft({ className = '' }: { className?: string }) {
 	const { screenSize } = useTheme();
+	const t = useT();
 	const navigation = useNavigation();
 
 	/**
@@ -34,6 +36,7 @@ export function HeaderLeft({ className = '' }: { className?: string }) {
 		<Button
 			variant="sidebar"
 			testID="drawer-open-button"
+			aria-label={t('common.menu')}
 			onPress={handleOpenDrawer}
 			className={`px-3 ${className}`}
 		>

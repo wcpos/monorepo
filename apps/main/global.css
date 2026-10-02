@@ -97,6 +97,8 @@
 
   /* motion:start */
   --duration-press: 80ms;
+  --duration-count-swell: 90ms;
+  --duration-count-fade: 170ms;
   --duration-overlay-fade: 150ms;
   --duration-crossfade: 200ms;
   --duration-popover-fade: 200ms;

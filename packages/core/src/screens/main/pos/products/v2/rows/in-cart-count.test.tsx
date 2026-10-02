@@ -55,9 +55,10 @@ it('shows what stands in for it while the cart holds none, and moves nothing on 
 	expect(screen.getByTestId('plus')).toBeTruthy();
 	rerender(<InCartCount product="p" count={3} empty={<i data-testid="plus" />} />);
 	expect(screen.queryByTestId('plus')).toBeNull();
+	mockSprings.length = 0;
 	// A badge that mounts already holding a count is a page load or a scrolled-in row.
 	render(<InCartCount product="q" count={2} />);
-	expect(mockSprings).toHaveLength(1);
+	expect(mockSprings).toHaveLength(0);
 });
 
 it('lands the first add: the number arrives and the badge bounces', () => {

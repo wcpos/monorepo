@@ -2,6 +2,9 @@ import { Easing } from 'react-native-reanimated';
 
 // Durations already used across the package, centralised.
 export const PRESS = 80;
+// The count badge: the swell before its spring, and the old number's fade under it.
+export const COUNT_SWELL = 90;
+export const COUNT_FADE = 170;
 export const OVERLAY_FADE = 150;
 export const CROSSFADE = 200;
 export const POPOVER_FADE = 200;
