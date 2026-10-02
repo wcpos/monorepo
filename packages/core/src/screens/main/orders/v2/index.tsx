@@ -270,6 +270,8 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	// until the pane has slid out, not until the selection clears.
 	const [beside, setBeside] = React.useState(Boolean(selected));
 	if (selected && !beside) setBeside(true);
+	// The phone has no pane frame to report that it left.
+	if (phone && !selected && beside) setBeside(false);
 	const pane = shown ? <OrderPane key={shown} selected={shown} onClose={close} /> : null;
 	return (
 		<View

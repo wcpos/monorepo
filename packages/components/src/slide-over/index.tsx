@@ -62,6 +62,8 @@ export function SlideOver({
 			const frame = requestAnimationFrame(() => setLanded(true));
 			return () => cancelAnimationFrame(frame);
 		}
+		// A cover that never opened has nothing to leave.
+		if (!staged) return;
 		// A close interrupted by a reopen clears this, and the cover stays.
 		const timer = setTimeout(
 			() => {
@@ -71,7 +73,7 @@ export function SlideOver({
 			reduced ? 0 : PANEL_SLIDE_OUT
 		);
 		return () => clearTimeout(timer);
-	}, [open, reduced]);
+	}, [open, staged, reduced]);
 
 	if (!staged) return null;
 	// A percentage is of the cover's own size: nothing to measure before the first frame.

@@ -124,6 +124,11 @@ it('says when it has left, and not when the close was interrupted', () => {
 	rerender(stage(false));
 	act(() => void jest.advanceTimersByTime(200));
 	expect(onLeft).toHaveBeenCalledTimes(1);
+	// A cover that mounts closed never opened: it has not left.
+	onLeft.mockClear();
+	render(stage(false));
+	act(() => void jest.advanceTimersByTime(500));
+	expect(onLeft).not.toHaveBeenCalled();
 });
 
 it('a close interrupted by a reopen leaves the cover mounted', () => {
