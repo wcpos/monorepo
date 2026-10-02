@@ -19,9 +19,13 @@ jest.mock('react-native', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
-		View: ({ children, style }: ViewProps) => {
+		View: ({ children, style, ...rest }: ViewProps) => {
 			mockCover = style as unknown as CoverStyle;
-			return <div data-testid="cover">{children}</div>;
+			return (
+				<div data-testid="cover" aria-hidden={rest['aria-hidden']}>
+					{children}
+				</div>
+			);
 		},
 	},
 	Easing: { bezier: () => 'ease' },
@@ -101,6 +105,8 @@ it('leaves faster, speeding up into its edge, and stays mounted until it has lef
 		// A cover that is leaving takes no presses.
 		pointerEvents: 'none',
 	});
+	// Still mounted for the slide out, but gone to a screen reader.
+	expect(screen.getByTestId('cover').getAttribute('aria-hidden')).toBe('true');
 	act(() => void jest.advanceTimersByTime(199));
 	expect(screen.getByTestId('content')).toBeTruthy();
 	act(() => void jest.advanceTimersByTime(1));
