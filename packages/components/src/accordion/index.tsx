@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Icon } from '../icon';
+import { CROSSFADE, EASE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -22,7 +23,9 @@ function Accordion({ children, ...props }: AccordionPrimitive.RootProps) {
 	return (
 		<LayoutAnimationConfig skipEntering>
 			<AccordionPrimitive.Root {...props} asChild={Platform.OS !== 'web'}>
-				<Animated.View layout={LinearTransition.duration(200)}>{children}</Animated.View>
+				<Animated.View layout={LinearTransition.duration(CROSSFADE).easing(EASE)}>
+					{children}
+				</Animated.View>
 			</AccordionPrimitive.Root>
 		</LayoutAnimationConfig>
 	);
@@ -30,7 +33,10 @@ function Accordion({ children, ...props }: AccordionPrimitive.RootProps) {
 
 function AccordionItem({ className, value, ...props }: AccordionPrimitive.ItemProps) {
 	return (
-		<Animated.View className={'overflow-hidden'} layout={LinearTransition.duration(200)}>
+		<Animated.View
+			className={'overflow-hidden'}
+			layout={LinearTransition.duration(CROSSFADE).easing(EASE)}
+		>
 			<AccordionPrimitive.Item
 				className={cn('border-border border-b', className)}
 				value={value}
@@ -115,7 +121,7 @@ function InnerContent({ children, className }: { children: React.ReactNode; clas
 	return (
 		<Animated.View
 			entering={FadeIn}
-			exiting={FadeOutUp.duration(200)}
+			exiting={FadeOutUp.duration(CROSSFADE).easing(EASE)}
 			className={cn('pb-4', className)}
 		>
 			{children}

@@ -57,7 +57,8 @@ export const BEATS = {
 		class: 'beat',
 		waitingPath: true,
 	},
-	// Decision 10: target the settle budget; shipped 400+400 stays in pulse-row.
+	// Decision 10: the settle budget. The row itself lights in 120 and releases over 420
+	// (`table/pulse-row.tsx`, 2026-10-02; 400+400 before).
 	lineAdded: {
 		name: 'Line-added highlight',
 		duration: BEAT,
@@ -234,13 +235,13 @@ export const BEATS = {
 	},
 } satisfies Record<string, Beat>;
 
-// Preserve today's accordion easing and duration; no component adopts new motion yet.
+// The accordion keeps its duration and takes the shared ease (2026-10-02; `ease-out` before).
 export const WEB_ANIMATIONS = {
 	'pop-in': `pop-in ${POPOVER_FADE}ms ${EASE_CSS}`,
 	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
 	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
-	'accordion-down': `accordion-down ${CROSSFADE}ms ease-out`,
-	'accordion-up': `accordion-up ${CROSSFADE}ms ease-out`,
+	'accordion-down': `accordion-down ${CROSSFADE}ms ${EASE_CSS}`,
+	'accordion-up': `accordion-up ${CROSSFADE}ms ${EASE_CSS}`,
 	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
 	// The scrim is the panel's parent on web: it must outlast the panel's exit, or it takes the
 	// panel with it mid-slide.

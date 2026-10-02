@@ -10,6 +10,7 @@ jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual<typeof import('react-native')>('react-native').View },
 	FadeOut: { duration: (duration: number) => mockDuration(duration) },
+	ZoomIn: { duration: () => ({ easing: () => undefined }) },
 	useReducedMotion: () => mockReduced,
 }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));

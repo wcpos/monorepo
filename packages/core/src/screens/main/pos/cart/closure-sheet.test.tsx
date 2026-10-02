@@ -27,7 +27,7 @@ jest.mock('../../receipt/receipt-body', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
-	ZoomIn: { duration: () => ({ reduceMotion: () => undefined }) },
+	ZoomIn: { duration: () => ({ easing: () => ({ reduceMotion: () => undefined }) }) },
 	ReduceMotion: { System: 'system' },
 	Easing: { bezier: jest.fn(), linear: jest.fn() },
 }));

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import Animated, { FadeOut, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeOut, useReducedMotion, ZoomIn } from 'react-native-reanimated';
 
 import { Icon } from '@wcpos/components/icon';
-import { BEAT } from '@wcpos/components/lib/motion';
+import { BEAT, EASE_BEAT } from '@wcpos/components/lib/motion';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
@@ -58,6 +58,8 @@ export function SavedMark({ name, label }: { name: string; label?: string }) {
 	return (
 		<Animated.View
 			testID={`settings-saved-${name}`}
+			// The beat for a saved setting: the mark pops in with the shared overshoot.
+			entering={reduced ? undefined : ZoomIn.duration(BEAT).easing(EASE_BEAT)}
 			exiting={reduced ? undefined : FadeOut.duration(BEAT)}
 			className="flex-row items-center gap-1"
 		>

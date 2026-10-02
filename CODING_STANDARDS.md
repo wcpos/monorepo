@@ -155,6 +155,12 @@ Tiles are equal width in fixed columns and keep their order. Width never follows
 Five or six payment gateways is normal for a WooCommerce store: design the grid for that, not for
 two. Phones stack to one or two columns; tablets and desktop use the space they have.
 
+- There are two layouts and nothing in between (owner, 2026-10-02): the navigation rail with
+  the register's two columns in a window at least 768 wide and 480 tall, the phone layout
+  (tabs) below that. The boundary is `isPhoneWindow` in `@wcpos/components/lib/device`. A
+  screen that wants more room for dense content reads the theme's `roomy`; it does not add a
+  breakpoint.
+
 #### 5. State is visible, not explained
 - Offline, saving, refused, disabled: one badge in one place, at the top of the pane.
 - A disabled control says why in a few words beside it. Unavailable options are folded or dimmed
@@ -172,7 +178,13 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   sake.
 - Anything that moves is smooth, and a beat is a pleasure (owner, 2026-10-01): "fun, smooth and
   joyful", so that adding to the cart is worth doing just to watch it land. In practice:
-  - Animate only `transform` and `opacity`, with Reanimated shared values, on every platform.
+  - Animate only `transform` and `opacity`, with Reanimated, on every platform. A slide that is
+    a plain open/closed state is a Reanimated CSS transition (`SlideOver`): on web the browser
+    runs it off the main thread, so the screen re-rendering around it cannot drop it. Shared
+    values are for motion that follows something (a gesture, two panes on one value).
+  - Leave on an accelerating curve (`EASE_EXIT`); the shared ease creeps at the end. A scrim
+    fades its colour, never its own opacity, or its panel fades with it.
+  - Anything focused while it is moving is focused with `preventScroll`.
   - Whatever slides keeps what it slides over on stage: both move as one (`PaneStack`), or the
     cover comes out of an edge and goes back into it (`SlideOver`). Nothing animates on mount.
   - What arrives is complete on its first visible frame: no skeleton, spinner or late image
