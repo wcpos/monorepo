@@ -9,7 +9,6 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SlideOver } from '@wcpos/components/slide-over';
-import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
