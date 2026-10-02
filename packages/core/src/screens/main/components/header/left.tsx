@@ -2,8 +2,7 @@ import * as React from 'react';
 
 import { useNavigation } from 'expo-router';
 
-import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
+import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 
 import { useTheme } from '../../../../contexts/theme';
@@ -15,8 +14,8 @@ import { useT } from '../../../../contexts/translations';
  */
 export function HeaderLeft({ className = '' }: { className?: string }) {
 	const { screenSize } = useTheme();
-	const navigation = useNavigation();
 	const t = useT();
+	const navigation = useNavigation();
 
 	/**
 	 *
@@ -32,36 +31,16 @@ export function HeaderLeft({ className = '' }: { className?: string }) {
 		return null;
 	}
 
-	/**
-	 * Small screen - icon only
-	 */
-	if (screenSize === 'sm') {
-		return (
-			<Button
-				variant="sidebar"
-				testID="drawer-open-button"
-				onPress={handleOpenDrawer}
-				className={`px-3 ${className}`}
-			>
-				<Icon name="bars" className="text-sidebar-foreground" />
-			</Button>
-		);
-	}
-
-	/**
-	 * Medium screen - icon with text
-	 */
+	// The phone layout: icon only. There is no layout between the two (owner, 2026-10-02).
 	return (
 		<Button
 			variant="sidebar"
 			testID="drawer-open-button"
+			aria-label={t('common.menu')}
 			onPress={handleOpenDrawer}
 			className={`px-3 ${className}`}
 		>
-			<HStack className="gap-2">
-				<Icon name="bars" className="text-sidebar-foreground" />
-				<ButtonText>{t('common.menu')}</ButtonText>
-			</HStack>
+			<Icon name="bars" className="text-sidebar-foreground" />
 		</Button>
 	);
 }

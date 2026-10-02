@@ -29,7 +29,7 @@ type Term = [id: string, sign: string, label: string, amount: string];
 
 export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 	const t = useT();
-	const { screenSize } = useTheme();
+	const { screenSize, roomy } = useTheme();
 	const { session, binding, terms, expected, blind, lastClosure, sessionsOn } =
 		useRegisterSession();
 	const { store, site } = useStoreSession();
@@ -205,7 +205,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					.join(' · ')
 			: '';
 	const phone = screenSize === 'sm';
-	const stacked = screenSize === 'md' || rows.length > 4;
+	const stacked = (!phone && !roomy) || rows.length > 4;
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const dispatch = async () => {

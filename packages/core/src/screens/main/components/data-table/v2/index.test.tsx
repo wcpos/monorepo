@@ -106,5 +106,7 @@ it('skeleton follows visible columns, with a capped row count', () => {
 	expect(screen.getAllByTestId('data-table-skeleton-name')).toHaveLength(12);
 	expect(screen.getAllByTestId('data-table-skeleton-actions')).toHaveLength(12);
 	expect(screen.queryByTestId('data-table-skeleton-price')).toBeNull();
-	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('row');
+	// A line of text in a real cell, not a bar the height of a row: the skeleton row is as
+	// tall as its cells make it, which is what keeps it the size of the row that replaces it.
+	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('line');
 });

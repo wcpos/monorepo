@@ -1,6 +1,6 @@
 {
   "packages/components/src/accordion/index.tsx": {
-    "duration-literal": 5,
+    "duration-literal": 2,
     "focus-visible:": 3
   },
   "packages/components/src/dnd/web/drop-indicator.tsx": {
@@ -12,10 +12,10 @@
     "hover:": 2
   },
   "packages/components/src/modal/index.tsx": {
-    "duration-literal": 2
+    "duration-literal": 1
   },
   "packages/components/src/table/pulse-row.tsx": {
-    "duration-literal": 3
+    "duration-literal": 2
   },
   "packages/components/src/toggle-group/index.tsx": {
     "focus-visible:": 4,

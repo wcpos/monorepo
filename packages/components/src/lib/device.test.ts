@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { DeviceScope, useIsPhone, usePointer } from './device';
 
-const mockDimensions = { width: 639, height: 800, scale: 1, fontScale: 1 };
+const mockDimensions = { width: 767, height: 1024, scale: 1, fontScale: 1 };
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	useWindowDimensions: () => mockDimensions,
@@ -16,10 +16,19 @@ afterEach(() => {
 	window.matchMedia = originalMatchMedia;
 });
 
-it('keeps room keyed only by the existing 640px boundary', () => {
+it('is a phone under 768 wide, and when wide but under 480 tall', () => {
 	const { result, rerender } = renderHook(useIsPhone);
+	// iPad mini in portrait (744) and anything narrower: the phone layout.
 	expect(result.current).toBe(true);
-	mockDimensions.width = 640;
+	mockDimensions.width = 768;
+	rerender();
+	expect(result.current).toBe(false);
+	// A phone on its side: wide enough, too short.
+	Object.assign(mockDimensions, { width: 932, height: 430 });
+	rerender();
+	expect(result.current).toBe(true);
+	// The shortest tablet on its side.
+	Object.assign(mockDimensions, { width: 960, height: 600 });
 	rerender();
 	expect(result.current).toBe(false);
 });

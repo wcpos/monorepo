@@ -3,7 +3,7 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 
 import { render, screen } from '@testing-library/react';
 
-import { EASE } from './motion';
+import { EASE, EASE_EXIT } from './motion';
 import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
 
 const mockViews: ViewProps[] = [];
@@ -166,7 +166,10 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		expect(panel.entering).toBe(OVERLAY_MOTION[presentation].entering);
 		expect(panel.exiting).toBe(OVERLAY_MOTION[presentation].exiting);
 		expect((panel.entering as { easing: jest.Mock }).easing).toHaveBeenCalledWith(EASE);
-		expect((panel.exiting as { easing: jest.Mock }).easing).toHaveBeenCalledWith(EASE);
+		// A fade leaves on the shared ease; a surface that slides away speeds up into its edge.
+		expect((panel.exiting as { easing: jest.Mock }).easing).toHaveBeenCalledWith(
+			presentation === 'center' ? EASE : EASE_EXIT
+		);
 		expect(panel.className?.split(' ')).toEqual(
 			expect.arrayContaining(['max-h-full', 'max-w-full'])
 		);

@@ -103,6 +103,11 @@ jest.mock('../../checkout/payments/server/use-resume-terminal-legs', () => ({
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 jest.mock('./open-orders-list', () => ({ OpenOrdersList: () => null }));
+jest.mock('@wcpos/components/slide-over', () => ({
+	SlideOver: ({ open, from }: { open: boolean; from: string }) => (
+		<div data-testid="open-orders-cover" data-open={String(open)} data-from={from} />
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -239,4 +244,25 @@ it('keeps the shared title wording for callers outside the strip', () => {
 	const order = mockOpen[0].record as unknown as React.ComponentProps<typeof CartTabTitle>['order'];
 	const { container } = render(<CartTabTitle order={order} />);
 	expect(container.textContent).toBe('Cart $10.00');
+});
+
+it('opens the list from the strip, and the count button or a tab closes it again', () => {
+	const { unmount } = render(<OpenOrderTabs position="top" />);
+	expect(screen.getByTestId('open-orders-cover').dataset.from).toBe('top');
+	unmount();
+	render(<OpenOrderTabs />);
+	const cover = () => screen.getByTestId('open-orders-cover').dataset;
+	// The strip sits under the cart by default, so the list rises out of its top edge.
+	expect(cover()).toMatchObject({ open: 'false', from: 'bottom' });
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	expect(cover().open).toBe('true');
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	expect(cover().open).toBe('false');
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	fireEvent.click(screen.getByTestId('open-order-tab-open'));
+	expect(cover().open).toBe('false');
+	// The new-order button stays pressable beside the open list and must close it too.
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	fireEvent.click(screen.getByTestId('new-order-tab'));
+	expect(cover().open).toBe('false');
 });

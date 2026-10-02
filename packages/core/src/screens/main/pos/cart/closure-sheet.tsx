@@ -13,7 +13,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/v2/dialog';
-import { STAMP } from '@wcpos/components/lib/motion';
+import { EASE_BEAT, STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { ClosureDocument } from '@wcpos/database';
@@ -73,7 +73,8 @@ export function ClosureSheet({
 			<DialogContent side={side} size="lg" portalHost="pos" testID="closure-sheet">
 				<DialogHeader className="flex-row items-center gap-3">
 					<Animated.View
-						entering={ZoomIn.duration(STAMP).reduceMotion(ReduceMotion.System)}
+						// Decision 29: the stamp lands on the shared overshoot.
+						entering={ZoomIn.duration(STAMP).easing(EASE_BEAT).reduceMotion(ReduceMotion.System)}
 						className="bg-success/15 size-11 items-center justify-center rounded-full"
 					>
 						<Icon name="check" className="text-success" />

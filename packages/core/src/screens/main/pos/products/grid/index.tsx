@@ -158,27 +158,26 @@ export function ProductGrid({
 					)}
 				/>
 			</VirtualizedList.Root>
-			<View className="border-border border-t">
-				{calcTaxes ? (
-					<DataTableFooter
-						collectionName="products"
-						active$={binding.active$}
-						total$={binding.total$}
-						sync={binding.sync}
-						count={renderedCount}
-					>
-						<TaxBasedOn />
-					</DataTableFooter>
-				) : (
-					<DataTableFooter
-						collectionName="products"
-						active$={binding.active$}
-						total$={binding.total$}
-						sync={binding.sync}
-						count={renderedCount}
-					/>
-				)}
-			</View>
+			{/* The footer draws its own top line; a bordered wrapper here doubled it. */}
+			{calcTaxes ? (
+				<DataTableFooter
+					collectionName="products"
+					active$={binding.active$}
+					total$={binding.total$}
+					sync={binding.sync}
+					count={renderedCount}
+				>
+					<TaxBasedOn />
+				</DataTableFooter>
+			) : (
+				<DataTableFooter
+					collectionName="products"
+					active$={binding.active$}
+					total$={binding.total$}
+					sync={binding.sync}
+					count={renderedCount}
+				/>
+			)}
 		</View>
 	);
 }

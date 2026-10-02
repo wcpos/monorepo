@@ -10,7 +10,6 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
-jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (value: number) => value }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./variations-pane', () => ({ VariationsPane: () => <div data-testid="variations" /> }));
 jest.mock('@wcpos/components/button', () => ({
@@ -47,22 +46,6 @@ jest.mock('../../../components/data-table/v2/rows', () => ({
 		</button>
 	),
 }));
-jest.mock('react-native-reanimated', () => {
-	const animation = {
-		duration: () => animation,
-		easing: () => animation,
-		reduceMotion: () => animation,
-	};
-	return {
-		__esModule: true,
-		default: { View: ({ children }: React.PropsWithChildren) => <div>{children}</div> },
-		FadeIn: animation,
-		FadeOut: animation,
-		SlideInRight: animation,
-		SlideOutLeft: animation,
-		ReduceMotion: { System: 'system' },
-	};
-});
 jest.mock('react-native-gesture-handler', () => ({
 	GestureDetector: ({ children }: React.PropsWithChildren) => children,
 	Gesture: {
@@ -87,7 +70,7 @@ const parent = {
 function Browser() {
 	const [inside, setInside] = React.useState(true);
 	return inside ? (
-		<DrillIn parent={parent} back={() => setInside(false)} viewMode="table" />
+		<DrillIn parent={parent} back={() => setInside(false)} />
 	) : (
 		<div data-testid="products-list" />
 	);

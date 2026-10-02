@@ -27,7 +27,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Cashier', stores: [] },
 	}),
 }));
-let mockScreenSize: 'sm' | 'md' | 'lg' = 'sm';
+let mockScreenSize: 'sm' | 'lg' = 'sm';
 jest.mock('../../../../contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
@@ -118,10 +118,4 @@ it('has no avatar on wide, where the rail carries it', () => {
 it('has an avatar on the phone', () => {
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
-});
-it('keeps the avatar at medium widths, which keep the old front drawer', () => {
-	mockScreenSize = 'md';
-	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
-	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
-	mockScreenSize = 'sm';
 });

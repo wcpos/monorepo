@@ -35,7 +35,7 @@ function TableBody({ className, style, ...props }: TablePrimitive.BodyProps) {
 function TableFooter({ className, ...props }: TablePrimitive.FooterProps) {
 	return (
 		<TablePrimitive.Footer
-			className={cn('bg-footer font-medium [&>tr]:last:border-b-0', className)}
+			className={cn('font-medium [&>tr]:last:border-b-0', className)}
 			{...props}
 		/>
 	);

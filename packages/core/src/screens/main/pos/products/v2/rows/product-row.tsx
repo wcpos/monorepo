@@ -1,14 +1,14 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { IconButton } from '@wcpos/components/icon-button';
-import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
-import { useT } from '../../../../../../contexts/translations';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useAddProduct } from '../../../hooks/use-add-product';
 import { DataTableRow } from '../../../../components/data-table/v2/rows';
+import { InCartCount } from './in-cart-count';
+
+export { InCartCount };
 
 export function useProductCount(record: EngineRecord<'products'>) {
 	const { currentOrderRecord } = useCurrentOrder();
@@ -25,30 +25,6 @@ export function useProductCount(record: EngineRecord<'products'>) {
 						.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
 	);
 }
-export function InCartCount({ count, onPress }: { count: number; onPress?: () => void }) {
-	const t = useT();
-	// Pressable when it stands in for the `+`: the badge is then the row's named add control,
-	// and its target keeps the row token (the 44-pt floor) around the compact badge.
-	const badge = (
-		<View className="bg-primary size-6 items-center justify-center rounded-full">
-			<Text className="text-primary-foreground">{count}</Text>
-		</View>
-	);
-	if (!onPress) {
-		return <View accessibilityLabel={t('pos_products.in_cart_count', { count })}>{badge}</View>;
-	}
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel={t('pos_products.in_cart_count', { count })}
-			onPress={onPress}
-			hitSlop={8}
-			className="min-h-row min-w-row items-center justify-center"
-		>
-			{badge}
-		</Pressable>
-	);
-}
 export function ProductRow({
 	item,
 }: Pick<React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'products'> }>>, 'item'>) {
@@ -60,18 +36,21 @@ export function ProductRow({
 			item={item}
 			onPress={() => addProduct(record)}
 			trailing={
-				count ? (
-					<InCartCount count={count} onPress={() => void addProduct(record)} />
-				) : (
-					<IconButton
-						name="circlePlus"
-						testID="add-to-cart-button"
-						onPress={(event) => {
-							event.stopPropagation();
-							void addProduct(record);
-						}}
-					/>
-				)
+				<InCartCount
+					product={record.uuid}
+					count={count}
+					onPress={() => void addProduct(record)}
+					empty={
+						<IconButton
+							name="circlePlus"
+							testID="add-to-cart-button"
+							onPress={(event) => {
+								event.stopPropagation();
+								void addProduct(record);
+							}}
+						/>
+					}
+				/>
 			}
 		/>
 	);

@@ -5,14 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 import isEqual from 'lodash/isEqual';
-import Animated, { FadeInRight, ReduceMotion } from 'react-native-reanimated';
 
-import { BEATS } from '@wcpos/components/lib/motion';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/device';
+import { SlideOver } from '@wcpos/components/slide-over';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 
@@ -256,15 +255,28 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	const t = useT();
 	const phone = useIsPhone();
 	const { width } = useWindowDimensions();
-	const { screenSize } = useTheme();
+	const { roomy } = useTheme();
 	const { order: selected } = useLocalSearchParams<{ order?: string }>();
 	const router = useRouter();
 	const selectedRow = React.useRef<ViewInstance>(null);
 	const close = () => {
 		router.setParams({ order: undefined });
-		if (Platform.OS === 'web') selectedRow.current?.focus();
+		// The pane is still sliding out beside the list: a plain focus scrolls a row that is
+		// just out of view into it, and the list jumps.
+		if (Platform.OS === 'web') {
+			(selectedRow.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+		}
 	};
-	const pane = selected ? <OrderPane key={selected} selected={selected} onClose={close} /> : null;
+	// The pane that is leaving keeps the order it showed until it has slid out.
+	const [shown, setShown] = React.useState(selected);
+	if (selected && selected !== shown) setShown(selected);
+	// The list keeps its narrow rows for as long as the pane's frame is beside it, which is
+	// until the pane has slid out, not until the selection clears.
+	const [beside, setBeside] = React.useState(Boolean(selected));
+	if (selected && !beside) setBeside(true);
+	// The phone has no pane frame to report that it left.
+	if (phone && !selected && beside) setBeside(false);
+	const pane = shown ? <OrderPane key={shown} selected={shown} onClose={close} /> : null;
 	return (
 		<View
 			testID="orders-body"
@@ -287,7 +299,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar
 						    (number, customer, status, total) until the pane closes. */}
 						<DeviceScope
-							pointer={selected && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
+							pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
 						>
 							<OrdersList
 								binding={binding}
@@ -300,8 +312,9 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 					</Suspense>
 				</ErrorBoundary>
 			</View>
-			{pane &&
-				(phone ? (
+			{phone ? (
+				selected &&
+				pane && (
 					<Dialog route onClose={close}>
 						<DialogContent
 							side="right"
@@ -315,16 +328,20 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 							{pane}
 						</DialogContent>
 					</Dialog>
-				) : (
-					<Animated.View
-						entering={FadeInRight.duration(BEATS.ordersPane.duration)
-							.easing(BEATS.ordersPane.easing)
-							.reduceMotion(ReduceMotion.System)}
-						className={`border-border bg-card border-l ${screenSize === 'lg' ? 'w-120' : 'w-2/5 max-w-110'}`}
-					>
-						{pane}
-					</Animated.View>
-				))}
+				)
+			) : (
+				// The pane slides out of the right edge, solid, and back into it. Its frame holds
+				// the pane's place beside the list until it has left.
+				<SlideOver
+					open={Boolean(selected)}
+					from="right"
+					onLeft={() => setBeside(false)}
+					className={roomy ? 'w-120' : 'w-2/5 max-w-110'}
+					coverClassName="border-border bg-card border-l"
+				>
+					{pane}
+				</SlideOver>
+			)}
 		</View>
 	);
 }

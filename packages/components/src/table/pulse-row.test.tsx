@@ -4,7 +4,8 @@ import { act, render } from '@testing-library/react';
 
 import { PulseTableRow, type PulseTableRowRef } from './pulse-row';
 
-const ERROR_COLOR = '#d40924';
+// The removal tint's peak opacity: what tells a remove pulse from an add pulse here.
+const TINT_REMOVED = 0.3;
 
 type StartedAnimation = { toValue: unknown; callback?: (finished: boolean) => void };
 
@@ -24,6 +25,7 @@ jest.mock('react-native-reanimated', () => {
 		default: {
 			View: ({ children, ...props }: any) => actualReact.createElement('div', props, children),
 		},
+		Easing: { bezier: () => 'ease' },
 		__started: started,
 		__pending: pending,
 		cancelAnimation: () => {
@@ -46,18 +48,14 @@ jest.mock('react-native-worklets', () => ({
 	scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args),
 }));
 
-jest.mock('uniwind', () => ({
-	useCSSVariable: () => ['#ffffff', '#007936', ERROR_COLOR],
-}));
-
 const reanimated = jest.requireMock('react-native-reanimated') as {
 	__started: StartedAnimation[];
 	__pending: ((finished: boolean) => void)[];
 };
 
-/** Every remove pulse started so far (add pulses fade to the success colour). */
+/** Every remove pulse started so far (an add pulse rises to its own, lower, tint). */
 function removePulses() {
-	return reanimated.__started.filter((animation) => animation.toValue === ERROR_COLOR);
+	return reanimated.__started.filter((animation) => animation.toValue === TINT_REMOVED);
 }
 
 /** Run every in-flight animation to completion. */

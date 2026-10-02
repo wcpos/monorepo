@@ -56,3 +56,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 46. Deduplicate billing/shipping locations using trimmed, case-normalized address fields rather than recipient names — equivalent delivery locations must not repeat solely because names or casing differ — evidence: `8fdcb93942 2026-05-01 fix: align refund eligibility and totals` — platform: all.
 47. Display tax IDs from the order’s sale-time snapshot, not the live customer — subsequent customer edits must not rewrite historical sale identity — evidence: “not the live customer record), since the order owns its own copy from” / “sale-time.” (`orders/view/sections/customer.tsx:118–119`) — platform: all.
 48. Resolve cashier/store metadata into labels rather than showing raw IDs — detail should identify who and where the sale belongs to — evidence: `bc8c2504a4 2026-05-03 Improve order modal metadata and address formatting` — platform: all.
+
+## v2 detail pane motion (added 2026-10-02)
+
+1. Beside the list the pane slides out of the right edge on `SlideOver`, solid, and back into it; a closing pane keeps the order it showed until it has left — evidence: filmed 2026-10-02: it used `FadeInRight` with no exit, vanished on close, and showed a grey block for the whole of its arrival; test `v2/index.test.tsx`: “slides the pane out of the right edge, and a closing pane keeps its order until it has left”.
+2. The pane awaits its record outside Suspense, and focuses its close button with `preventScroll` — evidence: React held the committed fallback for 300 ms over a local record; a plain focus made the browser scroll the frame that clips the pane, and it arrived from the wrong side (both filmed 2026-10-02).
+3. The pane's width follows the theme's `roomy` (480 at a desk, two fifths up to 440 on a standing tablet), which the removed `md` breakpoint used to decide — evidence: the 768 boundary, 2026-10-02.

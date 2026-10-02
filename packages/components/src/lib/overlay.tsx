@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from '../keyboard-controller';
 import {
 	EASE,
+	EASE_EXIT,
 	OVERLAY_FADE,
 	PANEL_SLIDE,
 	PANEL_SLIDE_OUT,
@@ -35,8 +36,17 @@ import {
 } from './motion';
 import { cn } from './utils';
 const isWeb = Platform.OS === 'web';
+/**
+ * Web: a closing overlay stays mounted until its exit has played. Radix keeps the portal,
+ * the scrim and the panel until the scrim's animation ends, but only while the caller goes
+ * on rendering them, and only if the portal can see the scrim: its presence check reads the
+ * animation off the node its child hands back, so the shell passes its `ref` on to the
+ * scrim. Native's primitives unmount at once and Reanimated plays the exit on the way out.
+ */
+export const OVERLAY_EXIT_MOUNTED = isWeb;
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
 export type OverlayScrimProps = {
+	ref?: React.Ref<never>;
 	children?: React.ReactNode;
 	className?: string;
 	style?: StyleProp<ViewStyle>;
@@ -49,6 +59,8 @@ export type OverlayScrimProps = {
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
 export type OverlayShellProps = {
+	/** Web: handed to the scrim, so the portal above can wait for its exit (see `OVERLAY_EXIT_MOUNTED`). */
+	ref?: React.Ref<never>;
 	presentation: OverlayPresentation;
 	open: boolean;
 	Scrim: OverlayScrimComponent;
@@ -91,6 +103,8 @@ export function useOverlayPresentation(): OverlayPresentation | undefined {
 /** The web scrim flattens Radix's wrapper; a panel carrying the mark keeps its box. */
 export const SCRIM_FLATTENS_WRAPPER = '[&>[role=dialog]:not([data-sheet])]:contents';
 const SHEET_MARK = { dataSet: { sheet: '' } } as object;
+/** Web: marks a scrim or panel whose Radix wrapper must wait for its exit (`overlay-hold` in global.css). */
+export const EXIT_MARK = { dataSet: { exit: '' } } as object;
 // `auto`: under a Radix modal dialog the body has `pointer-events: none`, which the layer would inherit.
 const OUTSIDE_PRESS_LAYER: StyleProp<ViewStyle> = [
 	StyleSheet.absoluteFill,
@@ -125,25 +139,25 @@ export const OVERLAY_MOTION: Record<
 		enter: 'web:animate-panel-in-left',
 		exit: 'web:animate-panel-out-left',
 		entering: SlideInLeft.duration(PANEL_SLIDE).easing(EASE),
-		exiting: SlideOutLeft.duration(PANEL_SLIDE_OUT).easing(EASE),
+		exiting: SlideOutLeft.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 	right: {
 		enter: 'web:animate-panel-in-right',
 		exit: 'web:animate-panel-out-right',
 		entering: SlideInRight.duration(PANEL_SLIDE).easing(EASE),
-		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
+		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 	bottom: {
 		enter: 'web:animate-sheet-in',
 		exit: 'web:animate-sheet-out',
 		entering: SlideInDown.duration(SHEET_RISE).easing(EASE),
-		exiting: SlideOutDown.duration(PANEL_SLIDE_OUT).easing(EASE),
+		exiting: SlideOutDown.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 	page: {
 		enter: 'web:animate-panel-in-right',
 		exit: 'web:animate-panel-out-right',
 		entering: SlideInRight.duration(PANEL_SLIDE).easing(EASE),
-		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
+		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 };
 /**
@@ -223,7 +237,8 @@ const keyOwners: object[] = [];
  * keyed on `open` runs, and that effect would never re-run.
  */
 export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
-	const { presentation, open, Scrim, onDismiss, onOutsidePress, pinned, testID, children } = props;
+	const { ref, presentation, open, Scrim, onDismiss, onOutsidePress, pinned, testID, children } =
+		props;
 	const insets = useSafeAreaInsets();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -392,10 +407,13 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	 */
 	const shell = isWeb ? (
 		<Scrim
+			ref={ref}
+			{...EXIT_MARK}
 			className={cn(
 				'bg-scrim absolute top-0 right-0 bottom-0 left-0 flex',
 				align[presentation],
-				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out',
+				// A leaving overlay takes no presses: the next tap goes to what is under it.
+				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out pointer-events-none',
 				// Radix inserts an auto-height [role=dialog] wrapper; flatten it on every presentation so the panel's h-full / max-h-[92%] / max-w-full resolve against the overlay (dialog ledger line 5).
 				// The phone sheet mounts no Radix wrapper: its own [role=dialog] panel sits right under the scrim and is the box, so it is marked out of the rule.
 				SCRIM_FLATTENS_WRAPPER

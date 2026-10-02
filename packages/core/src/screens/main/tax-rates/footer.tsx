@@ -34,7 +34,7 @@ export function TaxRatesFooter({ count, active$, total$, sync }: TaxRatesFooterP
 	const t = useT();
 
 	return (
-		<HStack className="border-border bg-footer justify-end gap-0 border-t p-2">
+		<HStack className="border-border justify-end gap-0 border-t p-2">
 			<Text className="text-xs">
 				{/* Only print a denominator something vouches for — see QueryBinding.total$. */}
 				{total === null

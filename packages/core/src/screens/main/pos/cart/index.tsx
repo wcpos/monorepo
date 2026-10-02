@@ -29,6 +29,8 @@ import { RegisterCount } from './register-count';
 import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
+import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
+import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';
 import {
 	consumeRegisterPickerRequest,
@@ -116,13 +118,22 @@ export function OpenOrders({
 	/**
 	 *
 	 */
+	// The desktop's title-bar strip is the till's topmost row: with the strip visible and
+	// the cart in its column, the register bar renders INTO the strip (prototype
+	// 2026-09-30-phone-md-chrome, desktop 7). Web, tablet and phone have no strip.
+	const strip = useTitleBarStrip();
+	const barInStrip = isColumn && strip.node !== null;
+	const registerBar = (
+		<RegisterBar
+			onSwitchRegister={() => setPickingRegister(true)}
+			panelOpen={panelOpen}
+			onPanelOpenChange={setPanelOpen}
+			strip={barInStrip}
+		/>
+	);
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn ? 'bg-card pl-0' : ''}`}>
-			<RegisterBar
-				onSwitchRegister={() => setPickingRegister(true)}
-				panelOpen={panelOpen}
-				onPanelOpenChange={setPanelOpen}
-			/>
+			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
