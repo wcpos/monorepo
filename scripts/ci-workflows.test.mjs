@@ -1764,6 +1764,11 @@ for (const jobName of ['android', 'ios']) {
 	});
 }
 
+test('both workflows push only on main, so the queue scan may skip push runs', () => {
+	assert.deepEqual(readWorkflow('deploy.yml').on.push.branches, ['main']);
+	assert.deepEqual(readWorkflow('e2e-native.yml').on.push.branches, ['main']);
+});
+
 test('the dev-next queue never uses concurrency groups or serialises web shards', () => {
 	const deploy = readWorkflow('deploy.yml');
 	assert.match(deploy.jobs.e2e.concurrency.group, /matrix\.shardIndex/);

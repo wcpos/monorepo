@@ -94,11 +94,12 @@ test('a holder blocks every other run regardless of id', () => {
 	assert.deepEqual(blockersFor(100, [{ id: 99, state: 'none', url: '99' }]), []);
 });
 
-test('waitForDevNext never fetches jobs for PRs or its own run', async () => {
+test('waitForDevNext never fetches jobs for PRs, pushes or its own run', async () => {
 	const fake = fakeQueue([
 		[
 			{ ...holder, id: 100 },
 			{ ...holder, event: 'pull_request' },
+			{ ...holder, event: 'push' },
 		],
 	]);
 	assert.equal((await fake.run()).admitted, true);
