@@ -187,6 +187,9 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   - Anything focused while it is moving is focused with `preventScroll`.
   - Whatever slides keeps what it slides over on stage: both move as one (`PaneStack`), or the
     cover comes out of an edge and goes back into it (`SlideOver`). Nothing animates on mount.
+  - A tile that opens onto more tiles deals them out of itself and gathers them back
+    (`pos/products/v2/deal-stack.tsx`): the tile walks to the first slot and is the way back,
+    and the grid it came from fades underneath and stays mounted.
   - What arrives is complete on its first visible frame: no skeleton, spinner or late image
     inside a moving surface. A beat fires for the cashier's own action, never because a row was
     recycled or another order came into view.

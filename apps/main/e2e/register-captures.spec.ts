@@ -314,7 +314,14 @@ for (const [device, viewport] of Object.entries({
 								);
 								await variable.click();
 								await expect(page.getByTestId('products-variations-pane')).toBeVisible();
-								await expect(page.getByTestId(/^data-table-row-variation-/).first()).toBeVisible({
+								// Tiles drill into tiles; rows drill into rows.
+								await expect(
+									page
+										.getByTestId(
+											view === 'grid' ? /^variation-tile-/ : /^data-table-row-variation-/
+										)
+										.first()
+								).toBeVisible({
 									timeout: 15_000,
 								});
 							},

@@ -31,7 +31,7 @@ const answered = { value: true };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: unknown) => resource,
 	// The resource's first answer: `undefined` until the query has spoken.
-	useObservableEagerState: () => (answered.value ? { current: {} } : undefined),
+	useObservableEagerState: () => (answered.value ? { current: { hits } } : undefined),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
@@ -72,6 +72,13 @@ jest.mock('../../../components/data-table/v2', () => ({
 jest.mock('../../../components/data-table/v2/rows', () => ({
 	DataTableRow: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
 		<button data-testid={testID} onClick={onPress} />
+	),
+}));
+jest.mock('./variations-grid', () => ({
+	VariationsGrid: ({ hits: found, back }: { hits?: typeof hits; back: () => void }) => (
+		<button data-testid="grid" onClick={back}>
+			{found ? found.map((hit) => hit.id).join(',') : 'unanswered'}
+		</button>
 	),
 }));
 jest.mock('./footer', () => ({
@@ -150,4 +157,18 @@ it('holds the skeleton, one row per variation, until the query has answered', ()
 	rerender(<VariationsPane parent={parent} />);
 	expect(screen.queryByTestId('skeleton')).toBeNull();
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+});
+it('given a way back, hands the grid the answer itself and never a skeleton or a suspense fallback', () => {
+	// A tile that suspended or was swapped for a skeleton mid-deal would lose its place.
+	const back = jest.fn();
+	answered.value = false;
+	const { rerender } = render(<VariationsPane parent={parent} back={back} />);
+	expect(screen.getByTestId('grid').textContent).toBe('unanswered');
+	expect(screen.queryByTestId('skeleton')).toBeNull();
+	answered.value = true;
+	rerender(<VariationsPane parent={parent} back={back} />);
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	expect(screen.queryByTestId('hits')).toBeNull();
+	fireEvent.click(screen.getByTestId('grid'));
+	expect(back).toHaveBeenCalled();
 });

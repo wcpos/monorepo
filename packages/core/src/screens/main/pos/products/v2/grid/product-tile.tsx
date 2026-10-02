@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, View, type ViewInstance } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 import { StatusBadge } from '@wcpos/components/status-badge';
@@ -17,7 +17,12 @@ import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import { useAddProduct } from '../../../hooks/use-add-product';
 import { TileImage } from '../../grid/tile-image';
 
-interface GridFields {
+import type { Measurable } from '../deal-stack';
+
+// A tile the deal has lifted off the grid: its copy is out on the stage.
+const LIFTED = { opacity: 0 };
+
+export interface GridFields {
 	name: boolean;
 	price: boolean;
 	tax: boolean;
@@ -32,12 +37,15 @@ interface GridFields {
 interface ProductTileProps {
 	record: EngineRecord<'products'>;
 	gridFields: GridFields;
-	onDrill?: (record: EngineRecord<'products'>) => void;
+	/** The tile itself goes along, so a drill-in can start from where it sits. */
+	onDrill?: (record: EngineRecord<'products'>, target?: Measurable) => void;
+	lifted?: boolean;
 }
 
 /** Renders a product tile with the fields enabled for the product grid. */
-export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
+export function ProductTile({ record, gridFields, onDrill, lifted }: ProductTileProps) {
 	const t = useT();
+	const tile = React.useRef<ViewInstance>(null);
 	const count = useProductCount(record);
 	const { getLabel } = useStockStatusLabel();
 	const stock = useDocField(record, ({ payload }) => displayStockStatus(payload));
@@ -111,13 +119,15 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 		gridFields.cost_of_goods_sold;
 
 	const handlePress = React.useCallback(async () => {
-		if (onDrill) onDrill(record);
+		if (onDrill) onDrill(record, tile.current);
 		else await addProduct(record);
 	}, [addProduct, record, onDrill]);
 
 	return (
 		<Pressable
+			ref={tile}
 			onPress={handlePress}
+			style={lifted ? LIFTED : undefined}
 			className="bg-card border-border active:bg-muted m-1 flex-1 overflow-hidden rounded-lg border"
 			testID={onDrill ? 'variable-product-tile' : 'product-tile'}
 		>

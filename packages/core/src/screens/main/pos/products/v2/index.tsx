@@ -50,6 +50,7 @@ import { VariableProductRow } from './rows/variable-product-row';
 import { ProductTile } from './grid/product-tile';
 import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
+import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
@@ -124,11 +125,13 @@ function POSProductsContent({
 	const [drill, setDrill] = React.useState<{
 		record: EngineRecord<'products'>;
 		search: string;
+		// The tile that was tapped, when it was a tile: the grid's deal starts from it.
+		target?: Measurable;
 	} | null>(null);
 	const drilled = drill && drill.search === state.search ? drill.record : null;
 	const setDrilled = React.useCallback(
-		(record: EngineRecord<'products'> | null) =>
-			setDrill(record ? { record, search: state.search } : null),
+		(record: EngineRecord<'products'> | null, target?: Measurable) =>
+			setDrill(record ? { record, search: state.search, target } : null),
 		[state.search]
 	);
 	const VariableTile = React.useCallback(
@@ -280,6 +283,63 @@ function POSProductsContent({
 	);
 	/* eslint-enable react-compiler/react-compiler */
 
+	// The products stay mounted under a drill-in: the stage brings the variations over them and
+	// takes them back off, and the list is where the cashier left it.
+	const products = (
+		<Suspense fallback={loading}>
+			{viewMode === 'grid' ? (
+				<ProductGrid
+					tile={ProductTile}
+					variableTile={VariableTile}
+					binding={binding}
+					actions={tableActions}
+					noDataMessage={noDataMessage}
+				/>
+			) : (
+				<DataTable<ProductRow>
+					id="pos-products"
+					collectionName="products"
+					binding={binding}
+					resource={binding.resource}
+					sort={state.sort}
+					actions={tableActions}
+					active$={binding.active$}
+					total$={binding.total$}
+					sync={binding.sync}
+					renderItem={({ item, index, table }) => (
+						<VirtualizedList.Item>
+							{item.original.record.payload.type === 'variable' ? (
+								<VariableProductRow
+									item={item}
+									index={index}
+									table={table}
+									variationsStyle={variationsStyle}
+									onDrill={setDrilled}
+								/>
+							) : (
+								<ProductRowView item={item} />
+							)}
+						</VirtualizedList.Item>
+					)}
+					cellsForRow={cellsForRow}
+					noDataMessage={noDataMessage}
+					estimatedItemSize={100}
+					TableFooterComponent={ProductsFooter}
+					getItemType={(row) => row.original.record.payload.type}
+					tableConfig={tableConfig}
+				/>
+			)}
+		</Suspense>
+	);
+	const renderDrillIn = (parent: EngineRecord<'products'>) => (
+		<DrillIn
+			parent={parent}
+			back={() => setDrilled(null)}
+			stockStatus={stockStatusFilter}
+			tiles={viewMode === 'grid'}
+		/>
+	);
+
 	return (
 		<View className="h-full">
 			<View className="flex-1">
@@ -356,65 +416,26 @@ function POSProductsContent({
 						}}
 					>
 						<ErrorBoundary>
-							{/* The products stay mounted under a drill-in: the pane slides over them and
-							    back off, and the list is where the cashier left it. */}
-							<PaneStack
-								testID="products-pane-stack"
-								detail={drilled}
-								paneClassName="bg-background"
-								renderDetail={(parent) => (
-									<DrillIn
-										parent={parent}
-										back={() => setDrilled(null)}
-										stockStatus={stockStatusFilter}
-									/>
-								)}
-							>
-								<Suspense fallback={loading}>
-									{viewMode === 'grid' ? (
-										<ProductGrid
-											tile={ProductTile}
-											variableTile={VariableTile}
-											binding={binding}
-											actions={tableActions}
-											noDataMessage={noDataMessage}
-										/>
-									) : (
-										<DataTable<ProductRow>
-											id="pos-products"
-											collectionName="products"
-											binding={binding}
-											resource={binding.resource}
-											sort={state.sort}
-											actions={tableActions}
-											active$={binding.active$}
-											total$={binding.total$}
-											sync={binding.sync}
-											renderItem={({ item, index, table }) => (
-												<VirtualizedList.Item>
-													{item.original.record.payload.type === 'variable' ? (
-														<VariableProductRow
-															item={item}
-															index={index}
-															table={table}
-															variationsStyle={variationsStyle}
-															onDrill={setDrilled}
-														/>
-													) : (
-														<ProductRowView item={item} />
-													)}
-												</VirtualizedList.Item>
-											)}
-											cellsForRow={cellsForRow}
-											noDataMessage={noDataMessage}
-											estimatedItemSize={100}
-											TableFooterComponent={ProductsFooter}
-											getItemType={(row) => row.original.record.payload.type}
-											tableConfig={tableConfig}
-										/>
-									)}
-								</Suspense>
-							</PaneStack>
+							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. */}
+							{viewMode === 'grid' ? (
+								<DealStack
+									testID="products-pane-stack"
+									detail={drilled}
+									target={drill?.target}
+									renderDetail={renderDrillIn}
+								>
+									{products}
+								</DealStack>
+							) : (
+								<PaneStack
+									testID="products-pane-stack"
+									detail={drilled}
+									paneClassName="bg-background"
+									renderDetail={renderDrillIn}
+								>
+									{products}
+								</PaneStack>
+							)}
 						</ErrorBoundary>
 					</View>
 				</View>

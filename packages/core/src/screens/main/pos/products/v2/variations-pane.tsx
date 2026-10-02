@@ -16,13 +16,19 @@ import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { ProductsFooter } from './footer';
+import { VariationsGrid } from './variations-grid';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from '../cells/price';
 import { SKU } from '../cells/sku';
 import { COGS } from '../cells/cogs';
 import { ProductVariationImage } from '../../../components/product/variation-image';
 
-type Props = { parent: EngineRecord<'products'>; stockStatus?: string };
+type Props = {
+	parent: EngineRecord<'products'>;
+	stockStatus?: string;
+	/** Given by the dealt grid: the variations are tiles, and the parent tile goes back. */
+	back?: () => void;
+};
 
 // The footer's sync button already turns while the variations refresh. The list's own
 // loading band would add and remove a strip under the rows on every drill-in.
@@ -30,7 +36,7 @@ function NoListFooter() {
 	return null;
 }
 
-export function VariationsPane({ parent, ...props }: Props) {
+export function VariationsPane({ parent, back, ...props }: Props) {
 	const state = useQueryState<'variations'>();
 	const variationIds: number[] = useDocField(parent, (value) => value.payload.variations) ?? [];
 	const remoteIds = variationIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
@@ -44,7 +50,19 @@ export function VariationsPane({ parent, ...props }: Props) {
 	// almost at once. So the first answer is awaited here, outside Suspense, where the swap is
 	// immediate — and lands while the pane is still off-stage.
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-01.
-	const answered = useObservableEagerState(binding.resource.valueRef$$) !== undefined;
+	const answer = useObservableEagerState(binding.resource.valueRef$$);
+	const answered = answer !== undefined;
+	if (back) {
+		return (
+			<VariationsGrid
+				parent={parent}
+				back={back}
+				binding={binding}
+				hits={answer?.current.hits}
+				{...props}
+			/>
+		);
+	}
 	// As many skeleton rows as the parent has variations: if the answer is slow, the rows that
 	// replace them land in the same places and the pane does not reflow.
 	const skeleton = <DataTableSkeleton id="pos-products" rowCount={variationIds.length || 1} />;
