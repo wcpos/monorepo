@@ -87,6 +87,8 @@ export function SlideOver({
 		>
 			<Animated.View
 				className={cn('flex-1', coverClassName)}
+				// A cover that is leaving is already gone to a screen reader.
+				aria-hidden={!open}
 				style={{
 					transform: [
 						from === 'left' || from === 'right' ? { translateX: offset } : { translateY: offset },
