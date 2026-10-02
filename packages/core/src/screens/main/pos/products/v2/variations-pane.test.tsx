@@ -30,9 +30,9 @@ jest.mock('@wcpos/query', () => ({
 const answered = { value: true };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: unknown) => resource,
-	// The resource's first answer: `undefined` until the query has spoken.
-	useObservableEagerState: () => (answered.value ? { current: {} } : undefined),
 }));
+// The resource's first answer: false until the query has spoken (or failed).
+jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
 }));

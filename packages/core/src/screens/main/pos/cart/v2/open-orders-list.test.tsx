@@ -43,3 +43,27 @@ it('focuses the current row, selects a row then closes, and provides close', () 
 	fireEvent.click(screen.getByTestId('open-orders-close'));
 	expect(onClose).toHaveBeenLastCalledWith();
 });
+
+it('a list that is leaving does not pull focus back to its selected row', () => {
+	const orders = ['a', 'b'].map((id) => ({
+		id,
+		record: { uuid: id, payload: { billing: {} } } as EngineRecord<'orders'>,
+	}));
+	const props = { orders, onSelect: jest.fn(), onClose: jest.fn() };
+	const { rerender } = render(
+		<>
+			<button data-testid="tab" />
+			<OpenOrdersList {...props} activeValue="b" />
+		</>
+	);
+	// The cashier picks order a: the strip takes focus, the list starts to leave, and only
+	// then does the selection move to row a.
+	screen.getByTestId('tab').focus();
+	rerender(
+		<>
+			<button data-testid="tab" />
+			<OpenOrdersList {...props} activeValue="a" leaving />
+		</>
+	);
+	expect(document.activeElement).toBe(screen.getByTestId('tab'));
+});

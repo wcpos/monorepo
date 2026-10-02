@@ -2,11 +2,7 @@ import * as React from 'react';
 import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import {
-	type ObservableResource,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
+import { type ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -20,6 +16,7 @@ import { CreatedVia } from '../../components/order/created-via';
 import { useProAccess } from '../../contexts/pro-access';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useEngineRecord } from '../../hooks/use-engine-document';
+import { useFirstAnswer } from '../../hooks/use-first-answer';
 import {
 	AddressesRail,
 	CustomerNoteSection,
@@ -46,8 +43,8 @@ export function OrderPane(props: Props) {
 	// Suspending on it commits the fallback, and React holds a committed fallback for 300 ms:
 	// a grey block in the pane for the whole of its slide. Awaited here instead, the swap is
 	// immediate (see `pos/products/v2/variations-pane.tsx`).
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
-	const answered = useObservableEagerState(resource.valueRef$$) !== undefined;
+	// A record that fails counts as answered: the content rethrows it into the boundary.
+	const answered = useFirstAnswer(resource);
 	const skeleton = <View testID="order-pane-skeleton" className="bg-muted m-4 h-48 rounded" />;
 	return (
 		<View testID="order-pane" className="min-h-0 flex-1">

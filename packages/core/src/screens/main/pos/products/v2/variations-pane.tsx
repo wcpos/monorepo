@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { Suspense } from '@wcpos/components/suspense';
@@ -14,6 +14,7 @@ import { useCollectionBinding, useQueryState, useQueryStateActions } from '../..
 import { DataTable } from '../../../components/data-table/v2';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
+import { useFirstAnswer } from '../../../hooks/use-first-answer';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { ProductsFooter } from './footer';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
@@ -43,8 +44,8 @@ export function VariationsPane({ parent, ...props }: Props) {
 	// revealing what replaces it: a third of a second of placeholder over rows that were ready
 	// almost at once. So the first answer is awaited here, outside Suspense, where the swap is
 	// immediate — and lands while the pane is still off-stage.
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-01.
-	const answered = useObservableEagerState(binding.resource.valueRef$$) !== undefined;
+	// A query that fails counts as answered: the table rethrows it into the error boundary.
+	const answered = useFirstAnswer(binding.resource);
 	// As many skeleton rows as the parent has variations: if the answer is slow, the rows that
 	// replace them land in the same places and the pane does not reflow.
 	const skeleton = <DataTableSkeleton id="pos-products" rowCount={variationIds.length || 1} />;

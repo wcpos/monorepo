@@ -108,7 +108,14 @@ export function useCountBeat({
 
 	// Before paint: the new number must not be seen in place before it arrives.
 	React.useLayoutEffect(() => {
-		if (seen.beat === 0 || seen.text === null) return;
+		if (seen.beat === 0) {
+			// A different thing is being counted: a bounce still running belongs to the last one.
+			// Assigning a plain value stops the animation where it is.
+			pop.value = 1;
+			change.value = 1;
+			return;
+		}
+		if (seen.text === null) return;
 		direction.value = seen.added ? 1 : -1;
 		change.value = 0;
 		change.value = withTiming(1, rolls ? ROLL : FADE);
