@@ -261,7 +261,11 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	const selectedRow = React.useRef<ViewInstance>(null);
 	const close = () => {
 		router.setParams({ order: undefined });
-		if (Platform.OS === 'web') selectedRow.current?.focus();
+		// The pane is still sliding out beside the list: a plain focus scrolls a row that is
+		// just out of view into it, and the list jumps.
+		if (Platform.OS === 'web') {
+			(selectedRow.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+		}
 	};
 	// The pane that is leaving keeps the order it showed until it has slid out.
 	const [shown, setShown] = React.useState(selected);

@@ -49,7 +49,8 @@ export function SlideOver({
 	const [staged, setStaged] = React.useState(open);
 	// `landed` moves one frame after `staged`: the cover is painted parked outside its frame
 	// first, so the transition has a position to start from.
-	const [landed, setLanded] = React.useState(false);
+	// A cover that mounts already open is in place: nothing slides on mount.
+	const [landed, setLanded] = React.useState(open);
 	const left = React.useRef(onLeft);
 	React.useEffect(() => {
 		left.current = onLeft;

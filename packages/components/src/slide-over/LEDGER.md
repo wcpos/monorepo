@@ -16,3 +16,4 @@ Seeded 2026-10-01 from the owner's review of the open-orders list ("slide up rea
 6. A cover that is leaving takes no presses — evidence: `pane-stack` line 7.
 7. Reduce-motion: no travel, and a closed cover unmounts at once — evidence: `CODING_STANDARDS.md` § Design 6.
 8. `onLeft` fires once the cover has slid out and unmounted, and not for a close that a reopen interrupted — evidence: Codex review on #2376, 2026-10-02: the orders list dropped its narrow rows the moment the selection cleared and reflowed behind the pane while it was still leaving; test "says when it has left, and not when the close was interrupted".
+9. A cover that mounts already open is in place; nothing slides on mount. A cover that is leaving is hidden from the accessibility tree — evidence: Codex review on #2376, 2026-10-02 (a reloaded wide Orders view with an order selected slid its pane in after the page appeared); tests "a cover that mounts already open is in place" and "leaves faster…".

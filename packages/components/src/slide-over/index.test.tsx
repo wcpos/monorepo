@@ -94,6 +94,11 @@ it.each([
 	}
 );
 
+it('a cover that mounts already open is in place: nothing slides on mount', () => {
+	render(<Stage open />);
+	expect(mockCover.transform).toEqual([{ translateY: '0%' }]);
+});
+
 it('leaves faster, speeding up into its edge, and stays mounted until it has left', () => {
 	const { rerender } = render(<Stage open />);
 	nextFrame();
