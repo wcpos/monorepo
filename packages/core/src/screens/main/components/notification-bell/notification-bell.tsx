@@ -48,11 +48,10 @@ export function NotificationBell({
 					>
 						<View>
 							<Icon name="bell" size="xl" className="text-sidebar-foreground" />
-							{unreadCount > 0 && (
-								<View className="absolute -top-1 -right-0.5">
-									<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
-								</View>
-							)}
+							{/* Always mounted: the badge has to be there to show the first one arrive. */}
+							<View className="absolute -top-1 -right-0.5">
+								<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+							</View>
 						</View>
 						{showLabel && (
 							<Text className="text-sidebar-foreground pr-2">{t('common.notifications')}</Text>
@@ -68,11 +67,9 @@ export function NotificationBell({
 							accessibilityLabel={t('common.notifications')}
 						/>
 					</PopoverTrigger>
-					{unreadCount > 0 && (
-						<View pointerEvents="none" className="absolute -top-1 -right-0.5">
-							<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
-						</View>
-					)}
+					<View pointerEvents="none" className="absolute -top-1 -right-0.5">
+						<Badge count={unreadCount} max={99} variant="destructive" size="sm" />
+					</View>
 				</View>
 			)}
 			<PopoverContent

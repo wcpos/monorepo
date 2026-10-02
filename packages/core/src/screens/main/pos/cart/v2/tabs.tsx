@@ -118,8 +118,8 @@ export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bot
 						aria-expanded={listOpen}
 						onPress={() => (listOpen ? closeList() : setListOpen(true))}
 					>
-						{/* `children`, not `count`: the pill must read "0" when the strip is empty. */}
-						<Badge variant="muted">{String(openOrders.length)}</Badge>
+						{/* The pill must read "0" when the strip is empty. */}
+						<Badge variant="muted" count={openOrders.length} max={Infinity} showZero />
 						{/* The chevron points the way the list will travel. */}
 						<Icon
 							name={listOpen === (position === 'bottom') ? 'chevronDown' : 'chevronUp'}

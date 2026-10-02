@@ -8,6 +8,34 @@ import { Badge } from './index';
 import { Button } from '../button';
 import { StatusBadge } from '../status-badge';
 
+const mockSprings: unknown[] = [];
+const mockTimings: number[] = [];
+
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: (props: any) => jest.requireActual('react').createElement('div', props) },
+	ReduceMotion: { System: 'system' },
+	Easing: { bezier: () => 'ease', linear: 'linear' },
+	Extrapolation: { CLAMP: 'clamp' },
+	interpolate: (value: number) => value,
+	useAnimatedStyle: () => ({}),
+	useSharedValue: (value: number) => jest.requireActual('react').useRef({ value }).current,
+	withSequence: (...steps: number[]) => steps.at(-1),
+	withSpring: (value: number, config: unknown) => {
+		mockSprings.push(config);
+		return value;
+	},
+	withTiming: (value: number, config: { duration: number }) => {
+		mockTimings.push(config.duration);
+		return value;
+	},
+}));
+
+beforeEach(() => {
+	mockSprings.length = 0;
+	mockTimings.length = 0;
+});
+
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	Pressable: ({ children, testID, onPress, ...props }: any) =>
@@ -128,5 +156,72 @@ describe('badge atoms skin', () => {
 		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 		expect(source).not.toContain('text-[');
 		expect(source).not.toContain('gray');
+	});
+});
+
+/**
+ * Every count badge plays one beat when its number changes (owner, 2026-10-02): the old
+ * number fades, the new one bounces with the badge. The roll stays as an option.
+ */
+describe('badge count beat', () => {
+	const FADE = 170;
+	const ROLL = 220;
+	const SWELL = 90;
+
+	it('moves nothing on mount', () => {
+		render(<Badge count={3} />);
+		expect(mockSprings).toHaveLength(0);
+		expect(mockTimings).toHaveLength(0);
+	});
+
+	it('fades the number over and lands the badge when the count goes up', () => {
+		const { container, rerender } = render(<Badge count={3} />);
+		rerender(<Badge count={4} />);
+		// Both numbers are on stage for the handover.
+		expect(container.textContent).toBe('34');
+		expect(mockTimings).toEqual([FADE, SWELL]);
+		expect(mockSprings).toHaveLength(1);
+	});
+
+	it('changes the number without the landing when the count goes down', () => {
+		const { rerender } = render(<Badge count={3} />);
+		rerender(<Badge count={2} />);
+		expect(mockTimings).toEqual([FADE]);
+		expect(mockSprings).toHaveLength(0);
+	});
+
+	it('sees the first count arrive when it was mounted showing nothing', () => {
+		const { container, rerender } = render(<Badge count={0} />);
+		expect(container.textContent).toBe('');
+		rerender(<Badge count={1} />);
+		expect(container.textContent).toBe('1');
+		expect(mockSprings).toHaveLength(1);
+	});
+
+	it('keeps the roll as an option', () => {
+		const { rerender } = render(<Badge count={3} motion="roll" />);
+		rerender(<Badge count={4} motion="roll" />);
+		expect(mockTimings).toEqual([ROLL, SWELL]);
+	});
+
+	it('does not move for a count that changed behind the cap', () => {
+		const { container, rerender } = render(<Badge count={100} max={99} />);
+		rerender(<Badge count={101} max={99} />);
+		expect(container.textContent).toBe('99+');
+		expect(mockTimings).toHaveLength(0);
+	});
+
+	it('does not move when something else is being counted', () => {
+		const { container, rerender } = render(<Badge count={3} identity="a" />);
+		rerender(<Badge count={7} identity="b" />);
+		expect(container.textContent).toBe('7');
+		expect(mockTimings).toHaveLength(0);
+	});
+
+	it('reads 0 only when asked to', () => {
+		const { container, rerender } = render(<Badge count={0} showZero />);
+		expect(container.textContent).toBe('0');
+		rerender(<Badge count={0} />);
+		expect(container.textContent).toBe('');
 	});
 });

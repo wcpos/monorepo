@@ -13,7 +13,9 @@ jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
 	ReduceMotion: { System: 'system' },
-	Easing: { bezier: () => 'ease' },
+	Easing: { bezier: () => 'ease', linear: 'linear' },
+	Extrapolation: { CLAMP: 'clamp' },
+	interpolate: (value: number) => value,
 	useAnimatedStyle: () => ({}),
 	useSharedValue: (value: number) => jest.requireActual('react').useRef({ value }).current,
 	withSequence: (...steps: number[]) => steps.at(-1),
@@ -34,6 +36,7 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 
+const FADE = 170;
 const ROLL = 220;
 const SWELL = 90;
 
@@ -57,19 +60,19 @@ it('shows what stands in for it while the cart holds none, and moves nothing on 
 	expect(mockSprings).toHaveLength(1);
 });
 
-it('lands the first add: the number rolls in and the badge bounces', () => {
+it('lands the first add: the number arrives and the badge bounces', () => {
 	const { rerender } = render(<InCartCount product="p" count={0} />);
 	rerender(<InCartCount product="p" count={1} />);
 	expect(badge().textContent).toBe('1');
 	expect(mockSprings).toHaveLength(1);
 	// Nothing else moves: no ring, no glow (owner, 2026-10-01).
-	expect(mockTimings).toEqual([ROLL, SWELL]);
+	expect(mockTimings).toEqual([FADE, SWELL]);
 });
 
-it('rolls the old number out under the new one on every further add', () => {
+it('hands the old number over to the new one on every further add', () => {
 	const { rerender } = render(<InCartCount product="p" count={1} />);
 	rerender(<InCartCount product="p" count={2} />);
-	// Both are on stage for the roll; the label reads only the new count.
+	// Both are on stage for the handover; the label reads only the new count.
 	expect(badge().textContent).toBe('12');
 	expect(mockSprings).toHaveLength(1);
 	rerender(<InCartCount product="p" count={3} />);
@@ -77,11 +80,19 @@ it('rolls the old number out under the new one on every further add', () => {
 	expect(mockSprings).toHaveLength(2);
 });
 
-it('a count that goes down rolls back without the landing', () => {
+it('a count that goes down changes the number without the landing', () => {
 	const { rerender } = render(<InCartCount product="p" count={3} />);
 	rerender(<InCartCount product="p" count={2} />);
 	expect(mockSprings).toHaveLength(0);
-	expect(mockTimings).toEqual([ROLL]);
+	expect(mockTimings).toEqual([FADE]);
+});
+
+it('keeps the roll as an option', () => {
+	const { rerender } = render(<InCartCount product="p" count={1} motion="roll" />);
+	rerender(<InCartCount product="p" count={2} motion="roll" />);
+	expect(mockTimings).toEqual([ROLL, SWELL]);
+	rerender(<InCartCount product="p" count={1} motion="roll" />);
+	expect(mockTimings).toEqual([ROLL, SWELL, ROLL]);
 });
 
 it('a different product or a different order is not an add', () => {
