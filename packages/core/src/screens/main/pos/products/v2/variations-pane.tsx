@@ -14,6 +14,7 @@ import { useCollectionBinding, useQueryState, useQueryStateActions } from '../..
 import { DataTable } from '../../../components/data-table/v2';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
+import { useFirstAnswer } from '../../../hooks/use-first-answer';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { ProductsFooter } from './footer';
 import { VariationsGrid } from './variations-grid';
@@ -49,10 +50,16 @@ export function VariationsPane({ parent, back, ...props }: Props) {
 	// revealing what replaces it: a third of a second of placeholder over rows that were ready
 	// almost at once. So the first answer is awaited here, outside Suspense, where the swap is
 	// immediate — and lands while the pane is still off-stage.
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-01.
+	// A query that fails counts as answered: the table rethrows it into the error boundary.
+	const answered = useFirstAnswer(binding.resource);
+	// The grid is handed the answer itself, as state: it never suspends (a tile that suspended,
+	// or was swapped for a skeleton, mid-deal would lose its place), and it has to hear the
+	// variations arrive when a cold refresh fills an answer that started empty.
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
 	const answer = useObservableEagerState(binding.resource.valueRef$$);
-	const answered = answer !== undefined;
 	if (back) {
+		// Answered without a value is a failure: reading it rethrows into the error boundary.
+		if (answered && !answer) binding.resource.read();
 		return (
 			<VariationsGrid
 				parent={parent}

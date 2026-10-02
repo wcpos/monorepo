@@ -12,8 +12,9 @@ const hits = [
 	{ id: 'one', record: { remoteId: 1, payload: { stock_status: 'instock' } } },
 	{ id: 'two', record: { remoteId: 2, payload: { stock_status: 'outofstock' } } },
 ];
+const mockRead = jest.fn();
 const binding = {
-	resource: { hits },
+	resource: { hits, read: mockRead },
 	sync: jest.fn(async () => {}),
 	total$: of(99),
 	active$: of(false),
@@ -28,11 +29,16 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
 const answered = { value: true };
+// Whether the answer carried a value; an answer without one is a failed query.
+const valued = { value: true };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: unknown) => resource,
-	// The resource's first answer: `undefined` until the query has spoken.
-	useObservableEagerState: () => (answered.value ? { current: { hits } } : undefined),
+	// The answer as state, for the grid: `undefined` until the query has spoken.
+	useObservableEagerState: () =>
+		answered.value && valued.value ? { current: { hits } } : undefined,
 }));
+// The resource's first answer: false until the query has spoken (or failed).
+jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
 }));
@@ -171,4 +177,15 @@ it('given a way back, hands the grid the answer itself and never a skeleton or a
 	expect(screen.queryByTestId('hits')).toBeNull();
 	fireEvent.click(screen.getByTestId('grid'));
 	expect(back).toHaveBeenCalled();
+});
+it('reads a query that failed, so its error reaches the boundary instead of an empty grid', () => {
+	answered.value = true;
+	mockRead.mockClear();
+	const { rerender } = render(<VariationsPane parent={parent} back={jest.fn()} />);
+	expect(mockRead).not.toHaveBeenCalled();
+	// Answered, but with no value: the resource's own read is what rethrows the failure.
+	valued.value = false;
+	rerender(<VariationsPane parent={parent} back={jest.fn()} />);
+	expect(mockRead).toHaveBeenCalled();
+	valued.value = true;
 });

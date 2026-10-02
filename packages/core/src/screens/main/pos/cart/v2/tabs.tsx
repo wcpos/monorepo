@@ -198,6 +198,7 @@ export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bot
 				<OpenOrdersList
 					orders={openOrders}
 					activeValue={activeValue}
+					leaving={!listOpen}
 					onSelect={handleTabPress}
 					onClose={closeList}
 				/>

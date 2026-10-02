@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 import { of } from 'rxjs';
 
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
@@ -21,13 +20,6 @@ import type { GridFields } from './grid/product-tile';
 
 type Binding = ReturnType<typeof useCollectionBinding<'variations'>>;
 type Hit = { record: EngineRecord<'variations'> };
-
-// The grid never suspends on the query (a tile that suspended mid-deal would lose its
-// place), so a failed read is surfaced here, to the boundary every other list throws to.
-function ResourceErrors({ resource }: { resource: Binding['resource'] }) {
-	useObservableSuspense(resource);
-	return null;
-}
 
 function VariationsFooter({
 	binding,
@@ -111,9 +103,6 @@ export function VariationsGrid({
 
 	return (
 		<View className="flex-1">
-			<Suspense fallback={null}>
-				<ResourceErrors resource={binding.resource} />
-			</Suspense>
 			<Animated.ScrollView
 				ref={scroller}
 				className="flex-1"
