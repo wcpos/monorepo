@@ -211,6 +211,15 @@ describe('badge count beat', () => {
 		expect(mockTimings).toHaveLength(0);
 	});
 
+	it('does not replay the beat that crossed the cap for counts behind it', () => {
+		const { rerender } = render(<Badge count={99} max={99} />);
+		rerender(<Badge count={100} max={99} />);
+		const crossed = mockTimings.length;
+		expect(crossed).toBeGreaterThan(0);
+		rerender(<Badge count={101} max={99} />);
+		expect(mockTimings).toHaveLength(crossed);
+	});
+
 	it('does not move when something else is being counted', () => {
 		const { container, rerender } = render(<Badge count={3} identity="a" />);
 		rerender(<Badge count={7} identity="b" />);

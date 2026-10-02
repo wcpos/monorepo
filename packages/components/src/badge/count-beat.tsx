@@ -106,23 +106,27 @@ export function useCountBeat({
 	const direction = useSharedValue(1);
 	const rolls = motion === 'roll';
 
+	const { beat, added, identity: shownIdentity } = seen;
+	const shows = seen.text !== null;
 	// Before paint: the new number must not be seen in place before it arrives.
 	React.useLayoutEffect(() => {
-		if (seen.beat === 0) {
+		if (beat === 0) {
 			// A different thing is being counted: a bounce still running belongs to the last one.
 			// Assigning a plain value stops the animation where it is.
 			pop.value = 1;
 			change.value = 1;
 			return;
 		}
-		if (seen.text === null) return;
-		direction.value = seen.added ? 1 : -1;
+		if (shows === false) return;
+		direction.value = added ? 1 : -1;
 		change.value = 0;
 		change.value = withTiming(1, rolls ? ROLL : FADE);
-		if (seen.added) {
+		if (added) {
 			pop.value = withSequence(withTiming(SWELL, SWELL_TIMING), withSpring(1, SETTLE));
 		}
-	}, [seen, rolls, direction, pop, change]);
+		// Keyed on the beat, not on `seen`: a count that moves behind a cap ("99+") stores a new
+		// value and must not replay the last beat.
+	}, [beat, shownIdentity, shows, added, rolls, direction, pop, change]);
 
 	const popStyle = useAnimatedStyle(() => ({
 		transform: [{ scaleX: 1 + (pop.value - 1) * SIDEWAYS }, { scaleY: pop.value }],

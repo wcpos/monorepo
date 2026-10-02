@@ -16,7 +16,10 @@ export function useFirstAnswer<TInput, TOutput extends TInput>(
 ): boolean {
 	const [, settled] = React.useReducer((count: number) => count + 1, 0);
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-01.
-	const valued = useObservableEagerState(resource.valueRef$$) !== undefined;
+	useObservableEagerState(resource.valueRef$$);
+	// Read from the subject itself: on the render where `resource` changes, the hook above can
+	// still hold the previous resource's state.
+	const valued = resource.valueRef$$.value !== undefined;
 	let waiting: PromiseLike<unknown> | null = null;
 	if (!valued) {
 		try {

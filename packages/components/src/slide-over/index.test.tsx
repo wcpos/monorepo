@@ -107,6 +107,25 @@ it('leaves faster, speeding up into its edge, and stays mounted until it has lef
 	expect(screen.queryByTestId('content')).toBeNull();
 });
 
+it('says when it has left, and not when the close was interrupted', () => {
+	const onLeft = jest.fn();
+	const stage = (open: boolean) => (
+		<SlideOver open={open} from="right" onLeft={onLeft}>
+			<span />
+		</SlideOver>
+	);
+	const { rerender } = render(stage(true));
+	nextFrame();
+	rerender(stage(false));
+	act(() => void jest.advanceTimersByTime(100));
+	rerender(stage(true));
+	act(() => void jest.advanceTimersByTime(500));
+	expect(onLeft).not.toHaveBeenCalled();
+	rerender(stage(false));
+	act(() => void jest.advanceTimersByTime(200));
+	expect(onLeft).toHaveBeenCalledTimes(1);
+});
+
 it('a close interrupted by a reopen leaves the cover mounted', () => {
 	const { rerender } = render(<Stage open />);
 	nextFrame();

@@ -21,6 +21,8 @@ export type SlideOverProps = {
 	style?: ViewStyle;
 	/** The cover hides what is under it, so it needs the surface's own opaque background. */
 	coverClassName?: string;
+	/** Called once the cover has slid out and unmounted. */
+	onLeft?: () => void;
 	testID?: string;
 };
 
@@ -40,6 +42,7 @@ export function SlideOver({
 	className,
 	style,
 	coverClassName,
+	onLeft,
 	testID,
 }: SlideOverProps) {
 	const reduced = useReducedMotion();
@@ -47,6 +50,10 @@ export function SlideOver({
 	// `landed` moves one frame after `staged`: the cover is painted parked outside its frame
 	// first, so the transition has a position to start from.
 	const [landed, setLanded] = React.useState(false);
+	const left = React.useRef(onLeft);
+	React.useEffect(() => {
+		left.current = onLeft;
+	});
 	if (open && !staged) setStaged(true);
 	if (!open && landed) setLanded(false);
 
@@ -56,7 +63,13 @@ export function SlideOver({
 			return () => cancelAnimationFrame(frame);
 		}
 		// A close interrupted by a reopen clears this, and the cover stays.
-		const timer = setTimeout(() => setStaged(false), reduced ? 0 : PANEL_SLIDE_OUT);
+		const timer = setTimeout(
+			() => {
+				setStaged(false);
+				left.current?.();
+			},
+			reduced ? 0 : PANEL_SLIDE_OUT
+		);
 		return () => clearTimeout(timer);
 	}, [open, reduced]);
 

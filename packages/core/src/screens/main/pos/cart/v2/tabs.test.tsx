@@ -261,4 +261,8 @@ it('opens the list from the strip, and the count button or a tab closes it again
 	fireEvent.click(screen.getByTestId('open-orders-count'));
 	fireEvent.click(screen.getByTestId('open-order-tab-open'));
 	expect(cover().open).toBe('false');
+	// The new-order button stays pressable beside the open list and must close it too.
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	fireEvent.click(screen.getByTestId('new-order-tab'));
+	expect(cover().open).toBe('false');
 });
