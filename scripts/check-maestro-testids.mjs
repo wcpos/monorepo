@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+const isMain = process.argv[1] === new URL(import.meta.url).pathname;
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const maestroDir = path.join(repoRoot, 'apps/main/.maestro');
 const maestroFlowDirs = ['flows', 'subflows'].map((dir) => path.join(maestroDir, dir));
@@ -44,7 +45,7 @@ function walk(dir, exts, files = []) {
 const flowIds = new Set();
 const envAssignments = new Map();
 const flowTexts = [];
-for (const dir of maestroFlowDirs) {
+for (const dir of isMain ? maestroFlowDirs : []) {
 	for (const file of walk(dir, ['.yml', '.yaml'])) {
 		const text = fs.readFileSync(file, 'utf8');
 		flowTexts.push(text);
@@ -72,7 +73,7 @@ for (const text of flowTexts) {
 // 2. Collect testIDs defined in source: literals and template-literal prefixes.
 const literals = new Set();
 const prefixes = new Set();
-for (const dir of sourceDirs) {
+for (const dir of isMain ? sourceDirs : []) {
 	for (const file of walk(dir, ['.tsx', '.ts'])) {
 		if (file.endsWith('.web.tsx') || file.endsWith('.web.ts')) continue;
 		// Test-only literals must not satisfy the lint — a removed production
@@ -82,6 +83,10 @@ for (const dir of sourceDirs) {
 		// Any *TestID prop (testID, removeTestID, screenTestID, …), string literal value.
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:]\s*\{?\s*["']([^"']+)["']/g)) {
 			literals.add(m[1]);
+		}
+		// Ternary results only, bounded to this JSX expression on this line.
+		for (const m of text.matchAll(/\w*[tT]estID\s*=\s*\{[^}\n]*?\?([^}\n]*)\}/g)) {
+			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
 		}
 		// Template-literal values, including inside short expressions (ternaries).
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:][^`\n]{0,80}`([^`]+)`/g)) {
@@ -94,8 +99,13 @@ for (const dir of sourceDirs) {
 }
 
 // 3. Match: exact literal, or dynamic-tail flow id / template prefix overlap.
-const missing = [];
-for (const flowId of flowIds) {
+export function missingTestIds(flowId, literals, prefixes) {
+	if (/^\([^.*+?^${}()|[\]\\]+(?:\|[^.*+?^${}()|[\]\\]+)+\)$/.test(flowId)) {
+		return flowId
+			.slice(1, -1)
+			.split('|')
+			.flatMap((id) => missingTestIds(id, literals, prefixes));
+	}
 	const regexTail = flowId.match(/^(.*?)(\.\*|\[|\(|\\d)/); // id ends in a regex construct
 	const wanted = regexTail ? regexTail[1] : flowId;
 	const ok =
@@ -103,12 +113,13 @@ for (const flowId of flowIds) {
 		(regexTail
 			? [...literals, ...prefixes].some((s) => s.startsWith(wanted))
 			: [...prefixes].some((p) => wanted.startsWith(p)));
-	if (!ok) missing.push(flowId);
+	return ok ? [] : [flowId];
 }
 
-if (missing.length) {
+const missing = [...flowIds].flatMap((id) => missingTestIds(id, literals, prefixes));
+if (isMain && missing.length) {
 	console.error('✖ Maestro flows reference testIDs missing from source:');
 	for (const id of missing.sort()) console.error(`  - ${id}`);
 	process.exit(1);
 }
-console.log(`✔ All ${flowIds.size} Maestro-referenced testIDs exist in source.`);
+if (isMain) console.log(`✔ All ${flowIds.size} Maestro-referenced testIDs exist in source.`);

@@ -42,6 +42,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	}),
 }));
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -55,7 +56,7 @@ jest.mock('../../../../../contexts/theme', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ replace: mockReplace }),
+	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockRequire } }),
@@ -158,7 +159,7 @@ describe('useCompleteOrderFlow', () => {
 		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
 	});
 
 	it('rejects a contract refresh when the order has no remote id', async () => {

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import ResizablePOSColumns from '../app/(app)/(drawer)/(pos)/(columns)/index';
+import POSProductsTab from '../app/(app)/(drawer)/(pos)/(tabs)/index';
 
 // Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
 jest.resetModules();
@@ -171,6 +172,13 @@ jest.mock('../../../packages/core/src/screens/main/pos/cart', () => ({
 		return null;
 	},
 }));
+jest.mock('@wcpos/core/screens/main/pos/cart/register-bar', () => {
+	const react = jest.requireActual('react');
+	const { View } = jest.requireActual('react-native');
+	return {
+		RegisterBar: () => react.createElement(View, { testID: 'register-bar-stub' }),
+	};
+});
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -304,6 +312,103 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 
 		act(() => mockLayoutHandler?.([70, 30], { isUserInteraction: false }));
 		expect(mockPatchUI).not.toHaveBeenCalled();
+	});
+});
+
+describe('phone Products pane (#2363)', () => {
+	// Count only host nodes so React Native's composite View and its host are not counted twice.
+	it('keeps the register bar in the small columns Products pane after landing on /cart', () => {
+		mockScreenSize = 'sm';
+		mockSegments = ['cart'];
+		renderColumns('left');
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+
+	it('keeps the register bar in the small columns Products pane at the root route', () => {
+		mockScreenSize = 'sm';
+		mockSegments = [];
+		renderColumns('left');
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+
+	it('does not render the phone Products pane or its register bar in wide columns', () => {
+		mockScreenSize = 'lg';
+		renderColumns('left');
+
+		expect(view!.root.findAllByProps({ testID: 'pos-products-tab' })).toHaveLength(0);
+		expect(view!.root.findAllByProps({ testID: 'register-bar-stub' })).toHaveLength(0);
+	});
+
+	it('keeps the register bar in the tabs Products pane', () => {
+		act(() => {
+			view = create(<POSProductsTab />);
+		});
+
+		const panes = view!.root
+			.findAllByProps({ testID: 'pos-products-tab' })
+			.filter((node) => typeof node.type === 'string');
+		expect(panes).toHaveLength(1);
+		expect(
+			panes[0]
+				.findAllByProps({ testID: 'register-bar-stub' })
+				.filter((node) => typeof node.type === 'string')
+		).toHaveLength(1);
+	});
+});
+
+describe('phone columns tab across a drawer round trip (#2363)', () => {
+	const cartSegments = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart'];
+	const paneDisplays = () =>
+		view!.root
+			.findAll((node) => typeof node.type === 'string' && node.props.style?.display)
+			.map((node) => node.props.style.display);
+
+	it('keeps Products active after leaving POS through the drawer and returning', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('left');
+		expect(paneDisplays()).toEqual(['none', 'flex']);
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(orders)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+	});
+
+	it('still switches to Cart on an in-POS move onto /cart', () => {
+		mockScreenSize = 'sm';
+		mockSegments = cartSegments;
+		renderColumns('left');
+		act(() => view!.root.findByProps({ testID: 'pos-tab-products' }).props.onPress());
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+
+		mockSegments = ['(app)', '(drawer)', '(pos)', '(columns)'];
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['flex', 'none']);
+		mockSegments = cartSegments;
+		act(() => view!.update(<ResizablePOSColumns />));
+		expect(paneDisplays()).toEqual(['none', 'flex']);
 	});
 });
 

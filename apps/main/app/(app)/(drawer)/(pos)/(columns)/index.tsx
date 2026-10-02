@@ -12,7 +12,8 @@ import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
+
+import { POSProductsPane } from '../../../../../components/pos-products-pane';
 
 /**
  *
@@ -25,17 +26,15 @@ export default function ResizablePOSColumns() {
 	// Check if we're at a /cart route (with or without orderId)
 	// If at cart route, default to cart tab; otherwise products tab
 	const isAtCartRoute = segments.includes('cart');
+	const isInPOSRoute = segments.includes('(pos)');
 	const [activeTab, setActiveTab] = React.useState<'products' | 'cart'>(
 		isAtCartRoute ? 'cart' : 'products'
 	);
 
-	// When navigating onto a cart route, switch to the cart tab. We track the previous
-	// route flag and adjust state during render (React's "adjusting state during render"
-	// pattern) rather than in an effect, so the tab switch happens on the route
-	// transition without an extra render pass. Navigating away from cart does not force
-	// the products tab, matching the prior behaviour.
+	// Track cart transitions only inside POS: a drawer round trip leaves (pos),
+	// and returning must keep the tab the cashier left.
 	const [wasAtCartRoute, setWasAtCartRoute] = React.useState(isAtCartRoute);
-	if (isAtCartRoute !== wasAtCartRoute) {
+	if (isInPOSRoute && isAtCartRoute !== wasAtCartRoute) {
 		setWasAtCartRoute(isAtCartRoute);
 		if (isAtCartRoute) {
 			setActiveTab('cart');
@@ -53,8 +52,10 @@ export default function ResizablePOSColumns() {
 				<View style={{ flex: 1, display: activeTab === 'products' ? 'flex' : 'none' }}>
 					<Suspense>
 						<ErrorBoundary>
-							<POSProducts />
-							{activeTab === 'products' && <ObserveInteractiveMarker />}
+							{/* A resize or phone-width reload of /cart reaches this fallback; keep the same register bar as (tabs). */}
+							<POSProductsPane>
+								{activeTab === 'products' && <ObserveInteractiveMarker />}
+							</POSProductsPane>
 						</ErrorBoundary>
 					</Suspense>
 				</View>

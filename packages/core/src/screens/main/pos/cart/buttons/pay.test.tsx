@@ -18,8 +18,11 @@ const mockLeave = jest.fn();
 const mockMarkSaving = jest.fn();
 const mockClearSaving = jest.fn();
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockOrder = { isNew: false, uuid: 'order-1', payload: { total: '10.00', line_items: [] } };
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, replace: mockReplace }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockPush, replace: mockReplace, dismissTo: mockDismissTo }),
+}));
 jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
@@ -124,8 +127,10 @@ it.each(['lg', 'sm'])(
 		fireEvent.click(screen.getByTestId('checkout-button'));
 		await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
 		expect(mockClearSaving).not.toHaveBeenCalled();
-		if (size === 'sm') expect(mockReplace).toHaveBeenCalledWith('/cart');
-		else expect(mockReplace).not.toHaveBeenCalled();
+		if (size === 'sm')
+			expect(mockDismissTo).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)/cart');
+		else expect(mockDismissTo).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
 	}
 );
 

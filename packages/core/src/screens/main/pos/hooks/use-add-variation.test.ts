@@ -14,6 +14,11 @@ const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
+const mockShowAddedToCartToast = jest.fn();
+
+jest.mock('./added-to-cart-toast', () => ({
+	showAddedToCartToast: (...args: unknown[]) => mockShowAddedToCartToast(...args),
+}));
 
 type TestOrder = {
 	isNew: boolean;
@@ -208,6 +213,8 @@ describe('useAddVariation', () => {
 				subtotal: '5',
 			})
 		);
+		// The variation add shows the same coalescing toast as a simple add, named by the parent.
+		expect(mockShowAddedToCartToast).toHaveBeenCalledWith(expect.any(Function), parent.name);
 	});
 
 	it('reports a falsy add result with the cashier toast', async () => {

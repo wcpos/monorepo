@@ -77,7 +77,12 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			)}
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 			{metaData.length > 0 && (
-				<Text className="text-muted-foreground text-sm leading-tight" numberOfLines={2}>
+				/* Native merges nested Text, so Maestro sees only the outer testID. */
+				<Text
+					className="text-muted-foreground text-sm leading-tight"
+					numberOfLines={2}
+					testID="cart-line-meta"
+				>
 					{metaData.map((meta, index) => (
 						<React.Fragment key={meta.id || meta.key || meta.display_key}>
 							{index > 0 && ' · '}
@@ -85,7 +90,8 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 								className="text-muted-foreground text-sm leading-tight"
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
-							{/* Keep the attribute selector on the value, not the whole subline. */}
+							{/* Keep the per-key id on the value for unit tests; native E2E uses the outer
+							    cart-line-meta because native merges nested Text. */}
 							<Text
 								className="text-muted-foreground text-sm leading-tight"
 								decodeHtml

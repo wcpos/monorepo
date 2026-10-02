@@ -570,17 +570,16 @@ jobs:
       contents: write
     steps: *gallery-steps
 
-  # The one check name the merge gate requires ("Gallery"): the gate script takes
-  # the first check with a matching name, so the two mutually exclusive jobs above
-  # report through this aggregator instead of sharing a name. Skipped when both
-  # were skipped (path filter or draft), which the gate counts as a pass.
+  # The one "Gallery" check aggregates the mutually exclusive jobs above. Skipped
+  # when both were skipped (path filter or draft), which the gate counts as a pass.
+  # A cancelled (superseded) run reports no Gallery check, so cannot leave stale red.
   gallery:
     name: Gallery
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [gallery-shoot, gallery-update]
     if: >-
-      always() &&
+      !cancelled() &&
       (needs.gallery-shoot.result != 'skipped' || needs.gallery-update.result != 'skipped')
     steps:
       - name: Aggregate

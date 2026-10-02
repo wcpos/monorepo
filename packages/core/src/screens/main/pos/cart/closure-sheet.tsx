@@ -83,6 +83,10 @@ export function ClosureSheet({
 						<DialogTitle testID="closure-title">
 							{t('register.closure_written_n', { n: number })}
 						</DialogTitle>
+						{/* The minted number on its own, for E2E: the title around it is translated. */}
+						<Text testID="closure-number" className="hidden">
+							{number}
+						</Text>
 						<DialogDescription>
 							{storeName} · {date}
 						</DialogDescription>

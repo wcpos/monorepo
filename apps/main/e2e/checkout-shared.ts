@@ -207,7 +207,10 @@ export async function openCheckout(
 	await expect(tender.or(legacy).filter({ visible: true }).first()).toBeVisible({
 		timeout: 60_000,
 	});
-	const mode = (await tender.isVisible()) ? 'tender' : 'legacy';
+	// A phone has no columns: its tender flow opens in the full-screen dialog, whose header
+	// carries the payments tab (tender-checkout.tsx). The legacy gateway dialog has no tab.
+	const phoneTender = legacy.getByTestId('checkout-tab-payments');
+	const mode = (await tender.isVisible()) || (await phoneTender.isVisible()) ? 'tender' : 'legacy';
 
 	if (orderId <= 0) {
 		if (mode === 'tender') {
