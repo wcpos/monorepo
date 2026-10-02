@@ -13,6 +13,7 @@ let mockFinalize: (event: { translationX: number }) => void;
 let mockTotalProps: { onHoverIn?: () => void; onHoverOut?: () => void; className?: string };
 let mockLayout: (event: { nativeEvent: { layout: { width: number } } }) => void;
 const mockDisabled: unknown[] = [];
+let mockRemoveProps: { variant?: string; className?: string };
 
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('../../../hooks/use-remove-line-item', () => ({
@@ -30,12 +31,17 @@ jest.mock('@wcpos/components/button', () => ({
 		testID,
 		onPress,
 		disabled,
+		variant,
+		className,
 	}: React.PropsWithChildren<{
 		testID: string;
 		onPress: () => void;
 		disabled?: boolean;
+		variant?: string;
+		className?: string;
 	}>) => {
 		mockDisabled.push(disabled);
+		mockRemoveProps = { variant, className };
 		return (
 			<button data-testid={testID} onClick={onPress}>
 				{children}
@@ -141,15 +147,47 @@ it('coarse uses a pan target without hover affordances', () => {
 	expect(mockTotalProps.className).not.toMatch(/hover|web:/);
 	expect(mockTotalProps.onHoverIn).toBeUndefined();
 	expect(mockTotalProps.onHoverOut).toBeUndefined();
+	expect(screen.queryByTestId('cart-line-total-hover-reach')).toBeNull();
+});
+it('Remove is a solid red block, square and as tall as the row', () => {
+	renderStrip();
+	expect(mockRemoveProps.variant).toBe('destructive');
+	expect(mockRemoveProps.className).toMatch(/\brounded-none\b/);
+	expect(mockRemoveProps.className).toMatch(/\bh-auto\b/);
 });
 it('fine uses the hover nudge rather than a pan', () => {
 	mockPointer = 'fine';
 	renderStrip();
 	expect(screen.queryByTestId('pan-target')).toBeNull();
 	act(() => mockTotalProps.onHoverIn?.());
-	expect(mockOffsetSet).toHaveBeenLastCalledWith(-14);
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-16);
 	act(() => mockTotalProps.onHoverOut?.());
 	expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
+});
+it('fine keeps the hover area under the pointer while the row bounces', () => {
+	mockPointer = 'fine';
+	renderStrip();
+	// The reach hangs off the total's right edge by more than the bounce travels (16 px peek,
+	// about 22 px at the top of the overshoot), so a pointer on the total never loses hover.
+	const reach = screen.getByTestId('cart-line-total-hover-reach');
+	expect(screen.getByTestId('cart-line-total').contains(reach)).toBe(true);
+	expect(parseFloat(reach.style.right)).toBeLessThanOrEqual(-22);
+	// Opened, the reach would overhang Edit's left edge and take its presses.
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(screen.queryByTestId('cart-line-total-hover-reach')).toBeNull();
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(screen.getByTestId('cart-line-total-hover-reach')).toBeTruthy();
+});
+it('fine: a hover-out bound before the press does not close the opened strip', () => {
+	mockPointer = 'fine';
+	renderStrip();
+	// react-native-web keeps the hover-out closure it bound when the pointer entered.
+	const staleHoverOut = mockTotalProps.onHoverOut;
+	act(() => mockTotalProps.onHoverIn?.());
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-100);
+	act(() => staleHoverOut?.());
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-100);
 });
 it('forwards every Remove press to pulseRemove, never disables, and waits for the pulse', async () => {
 	const { pulseRemove } = renderStrip();

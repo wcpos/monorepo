@@ -11,7 +11,6 @@ import Animated, {
 
 import { Button } from '@wcpos/components/button';
 import { usePointer } from '@wcpos/components/lib/device';
-import { Text } from '@wcpos/components/text';
 import type { PulseTableRowRef } from '@wcpos/components/table';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -26,6 +25,22 @@ import { EditShippingLine } from '../../cells/edit-shipping-line';
 import type { CartLine } from '../../../hooks/utils';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
+/** How far a hovered row rests to the left: enough of the strip's red edge to read as "there is something under here". */
+const PEEK = 16;
+/**
+ * The hover bounce. Underdamped on purpose (ratio ≈ 0.3): the row overshoots the peek by about
+ * a third, to roughly 22 px, and settles in two visible swings.
+ */
+const PEEK_SPRING = { mass: 1, stiffness: 380, damping: 12 };
+/**
+ * How far the total's hover area reaches to the RIGHT of the total itself. The total rides on
+ * the row it moves, so without this the bounce carries it out from under a pointer resting on
+ * its right-hand side, hover ends, the row springs back under the pointer, hover starts again,
+ * and the row flickers for as long as the pointer stays put. The reach must exceed the furthest
+ * the bounce travels (see PEEK_SPRING), so the area under the pointer never changes while the
+ * row moves; leaving is then always the cashier's move, never the animation's.
+ */
+const HOVER_REACH = PEEK * 2;
 type Props = {
 	line: { uuid: string; type: 'line_items' | 'fee_lines' | 'shipping_lines'; item: CartLine };
 	rowRefs: React.RefObject<Map<string, PulseTableRowRef | null>>;
@@ -36,13 +51,28 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const t = useT();
 	const { removeLineItem } = useRemoveLineItem();
 	const [width, setWidth] = React.useState(0);
-	const [open, setOpen] = React.useState(false);
+	const [open, setOpenState] = React.useState(false);
+	/**
+	 * `open` again, readable at event time. react-native-web binds a Pressable's hover-out
+	 * listener when the pointer ENTERS and keeps that closure until it leaves, so a hover
+	 * handler that closes over `open` still sees `false` after the press that opened the strip:
+	 * the pointer's next move off the (now slid-away) total sent the row home over Edit and
+	 * Remove. The hover handlers read this instead.
+	 */
+	const opened = useSharedValue(false);
+	const setOpen = (next: boolean) => {
+		opened.set(next);
+		setOpenState(next);
+	};
 	const swiped = useSharedValue(false);
 	const offset = useSharedValue(0);
 	const reduced = useReducedMotion();
 	const style = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
 	const settle = (x: number) => {
 		offset.set(reduced ? x : withSpring(x, { overshootClamping: true }));
+	};
+	const peek = () => {
+		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
 	const pan = Gesture.Pan()
 		.runOnJS(true)
@@ -103,14 +133,14 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				onHoverIn={
 					pointer === 'fine'
 						? () => {
-								if (!open) settle(-14);
+								if (!opened.get()) peek();
 							}
 						: undefined
 				}
 				onHoverOut={
 					pointer === 'fine'
 						? () => {
-								if (!open) settle(0);
+								if (!opened.get()) settle(0);
 							}
 						: undefined
 				}
@@ -125,6 +155,14 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				}}
 			>
 				{content}
+				{/* Closed only: on an opened row the reach would overhang Edit's left edge and take its presses. */}
+				{pointer === 'fine' && !open ? (
+					<View
+						testID="cart-line-total-hover-reach"
+						className="absolute inset-y-0 left-0"
+						style={{ right: -HOVER_REACH }}
+					/>
+				) : null}
 			</Pressable>
 		);
 		return target;
@@ -139,7 +177,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	return (
 		<View className="relative flex-1 overflow-hidden">
 			<View
-				className="absolute inset-y-0 right-0 flex-row items-center gap-2"
+				className="absolute inset-y-0 right-0 flex-row items-stretch"
 				onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
 				pointerEvents={open ? 'auto' : 'none'}
 				accessibilityElementsHidden={!open}
@@ -164,12 +202,12 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					)}
 				</EditCartItemButton>
 				<Button
-					variant="ghost"
+					variant="destructive"
 					testID="cart-line-remove"
-					className="h-tile"
+					className="min-w-tile h-auto rounded-none px-5"
 					onPress={handleRemoveLineItem}
 				>
-					<Text className="text-destructive">{t('pos_cart.remove_line')}</Text>
+					{t('pos_cart.remove_line')}
 				</Button>
 			</View>
 			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}

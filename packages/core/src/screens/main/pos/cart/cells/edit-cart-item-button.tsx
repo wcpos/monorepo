@@ -28,9 +28,10 @@ function EditCartItemButton({ title, children, trigger = 'icon' }: Props) {
 		<ErrorBoundary>
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				{trigger === 'label' ? (
+					// A square block the height of the cart row it sits under (the line strip).
 					<Button
-						variant="ghost"
-						className="h-tile"
+						variant="secondary"
+						className="min-w-tile h-auto flex-1 rounded-none px-5"
 						testID="cart-line-edit"
 						onPress={() => setOpenDialog(true)}
 					>
