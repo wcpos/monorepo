@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View, type ViewStyle } from 'react-native';
 
 import Animated, {
-	Easing,
 	ReduceMotion,
 	useAnimatedStyle,
 	useSharedValue,
@@ -10,18 +9,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { EASE, PANE, PANEL_SLIDE_OUT } from '../lib/motion';
+import { EASE, EASE_EXIT, PANE, PANEL_SLIDE_OUT } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 // The same beat as a pane push: the cover travels the whole surface it lands on.
 const TIMING = { duration: PANE, easing: EASE, reduceMotion: ReduceMotion.System };
-// Leaving, it speeds up into the edge. The shared ease slows down at the end, which left a
-// sliver of the cover creeping over the last few frames before it vanished.
-const LEAVING = {
-	duration: PANEL_SLIDE_OUT,
-	easing: Easing.bezier(0.4, 0, 1, 1),
-	reduceMotion: ReduceMotion.System,
-};
+const LEAVING = { duration: PANEL_SLIDE_OUT, easing: EASE_EXIT, reduceMotion: ReduceMotion.System };
 
 export type SlideOverProps = {
 	open: boolean;

@@ -116,15 +116,15 @@
   --animate-accordion-down: accordion-down 200ms ease-out;
   --animate-accordion-up: accordion-up 200ms ease-out;
   --animate-overlay-in: overlay-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  --animate-overlay-out: overlay-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-overlay-out: overlay-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   --animate-dialog-in: dialog-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-dialog-out: dialog-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   --animate-panel-in-left: panel-in-left 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --animate-panel-in-right: panel-in-right 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  --animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
-  --animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  --animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
   --animate-sheet-in: sheet-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
   /* motion:end */
 }
 
@@ -181,13 +181,23 @@
   }
 }
 
+/* The scrim fades its colour, not itself: the panel is its child on web, and an opacity fade
+   would make the panel see-through while it slides. */
 @keyframes overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { background-color: transparent; }
 }
 @keyframes overlay-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  to { background-color: transparent; }
+}
+/* Radix wraps the scrim and the panel in elements of its own, and it is THEIR animation it
+   waits on before unmounting a closed dialog. Unanimated, they took our exit with them on the
+   first frame. A wrapper whose child is marked holds for as long as the exit runs. */
+@keyframes overlay-hold {
+  from { --overlay-hold: 0; }
+  to { --overlay-hold: 1; }
+}
+[data-state='closed']:has(> [data-exit]) {
+  animation: overlay-hold var(--duration-panel-slide-out) linear;
 }
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(-6px); }

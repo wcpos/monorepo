@@ -21,6 +21,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT } from '../lib/motion';
+import { EXIT_MARK, OVERLAY_MOTION } from '../lib/overlay';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -40,13 +41,6 @@ const overlayAlignment = {
 	right: 'flex-row justify-end items-stretch p-0',
 	left: 'flex-row justify-start items-stretch p-0',
 	bottom: 'flex-col justify-end items-stretch p-0',
-};
-// Web close animation per side (the enter twin lives in the cva `side` variant).
-const exitSlide = {
-	center: '',
-	right: 'web:slide-out-to-right',
-	left: 'web:slide-out-to-left',
-	bottom: 'web:slide-out-to-bottom',
 };
 const entering = {
 	center: FadeIn.duration(OVERLAY_FADE),
@@ -76,7 +70,9 @@ function DialogOverlayWeb({
 		<DialogPrimitive.Overlay
 			className={cn(
 				'absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
-				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
+				// The scrim fades its colour, not itself: the panel is its child, and an opacity fade
+				// made the panel see-through while it slid in. Leaving, it takes no presses.
+				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out pointer-events-none',
 				overlayAlignment[side],
 				// Radix inserts an auto-height [role=dialog] wrapper; flatten it so the panel's
 				// h-full / max-h-[85%] resolve against the overlay (same as ModalOverlayWeb).
@@ -87,6 +83,7 @@ function DialogOverlayWeb({
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
+			{...EXIT_MARK}
 			{...props}
 		/>
 	);
@@ -201,9 +198,9 @@ const dialogContentVariants = cva(
 			},
 			side: {
 				center: '',
-				right: 'web:slide-in-from-right h-full max-h-full max-w-full rounded-none border-r-0',
-				left: 'web:slide-in-from-left h-full max-h-full max-w-full rounded-none border-l-0',
-				bottom: 'web:slide-in-from-bottom max-h-[85%] w-full max-w-full rounded-none border-b-0',
+				right: 'h-full max-h-full max-w-full rounded-none border-r-0',
+				left: 'h-full max-h-full max-w-full rounded-none border-l-0',
+				bottom: 'max-h-[85%] w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {
@@ -251,15 +248,11 @@ function DialogContent({
 					}
 					className={cn(
 						dialogContentVariants({ size, side }),
-						open
-							? side === 'center'
-								? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-								: 'web:animate-in'
-							: side === 'center'
-								? 'web:animate-out web:fade-out-0 web:zoom-out-95'
-								: cn('web:animate-out web:fade-out-0', exitSlide[side]),
+						// The shared overlay motion: a side panel slides solid, in and out of its edge.
+						open ? OVERLAY_MOTION[side].enter : OVERLAY_MOTION[side].exit,
 						className
 					)}
+					{...EXIT_MARK}
 					{...props}
 				>
 					<SideContext.Provider value={side}>{children}</SideContext.Provider>

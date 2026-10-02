@@ -29,6 +29,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button, type ButtonProps } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT } from '../lib/motion';
+import { OVERLAY_MOTION } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -144,7 +145,7 @@ function ModalOverlayWeb({
 		>
 			<DialogPrimitive.Overlay
 				className={cn(
-					'web:animate-in web:fade-in-0 absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full [&>[role=dialog]]:contents',
+					'web:animate-overlay-in absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full [&>[role=dialog]]:contents',
 					overlayAlignment[side],
 					className
 				)}
@@ -235,9 +236,9 @@ const modalContentVariants = cva(
 			},
 			side: {
 				center: '',
-				right: 'web:slide-in-from-right h-full max-h-full max-w-full rounded-none border-r-0',
-				left: 'web:slide-in-from-left h-full max-h-full max-w-full rounded-none border-l-0',
-				bottom: 'web:slide-in-from-bottom max-h-[85%] w-full max-w-full rounded-none border-b-0',
+				right: 'h-full max-h-full max-w-full rounded-none border-r-0',
+				left: 'h-full max-h-full max-w-full rounded-none border-l-0',
+				bottom: 'max-h-[85%] w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {
@@ -261,8 +262,9 @@ function ModalContent({
 				className={cn(
 					modalContentVariants({ size, side }),
 					side === 'center'
-						? 'web:animate-in web:fade-in-0 web:zoom-in-95 web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
-						: 'web:animate-in z-50',
+						? 'web:cursor-default border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
+						: 'z-50',
+					OVERLAY_MOTION[side].enter,
 					className
 				)}
 				{...props}
