@@ -12,8 +12,9 @@ const hits = [
 	{ id: 'one', record: { remoteId: 1, payload: { stock_status: 'instock' } } },
 	{ id: 'two', record: { remoteId: 2, payload: { stock_status: 'outofstock' } } },
 ];
+const mockRead = jest.fn();
 const binding = {
-	resource: { hits },
+	resource: { hits, read: mockRead },
 	sync: jest.fn(async () => {}),
 	total$: of(99),
 	active$: of(false),
@@ -28,8 +29,13 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
 const answered = { value: true };
+// Whether the answer carried a value; an answer without one is a failed query.
+const valued = { value: true };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: unknown) => resource,
+	// The answer as state, for the grid: `undefined` until the query has spoken.
+	useObservableEagerState: () =>
+		answered.value && valued.value ? { current: { hits } } : undefined,
 }));
 // The resource's first answer: false until the query has spoken (or failed).
 jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));
@@ -72,6 +78,13 @@ jest.mock('../../../components/data-table/v2', () => ({
 jest.mock('../../../components/data-table/v2/rows', () => ({
 	DataTableRow: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
 		<button data-testid={testID} onClick={onPress} />
+	),
+}));
+jest.mock('./variations-grid', () => ({
+	VariationsGrid: ({ hits: found, back }: { hits?: typeof hits; back: () => void }) => (
+		<button data-testid="grid" onClick={back}>
+			{found ? found.map((hit) => hit.id).join(',') : 'unanswered'}
+		</button>
 	),
 }));
 jest.mock('./footer', () => ({
@@ -150,4 +163,29 @@ it('holds the skeleton, one row per variation, until the query has answered', ()
 	rerender(<VariationsPane parent={parent} />);
 	expect(screen.queryByTestId('skeleton')).toBeNull();
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+});
+it('given a way back, hands the grid the answer itself and never a skeleton or a suspense fallback', () => {
+	// A tile that suspended or was swapped for a skeleton mid-deal would lose its place.
+	const back = jest.fn();
+	answered.value = false;
+	const { rerender } = render(<VariationsPane parent={parent} back={back} />);
+	expect(screen.getByTestId('grid').textContent).toBe('unanswered');
+	expect(screen.queryByTestId('skeleton')).toBeNull();
+	answered.value = true;
+	rerender(<VariationsPane parent={parent} back={back} />);
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	expect(screen.queryByTestId('hits')).toBeNull();
+	fireEvent.click(screen.getByTestId('grid'));
+	expect(back).toHaveBeenCalled();
+});
+it('reads a query that failed, so its error reaches the boundary instead of an empty grid', () => {
+	answered.value = true;
+	mockRead.mockClear();
+	const { rerender } = render(<VariationsPane parent={parent} back={jest.fn()} />);
+	expect(mockRead).not.toHaveBeenCalled();
+	// Answered, but with no value: the resource's own read is what rethrows the failure.
+	valued.value = false;
+	rerender(<VariationsPane parent={parent} back={jest.fn()} />);
+	expect(mockRead).toHaveBeenCalled();
+	valued.value = true;
 });

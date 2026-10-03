@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { Suspense } from '@wcpos/components/suspense';
@@ -17,13 +17,19 @@ import { matchesStockStatusFilter } from '../../../components/product/stock-filt
 import { useFirstAnswer } from '../../../hooks/use-first-answer';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { ProductsFooter } from './footer';
+import { VariationsGrid } from './variations-grid';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from '../cells/price';
 import { SKU } from '../cells/sku';
 import { COGS } from '../cells/cogs';
 import { ProductVariationImage } from '../../../components/product/variation-image';
 
-type Props = { parent: EngineRecord<'products'>; stockStatus?: string };
+type Props = {
+	parent: EngineRecord<'products'>;
+	stockStatus?: string;
+	/** Given by the dealt grid: the variations are tiles, and the parent tile goes back. */
+	back?: () => void;
+};
 
 // The footer's sync button already turns while the variations refresh. The list's own
 // loading band would add and remove a strip under the rows on every drill-in.
@@ -31,7 +37,7 @@ function NoListFooter() {
 	return null;
 }
 
-export function VariationsPane({ parent, ...props }: Props) {
+export function VariationsPane({ parent, back, ...props }: Props) {
 	const state = useQueryState<'variations'>();
 	const variationIds: number[] = useDocField(parent, (value) => value.payload.variations) ?? [];
 	const remoteIds = variationIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
@@ -46,6 +52,24 @@ export function VariationsPane({ parent, ...props }: Props) {
 	// immediate — and lands while the pane is still off-stage.
 	// A query that fails counts as answered: the table rethrows it into the error boundary.
 	const answered = useFirstAnswer(binding.resource);
+	// The grid is handed the answer itself, as state: it never suspends (a tile that suspended,
+	// or was swapped for a skeleton, mid-deal would lose its place), and it has to hear the
+	// variations arrive when a cold refresh fills an answer that started empty.
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
+	const answer = useObservableEagerState(binding.resource.valueRef$$);
+	if (back) {
+		// Answered without a value is a failure: reading it rethrows into the error boundary.
+		if (answered && !answer) binding.resource.read();
+		return (
+			<VariationsGrid
+				parent={parent}
+				back={back}
+				binding={binding}
+				hits={answer?.current.hits}
+				{...props}
+			/>
+		);
+	}
 	// As many skeleton rows as the parent has variations: if the answer is slow, the rows that
 	// replace them land in the same places and the pane does not reflow.
 	const skeleton = <DataTableSkeleton id="pos-products" rowCount={variationIds.length || 1} />;
