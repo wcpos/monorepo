@@ -180,6 +180,29 @@ it.each([0, 1])('draws the inert keypad while saving (%s tiles)', (count) => {
 	} else expect(screen.getAllByTestId('checkout-tile-skeleton')).toHaveLength(4);
 	expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
 });
+it('keeps the plan and unavailable controls inert while saving', () => {
+	const flow = makeFlow(2);
+	flow.tiles[1] = {
+		...flow.tiles[1],
+		method: { ...method, id: 'other' },
+		disabled: true,
+		reason: 'offline',
+	};
+	flow.plan = { kind: 'even', ways: 2, from: 0 };
+	flow.planLegs = [
+		{ state: 'now', minor: 4648 },
+		{ state: 'rest', minor: 4647 },
+	];
+	flow.planMore = true;
+	render(<TenderPane flow={flow} format={String} compact />);
+	for (const id of [
+		'checkout-plan-pick-items',
+		'checkout-plan-change',
+		'checkout-unavailable-toggle',
+	])
+		expect(screen.getByTestId(id).hasAttribute('disabled')).toBe(true);
+	expect(flow.dispatch).not.toHaveBeenCalled();
+});
 
 it('shows one slow notice after four seconds without settling the save', () => {
 	jest.useFakeTimers();

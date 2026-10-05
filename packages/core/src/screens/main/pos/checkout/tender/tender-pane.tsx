@@ -334,6 +334,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							variant="ghost"
 							size="sm"
 							testID="checkout-plan-pick-items"
+							disabled={busy}
 							onPress={() => {
 								flow.dispatch({ type: 'set-split-tab', tab: 'item' });
 								flow.dispatch({ type: 'open-split' });
@@ -346,6 +347,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						variant="ghost"
 						size="sm"
 						testID="checkout-plan-change"
+						disabled={busy}
 						onPress={() => flow.dispatch({ type: 'open-split' })}
 					>
 						<ButtonText className="underline">{t('pos_checkout.change_split')}</ButtonText>
@@ -376,6 +378,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						size="sm"
 						className="rounded-md"
 						testID="checkout-unavailable-toggle"
+						disabled={busy}
 						onPress={() => setUnavailableOpen(!unavailableOpen)}
 					>
 						<ButtonText>
