@@ -418,6 +418,8 @@ describe('POSProducts query-state wiring', () => {
 		render(<POSProducts />);
 
 		expect(mockGridProps).toMatchObject({ binding: mockBinding });
+		// Tiles drill in on the deal stage; rows keep the sliding pane.
+		expect(document.querySelector('[data-testid="deal-stage"]')).not.toBeNull();
 		const actions = mockGridProps.actions as { extendLimit: () => void };
 		act(() => actions.extendLimit());
 		expect(latestState().limit).toBe(20);
@@ -444,6 +446,11 @@ jest.mock('@wcpos/components/pane-stack', () => ({
 			{children}
 			{detail !== null && renderDetail(detail)}
 		</>
+	),
+}));
+jest.mock('./deal-stack', () => ({
+	DealStack: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="deal-stage">{children}</div>
 	),
 }));
 jest.mock('./footer', () => ({ ProductsFooter: () => null }));

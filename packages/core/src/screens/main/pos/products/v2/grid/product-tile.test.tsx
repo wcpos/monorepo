@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DealStagedContext } from '../deal-stack';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 
@@ -73,6 +74,9 @@ jest.mock('../../../../components/product/price-with-tax', () => ({
 }));
 jest.mock('../../../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
 jest.mock('../../grid/tile-image', () => ({ TileImage: () => null }));
+jest.mock('../deal-stack', () => ({
+	DealStagedContext: jest.requireActual('react').createContext(null),
+}));
 jest.mock('../../grid/variable-product-tile', () => ({
 	VariableProductTile: ({ record }: { record: { uuid: string } }) => (
 		<div data-testid="inline-tile">{record.uuid}</div>
@@ -191,7 +195,26 @@ it('composes the existing tile under inline and the drill tile with a chevron un
 	expect(screen.getByTestId('chevronRight')).not.toBeNull();
 	expect(screen.getByTestId('variable-product-tile-product')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('variable-product-tile'));
-	expect(onDrill).toHaveBeenCalledWith({ ...record, remoteId: null });
+	// The tile hands itself over with the record: the deal starts from where it sits.
+	expect(onDrill).toHaveBeenCalledWith({ ...record, remoteId: null }, expect.anything());
+});
+it('steps aside while its copy is out on the stage, and only then', () => {
+	const tile = (staged: object | null) => (
+		<DealStagedContext.Provider value={staged}>
+			<VariableProductTile
+				record={record}
+				gridFields={gridFields}
+				variationsStyle="drill"
+				onDrill={jest.fn()}
+			/>
+		</DealStagedContext.Provider>
+	);
+	const { rerender } = render(tile(null));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('');
+	rerender(tile({ uuid: 'another' }));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('');
+	rerender(tile({ uuid: 'product' }));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('0');
 });
 
 it('shows the minimum variable price with from and keeps sale strikethrough', () => {

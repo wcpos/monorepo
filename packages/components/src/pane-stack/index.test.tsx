@@ -25,10 +25,15 @@ jest.mock('react-native-worklets', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
-		View: ({ children, className, style, ...rest }: ViewProps & { className?: string }) => {
+		// The ref is the DOM node, as on web: the stack asks the leaving pane what it contains.
+		View: React.forwardRef(function AnimatedView(
+			{ children, className, style, ...rest }: ViewProps & { className?: string },
+			ref: React.Ref<HTMLDivElement>
+		) {
 			const flat = flatten(style);
 			return (
 				<div
+					ref={ref}
 					data-testid={className?.includes('absolute') ? 'detail-pane' : 'root-pane'}
 					data-visibility={(flat.visibility as string) ?? 'visible'}
 					data-pointer={flat.pointerEvents as string}
@@ -37,7 +42,7 @@ jest.mock('react-native-reanimated', () => ({
 					{children}
 				</div>
 			);
-		},
+		}),
 	},
 	Easing: { bezier: () => 'ease' },
 	ReduceMotion: { System: 'system' },
@@ -160,12 +165,19 @@ it('moves both panes from one progress value, clamped so neither can step backwa
 	expect(detailStyle().transform[0].translateX).toBe(0);
 });
 
+// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
+function Crumb({ children }: { children: string }) {
+	const crumb = React.useRef<HTMLButtonElement>(null);
+	React.useEffect(() => crumb.current?.focus(), []);
+	return <button ref={crumb}>{children}</button>;
+}
+
 it('hides a leaving detail from the accessibility tree and gives focus back to what opened it', () => {
 	const stage = (detail: string | null) => (
 		<>
 			<button data-testid="opener" />
 			<input data-testid="search" />
-			<PaneStack detail={detail} renderDetail={(value) => <span>{value}</span>}>
+			<PaneStack detail={detail} renderDetail={(value) => <Crumb>{value}</Crumb>}>
 				<span>root</span>
 			</PaneStack>
 		</>
@@ -174,7 +186,8 @@ it('hides a leaving detail from the accessibility tree and gives focus back to w
 	screen.getByTestId('opener').focus();
 	rerender(stage('variations'));
 	expect(screen.getByTestId('detail-pane').getAttribute('aria-hidden')).toBe('false');
-	(document.activeElement as HTMLElement).blur();
+	// The crumb took focus on mount; the opener on record is still the row, not the crumb.
+	expect(document.activeElement).toBe(screen.getByText('variations'));
 	rerender(stage(null));
 	// Still on stage for the pop, but already gone to a screen reader.
 	expect(screen.getByTestId('detail-pane').getAttribute('aria-hidden')).toBe('true');
