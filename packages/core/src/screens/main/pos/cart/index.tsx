@@ -72,7 +72,11 @@ export function OpenOrders({
 	// or the checkout button behind the list. The strip stays reachable to close it.
 	const [cartCovered, setCartCovered] = React.useState(false);
 	const barApi = React.useMemo<SlotContracts['pos.cart.bar']['api']>(
-		() => ({ setCartCovered }),
+		() => ({
+			setCartCovered: async (covered) => {
+				setCartCovered(covered);
+			},
+		}),
 		[]
 	);
 	// The rail's cashier sheet asks for the picker from outside this screen: the request is

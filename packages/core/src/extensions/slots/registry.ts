@@ -23,7 +23,7 @@ export interface SlotContracts {
 		value: { position: 'top' | 'bottom'; isColumn: boolean };
 		api: {
 			/** An entry that covers the cart says so, so the host can take the cart out of reach. */
-			setCartCovered(covered: boolean): void;
+			setCartCovered(covered: boolean): Promise<void>;
 		};
 	};
 	'pos.columns.panel': {

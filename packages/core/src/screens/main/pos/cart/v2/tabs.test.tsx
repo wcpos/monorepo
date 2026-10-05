@@ -290,9 +290,13 @@ it('opens the list from the strip, and the count button or a tab closes it again
 it('tells the cart column when the list covers it, and when the strip goes away', () => {
 	const onCoverChange = jest.fn();
 	const { unmount } = render(<OpenOrderTabs onCoverChange={onCoverChange} />);
-	expect(onCoverChange).toHaveBeenLastCalledWith(false);
+	// Nothing is covered on mount, and the host is told in the press itself.
+	expect(onCoverChange).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('open-orders-count'));
 	expect(onCoverChange).toHaveBeenLastCalledWith(true);
+	fireEvent.click(screen.getByTestId('open-order-tab-open'));
+	expect(onCoverChange).toHaveBeenLastCalledWith(false);
+	fireEvent.click(screen.getByTestId('open-orders-count'));
 	unmount();
 	expect(onCoverChange).toHaveBeenLastCalledWith(false);
 });

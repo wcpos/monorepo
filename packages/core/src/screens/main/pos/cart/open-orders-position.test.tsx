@@ -46,8 +46,8 @@ jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-
 jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));
 jest.mock('./v2/order-sheet', () => ({ OrderSheet: () => null }));
 jest.mock('./v2/tabs', () => ({
-	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => void }) => (
-		<button data-testid="open-orders" onClick={() => onCoverChange(true)} />
+	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => Promise<void> }) => (
+		<button data-testid="open-orders" onClick={() => void onCoverChange(true)} />
 	),
 }));
 
