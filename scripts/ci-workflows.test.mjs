@@ -1598,7 +1598,7 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	const run = setup.steps.find(({ id }) => id === 'setup');
 	assert.equal(run['timeout-minutes'], 20);
 	assert.ok(run['timeout-minutes'] < 30);
-	assert.equal(setup['timeout-minutes'], 30);
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 120 || 30 }}");
 	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
 	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
@@ -1641,8 +1641,20 @@ test('web E2E no longer queues for dev-next', () => {
 	const setup = workflow.jobs['e2e-setup'];
 	assert.equal(setup.outputs.queue, undefined);
 	assert.equal(setup.outputs.queue_attempt, undefined);
-	assert.equal(setup['timeout-minutes'], 30);
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 120 || 30 }}");
 	assert.equal(setup.permissions.actions, undefined);
+});
+
+test('lane-next runs queue for the mini store and wait out its nightly reset', () => {
+	const setup = readWorkflow('deploy.yml').jobs['e2e-setup'];
+	const index = setup.steps.findIndex(
+		({ name }) => name === "🌙 Wait out the mini store's nightly reset"
+	);
+	assert.ok(index >= 0, 'e2e-setup is missing the nightly-reset wait');
+	assert.equal(setup.steps[index].if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(setup.steps[index].run, 'node scripts/wait-mini-store-reset.mjs');
+	assert.equal(setup.steps[index + 1].name, '🔌 Join the tailnet');
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 120 || 30 }}");
 });
 
 test('only native E2E queues for dev-next', () => {
@@ -1800,6 +1812,14 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
+	assert.ok(
+		workflow.concurrency.group.startsWith(
+			"${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || "
+		)
+	);
+	assert.ok(
+		workflow.concurrency['cancel-in-progress'].startsWith("${{ !(github.event_name == 'schedule' ||")
+	);
 
 	// GitHub evaluates workflow concurrency and REST pagination; locally this
 	// test pins the declarative contract while hosted Actions exercises it.

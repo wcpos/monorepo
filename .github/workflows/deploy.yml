@@ -55,11 +55,14 @@ on:
 #   `cold-start` coalesce — a newer main run cancels an OLDER run's
 #   verification, so a merge burst verifies only the artifact that is live.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
-# newer SHA. There is deliberately NO cross-run store serialization except the
-# dev-next queue — see the comment above e2e.
+# newer SHA. There is deliberately NO cross-run store serialization except
+# lane next's: all lane-next E2E runs share the mini store, so they queue in
+# the one `deploy-mini-store` group instead of overlapping (#2382 review).
+# GitHub keeps at most one pending run per group; a third arrival replaces
+# the pending one.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -249,7 +252,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 30
+    # The nightly-reset wait can hold lane next up to 85 min; main keeps 30.
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 120 || 30 }}
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
     steps:
@@ -272,6 +276,12 @@ jobs:
 
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install chromium --only-shell
+
+      # Keep setup and its shards clear of the mini store's nightly snapshot restore.
+      - name: 🌙 Wait out the mini store's nightly reset
+        if: needs.changes.outputs.lane == 'next'
+        timeout-minutes: 90
+        run: node scripts/wait-mini-store-reset.mjs
 
       - name: 🔌 Join the tailnet
         if: needs.changes.outputs.lane == 'next'

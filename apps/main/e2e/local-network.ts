@@ -3,7 +3,7 @@ import type { Browser, BrowserContext } from '@playwright/test';
 /**
  * Chrome's Local Network Access check, lifted only for runs that ask for it.
  *
- * The mini-store job (`e2e-web-mini` in deploy.yml) serves the app from a public
+ * Lane-next E2E (the `e2e` job in deploy.yml, since #2382) serves the app from a public
  * `*.expo.app` origin and points it at a tailnet store, whose name resolves to a
  * Tailscale 100.64/10 address. Chrome treats that as the `local` address space and
  * blocks every store request unless the page holds the local-network permission
