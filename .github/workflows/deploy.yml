@@ -60,9 +60,10 @@ on:
 # the one `deploy-mini-store` group instead of overlapping (#2382 review).
 # GitHub keeps at most one pending run per group; a third arrival replaces
 # the pending one.
+# skip_e2e dispatches never touch the store; production-target dispatches still run E2E there, so they queue.
 concurrency:
-  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
+  group: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -252,8 +253,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # The nightly-reset wait can hold lane next up to 85 min; main keeps 30.
-    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 120 || 30 }}
+    # The nightly-reset wait can hold lane next up to 95 min; main keeps 30.
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
     steps:
@@ -280,7 +281,7 @@ jobs:
       # Keep setup and its shards clear of the mini store's nightly snapshot restore.
       - name: 🌙 Wait out the mini store's nightly reset
         if: needs.changes.outputs.lane == 'next'
-        timeout-minutes: 90
+        timeout-minutes: 100
         run: node scripts/wait-mini-store-reset.mjs
 
       - name: 🔌 Join the tailnet
@@ -357,7 +358,7 @@ jobs:
     needs: [changes, deploy, e2e-setup]
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -463,6 +464,12 @@ jobs:
 
           echo "❌ Deployment health check failed after 30 attempts"
           exit 1
+
+      # A shard-only rerun ("Re-run failed jobs") skips e2e-setup, so each shard waits too.
+      - name: 🌙 Wait out the mini store's nightly reset
+        if: needs.changes.outputs.lane == 'next'
+        timeout-minutes: 80
+        run: node scripts/wait-mini-store-reset.mjs --shard
 
       - name: 🔌 Join the tailnet
         if: needs.changes.outputs.lane == 'next'
