@@ -1148,9 +1148,11 @@ export function useAllCategoriesBinding() {
 }
 
 /**
- * The products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
- * category/tag/brand pill applies. An empty id list would compile to no filter (every
- * product), so the binding is disabled then: no local read, no demand.
+ * The local products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
+ * category/tag/brand pill applies. Local only, no remote pull: whether a zero-count term has
+ * products is decided by what the till has synced, since the catalogue recount is the
+ * storefront's. An empty id list would compile to no filter (every product), so the binding
+ * is disabled then: no read at all.
  */
 export function useProductsCarryingTermsBinding(
 	taxonomy: 'categories' | 'tags' | 'brands',
@@ -1160,7 +1162,7 @@ export function useProductsCarryingTermsBinding(
 	const idsKey = [...new Set(termIds)].sort((a, b) => a - b).join(',');
 	const compiled = React.useMemo(() => {
 		const ids = idsKey === '' ? [] : idsKey.split(',').map(Number);
-		return compileQuery(
+		const query = compileQuery(
 			'products',
 			{
 				search: '',
@@ -1169,6 +1171,7 @@ export function useProductsCarryingTermsBinding(
 			},
 			{ id: bindingId }
 		);
+		return { ...query, demand: [] };
 	}, [bindingId, idsKey, taxonomy]);
 	return useEngineBinding(
 		{ collection: compiled.collection, read: compiled.read },
