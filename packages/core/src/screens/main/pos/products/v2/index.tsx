@@ -463,8 +463,10 @@ function POSProductsContent({
 						}}
 					>
 						<ErrorBoundary>
-							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. */}
-							{browseBy !== 'all' ? (
+							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. A
+							    search is served by today's stack in every mode for now, so its
+							    variable products drill (the browse stage takes it over in Slice 2). */}
+							{browseBy !== 'all' && state.search === '' ? (
 								<BrowseStage
 									source={browseBy}
 									viewMode={viewMode}

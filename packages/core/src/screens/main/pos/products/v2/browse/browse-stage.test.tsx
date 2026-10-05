@@ -24,14 +24,6 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: Record<string, unknown>, read: (value: Record<string, unknown>) => unknown) =>
 		read(doc),
 }));
-let mockSearch = '';
-jest.mock('../../../../../../query', () => ({
-	useQueryState: () => ({
-		search: mockSearch,
-		filters: {},
-		sort: { field: 'name', direction: 'asc' },
-	}),
-}));
 // The term set's leaves pull in native-only modules; which set is on the stage is what is tested.
 jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
@@ -68,10 +60,6 @@ jest.mock('../../../../components/product/product-image-placeholder', () => ({
 
 const renderProducts = () => <span data-testid="products">products</span>;
 
-afterEach(() => {
-	mockSearch = '';
-});
-
 it('opens on the root term set, not the products, in grid and table', () => {
 	const { rerender } = render(
 		<BrowseStage source="categories" viewMode="grid" renderProducts={renderProducts} />
@@ -83,11 +71,4 @@ it('opens on the root term set, not the products, in grid and table', () => {
 	expect(screen.getByTestId('browse-root')).toBeTruthy();
 	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
 	expect(screen.queryByTestId('products')).toBeNull();
-});
-
-it('a search displaces the term set with the catalogue-wide products', () => {
-	mockSearch = 'lat';
-	render(<BrowseStage source="categories" viewMode="grid" renderProducts={renderProducts} />);
-	expect(screen.getByTestId('products')).toBeTruthy();
-	expect(screen.queryByTestId('browse-root')).toBeNull();
 });
