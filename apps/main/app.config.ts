@@ -129,8 +129,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// by libraries for features the app never uses:
 			// - RECORD_AUDIO / MODIFY_AUDIO_SETTINGS: @config-plugins/react-native-webrtc
 			//   adds them unconditionally; WebRTC here carries only the customer-display
-			//   data channel (no media), and nothing imports expo-audio. RECORD_AUDIO is a
-			//   dangerous permission that would list "Microphone" on the Play listing.
+			//   data channel (no media). RECORD_AUDIO is a dangerous permission that would
+			//   list "Microphone" on the Play listing. expo-audio (scan sounds,
+			//   play-scan-sound.ts) declares MODIFY_AUDIO_SETTINGS too, but only its
+			//   setAudioModeAsync / recording paths touch audio routing; plain playback
+			//   never does, and Android ignores rather than throws without it.
 			// - SYSTEM_ALERT_WINDOW ("display over other apps"): the same plugin plus
 			//   Expo's template. Only React Native's debug overlay uses it, so the dev
 			//   client keeps it and store/ad-hoc builds drop it.

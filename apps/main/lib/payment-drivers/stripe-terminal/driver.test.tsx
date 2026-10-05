@@ -444,7 +444,7 @@ it('rejects all web driver operations', async () => {
 	await expect(web.disconnect!()).rejects.toThrow();
 });
 it.each([true, false])(
-	'requests Android permissions on the first reader operation, not at mount (granted=%s)',
+	'prompts for Android permissions on the first reader operation, never at launch (granted=%s)',
 	async (granted) => {
 		const os = Platform.OS;
 		Platform.OS = 'android';
@@ -459,9 +459,10 @@ it.each([true, false])(
 			await act(async () => {
 				tree = create(<StripeTerminalDriverBridge driver={driver} />);
 			});
-			// Launching the app with Stripe Terminal enabled must not open a permission prompt.
+			// Launch with the permissions still missing: no dialog, no SDK, tile stays enabled.
 			expect(requestNeededAndroidPermissions).not.toHaveBeenCalled();
 			expect(api.initialize).not.toHaveBeenCalled();
+			expect(driver.availability()).toEqual({ available: true });
 			await act(async () => {
 				await driver.requestInitialization().catch(() => {});
 			});
@@ -488,7 +489,7 @@ it.each([true, false])(
 	}
 );
 
-it('initializes on the first reader operation once a Stripe device descriptor exists, and bootstraps at init', async () => {
+it('defers initialization until a Stripe device descriptor exists and bootstraps at init', async () => {
 	const os = Platform.OS;
 	Platform.OS = 'ios';
 	const post = jest
@@ -546,19 +547,9 @@ it('initializes on the first reader operation once a Stripe device descriptor ex
 			},
 		]);
 		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
-		// An enabled descriptor mounts the SDK but does not initialize it: on Android that
-		// would prompt for location at launch. The first reader operation initializes.
-		expect(api.initialize).not.toHaveBeenCalled();
-		expect(post).not.toHaveBeenCalled();
-		const registered = getDriver('stripe')!;
-		const callbacks = jest.mocked(useStripeTerminal).mock.calls.at(-1)![0]!;
-		let pending = registered.discoverReaders!('bluetooth');
-		await jest.advanceTimersByTimeAsync(0);
 		expect(api.initialize).toHaveBeenCalledTimes(1);
 		expect(post).toHaveBeenLastCalledWith('payment-methods/store_stripe/bootstrap', {});
-		callbacks.onUpdateDiscoveredReaders!([rawReader]);
-		callbacks.onFinishDiscoveringReaders!();
-		await pending;
+		const registered = getDriver('stripe')!;
 		descriptors([
 			{
 				...method,
@@ -571,7 +562,8 @@ it('initializes on the first reader operation once a Stripe device descriptor ex
 		await tokenProvider();
 		expect(post).toHaveBeenLastCalledWith('payment-methods/new_stripe/bootstrap', {});
 		expect(api.initialize).toHaveBeenCalledTimes(1);
-		pending = registered.discoverReaders!('bluetooth');
+		const callbacks = jest.mocked(useStripeTerminal).mock.calls.at(-1)![0]!;
+		const pending = registered.discoverReaders!('bluetooth');
 		await jest.advanceTimersByTimeAsync(0);
 		expect(api.discoverReaders).toHaveBeenLastCalledWith({
 			discoveryMethod: 'bluetoothScan',
@@ -598,11 +590,6 @@ it('initializes on the first reader operation once a Stripe device descriptor ex
 			},
 		]);
 		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
-		// Re-enabling remounts the SDK; it again waits for a reader operation.
-		expect(api.initialize).toHaveBeenCalledTimes(1);
-		await act(async () => {
-			await registered.cancel!();
-		});
 		expect(api.initialize).toHaveBeenCalledTimes(2);
 		expect(post).toHaveBeenLastCalledWith('payment-methods/reenabled/bootstrap', {});
 	} finally {
@@ -766,14 +753,6 @@ it.each(['operation', 'foreground', 'descriptors'])(
 			await act(async () => {
 				tree = create(<StripeTerminalDriverBridge driver={driver} />);
 			});
-			// Foregrounding before any reader operation does not initialize either.
-			await act(async () => {
-				foreground('active');
-			});
-			expect(api.initialize).not.toHaveBeenCalled();
-			await act(async () => {
-				await driver.requestInitialization().catch(() => {});
-			});
 			expect(driver.status$.get().message).toBe('Store bootstrap unavailable');
 			await act(async () => {
 				foreground('active');
@@ -816,6 +795,65 @@ it.each(['operation', 'foreground', 'descriptors'])(
 		}
 	}
 );
+it('initializes at launch on Android once the permissions are granted (offline forwarding)', async () => {
+	// The SDK forwards stored offline payments by itself once it is running — a till that
+	// has taken a card payment must not wait for a cashier action after a relaunch.
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(true);
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		expect(requestNeededAndroidPermissions).not.toHaveBeenCalled();
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+		expect(driver.availability()).toEqual({ available: true });
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
+it('forgets a refused Android prompt when the bridge unmounts, so a remount can ask again', async () => {
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
+	jest
+		.mocked(requestNeededAndroidPermissions)
+		.mockResolvedValueOnce({ error: { location: 'denied' } })
+		.mockResolvedValue({ error: null });
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		await act(async () => {
+			await driver.requestInitialization().catch(() => {});
+		});
+		expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
+		await act(async () => tree.unmount());
+		// The payment tile reads availability(); a stale refusal would keep it disabled with
+		// no way to trigger the operation that prompts again.
+		expect(driver.availability()).toEqual({ available: true });
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			await driver.requestInitialization();
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(2);
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+		expect(driver.availability()).toEqual({ available: true });
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
 it.each(['foreground', 'discover'])(
 	'rechecks denied Android permissions on %s',
 	async (trigger) => {
@@ -887,18 +925,12 @@ it('keeps one initialization in flight through StrictMode effect replay', async 
 				</React.StrictMode>
 			);
 		});
-		expect(api.initialize).not.toHaveBeenCalled();
-		// Two concurrent operations share one initialization, through the replayed effect.
-		const first = driver.cancel();
-		const second = driver.cancel();
-		await jest.advanceTimersByTimeAsync(0);
 		expect(api.initialize).toHaveBeenCalledTimes(1);
 		await act(async () => {
 			finish({});
 		});
-		await Promise.all([first, second]);
-		expect(api.initialize).toHaveBeenCalledTimes(1);
-		expect(api.cancelCollectPaymentMethod).toHaveBeenCalledTimes(2);
+		await driver.cancel();
+		expect(api.cancelCollectPaymentMethod).toHaveBeenCalledTimes(1);
 	} finally {
 		await act(async () => tree?.unmount());
 		Platform.OS = os;

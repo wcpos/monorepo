@@ -24,12 +24,10 @@ function SdkBinding({ driver, methods }: Props) {
 	const initialization = React.useRef<Promise<void> | null>(null);
 	const retryAfter = React.useRef(0);
 	const failure = React.useRef<Error | null>(null);
-	// Set by the first reader operation. Until then nothing initializes: on Android the SDK
-	// cannot initialize before location + Bluetooth are granted, so an eager init turned app
-	// launch into a permission prompt (2026-10-05). Foreground and descriptor refreshes only
-	// retry an attempt a cashier already made (e.g. after granting access in Settings).
-	const attempted = React.useRef(false);
 	const mounted = React.useRef(false);
+	// Launch, foreground and descriptor refreshes initialize WITHOUT prompting; the
+	// initialization handler (every reader operation) may prompt. See `request` below.
+	const quiet = React.useRef<() => Promise<void>>(() => Promise.resolve());
 	// The hook changes identity/state; bridge its current API into the non-React driver.
 	React.useEffect(() => {
 		latest.current = api;
@@ -39,9 +37,15 @@ function SdkBinding({ driver, methods }: Props) {
 	// Own the native SDK lifecycle and listen for external foreground/user retry requests.
 	React.useEffect(() => {
 		mounted.current = true;
-		const request = (): Promise<void> => {
+		// `prompt: false` initializes only when that cannot open a permission dialog: iOS
+		// always; Android once location + Bluetooth are already granted. The Android SDK
+		// refuses to initialize before they are, and an eager prompt turned every launch of
+		// a store with Stripe Terminal enabled into a location dialog (2026-10-05). A till
+		// that has taken a card payment has granted them, so it still initializes at launch
+		// — which is what forwards its stored offline payments without a cashier action.
+		// On a till that never has, the first reader operation prompts (`prompt: true`).
+		const request = (prompt: boolean): Promise<void> => {
 			if (initialized.current || !mounted.current) return Promise.resolve();
-			attempted.current = true;
 			if (initialization.current) return initialization.current;
 			if (Date.now() < retryAfter.current) return Promise.reject(failure.current);
 			initialization.current = (async () => {
@@ -55,6 +59,7 @@ function SdkBinding({ driver, methods }: Props) {
 					const granted = await Promise.all(
 						permissions.map((permission) => PermissionsAndroid.check(permission))
 					);
+					if (!granted.every(Boolean) && !prompt) return;
 					const { error } = granted.every(Boolean)
 						? { error: null }
 						: await requestNeededAndroidPermissions({
@@ -89,21 +94,28 @@ function SdkBinding({ driver, methods }: Props) {
 				});
 			return initialization.current;
 		};
-		driver.setInitializationHandler(request);
+		quiet.current = () => request(false);
+		driver.setInitializationHandler(() => request(true));
 		const foreground = AppState.addEventListener('change', (state) => {
-			if (state === 'active' && attempted.current) void request().catch(() => {});
+			if (state === 'active') void request(false).catch(() => {});
 		});
 		return () => {
 			mounted.current = false;
 			foreground.remove();
 			initialized.current = false;
+			quiet.current = () => Promise.resolve();
 			driver.setInitializationHandler(null);
 			driver.bindSdk(null);
+			// A refusal belongs to this mount's prompt; the next mount's first operation
+			// asks again rather than inheriting a disabled payment tile.
+			driver.setPermissionDenied(false);
 		};
 	}, [driver]);
-	// Refreshed descriptors can make bootstrap available after the first attempt failed.
+	// Runs at mount (the launch-time init) and when refreshed descriptors can make bootstrap
+	// available after the first attempt failed. Declared after the lifecycle effect so
+	// `quiet` is set when it runs.
 	React.useEffect(() => {
-		if (attempted.current) void driver.requestInitialization().catch(() => {});
+		void quiet.current().catch(() => {});
 	}, [driver, methods]);
 	return null;
 }
