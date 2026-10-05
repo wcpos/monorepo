@@ -9,9 +9,10 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { TableSurface } from '../../../components/data-table/surface';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { DealCell, DealFade, FRONT, useDeal } from './deal-stack';
+import { DealCell, DealFade, FRONT } from './deal-stack';
 import { ProductsFooter } from './footer';
 import { ParentTile, VariationPlaceholder, VariationTile } from './grid/variation-tile';
 
@@ -72,7 +73,6 @@ export function VariationsGrid({
 	hits: Hit[] | undefined;
 	stockStatus?: string;
 }) {
-	const { top } = useDeal();
 	const scroller = useAnimatedRef<Animated.ScrollView>();
 	const scroll = useScrollViewOffset(scroller);
 	const { uiSettings } = useUISettings('pos-products');
@@ -102,15 +102,10 @@ export function VariationsGrid({
 	);
 
 	return (
-		<View className="flex-1">
-			<Animated.ScrollView
-				ref={scroller}
-				className="flex-1"
-				testID="variations-grid-scroller"
-				// The breadcrumb lies over the top of the scroller, so that a tile dealt from the
-				// products' first row is not clipped on its way down.
-				contentContainerStyle={{ paddingTop: top ?? 0 }}
-			>
+		// The dealt grid lands on a card of its own under the crumb (TableSurface, the same one
+		// the products grid left); `top` is still the crumb's height, the grid's rest offset.
+		<TableSurface testID="variations-surface">
+			<Animated.ScrollView ref={scroller} className="flex-1" testID="variations-grid-scroller">
 				{rows.map((row, rowIndex) => (
 					<View key={rowIndex} className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
 						{row.map((index) => {
@@ -139,6 +134,6 @@ export function VariationsGrid({
 					shownCount={shownCount}
 				/>
 			</DealFade>
-		</View>
+		</TableSurface>
 	);
 }

@@ -56,6 +56,7 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 				testID={testID}
 				back={back}
 				status={badge}
+				search={!phone && search != null ? search : undefined}
 				onMenu={
 					screenSize !== 'lg'
 						? {
@@ -65,7 +66,6 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 						: undefined
 				}
 			>
-				{!phone && search != null && <View className="max-w-80 min-w-0 flex-1">{search}</View>}
 				{children}
 				<NotificationBell testID={`${testID}-bell`} />
 				{screenSize !== 'lg' && (

@@ -10,6 +10,7 @@ import { useDocField } from '@wcpos/query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
 import { getColumnStyle } from './index';
+import { TableSurface } from './surface';
 
 interface Props {
 	id: UISettingID;
@@ -24,36 +25,38 @@ export function DataTableSkeleton({ id }: Props) {
 	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 
 	return (
-		<Table className="flex h-full flex-col">
-			<TableHeader>
-				<TableRow>
-					{uiColumns
-						.filter((c) => c.show)
-						.map((c) => (
-							<TableHead key={c.key} style={getColumnStyle(c)}>
-								<DataTableHeader
-									columnId={c.key}
-									header={getUILabel(c.key)}
-									disableSort
-									sortBy=""
-									sortDirection="asc"
-									onSortingChange={() => {}}
-								/>
-							</TableHead>
-						))}
-				</TableRow>
-			</TableHeader>
-			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-				<Loader />
-			</View>
-			<TableFooter>
-				<HStack className="border-border border-t p-2">
-					<HStack className="flex-1" />
-					<HStack className="justify-end gap-0">
-						<Text className="text-xs">&nbsp;</Text>
+		<TableSurface>
+			<Table className="flex h-full flex-col">
+				<TableHeader>
+					<TableRow>
+						{uiColumns
+							.filter((c) => c.show)
+							.map((c) => (
+								<TableHead key={c.key} style={getColumnStyle(c)}>
+									<DataTableHeader
+										columnId={c.key}
+										header={getUILabel(c.key)}
+										disableSort
+										sortBy=""
+										sortDirection="asc"
+										onSortingChange={() => {}}
+									/>
+								</TableHead>
+							))}
+					</TableRow>
+				</TableHeader>
+				<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+					<Loader />
+				</View>
+				<TableFooter>
+					<HStack className="border-border border-t p-2">
+						<HStack className="flex-1" />
+						<HStack className="justify-end gap-0">
+							<Text className="text-xs">&nbsp;</Text>
+						</HStack>
 					</HStack>
-				</HStack>
-			</TableFooter>
-		</Table>
+				</TableFooter>
+			</Table>
+		</TableSurface>
 	);
 }

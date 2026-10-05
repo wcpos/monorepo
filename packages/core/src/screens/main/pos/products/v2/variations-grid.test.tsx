@@ -32,8 +32,8 @@ jest.mock('react-native-reanimated', () => ({
 		ScrollView: ({
 			children,
 			contentContainerStyle,
-		}: React.PropsWithChildren<{ contentContainerStyle: { paddingTop: number } }>) => (
-			<div data-testid="scroller" data-top={contentContainerStyle.paddingTop}>
+		}: React.PropsWithChildren<{ contentContainerStyle?: { paddingTop?: number } }>) => (
+			<div data-testid="scroller" data-top={contentContainerStyle?.paddingTop}>
 				{children}
 			</div>
 		),
@@ -169,8 +169,12 @@ it('holds a slot for every variation until the query answers, so the deal never 
 	);
 	expect(screen.getAllByTestId('variation-placeholder')).toHaveLength(4);
 	expect(screen.queryByTestId('variation-tile')).toBeNull();
-	// The first row starts below the breadcrumb that lies over the scroller.
-	expect(screen.getByTestId('scroller').dataset.top).toBe('40');
+	// The breadcrumb is a row above the grid's card, not an overlay: the grid pads nothing and
+	// sits on the shared table surface (owner's pick A, 2026-10-05).
+	expect(screen.getByTestId('scroller').dataset.top).toBeUndefined();
+	expect(screen.getByTestId('variations-surface').contains(screen.getByTestId('scroller'))).toBe(
+		true
+	);
 
 	// The answer lands in the slots that are already there.
 	rerender(<VariationsGrid parent={parent} back={back} binding={binding} hits={hits} />);

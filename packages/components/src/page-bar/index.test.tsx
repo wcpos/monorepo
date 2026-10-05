@@ -60,7 +60,7 @@ jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 0, left: 0 }),
 }));
 
-it('renders title, subtitle, real status variant and controls with a safe-area outside the ctl row', () => {
+it('renders title, subtitle, real status variant and controls with a safe-area outside the bar row', () => {
 	render(
 		<PageBar
 			testID="bar"
@@ -77,10 +77,40 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	expect(status).toHaveTextContent('Offline');
 	expect(status.firstElementChild).toHaveClass('bg-warning'); // the dot carries the colour (R3)
 	expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: '24px' });
-	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl');
+	// Wide widths: a taller row with no rule under it (ledger lines 8, 9).
+	const row = screen.getByTestId('bar').firstElementChild;
+	expect(row).toHaveClass('h-16');
+	expect(row).not.toHaveClass('border-b');
 	expect(screen.getByTestId('control')).toBeInTheDocument();
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-lines', '1');
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-ellipsis', 'tail');
+});
+
+it('seats the search beside the title and caps its width; the phone keeps the control-height row', () => {
+	const { unmount } = render(
+		<PageBar testID="bar" title="Orders" search={<input data-testid="search" />}>
+			<button data-testid="control" />
+		</PageBar>
+	);
+	const slot = screen.getByTestId('bar-search');
+	expect(slot).toContainElement(screen.getByTestId('search'));
+	expect(slot).toHaveClass('flex-1', 'max-w-160');
+	// Title, then the search, then the controls: the search is left-aligned, not pushed right.
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	const order = [
+		screen.getByTestId('bar-title'),
+		screen.getByTestId('bar-search'),
+		screen.getByTestId('control'),
+	].map((node) => Array.from(row.querySelectorAll('*')).indexOf(node));
+	expect(order).toEqual([...order].sort((a, b) => a - b));
+	unmount();
+
+	render(
+		<DeviceScope phone>
+			<PageBar testID="bar" title="Orders" />
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl');
 });
 
 it('phone scope shows the named menu and fires its callback', () => {

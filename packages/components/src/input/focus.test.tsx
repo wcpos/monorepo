@@ -21,6 +21,7 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock('../icon-button', () => ({ IconButton: () => null }));
+jest.mock('../icon', () => ({ Icon: () => null }));
 it('lights the border and one-pixel ring only while focused', () => {
 	const { rerender } = render(<Input testID="field" />);
 	expect(box.className).toContain('bg-card');

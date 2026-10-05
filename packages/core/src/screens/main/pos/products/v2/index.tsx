@@ -391,7 +391,9 @@ function POSProductsContent({
 						</VStack>
 					</ErrorBoundary>
 				</View>
-				<View className="border-border flex-1 border-t">
+				{/* No rule here: the grid and the table each sit on their own card (TableSurface),
+				    whose edge is the line. */}
+				<View className="flex-1">
 					{(session?.status === 'counting' || (!session && sessionsOn)) && (
 						<View
 							className="border-border bg-card mx-2 mb-2 flex-row items-center gap-2 rounded-lg border px-3 py-2.5"

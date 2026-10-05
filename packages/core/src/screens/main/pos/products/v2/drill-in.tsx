@@ -12,13 +12,11 @@ import { QueryStateProvider } from '../../../../../query';
 import { DealFade, useDeal } from './deal-stack';
 import { VariationsPane } from './variations-pane';
 
-// Over the grid, which scrolls underneath it.
-const CRUMB_OVER = { zIndex: 1 };
-
 /**
- * The detail pane of the products stage: the breadcrumb and one product's variations. With
- * `tiles` it is the dealt grid's pane and the breadcrumb lies over the top of the grid;
- * otherwise it is the `PaneStack`'s pane, with the breadcrumb above the rows.
+ * The detail pane of the products stage: the breadcrumb and one product's variations. The
+ * breadcrumb is a row of its own on the ground above the grid's or the table's card (owner's
+ * pick, option A of the 2026-10-05 drill-in mockup: never inside the card, never a card of
+ * its own). With `tiles` it is the dealt grid's pane; otherwise the `PaneStack`'s pane.
  */
 export function DrillIn({
 	parent,
@@ -77,17 +75,16 @@ export function DrillIn({
 					: {})}
 			>
 				{tiles ? (
-					<DealFade
-						className="bg-background absolute inset-x-0 top-0"
-						style={CRUMB_OVER}
-						onLayout={(event) => setTop(event.nativeEvent.layout.height)}
-					>
-						{crumb}
-					</DealFade>
+					// The crumb's height is where the dealt grid's first row rests (`DealCell`).
+					// A tile dealt from the products' first row sets off from under the crumb and
+					// its top is clipped by the grid's scroller for the first frames; every other
+					// row travels up or sideways and never leaves the scroller.
+					<DealFade onLayout={(event) => setTop(event.nativeEvent.layout.height)}>{crumb}</DealFade>
 				) : (
 					crumb
 				)}
-				{/* The table sizes itself to its parent, so it gets one that excludes the crumb. */}
+				{/* The grid and the table size themselves to their parent, so they get one that
+				    excludes the crumb; each brings its own card. */}
 				<View className="flex-1">
 					<QueryStateProvider
 						collection="variations"
