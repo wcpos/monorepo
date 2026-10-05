@@ -9,18 +9,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "pos-cart.spec.ts",
-			"title": "POS Cart › should add a product to the cart and show checkout button",
-			"group": "G2"
-		},
-		{
-			"project": "pro-authenticated",
-			"file": "pos-cart.spec.ts",
-			"title": "POS Cart › should add a product to the cart and show checkout button",
-			"group": "G2"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-variations.spec.ts",
 			"title": "POS Variations › should render the variation image the server sent",
 			"group": "G2"
@@ -90,12 +78,6 @@
 			"file": "reports-closures.spec.ts",
 			"title": "tablet › walks grouped closures, settled recount, reprint and CSV",
 			"group": "G3"
-		},
-		{
-			"project": "free-authenticated",
-			"file": "search-latency.spec.ts",
-			"title": "a single-word search meets the latency budgets on a slow host",
-			"group": "G4"
 		},
 		{
 			"project": "free-authenticated",
