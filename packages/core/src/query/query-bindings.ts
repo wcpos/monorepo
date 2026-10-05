@@ -1113,13 +1113,15 @@ export function useSearchSelect(
 
 export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
-/** Full reference-lane category residents for the hierarchical category tree. */
-export function useAllCategoriesBinding() {
+/** Full reference-lane residents of one product taxonomy: the category tree, the browse tiles. */
+export function useAllTermsBinding(
+	collection: 'products/categories' | 'products/tags' | 'products/brands'
+) {
 	const bindingId = React.useId();
 	const compiled = React.useMemo(
 		() =>
 			compileQuery(
-				'products/categories',
+				collection,
 				{
 					search: '',
 					filters: {},
@@ -1127,16 +1129,51 @@ export function useAllCategoriesBinding() {
 				},
 				{ id: bindingId }
 			),
-		[bindingId]
+		[bindingId, collection]
 	);
 	return useEngineBinding(
 		{
-			collection: 'products/categories',
+			collection,
 			selector: {},
 			sort: [{ name: 'asc' }],
 		},
 		compiled,
 		true,
+		bindingId
+	);
+}
+
+export function useAllCategoriesBinding() {
+	return useAllTermsBinding('products/categories');
+}
+
+/**
+ * The products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
+ * category/tag/brand pill applies. An empty id list would compile to no filter (every
+ * product), so the binding is disabled then: no local read, no demand.
+ */
+export function useProductsCarryingTermsBinding(
+	taxonomy: 'categories' | 'tags' | 'brands',
+	termIds: readonly number[]
+) {
+	const bindingId = React.useId();
+	const idsKey = [...new Set(termIds)].sort((a, b) => a - b).join(',');
+	const compiled = React.useMemo(() => {
+		const ids = idsKey === '' ? [] : idsKey.split(',').map(Number);
+		return compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [], [taxonomy]: ids },
+				sort: { field: 'name', direction: 'asc' },
+			},
+			{ id: bindingId }
+		);
+	}, [bindingId, idsKey, taxonomy]);
+	return useEngineBinding(
+		{ collection: compiled.collection, read: compiled.read },
+		compiled,
+		idsKey !== '',
 		bindingId
 	);
 }
