@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -29,6 +27,7 @@ import {
 	type TermLike,
 	visibleTerms,
 } from './term-tree';
+import { useAnswerOf } from './use-answer-of';
 
 export type BrowseTerms = {
 	/** Every visible term of the source, in order; undefined until the collection has answered. */
@@ -133,10 +132,9 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 	const taxonomy = source ?? 'categories';
 	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined);
 	// Read as state, never suspend: the tiles are on a stage that must not swap for a skeleton.
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
-	useObservableEagerState(binding.resource.valueRef$$);
-	const answer = binding.resource.valueRef$$.value;
-	const hits = answer?.current.hits as Hit<TermRecord>[] | undefined;
+	// THIS collection's answer: a source switch is unanswered until its own query emits, never
+	// the previous taxonomy's records projected as the new source.
+	const hits = useAnswerOf(binding.result$)?.hits as Hit<TermRecord>[] | undefined;
 	// The catalog recount leaves out POS-only products, so ask the local products which of the
 	// zero-count terms they carry (see `visibleTerms`).
 	const zeroCountIds = React.useMemo(
@@ -147,10 +145,8 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 		[hits]
 	);
 	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds);
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
-	useObservableEagerState(carrying.resource.valueRef$$);
-	const products = carrying.resource.valueRef$$.value?.current.hits as
-		Hit<ProductRecord>[] | undefined;
+	// THIS id set's answer (a disabled read emits its empty answer on subscribe).
+	const products = useAnswerOf(carrying.result$)?.hits as Hit<ProductRecord>[] | undefined;
 	// Keyed on the sorted ids, so a product write that leaves the set as it was keeps the same
 	// Set and the projection is not rebuilt.
 	const carriedKey = React.useMemo(() => {
@@ -173,13 +169,15 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 	// terms are all zero-count, and must not read as empty while their read is in flight.
 	const existence = zeroCountIds.length === 0 ? NO_IDS : carried;
 	// A changed id set is a new read: the last answer holds meanwhile, so the stage does not
-	// collapse for a frame (state set while rendering — React's "previous render" pattern).
+	// collapse for a frame (state set while rendering — React's "previous render" pattern). Only
+	// a products read's own answer is held: the disabled read's "nothing to lift" says nothing
+	// about zero-count terms, and holding it would hide them all on a POS-only store's first load.
 	const [held, setHeld] = React.useState<{
 		taxonomy: TaxonomySource;
 		ids: ReadonlySet<number>;
 	}>();
-	if (existence !== undefined && (held?.ids !== existence || held.taxonomy !== taxonomy))
-		setHeld({ taxonomy, ids: existence });
+	if (carried !== undefined && zeroCountIds.length > 0)
+		if (held?.ids !== carried || held.taxonomy !== taxonomy) setHeld({ taxonomy, ids: carried });
 	const knownNonEmpty = existence ?? (held?.taxonomy === taxonomy ? held.ids : undefined);
 	return React.useMemo(
 		() =>

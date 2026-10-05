@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { useDocField } from '@wcpos/query';
 
@@ -14,6 +14,8 @@ import {
 	useBrowseCounts,
 	useBrowseTerms,
 } from './use-browse-terms';
+
+import type { BrowseBy, BrowseTerm } from './browse-source';
 
 // The projections are pure; the hooks they sit beside are mocked out of the import graph.
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
@@ -113,33 +115,69 @@ describe('projectShortcuts', () => {
 	});
 });
 
-const answer = (hits: Record<string, unknown>[]) => ({
-	current: { hits: hits.map((payload) => ({ record: { payload } })) },
-});
-const binding = (hits: Record<string, unknown>[] | undefined) => ({
-	resource: {
-		valueRef$$: new BehaviorSubject<ReturnType<typeof answer> | undefined>(
-			hits === undefined ? undefined : answer(hits)
-		),
-	},
+type Payload = Record<string, unknown>;
+type Result = { hits: { record: { payload: Payload } }[] };
+const result = (payloads: Payload[]): Result => ({
+	hits: payloads.map((payload) => ({ record: { payload } })),
 });
 
+/**
+ * One hook's binding as the real one behaves: a new `result$` per compiled query that answers
+ * only when it emits (a disabled read answers empty on subscribe), beside ONE resource whose
+ * `valueRef$$` keeps the last answer of whichever query emitted (ObservableResource.reload) —
+ * the stale value the hook must not read.
+ */
+function fakeBinding() {
+	const reads = new Map<string, Subject<Result>>();
+	const valueRef$$ = new BehaviorSubject<{ current: Result } | undefined>(undefined);
+	return {
+		read(key: string, answered?: Result) {
+			let result$ = reads.get(key);
+			if (!result$) {
+				result$ = answered ? new BehaviorSubject(answered) : new Subject<Result>();
+				result$.subscribe((current) => valueRef$$.next({ current }));
+				reads.set(key, result$);
+			}
+			return { result$, resource: { valueRef$$ } };
+		},
+		emit(key: string, payloads: Payload[]) {
+			act(() => reads.get(key)!.next(result(payloads)));
+		},
+	};
+}
+
+/** The products read beside a terms binding: disabled (answered empty) with no ids. */
+function fakeCarrying() {
+	const fake = fakeBinding();
+	const keyOf = (taxonomy: string, ids: readonly number[]) =>
+		`${taxonomy}:${[...ids].sort((a, b) => a - b).join(',')}`;
+	(useProductsCarryingTermsBinding as jest.Mock).mockImplementation(
+		(taxonomy: string, ids: readonly number[]) =>
+			fake.read(keyOf(taxonomy, ids), ids.length === 0 ? result([]) : undefined)
+	);
+	return {
+		emit: (taxonomy: string, ids: number[], payloads: Payload[]) =>
+			fake.emit(keyOf(taxonomy, ids), payloads),
+	};
+}
+
 describe('useBrowseCounts', () => {
-	it("counts each source's root terms, and nothing for a source that has not answered", () => {
-		const answers: Record<string, ReturnType<typeof binding>> = {
-			'products/categories': binding([
-				{ id: 1, name: 'Drinks', parent: 0, count: 12 },
-				{ id: 2, name: 'Hot', parent: 1, count: 6 },
-				{ id: 3, name: 'Food', parent: 0, count: 4 },
-			]),
-			'products/tags': binding(undefined),
-			'products/brands': binding([]),
+	// One terms binding per source, as the dialog's three hooks hold.
+	let terms: Record<string, ReturnType<typeof fakeBinding>>;
+	beforeEach(() => {
+		terms = {
+			'products/categories': fakeBinding(),
+			'products/tags': fakeBinding(),
+			'products/brands': fakeBinding(),
 		};
-		(useAllTermsBinding as jest.Mock).mockImplementation(
-			(collection: string) => answers[collection]
+		(useAllTermsBinding as jest.Mock).mockImplementation((collection: string) =>
+			terms[collection].read(collection)
 		);
-		(useProductsCarryingTermsBinding as jest.Mock).mockReturnValue(binding(undefined));
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		(useDocField as jest.Mock).mockReturnValue([]);
+	});
+	it("counts each source's root terms, and nothing for a source that has not answered", () => {
+		fakeCarrying();
 		(useDocField as jest.Mock).mockReturnValue([
 			{ type: 'pill', id: 'stock_status', show: true },
 			{
@@ -149,43 +187,39 @@ describe('useBrowseCounts', () => {
 				conditions: [{ field: 'price', value: { max: 3 } }],
 			},
 		]);
-		const { result } = renderHook(() => useBrowseCounts());
-		expect(result.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 2, name: 'Hot', parent: 1, count: 6 },
+			{ id: 3, name: 'Food', parent: 0, count: 4 },
+		]);
+		terms['products/brands'].emit('products/brands', []);
+		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
 	});
-	// A POS-only store: every term is zero-count, kept only by the products that carry it.
+	// A POS-only store: every term is zero-count, kept only by the products that carry it. The
+	// products read starts disabled (no terms yet) and answers empty — that answer is not the
+	// zero-count terms' answer.
 	it('counts nothing for a source whose zero-count terms are still being looked for', () => {
-		const answers: Record<string, ReturnType<typeof binding>> = {
-			'products/categories': binding([
-				{ id: 1, name: 'Drinks', parent: 0, count: 12 },
-				{ id: 5, name: 'Counter', parent: 0, count: 0 },
-			]),
-			'products/tags': binding([]),
-			'products/brands': binding([]),
-		};
-		(useAllTermsBinding as jest.Mock).mockImplementation(
-			(collection: string) => answers[collection]
-		);
-		// Each binding is one object across renders, as the real hook's is.
-		const pending = binding(undefined);
-		const disabled = binding([]);
-		(useProductsCarryingTermsBinding as jest.Mock).mockImplementation((_taxonomy, ids) =>
-			ids.length > 0 ? pending : disabled
-		);
-		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
-		(useDocField as jest.Mock).mockReturnValue([]);
-		const { result, rerender } = renderHook(() => useBrowseCounts());
-		expect(result.current.categories).toBeUndefined();
+		const carrying = fakeCarrying();
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		expect(counts.current.categories).toBeUndefined();
 
-		act(() => pending.resource.valueRef$$.next(answer([{ categories: [{ id: 5 }] }])));
-		expect(result.current.categories).toBe(2);
+		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
+		expect(counts.current.categories).toBe(2);
 
 		// A changed id set is a new read; the last answer holds while it is pending.
-		const reread = binding(undefined);
-		(useProductsCarryingTermsBinding as jest.Mock).mockImplementation((_taxonomy, ids) =>
-			ids.length > 0 ? reread : disabled
-		);
-		rerender();
-		expect(result.current.categories).toBe(2);
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(counts.current.categories).toBe(2);
+		carrying.emit('categories', [5, 6], [{ categories: [{ id: 5 }] }, { categories: [{ id: 6 }] }]);
+		expect(counts.current.categories).toBe(3);
 	});
 });
 
@@ -194,9 +228,16 @@ describe('useBrowseTerms', () => {
 	const asked = (hook: unknown) => [
 		...new Set((hook as jest.Mock).mock.calls.map((call) => JSON.stringify(call.slice(0, 2)))),
 	];
+	// One terms binding for the stage, re-pointed when its source changes.
+	let terms: ReturnType<typeof fakeBinding>;
 	beforeEach(() => {
-		(useAllTermsBinding as jest.Mock).mockReset().mockReturnValue(binding([]));
-		(useProductsCarryingTermsBinding as jest.Mock).mockReset().mockReturnValue(binding([]));
+		(useAllTermsBinding as jest.Mock).mockReset();
+		(useProductsCarryingTermsBinding as jest.Mock).mockReset();
+		terms = fakeBinding();
+		(useAllTermsBinding as jest.Mock).mockImplementation((collection: string, enabled: boolean) =>
+			terms.read(`${collection}:${enabled}`, enabled ? undefined : result([]))
+		);
+		fakeCarrying();
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
 		(useDocField as jest.Mock).mockReturnValue([]);
 		(useT as jest.Mock).mockReturnValue((key: string) => key);
@@ -210,5 +251,19 @@ describe('useBrowseTerms', () => {
 	it('reads no taxonomy for the shortcuts', () => {
 		renderHook(() => useBrowseTerms('shortcuts'));
 		expect(asked(useAllTermsBinding)).toEqual(['["products/categories",false]']);
+	});
+	it("has no terms after a source switch until the new source's own query answers", () => {
+		const names = (all: BrowseTerm[] | undefined) =>
+			all?.map((term) => term.kind === 'term' && term.name);
+		const { result: browse, rerender } = renderHook(({ source }) => useBrowseTerms(source), {
+			initialProps: { source: 'categories' as BrowseBy },
+		});
+		terms.emit('products/categories:true', [{ id: 1, name: 'Drinks', parent: 0, count: 12 }]);
+		expect(names(browse.current.all)).toEqual(['Drinks']);
+
+		rerender({ source: 'tags' });
+		expect(browse.current.all).toBeUndefined();
+		terms.emit('products/tags:true', [{ id: 9, name: 'Vegan', count: 2 }]);
+		expect(names(browse.current.all)).toEqual(['Vegan']);
 	});
 });
