@@ -84,8 +84,9 @@ on:
 #    2026-09-03) made every PR wait for every other run's suite; store
 #    capacity is dev-pro's php-fpm worker count, not a queue here.
 #  - Except dev-next (Front desk ruling B, 2026-10-01): a run whose store is
-#    dev-next queues in the build job's `🚦 Queue for dev-next` step, shared
-#    with deploy.yml, and holds the store until the run completes.
+#    dev-next queues in the build job's `🚦 Queue for dev-next` step and
+#    holds the store until the run completes (native runs only; web E2E
+#    moved to the mini store in #2382).
 #  - workflow_dispatch and attempt>1 re-runs keep run-unique groups: a
 #    deliberate human/bot run must not be killed by the next merge.
 concurrency:
