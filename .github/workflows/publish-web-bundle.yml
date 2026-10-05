@@ -27,7 +27,9 @@ name: Publish Web Bundle
 # Manual only — run it when you want to refresh the dev bundle. The release gate
 # (require-green-main) can never pass for a `next` SHA, so pass the override
 # phrase; and pass `monorepo_ref` as a SHA when the branch name contains a `/`
-# (the resolve step puts the ref in a REST path).
+# (the resolve step puts the ref in a REST path). Dispatch with `--ref next`:
+# the workflow FILE runs at the dispatch ref, and the dev-next worker check at
+# the end of this file is on `next` before it is on `main`.
 
 on:
   workflow_dispatch:
