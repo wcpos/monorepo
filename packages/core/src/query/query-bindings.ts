@@ -1115,7 +1115,8 @@ export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
 /** Full reference-lane residents of one product taxonomy: the category tree, the browse tiles. */
 export function useAllTermsBinding(
-	collection: 'products/categories' | 'products/tags' | 'products/brands'
+	collection: 'products/categories' | 'products/tags' | 'products/brands',
+	enabled = true
 ) {
 	const bindingId = React.useId();
 	const compiled = React.useMemo(
@@ -1138,7 +1139,7 @@ export function useAllTermsBinding(
 			sort: [{ name: 'asc' }],
 		},
 		compiled,
-		true,
+		enabled,
 		bindingId
 	);
 }

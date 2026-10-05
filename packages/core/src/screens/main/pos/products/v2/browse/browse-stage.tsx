@@ -33,7 +33,8 @@ const noDrill = () => {};
 export function BrowseStage({ source, viewMode, renderProducts }: BrowseStageProps) {
 	const terms = useBrowseTerms(source);
 	const { search } = useQueryState<'products'>();
-	const roots = terms.rootsOf();
+	// One array per projection, so the root grid's and table's memos hold across query changes.
+	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
 	// A search spans the catalogue, not the term set: the products show, with no crumb (spec,
 	// "Search"). The filter bar's own clear brings the term set back.
 	if (search !== '') return <>{renderProducts(noDrill)}</>;

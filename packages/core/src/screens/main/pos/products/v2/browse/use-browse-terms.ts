@@ -53,28 +53,35 @@ const toTerm = (term: TermRecord['payload']): BrowseTerm & { kind: 'term' } => (
 
 const NO_IDS: ReadonlySet<number> = new Set();
 
-/** Pure: the taxonomy records → the source's terms. Exported for its test. */
+/**
+ * Pure: the taxonomy records → the source's terms. Exported for its test. `knownNonEmpty`
+ * undefined is an existence read that has not answered yet: the source is then unanswered too,
+ * as it is before its records arrive — a zero-count term may yet be shown.
+ */
 export function projectTerms(
 	records: TermRecord[] | undefined,
 	source: TaxonomySource,
-	knownNonEmpty: ReadonlySet<number> = NO_IDS
+	knownNonEmpty: ReadonlySet<number> | undefined
 ): BrowseTerms {
 	const payloads = (records ?? []).map((record) => record.payload);
 	const byId = new Map(payloads.map((term) => [term.id, term]));
 	const hierarchical = isHierarchical(source);
+	const known = records === undefined ? undefined : knownNonEmpty;
 	return {
 		all:
-			records === undefined
+			known === undefined
 				? undefined
-				: orderTerms(visibleTerms(payloads, knownNonEmpty), hierarchical).map(toTerm),
+				: orderTerms(visibleTerms(payloads, known), hierarchical).map(toTerm),
 		rootsOf: () =>
-			(hierarchical
-				? rootTerms(payloads, knownNonEmpty)
-				: orderTerms(visibleTerms(payloads, knownNonEmpty), false)
-			).map(toTerm),
+			known === undefined
+				? []
+				: (hierarchical
+						? rootTerms(payloads, known)
+						: orderTerms(visibleTerms(payloads, known), false)
+					).map(toTerm),
 		childrenOf: (term) =>
-			term.kind === 'term' && hierarchical
-				? childrenOf(payloads, term.id, knownNonEmpty).map(toTerm)
+			known !== undefined && term.kind === 'term' && hierarchical
+				? childrenOf(payloads, term.id, known).map(toTerm)
 				: [],
 		idsFor: (term) =>
 			term.kind !== 'term'
@@ -121,8 +128,10 @@ const NONE: BrowseTerms = {
 type Hit<T> = { record: T };
 type ProductRecord = { payload: Partial<Record<TaxonomySource, { id?: number }[]>> };
 
-function useTaxonomyTerms(source: TaxonomySource): BrowseTerms {
-	const binding = useAllTermsBinding(collectionFor(source));
+/** One taxonomy's terms; no taxonomy (a shortcuts stage) binds nothing, in the same hook order. */
+function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
+	const taxonomy = source ?? 'categories';
+	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined);
 	// Read as state, never suspend: the tiles are on a stage that must not swap for a skeleton.
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
 	useObservableEagerState(binding.resource.valueRef$$);
@@ -137,26 +146,49 @@ function useTaxonomyTerms(source: TaxonomySource): BrowseTerms {
 				.map((hit) => hit.record.payload.id),
 		[hits]
 	);
-	const carrying = useProductsCarryingTermsBinding(source, zeroCountIds);
+	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds);
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
 	useObservableEagerState(carrying.resource.valueRef$$);
 	const products = carrying.resource.valueRef$$.value?.current.hits as
 		Hit<ProductRecord>[] | undefined;
-	const knownNonEmpty = React.useMemo(() => {
+	// Keyed on the sorted ids, so a product write that leaves the set as it was keeps the same
+	// Set and the projection is not rebuilt.
+	const carriedKey = React.useMemo(() => {
+		if (products === undefined) return undefined;
 		const ids = new Set<number>();
-		for (const hit of products ?? [])
-			for (const term of hit.record.payload[source] ?? [])
+		for (const hit of products)
+			for (const term of hit.record.payload[taxonomy] ?? [])
 				if (typeof term?.id === 'number') ids.add(term.id);
-		return ids;
-	}, [products, source]);
+		return [...ids].sort((a, b) => a - b).join(',');
+	}, [products, taxonomy]);
+	const carried = React.useMemo(
+		() =>
+			carriedKey === undefined
+				? undefined
+				: new Set(carriedKey === '' ? [] : carriedKey.split(',').map(Number)),
+		[carriedKey]
+	);
+	// No zero-count terms: the read is disabled, and its answer is that nothing needs lifting.
+	// Otherwise the source is unanswered until the products have answered — a POS-only store's
+	// terms are all zero-count, and must not read as empty while their read is in flight.
+	const existence = zeroCountIds.length === 0 ? NO_IDS : carried;
+	// A changed id set is a new read: the last answer holds meanwhile, so the stage does not
+	// collapse for a frame (state set while rendering — React's "previous render" pattern).
+	const [held, setHeld] = React.useState<{
+		taxonomy: TaxonomySource;
+		ids: ReadonlySet<number>;
+	}>();
+	if (existence !== undefined && (held?.ids !== existence || held.taxonomy !== taxonomy))
+		setHeld({ taxonomy, ids: existence });
+	const knownNonEmpty = existence ?? (held?.taxonomy === taxonomy ? held.ids : undefined);
 	return React.useMemo(
 		() =>
 			projectTerms(
 				hits?.map((hit) => hit.record),
-				source,
+				taxonomy,
 				knownNonEmpty
 			),
-		[hits, source, knownNonEmpty]
+		[hits, taxonomy, knownNonEmpty]
 	);
 }
 
@@ -182,10 +214,8 @@ export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | und
 }
 
 export function useBrowseTerms(source: BrowseBy): BrowseTerms {
-	// Hooks are unconditional: every source's data is read; only one is projected.
-	const categories = useTaxonomyTerms('categories');
-	const tags = useTaxonomyTerms('tags');
-	const brands = useTaxonomyTerms('brands');
+	// Only the active source is read (the settings dialog's counts read all three).
+	const taxonomy = useTaxonomyTerms(isTaxonomy(source) ? source : undefined);
 	const { uiSettings } = useUISettings('pos-products');
 	const filterBar = useDocField(uiSettings, (value) => value.filterBar);
 	const t = useT();
@@ -198,6 +228,6 @@ export function useBrowseTerms(source: BrowseBy): BrowseTerms {
 		[filterBar, t, format]
 	);
 	if (source === 'shortcuts') return shortcuts;
-	if (isTaxonomy(source)) return { categories, tags, brands }[source];
+	if (isTaxonomy(source)) return taxonomy;
 	return NONE;
 }

@@ -1,12 +1,19 @@
 /** @jest-environment jsdom */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { useDocField } from '@wcpos/query';
 
 import { useAllTermsBinding, useProductsCarryingTermsBinding } from '../../../../../../query';
+import { useT } from '../../../../../../contexts/translations';
 import { useUISettings } from '../../../../contexts/ui-settings';
-import { projectShortcuts, projectTerms, useBrowseCounts } from './use-browse-terms';
+import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
+import {
+	projectShortcuts,
+	projectTerms,
+	useBrowseCounts,
+	useBrowseTerms,
+} from './use-browse-terms';
 
 // The projections are pure; the hooks they sit beside are mocked out of the import graph.
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
@@ -20,6 +27,8 @@ jest.mock('../../../../contexts/ui-settings', () => ({ useUISettings: jest.fn() 
 jest.mock('../../../../hooks/use-currency-format', () => ({ useCurrencyFormat: jest.fn() }));
 
 const rec = (payload: Record<string, unknown>) => ({ payload });
+// The existence read's answer when nothing is lifted.
+const NONE_CARRIED = new Set<number>();
 
 describe('projectTerms', () => {
 	const records = [
@@ -37,7 +46,7 @@ describe('projectTerms', () => {
 		rec({ id: 4, name: 'Empty', parent: 0, count: 0 }),
 	];
 	it('projects a hierarchical source into roots, children and id sets', () => {
-		const terms = projectTerms(records as never, 'categories');
+		const terms = projectTerms(records as never, 'categories', NONE_CARRIED);
 		expect(terms.rootsOf().map((t) => t.kind === 'term' && t.name)).toEqual(['Drinks']);
 		const drinks = terms.rootsOf()[0];
 		expect(terms.childrenOf(drinks).map((t) => t.kind === 'term' && t.name)).toEqual([
@@ -52,7 +61,8 @@ describe('projectTerms', () => {
 	it('projects a flat source by name with no children', () => {
 		const terms = projectTerms(
 			[rec({ id: 9, name: 'Vegan', count: 2 }), rec({ id: 8, name: 'Decaf', count: 1 })] as never,
-			'tags'
+			'tags',
+			NONE_CARRIED
 		);
 		expect(terms.rootsOf().map((t) => t.kind === 'term' && t.name)).toEqual(['Decaf', 'Vegan']);
 		expect(terms.childrenOf(terms.rootsOf()[0])).toEqual([]);
@@ -64,8 +74,13 @@ describe('projectTerms', () => {
 		expect(terms.all?.map((t) => t.kind === 'term' && t.name)).toContain('Empty');
 	});
 	it('has no terms until the collection has answered', () => {
-		expect(projectTerms(undefined, 'categories').all).toBeUndefined();
-		expect(projectTerms([], 'categories').all).toEqual([]);
+		expect(projectTerms(undefined, 'categories', NONE_CARRIED).all).toBeUndefined();
+		expect(projectTerms([], 'categories', NONE_CARRIED).all).toEqual([]);
+	});
+	it('has no terms while the existence read of its zero-count terms is pending', () => {
+		const terms = projectTerms(records as never, 'categories', undefined);
+		expect(terms.all).toBeUndefined();
+		expect(terms.rootsOf()).toEqual([]);
 	});
 });
 
@@ -98,16 +113,18 @@ describe('projectShortcuts', () => {
 	});
 });
 
+const answer = (hits: Record<string, unknown>[]) => ({
+	current: { hits: hits.map((payload) => ({ record: { payload } })) },
+});
+const binding = (hits: Record<string, unknown>[] | undefined) => ({
+	resource: {
+		valueRef$$: new BehaviorSubject<ReturnType<typeof answer> | undefined>(
+			hits === undefined ? undefined : answer(hits)
+		),
+	},
+});
+
 describe('useBrowseCounts', () => {
-	const binding = (hits: Record<string, unknown>[] | undefined) => ({
-		resource: {
-			valueRef$$: new BehaviorSubject(
-				hits === undefined
-					? undefined
-					: { current: { hits: hits.map((payload) => ({ record: { payload } })) } }
-			),
-		},
-	});
 	it("counts each source's root terms, and nothing for a source that has not answered", () => {
 		const answers: Record<string, ReturnType<typeof binding>> = {
 			'products/categories': binding([
@@ -134,5 +151,64 @@ describe('useBrowseCounts', () => {
 		]);
 		const { result } = renderHook(() => useBrowseCounts());
 		expect(result.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+	});
+	// A POS-only store: every term is zero-count, kept only by the products that carry it.
+	it('counts nothing for a source whose zero-count terms are still being looked for', () => {
+		const answers: Record<string, ReturnType<typeof binding>> = {
+			'products/categories': binding([
+				{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+				{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			]),
+			'products/tags': binding([]),
+			'products/brands': binding([]),
+		};
+		(useAllTermsBinding as jest.Mock).mockImplementation(
+			(collection: string) => answers[collection]
+		);
+		// Each binding is one object across renders, as the real hook's is.
+		const pending = binding(undefined);
+		const disabled = binding([]);
+		(useProductsCarryingTermsBinding as jest.Mock).mockImplementation((_taxonomy, ids) =>
+			ids.length > 0 ? pending : disabled
+		);
+		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		(useDocField as jest.Mock).mockReturnValue([]);
+		const { result, rerender } = renderHook(() => useBrowseCounts());
+		expect(result.current.categories).toBeUndefined();
+
+		act(() => pending.resource.valueRef$$.next(answer([{ categories: [{ id: 5 }] }])));
+		expect(result.current.categories).toBe(2);
+
+		// A changed id set is a new read; the last answer holds while it is pending.
+		const reread = binding(undefined);
+		(useProductsCarryingTermsBinding as jest.Mock).mockImplementation((_taxonomy, ids) =>
+			ids.length > 0 ? reread : disabled
+		);
+		rerender();
+		expect(result.current.categories).toBe(2);
+	});
+});
+
+describe('useBrowseTerms', () => {
+	// The bindings each render asked for, once each (a render may run twice before it commits).
+	const asked = (hook: unknown) => [
+		...new Set((hook as jest.Mock).mock.calls.map((call) => JSON.stringify(call.slice(0, 2)))),
+	];
+	beforeEach(() => {
+		(useAllTermsBinding as jest.Mock).mockReset().mockReturnValue(binding([]));
+		(useProductsCarryingTermsBinding as jest.Mock).mockReset().mockReturnValue(binding([]));
+		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		(useDocField as jest.Mock).mockReturnValue([]);
+		(useT as jest.Mock).mockReturnValue((key: string) => key);
+		(useCurrencyFormat as jest.Mock).mockReturnValue({ format: String });
+	});
+	it('reads only the active taxonomy', () => {
+		renderHook(() => useBrowseTerms('tags'));
+		expect(asked(useAllTermsBinding)).toEqual(['["products/tags",true]']);
+		expect(asked(useProductsCarryingTermsBinding)).toEqual(['["tags",[]]']);
+	});
+	it('reads no taxonomy for the shortcuts', () => {
+		renderHook(() => useBrowseTerms('shortcuts'));
+		expect(asked(useAllTermsBinding)).toEqual(['["products/categories",false]']);
 	});
 });
