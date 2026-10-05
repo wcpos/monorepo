@@ -122,13 +122,21 @@ export function DealStack<T>({
 	}
 
 	// The grid's frame, like the tile's: both in the window, so the stage's own frame is taken off.
+	// A measurement belongs to the deal that asked for it: one that lands after the cashier has
+	// opened another detail would overwrite the new grid's frame (CodeRabbit on #2396).
+	const current = React.useRef(generation);
+	React.useLayoutEffect(() => {
+		current.current = generation;
+	}, [generation]);
 	const placeGrid = React.useCallback((node: Measurable) => {
 		const frame = stage.current as Measurable;
 		if (!node?.measureInWindow || !frame?.measureInWindow) return;
+		const asked = current.current;
 		node.measureInWindow((x, y, width, height) =>
-			frame.measureInWindow?.((stageX, stageY) =>
-				setGrid({ x: x - stageX, y: y - stageY, width, height })
-			)
+			frame.measureInWindow?.((stageX, stageY) => {
+				if (current.current !== asked) return;
+				setGrid({ x: x - stageX, y: y - stageY, width, height });
+			})
 		);
 	}, []);
 	if (!open && settled) setSettled(false);

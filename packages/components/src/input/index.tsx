@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+	Pressable,
 	TextInput as RNTextInput,
 	type TextInputProps as RNTextInputProps,
 	type TextInputInstance,
@@ -242,9 +243,17 @@ function Input({
 	return (
 		<Root className={className} disabled={isDisabled}>
 			{leftIcon && (
-				<Left className="pr-0">
+				// The glyph sits inside the field's border, so a tap on it is a tap on the field:
+				// it focuses the input rather than being a dead strip (Codex review on #2396).
+				<Pressable
+					className="justify-center pl-3"
+					accessible={false}
+					tabIndex={-1}
+					onPress={() => inputRef.current?.focus()}
+					testID={props.testID ? `${props.testID}-icon` : undefined}
+				>
 					<Icon name={leftIcon} className="text-muted-foreground" />
-				</Left>
+				</Pressable>
 			)}
 			<InputField
 				ref={mergedRef}

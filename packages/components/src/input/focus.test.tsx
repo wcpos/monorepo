@@ -33,3 +33,11 @@ it('lights the border and one-pixel ring only while focused', () => {
 	rerender(<Input disabled />);
 	expect(box.className).toContain('opacity-45');
 });
+
+it('a tap on the leading glyph focuses the field: the glyph is part of the field, not a dead strip', () => {
+	render(<Input testID="field" leftIcon="magnifyingGlass" />);
+	const field = screen.getByTestId('field');
+	expect(document.activeElement).not.toBe(field);
+	fireEvent.click(screen.getByTestId('field-icon'));
+	expect(document.activeElement).toBe(field);
+});
