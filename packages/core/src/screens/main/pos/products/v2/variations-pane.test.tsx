@@ -13,8 +13,20 @@ const hits = [
 	{ id: 'two', record: { remoteId: 2, payload: { stock_status: 'outofstock' } } },
 ];
 const mockRead = jest.fn();
+const answered = { value: true };
+// Whether the answer carried a value; an answer without one is a failed query.
+const valued = { value: true };
 const binding = {
-	resource: { hits, read: mockRead },
+	resource: {
+		hits,
+		read: mockRead,
+		// The answer as the subject holds it, for the grid: `undefined` until the query has spoken.
+		valueRef$$: {
+			get value() {
+				return answered.value && valued.value ? { current: { hits } } : undefined;
+			},
+		},
+	},
 	sync: jest.fn(async () => {}),
 	total$: of(99),
 	active$: of(false),
@@ -28,14 +40,11 @@ jest.mock('../../../../../query', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-const answered = { value: true };
-// Whether the answer carried a value; an answer without one is a failed query.
-const valued = { value: true };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: unknown) => resource,
-	// The answer as state, for the grid: `undefined` until the query has spoken.
-	useObservableEagerState: () =>
-		answered.value && valued.value ? { current: { hits } } : undefined,
+	// The subscription that re-renders the pane when the answer moves; the pane reads the value
+	// off the subject itself.
+	useObservableEagerState: () => undefined,
 }));
 // The resource's first answer: false until the query has spoken (or failed).
 jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));

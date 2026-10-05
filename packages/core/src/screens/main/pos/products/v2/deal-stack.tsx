@@ -112,6 +112,24 @@ export function DealStack<T>({
 	// Closing turns the tiles for home in the same render that hears of it.
 	if (!open && dealt) setDealt(false);
 
+	// What had focus when the tile was tapped (the tile) gets it back when the parent walks
+	// home, if the control that sent it home was inside the dealt grid, which is leaving. Focus
+	// that has moved somewhere live (a search field whose typing closed the deal) is left alone.
+	const opener = React.useRef<HTMLElement | null>(null);
+	const leaving = React.useRef<ViewInstance>(null);
+	React.useEffect(() => {
+		if (typeof document === 'undefined') return;
+		if (open) {
+			opener.current = document.activeElement as HTMLElement | null;
+			return;
+		}
+		const active = document.activeElement;
+		const grid = leaving.current as unknown as HTMLElement | null;
+		const stranded = !active || active === document.body || !!grid?.contains?.(active);
+		if (stranded && opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+		opener.current = null;
+	}, [open]);
+
 	React.useEffect(() => {
 		if (detail === null) return;
 		let live = true;
@@ -200,7 +218,10 @@ export function DealStack<T>({
 				<DealContext.Provider value={deal}>
 					<View
 						key={generation}
+						ref={leaving}
 						className="absolute inset-0"
+						// A grid that is gathering is already gone to a screen reader.
+						aria-hidden={!open}
 						style={{ pointerEvents: open ? 'auto' : 'none' }}
 					>
 						{renderDetail(staged)}

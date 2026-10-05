@@ -56,7 +56,10 @@ export function VariationsPane({ parent, back, ...props }: Props) {
 	// or was swapped for a skeleton, mid-deal would lose its place), and it has to hear the
 	// variations arrive when a cold refresh fills an answer that started empty.
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; exception dated 2026-10-02.
-	const answer = useObservableEagerState(binding.resource.valueRef$$);
+	useObservableEagerState(binding.resource.valueRef$$);
+	// Read from the subject itself, as `useFirstAnswer` does: on the render where the binding
+	// changes, the hook above can still hold the previous resource's answer.
+	const answer = binding.resource.valueRef$$.value;
 	if (back) {
 		// Answered without a value is a failure: reading it rethrows into the error boundary.
 		if (answered && !answer) binding.resource.read();

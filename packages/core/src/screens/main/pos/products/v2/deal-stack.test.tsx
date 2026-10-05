@@ -22,15 +22,23 @@ jest.mock('react-native', () => {
 	return {
 		Platform: { OS: 'web' },
 		View: ReactActual.forwardRef(function View(
-			{ children, onLayout, testID, style }: ViewProps,
+			{ children, onLayout, testID, style, ...rest }: ViewProps,
 			ref: React.Ref<unknown>
 		) {
+			const node: React.RefObject<HTMLDivElement | null> = ReactActual.useRef(null);
+			// A view measures as the stage does, and knows what it contains, as a DOM node does.
 			ReactActual.useImperativeHandle(ref, () => ({
 				measureInWindow: (callback: (x: number, y: number) => void) => callback(STAGE.x, STAGE.y),
+				contains: (other: Node) => node.current?.contains(other) ?? false,
 			}));
 			if (onLayout) mockLayouts.push(onLayout);
 			return (
-				<div data-testid={testID} data-pointer={flatten(style).pointerEvents as string}>
+				<div
+					ref={node}
+					data-testid={testID}
+					data-pointer={flatten(style).pointerEvents as string}
+					aria-hidden={rest['aria-hidden']}
+				>
 					{children}
 				</div>
 			);
@@ -339,6 +347,33 @@ it('a return interrupted by the same tile leaves the detail mounted', () => {
 	// The cancelled return reports `finished: false`; it must not unmount what is being dealt.
 	finish(0, false);
 	expect(deal()).toMatchObject({ name: 'Hoodie', dealt: true });
+});
+
+it('hides a gathering grid from the accessibility tree and gives focus back to the tapped tile', () => {
+	const stage = (detail: string | null) => (
+		<>
+			<button data-testid="tapped-tile" />
+			<input data-testid="search" />
+			<Stage detail={detail} />
+		</>
+	);
+	const { rerender } = render(stage(null));
+	screen.getByTestId('tapped-tile').focus();
+	rerender(stage('Hoodie'));
+	const grid = () => screen.getByTestId('deal').closest('[aria-hidden]')!;
+	expect(grid().getAttribute('aria-hidden')).toBe('false');
+	// The parent tile, inside the dealt grid, is what sends it home.
+	screen.getByTestId('crumb-laid-out').focus();
+	rerender(stage(null));
+	// Still on stage for the gather, but already gone to a screen reader.
+	expect(grid().getAttribute('aria-hidden')).toBe('true');
+	expect(document.activeElement).toBe(screen.getByTestId('tapped-tile'));
+	// Focus that moved somewhere live before the return (typing in a search field closed the
+	// deal) stays where it is.
+	rerender(stage('Hoodie'));
+	screen.getByTestId('search').focus();
+	rerender(stage(null));
+	expect(document.activeElement).toBe(screen.getByTestId('search'));
 });
 
 it('fades the furniture with the products, clamped', () => {
