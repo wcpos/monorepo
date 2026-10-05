@@ -129,7 +129,7 @@ test('admission follows a holder leaving the in-progress list', async () => {
 test('a holder that never releases times out without passing maxWaitMs', async () => {
 	assert.equal(POLL_INTERVAL_MS, 90_000);
 	assert.equal(MAX_WAIT_MS, 240 * 60_000);
-	assert.deepEqual(QUEUE_WORKFLOWS, ['deploy.yml', 'e2e-native.yml']);
+	assert.deepEqual(QUEUE_WORKFLOWS, ['e2e-native.yml']);
 	const fake = fakeQueue([[holder]], { maxWaitMs: 2500 });
 	assert.deepEqual(await fake.run(), {
 		admitted: false,
