@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Platform, View, type ViewInstance, type ViewProps } from 'react-native';
 
 import Animated, {
+	cancelAnimation,
 	ReduceMotion,
 	type SharedValue,
 	useAnimatedStyle,
@@ -115,9 +116,11 @@ export function DealStack<T>({
 	// What had focus when the tile was tapped (the tile) gets it back when the parent walks
 	// home, if the control that sent it home was inside the dealt grid, which is leaving. Focus
 	// that has moved somewhere live (a search field whose typing closed the deal) is left alone.
+	// A layout effect: the detail mounts in the same commit, and its breadcrumb takes focus in a
+	// passive effect, which would otherwise be the "opener" on record.
 	const opener = React.useRef<HTMLElement | null>(null);
 	const leaving = React.useRef<ViewInstance>(null);
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		if (typeof document === 'undefined') return;
 		if (open) {
 			opener.current = document.activeElement as HTMLElement | null;
@@ -163,6 +166,9 @@ export function DealStack<T>({
 			});
 			return;
 		}
+		// A tap during the return keeps the stage: the return's clock would otherwise clear the
+		// detail when it ran out, taking the new tile's measurement with it.
+		cancelAnimation(furniture);
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
@@ -258,8 +264,12 @@ export function DealCell({
 	const travel = useSharedValue(dealt ? 1 : 0);
 	const parent = index === 0;
 
+	// A cell sets off only when its direction changes. `count` moves while a cold query fills
+	// its placeholders; a tile already in the air must not stop for a fresh delay.
+	const aimed = React.useRef(dealt);
 	React.useEffect(() => {
-		if (travel.value === (dealt ? 1 : 0)) return;
+		if (aimed.current === dealt) return;
+		aimed.current = dealt;
 		if (parent) {
 			travel.value = withTiming(dealt ? 1 : 0, { duration: PANE, easing: EASE, ...REDUCE });
 			return;

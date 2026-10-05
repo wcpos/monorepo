@@ -63,9 +63,11 @@ export function PaneStack<T>({
 	// What had focus when the detail was pushed (the row that opened it) gets it back on the
 	// pop, when the control that popped is inside the pane that is leaving. Focus that has
 	// moved somewhere live (a search field whose typing closed the detail) is left alone.
+	// A layout effect: the detail mounts in the same commit, and its breadcrumb takes focus in a
+	// passive effect, which would otherwise be the "opener" on record.
 	const opener = React.useRef<HTMLElement | null>(null);
 	const leaving = React.useRef<HTMLElement | null>(null);
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		if (typeof document === 'undefined') return;
 		if (open) {
 			opener.current = document.activeElement as HTMLElement | null;

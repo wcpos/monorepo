@@ -9,6 +9,7 @@ type TimingCall = { toValue: number; duration: number; done?: (finished: boolean
 const mockTimings: TimingCall[] = [];
 const mockDelays: number[] = [];
 const mockShared: { value: number }[] = [];
+const mockCancelled: { value: number }[] = [];
 const mockStyles = new Map<string, () => Style>();
 const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
 // The stage's own frame in the window; a tile's frame is given relative to the same window.
@@ -73,6 +74,9 @@ jest.mock('react-native-reanimated', () => {
 		},
 		Easing: { bezier: () => 'ease' },
 		ReduceMotion: { System: 'system' },
+		cancelAnimation: (shared: { value: number }) => {
+			mockCancelled.push(shared);
+		},
 		useAnimatedStyle: (factory: () => Style) => ({ factory }),
 		useSharedValue: (value: number) => {
 			const shared = ReactActual.useRef({ value }).current;
@@ -127,9 +131,12 @@ function Pane({
 	scroll?: { value: number };
 }) {
 	const { origin, dealt, setTop } = useDeal();
+	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
+	const crumb = React.useRef<HTMLButtonElement>(null);
+	React.useEffect(() => crumb.current?.focus(), []);
 	return (
 		<>
-			<button data-testid="crumb-laid-out" onClick={() => setTop(CRUMB)} />
+			<button ref={crumb} data-testid="crumb-laid-out" onClick={() => setTop(CRUMB)} />
 			<output data-testid="deal">
 				{JSON.stringify({ name, dealt, origin: origin ?? String(origin) })}
 			</output>
@@ -193,6 +200,7 @@ beforeEach(() => {
 	mockTimings.length = 0;
 	mockDelays.length = 0;
 	mockShared.length = 0;
+	mockCancelled.length = 0;
 	mockStyles.clear();
 	mockLayouts.length = 0;
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -338,6 +346,41 @@ it('keeps the detail on stage until its tiles are home, then puts the tile back'
 	expect(screen.getByTestId('lifted').textContent).toBe('null');
 });
 
+it('a return interrupted by another tile stops the return clock, keeping the new measurement', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	rerender(<Stage detail={null} />);
+	const [furniture] = mockShared;
+	mockCancelled.length = 0;
+	rerender(<Stage detail="Tee" />);
+	// Hoodie's return would have cleared the stage when it ran out, measurement and all.
+	expect(mockCancelled).toContain(furniture);
+	// A cancelled return reports `finished: false` and leaves the new deal alone.
+	finish(0, false);
+	expect(deal()).toMatchObject({
+		name: 'Tee',
+		origin: { x: TILE.x - STAGE.x, y: TILE.y - STAGE.y },
+	});
+});
+
+it('a cell in the air keeps going when the slot count changes under it', () => {
+	const { rerender } = render(<Stage detail={null} count={4} />);
+	rerender(<Stage detail="Hoodie" count={4} />);
+	layOut();
+	const [, ...cells] = mockShared;
+	// Mid-flight: nothing has landed.
+	cells.forEach((cell) => (cell.value = 0.5));
+	const timings = mockTimings.length;
+	const delays = mockDelays.length;
+	// A cold query fills in: the grid gains a slot, so every cell's `count` changes.
+	rerender(<Stage detail="Hoodie" count={5} />);
+	// The four cells already going are not sent off again; only the new slot starts (at rest).
+	expect(mockTimings.length).toBe(timings);
+	expect(mockDelays.length).toBe(delays);
+	expect(mockShared.at(-1)!.value).toBe(1);
+});
+
 it('a return interrupted by the same tile leaves the detail mounted', () => {
 	const { rerender } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);
@@ -362,8 +405,8 @@ it('hides a gathering grid from the accessibility tree and gives focus back to t
 	rerender(stage('Hoodie'));
 	const grid = () => screen.getByTestId('deal').closest('[aria-hidden]')!;
 	expect(grid().getAttribute('aria-hidden')).toBe('false');
-	// The parent tile, inside the dealt grid, is what sends it home.
-	screen.getByTestId('crumb-laid-out').focus();
+	// The crumb took focus on mount; the opener on record is still the tile, not the crumb.
+	expect(document.activeElement).toBe(screen.getByTestId('crumb-laid-out'));
 	rerender(stage(null));
 	// Still on stage for the gather, but already gone to a screen reader.
 	expect(grid().getAttribute('aria-hidden')).toBe('true');
