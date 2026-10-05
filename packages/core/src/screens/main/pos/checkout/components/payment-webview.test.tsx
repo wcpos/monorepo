@@ -8,6 +8,7 @@ import { BehaviorSubject, map, take } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { LegacyTab } from '../tender/legacy-tab';
 import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
@@ -299,6 +300,7 @@ describe('PaymentWebview load watchdog', () => {
 describe('PaymentWebview fallback order refresh', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		resetCheckoutMode();
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
@@ -381,6 +383,151 @@ describe('PaymentWebview fallback order refresh', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it('stage host with auto-show enters the in-pane receipt and never routes', async () => {
+		jest.useFakeTimers();
+		autoShowReceipt = true;
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValue({
+			ready: new Promise<void>(() => {
+				/* never settles */
+			}),
+			release,
+		});
+		const setLoading = jest.fn();
+		const payload = {
+			id: 42,
+			number: '42',
+			status: 'completed',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
+		expect(setLoading).toHaveBeenCalledWith(false);
+		expect(mockEngineRequire).toHaveBeenCalled();
+		expect(release).not.toHaveBeenCalled();
+		await act(async () => {
+			jest.advanceTimersByTime(10_000);
+			await Promise.resolve();
+		});
+	});
+
+	it('stage host without auto-show leaves checkout and clears the current order, without routing', async () => {
+		autoShowReceipt = false;
+		enterCheckout('uuid-42');
+		const payload = {
+			id: 42,
+			number: '42',
+			status: 'completed',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+	});
+
+	it('stage host fallback poll success enters the receipt without routing', async () => {
+		jest.useFakeTimers();
+		autoShowReceipt = true;
+		const serverOrder = {
+			id: 42,
+			status: 'completed',
+			number: '42',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
+	});
+
+	it('stage host fallback poll success without auto-show leaves checkout and clears the current order, without routing', async () => {
+		jest.useFakeTimers();
+		autoShowReceipt = false;
+		enterCheckout('uuid-42');
+		const serverOrder = {
+			id: 42,
+			status: 'completed',
+			number: '42',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 
 	it('adopts a valid payment payload and skips the redundant refresh when applied', async () => {
@@ -1492,6 +1639,55 @@ describe('pay-page session gate', () => {
 		act(() => button.click());
 		expect(mockPostMessage).not.toHaveBeenCalled();
 		expect(prepareSale).toHaveBeenCalledTimes(1);
+	});
+	it('LegacyTab forwards receiptHost to PaymentWebview', async () => {
+		autoShowReceipt = false;
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
+		mockAdoptOrderSnapshot.mockResolvedValue('applied');
+		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+		const preparedSession = new BehaviorSubject(session);
+		mockOpenSession.next(session);
+		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+			typeof query === 'string' || query.selector.id
+				? {
+						$: preparedSession.pipe(
+							map((session) => (session?.status === 'open' ? session : null))
+						),
+					}
+				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+		);
+		render(
+			<LegacyTab
+				order={makeOrder()}
+				flow={
+					{
+						hasLiveLeg: false,
+						legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
+						saveState: null,
+					} as never
+				}
+				receiptHost="stage"
+			/>
+		);
+		await act(async () => {});
+		const payload = {
+			id: 42,
+			number: '42',
+			status: 'completed',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 	it('opening a session recovers the legacy frame exactly once without a retryToken', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
