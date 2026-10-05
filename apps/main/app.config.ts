@@ -11,6 +11,10 @@ import packageJson from './package.json';
  */
 const DEV_CLIENT_NATIVE_VERSION = '1.10.4';
 
+// One camera string for every plugin that writes NSCameraUsageDescription (expo-camera and
+// react-native-webrtc both do); the barcode scanner is the only camera user.
+const CAMERA_USAGE_DESCRIPTION = 'WCPOS uses the camera to scan product barcodes.';
+
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
 	const iosInfoPlist = config.ios?.infoPlist ?? {};
@@ -120,6 +124,22 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					'android.permission.INTERNET',
 				]),
 			],
+			// Stripped from the merged manifest (`tools:node="remove"`). The audit of the
+			// 2026-10-01 dev client (aapt2 on the EAS APK, 2026-10-05) found these declared
+			// by libraries for features the app never uses:
+			// - RECORD_AUDIO / MODIFY_AUDIO_SETTINGS: @config-plugins/react-native-webrtc
+			//   adds them unconditionally; WebRTC here carries only the customer-display
+			//   data channel (no media), and nothing imports expo-audio. RECORD_AUDIO is a
+			//   dangerous permission that would list "Microphone" on the Play listing.
+			// - SYSTEM_ALERT_WINDOW ("display over other apps"): the same plugin plus
+			//   Expo's template. Only React Native's debug overlay uses it, so the dev
+			//   client keeps it and store/ad-hoc builds drop it.
+			// WAKE_LOCK stays: androidx.work (transitive) runs its jobs under it.
+			blockedPermissions: [
+				'android.permission.RECORD_AUDIO',
+				'android.permission.MODIFY_AUDIO_SETTINGS',
+				...(isDev ? [] : ['android.permission.SYSTEM_ALERT_WINDOW']),
+			],
 		},
 
 		web: {
@@ -187,8 +207,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			[
 				'@config-plugins/react-native-webrtc',
 				{
-					// WebRTC requires native declarations; the app never opens the camera or microphone.
-					cameraPermission: 'WCPOS does not use the camera.',
+					// WebRTC requires native declarations; the app never opens the microphone
+					// (its Android RECORD_AUDIO is blocked above). This plugin's withInfoPlist
+					// runs AFTER expo-camera's below (an earlier entry in this list wins), so
+					// the camera string must be the barcode scanner's — the webrtc default
+					// shipped as "WCPOS does not use the camera." on the scanner's prompt.
+					cameraPermission: CAMERA_USAGE_DESCRIPTION,
 					microphonePermission: 'WCPOS does not use the microphone.',
 				},
 			],
@@ -210,7 +234,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			[
 				'expo-camera',
 				{
-					cameraPermission: 'WCPOS uses the camera to scan product barcodes.',
+					cameraPermission: CAMERA_USAGE_DESCRIPTION,
 					recordAudioAndroid: false,
 				},
 			],

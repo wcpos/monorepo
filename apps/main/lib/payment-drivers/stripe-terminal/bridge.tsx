@@ -24,6 +24,11 @@ function SdkBinding({ driver, methods }: Props) {
 	const initialization = React.useRef<Promise<void> | null>(null);
 	const retryAfter = React.useRef(0);
 	const failure = React.useRef<Error | null>(null);
+	// Set by the first reader operation. Until then nothing initializes: on Android the SDK
+	// cannot initialize before location + Bluetooth are granted, so an eager init turned app
+	// launch into a permission prompt (2026-10-05). Foreground and descriptor refreshes only
+	// retry an attempt a cashier already made (e.g. after granting access in Settings).
+	const attempted = React.useRef(false);
 	const mounted = React.useRef(false);
 	// The hook changes identity/state; bridge its current API into the non-React driver.
 	React.useEffect(() => {
@@ -36,6 +41,7 @@ function SdkBinding({ driver, methods }: Props) {
 		mounted.current = true;
 		const request = (): Promise<void> => {
 			if (initialized.current || !mounted.current) return Promise.resolve();
+			attempted.current = true;
 			if (initialization.current) return initialization.current;
 			if (Date.now() < retryAfter.current) return Promise.reject(failure.current);
 			initialization.current = (async () => {
@@ -85,9 +91,8 @@ function SdkBinding({ driver, methods }: Props) {
 		};
 		driver.setInitializationHandler(request);
 		const foreground = AppState.addEventListener('change', (state) => {
-			if (state === 'active') void request().catch(() => {});
+			if (state === 'active' && attempted.current) void request().catch(() => {});
 		});
-		void request().catch(() => {});
 		return () => {
 			mounted.current = false;
 			foreground.remove();
@@ -98,7 +103,7 @@ function SdkBinding({ driver, methods }: Props) {
 	}, [driver]);
 	// Refreshed descriptors can make bootstrap available after the first attempt failed.
 	React.useEffect(() => {
-		void driver.requestInitialization().catch(() => {});
+		if (attempted.current) void driver.requestInitialization().catch(() => {});
 	}, [driver, methods]);
 	return null;
 }
