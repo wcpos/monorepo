@@ -490,6 +490,52 @@ it('a 4xx that is not a contract code is retried like a dropped connection', asy
 	await tick(2000);
 	expect(c.leg.getState().outcome).toBe('captured');
 });
+// An intent the store or the provider refused is not a dropped connection: the same request
+// would be refused the same way, and no leg exists on the server to poll. Found live on the
+// first SumUp Solo run (a 422 for a currency the merchant cannot take, and a 400 from the
+// ledger, each retried as "Connection unstable" until the five-minute deadline).
+it.each([
+	[400, 'rest_invalid_param', {}, 'Refused'],
+	[
+		422,
+		'wcpos_provider_error',
+		{ detail: { code: 'sumup_422', message: "This merchant can only accept 'EUR'" } },
+		"This merchant can only accept 'EUR'",
+	],
+] as const)(
+	'a refused intent (%s %s) lands as failed with the reason',
+	async (status, code, data, message) => {
+		const c = setup();
+		c.fail('intent', refusal(status, code, data));
+		await c.leg.start();
+		await tick();
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'final',
+			outcome: 'failed',
+			row: { status: 'failed' },
+			error: { message },
+			// The refusal is a logged event: the latest line under the stepper, and in Copy.
+			clientEvents: [expect.objectContaining({ level: 'error', message })],
+		});
+		await tick(20000);
+		expect(c.count('intent')).toBe(1);
+	}
+);
+it('an auth 4xx on intent is still retried like a dropped connection', async () => {
+	const c = setup();
+	c.fail('intent', refusal(403, 'rest_forbidden'));
+	c.answer('intent', response({ status: 'pending' }));
+	await c.leg.start();
+	await tick();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'creating',
+		outcome: null,
+		consecutiveErrors: 1,
+	});
+	await tick(2000);
+	expect(c.leg.getState().phase).toBe('polling');
+	expect(c.count('intent')).toBe(2);
+});
 it('a void the server never saw is a local void, not a failure', async () => {
 	const c = setup(true);
 	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
