@@ -70,6 +70,7 @@ jest.mock('react-native-reanimated', () => {
 						data-visibility={(flat.visibility as string) ?? 'visible'}
 						data-pointer={flat.pointerEvents as string}
 						data-front={flat.zIndex === 1}
+						data-opacity={flat.opacity as number}
 						aria-hidden={rest['aria-hidden']}
 					>
 						{children}
@@ -187,6 +188,9 @@ function Stage({
 }
 
 const deal = () => JSON.parse(screen.getByTestId('deal').textContent!);
+// The parent's visibility is a plain style (committed with the lift), not a worklet prop.
+const seen = (testID: string) =>
+	screen.getByTestId(testID).closest('[data-style]')!.getAttribute('data-opacity') !== '0';
 const styleOf = (testID: string) =>
 	mockStyles.get(
 		screen.getByTestId(testID).closest('[data-style]')!.getAttribute('data-style')!
@@ -239,11 +243,17 @@ it('lays the detail out unseen, then deals from the tapped tile once both frames
 	// Nothing has set off: no furniture deal (the one `1` with a callback) and no products fade.
 	expect(mockTimings.some((call) => call.toValue === 1 && call.done)).toBe(false);
 	expect(mockTimings.some((call) => call.toValue === 0 && !call.done)).toBe(false);
-	// The tapped tile steps aside for its copy as soon as the copy can stand on it.
-	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
+	// The copy is not shown until it also knows how far down the grid starts: with the frame
+	// alone it has no offset and would paint at rest, then snap (Android, 2026-10-05) — and the
+	// tapped tile does not step aside before the copy can stand on it, or the slot is empty.
+	expect(seen('cell-0')).toBe(false);
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
 
 	layOut();
 	expect(deal().dealt).toBe(true);
+	// Both on the same frame: the copy stands on the tile and the tile steps aside.
+	expect(seen('cell-0')).toBe(true);
+	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
 	// The products are out of reach from the tap, and hidden once they have faded.
 	const root = screen.getByTestId('lifted').closest('[data-style]') as HTMLElement;
 	expect(root.dataset.pointer).toBe('none');
@@ -263,8 +273,8 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 
 	// Undealt: slot 0 sits on the tile's frame. Its own slot is the stage's first cell, below the crumb.
 	cells.forEach((cell) => (cell.value = 0));
+	expect(seen('cell-0')).toBe(true);
 	expect(styleOf('cell-0')).toEqual({
-		opacity: 1,
 		transform: [{ translateX: 100 - 4 }, { translateY: 200 - (CRUMB + 4) }],
 	});
 	// Slot 5 is column 1 of row 1: one cell across, one tile-and-margins down.
@@ -295,6 +305,24 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	scroll.value = 30;
 	cells.forEach((cell) => (cell.value = 0));
 	expect(styleOf('cell-0').transform![1]).toEqual({ translateY: 200 - (CRUMB + 4) + 30 });
+
+	// A first frame stamped before the animation's start lets the easing overshoot the ends;
+	// the cell never leaves the line between the tapped tile and its slot (Android, 2026-10-05:
+	// the parent was thrown off the left of the screen for two frames on the way home).
+	scroll.value = 0;
+	cells.forEach((cell) => (cell.value = 1.2));
+	expect(styleOf('cell-0').transform).toEqual([{ translateX: 0 }, { translateY: 0 }]);
+	expect(styleOf('cell-5')).toEqual({
+		opacity: 1,
+		transform: [{ translateX: -0 }, { translateY: -0 }, { scale: 1 }],
+	});
+	cells.forEach((cell) => (cell.value = -0.2));
+	expect(styleOf('cell-0').transform).toEqual([
+		{ translateX: 100 - 4 },
+		{ translateY: 200 - (CRUMB + 4) },
+	]);
+	expect(styleOf('cell-5').opacity).toBe(0);
+	expect(styleOf('cell-5').transform![2]).toEqual({ scale: 0.92 });
 });
 
 it('deals in order on the beat, capped, and gathers last-out-first', () => {
@@ -333,13 +361,11 @@ it('deals in place when the tile cannot be measured, without losing the tap', ()
 	rerender(<Stage detail="Hoodie" target={null} />);
 	expect(deal()).toEqual({ name: 'Hoodie', dealt: false, origin: 'undefined' });
 	// Unmeasured, the parent is not shown anywhere yet.
-	expect(styleOf('cell-0').opacity).toBe(0);
+	expect(seen('cell-0')).toBe(false);
 	act(() => jest.advanceTimersByTime(120));
 	expect(deal()).toEqual({ name: 'Hoodie', dealt: true, origin: 'null' });
-	expect(styleOf('cell-0')).toEqual({
-		opacity: 1,
-		transform: [{ translateX: 0 }, { translateY: 0 }],
-	});
+	expect(seen('cell-0')).toBe(true);
+	expect(styleOf('cell-0')).toEqual({ transform: [{ translateX: 0 }, { translateY: 0 }] });
 	// No frame to stand on, so the products' own tile stays where it is.
 	expect(screen.getByTestId('lifted').textContent).toBe('null');
 });
