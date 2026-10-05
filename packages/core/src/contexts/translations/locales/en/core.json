@@ -239,6 +239,7 @@
 	"pos_checkout.reason_expired": "Timed out on the terminal",
 	"pos_checkout.reason_cancelled": "Cancelled on the terminal",
 	"pos_checkout.reason_declined_or_cancelled": "Declined or cancelled on the terminal",
+	"pos_checkout.reason_refused": "The store refused this payment",
 	"pos_checkout.event_sent_to": "Sent to {reader}",
 	"pos_checkout.event_on_terminal": "On the terminal, waiting for the customer",
 	"pos_checkout.event_approved": "Approved {amount}",

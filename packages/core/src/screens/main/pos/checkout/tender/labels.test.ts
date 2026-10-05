@@ -60,6 +60,10 @@ it('formats the approved amount in the till currency and leaves a foreign one as
 
 // SumUp reports a decline and a cancel on the reader the same way; the row's reason says so and
 // the cancelled line must not read it back as a cancel.
+it("names the leg's own reason for a code-less refusal", () => {
+	expect(failureReasonLabel('refused', t)).toBe('The store refused this payment');
+});
+
 it('reads a cancelled line through the row failure reason', () => {
 	expect(
 		describeEvent(info('Reader action cancelled'), t, {

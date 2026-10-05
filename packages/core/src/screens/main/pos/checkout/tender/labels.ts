@@ -72,6 +72,8 @@ const FAILURE_KEYS: Record<string, string> = {
 	declined_or_cancelled: 'pos_checkout.reason_declined_or_cancelled',
 	not_found: 'pos_checkout.reason_not_found',
 	amount_mismatch: 'pos_checkout.reason_amount_mismatch',
+	// The leg's own reason for a 4xx that carried no code (a proxy answering for the store).
+	refused: 'pos_checkout.reason_refused',
 };
 export function failureReasonLabel(reason: string | null, t: (key: string) => string): string {
 	return reason && FAILURE_KEYS[reason] ? t(FAILURE_KEYS[reason]) : (reason ?? '');

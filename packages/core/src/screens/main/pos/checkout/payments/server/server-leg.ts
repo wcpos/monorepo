@@ -288,16 +288,19 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		) {
 			// A void the server cannot find is a leg that never existed there: the
 			// cashier cancelled before the intent landed, which is a void, not a failure.
-			const row =
-				route === 'void' && code === 'wcpos_payment_not_found'
-					? { ...state.row, status: 'voided' as const, failure_reason: null }
-					: {
-							...state.row,
-							status: 'failed' as const,
-							// A refusal without a code (a proxy's bare 4xx) still names why the leg ended.
-							failure_reason:
-								code === 'wcpos_payment_not_found' ? 'not_found' : (code ?? 'refused'),
-						};
+			const localVoid = route === 'void' && code === 'wcpos_payment_not_found';
+			// The server wrote no event for a row it refused to create, so the refusal is
+			// logged here: it is what the cashier reads under the stepper and what Copy carries.
+			if (!localVoid)
+				event(changes.error?.message ?? body?.message ?? `HTTP ${response.status}`, 'error');
+			const row = localVoid
+				? { ...state.row, status: 'voided' as const, failure_reason: null }
+				: {
+						...state.row,
+						status: 'failed' as const,
+						// A refusal without a code (a proxy's bare 4xx) still names why the leg ended.
+						failure_reason: code === 'wcpos_payment_not_found' ? 'not_found' : (code ?? 'refused'),
+					};
 			await applyResponse({ payment: row, order: body?.data?.order }, seq);
 			return;
 		}

@@ -514,6 +514,8 @@ it.each([
 			outcome: 'failed',
 			row: { status: 'failed' },
 			error: { message },
+			// The refusal is a logged event: the latest line under the stepper, and in Copy.
+			clientEvents: [expect.objectContaining({ level: 'error', message })],
 		});
 		await tick(20000);
 		expect(c.count('intent')).toBe(1);

@@ -308,12 +308,17 @@ export function TerminalLegView({
 					})}
 				</HStack>
 				{latest ? (
-					<HStack testID="checkout-terminal-latest" className="items-center justify-center gap-2">
-						<EventMark tone={latest.line.tone} />
-						<Text className={`text-center text-sm ${toneText(latest.line.tone)}`}>
+					<HStack testID="checkout-terminal-latest" className="items-start justify-center gap-2">
+						<View className="shrink-0 pt-0.5">
+							<EventMark tone={latest.line.tone} />
+						</View>
+						{/* The words wrap on a phone or in a long translation; the time never does. */}
+						<Text className={`shrink text-center text-sm ${toneText(latest.line.tone)}`}>
 							{latest.line.text}
 						</Text>
-						<Text className="text-muted-foreground text-xs tabular-nums">· {latest.time}</Text>
+						<Text className="text-muted-foreground shrink-0 pt-0.5 text-xs tabular-nums">
+							· {latest.time}
+						</Text>
 					</HStack>
 				) : null}
 				<Collapsible open={open} onOpenChange={setOpen}>
@@ -357,17 +362,11 @@ export function TerminalLegView({
 							) : null}
 						</VStack>
 					</CollapsibleContent>
+					{/* The trigger draws its own chevron. */}
 					<CollapsibleTrigger testID="checkout-terminal-log-toggle">
-						<HStack className="items-center justify-center gap-1">
-							<Text className="text-muted-foreground text-sm">
-								{open ? t('pos_checkout.hide_details') : t('pos_checkout.details')}
-							</Text>
-							<Icon
-								name={open ? 'chevronUp' : 'chevronDown'}
-								size="xs"
-								className="text-muted-foreground"
-							/>
-						</HStack>
+						<Text className="text-muted-foreground text-center text-sm">
+							{open ? t('pos_checkout.hide_details') : t('pos_checkout.details')}
+						</Text>
 					</CollapsibleTrigger>
 				</Collapsible>
 			</VStack>
