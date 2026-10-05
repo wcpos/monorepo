@@ -88,6 +88,28 @@ function createStorageWorker(): Worker {
 
 // RxDB's code for "the worker runs a different rxdb than the page" (RxError RM1).
 const WORKER_VERSION_MISMATCH_CODE = 'RM1';
+// How RxStorageRemote.createStorageInstance rethrows an error the worker answered with:
+// `new Error('could not create instance ' + JSON.stringify(error))` — a plain Error whose
+// MESSAGE carries the serialised RxError (rxdb 17.5, plugins/storage-remote/rx-storage-remote.js).
+const REMOTE_CREATE_FAILED_PREFIX = 'could not create instance ';
+
+type RxErrorShape = {
+	code?: string;
+	parameters?: { args?: { mainVersion?: string; remoteVersion?: string } };
+};
+
+/** The RxError the worker answered with, whether thrown as is or serialised into a message. */
+function workerRxError(error: unknown): RxErrorShape | null {
+	if (typeof error !== 'object' || error === null) return null;
+	if ('code' in error) return error as RxErrorShape;
+	const message = (error as { message?: unknown }).message;
+	if (typeof message !== 'string' || !message.startsWith(REMOTE_CREATE_FAILED_PREFIX)) return null;
+	try {
+		return JSON.parse(message.slice(REMOTE_CREATE_FAILED_PREFIX.length)) as RxErrorShape;
+	} catch {
+		return null;
+	}
+}
 
 /**
  * RM1 as RxDB throws it says only `mainVersion 17.5.0, remoteVersion 17.4.0`. The page
@@ -99,10 +121,7 @@ const WORKER_VERSION_MISMATCH_CODE = 'RM1';
  * said nothing and the wrong plugin was redeployed twice).
  */
 export function describeWorkerVersionMismatch(error: unknown, workerUrl: string): unknown {
-	const rxError = error as {
-		code?: string;
-		parameters?: { args?: { mainVersion?: string; remoteVersion?: string } };
-	} | null;
+	const rxError = workerRxError(error);
 	if (rxError?.code !== WORKER_VERSION_MISMATCH_CODE) return error;
 	const main = rxError.parameters?.args?.mainVersion ?? 'unknown';
 	const remote = rxError.parameters?.args?.remoteVersion ?? 'unknown';
