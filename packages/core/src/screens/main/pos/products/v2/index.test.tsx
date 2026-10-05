@@ -432,6 +432,8 @@ jest.mock('./rows/variable-product-row', () => ({ VariableProductRow: () => null
 jest.mock('./grid/product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }));
+// Browse by is off here (no stored value reads as All products); the stage has its own suite.
+jest.mock('./browse/browse-stage', () => ({ BrowseStage: () => null }));
 // The stage's own behaviour is tested beside it; here it only has to hold both panes.
 jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: <T,>({

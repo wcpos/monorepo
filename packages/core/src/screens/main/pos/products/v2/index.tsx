@@ -52,6 +52,8 @@ import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
 import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
+import { readBrowseBy } from './browse/browse-source';
+import { BrowseStage } from './browse/browse-stage';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
@@ -59,10 +61,87 @@ import { ProductVariationImage } from '../../../components/product/variation-ima
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from '../../../components/data-table/v2';
-import type { QueryStateActions, QueryStateOf } from '../../../../../query';
+import type { QueryBinding, QueryStateActions, QueryStateOf } from '../../../../../query';
 import type { SlotContracts } from '../../../../../extensions/slots';
 export { cellsForRow };
 type ProductRow = { record: EngineRecord<'products'> };
+type DrillHandler = (record: EngineRecord<'products'> | null, target?: Measurable) => void;
+
+/** Today's products grid or table, drilling variable products through `onDrill`. */
+function ProductsView({
+	onDrill,
+	viewMode,
+	loading,
+	binding,
+	tableActions,
+	noDataMessage,
+	sort,
+	variationsStyle,
+	tableConfig,
+}: {
+	onDrill: DrillHandler;
+	viewMode: 'grid' | 'table';
+	loading: React.ReactNode;
+	binding: QueryBinding;
+	tableActions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
+	noDataMessage: React.ReactElement;
+	sort: QueryStateOf<'products'>['sort'];
+	variationsStyle: string;
+	tableConfig: React.ComponentProps<typeof DataTable<ProductRow>>['tableConfig'];
+}) {
+	const VariableTile = React.useCallback(
+		(props: React.ComponentProps<typeof ProductTile>) => (
+			<VariableProductTile {...props} variationsStyle={variationsStyle} onDrill={onDrill} />
+		),
+		[variationsStyle, onDrill]
+	);
+	return (
+		<Suspense fallback={loading}>
+			{viewMode === 'grid' ? (
+				<ProductGrid
+					tile={ProductTile}
+					variableTile={VariableTile}
+					binding={binding}
+					actions={tableActions}
+					noDataMessage={noDataMessage}
+				/>
+			) : (
+				<DataTable<ProductRow>
+					id="pos-products"
+					collectionName="products"
+					binding={binding}
+					resource={binding.resource}
+					sort={sort}
+					actions={tableActions}
+					active$={binding.active$}
+					total$={binding.total$}
+					sync={binding.sync}
+					renderItem={({ item, index, table }) => (
+						<VirtualizedList.Item>
+							{item.original.record.payload.type === 'variable' ? (
+								<VariableProductRow
+									item={item}
+									index={index}
+									table={table}
+									variationsStyle={variationsStyle}
+									onDrill={onDrill}
+								/>
+							) : (
+								<ProductRowView item={item} />
+							)}
+						</VirtualizedList.Item>
+					)}
+					cellsForRow={cellsForRow}
+					noDataMessage={noDataMessage}
+					estimatedItemSize={100}
+					TableFooterComponent={ProductsFooter}
+					getItemType={(row) => row.original.record.payload.type}
+					tableConfig={tableConfig}
+				/>
+			)}
+		</Suspense>
+	);
+}
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
 function POSProductsContent({
@@ -120,6 +199,7 @@ function POSProductsContent({
 
 	const viewMode = useDocField(uiSettings, (value) => value.viewMode) === 'grid' ? 'grid' : 'table';
 	const variationsStyle = useDocField(uiSettings, (value) => value.variationsStyle) ?? 'drill';
+	const browseBy = readBrowseBy(useDocField(uiSettings, (value) => value.browseBy));
 	// A drill-in remembers the search it opened under: typing a new product search is a return
 	// to the products (the search writes to the outer query, which the pane does not show).
 	const [drill, setDrill] = React.useState<{
@@ -133,12 +213,6 @@ function POSProductsContent({
 		(record: EngineRecord<'products'> | null, target?: Measurable) =>
 			setDrill(record ? { record, search: state.search, target } : null),
 		[state.search]
-	);
-	const VariableTile = React.useCallback(
-		(props: React.ComponentProps<typeof ProductTile>) => (
-			<VariableProductTile {...props} variationsStyle={variationsStyle} onDrill={setDrilled} />
-		),
-		[variationsStyle, setDrilled]
 	);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
@@ -284,53 +358,24 @@ function POSProductsContent({
 	/* eslint-enable react-compiler/react-compiler */
 
 	// The products stay mounted under a drill-in: the stage brings the variations over them and
-	// takes them back off, and the list is where the cashier left it.
-	const products = (
-		<Suspense fallback={loading}>
-			{viewMode === 'grid' ? (
-				<ProductGrid
-					tile={ProductTile}
-					variableTile={VariableTile}
-					binding={binding}
-					actions={tableActions}
-					noDataMessage={noDataMessage}
-				/>
-			) : (
-				<DataTable<ProductRow>
-					id="pos-products"
-					collectionName="products"
-					binding={binding}
-					resource={binding.resource}
-					sort={state.sort}
-					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
-					renderItem={({ item, index, table }) => (
-						<VirtualizedList.Item>
-							{item.original.record.payload.type === 'variable' ? (
-								<VariableProductRow
-									item={item}
-									index={index}
-									table={table}
-									variationsStyle={variationsStyle}
-									onDrill={setDrilled}
-								/>
-							) : (
-								<ProductRowView item={item} />
-							)}
-						</VirtualizedList.Item>
-					)}
-					cellsForRow={cellsForRow}
-					noDataMessage={noDataMessage}
-					estimatedItemSize={100}
-					TableFooterComponent={ProductsFooter}
-					getItemType={(row) => row.original.record.payload.type}
-					tableConfig={tableConfig}
-				/>
-			)}
-		</Suspense>
+	// takes them back off, and the list is where the cashier left it. A function of its drill
+	// handler, so a browse stage can wire its own (All products mode drills through `setDrilled`).
+	// Not memoised: `loading` and `noDataMessage` are fresh elements every render anyway. The tile
+	// component identity that matters is memoised inside ProductsView, per drill handler.
+	const renderProducts = (onDrill: DrillHandler) => (
+		<ProductsView
+			onDrill={onDrill}
+			viewMode={viewMode}
+			loading={loading}
+			binding={binding}
+			tableActions={tableActions}
+			noDataMessage={noDataMessage}
+			sort={state.sort}
+			variationsStyle={variationsStyle}
+			tableConfig={tableConfig}
+		/>
 	);
+	const products = renderProducts(setDrilled);
 	const renderDrillIn = (parent: EngineRecord<'products'>) => (
 		<DrillIn
 			parent={parent}
@@ -419,7 +464,13 @@ function POSProductsContent({
 					>
 						<ErrorBoundary>
 							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. */}
-							{viewMode === 'grid' ? (
+							{browseBy !== 'all' ? (
+								<BrowseStage
+									source={browseBy}
+									viewMode={viewMode}
+									renderProducts={renderProducts}
+								/>
+							) : viewMode === 'grid' ? (
 								<DealStack
 									testID="products-pane-stack"
 									detail={drilled}

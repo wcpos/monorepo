@@ -160,6 +160,27 @@ function useTaxonomyTerms(source: TaxonomySource): BrowseTerms {
 	);
 }
 
+/**
+ * How many terms each source would show — for the settings row's count and its dimming.
+ * `undefined` until the source's collection has answered: a source that is still loading is
+ * not an empty one, and the dialog can open before the browse bindings have (All products).
+ */
+export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | undefined> {
+	const categories = useTaxonomyTerms('categories');
+	const tags = useTaxonomyTerms('tags');
+	const brands = useTaxonomyTerms('brands');
+	const { uiSettings } = useUISettings('pos-products');
+	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	const answered = (terms: BrowseTerms) =>
+		terms.all === undefined ? undefined : terms.rootsOf().length;
+	return {
+		categories: answered(categories),
+		tags: answered(tags),
+		brands: answered(brands),
+		shortcuts: items.filter((item) => item.type === 'quick').length,
+	};
+}
+
 export function useBrowseTerms(source: BrowseBy): BrowseTerms {
 	// Hooks are unconditional: every source's data is read; only one is projected.
 	const categories = useTaxonomyTerms('categories');

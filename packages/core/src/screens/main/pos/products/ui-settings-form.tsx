@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import {
 	Select,
 	SelectContent,
@@ -25,6 +26,8 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { MetaDataKeysField } from './meta-data-keys-field';
+import { type BrowseBy, readBrowseBy } from './v2/browse/browse-source';
+import { useBrowseCounts } from './v2/browse/use-browse-terms';
 import { SORT_FIELD_VALUES } from './filter-bar/filter-bar-layout';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -49,6 +52,7 @@ const gridFieldsSchema = z.object({
 export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
 	variationsStyle: z.enum(['drill', 'inline']).optional(),
+	browseBy: z.enum(['all', 'categories', 'tags', 'brands', 'shortcuts']).optional(),
 	position: z.enum(['left', 'right']),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
@@ -147,6 +151,13 @@ export function UISettingsForm() {
 									]}
 								/>
 							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="browseBy"
+						render={({ field: { value, onChange } }) => (
+							<BrowseByField value={readBrowseBy(value)} onChange={onChange} />
 						)}
 					/>
 					<FormField
@@ -325,5 +336,87 @@ export function UISettingsForm() {
 				</VStack>
 			</Form>
 		</VStack>
+	);
+}
+
+/**
+ * Browse by: a radio list, not a segmented control — five labels do not fit a segment row in
+ * German. Each source shows how many terms it would put on the stage; one that has answered
+ * empty is dimmed and says why.
+ */
+function BrowseByField({
+	value,
+	onChange,
+}: {
+	value: BrowseBy;
+	onChange: (value: BrowseBy) => void;
+}) {
+	const t = useT();
+	const counts = useBrowseCounts();
+	const rows: { value: BrowseBy; label: string; count?: string; empty?: string }[] = [
+		{ value: 'all', label: t('pos_products.browse_all_products') },
+		{
+			value: 'categories',
+			label: t('pos_products.browse_categories'),
+			count: t('pos_products.n_categories', { count: counts.categories }),
+			empty: t('pos_products.no_categories_yet'),
+		},
+		{
+			value: 'tags',
+			label: t('pos_products.browse_tags'),
+			count: t('pos_products.n_tags', { count: counts.tags }),
+			empty: t('pos_products.no_tags_yet'),
+		},
+		{
+			value: 'brands',
+			label: t('pos_products.browse_brands'),
+			count: t('pos_products.n_brands', { count: counts.brands }),
+			empty: t('pos_products.no_brands_yet'),
+		},
+		{
+			value: 'shortcuts',
+			label: t('pos_products.browse_shortcuts'),
+			count: t('pos_products.n_quick_filters', { count: counts.shortcuts }),
+			empty: t('pos_products.no_shortcuts_yet'),
+		},
+	];
+	return (
+		<View className="gap-1 px-1">
+			<Text>{t('pos_products.browse_by')}</Text>
+			<View
+				role="radiogroup"
+				aria-label={t('pos_products.browse_by')}
+				className="border-border overflow-hidden rounded-lg border"
+			>
+				{rows.map((row) => {
+					// Dimmed only once the source has answered empty; a loading source is still a choice.
+					const count = row.value === 'all' ? undefined : counts[row.value];
+					const disabled = count === 0;
+					const on = row.value === value;
+					return (
+						// `role`/`aria-*`, not `accessibilityState`: react-native-web drops the
+						// latter, so the web build would lose checked and disabled (as SegmentedControl).
+						<Pressable
+							key={row.value}
+							disabled={disabled}
+							role="radio"
+							aria-checked={on}
+							aria-disabled={disabled}
+							onPress={() => onChange(row.value)}
+							className={`border-border active:bg-muted min-h-ctl flex-row items-center gap-2 border-b px-3 last:border-b-0 ${on ? 'bg-muted' : ''}`}
+							testID={`ui-settings-browse-by-${row.value}`}
+						>
+							<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />
+							<Text className={`flex-1 ${disabled ? 'text-muted-foreground' : ''}`}>
+								{row.label}
+							</Text>
+							<Text className="text-muted-foreground text-xs">
+								{disabled ? row.empty : count === undefined ? '' : row.count}
+							</Text>
+						</Pressable>
+					);
+				})}
+			</View>
+		</View>
 	);
 }

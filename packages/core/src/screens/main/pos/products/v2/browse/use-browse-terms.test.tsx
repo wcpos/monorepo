@@ -1,4 +1,12 @@
-import { projectShortcuts, projectTerms } from './use-browse-terms';
+/** @jest-environment jsdom */
+import { renderHook } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
+
+import { useDocField } from '@wcpos/query';
+
+import { useAllTermsBinding, useProductsCarryingTermsBinding } from '../../../../../../query';
+import { useUISettings } from '../../../../contexts/ui-settings';
+import { projectShortcuts, projectTerms, useBrowseCounts } from './use-browse-terms';
 
 // The projections are pure; the hooks they sit beside are mocked out of the import graph.
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
@@ -87,5 +95,44 @@ describe('projectShortcuts', () => {
 		]);
 		expect(terms.quickFilterFor(terms.rootsOf()[0])?.label).toBe('Breakfast');
 		expect(terms.idsFor(terms.rootsOf()[0])).toEqual([]);
+	});
+});
+
+describe('useBrowseCounts', () => {
+	const binding = (hits: Record<string, unknown>[] | undefined) => ({
+		resource: {
+			valueRef$$: new BehaviorSubject(
+				hits === undefined
+					? undefined
+					: { current: { hits: hits.map((payload) => ({ record: { payload } })) } }
+			),
+		},
+	});
+	it("counts each source's root terms, and nothing for a source that has not answered", () => {
+		const answers: Record<string, ReturnType<typeof binding>> = {
+			'products/categories': binding([
+				{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+				{ id: 2, name: 'Hot', parent: 1, count: 6 },
+				{ id: 3, name: 'Food', parent: 0, count: 4 },
+			]),
+			'products/tags': binding(undefined),
+			'products/brands': binding([]),
+		};
+		(useAllTermsBinding as jest.Mock).mockImplementation(
+			(collection: string) => answers[collection]
+		);
+		(useProductsCarryingTermsBinding as jest.Mock).mockReturnValue(binding(undefined));
+		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		(useDocField as jest.Mock).mockReturnValue([
+			{ type: 'pill', id: 'stock_status', show: true },
+			{
+				type: 'quick',
+				id: 'qf-1',
+				label: 'Under 3',
+				conditions: [{ field: 'price', value: { max: 3 } }],
+			},
+		]);
+		const { result } = renderHook(() => useBrowseCounts());
+		expect(result.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
 	});
 });
