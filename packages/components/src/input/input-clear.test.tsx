@@ -35,6 +35,7 @@ jest.mock(
 	{ virtual: true }
 );
 
+jest.mock('../icon', () => ({ Icon: () => null }));
 jest.mock('../icon-button', () => ({
 	IconButton: ({
 		testID,

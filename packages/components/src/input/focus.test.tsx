@@ -21,6 +21,7 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock('../icon-button', () => ({ IconButton: () => null }));
+jest.mock('../icon', () => ({ Icon: () => null }));
 it('lights the border and one-pixel ring only while focused', () => {
 	const { rerender } = render(<Input testID="field" />);
 	expect(box.className).toContain('bg-card');
@@ -31,4 +32,12 @@ it('lights the border and one-pixel ring only while focused', () => {
 	expect(box.className).not.toContain('border-ring');
 	rerender(<Input disabled />);
 	expect(box.className).toContain('opacity-45');
+});
+
+it('a tap on the leading glyph focuses the field: the glyph is part of the field, not a dead strip', () => {
+	render(<Input testID="field" leftIcon="magnifyingGlass" />);
+	const field = screen.getByTestId('field');
+	expect(document.activeElement).not.toBe(field);
+	fireEvent.click(screen.getByTestId('field-icon'));
+	expect(document.activeElement).toBe(field);
 });

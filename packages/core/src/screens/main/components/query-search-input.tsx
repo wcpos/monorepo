@@ -54,7 +54,16 @@ function DebouncedSearchInput({
 		[commitSearch]
 	);
 
-	return <Input ref={ref} value={draftSearch} onChangeText={handleSearch} clearable {...props} />;
+	return (
+		<Input
+			ref={ref}
+			value={draftSearch}
+			onChangeText={handleSearch}
+			clearable
+			leftIcon="magnifyingGlass"
+			{...props}
+		/>
+	);
 }
 
 export function QuerySearchInput<C extends CollectionKey>({

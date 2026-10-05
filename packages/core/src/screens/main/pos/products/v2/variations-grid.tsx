@@ -11,7 +11,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { DealCell, DealFade, FRONT, useDeal } from './deal-stack';
+import { DealCell, DealFade, FRONT, type Measurable, useDeal } from './deal-stack';
 import { ProductsFooter } from './footer';
 import { ParentTile, VariationPlaceholder, VariationTile } from './grid/variation-tile';
 
@@ -72,9 +72,12 @@ export function VariationsGrid({
 	hits: Hit[] | undefined;
 	stockStatus?: string;
 }) {
-	const { top } = useDeal();
 	const scroller = useAnimatedRef<Animated.ScrollView>();
 	const scroll = useScrollViewOffset(scroller);
+	// The slots rest inside this node; the stage measures it so the deal lands on the card, not
+	// on the stage the card is inset from.
+	const { placeGrid } = useDeal();
+	const slotsNode = React.useRef<React.ComponentRef<typeof View>>(null);
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -102,35 +105,43 @@ export function VariationsGrid({
 	);
 
 	return (
-		<View className="flex-1">
-			<Animated.ScrollView
-				ref={scroller}
-				className="flex-1"
-				testID="variations-grid-scroller"
-				// The breadcrumb lies over the top of the scroller, so that a tile dealt from the
-				// products' first row is not clipped on its way down.
-				contentContainerStyle={{ paddingTop: top ?? 0 }}
+		// The dealt grid lands on the ground under the crumb, as the products grid stands. The
+		// frame the slots rest in is reported, not assumed.
+		<View className="min-h-0 flex-1 px-1" testID="variations-surface">
+			<View
+				ref={slotsNode}
+				className="min-h-0 flex-1"
+				testID="variations-slots"
+				onLayout={() => placeGrid(slotsNode.current as Measurable)}
 			>
-				{rows.map((row, rowIndex) => (
-					<View key={rowIndex} className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
-						{row.map((index) => {
-							if (index >= count) return <View key={index} className="flex-1" />;
-							const variation = index === 0 ? null : slots[index - 1];
-							return (
-								<DealCell key={index} index={index} count={count} columns={columns} scroll={scroll}>
-									{index === 0 ? (
-										<ParentTile record={parent} onPress={back} />
-									) : variation ? (
-										<VariationTile record={variation} parent={parent} gridFields={gridFields} />
-									) : (
-										<VariationPlaceholder />
-									)}
-								</DealCell>
-							);
-						})}
-					</View>
-				))}
-			</Animated.ScrollView>
+				<Animated.ScrollView ref={scroller} className="flex-1" testID="variations-grid-scroller">
+					{rows.map((row, rowIndex) => (
+						<View key={rowIndex} className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
+							{row.map((index) => {
+								if (index >= count) return <View key={index} className="flex-1" />;
+								const variation = index === 0 ? null : slots[index - 1];
+								return (
+									<DealCell
+										key={index}
+										index={index}
+										count={count}
+										columns={columns}
+										scroll={scroll}
+									>
+										{index === 0 ? (
+											<ParentTile record={parent} onPress={back} />
+										) : variation ? (
+											<VariationTile record={variation} parent={parent} gridFields={gridFields} />
+										) : (
+											<VariationPlaceholder />
+										)}
+									</DealCell>
+								);
+							})}
+						</View>
+					))}
+				</Animated.ScrollView>
+			</View>
 			<DealFade>
 				<VariationsFooter
 					binding={binding}

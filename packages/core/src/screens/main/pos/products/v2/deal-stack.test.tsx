@@ -122,8 +122,19 @@ const TILE = { x: 110, y: 220, width: 92, height: 150 };
 const tile: Measurable = {
 	measureInWindow: (callback) => callback(TILE.x, TILE.y, TILE.width, TILE.height),
 };
-const CRUMB = 40;
+// Where the dealt grid's slots rest, within the stage: on a card 9 px in from the stage's edge
+// (the 8 px gutter plus its hairline), under a 40 px breadcrumb and the card's top hairline.
+const GRID = { x: 9, y: 41, width: 382, height: 300 };
+// A node whose measurement the platform answers later: the test fires it when it chooses.
+const pending: { fire: (() => void) | null } = { fire: null };
+const slowSlots: Measurable = {
+	measureInWindow: (callback) => {
+		pending.fire = () => callback(STAGE.x + 99, STAGE.y + 99, 50, 50);
+	},
+};
 const COLUMNS = 4;
+// One column of the grid's own width, not the stage's.
+const COLUMN = GRID.width / COLUMNS;
 
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
@@ -137,15 +148,26 @@ function Pane({
 	count: number;
 	scroll?: { value: number };
 }) {
-	const { origin, dealt, setTop } = useDeal();
+	const { origin, dealt, grid, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
 	const crumb = React.useRef<HTMLButtonElement>(null);
 	React.useEffect(() => crumb.current?.focus(), []);
+	// The grid reports the node its slots rest in: a card inset from the stage, under the crumb.
+	const slots: Measurable = {
+		measureInWindow: (callback) =>
+			callback(STAGE.x + GRID.x, STAGE.y + GRID.y, GRID.width, GRID.height),
+	};
 	return (
 		<>
-			<button ref={crumb} data-testid="crumb-laid-out" onClick={() => setTop(CRUMB)} />
+			<button ref={crumb} data-testid="crumb-laid-out" onClick={() => placeGrid(slots)} />
+			<button data-testid="measure-slowly" onClick={() => placeGrid(slowSlots)} />
 			<output data-testid="deal">
-				{JSON.stringify({ name, dealt, origin: origin ?? String(origin) })}
+				{JSON.stringify({
+					name,
+					dealt,
+					origin: origin ?? String(origin),
+					grid: grid ?? String(grid),
+				})}
 			</output>
 			<DealFade>
 				<span data-testid="furniture" />
@@ -239,6 +261,7 @@ it('lays the detail out unseen, then deals from the tapped tile once both frames
 		name: 'Hoodie',
 		dealt: false,
 		origin: { x: TILE.x - STAGE.x, y: TILE.y - STAGE.y, width: 92, height: 150 },
+		grid: 'undefined',
 	});
 	// Nothing has set off: no furniture deal (the one `1` with a callback) and no products fade.
 	expect(mockTimings.some((call) => call.toValue === 1 && call.done)).toBe(false);
@@ -271,18 +294,19 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	expect(furniture.value).toBe(1);
 	expect(products.value).toBe(0);
 
-	// Undealt: slot 0 sits on the tile's frame. Its own slot is the stage's first cell, below the crumb.
+	// Undealt: slot 0 sits on the tile's frame. Its own slot is the grid's first cell, inside the
+	// card's measured frame — not the stage's first cell, which the card is inset from.
 	cells.forEach((cell) => (cell.value = 0));
 	expect(seen('cell-0')).toBe(true);
 	expect(styleOf('cell-0')).toEqual({
-		transform: [{ translateX: 100 - 4 }, { translateY: 200 - (CRUMB + 4) }],
+		transform: [{ translateX: 100 - (GRID.x + 4) }, { translateY: 200 - (GRID.y + 4) }],
 	});
-	// Slot 5 is column 1 of row 1: one cell across, one tile-and-margins down.
+	// Slot 5 is column 1 of row 1: one grid column across, one tile-and-margins down.
 	const under = styleOf('cell-5');
 	expect(under.opacity).toBe(0);
 	expect(under.transform).toEqual([
-		{ translateX: 100 - (100 + 4) },
-		{ translateY: 200 - (CRUMB + 158 + 4) },
+		{ translateX: 100 - (GRID.x + COLUMN + 4) },
+		{ translateY: 200 - (GRID.y + 158 + 4) },
 		{ scale: 0.92 },
 	]);
 	// Only the parent's row and the parent itself are raised.
@@ -304,7 +328,7 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	// A scrolled grid gathers from where its tiles are on screen.
 	scroll.value = 30;
 	cells.forEach((cell) => (cell.value = 0));
-	expect(styleOf('cell-0').transform![1]).toEqual({ translateY: 200 - (CRUMB + 4) + 30 });
+	expect(styleOf('cell-0').transform![1]).toEqual({ translateY: 200 - (GRID.y + 4) + 30 });
 
 	// A first frame stamped before the animation's start lets the easing overshoot the ends;
 	// the cell never leaves the line between the tapped tile and its slot (Android, 2026-10-05:
@@ -318,8 +342,8 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	});
 	cells.forEach((cell) => (cell.value = -0.2));
 	expect(styleOf('cell-0').transform).toEqual([
-		{ translateX: 100 - 4 },
-		{ translateY: 200 - (CRUMB + 4) },
+		{ translateX: 100 - (GRID.x + 4) },
+		{ translateY: 200 - (GRID.y + 4) },
 	]);
 	expect(styleOf('cell-5').opacity).toBe(0);
 	expect(styleOf('cell-5').transform![2]).toEqual({ scale: 0.92 });
@@ -359,11 +383,12 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 it('deals in place when the tile cannot be measured, without losing the tap', () => {
 	const { rerender } = render(<Stage detail={null} target={null} />);
 	rerender(<Stage detail="Hoodie" target={null} />);
-	expect(deal()).toEqual({ name: 'Hoodie', dealt: false, origin: 'undefined' });
+	expect(deal()).toEqual({ name: 'Hoodie', dealt: false, origin: 'undefined', grid: 'undefined' });
 	// Unmeasured, the parent is not shown anywhere yet.
 	expect(seen('cell-0')).toBe(false);
 	act(() => jest.advanceTimersByTime(120));
-	expect(deal()).toEqual({ name: 'Hoodie', dealt: true, origin: 'null' });
+	// Neither frame could be measured: the grace period deals in place, on the stage itself.
+	expect(deal()).toEqual({ name: 'Hoodie', dealt: true, origin: 'null', grid: 'null' });
 	expect(seen('cell-0')).toBe(true);
 	expect(styleOf('cell-0')).toEqual({ transform: [{ translateX: 0 }, { translateY: 0 }] });
 	// No frame to stand on, so the products' own tile stays where it is.
@@ -403,6 +428,33 @@ it('a return interrupted by another tile stops the return clock, keeping the new
 		name: 'Tee',
 		origin: { x: TILE.x - STAGE.x, y: TILE.y - STAGE.y },
 	});
+});
+
+it('a grid measurement that lands after another detail opened is ignored', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	// Hoodie's grid asks to be measured; the platform has not answered yet.
+	act(() => screen.getByTestId('measure-slowly').click());
+	expect(deal().grid).toBe('undefined');
+	// The cashier opens Tee before the answer arrives.
+	rerender(<Stage detail="Tee" />);
+	act(() => pending.fire!());
+	// Hoodie's frame does not become Tee's; Tee's own report does.
+	expect(deal()).toMatchObject({ name: 'Tee', grid: 'undefined' });
+	layOut();
+	expect(deal().grid).toEqual(GRID);
+});
+
+it('a grid measurement that lands after the grace period dealt in place does not move the deal', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	act(() => screen.getByTestId('measure-slowly').click());
+	// The platform is slow: the grace period deals on the stage itself.
+	act(() => jest.advanceTimersByTime(120));
+	expect(deal()).toMatchObject({ dealt: true, grid: 'null' });
+	// The answer arrives with the tiles in the air; this deal keeps the frame it set off with.
+	act(() => pending.fire!());
+	expect(deal().grid).toBe('null');
 });
 
 it('a cell in the air keeps going when the slot count changes under it', () => {

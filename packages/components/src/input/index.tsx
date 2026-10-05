@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+	Pressable,
 	TextInput as RNTextInput,
 	type TextInputProps as RNTextInputProps,
 	type TextInputInstance,
@@ -10,6 +11,7 @@ import { useControllableState } from '@rn-primitives/hooks';
 
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
+import { Icon, type IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
@@ -191,6 +193,8 @@ interface InputProps
 	clearable?: boolean;
 	/** testID for the clear (×) button — E2E flows clear a filled field through it. */
 	clearTestID?: string;
+	/** A glyph at the field's leading edge that says what the field is for (a search field's lens). */
+	leftIcon?: IconName;
 	defaultValue?: string;
 	inputClassName?: string;
 }
@@ -203,6 +207,7 @@ function Input({
 	type,
 	clearable = false,
 	clearTestID,
+	leftIcon,
 	value: valueProp,
 	defaultValue,
 	onChangeText,
@@ -237,13 +242,26 @@ function Input({
 
 	return (
 		<Root className={className} disabled={isDisabled}>
+			{leftIcon && (
+				// The glyph sits inside the field's border, so a tap on it is a tap on the field:
+				// it focuses the input rather than being a dead strip (Codex review on #2396).
+				<Pressable
+					className="justify-center pl-3"
+					accessible={false}
+					tabIndex={-1}
+					onPress={() => inputRef.current?.focus()}
+					testID={props.testID ? `${props.testID}-icon` : undefined}
+				>
+					<Icon name={leftIcon} className="text-muted-foreground" />
+				</Pressable>
+			)}
 			<InputField
 				ref={mergedRef}
 				type={type}
 				editable={!isDisabled}
 				value={value}
 				onChangeText={setValue}
-				className={inputClassName}
+				className={cn(leftIcon && 'pl-2', inputClassName)}
 				{...props}
 			/>
 			{clearable && value !== undefined && value.length > 0 && (

@@ -110,7 +110,9 @@ export function ProductGrid({
 	}, [deferredResult.hits, skippedStaleHits]);
 
 	return (
-		<View className="flex h-full flex-col">
+		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
+		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
+		<View className="flex h-full flex-col px-1">
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}

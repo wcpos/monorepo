@@ -11,21 +11,9 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-const setTop = jest.fn();
 jest.mock('./deal-stack', () => ({
-	useDeal: () => ({ setTop }),
-	DealFade: ({
-		children,
-		onLayout,
-	}: React.PropsWithChildren<{
-		onLayout: (event: { nativeEvent: { layout: { height: number } } }) => void;
-	}>) => (
-		<div
-			data-testid="crumb-over-grid"
-			onClick={() => onLayout({ nativeEvent: { layout: { height: 44 } } })}
-		>
-			{children}
-		</div>
+	DealFade: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="crumb-fades">{children}</div>
 	),
 }));
 jest.mock('./variations-pane', () => ({
@@ -108,18 +96,20 @@ it('Back returns to products', () => {
 });
 it('as rows, keeps the breadcrumb above the pane and gives the variations no way back of their own', () => {
 	render(<Browser />);
-	expect(screen.queryByTestId('crumb-over-grid')).toBeNull();
+	expect(screen.queryByTestId('crumb-fades')).toBeNull();
 	expect(screen.getByTestId('variations').dataset.tiles).toBe('false');
 });
-it('as tiles, lays the breadcrumb over the grid, reports its height and makes the parent tile go back', () => {
+it('as tiles, keeps the breadcrumb a row above the grid, fading with the deal, and makes the parent tile go back', () => {
 	const back = jest.fn();
 	render(<DrillIn parent={parent} back={back} tiles />);
-	const over = screen.getByTestId('crumb-over-grid');
-	expect(over.contains(screen.getByTestId('products-breadcrumb'))).toBe(true);
-	// The grid's first row starts below the breadcrumb; the stage waits for this before it deals.
-	fireEvent.click(over);
-	expect(setTop).toHaveBeenCalledWith(44);
-	fireEvent.click(screen.getByTestId('variations'));
+	const fades = screen.getByTestId('crumb-fades');
+	expect(fades.contains(screen.getByTestId('products-breadcrumb'))).toBe(true);
+	// A row, not an overlay: the crumb comes before the pane in the flow and does not contain it
+	// (owner's pick A, 2026-10-05 — never inside the card, never a card of its own).
+	const pane = screen.getByTestId('variations');
+	expect(fades.contains(pane)).toBe(false);
+	expect(fades.compareDocumentPosition(pane) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	fireEvent.click(pane);
 	expect(back).toHaveBeenCalled();
 });
 it('Escape returns to products', () => {
