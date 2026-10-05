@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { LineStrip } from './line-strip';
+import { LineStrip, onStage } from './line-strip';
 
 let mockPointer = 'coarse';
 const mockRemoveLineItem = jest.fn().mockResolvedValue(undefined);
@@ -188,6 +188,12 @@ it('fine: a hover-out bound before the press does not close the opened strip', (
 	expect(mockOffsetSet).toHaveBeenLastCalledWith(-100);
 	act(() => staleHoverOut?.());
 	expect(mockOffsetSet).toHaveBeenLastCalledWith(-100);
+});
+it('never paints the row right of its rest, whatever the spring does', () => {
+	// A hover landing mid-close inherits the closing velocity and the bounce overshoots 0.
+	expect(onStage(7)).toBe(0);
+	expect(onStage(0)).toBe(0);
+	expect(onStage(-21.8)).toBe(-21.8);
 });
 it('forwards every Remove press to pulseRemove, never disables, and waits for the pulse', async () => {
 	const { pulseRemove } = renderStrip();

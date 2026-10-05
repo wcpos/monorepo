@@ -41,6 +41,17 @@ const PEEK_SPRING = { mass: 1, stiffness: 380, damping: 12 };
  * row moves; leaving is then always the cashier's move, never the animation's.
  */
 const HOVER_REACH = PEEK * 2;
+/**
+ * The row never moves right of its rest. A spring retargeted mid-flight keeps the velocity it
+ * already has when that velocity points at the new target (Reanimated's `withSpring`), so a
+ * hover that lands while the strip is still sliding shut arrives at the peek fast and the
+ * underdamped bounce can swing past 0, opening a gap on the row's left. Clamped at the style,
+ * so no sequence of hover, press and swipe can show that gap.
+ */
+export function onStage(x: number): number {
+	'worklet';
+	return Math.min(0, x);
+}
 type Props = {
 	line: { uuid: string; type: 'line_items' | 'fee_lines' | 'shipping_lines'; item: CartLine };
 	rowRefs: React.RefObject<Map<string, PulseTableRowRef | null>>;
@@ -67,7 +78,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const swiped = useSharedValue(false);
 	const offset = useSharedValue(0);
 	const reduced = useReducedMotion();
-	const style = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
+	const style = useAnimatedStyle(() => ({ transform: [{ translateX: onStage(offset.value) }] }));
 	const settle = (x: number) => {
 		offset.set(reduced ? x : withSpring(x, { overshootClamping: true }));
 	};
