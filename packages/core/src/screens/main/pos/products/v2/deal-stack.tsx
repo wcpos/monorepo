@@ -29,9 +29,15 @@ type Deal = {
 	/** Where the tiles are headed: out on the grid, or back in the parent. */
 	dealt: boolean;
 	stageWidth: number;
-	/** How far down the stage the grid's first row starts (the breadcrumb's height). */
-	top: number | null;
-	setTop: (top: number) => void;
+	/**
+	 * The dealt grid's frame within the stage, where its slots rest: `undefined` until the grid
+	 * has reported it, `null` if it could not be measured (the slots then rest on the stage
+	 * itself). Measured, not assumed: the grid sits on a card inset from the stage, under a
+	 * breadcrumb, and the parent must land exactly on the tapped tile whatever frames them.
+	 */
+	grid: Rect | null | undefined;
+	/** The dealt grid reports the node its slots are laid out in; the stage places it against itself. */
+	placeGrid: (node: Measurable) => void;
 	furniture?: SharedValue<number>;
 };
 
@@ -40,8 +46,8 @@ const AT_REST: Deal = {
 	origin: null,
 	dealt: true,
 	stageWidth: 0,
-	top: 0,
-	setTop: () => {},
+	grid: null,
+	placeGrid: () => {},
 };
 const DealContext = React.createContext<Deal>(AT_REST);
 
@@ -103,7 +109,7 @@ export function DealStack<T>({
 	const [staged, setStaged] = React.useState<T | null>(null);
 	const [generation, setGeneration] = React.useState(0);
 	const [origin, setOrigin] = React.useState<Rect | null | undefined>(undefined);
-	const [top, setTop] = React.useState<number | null>(null);
+	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
 	const [dealt, setDealt] = React.useState(false);
 	const [settled, setSettled] = React.useState(false);
 	const open = detail !== null;
@@ -111,9 +117,20 @@ export function DealStack<T>({
 		setStaged(detail);
 		setGeneration(generation + 1);
 		setOrigin(undefined);
-		setTop(null);
+		setGrid(undefined);
 		setDealt(false);
 	}
+
+	// The grid's frame, like the tile's: both in the window, so the stage's own frame is taken off.
+	const placeGrid = React.useCallback((node: Measurable) => {
+		const frame = stage.current as Measurable;
+		if (!node?.measureInWindow || !frame?.measureInWindow) return;
+		node.measureInWindow((x, y, width, height) =>
+			frame.measureInWindow?.((stageX, stageY) =>
+				setGrid({ x: x - stageX, y: y - stageY, width, height })
+			)
+		);
+	}, []);
 	if (!open && settled) setSettled(false);
 	// Closing turns the tiles for home in the same render that hears of it.
 	if (!open && dealt) setDealt(false);
@@ -152,7 +169,7 @@ export function DealStack<T>({
 		}
 		const grace = setTimeout(() => {
 			setOrigin((known) => (known === undefined ? null : known));
-			setTop((known) => known ?? 0);
+			setGrid((known) => (known === undefined ? null : known));
 		}, MEASURE_GRACE);
 		return () => {
 			live = false;
@@ -160,7 +177,7 @@ export function DealStack<T>({
 		};
 	}, [detail, target]);
 
-	const armed = origin !== undefined && top !== null;
+	const armed = origin !== undefined && grid !== undefined;
 	React.useEffect(() => {
 		if (!open) {
 			// The products and the parent share one clock: the detail leaves the stage on the frame
@@ -199,11 +216,11 @@ export function DealStack<T>({
 			origin,
 			dealt,
 			stageWidth,
-			top,
-			setTop,
+			grid,
+			placeGrid,
 			furniture,
 		}),
-		[origin, dealt, stageWidth, top, furniture]
+		[origin, dealt, stageWidth, grid, placeGrid, furniture]
 	);
 
 	// Clamped for the reason `PaneStack` clamps: a first frame stamped before the animation's
@@ -220,9 +237,10 @@ export function DealStack<T>({
 			onLayout={(event) => setStageWidth(event.nativeEvent.layout.width)}
 		>
 			{/* The tapped tile steps aside only once its copy can stand on it — the copy needs the
-			    crumb's height as well as the frame, and on Android the two arrive frames apart:
-			    lifting on the frame alone left the slot empty for two frames (Pixel, 2026-10-05). */}
-			<DealStagedContext.Provider value={origin && top !== null ? staged : null}>
+			    grid's frame as well as the tile's, and on Android the two arrive frames apart:
+			    lifting on the tile's frame alone left the slot empty for two frames (Pixel,
+			    2026-10-05; then the crumb's height, now the grid's own measured frame). */}
+			<DealStagedContext.Provider value={origin && grid !== undefined ? staged : null}>
 				<Animated.View
 					className="flex-1"
 					aria-hidden={open}
@@ -253,8 +271,9 @@ export function DealStack<T>({
  * One slot of the dealt grid. Slot 0 is the parent tile, which travels from the tapped
  * tile's frame; every other slot starts underneath it and lands in turn.
  *
- * A slot's resting place is arithmetic (column, row, the tapped tile's height), not a
- * measurement: only slot 0 has to start exactly on the tapped tile, and its place is exact.
+ * A slot's resting place is arithmetic within the grid's measured frame (column, row, the
+ * tapped tile's height): only slot 0 has to start exactly on the tapped tile, and its place is
+ * exact because the frame is measured, not assumed to be the stage.
  */
 export function DealCell({
 	index,
@@ -271,7 +290,7 @@ export function DealCell({
 	scroll?: SharedValue<number>;
 	children: React.ReactNode;
 }) {
-	const { origin, dealt, stageWidth, top } = useDeal();
+	const { origin, dealt, stageWidth, grid } = useDeal();
 	const travel = useSharedValue(dealt ? 1 : 0);
 	const parent = index === 0;
 
@@ -299,17 +318,21 @@ export function DealCell({
 		);
 	}, [dealt, parent, index, count, travel]);
 
-	const flies = !!origin && top !== null;
-	const fromX = flies ? origin.x - ((index % columns) * (stageWidth / columns) + TILE_MARGIN) : 0;
+	const flies = !!origin && grid !== undefined;
+	// An unmeasured grid rests on the stage itself, as it did before it had a card.
+	const frame = grid ?? { x: 0, y: 0, width: stageWidth };
+	const fromX = flies
+		? origin.x - (frame.x + (index % columns) * (frame.width / columns) + TILE_MARGIN)
+		: 0;
 	const fromY = flies
 		? origin.y -
-			(top + Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN) + TILE_MARGIN)
+			(frame.y + Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN) + TILE_MARGIN)
 		: 0;
-	// Hidden until BOTH the tile's frame and the crumb's height are known: the offset needs
-	// both, and on Android `measureInWindow` answers before the crumb's `onLayout`, so a cell
-	// that waited for the frame alone painted at rest for a few frames and then snapped onto
-	// the tapped tile (Pixel, 2026-10-05). The stage arms on the same pair.
-	const waiting = origin === undefined || top === null;
+	// Hidden until BOTH the tile's frame and the grid's frame are known: the offset needs both,
+	// and on Android the two measurements answer frames apart, so a cell that waited for the
+	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile
+	// (Pixel, 2026-10-05, when the second was the crumb's height). The stage arms on the same pair.
+	const waiting = origin === undefined || grid === undefined;
 
 	const style = useAnimatedStyle(() => {
 		// Clamped for the reason the stage clamps: a first frame stamped before the animation's

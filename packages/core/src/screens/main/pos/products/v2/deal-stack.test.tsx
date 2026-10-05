@@ -122,8 +122,12 @@ const TILE = { x: 110, y: 220, width: 92, height: 150 };
 const tile: Measurable = {
 	measureInWindow: (callback) => callback(TILE.x, TILE.y, TILE.width, TILE.height),
 };
-const CRUMB = 40;
+// Where the dealt grid's slots rest, within the stage: on a card 9 px in from the stage's edge
+// (the 8 px gutter plus its hairline), under a 40 px breadcrumb and the card's top hairline.
+const GRID = { x: 9, y: 41, width: 382, height: 300 };
 const COLUMNS = 4;
+// One column of the grid's own width, not the stage's.
+const COLUMN = GRID.width / COLUMNS;
 
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
@@ -137,13 +141,18 @@ function Pane({
 	count: number;
 	scroll?: { value: number };
 }) {
-	const { origin, dealt, setTop } = useDeal();
+	const { origin, dealt, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
 	const crumb = React.useRef<HTMLButtonElement>(null);
 	React.useEffect(() => crumb.current?.focus(), []);
+	// The grid reports the node its slots rest in: a card inset from the stage, under the crumb.
+	const slots: Measurable = {
+		measureInWindow: (callback) =>
+			callback(STAGE.x + GRID.x, STAGE.y + GRID.y, GRID.width, GRID.height),
+	};
 	return (
 		<>
-			<button ref={crumb} data-testid="crumb-laid-out" onClick={() => setTop(CRUMB)} />
+			<button ref={crumb} data-testid="crumb-laid-out" onClick={() => placeGrid(slots)} />
 			<output data-testid="deal">
 				{JSON.stringify({ name, dealt, origin: origin ?? String(origin) })}
 			</output>
@@ -271,18 +280,19 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	expect(furniture.value).toBe(1);
 	expect(products.value).toBe(0);
 
-	// Undealt: slot 0 sits on the tile's frame. Its own slot is the stage's first cell, below the crumb.
+	// Undealt: slot 0 sits on the tile's frame. Its own slot is the grid's first cell, inside the
+	// card's measured frame — not the stage's first cell, which the card is inset from.
 	cells.forEach((cell) => (cell.value = 0));
 	expect(seen('cell-0')).toBe(true);
 	expect(styleOf('cell-0')).toEqual({
-		transform: [{ translateX: 100 - 4 }, { translateY: 200 - (CRUMB + 4) }],
+		transform: [{ translateX: 100 - (GRID.x + 4) }, { translateY: 200 - (GRID.y + 4) }],
 	});
-	// Slot 5 is column 1 of row 1: one cell across, one tile-and-margins down.
+	// Slot 5 is column 1 of row 1: one grid column across, one tile-and-margins down.
 	const under = styleOf('cell-5');
 	expect(under.opacity).toBe(0);
 	expect(under.transform).toEqual([
-		{ translateX: 100 - (100 + 4) },
-		{ translateY: 200 - (CRUMB + 158 + 4) },
+		{ translateX: 100 - (GRID.x + COLUMN + 4) },
+		{ translateY: 200 - (GRID.y + 158 + 4) },
 		{ scale: 0.92 },
 	]);
 	// Only the parent's row and the parent itself are raised.
@@ -304,7 +314,7 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	// A scrolled grid gathers from where its tiles are on screen.
 	scroll.value = 30;
 	cells.forEach((cell) => (cell.value = 0));
-	expect(styleOf('cell-0').transform![1]).toEqual({ translateY: 200 - (CRUMB + 4) + 30 });
+	expect(styleOf('cell-0').transform![1]).toEqual({ translateY: 200 - (GRID.y + 4) + 30 });
 
 	// A first frame stamped before the animation's start lets the easing overshoot the ends;
 	// the cell never leaves the line between the tapped tile and its slot (Android, 2026-10-05:
@@ -318,8 +328,8 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	});
 	cells.forEach((cell) => (cell.value = -0.2));
 	expect(styleOf('cell-0').transform).toEqual([
-		{ translateX: 100 - 4 },
-		{ translateY: 200 - (CRUMB + 4) },
+		{ translateX: 100 - (GRID.x + 4) },
+		{ translateY: 200 - (GRID.y + 4) },
 	]);
 	expect(styleOf('cell-5').opacity).toBe(0);
 	expect(styleOf('cell-5').transform![2]).toEqual({ scale: 0.92 });

@@ -9,7 +9,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { QueryStateProvider } from '../../../../../query';
-import { DealFade, useDeal } from './deal-stack';
+import { DealFade } from './deal-stack';
 import { VariationsPane } from './variations-pane';
 
 /**
@@ -29,7 +29,6 @@ export function DrillIn({
 	stockStatus?: string;
 	tiles?: boolean;
 }) {
-	const { setTop } = useDeal();
 	const name = useDocField(parent, (value) => value.payload.name);
 	const count = useDocField(parent, (value) => value.payload.variations?.length ?? 0);
 	const pointer = usePointer();
@@ -75,11 +74,11 @@ export function DrillIn({
 					: {})}
 			>
 				{tiles ? (
-					// The crumb's height is where the dealt grid's first row rests (`DealCell`).
-					// A tile dealt from the products' first row sets off from under the crumb and
-					// its top is clipped by the grid's scroller for the first frames; every other
-					// row travels up or sideways and never leaves the scroller.
-					<DealFade onLayout={(event) => setTop(event.nativeEvent.layout.height)}>{crumb}</DealFade>
+					// The dealt grid measures its own frame under this row (`placeGrid`). A tile dealt
+					// from the products' first row sets off from under the crumb and its top is
+					// clipped by the grid's scroller for the first frames; every other row travels up
+					// or sideways and never leaves the scroller.
+					<DealFade>{crumb}</DealFade>
 				) : (
 					crumb
 				)}

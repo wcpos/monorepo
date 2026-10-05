@@ -41,9 +41,10 @@ jest.mock('react-native-reanimated', () => ({
 	useAnimatedRef: () => ({ current: null }),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
+const placeGrid = jest.fn();
 jest.mock('./deal-stack', () => ({
 	FRONT: { zIndex: 1 },
-	useDeal: () => ({ top: 40 }),
+	useDeal: () => ({ placeGrid }),
 	DealFade: ({ children }: React.PropsWithChildren) => children,
 	DealCell: ({
 		children,
@@ -175,6 +176,15 @@ it('holds a slot for every variation until the query answers, so the deal never 
 	expect(screen.getByTestId('variations-surface').contains(screen.getByTestId('scroller'))).toBe(
 		true
 	);
+	// The stage is told where the slots rest once they are laid out, so the deal lands on the
+	// card and not on the stage the card is inset from.
+	const slots = screen.getByTestId('variations-slots');
+	expect(slots.contains(screen.getByTestId('scroller'))).toBe(true);
+	// react-native-web drives `onLayout` from a ResizeObserver jsdom lacks; it leaves the handler
+	// on the node, so a layout is delivered the way the observer would.
+	type LaidOut = HTMLElement & { __reactLayoutHandler?: (event: unknown) => void };
+	(slots as LaidOut).__reactLayoutHandler?.({ nativeEvent: { layout: {} } });
+	expect(placeGrid).toHaveBeenCalledWith(slots);
 
 	// The answer lands in the slots that are already there.
 	rerender(<VariationsGrid parent={parent} back={back} binding={binding} hits={hits} />);
