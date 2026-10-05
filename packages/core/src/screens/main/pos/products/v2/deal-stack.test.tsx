@@ -445,6 +445,18 @@ it('a grid measurement that lands after another detail opened is ignored', () =>
 	expect(deal().grid).toEqual(GRID);
 });
 
+it('a grid measurement that lands after the grace period dealt in place does not move the deal', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	act(() => screen.getByTestId('measure-slowly').click());
+	// The platform is slow: the grace period deals on the stage itself.
+	act(() => jest.advanceTimersByTime(120));
+	expect(deal()).toMatchObject({ dealt: true, grid: 'null' });
+	// The answer arrives with the tiles in the air; this deal keeps the frame it set off with.
+	act(() => pending.fire!());
+	expect(deal().grid).toBe('null');
+});
+
 it('a cell in the air keeps going when the slot count changes under it', () => {
 	const { rerender } = render(<Stage detail={null} count={4} />);
 	rerender(<Stage detail="Hoodie" count={4} />);

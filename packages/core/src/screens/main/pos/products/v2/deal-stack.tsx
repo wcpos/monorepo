@@ -135,7 +135,12 @@ export function DealStack<T>({
 		node.measureInWindow((x, y, width, height) =>
 			frame.measureInWindow?.((stageX, stageY) => {
 				if (current.current !== asked) return;
-				setGrid({ x: x - stageX, y: y - stageY, width, height });
+				// Once the grace period has dealt in place (`null`), that is this deal's frame: an
+				// answer arriving mid-flight would move every cell's offset under it (CodeRabbit on
+				// #2396). The next deal measures afresh.
+				setGrid((known) =>
+					known === null ? known : { x: x - stageX, y: y - stageY, width, height }
+				);
 			})
 		);
 	}, []);
