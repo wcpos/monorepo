@@ -8,8 +8,13 @@ name: Publish Web Bundle
 #   monorepo `next`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next
 #                       The `next` BRANCH of web-bundle IS the dev lane's tag.
 #                       There is no versioned / prerelease tag for `next`; this
-#                       workflow, run with bundle_branch=next, is the whole deploy.
-#                       dev-next.wcpos.com reads it (WCPOS_WEB_BUNDLE_REF=next).
+#                       workflow, run with bundle_branch=next, is the whole deploy
+#                       of the PAGE. dev-next.wcpos.com reads it
+#                       (WCPOS_WEB_BUNDLE_REF=next). The storage WORKER is not in
+#                       it: the plugin serves that, so a bundle whose rxdb moved
+#                       also needs the free plugin's `next` to re-vendor
+#                       sqlite.worker.js and Pro's dev deploy to pick it up — the
+#                       last step of this workflow checks dev-next for exactly that.
 #
 #   monorepo `main`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<major.minor>
 #                       (e.g. @1.10, then @1.11 once `next` becomes `main`). The
@@ -201,3 +206,35 @@ jobs:
             echo "purge @${BRANCH}/build/${f} -> HTTP ${code}"
           done
           echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"
+
+      # The page is the bundle; the storage worker is NOT. The plugin serves it
+      # (Frontend.php hands the app `opfsWorker`), and on dev-next that plugin is
+      # woocommerce-pos-pro's vendored copy of the free plugin. A bundle whose rxdb
+      # moved boots against a worker the plugins have not re-vendored yet and every
+      # tab fails with RxDB RM1 ("Failed to create user database") — this workflow
+      # was green while dev-next was down (2026-10-05). So the publish ends by
+      # reading the worker dev-next actually serves and comparing it with the one
+      # just published. A mismatch fails the run and names the two deploys to make.
+      - name: 🧵 dev-next serves the worker this bundle was built with
+        if: ${{ github.event.inputs.bundle_branch == 'next' }}
+        env:
+          # dev-next's active plugin is Pro; the free plugin dir there is inactive,
+          # so its own deploy changes nothing the page loads.
+          SERVED_WORKER: https://dev-next.wcpos.com/wp-content/plugins/woocommerce-pos-pro/vendor/wcpos/woocommerce-pos/assets/js/sqlite.worker.js
+        run: |
+          set -euo pipefail
+          published="$GITHUB_WORKSPACE/apps/web/build/sqlite.worker.js"
+          test -f "$published" || { echo "::error::the built bundle has no sqlite.worker.js"; exit 1; }
+          served="$RUNNER_TEMP/served.sqlite.worker.js"
+          curl -fsSL --retry 3 "$SERVED_WORKER" -o "$served" \
+            || { echo "::error::could not fetch the worker dev-next serves ($SERVED_WORKER)"; exit 1; }
+          want=$(sha256sum "$published" | cut -d' ' -f1)
+          have=$(sha256sum "$served" | cut -d' ' -f1)
+          # Informational: the rxdb version strings the worker carries (RM1 names them too).
+          versions() { grep -oE '\b1[0-9]\.[0-9]+\.[0-9]+\b' "$1" | sort -u | tr '\n' ' '; }
+          if [ "$want" = "$have" ]; then
+            echo "✅ dev-next serves the published worker (sha256 ${want:0:12})"
+            exit 0
+          fi
+          echo "::error::dev-next serves a different sqlite.worker.js than this bundle was built with (published ${want:0:12} [$(versions "$published")], served ${have:0:12} [$(versions "$served")]). The page will fail with RxDB RM1 until the plugins catch up: (1) re-vendor assets/js/sqlite.worker.js from web-bundle@next in wcpos/woocommerce-pos and merge to next; (2) gh workflow run deploy-dev.yml --repo wcpos/woocommerce-pos-pro --ref next (Pro vendors free at build time; the free plugin's own deploy does not reach dev-next's page)."
+          exit 1

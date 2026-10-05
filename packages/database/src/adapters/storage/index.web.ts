@@ -86,6 +86,53 @@ function createStorageWorker(): Worker {
 	return worker;
 }
 
+// RxDB's code for "the worker runs a different rxdb than the page" (RxError RM1).
+const WORKER_VERSION_MISMATCH_CODE = 'RM1';
+// How RxStorageRemote.createStorageInstance rethrows an error the worker answered with:
+// `new Error('could not create instance ' + JSON.stringify(error))` — a plain Error whose
+// MESSAGE carries the serialised RxError (rxdb 17.5, plugins/storage-remote/rx-storage-remote.js).
+const REMOTE_CREATE_FAILED_PREFIX = 'could not create instance ';
+
+type RxErrorShape = {
+	code?: string;
+	parameters?: { args?: { mainVersion?: string; remoteVersion?: string } };
+};
+
+/** The RxError the worker answered with, whether thrown as is or serialised into a message. */
+function workerRxError(error: unknown): RxErrorShape | null {
+	if (typeof error !== 'object' || error === null) return null;
+	if ('code' in error) return error as RxErrorShape;
+	const message = (error as { message?: unknown }).message;
+	if (typeof message !== 'string' || !message.startsWith(REMOTE_CREATE_FAILED_PREFIX)) return null;
+	try {
+		return JSON.parse(message.slice(REMOTE_CREATE_FAILED_PREFIX.length)) as RxErrorShape;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * RM1 as RxDB throws it says only `mainVersion 17.5.0, remoteVersion 17.4.0`. The page
+ * cannot be the wrong half: it IS the bundle. The worker is served by whatever host the
+ * page bootstrap pointed at (on a WordPress site, the plugin — on a Pro site, Pro's
+ * vendored copy of the free plugin), and a host that was not redeployed after the bundle's
+ * rxdb moved is exactly what the two versions describe. Name the URL, so the next reader
+ * knows which deploy is behind without diagnosing it (dev-next, 2026-10-05: the page
+ * said nothing and the wrong plugin was redeployed twice).
+ */
+export function describeWorkerVersionMismatch(error: unknown, workerUrl: string): unknown {
+	const rxError = workerRxError(error);
+	if (rxError?.code !== WORKER_VERSION_MISMATCH_CODE) return error;
+	const main = rxError.parameters?.args?.mainVersion ?? 'unknown';
+	const remote = rxError.parameters?.args?.remoteVersion ?? 'unknown';
+	return new Error(
+		`Storage worker at ${workerUrl} runs rxdb ${remote} but the page runs rxdb ${main}: ` +
+			`the host serving that worker is behind the bundle. Redeploy the plugin that serves it ` +
+			`(on a Pro site that is woocommerce-pos-pro's vendored copy of the free plugin).`,
+		{ cause: error }
+	);
+}
+
 export function getWebNewStorage() {
 	const rawStorage: RxStorage<unknown, unknown> = {
 		name: 'worker',
@@ -99,7 +146,9 @@ export function getWebNewStorage() {
 				workerOptions: { type: 'module', name: STORAGE_WORKER_NAME },
 				mode: 'one',
 			});
-			return innerStorage.createStorageInstance(params);
+			return innerStorage.createStorageInstance(params).catch((error: unknown) => {
+				throw describeWorkerVersionMismatch(error, getWebStorageWorkerPaths().targetOpfsWorker);
+			});
 		},
 	};
 	return STORAGE_TIMING_PROBE_ENABLED ? withStorageTimingProbe(rawStorage, 'raw') : rawStorage;
