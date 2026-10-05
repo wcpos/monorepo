@@ -26,6 +26,10 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
 
+// These answer 2xx without a valid credential, so a dead restored session would pass.
+// CI run 37281168136, token minted 2026-09-03.
+const PUBLIC_WCPOS_V2_ROUTES = ['echo', 'ping', 'site', 'auth/test'];
+
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
 const TRANSPARENT_PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';
@@ -56,12 +60,16 @@ export function isAuthenticatedStoreApiResponse(
 	const url = new URL(responseUrl);
 	const store = new URL(storeUrl);
 	const storePath = store.pathname.replace(/\/+$/, '');
+	const apiPath = `${storePath}/wp-json/wcpos/v2/`;
+	const restRoute = url.searchParams.get('rest_route');
 	return (
 		responseOk &&
 		url.origin === store.origin &&
-		(url.pathname.startsWith(`${storePath}/wp-json/wcpos/v2/`) ||
+		((url.pathname.startsWith(apiPath) &&
+			!PUBLIC_WCPOS_V2_ROUTES.includes(url.pathname.slice(apiPath.length).replace(/\/$/, ''))) ||
 			(url.pathname.replace(/\/+$/, '') === storePath &&
-				url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true))
+				restRoute?.startsWith('/wcpos/v2/') === true &&
+				!PUBLIC_WCPOS_V2_ROUTES.includes(restRoute.slice('/wcpos/v2/'.length).replace(/\/$/, ''))))
 	);
 }
 
@@ -187,6 +195,7 @@ async function reuseValidAuthState(
 		// the booted app immediately talks wcpos/v2 (census, open-orders poll),
 		// so an authenticated 2xx arrives within seconds when the token lives
 		// and never arrives when it is dead.
+		// Public probes (echo, ping, site, auth/test) do not count.
 		let sawAuthenticatedOk = false;
 		page.on('response', (response) => {
 			if (isAuthenticatedStoreApiResponse(response.url(), storeUrl, response.ok())) {
