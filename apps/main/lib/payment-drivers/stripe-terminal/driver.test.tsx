@@ -444,7 +444,7 @@ it('rejects all web driver operations', async () => {
 	await expect(web.disconnect!()).rejects.toThrow();
 });
 it.each([true, false])(
-	'requests Android permissions before initializing (granted=%s)',
+	'prompts for Android permissions on the first reader operation, never at launch (granted=%s)',
 	async (granted) => {
 		const os = Platform.OS;
 		Platform.OS = 'android';
@@ -458,6 +458,13 @@ it.each([true, false])(
 		try {
 			await act(async () => {
 				tree = create(<StripeTerminalDriverBridge driver={driver} />);
+			});
+			// Launch with the permissions still missing: no dialog, no SDK, tile stays enabled.
+			expect(requestNeededAndroidPermissions).not.toHaveBeenCalled();
+			expect(api.initialize).not.toHaveBeenCalled();
+			expect(driver.availability()).toEqual({ available: true });
+			await act(async () => {
+				await driver.requestInitialization().catch(() => {});
 			});
 			expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
 			if (granted) {
@@ -788,6 +795,97 @@ it.each(['operation', 'foreground', 'descriptors'])(
 		}
 	}
 );
+it('initializes at launch on Android once the permissions are granted (offline forwarding)', async () => {
+	// The SDK forwards stored offline payments by itself once it is running — a till that
+	// has taken a card payment must not wait for a cashier action after a relaunch.
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(true);
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		expect(requestNeededAndroidPermissions).not.toHaveBeenCalled();
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+		expect(driver.availability()).toEqual({ available: true });
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
+it('a reader operation that joins an in-flight quiet launch check still prompts', async () => {
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	let settle!: (granted: boolean) => void;
+	jest.spyOn(PermissionsAndroid, 'check').mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				settle = resolve;
+			})
+	);
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
+	jest.mocked(requestNeededAndroidPermissions).mockResolvedValue({ error: null });
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		// The launch check is still pending when the cashier starts an operation.
+		const operation = driver.requestInitialization();
+		settle(false);
+		await act(async () => {
+			await operation;
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
+it('forgets a refused Android prompt when the bridge unmounts, so a remount can ask again', async () => {
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
+	jest
+		.mocked(requestNeededAndroidPermissions)
+		.mockResolvedValueOnce({ error: { location: 'denied' } })
+		.mockResolvedValue({ error: null });
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		await act(async () => {
+			await driver.requestInitialization().catch(() => {});
+		});
+		expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
+		await act(async () => tree.unmount());
+		// The payment tile reads availability(); a stale refusal would keep it disabled with
+		// no way to trigger the operation that prompts again.
+		expect(driver.availability()).toEqual({ available: true });
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			await driver.requestInitialization();
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(2);
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+		expect(driver.availability()).toEqual({ available: true });
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
 it.each(['foreground', 'discover'])(
 	'rechecks denied Android permissions on %s',
 	async (trigger) => {
@@ -809,6 +907,9 @@ it.each(['foreground', 'discover'])(
 		try {
 			await act(async () => {
 				tree = create(<StripeTerminalDriverBridge driver={driver} />);
+			});
+			await act(async () => {
+				await driver.requestInitialization().catch(() => {});
 			});
 			expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
 			await jest.advanceTimersByTimeAsync(15000);
