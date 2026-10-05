@@ -21,7 +21,7 @@
 		"build:web": "expo export --output-dir ./web-build --platform=web",
 		"build:electron": "ELECTRON=true expo export --output-dir ./electron-build --platform=web",
 		"eas-build-pre-install": "[ \"$EAS_BUILD_PLATFORM\" = \"android\" ] && sudo apt-get update && sudo apt-get install -y libsecret-1-dev || true",
-		"eas-build-post-install": "pnpm run -w build:main",
+		"eas-build-post-install": "pnpm -w exec turbo build --filter=@wcpos/main^...",
 		"lint": "eslint app components --ext .js,.jsx,.ts,.tsx",
 		"lint:fix": "eslint app components --ext .js,.jsx,.ts,.tsx --fix"
 	},
