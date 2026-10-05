@@ -9,7 +9,6 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { TableSurface } from '../../../components/data-table/surface';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { DealCell, DealFade, FRONT, type Measurable, useDeal } from './deal-stack';
@@ -106,9 +105,9 @@ export function VariationsGrid({
 	);
 
 	return (
-		// The dealt grid lands on a card of its own under the crumb (TableSurface, the same one
-		// the products grid left). The frame the slots rest in is reported, not assumed.
-		<TableSurface testID="variations-surface">
+		// The dealt grid lands on the ground under the crumb, as the products grid stands. The
+		// frame the slots rest in is reported, not assumed.
+		<View className="min-h-0 flex-1 px-1" testID="variations-surface">
 			<View
 				ref={slotsNode}
 				className="min-h-0 flex-1"
@@ -151,6 +150,6 @@ export function VariationsGrid({
 					shownCount={shownCount}
 				/>
 			</DealFade>
-		</TableSurface>
+		</View>
 	);
 }

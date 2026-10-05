@@ -85,43 +85,46 @@ export function DataTableSkeleton({ id, rowCount }: { id: UISettingID; rowCount?
 	const pointer = usePointer();
 	const [height, setHeight] = React.useState(0);
 	return (
-		// The same card the loaded table stands on, so the shell and the table share one frame.
-		<TableSurface>
-			<Table className="flex h-full flex-col">
-				{pointer === 'fine' && (
-					<TableHeader>
-						<TableRow className="min-h-row border-border border-b">
-							{columns.map((column, index) => (
-								<TableHead
-									key={column.key}
-									className="min-h-row relative"
-									style={columnStyle(columns, index)}
-								>
-									<DataTableHeader
-										columnId={column.key}
-										header={
-											<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-												{column.hideLabel ? '' : getUILabel(column.key)}
-											</Text>
-										}
-										disableSort
-										sortBy=""
-										sortDirection="asc"
-										onSortingChange={() => {}}
-									/>
-								</TableHead>
-							))}
-						</TableRow>
-					</TableHeader>
-				)}
-				<View
-					className="flex-1 overflow-hidden"
-					onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
-				>
-					<DataTableSkeletonRows id={id} rowCount={rowCount ?? skeletonCount(height, 48)} />
-				</View>
-				<View className="min-h-ctl border-border border-t" />
-			</Table>
-		</TableSurface>
+		// The same card the loaded table stands on, with the footer's row held beneath it, so the
+		// shell and the table share one frame.
+		<View className="flex h-full flex-col">
+			<TableSurface>
+				<Table className="flex h-full flex-col">
+					{pointer === 'fine' && (
+						<TableHeader>
+							<TableRow className="min-h-row border-border border-b">
+								{columns.map((column, index) => (
+									<TableHead
+										key={column.key}
+										className="min-h-row relative"
+										style={columnStyle(columns, index)}
+									>
+										<DataTableHeader
+											columnId={column.key}
+											header={
+												<Text className="text-muted-foreground text-xs tracking-wide uppercase">
+													{column.hideLabel ? '' : getUILabel(column.key)}
+												</Text>
+											}
+											disableSort
+											sortBy=""
+											sortDirection="asc"
+											onSortingChange={() => {}}
+										/>
+									</TableHead>
+								))}
+							</TableRow>
+						</TableHeader>
+					)}
+					<View
+						className="flex-1 overflow-hidden"
+						onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+					>
+						<DataTableSkeletonRows id={id} rowCount={rowCount ?? skeletonCount(height, 48)} />
+					</View>
+				</Table>
+			</TableSurface>
+			<View className="min-h-ctl" />
+		</View>
 	);
 }

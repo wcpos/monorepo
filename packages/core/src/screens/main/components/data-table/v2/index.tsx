@@ -228,145 +228,149 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	}, [columnVisibility, widths, tableConfig?.extraData]);
 
 	return (
-		// Every table sits on the one card surface; see surface.tsx and ledger line 19.
-		<TableSurface>
-			<Table className="flex h-full flex-col">
-				{pointer === 'fine' && (
-					<TableHeader>
-						{table.getHeaderGroups().map((headerGroup) => (
-							<TableRow key={headerGroup.id} className="min-h-row border-border border-b">
-								{headerGroup.headers.map((header, index) => (
-									<ResizeHead
-										key={header.id}
-										columnId={header.column.id}
-										meta={header.column.columnDef.meta}
-										// The rows give the last BODY cell the remainder only when no actions
-										// column trails them (the actions cell keeps its configured width beside
-										// the pressable); the header follows the same rule or drifts from the cells.
-										last={
-											index === headerGroup.headers.length - 1 &&
-											!headerGroup.headers.some((h) => h.column.id === 'actions')
-										}
-										resizable={header.column.id !== 'actions'}
-										onResize={(width) =>
-											setWidths((previous) => new Map(previous).set(header.column.id, width))
-										}
-									>
-										{renderHeader ? (
-											renderHeader({
-												header,
-												table,
-												collectionName: props.collectionName,
-												sortBy,
-												sortDirection,
-												onSortingChange: handleSortingChange,
-											})
-										) : (
-											<DataTableHeader
-												collectionName={props.collectionName}
-												columnId={header.column.id}
-												header={
-													<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-														{flexRender(header.column.columnDef.header, header.getContext())}
-													</Text>
-												}
-												disableSort={!header.column.getCanSort()}
-												sortBy={sortBy}
-												sortDirection={sortDirection}
-												onSortingChange={handleSortingChange}
-												align={header.column.columnDef.meta?.align}
-											/>
-										)}
-									</ResizeHead>
-								))}
-							</TableRow>
-						))}
-					</TableHeader>
-				)}
-				<VirtualizedList.Root
-					testID={`data-table-scroller-${props.collectionName}`}
-					style={{ flex: 1 }}
-				>
-					<VirtualizedList.List
-						ref={listRef}
-						data={table.getRowModel().rows}
-						keyExtractor={(item) => item.id}
-						renderItem={({ item, index }) =>
-							renderItem
-								? renderItem({ item, index, table })
-								: defaultRenderItem({ item, index, table })
-						}
-						estimatedItemSize={estimatedItemSize ?? 50}
-						parentComponent={TableBody as unknown as typeof import('react-native').View}
-						getItemType={getItemType}
-						onEndReachedThreshold={0.1}
-						onEndReached={handleEndReached}
-						ListEmptyComponent={() => {
-							/* "No results" may only ever mean the search ANSWERED with nothing.
+		// The header and rows sit on the one card surface (surface.tsx, ledger line 19); the footer
+		// is a caption row on the ground beneath it, the same row the POS tile grid has, so the two
+		// views share a footer and only the body differs.
+		<View className="flex h-full flex-col">
+			<TableSurface>
+				<Table className="flex h-full flex-col">
+					{pointer === 'fine' && (
+						<TableHeader>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow key={headerGroup.id} className="min-h-row border-border border-b">
+									{headerGroup.headers.map((header, index) => (
+										<ResizeHead
+											key={header.id}
+											columnId={header.column.id}
+											meta={header.column.columnDef.meta}
+											// The rows give the last BODY cell the remainder only when no actions
+											// column trails them (the actions cell keeps its configured width beside
+											// the pressable); the header follows the same rule or drifts from the cells.
+											last={
+												index === headerGroup.headers.length - 1 &&
+												!headerGroup.headers.some((h) => h.column.id === 'actions')
+											}
+											resizable={header.column.id !== 'actions'}
+											onResize={(width) =>
+												setWidths((previous) => new Map(previous).set(header.column.id, width))
+											}
+										>
+											{renderHeader ? (
+												renderHeader({
+													header,
+													table,
+													collectionName: props.collectionName,
+													sortBy,
+													sortDirection,
+													onSortingChange: handleSortingChange,
+												})
+											) : (
+												<DataTableHeader
+													collectionName={props.collectionName}
+													columnId={header.column.id}
+													header={
+														<Text className="text-muted-foreground text-xs tracking-wide uppercase">
+															{flexRender(header.column.columnDef.header, header.getContext())}
+														</Text>
+													}
+													disableSort={!header.column.getCanSort()}
+													sortBy={sortBy}
+													sortDirection={sortDirection}
+													onSortingChange={handleSortingChange}
+													align={header.column.columnDef.meta?.align}
+												/>
+											)}
+										</ResizeHead>
+									))}
+								</TableRow>
+							))}
+						</TableHeader>
+					)}
+					<VirtualizedList.Root
+						testID={`data-table-scroller-${props.collectionName}`}
+						style={{ flex: 1 }}
+					>
+						<VirtualizedList.List
+							ref={listRef}
+							data={table.getRowModel().rows}
+							keyExtractor={(item) => item.id}
+							renderItem={({ item, index }) =>
+								renderItem
+									? renderItem({ item, index, table })
+									: defaultRenderItem({ item, index, table })
+							}
+							estimatedItemSize={estimatedItemSize ?? 50}
+							parentComponent={TableBody as unknown as typeof import('react-native').View}
+							getItemType={getItemType}
+							onEndReachedThreshold={0.1}
+							onEndReached={handleEndReached}
+							ListEmptyComponent={() => {
+								/* "No results" may only ever mean the search ANSWERED with nothing.
 						   A pending search (index building, engine database not bound yet)
 						   says so instead — rendering the ordinary empty state there reads
 						   as "this record does not exist" (#1733). */
-							const searchPending =
-								deferredResult.searchActive && deferredResult.searchState === 'pending';
-							/* An empty list while the collection is still pulling is not an empty
+								const searchPending =
+									deferredResult.searchActive && deferredResult.searchState === 'pending';
+								/* An empty list while the collection is still pulling is not an empty
 						   store either: the footer's sync spinner is running, and "No customers
 						   yet" beside it told a fresh install it had no data while 5,454
 						   customers were on their way. Rows in flight look like rows in flight
 						   until the pull settles. */
-							if (syncing && !searchPending) {
+								if (syncing && !searchPending) {
+									return (
+										<View testID="data-table-syncing-rows">
+											<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+										</View>
+									);
+								}
 								return (
-									<View testID="data-table-syncing-rows">
-										<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+									<View className="justify-center p-6">
+										{searchPending ? (
+											<Text testID="search-pending-message">{t('common.searching')}</Text>
+										) : React.isValidElement(noDataMessage) ? (
+											noDataMessage
+										) : (
+											<Text testID="no-data-message">
+												{noDataMessage ? noDataMessage : t('common.no_results_found')}
+											</Text>
+										)}
 									</View>
 								);
+							}}
+							ListFooterComponent={() =>
+								ListFooterComponent ? (
+									<ListFooterComponent active$={props.active$} />
+								) : (
+									<DefaultListFooterComponent active$={props.active$} />
+								)
 							}
-							return (
-								<View className="justify-center p-6">
-									{searchPending ? (
-										<Text testID="search-pending-message">{t('common.searching')}</Text>
-									) : React.isValidElement(noDataMessage) ? (
-										noDataMessage
-									) : (
-										<Text testID="no-data-message">
-											{noDataMessage ? noDataMessage : t('common.no_results_found')}
-										</Text>
-									)}
-								</View>
-							);
-						}}
-						ListFooterComponent={() =>
-							ListFooterComponent ? (
-								<ListFooterComponent active$={props.active$} />
-							) : (
-								<DefaultListFooterComponent active$={props.active$} />
-							)
-						}
-						extraData={extraData}
-					/>
-				</VirtualizedList.Root>
-				{showFooter && (
-					<TableFooter>
-						{props.TableFooterComponent ? (
-							<props.TableFooterComponent
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
-						) : (
-							<DataTableFooter
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
-						)}
-					</TableFooter>
-				)}
-			</Table>
-		</TableSurface>
+							extraData={extraData}
+						/>
+					</VirtualizedList.Root>
+				</Table>
+			</TableSurface>
+			{showFooter && (
+				<TableFooter>
+					{props.TableFooterComponent ? (
+						<props.TableFooterComponent
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
+					) : (
+						<DataTableFooter
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
+					)}
+				</TableFooter>
+			)}
+		</View>
 	);
 }
 

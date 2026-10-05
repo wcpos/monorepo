@@ -16,7 +16,6 @@ import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { DataTableFooter } from '../../../components/data-table/footer';
-import { TableSurface } from '../../../components/data-table/surface';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
@@ -111,9 +110,9 @@ export function ProductGrid({
 	}, [deferredResult.hits, skippedStaleHits]);
 
 	return (
-		// The tile grid sits on the same card as every table (TableSurface), so the POS
-		// products pane matches the Orders, Products, Customers and Coupons screens.
-		<TableSurface className="flex h-full flex-col">
+		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
+		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
+		<View className="flex h-full flex-col px-1">
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
@@ -181,6 +180,6 @@ export function ProductGrid({
 					count={renderedCount}
 				/>
 			)}
-		</TableSurface>
+		</View>
 	);
 }
