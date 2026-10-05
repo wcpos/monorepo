@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { CartTable } from './table';
 
@@ -70,6 +70,7 @@ jest.mock('@wcpos/components/lib/utils', () => ({
 	getFlexAlign: () => undefined,
 }));
 
+let mockTableLayout: ((event: { nativeEvent: { layout: { width: number } } }) => void) | undefined;
 jest.mock('@wcpos/components/table', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
 	function Passthrough({ children }: React.PropsWithChildren) {
@@ -91,7 +92,13 @@ jest.mock('@wcpos/components/table', () => {
 
 	return {
 		PulseTableRow,
-		Table: Passthrough,
+		Table: ({
+			children,
+			onLayout,
+		}: React.PropsWithChildren<{ onLayout?: typeof mockTableLayout }>) => {
+			mockTableLayout = onLayout;
+			return <>{children}</>;
+		},
 		TableBody: Passthrough,
 		TableCell: Passthrough,
 		TableHead: Passthrough,
@@ -214,6 +221,17 @@ it('has no Price column on the phone (the decided cart line at phone width)', ()
 	} finally {
 		mockIsPhone = false;
 	}
+});
+it('folds the Price column away while the cart column is narrower than 300', () => {
+	render(<CartTable />);
+	const layout = (width: number) =>
+		act(() => mockTableLayout!({ nativeEvent: { layout: { width } } }));
+	// A 768-wide tablet standing up leaves the cart about 273.
+	layout(273);
+	expect(screen.queryByText('Price')).toBeNull();
+	expect(screen.getByText('Total')).toBeTruthy();
+	layout(300);
+	expect(screen.getByText('Price')).toBeTruthy();
 });
 it('pulses once for an added line and does not pulse again on an unchanged rerender', () => {
 	mockPulseAdd.mockClear();

@@ -10,6 +10,17 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (_: unknown, select: (v: object) => unknown) =>
 		select({ payload: { line_items: lines } }),
 }));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual('react-native').View },
+	ReduceMotion: { System: 'system' },
+	Easing: { bezier: () => 'ease' },
+	useAnimatedStyle: () => ({}),
+	useSharedValue: (value: number) => ({ value }),
+	withSequence: (value: number) => value,
+	withSpring: (value: number) => value,
+	withTiming: (value: number) => value,
+}));
 jest.mock('../../../hooks/use-add-product', () => ({ useAddProduct: () => ({ addProduct: add }) }));
 jest.mock('../../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: {} }),

@@ -251,7 +251,11 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => mockPointer,
 	useIsPhone: () => mockPhone,
-	DeviceScope: ({ children }: { children: React.ReactNode }) => children,
+	DeviceScope: ({ children, pointer }: { children: React.ReactNode; pointer?: string }) => (
+		<div data-testid="list-scope" data-pointer={pointer ?? 'device'}>
+			{children}
+		</div>
+	),
 }));
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ order: mockSelected }),
@@ -436,14 +440,19 @@ jest.mock('@wcpos/components/v2/dialog', () => ({
 	),
 	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
-jest.mock('react-native-reanimated', () => ({
-	__esModule: true,
-	default: { View: ({ children }: React.PropsWithChildren) => <div>{children}</div> },
-	FadeInRight: { duration: () => ({ easing: () => ({ reduceMotion: () => undefined }) }) },
-	ReduceMotion: { System: 'system' },
-}));
-jest.mock('@wcpos/components/lib/motion', () => ({
-	BEATS: { ordersPane: { duration: 220, easing: 'ease' } },
+// The pane's slide is `SlideOver`'s own (tested there); here it is its frame and its content.
+jest.mock('@wcpos/components/slide-over', () => ({
+	SlideOver: ({
+		open,
+		from,
+		onLeft,
+		children,
+	}: React.PropsWithChildren<{ open: boolean; from: string; onLeft?: () => void }>) => (
+		<div data-testid="orders-pane-frame" data-open={String(open)} data-from={from}>
+			<button data-testid="orders-pane-left" onClick={onLeft} />
+			{children}
+		</div>
+	),
 }));
 afterEach(() => {
 	mockSelected = undefined;
@@ -463,6 +472,23 @@ it('renders the selected order as a full page on the phone', () => {
 	mockSelected = 'one';
 	render(<OrdersScreen />);
 	expect(screen.getByTestId('phone-page').contains(screen.getByTestId('order-pane'))).toBe(true);
+});
+
+it('slides the pane out of the right edge, and a closing pane keeps its order until it has left', () => {
+	mockSelected = 'one';
+	const { rerender } = render(<OrdersScreen />);
+	const frame = () => screen.getByTestId('orders-pane-frame');
+	expect(frame().dataset).toMatchObject({ open: 'true', from: 'right' });
+	mockSelected = undefined;
+	rerender(<OrdersScreen />);
+	// Closed, but the order it showed is still inside for the slide out.
+	expect(frame().dataset.open).toBe('false');
+	expect(frame().contains(screen.getByTestId('order-pane'))).toBe(true);
+	// The list keeps its narrow rows while the frame is still beside it, and gets its columns
+	// back only once the pane has left.
+	expect(screen.getByTestId('list-scope').dataset.pointer).toBe('coarse');
+	fireEvent.click(screen.getByTestId('orders-pane-left'));
+	expect(screen.getByTestId('list-scope').dataset.pointer).toBe('device');
 });
 
 it('ignores reselecting the same row and returns focus there when the pane closes', () => {

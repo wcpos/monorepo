@@ -50,7 +50,7 @@ export function PeriodSection() {
 	const enabled = cogsEnabled(selectedOrders, products ?? []);
 	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled);
 	const t = useT(),
-		{ screenSize } = useTheme(),
+		{ screenSize, roomy } = useTheme(),
 		{ dateRange, storeId, timezone } = useReportsPeriod();
 	const { presets } = useStoreDay(storeId),
 		{ formatDate } = useLocalDate();
@@ -64,11 +64,11 @@ export function PeriodSection() {
 	const [width, setWidth] = React.useState<number | null>(null);
 	const columns =
 		width === null
-			? screenSize === 'lg'
-				? 3
-				: screenSize === 'md'
-					? 2
-					: 1
+			? screenSize === 'sm'
+				? 1
+				: roomy
+					? 3
+					: 2
 			: width >= THREE_COLUMNS_MIN_WIDTH
 				? 3
 				: width >= TWO_COLUMNS_MIN_WIDTH

@@ -46,7 +46,7 @@ function FooterContent({
 	const t = useT();
 
 	return (
-		<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
+		<HStack className="border-border border-t p-2">
 			{/* min-w-0 lets the children (the tax label) shrink and truncate; without it a
 			    narrow products column wrapped the label one character per line and the
 			    footer grew to the column's full height. The count and sync button keep

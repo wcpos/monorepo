@@ -89,6 +89,8 @@ it('autoFocus focuses the last parent through its ref once, not on parents chang
 	const focus = jest.spyOn(HTMLElement.prototype, 'focus');
 	const { rerender } = render(<Breadcrumb testID="crumb" parents={parents} autoFocus />);
 	expect(focus).toHaveBeenCalledTimes(1);
+	// Without preventScroll a crumb focused inside an off-stage pane scrolls the stage to it.
+	expect(focus).toHaveBeenCalledWith({ preventScroll: true });
 	expect(document.activeElement).toBe(screen.getByTestId('crumb-parent-1'));
 	rerender(<Breadcrumb testID="crumb" parents={[parents[0]]} autoFocus />);
 	expect(focus).toHaveBeenCalledTimes(1);

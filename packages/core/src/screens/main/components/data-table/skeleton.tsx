@@ -47,7 +47,7 @@ export function DataTableSkeleton({ id }: Props) {
 				<Loader />
 			</View>
 			<TableFooter>
-				<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
+				<HStack className="border-border border-t p-2">
 					<HStack className="flex-1" />
 					<HStack className="justify-end gap-0">
 						<Text className="text-xs">&nbsp;</Text>

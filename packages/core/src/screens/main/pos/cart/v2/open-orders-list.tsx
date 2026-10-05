@@ -15,17 +15,20 @@ type Order = { id: string; record: EngineRecord<'orders'> };
 export function OpenOrdersList({
 	orders,
 	activeValue,
+	leaving = false,
 	onSelect,
 	onClose,
 }: {
 	orders: readonly Order[];
 	activeValue: string;
+	/** The list is sliding out: focus has gone back to the strip and must stay there. */
+	leaving?: boolean;
 	onSelect: (id: string) => void;
 	onClose: (id?: string) => void;
 }) {
 	const t = useT();
 	return (
-		<View testID="open-orders-list" className="bg-background absolute inset-0 z-50">
+		<View testID="open-orders-list" className="flex-1">
 			<View className="h-ctl border-border flex-row items-center justify-between border-b px-2">
 				<Text>{t('pos_cart.open_orders')}</Text>
 				<IconButton
@@ -42,12 +45,13 @@ export function OpenOrdersList({
 					data={orders}
 					keyExtractor={(order) => order.id}
 					estimatedItemSize={48}
-					extraData={activeValue}
+					extraData={`${activeValue}:${leaving}`}
 					renderItem={({ item: { id, record } }) => (
 						<VirtualizedList.Item>
 							<OrderRow
 								order={record}
 								selected={id === activeValue}
+								takesFocus={!leaving}
 								onPress={() => {
 									onSelect(id);
 									onClose(id);
@@ -63,10 +67,12 @@ export function OpenOrdersList({
 function OrderRow({
 	order,
 	selected,
+	takesFocus,
 	onPress,
 }: {
 	order: EngineRecord<'orders'>;
 	selected: boolean;
+	takesFocus: boolean;
 	onPress: () => void;
 }) {
 	const t = useT();
@@ -75,9 +81,14 @@ function OrderRow({
 	const billing = payload.billing;
 	const focusCurrent = React.useCallback(
 		(node: React.ElementRef<typeof Pressable> | null) => {
-			if (selected) node?.focus();
+			// The row is focused while its list is still sliding in: without `preventScroll` the
+			// browser scrolls the clipping frame to bring it into view and the slide jumps.
+			if (selected && takesFocus)
+				(node as { focus?: (options?: FocusOptions) => void } | null)?.focus?.({
+					preventScroll: true,
+				});
 		},
-		[selected]
+		[selected, takesFocus]
 	);
 	const name = [billing?.first_name, billing?.last_name].filter(Boolean).join(' ');
 	return (

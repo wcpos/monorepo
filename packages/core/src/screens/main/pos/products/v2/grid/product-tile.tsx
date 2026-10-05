@@ -143,11 +143,10 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 						<Icon name="chevronRight" size="sm" className="text-muted-foreground" />
 					</View>
 				)}
-				{count > 0 && (
-					<View className="absolute top-2 right-2">
-						<InCartCount count={count} />
-					</View>
-				)}
+				{/* Always mounted: the count has to be there before the first add to show it land. */}
+				<View className="absolute top-2 right-2">
+					<InCartCount product={record.uuid} count={count} />
+				</View>
 			</View>
 			{hasAnyField && (
 				<VStack className="p-2" space="xs">

@@ -34,7 +34,9 @@ import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
+import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
 import { PortalHost } from '@wcpos/components/portal';
+import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
 import { stories as text } from '@wcpos/components/text/gallery';
@@ -98,6 +100,8 @@ const registry: Record<string, Story[]> = {
 	notice,
 	breadcrumb,
 	'page-bar': pageBar,
+	'pane-stack': paneStack,
+	'slide-over': slideOver,
 	'v2-dialog': dialogV2,
 };
 

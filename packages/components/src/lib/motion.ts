@@ -2,6 +2,9 @@ import { Easing } from 'react-native-reanimated';
 
 // Durations already used across the package, centralised.
 export const PRESS = 80;
+// The count badge: the swell before its spring, and the old number's fade under it.
+export const COUNT_SWELL = 90;
+export const COUNT_FADE = 170;
 export const OVERLAY_FADE = 150;
 export const CROSSFADE = 200;
 export const POPOVER_FADE = 200;
@@ -14,9 +17,18 @@ export const STAMP = 380;
 export const SPINNER = 1000;
 export const INDETERMINATE = 1100;
 
-export const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
-export const EASE_CSS = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+// The control points, for the three forms a curve is needed in: a Reanimated easing (shared
+// values, layout animations), a CSS string (web keyframes) and Reanimated's `cubicBezier()`
+// (CSS transitions, which the browser runs off the main thread).
+export const EASE_POINTS = [0.2, 0.7, 0.2, 1] as const;
+export const EASE = Easing.bezier(...EASE_POINTS);
+export const EASE_CSS = `cubic-bezier(${EASE_POINTS.join(', ')})`;
 export const EASE_BEAT = Easing.bezier(0.2, 0.9, 0.3, 1.1);
+// Leaving: speed up into the edge. The shared ease slows down at the end, and a surface that
+// leaves on it creeps as a sliver at the edge for its last frames (filmed 2026-10-01).
+export const EASE_EXIT_POINTS = [0.4, 0, 1, 1] as const;
+export const EASE_EXIT = Easing.bezier(...EASE_EXIT_POINTS);
+export const EASE_EXIT_CSS = `cubic-bezier(${EASE_EXIT_POINTS.join(', ')})`;
 
 type Beat = {
 	name: string;
@@ -48,7 +60,8 @@ export const BEATS = {
 		class: 'beat',
 		waitingPath: true,
 	},
-	// Decision 10: target the settle budget; shipped 400+400 stays in pulse-row.
+	// Decision 10: the settle budget. The row itself lights in 120 and releases over 420
+	// (`table/pulse-row.tsx`, 2026-10-02; 400+400 before).
 	lineAdded: {
 		name: 'Line-added highlight',
 		duration: BEAT,
@@ -225,21 +238,23 @@ export const BEATS = {
 	},
 } satisfies Record<string, Beat>;
 
-// Preserve today's accordion easing and duration; no component adopts new motion yet.
+// The accordion keeps its duration and takes the shared ease (2026-10-02; `ease-out` before).
 export const WEB_ANIMATIONS = {
 	'pop-in': `pop-in ${POPOVER_FADE}ms ${EASE_CSS}`,
 	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
 	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
-	'accordion-down': `accordion-down ${CROSSFADE}ms ease-out`,
-	'accordion-up': `accordion-up ${CROSSFADE}ms ease-out`,
+	'accordion-down': `accordion-down ${CROSSFADE}ms ${EASE_CSS}`,
+	'accordion-up': `accordion-up ${CROSSFADE}ms ${EASE_CSS}`,
 	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
-	'overlay-out': `overlay-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	// The scrim is the panel's parent on web: it must outlast the panel's exit, or it takes the
+	// panel with it mid-slide.
+	'overlay-out': `overlay-out ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
 	'dialog-in': `dialog-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
 	'dialog-out': `dialog-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
 	'panel-in-left': `panel-in-left ${PANEL_SLIDE}ms ${EASE_CSS}`,
 	'panel-in-right': `panel-in-right ${PANEL_SLIDE}ms ${EASE_CSS}`,
-	'panel-out-left': `panel-out-left ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
-	'panel-out-right': `panel-out-right ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'panel-out-left': `panel-out-left ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
+	'panel-out-right': `panel-out-right ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
 	'sheet-in': `sheet-in ${SHEET_RISE}ms ${EASE_CSS}`,
-	'sheet-out': `sheet-out ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'sheet-out': `sheet-out ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
 };

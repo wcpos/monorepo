@@ -83,7 +83,11 @@ jest.mock('../context', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ screenSize: mockState.screenSize }),
+	// 'md' stands for a tablet standing up: the wide layout, without the room.
+	useTheme: () => ({
+		screenSize: mockState.screenSize === 'md' ? 'lg' : mockState.screenSize,
+		roomy: mockState.screenSize === 'lg',
+	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: mockSite, store: mockState.store }),

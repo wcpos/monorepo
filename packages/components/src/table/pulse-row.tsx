@@ -8,8 +8,8 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { useCSSVariable } from 'uniwind';
 
+import { EASE, EASE_EXIT, PANEL_SLIDE_OUT } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 import type { RowData, TableFeatures } from '@tanstack/react-table';
@@ -38,9 +38,24 @@ interface PulseTableRowRef {
 	pulseRemove: (callback?: PulseRemoveCallback) => void;
 }
 
+// The added line lights up at once and settles back: a flash that answers the tap, then a
+// slow release (540 ms in all, where 400 + 400 read as a row slowly changing colour).
+const LIT = { duration: 120, easing: EASE };
+const SETTLE = { duration: 420, easing: EASE };
+// The removal waits on this pulse, so it is short: nothing over 400 ms on a path the cashier
+// is waiting on.
+const GOING = { duration: PANEL_SLIDE_OUT, easing: EASE_EXIT };
+// How strongly the tint washes the row at its peak: enough to read, with the text still clear.
+const TINT_ADDED = 0.22;
+const TINT_REMOVED = 0.3;
+
 /**
- * Table row with pulse animation for add/remove feedback.
- * Uses theme-aware colors for the row surface and pulse effects.
+ * Table row with a pulse for add/remove feedback.
+ *
+ * The pulse is a tint laid OVER the row's content, and only its opacity animates. It used to
+ * be the row's own background colour, which a row with an opaque body on top of it (the cart
+ * line, whose body hides the swipe strip under it) covered completely: the row pulsed and
+ * nobody could see it (filmed and probed 2026-10-02).
  */
 function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	ref,
@@ -49,31 +64,13 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	onRemove = () => {},
 	row,
 	table,
+	children,
 	...viewProps
 }: PulseTableRowProps<TData, TFeatures>) {
-	// Get theme-aware colors
-	const [tableRowColor, successColor, errorColor] = useCSSVariable([
-		'--color-table-row',
-		'--color-success',
-		'--color-destructive',
-	]) as string[];
-
-	// Every row uses the same unstriped surface.
-	const baseColor = tableRowColor;
-
-	// Shared value for animated background color
-	const backgroundColor = useSharedValue(baseColor);
-
-	// Update base color when theme colors change
-	React.useEffect(() => {
-		backgroundColor.value = baseColor;
-	}, [baseColor, backgroundColor]);
-
-	const animatedStyle = useAnimatedStyle(() => {
-		return {
-			backgroundColor: backgroundColor.value,
-		};
-	});
+	const added = useSharedValue(0);
+	const removed = useSharedValue(0);
+	const addedStyle = useAnimatedStyle(() => ({ opacity: added.value }));
+	const removedStyle = useAnimatedStyle(() => ({ opacity: removed.value }));
 
 	/**
 	 * `pulseRemove` commits the row's removal from the animation's completion
@@ -117,11 +114,13 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 		() => ({
 			pulseAdd(callback?: () => void) {
 				(table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(row.id);
-				cancelAnimation(backgroundColor);
-				// Pulse to success color then back to base
-				backgroundColor.value = withSequence(
-					withTiming(successColor, { duration: 400 }),
-					withTiming(baseColor, { duration: 400 }, (finished) => {
+				// One pulse at a time: an add takes over from a removal that has not committed.
+				cancelAnimation(removed);
+				cancelAnimation(added);
+				removed.value = 0;
+				added.value = withSequence(
+					withTiming(TINT_ADDED, LIT),
+					withTiming(0, SETTLE, (finished) => {
 						'worklet';
 						if (finished && callback) {
 							scheduleOnRN(callback);
@@ -136,29 +135,37 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 				removePulseActive.current = true;
 				removePulseCallback.current = callback ?? null;
 
-				cancelAnimation(backgroundColor);
-				// Pulse to error color
-				backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
+				cancelAnimation(added);
+				cancelAnimation(removed);
+				added.value = 0;
+				removed.value = withTiming(TINT_REMOVED, GOING, (finished) => {
 					'worklet';
 					scheduleOnRN(settleRemovePulse, !!finished);
 				});
 			},
 		}),
-		[backgroundColor, baseColor, successColor, errorColor, row.id, table, settleRemovePulse]
+		[added, removed, row.id, table, settleRemovePulse]
 	);
 
 	return (
 		<Animated.View
-			// No `web:transition-colors` here: a CSS background-color transition
-			// low-pass-filters reanimated's per-frame inline style updates, so the
-			// pulse never reaches the success/error color and visibly lags/snaps.
+			// No `web:transition-colors` here: a CSS colour transition on the row fights the pulse.
 			className={cn(
-				'web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				'bg-table-row web:data-[state=selected]:bg-muted border-border min-h-row relative flex-row border-b',
 				className
 			)}
-			style={animatedStyle}
 			{...viewProps}
-		/>
+		>
+			{children as React.ReactNode}
+			<Animated.View
+				className="bg-success absolute inset-0"
+				style={[addedStyle, { pointerEvents: 'none' }]}
+			/>
+			<Animated.View
+				className="bg-destructive absolute inset-0"
+				style={[removedStyle, { pointerEvents: 'none' }]}
+			/>
+		</Animated.View>
 	);
 }
 

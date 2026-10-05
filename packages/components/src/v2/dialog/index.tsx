@@ -9,7 +9,13 @@ import { router } from 'expo-router';
 import { Button } from '../../button';
 import { IconButton } from '../../icon-button';
 import { useIsPhone } from '../../lib/device';
-import { OVERLAY_MOTION, OverlayShell, useOverlay } from '../../lib/overlay';
+import {
+	EXIT_MARK,
+	OVERLAY_EXIT_MOUNTED,
+	OVERLAY_MOTION,
+	OverlayShell,
+	useOverlay,
+} from '../../lib/overlay';
 import { usePortalContainer } from '../../lib/portal-container';
 import { cn } from '../../lib/utils';
 import { Text, TextClassContext } from '../../text';
@@ -88,7 +94,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
 	const container = usePortalContainer(portalHost);
-	if (!open && !route) return null;
+	if (!open && !route && !OVERLAY_EXIT_MOUNTED) return null;
 	const shell = (
 		<OverlayShell
 			Scrim={DialogPrimitive.Overlay}
@@ -160,6 +166,7 @@ function DialogPanel(allProps: DialogContentProps) {
 				className
 			)}
 			testID={testID}
+			{...EXIT_MARK}
 			{...props}
 		>
 			{children}

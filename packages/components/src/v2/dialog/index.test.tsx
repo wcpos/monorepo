@@ -203,7 +203,10 @@ jest.mock('@rn-primitives/dialog', () => {
 		},
 		Overlay: (props: Primitive.OverlayProps) => {
 			mockScrimProps.push(props);
-			const { onOpenChange } = useRootContext();
+			const { onOpenChange, open } = useRootContext();
+			// As Radix: a closed overlay stays only while its exit animates, and jsdom animates
+			// nothing. The component itself no longer unmounts on web (the exit needs it mounted).
+			if (!open) return null;
 			const mapped = Object.fromEntries(
 				Object.entries(props)
 					.filter(

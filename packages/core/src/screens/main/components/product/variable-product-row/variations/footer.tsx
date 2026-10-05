@@ -60,7 +60,7 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	const t = useT();
 
 	return (
-		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
+		<HStack space="xs" className="border-border justify-end border-b p-2">
 			<Text className="text-xs">
 				{total === null
 					? t('common.showing_n', { shown: count.toLocaleString() })

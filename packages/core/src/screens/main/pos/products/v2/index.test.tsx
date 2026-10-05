@@ -429,9 +429,22 @@ jest.mock('./rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('./rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('./grid/product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
-jest.mock('./drill-in', () => ({
-	DrillIn: () => null,
-	ProductsTransition: ({ children }: React.PropsWithChildren) => children,
+jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }));
+// The stage's own behaviour is tested beside it; here it only has to hold both panes.
+jest.mock('@wcpos/components/pane-stack', () => ({
+	PaneStack: <T,>({
+		children,
+		detail,
+		renderDetail,
+	}: React.PropsWithChildren<{
+		detail: T | null;
+		renderDetail: (detail: T) => React.ReactNode;
+	}>) => (
+		<>
+			{children}
+			{detail !== null && renderDetail(detail)}
+		</>
+	),
 }));
 jest.mock('./footer', () => ({ ProductsFooter: () => null }));
 jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (n: number) => n }));

@@ -66,6 +66,12 @@ const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined>
 	subtotal: TEXT_COLUMN,
 	total: TEXT_COLUMN,
 };
+/**
+ * Under this cart width the Price column folds away. With it, the item name is left about
+ * 50 px at 273 (a 768-wide tablet: "Affirm Wat…", "Beani / e wi…") and about 100 px at 300,
+ * where a two-word name reads. Shot on the real register, 2026-10-02.
+ */
+const PRICE_COLUMN_MIN_WIDTH = 300;
 type CartTableFeatures = typeof cartTableFeatures;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -146,7 +152,10 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const t = useT();
 	// The decided cart line at phone width has no Price column (the cart board, 2026-09-17):
 	// Qty · Item · Total fit; four columns truncate their labels at the larger scale steps.
-	const isPhone = useIsPhone();
+	// The same goes for a narrow cart column beside the products (a tablet standing up, or the
+	// split dragged over): the column's own width decides, not the window's.
+	const [narrow, setNarrow] = React.useState(false);
+	const isPhone = useIsPhone() || narrow;
 	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 	const setting = useDocField(uiSettings, (value) => value.sortLines) as LineSort | undefined;
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
@@ -284,7 +293,11 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 		},
 	});
 	return (
-		<Table aria-labelledby="cart-table" className="h-full">
+		<Table
+			aria-labelledby="cart-table"
+			className="h-full"
+			onLayout={({ nativeEvent }) => setNarrow(nativeEvent.layout.width < PRICE_COLUMN_MIN_WIDTH)}
+		>
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					// Measurement tooling must stay outside ordinary application bundles (ledger 16).

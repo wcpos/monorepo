@@ -39,6 +39,8 @@ export function ProductVariationImage({
 					source={{ uri: error ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
 					recyclingKey={row.original.record.uuid}
 					className="h-20 w-full rounded"
+					// The placeholder is the absence of an image, not one arriving: it does not fade in.
+					{...(error ? { transition: 0 } : {})}
 				/>
 			</View>
 		</>

@@ -12,7 +12,7 @@ import type { NavigationAreaItem } from './index';
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
 let mockPathname = '/settings/tax';
-let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
+let mockScreenSize: 'sm' | 'lg' = 'lg';
 
 jest.mock('expo-router', () => ({
 	Redirect: ({ href }: { href: string }) => <div data-testid="redirect">{href}</div>,
@@ -99,9 +99,9 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 	});
 
-	// md is the narrowest wide screen (a tablet in portrait): still the rail, still no crumb.
-	it('keeps the rail beside the screen with no crumb on the bar at md', () => {
-		mockScreenSize = 'md';
+	// The narrowest wide screen (a tablet in portrait) is `lg` too: still the rail, no crumb.
+	it('keeps the rail beside the screen with no crumb on the bar on a wide screen', () => {
+		mockScreenSize = 'lg';
 		render(
 			<NavigationAreaLayout
 				items={items}
@@ -239,7 +239,7 @@ describe('NavigationAreaIndex', () => {
 	});
 
 	it('redirects the area root to its default page on wide screens', () => {
-		mockScreenSize = 'md';
+		mockScreenSize = 'lg';
 
 		render(
 			<NavigationAreaIndex items={items} defaultHref="/settings/general" testID="settings-index" />

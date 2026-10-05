@@ -27,7 +27,12 @@ jest.mock('../../../../../query', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-jest.mock('observable-hooks', () => ({ useObservableSuspense: (resource: unknown) => resource }));
+const answered = { value: true };
+jest.mock('observable-hooks', () => ({
+	useObservableSuspense: (resource: unknown) => resource,
+}));
+// The resource's first answer: false until the query has spoken (or failed).
+jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
 }));
@@ -41,8 +46,11 @@ jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }))
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (value: number) => value }));
-jest.mock('../../../components/data-table/v2/skeleton', () => ({ DataTableSkeleton: () => null }));
+jest.mock('../../../components/data-table/v2/skeleton', () => ({
+	DataTableSkeleton: ({ rowCount }: { rowCount: number }) => (
+		<div data-testid="skeleton" data-rows={rowCount} />
+	),
+}));
 jest.mock('../../../components/data-table/v2', () => ({
 	DataTable: ({
 		tableConfig,
@@ -100,28 +108,12 @@ jest.mock('../../../hooks/use-stock-status-label', () => ({
 	useStockStatusLabel: () => ({ getLabel: String }),
 }));
 jest.mock('../../hooks/use-add-variation', () => ({ useAddVariation: () => ({ addVariation }) }));
-jest.mock('react-native-reanimated', () => {
-	const animation = {
-		delay: () => animation,
-		duration: () => animation,
-		easing: () => animation,
-		reduceMotion: () => animation,
-	};
-	return {
-		__esModule: true,
-		default: { View: ({ children }: React.PropsWithChildren) => children },
-		FadeIn: animation,
-		ReduceMotion: { System: 'system' },
-	};
-});
 const parent = {
 	uuid: 'parent',
 	payload: { name: 'Tea', variations: [1, 2] },
 } as unknown as React.ComponentProps<typeof VariationsPane>['parent'];
 it('scopes the query to published parent IDs, filters displayed stock and counts shown of parent total', () => {
-	const { rerender } = render(
-		<VariationsPane parent={parent} viewMode="grid" stockStatus="instock" />
-	);
+	const { rerender } = render(<VariationsPane parent={parent} stockStatus="instock" />);
 	expect(bind).toHaveBeenLastCalledWith(
 		'variations',
 		{ filters: { status: 'publish' } },
@@ -130,7 +122,7 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 	expect(screen.getByTestId('hits').textContent).toBe('one');
 	expect(screen.getByTestId('footer').textContent).toContain('1 of 2');
 	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_variations_of');
-	rerender(<VariationsPane parent={parent} viewMode="table" />);
+	rerender(<VariationsPane parent={parent} />);
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
 	expect(screen.getByTestId('footer').textContent).toContain('2 of 2');
 });
@@ -147,4 +139,15 @@ it('adds a variation with exactly the old cell’s sanitised metadata', () => {
 	expect(addVariation).toHaveBeenCalledWith(variation, parent, [
 		{ attr_id: 1, display_key: 'Colour', display_value: 'Blue' },
 	]);
+});
+it('holds the skeleton, one row per variation, until the query has answered', () => {
+	// Outside Suspense on purpose: a fallback React has committed stays up for 300 ms.
+	answered.value = false;
+	const { rerender } = render(<VariationsPane parent={parent} />);
+	expect(screen.getByTestId('skeleton').dataset.rows).toBe('2');
+	expect(screen.queryByTestId('hits')).toBeNull();
+	answered.value = true;
+	rerender(<VariationsPane parent={parent} />);
+	expect(screen.queryByTestId('skeleton')).toBeNull();
+	expect(screen.getByTestId('hits').textContent).toBe('one,two');
 });

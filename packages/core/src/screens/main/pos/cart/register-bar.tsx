@@ -40,10 +40,13 @@ function RegisterBarContent({
 	onSwitchRegister,
 	panelOpen,
 	onPanelOpenChange,
+	strip = false,
 }: {
 	onSwitchRegister?: () => void;
 	panelOpen: boolean;
 	onPanelOpenChange: (open: boolean) => void;
+	/** The desktop's title-bar strip: 40 pt, no frame of its own (the strip is the frame). */
+	strip?: boolean;
 }) {
 	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
 	const { wpCredentials, store } = useStoreSession();
@@ -71,12 +74,18 @@ function RegisterBarContent({
 	const { open: userOpen, setOpen: setUserOpen } = useCashierSheet();
 	const [storeOpen, setStoreOpen] = React.useState(false);
 	return (
-		<HStack className="bg-background border-border h-12 gap-2 border-b px-2">
+		<HStack
+			testID={strip ? 'register-bar-strip' : undefined}
+			className={
+				strip ? 'flex-1 gap-2 px-2' : 'bg-background border-border h-12 gap-2 border-b px-2'
+			}
+		>
 			{screenSize !== 'lg' && (
 				<Button
 					variant="ghost"
 					className="h-11 w-11 p-0"
 					testID="pos-drawer-open-button"
+					aria-label={t('common.menu')}
 					onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
 				>
 					<Icon name="bars" />

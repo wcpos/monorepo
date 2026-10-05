@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { registerSlotEntry } from '../../../../extensions/slots';
+import { registerSlotEntry, useSlotValue } from '../../../../extensions/slots';
 import { OpenOrderTabs } from './v2/tabs';
 
 import type { SlotEntryProps } from '../../../../extensions/slots';
 
-function OpenOrdersEntry(_props: SlotEntryProps<'pos.cart.bar'>) {
-	return React.createElement(OpenOrderTabs);
+function OpenOrdersEntry({ data }: SlotEntryProps<'pos.cart.bar'>) {
+	return React.createElement(OpenOrderTabs, { position: useSlotValue(data).position });
 }
 
 registerSlotEntry({

@@ -9,6 +9,7 @@ import { EmptyState } from '@wcpos/components/empty-state';
 import { Skeleton, skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
+import { PaneStack } from '@wcpos/components/pane-stack';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -49,7 +50,7 @@ import { VariableProductRow } from './rows/variable-product-row';
 import { ProductTile } from './grid/product-tile';
 import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
-import { DrillIn, ProductsTransition } from './drill-in';
+import { DrillIn } from './drill-in';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
@@ -64,11 +65,9 @@ type ProductRow = { record: EngineRecord<'products'> };
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
 function POSProductsContent({
-	isColumn = false,
 	showOutOfStock,
 	initialFilters,
 }: {
-	isColumn?: boolean;
 	showOutOfStock: boolean;
 	initialFilters: Record<string, unknown>;
 }) {
@@ -282,7 +281,7 @@ function POSProductsContent({
 	/* eslint-enable react-compiler/react-compiler */
 
 	return (
-		<View className={`h-full p-2 ${isColumn && 'pr-0'}`}>
+		<View className="h-full">
 			<View className="flex-1">
 				<View className="p-2">
 					<ErrorBoundary>
@@ -357,61 +356,65 @@ function POSProductsContent({
 						}}
 					>
 						<ErrorBoundary>
-							<Suspense fallback={loading}>
-								{drilled ? (
+							{/* The products stay mounted under a drill-in: the pane slides over them and
+							    back off, and the list is where the cashier left it. */}
+							<PaneStack
+								testID="products-pane-stack"
+								detail={drilled}
+								paneClassName="bg-background"
+								renderDetail={(parent) => (
 									<DrillIn
-										parent={drilled}
+										parent={parent}
 										back={() => setDrilled(null)}
-										viewMode={viewMode}
 										stockStatus={stockStatusFilter}
 									/>
-								) : (
-									<ProductsTransition viewMode={viewMode}>
-										{viewMode === 'grid' ? (
-											<ProductGrid
-												tile={ProductTile}
-												variableTile={VariableTile}
-												binding={binding}
-												actions={tableActions}
-												noDataMessage={noDataMessage}
-											/>
-										) : (
-											<DataTable<ProductRow>
-												id="pos-products"
-												collectionName="products"
-												binding={binding}
-												resource={binding.resource}
-												sort={state.sort}
-												actions={tableActions}
-												active$={binding.active$}
-												total$={binding.total$}
-												sync={binding.sync}
-												renderItem={({ item, index, table }) => (
-													<VirtualizedList.Item>
-														{item.original.record.payload.type === 'variable' ? (
-															<VariableProductRow
-																item={item}
-																index={index}
-																table={table}
-																variationsStyle={variationsStyle}
-																onDrill={setDrilled}
-															/>
-														) : (
-															<ProductRowView item={item} />
-														)}
-													</VirtualizedList.Item>
-												)}
-												cellsForRow={cellsForRow}
-												noDataMessage={noDataMessage}
-												estimatedItemSize={100}
-												TableFooterComponent={ProductsFooter}
-												getItemType={(row) => row.original.record.payload.type}
-												tableConfig={tableConfig}
-											/>
-										)}
-									</ProductsTransition>
 								)}
-							</Suspense>
+							>
+								<Suspense fallback={loading}>
+									{viewMode === 'grid' ? (
+										<ProductGrid
+											tile={ProductTile}
+											variableTile={VariableTile}
+											binding={binding}
+											actions={tableActions}
+											noDataMessage={noDataMessage}
+										/>
+									) : (
+										<DataTable<ProductRow>
+											id="pos-products"
+											collectionName="products"
+											binding={binding}
+											resource={binding.resource}
+											sort={state.sort}
+											actions={tableActions}
+											active$={binding.active$}
+											total$={binding.total$}
+											sync={binding.sync}
+											renderItem={({ item, index, table }) => (
+												<VirtualizedList.Item>
+													{item.original.record.payload.type === 'variable' ? (
+														<VariableProductRow
+															item={item}
+															index={index}
+															table={table}
+															variationsStyle={variationsStyle}
+															onDrill={setDrilled}
+														/>
+													) : (
+														<ProductRowView item={item} />
+													)}
+												</VirtualizedList.Item>
+											)}
+											cellsForRow={cellsForRow}
+											noDataMessage={noDataMessage}
+											estimatedItemSize={100}
+											TableFooterComponent={ProductsFooter}
+											getItemType={(row) => row.original.record.payload.type}
+											tableConfig={tableConfig}
+										/>
+									)}
+								</Suspense>
+							</PaneStack>
 						</ErrorBoundary>
 					</View>
 				</View>
@@ -420,7 +423,7 @@ function POSProductsContent({
 	);
 }
 
-export function POSProducts({ isColumn = false }) {
+export function POSProducts() {
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
 	const initialSort = getPOSProductSort(uiSettings.sortBy, uiSettings.sortDirection);
@@ -436,11 +439,7 @@ export function POSProducts({ isColumn = false }) {
 			initialSort={initialSort}
 			initialFilters={initialFilters}
 		>
-			<POSProductsContent
-				isColumn={isColumn}
-				showOutOfStock={showOutOfStock}
-				initialFilters={initialFilters}
-			/>
+			<POSProductsContent showOutOfStock={showOutOfStock} initialFilters={initialFilters} />
 		</QueryStateProvider>
 	);
 }
