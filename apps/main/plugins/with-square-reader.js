@@ -166,14 +166,14 @@ function withSquareReader(config) {
 					`${PODFILE_SETUP_PHASE}\nprepare_react_native_project!`
 				);
 			}
-			if (!/^\s+add_square_setup_build_phase\(installer\)/m.test(contents)) {
-				const next = contents.replace(
-					/(\s+react_native_post_install\(\n[\s\S]*?\n\s+\)\n)/,
-					'$1\n    add_square_setup_build_phase(installer)\n'
-				);
-				if (next === contents)
-					throw new Error('with-square-reader: no react_native_post_install block in Podfile');
-				contents = next;
+			// Square's sample plugin adds the phase from post_install, which runs BEFORE CocoaPods
+			// adds "[CP] Embed Pods Frameworks" to the app target. The setup script then runs
+			// first, finds no SDK in the app, and leaves SquareReader / LCRCore / CorePaymentCard
+			// nested, so the app dies in dyld at launch (EAS build 6c5f6a7a, 2026-10-05).
+			// post_integrate runs after the user project is integrated, so the phase lands last.
+			// NOT yet proven by a build: only the hand-repackaged app has been launched.
+			if (!/^\s*add_square_setup_build_phase\(installer\)/m.test(contents)) {
+				contents += `\npost_integrate do |installer|\n  add_square_setup_build_phase(installer)\nend\n`;
 			}
 			fs.writeFileSync(podfilePath, contents);
 			return mod;
