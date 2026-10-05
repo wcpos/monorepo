@@ -16,6 +16,7 @@ import {
 	RegisterSessionRequiredError,
 } from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
+import { leaveCheckout } from '../checkout-mode';
 import { returnToTill } from '../till-route';
 import { useTheme } from '../../../../../contexts/theme';
 import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
@@ -105,6 +106,8 @@ export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
+	/** `stage` when hosted in the wide checkout pane, where no checkout route exists to replace. */
+	receiptHost?: 'modal' | 'stage';
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 	/** Reports frame readiness to the checkout footer, which gates on it. */
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -122,6 +125,7 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
  */
 export function PaymentWebview({
 	order,
+	receiptHost = 'modal',
 	setLoading,
 	setFrameStatus,
 	onStockRejection,
@@ -132,7 +136,7 @@ export function PaymentWebview({
 	const { screenSize } = useTheme();
 	const ctx = useSaleContext();
 	const { sessionsOn } = ctx;
-	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
+	const completeOrderFlow = useCompleteOrderFlow(order, receiptHost);
 	const orderData = useRecordField(order, (record) => record.payload);
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -405,7 +409,7 @@ export function PaymentWebview({
 				}
 				paymentReceivedRef.current = true;
 				settled = true;
-				setCurrentOrderID('');
+				if (receiptHost === 'modal') setCurrentOrderID('');
 				orderLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
 						orderNumber: (serverOrder.number as string) || orderNumber,
@@ -421,7 +425,14 @@ export function PaymentWebview({
 						},
 					}
 				);
-				if (uiSettings.autoShowReceipt) {
+				if (receiptHost === 'stage') {
+					// completeOrderFlow('stage') enters the receipt itself (completeSale, before any await);
+					// it never leaves checkout for a gateway snapshot, so that half is ours.
+					if (!uiSettings.autoShowReceipt) {
+						leaveCheckout(order.uuid);
+						setCurrentOrderID('');
+					}
+				} else if (uiSettings.autoShowReceipt) {
 					router.replace({
 						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
 						params: { orderId: order.uuid },
@@ -468,6 +479,7 @@ export function PaymentWebview({
 			orderId,
 			orderNumber,
 			completeOrderFlow,
+			receiptHost,
 			ctx.dp,
 			uiSettings.autoShowReceipt,
 			router,
@@ -534,7 +546,7 @@ export function PaymentWebview({
 							},
 						}
 					);
-					setCurrentOrderID('');
+					if (receiptHost === 'modal') setCurrentOrderID('');
 					// Route FIRST; the local refresh is catch-up, never a gate. Awaiting it
 					// here left cashiers on a spinning "Process payment" after a paid sale:
 					// orders #117902 and #118391 (2026-08-29, local + CI iOS) both logged
@@ -543,7 +555,14 @@ export function PaymentWebview({
 					// handler, and the fallback poll was already disarmed by
 					// `paymentReceivedRef`. The fallback path below has always routed
 					// without waiting; the success path now does the same.
-					if (uiSettings.autoShowReceipt) {
+					if (receiptHost === 'stage') {
+						// completeOrderFlow('stage') enters the receipt itself (completeSale, before any await);
+						// it never leaves checkout for a gateway snapshot, so that half is ours.
+						if (!uiSettings.autoShowReceipt) {
+							leaveCheckout(order.uuid);
+							setCurrentOrderID('');
+						}
+					} else if (uiSettings.autoShowReceipt) {
 						router.replace({
 							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
 							params: { orderId: order.uuid },
@@ -577,6 +596,7 @@ export function PaymentWebview({
 			screenSize,
 			order,
 			completeOrderFlow,
+			receiptHost,
 			ctx.dp,
 			uiSettings.autoShowReceipt,
 			setLoading,

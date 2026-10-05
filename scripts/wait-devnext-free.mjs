@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Queue web and native E2E runs before their first dev-next request.
+ * Queue native E2E runs before their first dev-next request.
+ * Web E2E stopped using dev-next on 2026-10-05.
  * Front desk ruling B, 2026-10-01: six web shards and two native dispatches
  * saturated dev-next's six php-fpm workers (1,898 requests returned 499;
  * every device failed at the connect screen).
@@ -8,15 +9,15 @@
  * Admit only with no holder and no older waiting run. Two consecutive clear
  * polls, one interval apart, let lagging API step status reveal contenders.
  * A successful queue step holds the store until its whole run completes,
- * covering web shards and the native device phase. PRs targeting next skip
- * both suites, so PR runs cannot reach dev-next and are skipped in API scans.
+ * covering the native device phase. PRs targeting next skip the suite,
+ * so PR runs cannot reach dev-next and are skipped in API scans.
  * Push runs are skipped too: both workflows push only on main, never dev-next.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 export const QUEUE_STEP_NAME = '🚦 Queue for dev-next';
-export const QUEUE_WORKFLOWS = ['deploy.yml', 'e2e-native.yml'];
+export const QUEUE_WORKFLOWS = ['e2e-native.yml'];
 /** Between polls. ~5 API calls a poll stays far below GITHUB_TOKEN's 1,000/h. */
 export const POLL_INTERVAL_MS = 90_000;
 /** One native holder can run ~3.5 h worst case (EAS build + 130-min device job). */

@@ -29,6 +29,7 @@ let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 let mockNumber = '1187';
 const mockUseFlow = jest.fn(() => mockFlow);
+const mockLegacyTab = jest.fn();
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -58,7 +59,12 @@ jest.mock('../tender/use-ledger-view', () => ({
 	useLedgerView: () => ({ ...mockFlow, format: (minor: number) => `$${(minor / 100).toFixed(2)}` }),
 }));
 jest.mock('../tender/use-tender-flow', () => ({ useTenderFlow: () => mockUseFlow() }));
-jest.mock('../tender/legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
+jest.mock('../tender/legacy-tab', () => ({
+	LegacyTab: (props: unknown) => {
+		mockLegacyTab(props);
+		return <div data-testid="legacy-tab" />;
+	},
+}));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 jest.mock('../../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: () => false }),
@@ -204,6 +210,11 @@ beforeEach(() => {
 	enterCheckout('order-1');
 	mockFlow = makeFlow();
 	mockFlow satisfies LedgerView;
+});
+it('hosts the Legacy tab with the in-pane receipt (receiptHost="stage")', () => {
+	mockFlow = makeFlow({ state: { ...initialTenderState, tab: 'legacy' } });
+	mountColumn();
+	expect(mockLegacyTab).toHaveBeenLastCalledWith(expect.objectContaining({ receiptHost: 'stage' }));
 });
 it.each([false, true])('Cart protects a live leg: %s', (live) => {
 	mockFlow = makeFlow({ hasLiveLeg: live });

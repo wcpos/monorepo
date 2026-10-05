@@ -1429,7 +1429,9 @@ test('the web E2E test step stops before the job limit so the reports still uplo
 	const job = readWorkflow('deploy.yml').jobs.e2e;
 	const step = job.steps.find(({ name }) => name?.startsWith('🧪 Run E2E tests'));
 	assert.equal(typeof step['timeout-minutes'], 'number');
-	assert.ok(step['timeout-minutes'] < job['timeout-minutes']);
+	assert.equal(job['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}");
+	assert.ok(step['timeout-minutes'] < 60);
+	assert.ok(step['timeout-minutes'] + 80 <= 140);
 });
 
 test('the shared-store queue stays removed', () => {
@@ -1478,80 +1480,37 @@ test('both lanes run six E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
 });
 
-test('e2e-web-mini runs the suite against the mini store in parallel, never gating', () => {
+test('lane next runs web E2E on the mini store over the tailnet', () => {
 	const workflow = readWorkflow('deploy.yml');
-	const mini = workflow.jobs['e2e-web-mini'];
-	const e2e = workflow.jobs.e2e;
-	assert.ok(mini, 'deploy.yml is missing the e2e-web-mini job');
-	assert.deepEqual(mini.needs, ['changes', 'deploy']);
-	assert.equal(mini['continue-on-error'], true);
-	const prefix = "!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && ";
-	const condition = e2e.if.replace(/^\$\{\{ /, '').replace(/ \}\}$/, '');
-	assert.ok(condition.startsWith(prefix));
-	const eligibility = condition.slice(prefix.length);
-	assert.equal(mini.if, `${eligibility} && needs.changes.outputs.lane == 'next'`);
-	assert.deepEqual(mini.strategy, e2e.strategy);
-	assert.equal(mini['runs-on'], 'ubuntu-latest');
-	assert.equal(mini['timeout-minutes'], 60);
-	assert.deepEqual(mini.concurrency, {
-		group: "${{ format('deploy-verify-mini-{0}-{1}', github.run_id, matrix.shardIndex) }}",
-		'cancel-in-progress': true,
-	});
-
-	const [gate, ...steps] = mini.steps;
-	assert.equal(gate.id, 'gate');
-	assert.equal(gate.env.TS_OAUTH_CLIENT_ID, '${{ secrets.TS_OAUTH_CLIENT_ID }}');
-	assert.equal(gate.env.E2E_MINI_CASHIER_PASS, '${{ secrets.E2E_MINI_CASHIER_PASS }}');
-	assert.match(gate.run, /ready=false/);
-	assert.match(gate.run, /ready=true/);
-	assert.match(gate.run, /::notice::/);
-	for (const step of steps) {
-		assert.ok(step.if?.includes("steps.gate.outputs.ready == 'true'"), step.name);
+	assert.equal(workflow.jobs['e2e-web-mini'], undefined);
+	for (const jobName of ['e2e-setup', 'e2e']) {
+		const { steps } = workflow.jobs[jobName];
+		const tailnetSteps = steps.filter((step) => step.uses?.startsWith('tailscale/github-action@'));
+		assert.equal(tailnetSteps.length, 1, jobName);
+		const [tailnet] = tailnetSteps;
+		assert.match(tailnet.uses, /^tailscale\/github-action@[a-f0-9]{40}$/);
+		assert.equal(tailnet.if, "needs.changes.outputs.lane == 'next'");
+		assert.deepEqual(tailnet.with, {
+			'oauth-client-id': '${{ secrets.TS_OAUTH_CLIENT_ID }}',
+			'oauth-secret': '${{ secrets.TS_OAUTH_SECRET }}',
+			tags: 'tag:ci',
+		});
+		for (const [index, step] of steps.entries()) {
+			if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(tailnet) < index);
+		}
 	}
-	for (const step of mini.steps) {
-		assert.doesNotMatch(JSON.stringify(step), /E2E_AUTH_CACHE_KEY/);
+	const setup = workflow.jobs['e2e-setup'].steps.find((step) => step.id === 'setup');
+	const run = workflow.jobs.e2e.steps.find((step) => step.id === 'e2e-tests');
+	for (const step of [setup, run]) {
+		assert.equal(step.env.E2E_ALLOW_LOCAL_NETWORK,
+			"${{ needs.changes.outputs.lane == 'next' && '1' || '' }}");
+		assert.equal(step.env.E2E_CASHIER_PASS,
+			"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_CASHIER_PASS || secrets.E2E_CASHIER_PASS }}");
 	}
-
-	const tailnet = steps.find((step) => step.uses?.startsWith('tailscale/github-action@'));
-	assert.ok(tailnet, 'mini job must join the tailnet');
-	assert.match(tailnet.uses, /^tailscale\/github-action@[a-f0-9]{40}$/);
-	assert.deepEqual(tailnet.with, {
-		'oauth-client-id': '${{ secrets.TS_OAUTH_CLIENT_ID }}',
-		'oauth-secret': '${{ secrets.TS_OAUTH_SECRET }}',
-		tags: 'tag:ci',
-	});
-
-	const runStep = steps.find((step) => step.id === 'e2e-tests');
-	const originalRun = e2e.steps.find((step) => step.id === 'e2e-tests');
-	assert.ok(runStep, 'mini job must run the suite');
-	assert.equal(runStep.run, originalRun.run.replace(/^\s*#.*\n/gm, ''));
-	assert.deepEqual(runStep.env, {
-		...originalRun.env,
-		E2E_STORE_URL_PRO: 'https://claudes-mac-mini.tail6a20e3.ts.net:8443',
-		E2E_STORE_URL_FREE: 'https://claudes-mac-mini.tail6a20e3.ts.net:8443',
-		E2E_CASHIER_PASS: '${{ secrets.E2E_MINI_CASHIER_PASS }}',
-		E2E_PRODUCT_WRITER_USER: '${{ secrets.E2E_MINI_PRODUCT_WRITER_USER }}',
-		E2E_PRODUCT_WRITER_PASS: '${{ secrets.E2E_MINI_PRODUCT_WRITER_PASS }}',
-		E2E_ALLOW_LOCAL_NETWORK: '1',
-	});
-	// Only the tailnet store is a local address to Chrome; dev-next keeps the check.
-	assert.equal(originalRun.env.E2E_ALLOW_LOCAL_NETWORK, undefined);
-
-	const artifacts = steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
-	assert.deepEqual(artifacts.map((step) => step.with.name), [
-		'mini-blob-report-${{ matrix.shardIndex }}',
-		'mini-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}',
-	]);
-	assert.equal(artifacts[0].if, "always() && steps.gate.outputs.ready == 'true'");
-	assert.equal(artifacts[1].if, "failure() && steps.gate.outputs.ready == 'true'");
-	for (const artifact of artifacts) {
-		assert.doesNotMatch(artifact.with.name, /^blob-report-/);
-		assert.doesNotMatch(artifact.with.name, /^playwright-screenshots-/);
-	}
-	for (const [name, job] of Object.entries(workflow.jobs)) {
-		if (name === 'e2e-web-mini') continue;
-		assert.ok(![job.needs].flat().includes('e2e-web-mini'), name);
-	}
+	assert.equal(run.env.E2E_PRODUCT_WRITER_USER,
+		"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_USER || secrets.E2E_PRODUCT_WRITER_USER }}");
+	assert.equal(run.env.E2E_PRODUCT_WRITER_PASS,
+		"${{ needs.changes.outputs.lane == 'next' && secrets.E2E_MINI_PRODUCT_WRITER_PASS || secrets.E2E_PRODUCT_WRITER_PASS }}");
 });
 
 test('cold-start verifies the deployed main artifact and participates in the gate', () => {
@@ -1641,7 +1600,7 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	const run = setup.steps.find(({ id }) => id === 'setup');
 	assert.equal(run['timeout-minutes'], 20);
 	assert.ok(run['timeout-minutes'] < 30);
-	assert.match(setup['timeout-minutes'], /\|\| 30 \}\}$/);
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
 	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
 	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
@@ -1672,63 +1631,45 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	}
 });
 
-test('deploy.yml queues next-lane setup before every store request', () => {
+test('web E2E no longer queues for dev-next', () => {
 	const workflow = readWorkflow('deploy.yml');
+	for (const job of Object.values(workflow.jobs)) {
+		for (const step of job.steps ?? []) {
+			assert.notEqual(step.name, QUEUE_STEP_NAME);
+			assert.ok(!step.name?.includes('Refuse dev-next'));
+			assert.doesNotMatch(step.run ?? '', /wait-devnext-free/);
+		}
+	}
 	const setup = workflow.jobs['e2e-setup'];
-	const queue = findStep(workflow, 'e2e-setup', QUEUE_STEP_NAME);
-	assert.equal(queue.id, 'queue');
-	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
-	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
-	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
-	assert.equal(typeof queue['timeout-minutes'], 'number');
-	const queueIndex = setup.steps.indexOf(queue);
-	assert.ok(queueIndex < setup.steps.findIndex(({ id }) => id === 'setup'));
-	for (const [index, step] of setup.steps.entries()) {
-		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(queueIndex < index);
-	}
-	assert.equal(setup.permissions.actions, 'read');
-	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
-	assert.equal(setup.outputs.queue_attempt,
-		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}");
-	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
+	assert.equal(setup.outputs.queue, undefined);
+	assert.equal(setup.outputs.queue_attempt, undefined);
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
+	assert.equal(setup.permissions.actions, undefined);
 });
 
-test('deploy.yml shards refuse dev-next without queue admission as their second step', () => {
-	const workflow = readWorkflow('deploy.yml');
-	const steps = workflow.jobs.e2e.steps;
-	const refuse = findStep(workflow, 'e2e', '🚦 Refuse dev-next without the queue');
-	assert.equal(steps.indexOf(refuse), 1);
-	assert.equal(refuse.if,
-		"needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))");
-	assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.e2e-setup.outputs.queue_attempt }}');
-	assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
-	assert.match(refuse.run, /Re-run all jobs/);
-	assert.match(refuse.run, /exit 1/);
-	for (const [index, step] of steps.entries()) {
-		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(refuse) < index);
-	}
+test('lane-next runs queue for the mini store and wait out its nightly reset', () => {
+	const setup = readWorkflow('deploy.yml').jobs['e2e-setup'];
+	const index = setup.steps.findIndex(
+		({ name }) => name === "🌙 Wait out the mini store's nightly reset"
+	);
+	assert.ok(index >= 0, 'e2e-setup is missing the nightly-reset wait');
+	assert.equal(setup.steps[index].if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(setup.steps[index].run, 'node scripts/wait-mini-store-reset.mjs');
+	assert.equal(setup.steps[index + 1].name, '🔌 Join the tailnet');
+	assert.equal(setup['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 130 || 30 }}");
+
+	const shards = readWorkflow('deploy.yml').jobs.e2e;
+	const shardIndex = shards.steps.findIndex(
+		({ name }) => name === "🌙 Wait out the mini store's nightly reset"
+	);
+	assert.ok(shardIndex >= 0, 'e2e is missing the nightly-reset wait');
+	assert.equal(shards.steps[shardIndex].if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(shards.steps[shardIndex].run, 'node scripts/wait-mini-store-reset.mjs --shard');
+	assert.equal(shards.steps[shardIndex + 1].name, '🔌 Join the tailnet');
+	assert.equal(shards['timeout-minutes'], "${{ needs.changes.outputs.lane == 'next' && 140 || 60 }}");
 });
 
-for (const [runAttempt, queueAttempt, expected] of [[1, '1', false], [2, '1', true], [2, '2', false]]) {
-	test(`deploy.yml queue admission for attempt ${runAttempt} with admitted attempt ${queueAttempt}`, () => {
-		const refuse = findStep(readWorkflow('deploy.yml'), 'e2e', '🚦 Refuse dev-next without the queue');
-		const expression = refuse.if
-			.replace(/needs\.changes\.outputs\.lane/g, "'next'")
-			.replace(/needs\.e2e-setup\.outputs\.queue_attempt/g, JSON.stringify(queueAttempt))
-			.replace(/needs\.e2e-setup\.outputs\.queue/g, "'success'")
-			.replace(/format\('\{0\}', github\.run_attempt\)/g, JSON.stringify(String(runAttempt)));
-		assert.equal(evaluateGuard(expression, {}), expected);
-	});
-}
-
-test('the main lane and mini store are not queued', () => {
-	const deploy = readWorkflow('deploy.yml');
-	const queue = findStep(deploy, 'e2e-setup', QUEUE_STEP_NAME);
-	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
-	assert.doesNotMatch(queue.if, /\|\|/);
-	const mini = deploy.jobs['e2e-web-mini'];
-	assert.ok(!mini.steps.some(({ name }) => name === QUEUE_STEP_NAME));
-	assert.deepEqual(mini.needs, ['changes', 'deploy']);
+test('only native E2E queues for dev-next', () => {
 	const native = readWorkflow('e2e-native.yml');
 	assert.equal(findStep(native, 'build', QUEUE_STEP_NAME).if,
 		"env.E2E_STORE_URL == 'https://dev-next.wcpos.com'");
@@ -1781,7 +1722,7 @@ test('the dev-next queue never uses concurrency groups or serialises web shards'
 });
 
 test('no cancelling concurrency group spans the web and native workflows', () => {
-	for (const filename of QUEUE_WORKFLOWS) {
+	for (const filename of ['deploy.yml', 'e2e-native.yml']) {
 		const workflow = readWorkflow(filename);
 		const prefix = filename === 'deploy.yml' ? 'deploy-' : 'native-';
 		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
@@ -1796,9 +1737,8 @@ test('no cancelling concurrency group spans the web and native workflows', () =>
 	}
 });
 
-test('both workflows share the queue step name and workflow list', () => {
-	assert.deepEqual(QUEUE_WORKFLOWS, ['deploy.yml', 'e2e-native.yml']);
-	assert.equal(findStep(readWorkflow('deploy.yml'), 'e2e-setup', QUEUE_STEP_NAME).name, QUEUE_STEP_NAME);
+test('the queue step name and workflow list name only native E2E', () => {
+	assert.deepEqual(QUEUE_WORKFLOWS, ['e2e-native.yml']);
 	assert.equal(findStep(readWorkflow('e2e-native.yml'), 'build', QUEUE_STEP_NAME).name, QUEUE_STEP_NAME);
 });
 
@@ -1884,6 +1824,16 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
+	assert.ok(
+		workflow.concurrency.group.startsWith(
+			"${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && 'deploy-mini-store' || "
+		)
+	);
+	assert.ok(
+		workflow.concurrency['cancel-in-progress'].startsWith(
+			"${{ !(github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.skip_e2e != true && (inputs.quarantine_only || inputs.lane == 'next' || (inputs.lane != 'main' && github.ref_name == 'next')))) && "
+		)
+	);
 
 	// GitHub evaluates workflow concurrency and REST pagination; locally this
 	// test pins the declarative contract while hosted Actions exercises it.
@@ -2075,7 +2025,8 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
-	// may use dev-free + dev-pro and nothing else; next has only dev-next.
+	// may use dev-free + dev-pro and nothing else; next originally had only dev-next.
+	// Lane next moved to the mini store (2026-10-05).
 	// Pin the EXACT expressions, arm order included — hostname-presence checks
 	// would pass with the lanes swapped, silently gating each lane against the
 	// other's store (greptile catch on #1289). A third arm, EMPTY, is what a
@@ -2083,11 +2034,11 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	const lane = 'needs.changes.outputs.lane';
 	assert.equal(
 		runStep.env.E2E_STORE_URL_PRO,
-		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
+		`\${{ ${lane} == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
+		`\${{ ${lane} == 'next' && 'https://claudes-mac-mini.tail6a20e3.ts.net:8443' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
 	);
 });
 
