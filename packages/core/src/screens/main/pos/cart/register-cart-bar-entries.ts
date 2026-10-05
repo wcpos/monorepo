@@ -5,8 +5,11 @@ import { OpenOrderTabs } from './v2/tabs';
 
 import type { SlotEntryProps } from '../../../../extensions/slots';
 
-function OpenOrdersEntry({ data }: SlotEntryProps<'pos.cart.bar'>) {
-	return React.createElement(OpenOrderTabs, { position: useSlotValue(data).position });
+function OpenOrdersEntry({ data, api }: SlotEntryProps<'pos.cart.bar'>) {
+	return React.createElement(OpenOrderTabs, {
+		position: useSlotValue(data).position,
+		onCoverChange: api.setCartCovered,
+	});
 }
 
 registerSlotEntry({

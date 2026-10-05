@@ -39,7 +39,6 @@ import {
 import { CartTotalsChangedBanner } from './totals-changed-banner';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
-const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
 const LOADING_ROWS = (
 	<View testID="cart-column-loading" className="gap-2 p-2">
@@ -68,6 +67,14 @@ export function OpenOrders({
 	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
+	// The open-orders list slides over the cart. Covered, the cart leaves the tab order and
+	// the accessibility tree: a keyboard or screen-reader user must not reach a line, a total
+	// or the checkout button behind the list. The strip stays reachable to close it.
+	const [cartCovered, setCartCovered] = React.useState(false);
+	const barApi = React.useMemo<SlotContracts['pos.cart.bar']['api']>(
+		() => ({ setCartCovered }),
+		[]
+	);
 	// The rail's cashier sheet asks for the picker from outside this screen: the request is
 	// read as state and consumed when the picker binds.
 	const pickerRequested = useRegisterPickerRequested();
@@ -93,7 +100,7 @@ export function OpenOrders({
 		!sessionLoading &&
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
 		!(session && session.status !== 'open');
-	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={NO_API} data={view} /> : null;
+	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');
@@ -142,68 +149,76 @@ export function OpenOrders({
 				)}
 			{position === 'top' && cartBar}
 			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
-			<ErrorBoundary>
-				{bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
-					<RegisterPicker
-						onBound={() => {
-							setPickingRegister(false);
-							consumeRegisterPickerRequest();
-						}}
-					/>
-				) : sessionLoading ? (
-					LOADING_ROWS
-				) : sessionsOn && !session && bindingStatus === 'bound' ? (
-					<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
-				) : session && session.status !== 'open' ? (
-					<RegisterCount key={session.id} onClosed={setClosure} />
-				) : isColumn && receiptOrderUuid ? (
-					<React.Suspense fallback={LOADING_ROWS}>
-						<ReceiptLedger uuid={receiptOrderUuid} />
-					</React.Suspense>
-				) : isColumn && !isNewOrder && stage === 'checkout' ? (
-					<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
-				) : isNewOrder ? (
-					<View className="flex-1">
-						<ErrorBoundary>
-							<CartHeader />
-						</ErrorBoundary>
-						<View className="flex-1" />
-						{overdue && (
-							<Button
-								testID="checkout-close-register"
-								className="min-h-14"
-								onPress={() => setPanelOpen(true)}
-							>
-								{t('register.close_register')}
-							</Button>
-						)}
-					</View>
-				) : (
-					<View className="flex-1">
-						<ErrorBoundary>
-							<CartHeader />
-						</ErrorBoundary>
+			<View
+				testID="cart-column-body"
+				className="min-h-0 flex-1"
+				aria-hidden={cartCovered}
+				// `inert` is a web attribute (RN-web forwards it); native has only the a11y hide.
+				{...(cartCovered ? { inert: true } : {})}
+			>
+				<ErrorBoundary>
+					{bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
+						<RegisterPicker
+							onBound={() => {
+								setPickingRegister(false);
+								consumeRegisterPickerRequest();
+							}}
+						/>
+					) : sessionLoading ? (
+						LOADING_ROWS
+					) : sessionsOn && !session && bindingStatus === 'bound' ? (
+						<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
+					) : session && session.status !== 'open' ? (
+						<RegisterCount key={session.id} onClosed={setClosure} />
+					) : isColumn && receiptOrderUuid ? (
+						<React.Suspense fallback={LOADING_ROWS}>
+							<ReceiptLedger uuid={receiptOrderUuid} />
+						</React.Suspense>
+					) : isColumn && !isNewOrder && stage === 'checkout' ? (
+						<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
+					) : isNewOrder ? (
 						<View className="flex-1">
-							<View className="flex-1">
-								<ErrorBoundary>
-									<CartTable lastDraftOrderUuidRef={lastDraftOrderUuidRef} />
-								</ErrorBoundary>
-							</View>
 							<ErrorBoundary>
-								<CartTotalsChangedBanner />
+								<CartHeader />
 							</ErrorBoundary>
-							<ErrorBoundary>
-								<Totals />
-							</ErrorBoundary>
-							<CartFoot
-								onOpenRegister={() => setPickingRegister(true)}
-								onCloseRegister={() => setPanelOpen(true)}
-								onOpenSheet={() => setEditingOrder(currentOrderRecord)}
-							/>
+							<View className="flex-1" />
+							{overdue && (
+								<Button
+									testID="checkout-close-register"
+									className="min-h-14"
+									onPress={() => setPanelOpen(true)}
+								>
+									{t('register.close_register')}
+								</Button>
+							)}
 						</View>
-					</View>
-				)}
-			</ErrorBoundary>
+					) : (
+						<View className="flex-1">
+							<ErrorBoundary>
+								<CartHeader />
+							</ErrorBoundary>
+							<View className="flex-1">
+								<View className="flex-1">
+									<ErrorBoundary>
+										<CartTable lastDraftOrderUuidRef={lastDraftOrderUuidRef} />
+									</ErrorBoundary>
+								</View>
+								<ErrorBoundary>
+									<CartTotalsChangedBanner />
+								</ErrorBoundary>
+								<ErrorBoundary>
+									<Totals />
+								</ErrorBoundary>
+								<CartFoot
+									onOpenRegister={() => setPickingRegister(true)}
+									onCloseRegister={() => setPanelOpen(true)}
+									onOpenSheet={() => setEditingOrder(currentOrderRecord)}
+								/>
+							</View>
+						</View>
+					)}
+				</ErrorBoundary>
+			</View>
 			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
 			<OrderSheet
 				open={editingOrder !== null}

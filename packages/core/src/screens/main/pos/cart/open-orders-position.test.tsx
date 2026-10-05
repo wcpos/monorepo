@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrders } from './index';
 
@@ -45,7 +45,11 @@ jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <di
 jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
 jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));
 jest.mock('./v2/order-sheet', () => ({ OrderSheet: () => null }));
-jest.mock('./v2/tabs', () => ({ OpenOrderTabs: () => <div data-testid="open-orders" /> }));
+jest.mock('./v2/tabs', () => ({
+	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => void }) => (
+		<button data-testid="open-orders" onClick={() => onCoverChange(true)} />
+	),
+}));
 
 // Keep the slot and its registration real; replace native chrome and data-heavy children.
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -148,4 +152,18 @@ it('shows neither the Open register card nor the cart until the session has load
 	} finally {
 		mockSession = { session: null, sessionsOn: false };
 	}
+});
+
+it('takes the covered cart out of the tab order and the accessibility tree while the list is open', () => {
+	mockIsNew = false;
+	mockStage = 'cart';
+	render(<OpenOrders isColumn />);
+	const body = screen.getByTestId('cart-column-body');
+	expect(body.getAttribute('aria-hidden')).not.toBe('true');
+	expect(body.hasAttribute('inert')).toBe(false);
+	fireEvent.click(screen.getByTestId('open-orders'));
+	expect(body.getAttribute('aria-hidden')).toBe('true');
+	expect(body.hasAttribute('inert')).toBe(true);
+	// The strip itself stays reachable: it is how the list is closed.
+	expect(body.contains(screen.getByTestId('open-orders'))).toBe(false);
 });

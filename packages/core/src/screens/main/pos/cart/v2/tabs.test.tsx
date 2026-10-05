@@ -50,7 +50,25 @@ const mockRecord = (uuid: string, date: string) => ({
 	uuid,
 	payload: { date_created_gmt: date, total: '10.00', refunds: [], meta_data: [] },
 });
-const mockOpen = [{ id: 'open', record: mockRecord('open', '2026-09-07T12:00:00') }];
+let mockOpen = [{ id: 'open', record: mockRecord('open', '2026-09-07T12:00:00') }];
+const mockTimings: number[] = [];
+// The count badge's beat, observed: the inert mock from jest.config says nothing about motion.
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual('react-native').View },
+	ReduceMotion: { System: 'system' },
+	Easing: { bezier: () => 'ease', linear: 'linear' },
+	Extrapolation: { CLAMP: 'clamp' },
+	interpolate: (value: number) => value,
+	useAnimatedStyle: () => ({}),
+	useSharedValue: (value: number) => jest.requireActual('react').useRef({ value }).current,
+	withSequence: (...steps: number[]) => steps.at(-1),
+	withSpring: (value: number) => value,
+	withTiming: (value: number, config: { duration: number }) => {
+		mockTimings.push(config.duration);
+		return value;
+	},
+}));
 const mockReceipts = {
 	early: mockRecord('early', '2026-09-07T10:00:00'),
 	late: mockRecord('late', '2026-09-07T14:00:00'),
@@ -58,6 +76,7 @@ const mockReceipts = {
 const mockPending = new Promise(() => {});
 let mockSuspended: string | null = null;
 let mockPhone = false;
+let mockScope = '7:2:r1';
 let mockCurrent: ReturnType<typeof mockRecord> & { isNew?: boolean } = mockOpen[0].record;
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
@@ -66,6 +85,7 @@ jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
 		currentOrderRecord: mockCurrent,
 		openOrders: mockOpen,
+		openOrdersScope: mockScope,
 		setCurrentOrderID: mockSetOrder,
 	}),
 }));
@@ -265,4 +285,33 @@ it('opens the list from the strip, and the count button or a tab closes it again
 	fireEvent.click(screen.getByTestId('open-orders-count'));
 	fireEvent.click(screen.getByTestId('new-order-tab'));
 	expect(cover().open).toBe('false');
+});
+
+it('tells the cart column when the list covers it, and when the strip goes away', () => {
+	const onCoverChange = jest.fn();
+	const { unmount } = render(<OpenOrderTabs onCoverChange={onCoverChange} />);
+	expect(onCoverChange).toHaveBeenLastCalledWith(false);
+	fireEvent.click(screen.getByTestId('open-orders-count'));
+	expect(onCoverChange).toHaveBeenLastCalledWith(true);
+	unmount();
+	expect(onCoverChange).toHaveBeenLastCalledWith(false);
+});
+
+it('the count badge beats for a new open order, not for another scope arriving', () => {
+	const open = mockOpen;
+	try {
+		const { rerender } = render(<OpenOrderTabs />);
+		mockTimings.length = 0;
+		// Another store, register or cashier: a different count, not a changed one.
+		mockScope = '7:3:r2';
+		mockOpen = [...open, { id: 'theirs', record: mockRecord('theirs', '2026-09-07T13:00:00') }];
+		rerender(<OpenOrderTabs />);
+		expect(mockTimings).toHaveLength(0);
+		mockOpen = [...mockOpen, { id: 'more', record: mockRecord('more', '2026-09-07T13:30:00') }];
+		rerender(<OpenOrderTabs />);
+		expect(mockTimings.length).toBeGreaterThan(0);
+	} finally {
+		mockOpen = open;
+		mockScope = '7:2:r1';
+	}
 });

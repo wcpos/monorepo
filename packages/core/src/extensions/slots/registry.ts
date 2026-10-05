@@ -21,7 +21,10 @@ export const SLOT_API_VERSION = 1;
 export interface SlotContracts {
 	'pos.cart.bar': {
 		value: { position: 'top' | 'bottom'; isColumn: boolean };
-		api: Record<string, never>;
+		api: {
+			/** An entry that covers the cart says so, so the host can take the cart out of reach. */
+			setCartCovered(covered: boolean): void;
+		};
 	};
 	'pos.columns.panel': {
 		value: { side: 'left' | 'right'; isColumn: boolean };

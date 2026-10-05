@@ -117,6 +117,7 @@ export default function POSLayout() {
 				<Suspense>
 					<CurrentOrderProvider
 						resource={resource}
+						scope={`${cashierID}:${storeID}:${registerId}`}
 						defaultCustomerResource={defaultCustomerResource}
 						currentOrderUUID={orderId}
 					>
