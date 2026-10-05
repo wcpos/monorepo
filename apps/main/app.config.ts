@@ -184,6 +184,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
 			'./plugins/with-sumup-reader',
+			// SPIKE: Square Mobile Payments SDK beside Stripe and SumUp. Not for merge.
+			'./plugins/with-square-reader',
 			[
 				'@config-plugins/react-native-webrtc',
 				{
