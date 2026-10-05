@@ -182,9 +182,43 @@ it.each(cases)('renders the terminal state %j', (changes, status, present) => {
 		expect(Boolean(button)).toBe(present.includes(action));
 		if (button) expect((button as HTMLButtonElement).disabled).toBe(changes.phase === 'cancelling');
 	}
-	if (changes.unstable)
-		expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain(
-			'Connection unstable — still waiting'
+});
+// The wobble is the latest line under the stepper, not a second sentence under the badge.
+it('reads the connection warning as the latest log line', () => {
+	renderLeg({
+		unstable: true,
+		clientEvents: [{ t: '2026-10-05T13:15:12Z', level: 'warning', message: 'Connection unstable' }],
+	});
+	expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain(
+		'Connection unstable, still trying'
+	);
+	expect(screen.getByTestId('checkout-terminal-leg').textContent).not.toContain('still waiting');
+});
+// The stepper is the mockup's horizontal one: the end of a leg marks the node it stopped on
+// and puts a mark the size of the ring where the ring was (roadmap docs/prototypes/2026-10-05).
+it.each([
+	['failed', 'failed', 'Declined or cancelled on the terminal'],
+	['voided', 'ended', 'Payment cancelled'],
+	['released', 'ended', 'Payment released'],
+] as const)('marks a %s leg on the node and in the ring slot', (outcome, mark, status) => {
+	const flow = renderLeg({
+		row: {
+			...row,
+			failure_reason: 'declined_or_cancelled',
+			events: [{ t: '2026-10-05T13:14:54Z', level: 'info', message: 'Reader action cancelled' }],
+		},
+	});
+	flow.update({ phase: 'final', outcome });
+	expect(screen.getByTestId(`checkout-terminal-mark-${mark}`)).not.toBeNull();
+	expect(screen.queryByTestId('checkout-terminal-ring')).toBeNull();
+	expect(screen.getByTestId('checkout-terminal-status').textContent).toContain(status);
+	const node = screen.getByTestId('checkout-terminal-step-1');
+	expect(
+		node.className.includes(mark === 'failed' ? 'bg-destructive' : 'bg-muted-foreground')
+	).toBe(true);
+	if (outcome === 'failed')
+		expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain(
+			'Declined or cancelled on the terminal'
 		);
 });
 it('renders retained partial capture finishing errors without offering recollection', () => {
@@ -216,9 +250,11 @@ it('merges logs oldest first and copies the displayed lines', async () => {
 	});
 	const log = screen.getByTestId('checkout-terminal-log');
 	expect(log.textContent?.indexOf('First')).toBeLessThan(log.textContent!.indexOf('Last'));
+	// The last line is what the cashier reads under the stepper.
+	expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain('Last');
 	fireEvent.click(screen.getByTestId('checkout-terminal-log-copy'));
 	expect(writeText).toHaveBeenCalledWith(
-		expect.stringMatching(/\d{2}:\d{2}:01 · First\n\d{2}:\d{2}:02 · Last/)
+		expect.stringMatching(/\d{2}:\d{2}:01 · First\n\d{2}:\d{2}:02 · Last\nReader: reader/)
 	);
 	fireEvent.click(screen.getByTestId('checkout-terminal-cancel'));
 	expect(flow.cancelTerminalLeg).toHaveBeenCalledTimes(1);
@@ -261,8 +297,9 @@ it.each([
 	for (let index = 0; index < 4; index++) {
 		const dot = screen.getByTestId(`checkout-terminal-step-${index}`);
 		expect(dot.getAttribute('aria-selected')).toBe(String(index === current));
-		// The timeline marks every reached step, including the current one, green.
-		expect(dot.className.includes('bg-success')).toBe(index <= current);
+		// Passed steps are green discs; the live one is the ringed white disc.
+		expect(dot.className.includes('bg-success')).toBe(index < current);
+		expect(dot.className.includes('border-primary')).toBe(index === current);
 	}
 });
 
@@ -347,7 +384,7 @@ it('reads device connection and battery from the driver status stream', async ()
 			{ tiles: [tile(deviceMethod)] }
 		);
 	});
-	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain('Connected82%');
+	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain('Connected · 82%');
 	await act(async () => {
 		await driver.disconnect!();
 	});

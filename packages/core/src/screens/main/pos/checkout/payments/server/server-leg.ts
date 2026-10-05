@@ -12,6 +12,9 @@ const POLL_CADENCE_MS = 2000; // Wait after each response, not on a fixed interv
 const BACKOFF_MS = [2000, 4000, 8000, 15000]; // Bound transport pressure without giving up.
 const UNSTABLE_AFTER = 3; // Surface sustained connection loss to the cashier.
 const DEADLINE_MS = 300_000; // Check finality before requesting cancellation at five minutes.
+// A 4xx on intent that is about the request, not the session: 401/403/407/429 (an
+// expired token, a proxy, rate limiting) stay transport and are retried.
+const INTENT_REFUSAL_STATUSES = new Set([400, 404, 405, 409, 410, 413, 415, 422]);
 export interface ServerLegResponse {
 	payment: PaymentRow;
 	order?: OrderPaymentSummary;
@@ -269,8 +272,16 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// Only the contract's own codes are definitive. An auth or gateway 4xx (expired
 		// JWT, a proxy answering for the site) says nothing about the leg, which is
 		// still live on the server, so it is retried like a dropped connection.
+		// An intent the store or the provider REFUSED is the exception: no leg exists to
+		// keep polling for, and the same request will be refused the same way (a currency
+		// the merchant cannot take, a payment the ledger rejects). It lands as failed with
+		// the message, so the cashier reads the reason instead of "Connection unstable".
+		const refusedIntent =
+			route === 'intent' &&
+			response?.status !== undefined &&
+			INTENT_REFUSAL_STATUSES.has(response.status);
 		if (
-			code?.startsWith('wcpos_') &&
+			(code?.startsWith('wcpos_') || refusedIntent) &&
 			response?.status !== undefined &&
 			response.status >= 400 &&
 			response.status < 500
@@ -283,7 +294,9 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 					: {
 							...state.row,
 							status: 'failed' as const,
-							failure_reason: code === 'wcpos_payment_not_found' ? 'not_found' : code,
+							// A refusal without a code (a proxy's bare 4xx) still names why the leg ended.
+							failure_reason:
+								code === 'wcpos_payment_not_found' ? 'not_found' : (code ?? 'refused'),
 						};
 			await applyResponse({ payment: row, order: body?.data?.order }, seq);
 			return;

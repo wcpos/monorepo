@@ -165,20 +165,21 @@ function makeFlow(count = 1): TenderFlow {
 		cancelPayment: jest.fn(),
 	};
 }
-it.each([0, 1])(
-	'shows inert known tiles or four fallback skeletons while saving (%s tiles)',
-	(count) => {
-		const flow = makeFlow(count);
-		render(<TenderPane flow={flow} format={String} compact />);
-		if (count) {
-			expect(screen.getByTestId('checkout-tile-pos_cash').hasAttribute('disabled')).toBe(true);
-			expect(screen.getByTestId('checkout-tile-saving').textContent).toBe('Saving order…');
-			expect(screen.queryByTestId('checkout-tile-skeleton')).toBeNull();
-		} else expect(screen.getAllByTestId('checkout-tile-skeleton')).toHaveLength(4);
-		expect(screen.queryByTestId('checkout-keypad')).toBeNull();
-		expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
-	}
-);
+// The pane while saving is the keypad it is about to be, inert: the save settling must not
+// swap one layout for another under the cashier's eyes.
+it.each([0, 1])('draws the inert keypad while saving (%s tiles)', (count) => {
+	const flow = makeFlow(count);
+	render(<TenderPane flow={flow} format={String} compact />);
+	expect(screen.getByTestId('checkout-keypad')).not.toBeNull();
+	expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+	expect(screen.getByTestId('checkout-commit').textContent).toBe('Saving order…');
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	if (count) {
+		expect(screen.getByTestId('checkout-method-pos_cash').hasAttribute('disabled')).toBe(true);
+		expect(screen.queryByTestId('checkout-tile-skeleton')).toBeNull();
+	} else expect(screen.getAllByTestId('checkout-tile-skeleton')).toHaveLength(4);
+	expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
+});
 
 it('shows one slow notice after four seconds without settling the save', () => {
 	jest.useFakeTimers();
@@ -189,7 +190,7 @@ it('shows one slow notice after four seconds without settling the save', () => {
 		expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
 		act(() => jest.advanceTimersByTime(1));
 		expect(screen.getAllByTestId('checkout-save-slow')).toHaveLength(1);
-		expect(screen.getByTestId('checkout-tile-pos_cash').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('checkout-method-pos_cash').hasAttribute('disabled')).toBe(true);
 		rerender(<TenderPane flow={{ ...flow, saveState: null }} format={String} />);
 		rerender(<TenderPane flow={flow} format={String} />);
 		expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
@@ -759,9 +760,9 @@ it.each([
 				<TenderPane flow={{ ...flow, saveState: saving ? flow.saveState : null }} format={String} />
 			</DeviceScope>
 		);
-		const tiles = screen.getAllByTestId(
-			saving ? /^checkout-tile-method-/ : /^checkout-method-method-/
-		);
+		// Saving or not, the method row is the same pills: the save settling moves nothing.
+		const tiles = screen.getAllByTestId(/^checkout-method-method-/);
+		expect(screen.getByTestId('checkout-commit').textContent === 'Saving order…').toBe(saving);
 		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
 		expect(rows).toHaveLength(phone ? 3 : 2);
 		for (const row of rows) {

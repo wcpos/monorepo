@@ -11,7 +11,6 @@ import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
@@ -19,7 +18,7 @@ import { fromMinor } from '@wcpos/order-math';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { deviceTransports, selectableReaders } from './tiles';
-import { disabledReasonKey, kindLabelKey } from './labels';
+import { disabledReasonKey } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
@@ -53,6 +52,10 @@ interface Props {
 	format: (minor: number) => string;
 	/** Compact host layout. */
 	compact?: boolean;
+	/** The order is still saving: everything is drawn, nothing can be pressed. */
+	saving?: boolean;
+	/** The save has taken long enough to say so. */
+	slow?: boolean;
 }
 
 export function TenderPane({ flow, format, compact }: Props) {
@@ -66,40 +69,11 @@ export function TenderPane({ flow, format, compact }: Props) {
 	if (flow.saveState?.kind === 'rejected') {
 		return <RefusedPane rejection={flow.saveState} />;
 	}
+	// While the order saves, the pane is the keypad it is about to be — amount, methods and keys
+	// in place, inert — so the save settling changes nothing the cashier is looking at. A till
+	// that has never fetched its methods gets tile-shaped slots in the method row, nothing else.
 	if (flow.saveState?.kind === 'saving') {
-		return (
-			<VStack space="md" className="bg-card flex-1">
-				<MethodRows>
-					{flow.tiles.length > 0
-						? flow.tiles.map((tile) => (
-								<PaymentTile
-									key={tile.method.id}
-									tile={tile}
-									selected={flow.state.methodId === tile.method.id}
-									compact={compact}
-									saving
-									onPress={() => flow.pickMethod(tile.method.id)}
-								/>
-							))
-						: Array.from({ length: 4 }, (_, index) => (
-								<View
-									key={index}
-									testID="checkout-tile-skeleton"
-									className="bg-muted h-tile min-w-0 flex-1 rounded-lg"
-								/>
-							))}
-				</MethodRows>
-				{/* Each real tile already says it; the line below is for the skeleton fallback only. */}
-				{flow.tiles.length === 0 ? (
-					<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
-				) : null}
-				{slow ? (
-					<Text testID="checkout-save-slow" className="text-warning text-sm">
-						{t('pos_checkout.store_not_answering')}
-					</Text>
-				) : null}
-			</VStack>
-		);
+		return <TenderKeypad flow={flow} format={format} compact={compact} saving slow={slow} />;
 	}
 
 	if (flow.tiles.length === 0) {
@@ -164,74 +138,6 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	);
 }
 
-/**
- * A method the app cannot drive is shown disabled with the reason, never hidden
- * (payments contract §13) — a cashier looking for a gateway they know is enabled
- * on the store needs to be told why it is not on this till.
- */
-function PaymentTile({
-	tile,
-	selected,
-	saving,
-	onPress,
-}: {
-	tile: TenderTile;
-	selected: boolean;
-	saving?: boolean;
-	compact?: boolean;
-	onPress: () => void;
-}) {
-	const t = useT();
-	const canChooseOffline =
-		tile.reason === 'offline' &&
-		tile.method.capture.mode === 'device' &&
-		deviceTransports(tile.method).some((item) => item.offline === 'queue');
-
-	return (
-		<Button
-			testID={`checkout-tile-${tile.method.id}`}
-			variant={selected ? 'outline-primary' : 'outline'}
-			disabled={saving || (tile.disabled && !canChooseOffline)}
-			onPress={onPress}
-			className={`h-tile border-border bg-background min-w-0 flex-1 items-stretch rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${saving || (tile.disabled && !canChooseOffline) ? 'opacity-45' : ''}`}
-		>
-			<VStack space="xs" className="flex-1">
-				<HStack className="items-center justify-between gap-2">
-					<Text className="text-muted-foreground text-xs tracking-wider uppercase">
-						{t(kindLabelKey(tile.method.kind))}
-					</Text>
-					{tile.settlesLater ? (
-						<StatusBadge label={t('pos_checkout.settles_later')} variant="muted" />
-					) : null}
-					{tile.worksOffline ? (
-						<StatusBadge label={t('pos_checkout.works_offline')} variant="muted" />
-					) : null}
-				</HStack>
-				<Text className="text-base font-semibold" decodeHtml>
-					{tile.method.title}
-				</Text>
-				{saving ? (
-					<Text testID="checkout-tile-saving" className="text-muted-foreground text-xs">
-						{t('pos_checkout.saving_order')}
-					</Text>
-				) : tile.reason ? (
-					<Text className="text-warning text-xs">
-						{t(
-							canChooseOffline
-								? 'pos_checkout.choose_offline_transport'
-								: disabledReasonKey(tile.reason),
-							{
-								title: tile.method.title,
-								...(typeof tile.reason === 'object' ? tile.reason : {}),
-							}
-						)}
-					</Text>
-				) : null}
-			</VStack>
-		</Button>
-	);
-}
-
 const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
 	...['123', '456', '789'].map((row) =>
 		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
@@ -248,8 +154,9 @@ const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
  * balance and the first keypress starts a fresh number. There is no decimal key
  * because there is no decimal to get wrong.
  */
-function TenderKeypad({ flow, format }: Props) {
+function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const t = useT();
+	const busy = flow.busy || saving;
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
 	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
@@ -298,9 +205,9 @@ function TenderKeypad({ flow, format }: Props) {
 			<Button
 				key={tile.method.id}
 				variant="outline"
-				className={`h-tile border-border bg-background min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${flow.busy ? 'opacity-45' : ''}`}
+				className={`h-tile border-border bg-background min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${busy ? 'opacity-45' : ''}`}
 				testID={`checkout-method-${tile.method.id}`}
-				disabled={flow.busy}
+				disabled={busy}
 				onPress={() => {
 					setChoosingReader(null);
 					flow.pickMethod(tile.method.id);
@@ -360,7 +267,7 @@ function TenderKeypad({ flow, format }: Props) {
 									? 'pos_checkout.remaining'
 									: 'pos_checkout.to_pay'
 							)}{' '}
-					<Text testID="checkout-balance" className={plan ? 'hidden' : 'text-amt tabular-nums'}>
+					<Text testID="checkout-balance" className={plan ? 'hidden' : 'tabular-nums'}>
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
@@ -369,7 +276,7 @@ function TenderKeypad({ flow, format }: Props) {
 						on={!!plan}
 						label={t('pos_checkout.split')}
 						testID="checkout-split-chip"
-						disabled={flow.busy}
+						disabled={busy}
 						onPress={() =>
 							flow.dispatch({
 								type: 'open-split',
@@ -446,7 +353,22 @@ function TenderKeypad({ flow, format }: Props) {
 				</View>
 			) : null}
 
-			<MethodRows>{pills}</MethodRows>
+			<MethodRows>
+				{pills.length > 0 || !saving
+					? pills
+					: Array.from({ length: 4 }, (_, index) => (
+							<View
+								key={index}
+								testID="checkout-tile-skeleton"
+								className="bg-muted h-tile min-w-0 flex-1 rounded-lg"
+							/>
+						))}
+			</MethodRows>
+			{slow ? (
+				<Text testID="checkout-save-slow" className="text-warning text-sm">
+					{t('pos_checkout.store_not_answering')}
+				</Text>
+			) : null}
 			{unavailable.length > 0 ? (
 				<VStack space="xs" className="w-full max-w-md">
 					<Button
@@ -497,7 +419,7 @@ function TenderKeypad({ flow, format }: Props) {
 					transport={flow.deviceTransport ?? null}
 					pickTransport={flow.pickTransport}
 					online={flow.online}
-					disabled={flow.busy || (Boolean(reason) && reason !== 'offline')}
+					disabled={busy || (Boolean(reason) && reason !== 'offline')}
 				/>
 			) : null}
 			{server ? (
@@ -518,7 +440,7 @@ function TenderKeypad({ flow, format }: Props) {
 									variant="secondary"
 									size="sm"
 									testID="checkout-reader-change"
-									disabled={flow.busy}
+									disabled={busy}
 									onPress={() => setChoosingReader(method?.id ?? null)}
 								>
 									<ButtonText>{t('pos_checkout.change_reader')}</ButtonText>
@@ -533,7 +455,7 @@ function TenderKeypad({ flow, format }: Props) {
 										size="sm"
 										variant={flow.state.readerId === reader.id ? 'default' : 'secondary'}
 										testID={`checkout-reader-${reader.id}`}
-										disabled={flow.busy || reader.inUseBy !== null}
+										disabled={busy || reader.inUseBy !== null}
 										onPress={() => flow.pickReader(reader.id)}
 									>
 										<ButtonText>{reader.label}</ButtonText>
@@ -565,7 +487,7 @@ function TenderKeypad({ flow, format }: Props) {
 							key={minor}
 							label={format(minor)}
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
-							disabled={flow.busy}
+							disabled={busy}
 							onPress={() => flow.dispatch({ type: 'set-entry', minor })}
 						/>
 					))}
@@ -577,14 +499,14 @@ function TenderKeypad({ flow, format }: Props) {
 							{ amount: format(due) }
 						)}
 						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
-						disabled={flow.busy}
+						disabled={busy}
 						onPress={() => flow.dispatch({ type: 'set-entry', minor: due })}
 					/>
 				</View>
 			) : null}
 
 			<Keypad
-				rows={KEYPAD_ROWS.map((row) => row.map((key) => ({ ...key, disabled: flow.busy })))}
+				rows={KEYPAD_ROWS.map((row) => row.map((key) => ({ ...key, disabled: busy })))}
 				onPress={(value) => flow.dispatch({ type: 'key', key: value as TenderKey })}
 				fit={shrink ? 'shrink' : 'tile'}
 				testID="checkout-keypad"
@@ -597,10 +519,10 @@ function TenderKeypad({ flow, format }: Props) {
 					size="lg"
 					className="w-full"
 					testID="checkout-commit"
-					loading={flow.busy}
+					loading={busy}
 					disabled={
 						!method ||
-						flow.busy ||
+						busy ||
 						flow.entryAppliedMinor <= 0 ||
 						needsReader ||
 						Boolean(reason) ||
@@ -608,7 +530,9 @@ function TenderKeypad({ flow, format }: Props) {
 					}
 					onPress={() => void flow.takeTender()}
 				>
-					<ButtonText decodeHtml>{commit}</ButtonText>
+					<ButtonText decodeHtml>
+						{saving ? t('pos_checkout.saving_order_commit') : commit}
+					</ButtonText>
 				</Button>
 			</View>
 		</ScrollView>
