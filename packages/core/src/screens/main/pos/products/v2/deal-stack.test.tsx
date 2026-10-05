@@ -5,7 +5,12 @@ import type { ViewProps } from 'react-native';
 import { act, render, screen } from '@testing-library/react';
 
 type Style = { opacity?: number; transform?: Record<string, number>[] };
-type TimingCall = { toValue: number; duration: number; done?: (finished: boolean) => void };
+type TimingCall = {
+	toValue: number;
+	duration: number;
+	easing?: unknown;
+	done?: (finished: boolean) => void;
+};
 const mockTimings: TimingCall[] = [];
 const mockDelays: number[] = [];
 const mockShared: { value: number }[] = [];
@@ -72,7 +77,8 @@ jest.mock('react-native-reanimated', () => {
 				);
 			},
 		},
-		Easing: { bezier: () => 'ease' },
+		// A curve is its points, so a test can tell the motion library's easings apart.
+		Easing: { bezier: (...points: number[]) => points.join(',') },
 		ReduceMotion: { System: 'system' },
 		cancelAnimation: (shared: { value: number }) => {
 			mockCancelled.push(shared);
@@ -89,17 +95,17 @@ jest.mock('react-native-reanimated', () => {
 		},
 		withTiming: (
 			toValue: number,
-			config: { duration: number },
+			config: { duration: number; easing?: unknown },
 			done?: (finished: boolean) => void
 		) => {
-			mockTimings.push({ toValue, duration: config.duration, done });
+			mockTimings.push({ toValue, duration: config.duration, easing: config.easing, done });
 			return toValue;
 		},
 	};
 });
 
 /* eslint-disable import/first */
-import { BEATS, PANE } from '@wcpos/components/lib/motion';
+import { BEATS, EASE, EASE_EXIT, PANE } from '@wcpos/components/lib/motion';
 
 import {
 	DealCell,
@@ -217,8 +223,8 @@ it('shows only the root at rest and deals nothing on mount', () => {
 	render(<Stage detail={null} />);
 	expect(screen.queryByTestId('deal')).toBeNull();
 	expect(screen.getByTestId('lifted').textContent).toBe('null');
-	// The only timing is the no-op settle to the resting value.
-	expect(mockTimings.map((call) => call.toValue)).toEqual([0]);
+	// The only timings are the no-op settles to the resting values: furniture away, products shown.
+	expect(mockTimings.map((call) => call.toValue)).toEqual([0, 1]);
 });
 
 it('lays the detail out unseen, then deals from the tapped tile once both frames are known', () => {
@@ -230,7 +236,9 @@ it('lays the detail out unseen, then deals from the tapped tile once both frames
 		dealt: false,
 		origin: { x: TILE.x - STAGE.x, y: TILE.y - STAGE.y, width: 92, height: 150 },
 	});
-	expect(mockTimings.some((call) => call.toValue === 1)).toBe(false);
+	// Nothing has set off: no furniture deal (the one `1` with a callback) and no products fade.
+	expect(mockTimings.some((call) => call.toValue === 1 && call.done)).toBe(false);
+	expect(mockTimings.some((call) => call.toValue === 0 && !call.done)).toBe(false);
 	// The tapped tile steps aside for its copy as soon as the copy can stand on it.
 	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
 
@@ -249,8 +257,9 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	const { rerender } = render(<Stage detail={null} scroll={scroll} />);
 	rerender(<Stage detail="Hoodie" scroll={scroll} />);
 	layOut();
-	const [furniture, ...cells] = mockShared;
+	const [furniture, products, ...cells] = mockShared;
 	expect(furniture.value).toBe(1);
+	expect(products.value).toBe(0);
 
 	// Undealt: slot 0 sits on the tile's frame. Its own slot is the stage's first cell, below the crumb.
 	cells.forEach((cell) => (cell.value = 0));
@@ -298,8 +307,13 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	expect(mockDelays.slice(-11)).toEqual(
 		Array.from({ length: 11 }, (_, turn) => Math.min(turn, cap - 1) * step)
 	);
+	// The products leave on the furniture's clock; then the parent walks and the tiles deal.
 	const out = mockTimings.filter((call) => !call.done).map((call) => call.duration);
-	expect(out).toEqual([PANE, ...Array.from({ length: 11 }, () => duration)]);
+	expect(out).toEqual([
+		BEATS.oldTiles.duration,
+		PANE,
+		...Array.from({ length: 11 }, () => duration),
+	]);
 	// Nothing on the way out takes longer than the 400 ms the cashier will wait.
 	expect((cap - 1) * step + duration).toBeLessThanOrEqual(400);
 
@@ -351,11 +365,12 @@ it('a return interrupted by another tile stops the return clock, keeping the new
 	rerender(<Stage detail="Hoodie" />);
 	layOut();
 	rerender(<Stage detail={null} />);
-	const [furniture] = mockShared;
+	const [furniture, under] = mockShared;
 	mockCancelled.length = 0;
 	rerender(<Stage detail="Tee" />);
 	// Hoodie's return would have cleared the stage when it ran out, measurement and all.
 	expect(mockCancelled).toContain(furniture);
+	expect(mockCancelled).toContain(under);
 	// A cancelled return reports `finished: false` and leaves the new deal alone.
 	finish(0, false);
 	expect(deal()).toMatchObject({
@@ -419,14 +434,34 @@ it('hides a gathering grid from the accessibility tree and gives focus back to t
 	expect(document.activeElement).toBe(screen.getByTestId('search'));
 });
 
-it('fades the furniture with the products, clamped', () => {
+it('fades the furniture and the products on their own values, clamped', () => {
 	const { rerender } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);
-	const [furniture] = mockShared;
+	const [furniture, under] = mockShared;
 	furniture.value = -0.1;
 	expect(styleOf('furniture').opacity).toBe(0);
-	expect(styleOf('lifted').opacity).toBe(1);
 	furniture.value = 1.1;
 	expect(styleOf('furniture').opacity).toBe(1);
+	under.value = 1.1;
+	expect(styleOf('lifted').opacity).toBe(1);
+	under.value = -0.1;
 	expect(styleOf('lifted').opacity).toBe(0);
+});
+
+it('brings the products back over the whole return, accelerating, so they stay dim while the tiles gather', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	mockTimings.length = 0;
+	rerender(<Stage detail={null} />);
+	const back = mockTimings.find((call) => call.toValue === 1 && !call.done);
+	// The parent's clock, not the furniture's shorter one, and an accelerating curve: at the
+	// last gathered tile (210 ms of 280) the products are about two thirds in, not full.
+	expect(back).toMatchObject({ duration: PANE, easing: EASE_EXIT });
+	expect(back!.easing).not.toBe(EASE);
+	// The furniture still leaves on the parent's clock, decelerating, and clears the stage.
+	expect(mockTimings.find((call) => call.toValue === 0 && call.done)).toMatchObject({
+		duration: PANE,
+		easing: EASE,
+	});
 });

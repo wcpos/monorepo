@@ -93,6 +93,11 @@ export function DealStack<T>({
 }: DealStackProps<T>) {
 	const stage = React.useRef<ViewInstance>(null);
 	const furniture = useSharedValue(0);
+	// The products' own opacity. Going out they leave with the furniture's clock; coming back
+	// they take the parent's whole walk, on an accelerating curve, so they are still dim while
+	// the variations gather (the gaps between gathering tiles showed them at once, which
+	// read as a flash) and reach full on the frame the parent lands (owner, 2026-10-05).
+	const under = useSharedValue(1);
 	const [stageWidth, setStageWidth] = React.useState(0);
 	// The detail on stage outlives `detail` by one return, so its tiles can travel home.
 	const [staged, setStaged] = React.useState<T | null>(null);
@@ -164,11 +169,13 @@ export function DealStack<T>({
 				'worklet';
 				if (finished) scheduleOnRN(setStaged, null);
 			});
+			under.value = withTiming(1, { duration: PANE, easing: EASE_EXIT, ...REDUCE });
 			return;
 		}
 		// A tap during the return keeps the stage: the return's clock would otherwise clear the
 		// detail when it ran out, taking the new tile's measurement with it.
 		cancelAnimation(furniture);
+		cancelAnimation(under);
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
@@ -182,9 +189,10 @@ export function DealStack<T>({
 					if (finished) scheduleOnRN(setSettled, true);
 				}
 			);
+			under.value = withTiming(0, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE });
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [open, armed, furniture]);
+	}, [open, armed, furniture, under]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
@@ -201,7 +209,7 @@ export function DealStack<T>({
 	// Clamped for the reason `PaneStack` clamps: a first frame stamped before the animation's
 	// start asks the easing for a negative time.
 	const rootStyle = useAnimatedStyle(() => ({
-		opacity: 1 - Math.min(1, Math.max(0, furniture.value)),
+		opacity: Math.min(1, Math.max(0, under.value)),
 	}));
 
 	return (
