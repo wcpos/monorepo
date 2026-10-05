@@ -363,7 +363,7 @@ export function TerminalLegView({
 						</VStack>
 					</CollapsibleContent>
 					{/* The trigger draws its own chevron. */}
-					<CollapsibleTrigger testID="checkout-terminal-log-toggle">
+					<CollapsibleTrigger testID="checkout-terminal-log-toggle" className="justify-center">
 						<Text className="text-muted-foreground text-center text-sm">
 							{open ? t('pos_checkout.hide_details') : t('pos_checkout.details')}
 						</Text>
