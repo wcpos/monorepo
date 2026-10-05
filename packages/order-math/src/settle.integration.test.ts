@@ -178,8 +178,8 @@ describe('coupon integration: real order scenarios', () => {
 			return sum + parseFloat(item.total!) + parseFloat(item.total_tax!);
 		}, 0);
 
-		// The coupon distributes $10 total across items (tax-inclusive allocation)
-		expect(105 - grandTotal).toBeCloseTo(10, 4);
+		// Lines store total_tax rounded per rate to 2dp (wc_round_tax_total, round-at-subtotal off) and WC's set_total rounds the order total to price decimals, so compare in cents (the #506 test does the same).
+		expect(Math.round((105 - grandTotal) * 100)).toBe(1000);
 
 		// Coupon line: discount + discount_tax ≈ $10 (tax-inclusive).
 		// Per-item tax rounding (matching WC's wc_round_tax_total) produces a
@@ -188,7 +188,7 @@ describe('coupon integration: real order scenarios', () => {
 		expect(couponTotal).toBe(9.99091);
 
 		// Cart was $105 inc tax, minus $10 coupon = $95
-		expect(grandTotal).toBe(95);
+		expect(Math.round(grandTotal * 100)).toBe(9500);
 
 		// Individual line items should all have reduced totals
 		for (const item of discountedLineItems) {
@@ -592,7 +592,8 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 		);
 
 		expect(discountedLineItems[0].total).toBe('332.479339');
-		expect(discountedLineItems[0].total_tax).toBe('69.820661');
+		// WC_Order_Item_Product::set_taxes rounds each rate with wc_round_tax_total (round-at-subtotal off): the plugin test expects €69.82.
+		expect(discountedLineItems[0].total_tax).toBe('69.82');
 
 		const orderTotal =
 			parseFloat(discountedLineItems[0].total!) + parseFloat(discountedLineItems[0].total_tax!);
