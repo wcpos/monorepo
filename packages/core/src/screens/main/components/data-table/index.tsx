@@ -37,7 +37,6 @@ import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
-import { TableSurface } from './surface';
 
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
@@ -213,107 +212,105 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	}, [columnVisibility, tableConfig?.extraData]);
 
 	return (
-		<TableSurface>
-			<Table className="flex h-full flex-col">
-				<TableHeader>
-					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow key={headerGroup.id}>
-							{headerGroup.headers.map((header) => (
-								<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
-									{renderHeader ? (
-										renderHeader({
-											header,
-											table,
-											collectionName: props.collectionName,
-											sortBy,
-											sortDirection,
-											onSortingChange: handleSortingChange,
-										})
-									) : (
-										<DataTableHeader
-											collectionName={props.collectionName}
-											columnId={header.column.id}
-											header={flexRender(header.column.columnDef.header, header.getContext())}
-											disableSort={!header.column.getCanSort()}
-											sortBy={sortBy}
-											sortDirection={sortDirection}
-											onSortingChange={handleSortingChange}
-											align={header.column.columnDef.meta?.align}
-										/>
-									)}
-								</TableHead>
-							))}
-						</TableRow>
-					))}
-				</TableHeader>
-				<VirtualizedList.Root
-					testID={`data-table-scroller-${props.collectionName}`}
-					style={{ flex: 1 }}
-				>
-					<VirtualizedList.List
-						data={table.getRowModel().rows}
-						keyExtractor={(item) => item.id}
-						renderItem={({ item, index }) =>
-							renderItem
-								? renderItem({ item, index, table })
-								: defaultRenderItem({ item, index, table })
-						}
-						estimatedItemSize={estimatedItemSize ?? 50}
-						nestedScrollEnabled={nestedScrollEnabled}
-						parentComponent={TableBody as unknown as typeof import('react-native').View}
-						getItemType={getItemType}
-						onEndReachedThreshold={0.1}
-						onEndReached={handleEndReached}
-						ListEmptyComponent={() => (
-							<TableRow className="justify-center p-2">
-								{/* "No results" may only ever mean the search ANSWERED with nothing.
+		<Table className="flex h-full flex-col">
+			<TableHeader>
+				{table.getHeaderGroups().map((headerGroup) => (
+					<TableRow key={headerGroup.id}>
+						{headerGroup.headers.map((header) => (
+							<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
+								{renderHeader ? (
+									renderHeader({
+										header,
+										table,
+										collectionName: props.collectionName,
+										sortBy,
+										sortDirection,
+										onSortingChange: handleSortingChange,
+									})
+								) : (
+									<DataTableHeader
+										collectionName={props.collectionName}
+										columnId={header.column.id}
+										header={flexRender(header.column.columnDef.header, header.getContext())}
+										disableSort={!header.column.getCanSort()}
+										sortBy={sortBy}
+										sortDirection={sortDirection}
+										onSortingChange={handleSortingChange}
+										align={header.column.columnDef.meta?.align}
+									/>
+								)}
+							</TableHead>
+						))}
+					</TableRow>
+				))}
+			</TableHeader>
+			<VirtualizedList.Root
+				testID={`data-table-scroller-${props.collectionName}`}
+				style={{ flex: 1 }}
+			>
+				<VirtualizedList.List
+					data={table.getRowModel().rows}
+					keyExtractor={(item) => item.id}
+					renderItem={({ item, index }) =>
+						renderItem
+							? renderItem({ item, index, table })
+							: defaultRenderItem({ item, index, table })
+					}
+					estimatedItemSize={estimatedItemSize ?? 50}
+					nestedScrollEnabled={nestedScrollEnabled}
+					parentComponent={TableBody as unknown as typeof import('react-native').View}
+					getItemType={getItemType}
+					onEndReachedThreshold={0.1}
+					onEndReached={handleEndReached}
+					ListEmptyComponent={() => (
+						<TableRow className="justify-center p-2">
+							{/* "No results" may only ever mean the search ANSWERED with nothing.
 							    A pending search (index building, engine database not bound yet)
 							    says so instead — rendering the ordinary empty state there reads
 							    as "this record does not exist" (#1733). */}
-								{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
-									<Text testID="search-pending-message">{t('common.searching')}</Text>
-								) : React.isValidElement(noDataMessage) ? (
-									noDataMessage
-								) : (
-									<Text testID="no-data-message">
-										{noDataMessage ? noDataMessage : t('common.no_results_found')}
-									</Text>
-								)}
-							</TableRow>
-						)}
-						ListFooterComponent={() =>
-							ListFooterComponent ? (
-								<ListFooterComponent active$={props.active$} />
+							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
+								<Text testID="search-pending-message">{t('common.searching')}</Text>
+							) : React.isValidElement(noDataMessage) ? (
+								noDataMessage
 							) : (
-								<DefaultListFooterComponent active$={props.active$} />
-							)
-						}
-						extraData={extraData}
-					/>
-				</VirtualizedList.Root>
-				{showFooter && (
-					<TableFooter>
-						{props.TableFooterComponent ? (
-							<props.TableFooterComponent
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
+								<Text testID="no-data-message">
+									{noDataMessage ? noDataMessage : t('common.no_results_found')}
+								</Text>
+							)}
+						</TableRow>
+					)}
+					ListFooterComponent={() =>
+						ListFooterComponent ? (
+							<ListFooterComponent active$={props.active$} />
 						) : (
-							<DataTableFooter
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
-						)}
-					</TableFooter>
-				)}
-			</Table>
-		</TableSurface>
+							<DefaultListFooterComponent active$={props.active$} />
+						)
+					}
+					extraData={extraData}
+				/>
+			</VirtualizedList.Root>
+			{showFooter && (
+				<TableFooter>
+					{props.TableFooterComponent ? (
+						<props.TableFooterComponent
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
+					) : (
+						<DataTableFooter
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
+					)}
+				</TableFooter>
+			)}
+		</Table>
 	);
 }
 

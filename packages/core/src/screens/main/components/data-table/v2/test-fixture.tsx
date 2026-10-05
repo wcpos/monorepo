@@ -22,7 +22,11 @@ export const state = {
 export const patchUI = jest.fn();
 export const setSort = jest.fn();
 export const pans: { begin?: () => void; end?: (event: { translationX: number }) => void }[] = [];
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => state.pointer }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	usePointer: () => state.pointer,
+	// The surface the table stands on asks; these tests are about the table, on a wide window.
+	useIsPhone: () => false,
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, selector: (value: unknown) => unknown) =>
 		selector({ columns: state.columns }),
