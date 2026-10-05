@@ -10,6 +10,11 @@ export type OpenOrderHit = { id: string; record: EngineOrderRecord };
 export interface CurrentOrderContextProps {
 	currentOrderRecord: CurrentOrderRecord;
 	openOrders: OpenOrderHit[];
+	/**
+	 * Whose open orders these are (cashier, store, register). A count that differs because
+	 * the scope changed is not a change in the count: the strip's badge keys its beat on it.
+	 */
+	openOrdersScope: string;
 	setCurrentOrderID: (id: string) => void;
 }
 

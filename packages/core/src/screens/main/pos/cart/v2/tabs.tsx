@@ -20,8 +20,15 @@ import { CartTabTitle } from '../tab-title';
 import { OpenOrdersList } from './open-orders-list';
 import { TabChip } from './tab-chip';
 
-export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bottom' }) {
-	const { currentOrderRecord, openOrders, setCurrentOrderID } = useCurrentOrder();
+export function OpenOrderTabs({
+	position = 'bottom',
+	onCoverChange,
+}: {
+	position?: 'top' | 'bottom';
+	/** The list is covering the cart (or has stopped): the host takes the cart out of reach. */
+	onCoverChange?: (covered: boolean) => void | Promise<void>;
+}) {
+	const { currentOrderRecord, openOrders, openOrdersScope, setCurrentOrderID } = useCurrentOrder();
 	useResumeTerminalLegsForOrders(openOrders.map(({ record }) => record));
 	const t = useT();
 	const phone = useIsPhone();
@@ -29,7 +36,19 @@ export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bot
 	const extraReceiptIds = [...receiptOrders].filter(
 		(uuid) => !openOrders.some((order) => order.id === uuid)
 	);
-	const [listOpen, setListOpen] = React.useState(false);
+	const [listOpen, setListOpenState] = React.useState(false);
+	// The host hears about the cover in the same handler that opens or closes the list, so
+	// the covered cart is out of reach in the frame the list appears.
+	const setListOpen = (open: boolean) => {
+		setListOpenState(open);
+		void onCoverChange?.(open);
+	};
+	// The strip unmounting (the column shows the register picker instead) uncovers the cart.
+	const uncover = React.useRef(onCoverChange);
+	React.useEffect(() => {
+		uncover.current = onCoverChange;
+	}, [onCoverChange]);
+	React.useEffect(() => () => void uncover.current?.(false), []);
 	// Where the strip sits in the cart column: the list covers the cart on the far side of it.
 	const [strip, setStrip] = React.useState({ y: 0, height: 0 });
 	const scroll = React.useRef<React.ElementRef<typeof ScrollView>>(null);
@@ -118,7 +137,14 @@ export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bot
 						onPress={() => (listOpen ? closeList() : setListOpen(true))}
 					>
 						{/* The pill must read "0" when the strip is empty. */}
-						<Badge variant="muted" count={openOrders.length} max={Infinity} showZero />
+						{/* Keyed on the scope: another cashier's or register's count arriving is not a change. */}
+						<Badge
+							variant="muted"
+							count={openOrders.length}
+							max={Infinity}
+							showZero
+							identity={openOrdersScope}
+						/>
 						{/* The chevron points the way the list will travel. */}
 						<Icon
 							name={listOpen === (position === 'bottom') ? 'chevronDown' : 'chevronUp'}

@@ -54,6 +54,7 @@ function App({
 		<React.Suspense fallback={null}>
 			<CurrentOrderProvider
 				resource={resource}
+				scope="7:2:r1"
 				defaultCustomerResource={resource as never}
 				currentOrderUUID={currentOrderUUID}
 			>

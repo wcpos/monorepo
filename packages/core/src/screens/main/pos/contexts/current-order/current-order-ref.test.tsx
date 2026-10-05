@@ -72,6 +72,7 @@ function App({
 			    `useNewOrder` is mocked here, so any resource stands in. */}
 			<CurrentOrderProvider
 				resource={resource}
+				scope="7:2:r1"
 				defaultCustomerResource={resource as never}
 				currentOrderUUID="order-a"
 			>

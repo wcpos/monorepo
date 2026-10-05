@@ -30,6 +30,8 @@ export {
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 	resource: ObservableResource<OpenOrderHit[]>;
+	/** Whose open orders `resource` holds; see `CurrentOrderContextProps.openOrdersScope`. */
+	scope: string;
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
 	defaultCustomerResource: DefaultCustomerResource;
 	currentOrderUUID?: string;
@@ -46,6 +48,7 @@ interface CurrentOrderContextProviderProps {
 export function CurrentOrderProvider({
 	children,
 	resource,
+	scope,
 	defaultCustomerResource,
 	currentOrderUUID,
 }: CurrentOrderContextProviderProps) {
@@ -158,6 +161,7 @@ export function CurrentOrderProvider({
 				value={{
 					currentOrderRecord,
 					openOrders,
+					openOrdersScope: scope,
 					setCurrentOrderID,
 				}}
 			>
