@@ -58,6 +58,29 @@ describe('web SQLite storage', () => {
 		});
 	});
 
+	it('names the worker URL and both rxdb versions when the worker runs a different rxdb', async () => {
+		const { getWebNewStorage } = await import('./index.web');
+		const runtime = globalThis as { opfsWorker?: string };
+		runtime.opfsWorker =
+			'https://shop.example/wp-content/plugins/woocommerce-pos-pro/vendor/wcpos/woocommerce-pos/assets/js/sqlite.worker.js?ver=3f9b';
+		const rm1 = Object.assign(new Error('RM1'), {
+			code: 'RM1',
+			rxdb: true,
+			parameters: { args: { mainVersion: '17.5.0', remoteVersion: '17.4.0' } },
+		});
+		mockCreateInstance.mockRejectedValueOnce(rm1);
+		await expect(getWebNewStorage().createStorageInstance({} as never)).rejects.toMatchObject({
+			message: expect.stringMatching(
+				/^Storage worker at https:\/\/shop\.example\/.*sqlite\.worker\.js\?ver=3f9b runs rxdb 17\.4\.0 but the page runs rxdb 17\.5\.0: the host serving that worker is behind the bundle\. Redeploy the plugin that serves it/
+			),
+			cause: rm1,
+		});
+		// Any other failure passes through untouched.
+		const other = Object.assign(new Error('DB8'), { code: 'DB8' });
+		mockCreateInstance.mockRejectedValueOnce(other);
+		await expect(getWebNewStorage().createStorageInstance({} as never)).rejects.toBe(other);
+	});
+
 	it.each(['error', 'messageerror'])(
 		'reports %s before an instance exists and allows unsubscribe',
 		async (type) => {
