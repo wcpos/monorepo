@@ -252,6 +252,42 @@ describe('mergeWithInitalValues', () => {
 
 		expect(currentState.position).toBe('right');
 	});
+
+	it('resets a browseBy outside the vocabulary to all', async () => {
+		const currentState: Record<string, unknown> = {
+			position: 'left',
+			browseBy: 'favourites',
+			filterBar: [],
+		};
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+		await mergeWithInitalValues('pos-products', state as never);
+		expect(currentState.browseBy).toBe('all');
+	});
+
+	it('keeps a browseBy the cashier chose, and seeds all on a state written before the setting existed', async () => {
+		const chosen: Record<string, unknown> = {
+			position: 'left',
+			browseBy: 'categories',
+			filterBar: [],
+		};
+		const older: Record<string, unknown> = { position: 'left', filterBar: [] };
+		for (const currentState of [chosen, older]) {
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+			await mergeWithInitalValues('pos-products', state as never);
+		}
+		expect(chosen.browseBy).toBe('categories');
+		expect(older.browseBy).toBe('all');
+	});
 });
 
 // Authored status sizing must displace the legacy icon width without undoing user preferences.
