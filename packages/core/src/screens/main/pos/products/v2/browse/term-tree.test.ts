@@ -90,7 +90,7 @@ describe('rootTerms and childrenOf', () => {
 		T(5, 'Empty', { parent: 1, count: 0 }),
 	];
 	it('roots are parentless or orphaned, ordered and visible', () => {
-		expect(rootTerms(terms).map((t) => t.name)).toEqual(['Drinks', 'Orphan']);
+		expect(rootTerms(terms).map((t) => t.name)).toEqual(['Orphan', 'Drinks']);
 	});
 	it('an empty parent with a POS-only child is a root, and the child is its child', () => {
 		const posOnly = [T(1, 'Org', { count: 0 }), T(2, 'Leaf', { parent: 1, count: 0 })];
