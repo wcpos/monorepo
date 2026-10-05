@@ -816,6 +816,38 @@ it('initializes at launch on Android once the permissions are granted (offline f
 		Platform.OS = os;
 	}
 });
+it('a reader operation that joins an in-flight quiet launch check still prompts', async () => {
+	const os = Platform.OS;
+	Platform.OS = 'android';
+	let settle!: (granted: boolean) => void;
+	jest.spyOn(PermissionsAndroid, 'check').mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				settle = resolve;
+			})
+	);
+	jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
+	jest.mocked(requestNeededAndroidPermissions).mockResolvedValue({ error: null });
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(<StripeTerminalDriverBridge driver={driver} />);
+		});
+		// The launch check is still pending when the cashier starts an operation.
+		const operation = driver.requestInitialization();
+		settle(false);
+		await act(async () => {
+			await operation;
+		});
+		expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
+});
 it('forgets a refused Android prompt when the bridge unmounts, so a remount can ask again', async () => {
 	const os = Platform.OS;
 	Platform.OS = 'android';

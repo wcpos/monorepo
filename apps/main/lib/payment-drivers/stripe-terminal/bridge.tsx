@@ -95,7 +95,12 @@ function SdkBinding({ driver, methods }: Props) {
 			return initialization.current;
 		};
 		quiet.current = () => request(false);
-		driver.setInitializationHandler(() => request(true));
+		driver.setInitializationHandler(async () => {
+			await request(true);
+			// A prompting call that joined an in-flight quiet one resolves without the SDK
+			// when a permission was missing; ask once more rather than let ready() time out.
+			if (!initialized.current && mounted.current) await request(true);
+		});
 		const foreground = AppState.addEventListener('change', (state) => {
 			if (state === 'active') void request(false).catch(() => {});
 		});
