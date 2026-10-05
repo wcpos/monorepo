@@ -17,6 +17,7 @@ import type { TenderFlow } from './use-tender-flow';
 interface Props {
 	flow: TenderFlow;
 	order: EngineRecord<'orders'>;
+	receiptHost?: 'modal' | 'stage';
 }
 
 /**
@@ -25,7 +26,7 @@ interface Props {
  * go — so they can never be one leg of a split, and the tab greys out the moment
  * the ledger holds live money rather than letting a cashier double-charge.
  */
-export function LegacyTab({ flow, order }: Props) {
+export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
 	const { handleStockRejection } = useCheckoutSession(order);
@@ -102,6 +103,7 @@ export function LegacyTab({ flow, order }: Props) {
 			) : null}
 			<PaymentWebview
 				order={order}
+				receiptHost={receiptHost}
 				ref={webViewRef}
 				setLoading={setLoading}
 				setFrameStatus={reportFrameStatus}

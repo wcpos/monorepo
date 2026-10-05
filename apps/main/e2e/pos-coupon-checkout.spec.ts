@@ -265,10 +265,13 @@ for (const targetStoreId of storeTargets) {
 								line.includes('Checkout order snapshot was not applied')
 							)
 						).toEqual([]);
-						// 2. Dismiss an auto-shown receipt so hidden modal background cannot fake tab removal.
-						if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
-							await page.getByTestId('receipt-close-button').click();
-						}
+						// 2. Dismiss the receipt (in-pane stage or routed modal) so a hidden modal background cannot fake tab removal.
+						const dismissReceipt = page
+							.getByTestId('receipt-new-sale')
+							.or(page.getByTestId('receipt-close-button'))
+							.first();
+						await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+						await dismissReceipt.click();
 						await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 						await expect(orderTab).not.toBeVisible({ timeout: 30_000 });
 						// 3. Read the acked order with readOrder's dp=6, not a stub or another cashier's sale.

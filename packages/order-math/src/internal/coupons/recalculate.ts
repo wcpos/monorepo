@@ -12,6 +12,7 @@ import {
 } from './helpers';
 import { calculateTaxes } from '../money/calculate-taxes';
 import { getRoundingPrecision, roundHalfUp } from '../money/precision';
+import { sumStoredLineTax } from '../money/sum-taxes';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
 import { normalizeTaxClass } from '../tax-class';
 
@@ -44,6 +45,64 @@ export interface RecalculateInput {
 export interface RecalculateResult {
 	lineItems: LineItem[];
 	couponLines: CouponLine[];
+}
+
+// WC_Order_Item::calculate_taxes derives each rate from the final net total.
+// WC_Order_Item_Product::set_taxes sums stored rates using the subtotal-rounding setting.
+function rederiveOrderItemTaxes(
+	items: LineItem[],
+	taxRates: RecalculateInput['taxRates'],
+	{
+		pricesIncludeTax,
+		taxRoundAtSubtotal,
+		dp,
+	}: {
+		pricesIncludeTax: boolean;
+		taxRoundAtSubtotal: boolean;
+		dp: number;
+	}
+): LineItem[] {
+	return items.map((item) => {
+		if (getLineItemTaxStatus(item) !== 'taxable') return item;
+		const normalizedClass = normalizeTaxClass(item.tax_class);
+		const itemRates = taxRates.filter((r) => normalizeTaxClass(r.class) === normalizedClass);
+		if (itemRates.length === 0) return item;
+
+		const perRate = calculateTaxes({
+			amount: Number(item.total),
+			rates: itemRates.map((r) => ({
+				id: r.id,
+				rate: r.rate,
+				compound: r.compound,
+				order: r.order,
+				priority: r.priority,
+			})),
+			amountIncludesTax: false,
+			dp,
+			perRatePrecision: getRoundingPrecision(dp),
+		}).taxes;
+		const taxes = (item.taxes || []).map((tax) => {
+			const matching = perRate.find((t) => t.id === tax.id);
+			return matching ? { ...tax, total: String(matching.total) } : tax;
+		});
+		for (const tax of perRate) {
+			if (!taxes.some((t) => t.id === tax.id)) {
+				taxes.push({ id: tax.id, subtotal: '0', total: String(tax.total) });
+			}
+		}
+		return {
+			...item,
+			taxes,
+			total_tax: String(
+				sumStoredLineTax(
+					perRate.map((t) => t.total),
+					dp,
+					pricesIncludeTax,
+					taxRoundAtSubtotal
+				)
+			),
+		};
+	});
 }
 
 /**
@@ -346,6 +405,9 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 						})),
 						amountIncludesTax: true,
 						dp,
+						// WC set_item_discount_amounts → WC_Tax::calc_inclusive_tax rounds each
+						// rate with WC_Tax::round at wc_get_rounding_precision().
+						perRatePrecision: getRoundingPrecision(dp),
 					});
 					const exTaxDiscount = entry.discount - taxResult.total;
 					return { ...entry, discount: round(exTaxDiscount, 6) };
@@ -387,6 +449,11 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		allPerItemDiscounts,
 		getRoundingPrecision(dp)
 	);
+	const taxedLineItems = rederiveOrderItemTaxes(discountedLineItems, taxRates, {
+		pricesIncludeTax,
+		taxRoundAtSubtotal,
+		dp,
+	});
 
 	// Merge updated coupon lines back, preserving non-active ones
 	const finalCouponLines = couponLines.map((cl) => {
@@ -398,7 +465,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	});
 
 	return {
-		lineItems: serializeLineItemTaxes(discountedLineItems, getRoundingPrecision(dp)),
+		lineItems: serializeLineItemTaxes(taxedLineItems, getRoundingPrecision(dp)),
 		couponLines: finalCouponLines,
 	};
 }

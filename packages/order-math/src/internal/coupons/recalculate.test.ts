@@ -92,6 +92,72 @@ const makeInput = (
 // ---------------------------------------------------------------------------
 
 describe('recalculateCoupons', () => {
+	describe('order-item tax rounding (US:AL compound, prices incl. tax)', () => {
+		const taxRates = [
+			{ id: 3, rate: '4.0000', priority: 1, compound: false, order: 0, class: 'standard' },
+			{ id: 5, rate: '1.0000', priority: 2, compound: true, order: 0, class: 'standard' },
+			{ id: 4, rate: '5.0000', priority: 3, compound: true, order: 0, class: 'standard' },
+		];
+
+		function replay(discountType: 'percent' | 'fixed_cart', taxRoundAtSubtotal: boolean) {
+			return recalculateCoupons(
+				makeInput({
+					lineItems: [
+						{ ...makePosLineItem(1, 25, 25), tax_class: '', subtotal: '22.667102' },
+						makePosLineItem(2, 5, 5, 1, 'none'),
+					],
+					couponLines: [makeCouponLine('rounding')],
+					couponConfigs: new Map([
+						[
+							'rounding',
+							makeConfig({
+								discount_type: discountType,
+								amount: discountType === 'percent' ? '10' : '1',
+							}),
+						],
+					]),
+					taxRates,
+					pricesIncludeTax: true,
+					calcDiscountsSequentially: false,
+					taxRoundAtSubtotal,
+					dp: 2,
+				})
+			);
+		}
+
+		it('A: percent 10 rounds each stored rate before summing when round-at-subtotal is off', () => {
+			const line = replay('percent', false).lineItems[0];
+			expect(Number(line.total)).toBe(20.400392);
+			expect(Number(line.total_tax)).toBe(2.1);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.816016);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.212164);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.071429);
+		});
+
+		it('B: percent 10 sums stored rates when round-at-subtotal is on', () => {
+			const line = replay('percent', true).lineItems[0];
+			expect(Number(line.total)).toBe(20.400392);
+			expect(Number(line.total_tax)).toBe(2.099609);
+		});
+
+		it('C: fixed_cart 1 decomposes the discount at 6dp when round-at-subtotal is off', () => {
+			const { lineItems } = replay('fixed_cart', false);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(22.213761);
+			expect(Number(line.total_tax)).toBe(2.29);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.88855);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.231023);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.166667);
+			expect(Number(lineItems[1].total)).toBe(4.5);
+		});
+
+		it('D: fixed_cart 1 sums stored rates when round-at-subtotal is on', () => {
+			const line = replay('fixed_cart', true).lineItems[0];
+			expect(Number(line.total)).toBe(22.213761);
+			expect(Number(line.total_tax)).toBe(2.28624);
+		});
+	});
+
 	// -----------------------------------------------------------------------
 	// Group 1: Basic coupon types (no tax, no POS discount)
 	// -----------------------------------------------------------------------
