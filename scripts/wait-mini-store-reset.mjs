@@ -7,8 +7,9 @@ export const RESET_TIME_ZONE = 'Europe/Madrid';
 export const RESET_HOUR = 3;
 // The reset's local minute from com.kilbot.e2e-store-reset.
 export const RESET_MINUTE = 17;
-// e2e-setup plus one 60-minute shard.
-export const RUN_BUDGET_MS = 75 * 60_000;
+// The e2e-setup step's 20-min cap plus one 60-min shard, plus 5 min margin.
+export const RUN_BUDGET_MS = 85 * 60_000;
+export const SHARD_BUDGET_MS = 65 * 60_000; // One 60-min shard plus 5 min margin, for shard-only reruns.
 // The restore takes about a minute; margin for the php container restart.
 export const SETTLE_MS = 10 * 60_000;
 
@@ -37,11 +38,11 @@ export function resetInstantNear(now) {
 	return new Date(wallTime - offset);
 }
 
-export function resetWaitMs(now) {
+export function resetWaitMs(now, budgetMs = RUN_BUDGET_MS) {
 	const today = resetInstantNear(now);
 	const tomorrow = resetInstantNear(new Date(today.getTime() + 24 * 60 * 60_000));
 	for (const reset of [today, tomorrow]) {
-		const start = reset.getTime() - RUN_BUDGET_MS;
+		const start = reset.getTime() - budgetMs;
 		const end = reset.getTime() + SETTLE_MS;
 		if (now.getTime() >= start && now.getTime() < end) return end - now.getTime();
 	}
@@ -49,7 +50,10 @@ export function resetWaitMs(now) {
 }
 
 async function main() {
-	const wait = resetWaitMs(new Date());
+	const wait = resetWaitMs(
+		new Date(),
+		process.argv.includes('--shard') ? SHARD_BUDGET_MS : RUN_BUDGET_MS
+	);
 	if (wait === 0) {
 		console.log('[mini-reset] clear of the nightly reset');
 		return;
