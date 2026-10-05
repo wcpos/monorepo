@@ -43,7 +43,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
 		if (flow.state.tab === 'legacy') {
-			return <LegacyTab flow={flow} order={order} />;
+			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
 		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
 			return (
