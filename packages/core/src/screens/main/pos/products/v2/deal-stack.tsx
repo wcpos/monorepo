@@ -219,7 +219,10 @@ export function DealStack<T>({
 			testID={testID}
 			onLayout={(event) => setStageWidth(event.nativeEvent.layout.width)}
 		>
-			<DealStagedContext.Provider value={origin ? staged : null}>
+			{/* The tapped tile steps aside only once its copy can stand on it — the copy needs the
+			    crumb's height as well as the frame, and on Android the two arrive frames apart:
+			    lifting on the frame alone left the slot empty for two frames (Pixel, 2026-10-05). */}
+			<DealStagedContext.Provider value={origin && top !== null ? staged : null}>
 				<Animated.View
 					className="flex-1"
 					aria-hidden={open}
@@ -302,23 +305,35 @@ export function DealCell({
 		? origin.y -
 			(top + Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN) + TILE_MARGIN)
 		: 0;
-	const waiting = origin === undefined;
+	// Hidden until BOTH the tile's frame and the crumb's height are known: the offset needs
+	// both, and on Android `measureInWindow` answers before the crumb's `onLayout`, so a cell
+	// that waited for the frame alone painted at rest for a few frames and then snapped onto
+	// the tapped tile (Pixel, 2026-10-05). The stage arms on the same pair.
+	const waiting = origin === undefined || top === null;
 
 	const style = useAnimatedStyle(() => {
-		const left = 1 - travel.value;
+		// Clamped for the reason the stage clamps: a first frame stamped before the animation's
+		// start asks the easing for a negative time, and the curve extrapolates past 0 or 1. On
+		// the way home that put the parent a tile's width LEFT of the screen for two frames
+		// (Pixel, 2026-10-05) — `1 - travel` went negative.
+		const t = Math.min(1, Math.max(0, travel.value));
+		const left = 1 - t;
 		const translate = [
 			{ translateX: fromX * left },
 			{ translateY: (flies ? fromY + (scroll?.value ?? 0) : 0) * left },
 		];
-		if (parent) return { opacity: waiting ? 0 : 1, transform: translate };
+		// The parent's visibility is NOT in here: a worklet's props land on the UI thread a frame after
+		// the commit on Android, and the tapped tile steps aside at the commit, so the slot was empty
+		// for a frame (Pixel, 2026-10-05). It is a plain style below, committed with the lift.
+		if (parent) return { transform: translate };
 		return {
-			opacity: Math.min(1, Math.max(0, travel.value / FADE_IN_BY)),
-			transform: [...translate, { scale: SCALE_FROM + (1 - SCALE_FROM) * travel.value }],
+			opacity: Math.min(1, t / FADE_IN_BY),
+			transform: [...translate, { scale: SCALE_FROM + (1 - SCALE_FROM) * t }],
 		};
 	});
 
 	return (
-		<Animated.View className="flex-1" style={[style, parent && FRONT]}>
+		<Animated.View className="flex-1" style={[style, parent && FRONT, parent && waiting && UNSEEN]}>
 			{children}
 		</Animated.View>
 	);
@@ -326,6 +341,9 @@ export function DealCell({
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */
 export const FRONT = { zIndex: 1 };
+// The parent before it can stand on the tapped tile. A plain style, not a worklet prop: it
+// has to commit on the same frame as the tapped tile stepping aside.
+const UNSEEN = { opacity: 0 };
 
 /** The pane's furniture (breadcrumb, footer): it fades in as the products fade out. */
 export function DealFade({ children, style, ...props }: ViewProps) {
