@@ -60,6 +60,23 @@ export function PaneStack<T>({
 	if (open && detail !== staged) setStaged(detail);
 	if (!open && settled) setSettled(false);
 
+	// What had focus when the detail was pushed (the row that opened it) gets it back on the
+	// pop, when the control that popped is inside the pane that is leaving. Focus that has
+	// moved somewhere live (a search field whose typing closed the detail) is left alone.
+	const opener = React.useRef<HTMLElement | null>(null);
+	const leaving = React.useRef<HTMLElement | null>(null);
+	React.useEffect(() => {
+		if (typeof document === 'undefined') return;
+		if (open) {
+			opener.current = document.activeElement as HTMLElement | null;
+			return;
+		}
+		const active = document.activeElement;
+		const stranded = !active || active === document.body || leaving.current?.contains(active);
+		if (stranded && opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+		opener.current = null;
+	}, [open]);
+
 	React.useEffect(() => {
 		if (!open) {
 			progress.value = withTiming(0, TIMING, (finished) => {
@@ -110,6 +127,9 @@ export function PaneStack<T>({
 			{staged !== null && (
 				<Animated.View
 					className={cn('absolute inset-0', paneClassName)}
+					ref={leaving as unknown as React.Ref<Animated.View>}
+					// A pane that is leaving is already gone to a screen reader.
+					aria-hidden={!open}
 					style={[detailStyle, { pointerEvents: open ? 'auto' : 'none' }]}
 				>
 					{renderDetail(staged)}

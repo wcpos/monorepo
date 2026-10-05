@@ -179,7 +179,12 @@ export function OpenOrderTabs({ position = 'bottom' }: { position?: 'top' | 'bot
 						name="plus"
 						testID="new-order-tab"
 						accessibilityLabel={t('pos_cart.new_order')}
-						onPress={() => handleTabPress('new')}
+						onPress={() => {
+							handleTabPress('new');
+							// The strip stays pressable beside the open list: the fresh cart must not
+							// be left covered by it.
+							setListOpen(false);
+						}}
 					/>
 				</View>
 			</View>

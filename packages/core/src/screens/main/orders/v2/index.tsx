@@ -261,11 +261,21 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	const selectedRow = React.useRef<ViewInstance>(null);
 	const close = () => {
 		router.setParams({ order: undefined });
-		if (Platform.OS === 'web') selectedRow.current?.focus();
+		// The pane is still sliding out beside the list: a plain focus scrolls a row that is
+		// just out of view into it, and the list jumps.
+		if (Platform.OS === 'web') {
+			(selectedRow.current as unknown as HTMLElement | null)?.focus({ preventScroll: true });
+		}
 	};
 	// The pane that is leaving keeps the order it showed until it has slid out.
 	const [shown, setShown] = React.useState(selected);
 	if (selected && selected !== shown) setShown(selected);
+	// The list keeps its narrow rows for as long as the pane's frame is beside it, which is
+	// until the pane has slid out, not until the selection clears.
+	const [beside, setBeside] = React.useState(Boolean(selected));
+	if (selected && !beside) setBeside(true);
+	// The phone has no pane frame to report that it left.
+	if (phone && !selected && beside) setBeside(false);
 	const pane = shown ? <OrderPane key={shown} selected={shown} onClose={close} /> : null;
 	return (
 		<View
@@ -289,7 +299,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar
 						    (number, customer, status, total) until the pane closes. */}
 						<DeviceScope
-							pointer={selected && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
+							pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
 						>
 							<OrdersList
 								binding={binding}
@@ -325,6 +335,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 				<SlideOver
 					open={Boolean(selected)}
 					from="right"
+					onLeft={() => setBeside(false)}
 					className={roomy ? 'w-120' : 'w-2/5 max-w-110'}
 					coverClassName="border-border bg-card border-l"
 				>

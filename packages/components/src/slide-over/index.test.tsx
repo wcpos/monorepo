@@ -19,9 +19,13 @@ jest.mock('react-native', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
-		View: ({ children, style }: ViewProps) => {
+		View: ({ children, style, ...rest }: ViewProps) => {
 			mockCover = style as unknown as CoverStyle;
-			return <div data-testid="cover">{children}</div>;
+			return (
+				<div data-testid="cover" aria-hidden={rest['aria-hidden']}>
+					{children}
+				</div>
+			);
 		},
 	},
 	Easing: { bezier: () => 'ease' },
@@ -90,6 +94,11 @@ it.each([
 	}
 );
 
+it('a cover that mounts already open is in place: nothing slides on mount', () => {
+	render(<Stage open />);
+	expect(mockCover.transform).toEqual([{ translateY: '0%' }]);
+});
+
 it('leaves faster, speeding up into its edge, and stays mounted until it has left', () => {
 	const { rerender } = render(<Stage open />);
 	nextFrame();
@@ -101,10 +110,36 @@ it('leaves faster, speeding up into its edge, and stays mounted until it has lef
 		// A cover that is leaving takes no presses.
 		pointerEvents: 'none',
 	});
+	// Still mounted for the slide out, but gone to a screen reader.
+	expect(screen.getByTestId('cover').getAttribute('aria-hidden')).toBe('true');
 	act(() => void jest.advanceTimersByTime(199));
 	expect(screen.getByTestId('content')).toBeTruthy();
 	act(() => void jest.advanceTimersByTime(1));
 	expect(screen.queryByTestId('content')).toBeNull();
+});
+
+it('says when it has left, and not when the close was interrupted', () => {
+	const onLeft = jest.fn();
+	const stage = (open: boolean) => (
+		<SlideOver open={open} from="right" onLeft={onLeft}>
+			<span />
+		</SlideOver>
+	);
+	const { rerender } = render(stage(true));
+	nextFrame();
+	rerender(stage(false));
+	act(() => void jest.advanceTimersByTime(100));
+	rerender(stage(true));
+	act(() => void jest.advanceTimersByTime(500));
+	expect(onLeft).not.toHaveBeenCalled();
+	rerender(stage(false));
+	act(() => void jest.advanceTimersByTime(200));
+	expect(onLeft).toHaveBeenCalledTimes(1);
+	// A cover that mounts closed never opened: it has not left.
+	onLeft.mockClear();
+	render(stage(false));
+	act(() => void jest.advanceTimersByTime(500));
+	expect(onLeft).not.toHaveBeenCalled();
 });
 
 it('a close interrupted by a reopen leaves the cover mounted', () => {

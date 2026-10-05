@@ -21,6 +21,8 @@ export type SlideOverProps = {
 	style?: ViewStyle;
 	/** The cover hides what is under it, so it needs the surface's own opaque background. */
 	coverClassName?: string;
+	/** Called once the cover has slid out and unmounted. */
+	onLeft?: () => void;
 	testID?: string;
 };
 
@@ -40,13 +42,19 @@ export function SlideOver({
 	className,
 	style,
 	coverClassName,
+	onLeft,
 	testID,
 }: SlideOverProps) {
 	const reduced = useReducedMotion();
 	const [staged, setStaged] = React.useState(open);
 	// `landed` moves one frame after `staged`: the cover is painted parked outside its frame
 	// first, so the transition has a position to start from.
-	const [landed, setLanded] = React.useState(false);
+	// A cover that mounts already open is in place: nothing slides on mount.
+	const [landed, setLanded] = React.useState(open);
+	const left = React.useRef(onLeft);
+	React.useEffect(() => {
+		left.current = onLeft;
+	});
 	if (open && !staged) setStaged(true);
 	if (!open && landed) setLanded(false);
 
@@ -55,10 +63,18 @@ export function SlideOver({
 			const frame = requestAnimationFrame(() => setLanded(true));
 			return () => cancelAnimationFrame(frame);
 		}
+		// A cover that never opened has nothing to leave.
+		if (!staged) return;
 		// A close interrupted by a reopen clears this, and the cover stays.
-		const timer = setTimeout(() => setStaged(false), reduced ? 0 : PANEL_SLIDE_OUT);
+		const timer = setTimeout(
+			() => {
+				setStaged(false);
+				left.current?.();
+			},
+			reduced ? 0 : PANEL_SLIDE_OUT
+		);
 		return () => clearTimeout(timer);
-	}, [open, reduced]);
+	}, [open, staged, reduced]);
 
 	if (!staged) return null;
 	// A percentage is of the cover's own size: nothing to measure before the first frame.
@@ -72,6 +88,8 @@ export function SlideOver({
 		>
 			<Animated.View
 				className={cn('flex-1', coverClassName)}
+				// A cover that is leaving is already gone to a screen reader.
+				aria-hidden={!open}
 				style={{
 					transform: [
 						from === 'left' || from === 'right' ? { translateX: offset } : { translateY: offset },
