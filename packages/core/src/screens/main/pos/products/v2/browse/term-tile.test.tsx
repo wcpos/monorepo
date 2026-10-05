@@ -17,7 +17,9 @@ jest.mock('../../../../../../contexts/translations', () => ({
 }));
 // The leaf components pull in native-only modules; the tiles' own structure is what is tested.
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<span className={className}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -100,13 +102,14 @@ describe('TermTile', () => {
 	});
 	it('renders All products with no count', () => {
 		render(<TermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
-		expect(screen.getByTestId('browse-all-products')).toBeTruthy();
+		expect(screen.getByTestId('browse-all-products')).toHaveAttribute('aria-label', 'All products');
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
 	it('renders a shortcut with its description', () => {
 		render(<TermTile term={breakfast} onPress={jest.fn()} />);
 		expect(screen.getByTestId('browse-shortcut-qf-1')).toBeTruthy();
-		expect(screen.getByText('Hot Food + Bakery')).toBeTruthy();
+		// Read at arm's length on the register: the default size, not the row's small print.
+		expect(screen.getByText('Hot Food + Bakery')).not.toHaveClass('text-xs');
 	});
 	it('is invisible while lifted (its copy is out on the stage)', () => {
 		render(<TermTile term={snacks} onPress={jest.fn()} lifted />);

@@ -79,7 +79,7 @@ function TermBody({ term, still }: { term: BrowseTerm; still?: boolean }) {
 				<Text className="text-center text-lg font-bold" numberOfLines={2} decodeHtml>
 					{term.name}
 				</Text>
-				<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
+				<Text className="text-muted-foreground text-center" numberOfLines={2}>
 					{term.description}
 				</Text>
 			</View>
@@ -135,8 +135,9 @@ export function TermTile({
 	onPress: (term: BrowseTerm, target?: Measurable) => void;
 	lifted?: boolean;
 }) {
+	const t = useT();
 	const tile = React.useRef<ViewInstance>(null);
-	const label = term.kind === 'all' ? undefined : term.name;
+	const label = term.kind === 'all' ? t('pos_products.browse_all_products') : term.name;
 	return (
 		<Pressable
 			ref={tile}
