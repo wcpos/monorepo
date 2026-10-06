@@ -18,6 +18,7 @@ export {
 	awaitWriteSettlement,
 	awaitTerminalWriteOutcome,
 	type WriteSettlement,
+	WriteDeferredError,
 	WriteOutcomeError,
 } from './await-write-outcome';
 export type { QueryResult } from './query-result';

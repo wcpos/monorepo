@@ -1,7 +1,12 @@
 import * as Sentry from '@sentry/browser';
 
 import { AppInfo } from '../app-info';
-import { buildCaptureOptions, createPendingCaptures, scrubEvent, SENTRY_DSN } from './sentry-core';
+import {
+	buildCaptureOptions,
+	createPendingCaptures,
+	prepareEvent,
+	SENTRY_DSN,
+} from './sentry-core';
 
 import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 export { buildCaptureOptions, messageTemplate, scrubEvent } from './sentry-core';
@@ -121,7 +126,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			sendDefaultPii: false,
 			integrations: (integrations) => integrations.filter(({ name }) => name !== 'BrowserSession'),
 			sampleRate: 1,
-			beforeSend: scrubEvent,
+			beforeSend: prepareEvent,
 			ignoreErrors: [/ResizeObserver loop/],
 		});
 		const installId = getInstallId();

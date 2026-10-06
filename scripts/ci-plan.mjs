@@ -261,7 +261,11 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 			const rule = rules[index];
 			if (rule === 'docs') continue;
 			if (rule === 'github-shared') {
-				all(rule);
+				// Every job using a shared action or script exercises it; devices spend EAS builds when the dev-client cache was evicted (#2259).
+				lint(rule);
+				plan.unit = 'all';
+				reasons.unit.add(rule);
+				widen('web', 'full', rule);
 				continue;
 			}
 			lint(rule);

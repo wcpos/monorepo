@@ -59,6 +59,26 @@ describe('decideWritePlacement', () => {
 		expect(decide(rows, { operation: 'delete' })).toEqual({ kind: 'annihilate', chain: rows });
 	});
 
+	it('appends behind an explicit pending candidate but still coalesces ordinary edits', () => {
+		const explicit = row({ explicit: true, status: 'pending', attempts: 0 });
+		expect(decide([row({ mutationId: 'older' }), explicit])).toEqual({
+			kind: 'append',
+			deferBaseRevision: false,
+		});
+		const ordinary = row({ explicit: false, status: 'pending', attempts: 0 });
+		expect(decide([ordinary])).toEqual({ kind: 'coalesce', prior: ordinary, operation: 'update' });
+	});
+
+	it('still coalesces a recovered create into an explicit pending update', () => {
+		// Appending would queue the create behind an update the server has no record for.
+		const explicit = row({ explicit: true, status: 'pending', attempts: 0 });
+		expect(decide([explicit], { isRecovery: true, operation: 'create' })).toEqual({
+			kind: 'coalesce',
+			prior: explicit,
+			operation: 'create',
+		});
+	});
+
 	it('coalesces only into the last pending never-attempted row', () => {
 		const prior = row({ mutationId: 'last', operation: 'create' });
 		expect(decide([row({ mutationId: 'first', status: 'claimed' }), prior])).toEqual({
