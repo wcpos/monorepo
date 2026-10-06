@@ -1211,6 +1211,64 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}, 30_000);
 	});
 
+	it('a live copy whose create the store REFUSED is a dead letter: no new create, the cart stays in v5', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+		const refusedId = '17400000-0000-4000-8000-0000000007aa';
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			// A crash after the copy's create was enqueued; the store refused it before this launch.
+			await app
+				.collection('orders')
+				.insert({ ...cart.stored, local: { dirty: false, pendingMutationIds: [] } });
+			await app.collection('mutations').insert({
+				...heldRow.stored,
+				mutationId: refusedId,
+				status: 'rejected',
+				rejectedStatus: 400,
+				rejectedReason: 'rest_invalid_param',
+				rejectedAt: '2026-09-30T09:00:00.000Z',
+			});
+
+			const outcome = await drainLegacyScopeDatabase(
+				drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+				manifest.identity
+			);
+			expect(outcome).toMatchObject({
+				status: 'kept',
+				retryable: false,
+				carried: 0,
+				remaining: { deadLetters: 2, conflicts: 1 },
+			});
+			expect(outcome.status === 'kept' && outcome.reason).toContain('dead letter');
+			// Nothing new was queued: only the refused create is there.
+			expect([...(await stored(app)).rows.keys()]).toEqual([refusedId]);
+			expect(server.received.map((envelope) => envelope.recordId)).not.toContain(cart.uuid);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(true);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(true);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
 	it('a push the store applied but whose answer was lost is re-sent under the same mutationId, never applied twice', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);

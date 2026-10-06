@@ -334,24 +334,27 @@ async function carryOverOpenCarts(
 	identity: StoreScopeIdentity,
 	legacy: RxDatabase,
 	carts: CarriableCart[]
-): Promise<{ carried: number; error: string | null }> {
+): Promise<{ carried: number; error: string | null; deadLettered: CarriableCart[] }> {
 	const live = ports.liveEngine;
-	if (!live || carts.length === 0) return { carried: 0, error: null };
+	if (!live || carts.length === 0) return { carried: 0, error: null, deadLettered: [] };
 	let carried = 0;
 	const errors: string[] = [];
+	/** Carts whose live copy's create the store REFUSED: automatic repair stops there. */
+	const deadLettered: CarriableCart[] = [];
 	let active: Awaited<ReturnType<typeof live.whenActive>>;
 	try {
 		active = await live.whenActive();
 	} catch (error) {
-		return { carried: 0, error: errorMessage(error) };
+		return { carried: 0, error: errorMessage(error), deadLettered };
 	}
 	// Only into the drained scope's own database: another cashier or store never receives this cart.
 	if (scopeKeyFor(active.identity) !== scopeKeyFor(identity)) {
-		return { carried: 0, error: 'the live engine is on another scope' };
+		return { carried: 0, error: 'the live engine is on another scope', deadLettered };
 	}
 	const liveOrders = active.database.collections.orders;
 	const liveQueue = active.database.collections[MUTATION_QUEUE_RXDB_COLLECTION];
-	if (!liveOrders || !liveQueue) return { carried: 0, error: 'the live database has no orders' };
+	if (!liveOrders || !liveQueue)
+		return { carried: 0, error: 'the live database has no orders', deadLettered };
 	const liveRowsFor = async (recordId: string): Promise<QueueRow[]> =>
 		(await liveQueue.find({ selector: { recordId } }).exec()).map(
 			(doc) => doc.toJSON() as QueueRow
@@ -375,7 +378,15 @@ async function carryOverOpenCarts(
 				remoteIdOrNull(residentJson.remoteId) !== null ||
 				hasLiveCreate(await liveRowsFor(cart.recordId));
 			if (!(await carriesSale())) {
-				const open = (await liveRowsFor(cart.recordId)).filter((row) => row.status !== 'rejected');
+				// A create the store already REFUSED (enqueued before a crash, rejected before this
+				// launch) is a dead letter: a permanent refusal waits for Store health, and a fresh
+				// create under a new mutation id would bypass it. The cart stays in v5, non-retryable.
+				const liveRows = await liveRowsFor(cart.recordId);
+				if (liveRows.some((row) => row.operation === 'create' && row.status === 'rejected')) {
+					deadLettered.push(cart);
+					continue;
+				}
+				const open = liveRows.filter((row) => row.status !== 'rejected');
 				const neverPushed = open.every(
 					(row) =>
 						(row.status === undefined || row.status === 'pending') &&
@@ -440,7 +451,7 @@ async function carryOverOpenCarts(
 			errors.push(errorMessage(error));
 		}
 	}
-	return { carried, error: errors.length > 0 ? errors.join('; ') : null };
+	return { carried, error: errors.length > 0 ? errors.join('; ') : null, deadLettered };
 }
 
 /**
@@ -570,12 +581,24 @@ async function settle(input: {
 	// write failed) is retried: it is live work, and the next attempt on this scope can move it.
 	const retryable =
 		input.tickProblem !== null || (after.remaining.unsent ?? 0) > 0 || carry.error !== null;
+	// A cart whose live create was refused is counted as the dead letter it is, not as held.
+	const remaining: LegacyScopeRemainingWork = { ...after.remaining };
+	for (const cart of carry.deadLettered) {
+		const rows = Math.max(cart.rows.length, 1);
+		remaining.held = (remaining.held ?? 0) - rows;
+		if (remaining.held <= 0) delete remaining.held;
+		remaining.deadLetters = (remaining.deadLetters ?? 0) + rows;
+	}
 	const reasons = [
 		input.tickProblem ??
 			((after.remaining.unsent ?? 0) > 0
 				? 'sendable work is left in the queue'
 				: 'unsent work is left in the queue'),
 		...(carry.error !== null ? [`open carts not carried over: ${carry.error}`] : []),
+		...carry.deadLettered.map(
+			(cart) =>
+				`open cart ${cart.recordId} not carried over: its create is a dead letter in the live database (resolve it in Store health)`
+		),
 	];
 	const reportDue = retryable || (await unsendableReportDue(database, (ports.now ?? Date.now)()));
 	await input.close();
@@ -586,7 +609,7 @@ async function settle(input: {
 		retryable,
 		pushed,
 		carried: carry.carried,
-		remaining: after.remaining,
+		remaining,
 		keptOrderUuids: after.orderUuids,
 		reportDue,
 	};
