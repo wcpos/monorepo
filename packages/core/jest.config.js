@@ -42,10 +42,10 @@ module.exports = {
 		// (wcpos/roadmap#129): the compiler cached a module-level service read
 		// behind a memo sentinel, so the screen never saw the service that started
 		// after it mounted. Uncompiled, the same component passed every test.
-		// Reader dev controls must refresh mutable driver state under compiler memoization too.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$':
+		// Reader dev controls (now on the Card readers settings row) must refresh mutable driver state under compiler memoization too.
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [

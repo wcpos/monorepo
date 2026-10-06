@@ -12,6 +12,7 @@ const ALL_FALSE = {
 	canEditCustomers: false,
 	canCreateCustomers: false,
 	canDeleteCustomers: false,
+	canAcceptReaderTerms: false,
 };
 const ALL_TRUE = {
 	canEditProducts: true,
@@ -25,14 +26,20 @@ const ALL_TRUE = {
 	canEditCustomers: true,
 	canCreateCustomers: true,
 	canDeleteCustomers: true,
+	canAcceptReaderTerms: true,
 };
 
 describe('deriveUserCapabilities', () => {
-	it('fails open when capabilities are unknown', () => {
+	it('fails open when capabilities are unknown, except accepting reader terms', () => {
 		const result = deriveUserCapabilities(undefined);
 
 		expect(result.known).toBe(false);
-		expect(result.caps).toEqual(ALL_TRUE);
+		// Apple's Tap to Pay terms may only be accepted by a known administrator.
+		expect(result.caps).toEqual({ ...ALL_TRUE, canAcceptReaderTerms: false });
+	});
+
+	it('lets manage_woocommerce accept reader terms', () => {
+		expect(deriveUserCapabilities(['manage_woocommerce']).caps.canAcceptReaderTerms).toBe(true);
 	});
 
 	it('closes every gate for a known empty capability list', () => {

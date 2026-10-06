@@ -1,9 +1,10 @@
 import * as React from 'react';
 
+import { useRouter } from 'expo-router';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-math';
 
 import { useT } from '../../../../../contexts/translations';
@@ -12,20 +13,28 @@ import { deviceTransports } from './tiles';
 import { useDriverStatus } from './use-driver-status';
 
 import type { ReaderInfo } from '../../../../../services/payment-drivers/types';
+import type { RememberedReader } from './remembered-readers';
 
+export const CARD_READERS_SETTINGS_HREF = '/settings/card-readers';
+
+/**
+ * The pay sheet's one line about the reader. Scanning, software updates, errors, Disconnect and
+ * Forget live on Settings → Card readers (wcpos/roadmap#407); here the cashier only sees which
+ * reader is connected, or a link to go and connect one. The remembered reader still reconnects
+ * when the method's keypad opens, so the usual sale needs no trip to Settings.
+ */
 export function ReaderConnection({
 	method,
 	bootstrap,
 	remembered,
 	remember,
-	transport,
 	pickTransport,
 	online,
 	disabled,
 }: {
 	method: PaymentMethodDescriptor;
 	remembered: string | null;
-	remember: (readerId: string) => Promise<void>;
+	remember: (reader: RememberedReader) => Promise<void>;
 	bootstrap: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	transport: PaymentTransport | null;
 	pickTransport: (transport: PaymentTransport) => void;
@@ -33,20 +42,13 @@ export function ReaderConnection({
 	disabled: boolean;
 }) {
 	const t = useT();
+	const router = useRouter();
 	const driver = getDriver(method.capture.provider);
 	const status = useDriverStatus(driver);
-	const [readers, setReaders] = React.useState<ReaderInfo[] | null>(null);
-	const [error, setError] = React.useState<string | null>(null);
+	const [failed, setFailed] = React.useState(false);
 	const [working, setWorking] = React.useState(false);
-	const [devControlRevision, refreshDevControls] = React.useReducer((value) => value + 1, 0);
-	const devControls = React.useMemo(
-		() => (__DEV__ ? (driver?.devControls?.() ?? []) : []),
-		// The driver's mutable control snapshot changes on status events and completed actions.
-		[driver, status, devControlRevision]
-	);
 	const attempted = React.useRef(false);
 	const reconnect = React.useRef<{ cancelled: boolean } | null>(null);
-	const transports = deviceTransports(method);
 	const connect = React.useCallback(
 		async (reader: ReaderInfo, active: () => boolean = () => true) => {
 			if (!driver?.connect) return;
@@ -55,25 +57,10 @@ export function ReaderConnection({
 			await driver.connect(reader, handoff ? { ...handoff, method_id: method.id } : null);
 			if (!active()) return;
 			pickTransport(reader.transport);
-			await remember(reader.id);
-			if (!active()) return;
-			setReaders(null);
+			await remember(reader);
 		},
 		[driver, online, bootstrap, pickTransport, remember, method.id]
 	);
-	const run = async (operation: () => Promise<void>) => {
-		if (working || disabled) return;
-		attempted.current = true;
-		setWorking(true);
-		setError(null);
-		try {
-			await operation();
-		} catch (error) {
-			setError(error instanceof Error ? error.message : t('pos_checkout.reader_connection_failed'));
-		} finally {
-			setWorking(false);
-		}
-	};
 	// Reconnect an externally loaded preference once when this method's keypad mounts.
 	React.useEffect(() => {
 		if (reconnect.current?.cancelled) {
@@ -88,6 +75,8 @@ export function ReaderConnection({
 		reconnect.current = operation;
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- Reconnect an externally loaded preference; this begins async driver work.
 		setWorking(true);
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- A fresh attempt clears the last attempt's verdict.
+		setFailed(false);
 		void (async () => {
 			for (const item of deviceTransports(method)) {
 				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
@@ -105,8 +94,9 @@ export function ReaderConnection({
 				}
 			}
 		})()
-			.catch((error) => {
-				if (active) setError(error instanceof Error ? error.message : String(error));
+			.catch(() => {
+				// The reason is on the settings page's row; the sheet only says it did not happen.
+				if (active) setFailed(true);
 			})
 			.finally(() => {
 				if (active && reconnect.current === operation) {
@@ -122,13 +112,14 @@ export function ReaderConnection({
 			}
 		};
 	}, [remembered, driver, method, disabled, connect, pickTransport]);
-	let line = t('pos_checkout.reader_disconnected');
-	if (status.pairingCode) line = t('pos_checkout.reader_pairing', { code: status.pairingCode });
-	else if (status.connection === 'connected')
+	const connected = status.connection === 'connected' && !working;
+	let line: string;
+	if (connected)
 		line = [
-			t('pos_checkout.reader_connected'),
-			status.reader?.label ?? status.reader?.model,
-			status.reader?.battery == null ? null : `${status.reader.battery}%`,
+			status.reader?.label ?? status.reader?.model ?? t('pos_checkout.reader_connected'),
+			status.reader?.battery == null
+				? null
+				: t('pos_checkout.reader_battery_percent', { battery: status.reader.battery }),
 		]
 			.filter(Boolean)
 			.join(' · ');
@@ -136,98 +127,29 @@ export function ReaderConnection({
 		line = t('pos_checkout.reader_updating', {
 			progress: status.progress == null ? '' : `${Math.round(status.progress * 100)}%`,
 		});
-	else if (status.connection === 'connecting') line = t('pos_checkout.reader_connecting');
-	else if (status.connection === 'discovering') line = t('pos_checkout.reader_discovering');
+	else if (working || status.connection === 'connecting' || status.connection === 'discovering')
+		line = t('pos_checkout.reader_connecting');
+	else if (failed) line = t('pos_checkout.reader_reconnect_failed');
+	else line = t('pos_checkout.reader_disconnected');
 	return (
-		<VStack space="xs">
-			<HStack className="items-center gap-2">
-				<Text testID="checkout-reader-status" className="text-muted-foreground text-sm">
-					{line}
-				</Text>
+		<HStack className="flex-wrap items-center justify-center gap-x-2 gap-y-1">
+			<Text
+				testID="checkout-reader-status"
+				className={connected ? 'text-foreground text-sm' : 'text-muted-foreground text-sm'}
+			>
+				{line}
+			</Text>
+			{!connected && !working && status.connection === 'disconnected' ? (
 				<Button
-					testID="checkout-reader-connect"
+					testID="checkout-reader-settings-link"
 					size="sm"
-					variant="secondary"
-					disabled={disabled || working}
-					onPress={() =>
-						void run(async () => {
-							if (driver?.capabilities.discovery === 'sdk_ui') await driver.openReaderSettings?.();
-							else if (driver?.discoverReaders && transport)
-								setReaders(await driver.discoverReaders(transport));
-						})
-					}
+					variant="link"
+					disabled={disabled}
+					onPress={() => router.push(CARD_READERS_SETTINGS_HREF)}
 				>
-					<ButtonText>
-						{status.connection === 'connected'
-							? t('pos_checkout.change_reader')
-							: t('pos_checkout.connect_reader')}
-					</ButtonText>
+					<ButtonText>{t('pos_checkout.connect_in_card_readers')}</ButtonText>
 				</Button>
-			</HStack>
-			{__DEV__ && devControls.length > 0 ? (
-				<HStack className="flex-wrap gap-2">
-					{devControls.map((control) => (
-						<Button
-							key={control.id}
-							testID={`checkout-dev-control-${control.id}`}
-							size="sm"
-							variant={control.active ? 'default' : 'secondary'}
-							disabled={disabled || working}
-							onPress={() =>
-								void run(async () => {
-									try {
-										await control.run();
-									} finally {
-										refreshDevControls();
-									}
-								})
-							}
-						>
-							<ButtonText>{control.label}</ButtonText>
-						</Button>
-					))}
-				</HStack>
 			) : null}
-			{status.message ? (
-				<Text className="text-muted-foreground text-xs">{status.message}</Text>
-			) : null}
-			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}
-			{transports.length > 1 ? (
-				<HStack className="flex-wrap gap-2">
-					{transports.map((item) => (
-						<Button
-							key={item.transport}
-							size="sm"
-							testID={`checkout-transport-${item.transport}`}
-							variant={transport === item.transport ? 'default' : 'secondary'}
-							disabled={disabled || working}
-							onPress={() => {
-								attempted.current = true;
-								setReaders(null);
-								pickTransport(item.transport);
-							}}
-						>
-							<ButtonText>{t(`pos_checkout.transport_${item.transport}`)}</ButtonText>
-						</Button>
-					))}
-				</HStack>
-			) : null}
-			{readers ? (
-				<VStack testID="checkout-reader-list" space="xs">
-					{readers.map((reader) => (
-						<Button
-							key={reader.id}
-							testID={`checkout-reader-option-${reader.id}`}
-							variant="secondary"
-							disabled={disabled || working}
-							onPress={() => void run(() => connect(reader))}
-						>
-							<ButtonText>{reader.label}</ButtonText>
-						</Button>
-					))}
-					{readers.length === 0 ? <Text>{t('pos_checkout.no_readers_found')}</Text> : null}
-				</VStack>
-			) : null}
-		</VStack>
+		</HStack>
 	);
 }

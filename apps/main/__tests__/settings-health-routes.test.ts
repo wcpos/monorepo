@@ -12,6 +12,7 @@ const settingsRoutes = [
 	'general.tsx',
 	'tax.tsx',
 	'printing.tsx',
+	'card-readers.tsx',
 	'barcode-scanning.tsx',
 	'theme.tsx',
 ];

@@ -39,11 +39,12 @@ const persistProvenanceSpy = jest.spyOn(provenance, 'persistSaleProvenance');
 
 let mockRealService: TerminalPaymentsService | null = null;
 let mockLeg: TerminalLegState | null = null;
-const mockReaderPreferences: Record<string, string> = {};
+type MockReader = { id: string; label: string; transport?: string };
+const mockReaderPreferences: Record<string, MockReader> = {};
 const mockReadersInUse = new Map<string, { orderUuid: string; orderNumber: string }>();
 const mockReaderState = {
 	get: (path: string) => mockReaderPreferences[path],
-	set: async (path: string, modify: (value: string | undefined) => string) => {
+	set: async (path: string, modify: (value: MockReader | undefined) => MockReader) => {
 		mockReaderPreferences[path] = modify(mockReaderPreferences[path]);
 	},
 };
@@ -52,16 +53,24 @@ beforeEach(() => {
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 });
-it('stores only the reader id, separately for each method', async () => {
+it('stores the reader snapshot separately for each method, and forgets one', async () => {
 	const preferences = rememberedReaders(mockStoreDB as unknown as StoreDatabase);
 	expect(await preferences.get('terminal')).toBeNull();
-	await preferences.set('terminal', 'b');
-	await preferences.set('other', 'a');
-	expect(await preferences.get('terminal')).toBe('b');
-	expect(await preferences.get('other')).toBe('a');
-	await preferences.set('terminal', 'c');
-	expect(await preferences.get('terminal')).toBe('c');
-	expect(mockStoreDB.addState).toHaveBeenCalledWith('terminal-readers_v1');
+	await preferences.set('terminal', { id: 'b', label: 'Back', transport: 'bluetooth' });
+	await preferences.set('other', { id: 'a', label: 'Front' });
+	expect(await preferences.get('terminal')).toEqual({
+		id: 'b',
+		label: 'Back',
+		transport: 'bluetooth',
+		model: undefined,
+		serial: undefined,
+	});
+	expect((await preferences.get('other'))?.id).toBe('a');
+	await preferences.set('terminal', { id: 'c', label: 'Counter', transport: 'bluetooth' });
+	expect((await preferences.get('terminal'))?.id).toBe('c');
+	await preferences.remove('terminal');
+	expect(await preferences.get('terminal')).toBeNull();
+	expect(mockStoreDB.addState).toHaveBeenCalledWith('terminal-readers_v2');
 });
 const mockPushDocument = jest.fn(async () => order);
 jest.mock('../../../contexts/use-push-document', () => ({
@@ -1048,7 +1057,7 @@ describe('server tender', () => {
 		expect(next.result.current.state.readerId).toBe(busy ? 'reader' : 'b');
 	});
 	it('applies a late remembered read when no reader has been picked', async () => {
-		mockReaderPreferences.terminal = 'reader';
+		mockReaderPreferences.terminal = { id: 'reader', label: 'Reader' };
 		mockMethods = [
 			{
 				...terminal,
@@ -1068,7 +1077,7 @@ describe('server tender', () => {
 		await waitFor(() => expect(result.current.state.readerId).toBe('reader'));
 	});
 	it('lets a remembered reader override the initially preselected default', async () => {
-		mockReaderPreferences.terminal = 'b';
+		mockReaderPreferences.terminal = { id: 'b', label: 'Back' };
 		mockMethods = [
 			{
 				...terminal,
@@ -1511,7 +1520,11 @@ describe('device tender', () => {
 			mirror: async () => {},
 		});
 		registerDriver(createSimulatedDriver());
-		mockReaderPreferences.device = 'remembered';
+		mockReaderPreferences.device = {
+			id: 'remembered',
+			label: 'Remembered',
+			transport: 'bluetooth',
+		};
 		const { result } = renderHook(() => useTenderFlow(order));
 		await act(async () => result.current.pickMethod('device'));
 		expect(result.current.rememberedReaderId).toBe('remembered');
@@ -1522,8 +1535,14 @@ describe('device tender', () => {
 		expect(post).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
 			context: { transport: 'bluetooth' },
 		});
-		await act(async () => result.current.rememberReader('replacement'));
-		expect(mockReaderPreferences.device).toBe('replacement');
+		await act(async () =>
+			result.current.rememberReader({
+				id: 'replacement',
+				label: 'Replacement',
+				transport: 'bluetooth',
+			})
+		);
+		expect(mockReaderPreferences.device.id).toBe('replacement');
 		mockRealService.stop();
 		mockRealService = null;
 	});
@@ -1589,7 +1608,25 @@ describe('device tender', () => {
 			);
 		}
 	);
-	it.each(['disconnected', 'discovering', 'updating', 'wrong-transport', 'no-reader'] as const)(
+	it('the connected reader decides the transport unless the cashier picked one', async () => {
+		// Readers connect on Settings → Card readers (roadmap#407): a Tap to Pay reader that is
+		// already connected makes the leg a tap_to_pay leg without a chip tap in the sheet.
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const reader = (await driver.discoverReaders!('tap_to_pay'))[0];
+		jest.spyOn(driver.status$, 'get').mockReturnValue({ connection: 'connected', reader });
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.pickMethod(deviceMethod.id));
+		expect(result.current.deviceTransport).toBe('tap_to_pay');
+		expect(result.current.deviceReady).toBe(true);
+		// An explicit pick still wins, and a mismatch still refuses.
+		await act(async () => result.current.pickTransport!('bluetooth'));
+		expect(result.current.deviceTransport).toBe('bluetooth');
+		expect(result.current.deviceReady).toBe(false);
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+	});
+	it.each(['disconnected', 'discovering', 'updating', 'no-reader'] as const)(
 		'keeps Take unavailable and refuses minting with %s',
 		async (state) => {
 			const driver = createSimulatedDriver();
@@ -1597,7 +1634,7 @@ describe('device tender', () => {
 			registerDriver(driver);
 			const reader = (await driver.discoverReaders!('tap_to_pay'))[0];
 			jest.spyOn(driver.status$, 'get').mockReturnValue({
-				connection: state === 'wrong-transport' || state === 'no-reader' ? 'connected' : state,
+				connection: state === 'no-reader' ? 'connected' : state,
 				reader: state === 'no-reader' ? null : reader,
 			});
 			const { result } = renderHook(() => useTenderFlow(order));

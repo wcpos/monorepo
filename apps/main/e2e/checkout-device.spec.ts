@@ -17,16 +17,29 @@ function simulatedDevice(descriptors: Descriptor[]) {
 		return method.pos_enabled && capture?.mode === 'device' && capture.provider === 'simulated';
 	});
 }
-async function connect(page: Page, reader: string) {
+/**
+ * Readers are connected on Settings → Card readers (roadmap#407); the pay sheet only links there.
+ * The simulated driver keeps its connection in memory, so the round trip must stay in-app
+ * (router navigation, never a reload).
+ */
+async function connect(page: Page, methodId: string, reader: string) {
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
-	await expect(page.getByTestId('checkout-reader-connect')).toBeEnabled();
-	await page.getByTestId('checkout-reader-connect').click();
-	await expect(page.getByTestId('checkout-reader-list')).toBeVisible();
-	const option = page.getByTestId(`checkout-reader-option-${reader}`);
-	const readerName = (await option.innerText()).trim();
+	const status = page.getByTestId('checkout-reader-status');
+	if (!(await status.innerText()).includes('Simulated')) {
+		await page.getByTestId('checkout-reader-settings-link').click();
+		await expect(page.getByTestId('screen-settings-card-readers')).toBeVisible();
+	} else {
+		await page.getByTestId('drawer-item-settings').click();
+		await page.getByTestId('settings-nav-card-readers').click();
+	}
+	await page.getByTestId('card-readers-connect').click();
+	const option = page.getByTestId(`reader-row-${methodId}-connect-${reader}`);
+	await expect(option).toBeVisible();
 	await option.click();
-	// The reader name in this composite status identifies the completed switch.
-	await expect(page.getByTestId('checkout-reader-status')).toContainText(readerName);
+	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toContainText('Connected');
+	await page.goBack();
+	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
+	await expect(page.getByTestId('checkout-reader-status')).toContainText('Simulated');
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
@@ -82,7 +95,7 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 				expect(device!.id).toBe('wcpos_simulated_device');
 				await page.getByTestId(`checkout-method-${device!.id}`).click();
 				const amount = await readAmountMinor(page, 'checkout-entry');
-				await connect(page, `sim-${scenario}`);
+				await connect(page, device!.id, `sim-${scenario}`);
 				const capture =
 					scenario === 'approve' || scenario === 'tip'
 						? paymentResponse(page, orderId, 'capture')
@@ -121,7 +134,7 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 							JSON.stringify(declined.events ?? []).includes('card_declined')
 					).toBe(true);
 					await page.getByTestId('checkout-terminal-retry').click();
-					await connect(page, 'sim-approve');
+					await connect(page, device!.id, 'sim-approve');
 					await take(page, orderId);
 				}
 				if (capture) {

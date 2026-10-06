@@ -12,9 +12,7 @@ import { registerDriver } from '../../../../../services/payment-drivers/registry
 import { initialTenderState, tenderReducer } from './tender-state';
 import { TenderPane } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
-import { ReaderConnection } from './reader-connection';
 
-import type { DriverStatus } from '../../../../../services/payment-drivers/types';
 import type { TenderFlow } from './use-tender-flow';
 
 const mockPush = jest.fn();
@@ -465,43 +463,43 @@ it.each([1, 2])('collapses a preselected reader (%s readers)', (count) => {
 		expect(screen.getByTestId('checkout-reader-change')).toBeTruthy();
 	}
 });
-it('device status, discovery, bootstrap and transport choice drive payment readiness', async () => {
+it('the pay sheet shows one reader line: a link to Settings until a reader is connected', async () => {
+	// Scanning, errors and Disconnect live on Settings → Card readers (roadmap#407).
 	const driver = createSimulatedDriver();
 	registerDriver(driver);
-	const transportChanges = jest.fn();
 	const flow = {
 		...makeFlow(),
 		saveState: null,
 		method: deviceMethod,
 		tiles: [{ method: deviceMethod, disabled: false, reason: null, worksOffline: false }],
 		deviceTransport: 'bluetooth' as const,
-		pickTransport: transportChanges,
+		pickTransport: jest.fn(),
 		deviceReady: false,
 		entryAppliedMinor: 1000,
 	};
 	const rendered = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('No reader connected');
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	expect(screen.queryByTestId('checkout-reader-connect')).toBeNull();
+	expect(screen.queryByTestId('checkout-transport-tap_to_pay')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-reader-settings-link'));
+	expect(mockPush).toHaveBeenCalledWith('/settings/card-readers');
 	await act(async () => {
-		fireEvent.click(screen.getByTestId('checkout-reader-connect'));
+		await driver.connect!(
+			{ id: 'sim-approve', label: 'Simulated approve', battery: 82, transport: 'bluetooth' },
+			null
+		);
 	});
-	expect(screen.getByTestId('checkout-reader-list')).not.toBeNull();
-	await act(async () => {
-		fireEvent.click(screen.getByTestId('checkout-reader-option-sim-approve'));
-		await new Promise((resolve) => setTimeout(resolve, 350));
-	});
-	expect(mockBootstrap).toHaveBeenCalledWith('bluetooth');
-	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Simulated approve');
+	expect(screen.getByTestId('checkout-reader-status').textContent).toBe('Simulated approve · 82%');
+	expect(screen.queryByTestId('checkout-reader-settings-link')).toBeNull();
 	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).textContent).toContain(
 		'82%'
 	);
-	expect(screen.getByTestId('checkout-commit').textContent).toContain(
-		`Send 1000 to ${deviceMethod.title}`
-	);
 	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
-	fireEvent.click(screen.getByTestId('checkout-transport-tap_to_pay'));
-	expect(transportChanges).toHaveBeenCalledWith('tap_to_pay');
+	await act(async () => {
+		await driver.disconnect!();
+	});
 });
 
 it.each(['discovery', 'bootstrap'] as const)(
@@ -537,11 +535,13 @@ it.each(['discovery', 'bootstrap'] as const)(
 		};
 		const rendered = render(<TenderPane flow={flow} format={String} />);
 		await act(async () => {});
-		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(true);
+		// While the remembered reader reconnects the line says so and offers no link.
+		expect(screen.getByTestId('checkout-reader-status').textContent).toBe('Connecting…');
+		expect(screen.queryByTestId('checkout-reader-settings-link')).toBeNull();
 		await act(async () => {
 			rendered.rerender(<TenderPane flow={{ ...flow, online: false }} format={String} />);
 		});
-		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(false);
+		expect(screen.getByTestId('checkout-reader-status').textContent).toBe('No reader connected');
 		expect(connect).toHaveBeenCalledTimes(1);
 		expect(connect).toHaveBeenLastCalledWith(reader, null);
 		await act(async () => {
@@ -549,100 +549,10 @@ it.each(['discovery', 'bootstrap'] as const)(
 			await pending;
 		});
 		expect(connect).toHaveBeenCalledTimes(1);
-		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(false);
+		expect(screen.getByTestId('checkout-reader-status').textContent).toBe('No reader connected');
 		rendered.unmount();
 	}
 );
-
-describe('reader dev controls', () => {
-	const dev = __DEV__;
-	afterEach(() => {
-		Object.assign(globalThis, { __DEV__: dev });
-	});
-	function setup() {
-		let status: DriverStatus = { connection: 'disconnected', reader: null };
-		let listener: (status: DriverStatus) => void = () => {};
-		let active = false;
-		const run = jest.fn(async () => {
-			active = !active;
-		});
-		const devControls = jest.fn(() =>
-			status.connection === 'connected'
-				? [{ id: 'offline', label: `Offline: ${active ? 'on' : 'off'}`, active, run }]
-				: []
-		);
-		registerDriver({
-			...createSimulatedDriver(),
-			devControls,
-			status$: {
-				get: () => status,
-				subscribe: (next) => {
-					listener = next;
-					return () => {
-						listener = () => {};
-					};
-				},
-			},
-		});
-		const rendered = render(
-			<ReaderConnection
-				method={deviceMethod}
-				remembered={null}
-				remember={jest.fn()}
-				bootstrap={mockBootstrap}
-				transport="bluetooth"
-				pickTransport={jest.fn()}
-				online
-				disabled={false}
-			/>
-		);
-		const publish = (connection: DriverStatus['connection']) =>
-			act(() => {
-				status = { connection, reader: null };
-				listener(status);
-			});
-		return { ...rendered, publish, run, devControls };
-	}
-	it('refreshes controls on status changes and after running, including active styling', async () => {
-		const { publish, run } = setup();
-		expect(screen.queryByTestId('checkout-dev-control-offline')).toBeNull();
-		publish('connected');
-		expect(screen.getByTestId('checkout-dev-control-offline').getAttribute('data-variant')).toBe(
-			'secondary'
-		);
-		await act(async () => {
-			fireEvent.click(screen.getByTestId('checkout-dev-control-offline'));
-		});
-		expect(run).toHaveBeenCalledTimes(1);
-		expect(screen.getByTestId('checkout-dev-control-offline').textContent).toBe('Offline: on');
-		expect(screen.getByTestId('checkout-dev-control-offline').getAttribute('data-variant')).toBe(
-			'default'
-		);
-		publish('disconnected');
-		expect(screen.queryByTestId('checkout-dev-control-offline')).toBeNull();
-	});
-	it('shows a rejected control message on the error line and refreshes the controls', async () => {
-		const { publish, run, devControls, container } = setup();
-		publish('connected');
-		run.mockRejectedValueOnce(new Error('Simulation unavailable'));
-		devControls.mockClear();
-		await act(async () => {
-			fireEvent.click(screen.getByTestId('checkout-dev-control-offline'));
-		});
-		expect(container.textContent).toContain('Simulation unavailable');
-		expect(devControls).toHaveBeenCalled();
-		expect(screen.getByTestId('checkout-dev-control-offline').getAttribute('data-variant')).toBe(
-			'secondary'
-		);
-	});
-	it('never reads or renders controls outside dev builds, even after status changes', () => {
-		Object.assign(globalThis, { __DEV__: false });
-		const { publish, devControls } = setup();
-		publish('connected');
-		expect(devControls).not.toHaveBeenCalled();
-		expect(screen.queryByTestId('checkout-dev-control-offline')).toBeNull();
-	});
-});
 
 it('keeps typed entry when switching methods without taking money', () => {
 	const state = tenderReducer(
