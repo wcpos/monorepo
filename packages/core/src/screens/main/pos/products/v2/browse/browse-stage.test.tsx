@@ -561,10 +561,31 @@ it('a sort-only quick filter pressed at the root shows its sorted products, not 
 	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
 });
 
-it('a persisted settings sort change moves the baseline with it: the root is not displaced', () => {
+// A header sort writes uiSettings; the screen's effect (index.tsx) sets the query sort from it
+// one commit LATER. The baseline must not displace the root for that commit: the products view
+// mounting and the term tiles unmounting (their scroll and held state lost) and back.
+it('a persisted settings sort change moves the baseline with it: the root is not displaced, not even for the commit before the query follows', () => {
 	const props = stageProps();
 	const { rerender } = render(<BrowseStage {...props} />);
-	// A header sort writes uiSettings, and the screen's effect sets the query sort from it.
+	const root = screen.getByTestId('browse-root');
+	// The baseline moved; the query has not yet.
+	mockUISettings = { ...mockUISettings, sortBy: 'sku', sortDirection: 'desc' };
+	rerender(<BrowseStage {...props} />);
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root); // the same node: never unmounted
+	// The query catches up: still the tiles.
+	act(() => queryActions.setSort('sku', 'desc'));
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	// A chip then setting another sort — the very one the baseline left — is a displacement.
+	act(() => queryActions.setSort('name', 'asc'));
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+});
+
+it('a settings sort and the query sort moved in one event is not a displacement either', () => {
+	const props = stageProps();
+	const { rerender } = render(<BrowseStage {...props} />);
 	mockUISettings = { ...mockUISettings, sortBy: 'sku', sortDirection: 'desc' };
 	act(() => queryActions.setSort('sku', 'desc'));
 	rerender(<BrowseStage {...props} />);
