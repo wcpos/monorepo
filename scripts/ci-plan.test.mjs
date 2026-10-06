@@ -235,7 +235,11 @@ test('one representative path exercises every ordered rule', () => {
 		['jest.config.js', 'root-jest', { unit: 'all', web: 'none' }],
 		['prettier.config.mjs', 'root-format', { lint: true, unit: 'none' }],
 		['.github/workflows/deploy.yml', 'workflow', { web: 'full', self: 'deploy' }],
-		['.github/actions/setup-monorepo/action.yml', 'github-shared', { unit: 'all', web: 'full' }],
+		[
+			'.github/actions/setup-monorepo/action.yml',
+			'github-shared',
+			{ unit: 'all', web: 'full', native: 'none', lint: true },
+		],
 		['scripts/check-ci-test-matrix.mjs', 'scripts', { lint: true, unit: 'none' }],
 		['apps/web', 'submodule', { lint: true, unit: 'none' }],
 	];
@@ -307,6 +311,18 @@ test('app and package source targeting next retain cache-hit device coverage', (
 		{ GITHUB_BASE_REF: 'next' }
 	);
 	assert.equal(plan.native, 'cachehit');
+});
+
+test('a native workflow change still runs the device suites', () => {
+	assert.equal(planFor(['.github/workflows/e2e-native.yml'], {}).native, 'cachehit');
+});
+
+test('a shared action change does not suppress a native rebuild in a mixed change', () => {
+	const plan = planFor(
+		['.github/actions/setup-monorepo/action.yml', 'apps/main/app.config.ts'],
+		{}
+	);
+	assert.equal(plan.native, 'rebuild');
 });
 
 test('workflow self-triggers widen only their associated tier', () => {

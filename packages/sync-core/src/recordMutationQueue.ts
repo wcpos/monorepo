@@ -27,7 +27,8 @@ import type { RecordMutation } from './recordMutation';
  * a fresh `mutationId` would replay into the server's born-twice / dedupe
  * guards with the new payload silently ignored. An edit racing either queues
  * BEHIND it. A replacement keeps the original queue position (`seq`),
- * original `baseRevision`, and original `queuedAt`, but ALWAYS carries a
+ * original `baseRevision`, and original `queuedAt` (an explicit write stamps
+ * its own, see write-intents), but ALWAYS carries a
  * fresh `mutationId` — the server replays by mutationId, so a mutationId must
  * never be reused with a different payload. Terminal `conflicted` /
  * `needs-revision` / `rejected` rows persist (they are the engine's

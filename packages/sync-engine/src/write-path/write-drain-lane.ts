@@ -207,6 +207,14 @@ export type WriteOutcomeEvent =
 			currentRevision: string | null;
 	  }
 	| {
+			type: 'write-deferred';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  }
+	| {
 			type: 'write-rejected';
 			collection: string;
 			recordId: string;
@@ -404,6 +412,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				// server dedupes on mutationId) — eventing it early would announce an
 				// acknowledgement the queue does not yet agree with.
 				const ackCandidates: WriteOutcomeEvent[] = [];
+				const emittedAcks = new Set<WriteOutcomeEvent>();
 				// What the till believed each pushed order was worth, captured at PUSH
 				// time (see order-till-aggregate.ts). It cannot be read when the ack
 				// lands: `facet.reconcile` runs first and adopts the server's money over
@@ -661,17 +670,36 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									currentRevision: pushResult.currentRevision,
 								});
 							},
+							onAcknowledged: (mutation) => {
+								for (const ack of ackCandidates) {
+									if (ack.mutationId === mutation.mutationId) emitAcknowledged(ack);
+								}
+							},
+							// A deferral stays queued, so it is not subject to the acknowledgement
+							// gate below and is emitted AS the drain meets it: a waiter on a 401
+							// (and on any row queued behind that record) must not wait for the
+							// rest of the queue to be tried first.
+							onRetryableFailure: ({ mutation, status, reason }) =>
+								deps.emitWriteEvent({
+									type: 'write-deferred',
+									collection: mutation.collectionName,
+									recordId: mutation.recordId,
+									mutationId: mutation.mutationId,
+									status,
+									reason,
+								}),
 							observe: deps.diagnostics,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
-						for (const ack of ackCandidates) {
-							if (stillPending.has(ack.mutationId)) continue;
+						function emitAcknowledged(ack: WriteOutcomeEvent): void {
+							if (emittedAcks.has(ack)) return;
+							emittedAcks.add(ack);
 							// A broken money mirror is a TERMINAL anomaly, not a transient step
 							// the arc later settles, so it logs at error (#899's outcome-based
 							// rule) and stamps its own outcome rather than letting the observer
-							// derive one. It rides the same still-pending gate as the event, so
+							// derive one. It rides the same durable-ack gate as the event, so
 							// the durable row and the UI alert can never disagree about whether
 							// it happened.
 							if (ack.type === 'order-money-divergence') {
@@ -694,6 +722,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							}
 							deps.emitWriteEvent(ack);
+						}
+						for (const ack of ackCandidates) {
+							if (!stillPending.has(ack.mutationId)) emitAcknowledged(ack);
 						}
 						// #1209: a chain the LEADER cancelled at drain (#1059) is terminal
 						// for every intent in it, and the tab that asked for the void is

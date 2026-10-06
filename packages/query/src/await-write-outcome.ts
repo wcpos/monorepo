@@ -36,7 +36,10 @@ function subscribeTerminal(
 	engine: Pick<RxdbSyncEngine, 'events'>,
 	mutationId: string,
 	resolve: (outcome: AwaitedWriteOutcome) => void,
-	reject: (error: unknown) => void
+	reject: (error: unknown) => void,
+	// A `write-deferred` is not terminal: the row is held (a 401 waits for re-auth).
+	// Only the clocked waiter settles on it, so the hook is opt-in.
+	onDeferred?: (event: { status?: number; reason?: string }) => void
 ) {
 	const subscriptions: (() => void)[] = [];
 	let boundId = mutationId;
@@ -48,6 +51,10 @@ function subscribeTerminal(
 					if (!('mutationId' in event) || event.mutationId !== boundId) return;
 					if (event.type === 'write-superseded') {
 						follow(event.replacedBy);
+						return;
+					}
+					if (event.type === 'write-deferred') {
+						onDeferred?.(event);
 						return;
 					}
 					if (!TERMINAL_WRITE_EVENT_TYPES.has(event.type)) return;
@@ -87,8 +94,20 @@ function subscribeTerminal(
 	};
 }
 
+export class WriteDeferredError extends Error {
+	status?: number;
+	reason?: string;
+
+	constructor(mutationId: string, status?: number, reason?: string) {
+		super(`write-deferred (${status}) for mutation "${mutationId}"`);
+		this.name = 'WriteDeferredError';
+		this.status = status;
+		this.reason = reason;
+	}
+}
+
 export function awaitWriteOutcome(
-	engine: Pick<RxdbSyncEngine, 'events' | 'sync'>,
+	engine: Pick<RxdbSyncEngine, 'events' | 'status' | 'sync'>,
 	mutationId: string,
 	options: { timeoutMs?: number } = {}
 ): Promise<AwaitedWriteOutcome> {
@@ -113,11 +132,29 @@ export function awaitWriteOutcome(
 			engine,
 			mutationId,
 			(value) => finish(() => resolve(value)),
-			(error) => finish(() => reject(error))
+			(error) => finish(() => reject(error)),
+			(deferred) => {
+				if (deferred.status === 401) {
+					finish(() =>
+						reject(new WriteDeferredError(mutationId, deferred.status, deferred.reason))
+					);
+				}
+			}
 		);
 		// The replay fires synchronously inside events(), so `settled` may already
 		// be true here — this is what releases the subscription in that case.
-		if (settled) unsubscribe();
+		if (settled) {
+			unsubscribe();
+			return;
+		}
+
+		// A standing auth hold is the 401 verdict known up front. A retry enqueued behind
+		// a held row is FIFO-blocked in the backoff window, where no drain reports it, so
+		// without this it would wait out the clock to learn what the engine already knows.
+		if (engine.status().authRequired) {
+			finish(() => reject(new WriteDeferredError(mutationId, 401, 'auth-required')));
+			return;
+		}
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));
 	});
