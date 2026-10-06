@@ -161,8 +161,57 @@ it('a shortcut applies the quick filter exactly as its chip does and is shown wh
 	expect(result.current.path.map((entry) => entry.term)).toEqual([breakfast]);
 	act(() => actions.setFilter('on_sale', true));
 	expect(result.current.path).toEqual([]);
-	// The pill the cashier pressed stays; the shortcut's own patch, still there, goes.
-	expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish', on_sale: true });
+	// The cashier moved the query somewhere the shortcut did not write: it is theirs now, and is
+	// left exactly as they set it (the shortcut's own condition included).
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [3],
+		status: 'publish',
+		on_sale: true,
+	});
+});
+
+it('a chip pressed inside a shortcut level keeps the condition it shares with the shortcut', () => {
+	const { result } = renderHook(() => useBrowsePath('shortcuts', terms as never));
+	act(() => result.current.enter(breakfast));
+	expect(mockState.filters.categories).toEqual([3]);
+	// Chip B, as filter-bar.tsx QuickChip applies it: categories [3] and on sale.
+	act(() => {
+		actions.resetFilters();
+		actions.clearSearch();
+		actions.setFilter('categories', [3]);
+		actions.setFilter('on_sale', true);
+		actions.setSort('name', 'asc');
+	});
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [3],
+		status: 'publish',
+		on_sale: true,
+	});
+	// Forgotten, not deferred: nothing comes out later either.
+	act(() => actions.setSearch('lat'));
+	expect(mockState.filters.categories).toEqual([3]);
+});
+
+it('a search typed inside a term still takes the term out, even after a sort changed in the level', () => {
+	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
+	act(() => result.current.enter(drinks));
+	act(() => actions.setSort('sortable_price', 'desc'));
+	expect(result.current.path.length).toBe(1);
+	act(() => actions.setSearch('lat'));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.categories).toEqual([]);
+	expect(mockState.search).toBe('lat');
+});
+
+it('a Category pill set to another value inside a term drops the path and leaves the pill', () => {
+	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
+	act(() => result.current.enter(drinks));
+	act(() => actions.setFilter('categories', [9]));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.categories).toEqual([9]);
 });
 
 it('leaving a shortcut level takes its patch back out; a search typed over it keeps the search and drops the patch', () => {

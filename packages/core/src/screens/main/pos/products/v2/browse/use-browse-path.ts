@@ -60,6 +60,30 @@ const sameSort = (
 ) => left.field === right.field && left.direction === right.direction;
 
 /**
+ * Whether the query moved anywhere but where the projection writes (and the search) since the
+ * path was last live: a taxonomy projection owns its field; a shortcut owns its patch's keys and
+ * the sort (its chip sets one either way).
+ */
+function movedElsewhere(
+	projection: Projection,
+	now: { filters: FiltersOf<'products'>; sort: { field: string; direction: string } },
+	before: { filters: FiltersOf<'products'>; sort: { field: string; direction: string } }
+): boolean {
+	const owned = new Set<string>(
+		projection.kind === 'taxonomy'
+			? [projection.field]
+			: Object.keys(quickFilterToQueryPatch(projection.quickFilter).filters)
+	);
+	const keys = new Set([...Object.keys(now.filters), ...Object.keys(before.filters)]);
+	for (const key of keys) {
+		if (owned.has(key)) continue;
+		const field = key as keyof FiltersOf<'products'>;
+		if (!isEqual(now.filters[field], before.filters[field])) return true;
+	}
+	return projection.kind === 'taxonomy' && !sameSort(now.sort, before.sort);
+}
+
+/**
  * Every stored term is still in the source, the first is still a root (its parent absent or
  * not in the source), and each later one is still the child of the one before.
  */
@@ -162,32 +186,50 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		latest.current = { state, actions, resetState };
 	});
 
+	// The query as it stood at the last commit the path was live, with the projection it was live
+	// under — what a drop compares against (see `unproject`).
+	const liveQuery = React.useRef<{
+		of: Projection;
+		filters: FiltersOf<'products'>;
+		sort: { field: string; direction: string };
+	} | null>(null);
+
 	// Take back out exactly what the path put in, and only what is still there: a pill the
 	// cashier pressed inside a level is theirs and stays.
-	const unproject = React.useCallback(() => {
-		const current = projected.get();
-		projected.set(null);
-		if (!current) return;
-		const { state: now, actions: act, resetState: baseline } = latest.current;
-		if (current.kind === 'taxonomy') {
-			if (sameSet(now.filters[current.field], current.ids)) act.clearFilter(current.field);
-			return;
-		}
-		const patch = quickFilterToQueryPatch(current.quickFilter);
-		for (const [key, value] of Object.entries(patch.filters)) {
-			const field = key as keyof FiltersOf<'products'>;
-			if (!isEqual(now.filters[field], value)) continue;
-			// A key the baseline owns (status, stock_status under the device setting) goes back to
-			// its baseline value, not away: a shortcut on in-stock must not leave out-of-stock on.
-			const base = baseline.filters[field as keyof typeof baseline.filters];
-			if (base !== undefined && !(Array.isArray(base) && base.length === 0))
-				act.setFilter(field, base as never);
-			else act.clearFilter(field);
-		}
-		if (patch.search && now.search === patch.search) act.clearSearch();
-		if (current.quickFilter.sort && sameSort(now.sort, current.quickFilter.sort))
-			act.setSort(baseline.sort.field, baseline.sort.direction);
-	}, [projected]);
+	// On a DROP (the path invalidated by someone else's change, not `root`/`backTo`/a source
+	// change), only if nothing but the projected keys and the search moved since the path was
+	// last live: a quick-filter chip pressed inside a shortcut level that shares the shortcut's
+	// condition (`categories: [3]`) must keep it — another actor owns the query now, so the path
+	// is forgotten and the query left exactly as they set it.
+	const unproject = React.useCallback(
+		(dropped = false) => {
+			const current = projected.get();
+			projected.set(null);
+			if (!current) return;
+			const { state: now, actions: act, resetState: baseline } = latest.current;
+			const before = liveQuery.current;
+			if (dropped && before?.of === current && movedElsewhere(current, now, before)) return;
+			if (current.kind === 'taxonomy') {
+				if (sameSet(now.filters[current.field], current.ids)) act.clearFilter(current.field);
+				return;
+			}
+			const patch = quickFilterToQueryPatch(current.quickFilter);
+			for (const [key, value] of Object.entries(patch.filters)) {
+				const field = key as keyof FiltersOf<'products'>;
+				if (!isEqual(now.filters[field], value)) continue;
+				// A key the baseline owns (status, stock_status under the device setting) goes back to
+				// its baseline value, not away: a shortcut on in-stock must not leave out-of-stock on.
+				const base = baseline.filters[field as keyof typeof baseline.filters];
+				if (base !== undefined && !(Array.isArray(base) && base.length === 0))
+					act.setFilter(field, base as never);
+				else act.clearFilter(field);
+			}
+			if (patch.search && now.search === patch.search) act.clearSearch();
+			if (current.quickFilter.sort && sameSort(now.sort, current.quickFilter.sort))
+				act.setSort(baseline.sort.field, baseline.sort.direction);
+		},
+		[projected]
+	);
 
 	const project = React.useCallback(
 		(entry: PathEntry | undefined) => {
@@ -279,8 +321,14 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	// the path in the same batch as its projection, and leaving takes the projection out itself.
 	// A LAYOUT effect, as the source teardown: the search results must not paint once under the
 	// old term's filter.
+	// Recorded before the drop effect below reads it, and only while the path is live: the drop
+	// commit's own query is what is compared, never recorded.
 	React.useLayoutEffect(() => {
-		if (stored.length === 0 && projection) unproject();
+		if (live && projection)
+			liveQuery.current = { of: projection, filters: state.filters, sort: state.sort };
+	});
+	React.useLayoutEffect(() => {
+		if (stored.length === 0 && projection) unproject(true);
 	}, [stored.length, projection, unproject]);
 
 	// A live term level whose descendant set has changed under it (a child added, removed or
