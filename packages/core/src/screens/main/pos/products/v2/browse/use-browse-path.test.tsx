@@ -1,6 +1,9 @@
 /** @jest-environment jsdom */
+import { startTransition } from 'react';
+
 import { act, renderHook } from '@testing-library/react';
 
+import { inOneBatch } from '../one-batch.web';
 import { useBrowsePath } from './use-browse-path';
 
 // A tiny in-memory store, so the hook is tested against real state transitions. It keeps the
@@ -442,3 +445,46 @@ it('enter at a depth replaces the path below it with one projection, never nesti
 	expect(mockState.filters.categories).toEqual([2]);
 	expect(actions.setFilter).toHaveBeenLastCalledWith('categories', [2]);
 });
+
+// The edge swipe's end is not a discrete event: a `backTo` from a lower-priority caller,
+// unbatched, commits the parent's query under the child's path for a render (the child level
+// then reads as settled over the parent's products). In one batch the query and the path move
+// together. A transition is the caller here: in jsdom a bare timer's updates happen to land
+// together, a transition's reliably do not.
+it('a backTo from a non-discrete callback, in one batch, moves the query and the path in one render', async () => {
+	const seen: { depth: number; categories: unknown }[] = [];
+	const { result } = renderHook(() => {
+		const browse = useBrowsePath('categories', terms as never);
+		seen.push({ depth: browse.path.length, categories: mockState.filters.categories });
+		return browse;
+	});
+	act(() => {
+		result.current.enter(drinks);
+		result.current.enter(hot);
+	});
+	actions.setFilter.mockClear();
+	seen.length = 0;
+	await act(
+		() =>
+			new Promise<void>((resolve) =>
+				setTimeout(() => {
+					startTransition(() => inOneBatch(() => result.current.backTo(1)));
+					resolve();
+				}, 0)
+			)
+	);
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	expect(mockState.filters.categories).toEqual([1, 2]);
+	// One write, the parent's ids — no stray re-projection of the child's.
+	expect(actions.setFilter.mock.calls).toEqual([['categories', [1, 2]]]);
+	// Never Hot's path over Drinks' query.
+	expect(
+		seen.filter(({ depth, categories }) => depth === 2 && isEqualIds(categories, [1, 2]))
+	).toEqual([]);
+});
+
+function isEqualIds(left: unknown, right: number[]) {
+	return (
+		Array.isArray(left) && left.length === right.length && right.every((id) => left.includes(id))
+	);
+}
