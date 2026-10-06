@@ -656,6 +656,83 @@ it('a collapsing stack cross-fades its detail out and the root in; nothing trave
 	expect(screen.queryByTestId('deal')).toBeNull();
 });
 
+it('the next detail after a cross-fade starts from rest: its veil up, its furniture down', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	finish(0);
+	expect(screen.queryByTestId('deal')).toBeNull();
+	const [furniture, , veil] = mockShared;
+	// The fade left its veil down.
+	expect(veil.value).toBe(0);
+
+	// The next detail, before its deal sets off: shown (the veil up), its crumb and footer still
+	// to join the deal (the furniture down) — not hidden then snapping in, nor there whole.
+	rerender(<Stage detail="Beanie" collapse />);
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+	expect(styleOf('deal').opacity).toBe(1);
+	expect(styleOf('furniture').opacity).toBe(0);
+	layOut();
+	expect(furniture.value).toBe(1);
+});
+
+it('a detail staged after a cross-fade has its clocks at rest before it first paints', () => {
+	// What the detail's own first effects see: every layout effect (the stack's reset among them)
+	// has run by then, but no parent's passive effect yet — the frame it is painted in.
+	const firstSeen: { veil: number; furniture: number }[] = [];
+	function Probe() {
+		React.useEffect(() => {
+			const [furniture, , veil] = mockShared;
+			firstSeen.push({ veil: veil.value, furniture: furniture.value });
+		}, []);
+		return null;
+	}
+	function Probed({ detail, collapse }: { detail: string | null; collapse?: boolean }) {
+		return (
+			<DealStack
+				testID="stage"
+				detail={detail}
+				target={tile}
+				collapse={collapse}
+				renderDetail={(name) => (
+					<>
+						<Pane name={name} count={2} />
+						{name === 'Beanie' ? <Probe /> : null}
+					</>
+				)}
+			>
+				<Lifted />
+			</DealStack>
+		);
+	}
+	const { rerender } = render(<Probed detail={null} />);
+	rerender(<Probed detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Probed detail={null} collapse />);
+	finish(0); // the fade completes: the veil stays down
+	rerender(<Probed detail="Beanie" collapse />);
+	expect(firstSeen).toEqual([{ veil: 1, furniture: 0 }]);
+});
+
+it('a detail opened during a cross-fade is shown whole and its furniture joins its deal', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	const [furniture, , veil] = mockShared;
+	// Mid-fade: the leaving detail's veil going down, its furniture still up.
+	expect(veil.value).toBe(0);
+	expect(furniture.value).toBe(1);
+	rerender(<Stage detail="Beanie" collapse />);
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+});
+
 it('a stack inside a detail that cross-fades away holds what it shows', () => {
 	function Nested({ inner, collapse }: { inner: string | null; collapse?: boolean }) {
 		return (

@@ -105,6 +105,19 @@ export type DealStackProps<T> = {
 };
 
 /**
+ * The clocks a cross-fade leaves (the veil down, the furniture up) put back at rest for the
+ * next detail: shown, its furniture still to fade in with its deal. Nothing to do after a gather,
+ * which leaves the veil up and runs the furniture home itself.
+ */
+function restAfterCrossFade(veil: SharedValue<number>, furniture: SharedValue<number>): void {
+	if (veil.value >= 1) return;
+	cancelAnimation(veil);
+	veil.value = 1;
+	cancelAnimation(furniture);
+	furniture.value = 0;
+}
+
+/**
  * A grid of tiles and the grid of one tile's children, on one stage (owner's pick,
  * 2026-10-02). The tapped tile walks to the first slot and its children are dealt out from
  * under it; going back gathers them into the tile, which walks home.
@@ -264,9 +277,8 @@ export function DealStack<T>({
 		// detail when it ran out, taking the new tile's measurement with it.
 		cancelAnimation(furniture);
 		cancelAnimation(under);
-		// So does a tap during a cross-fade: the new detail is shown whole.
-		cancelAnimation(veil);
-		veil.value = 1;
+		// So does a tap during a cross-fade: the new detail is shown whole (its veil was put back
+		// up before its first paint, above).
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
@@ -289,6 +301,16 @@ export function DealStack<T>({
 			clearTimeout(landing);
 		};
 	}, [open, armed, fading, faded, furniture, under, veil]);
+
+	// A detail put on stage after (or during) a cross-fade starts every opacity clock from rest,
+	// before its first paint. A gather runs the furniture home to 0 and leaves the veil up; a
+	// cross-fade leaves the veil down and the furniture up — the new detail would mount hidden,
+	// then snap in a frame later, with its crumb and footer there whole instead of joining its
+	// deal. A layout effect, on the staging itself: `origin` and `grid` are reset the same way, in
+	// the render that stages it.
+	React.useLayoutEffect(() => {
+		if (open) restAfterCrossFade(veil, furniture);
+	}, [open, generation, furniture, veil]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
