@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { TermLevelGrid } from './term-grid';
 
@@ -207,7 +208,7 @@ const drinks = { kind: 'term' as const, id: 1, name: 'Drinks', count: 12 };
 const hot = { kind: 'term' as const, id: 2, name: 'Hot', count: 6, parent: 1 };
 const latte = { uuid: 'l', payload: { type: 'variable', name: 'Latte' } };
 const flat = { uuid: 'f', payload: { type: 'simple', name: 'Flat White' } };
-const binding = { active$: {}, sync: jest.fn() };
+const binding = { active$: {}, pending$: new BehaviorSubject(false), sync: jest.fn() };
 const base = () => ({
 	term: drinks,
 	children: [hot],
@@ -340,6 +341,32 @@ it('extends the query window when the cashier nears the end of the level', () =>
 	expect(props.actions.extendLimit).toHaveBeenCalled();
 	// Guarded on the level's own loaded rows.
 	expect(guarded).toHaveBeenCalledWith(2);
+});
+
+// The list marks a content length notified even when the guard ignored it (pending): the end
+// reached then is fired once pending clears, or a short page could never page again.
+it('pages once when pending clears after an end-reached it ignored while pending', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...binding, pending$ } });
+	render(<TermLevelGrid {...props} />);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	// Armed once, fired once: a later pending round-trip with no end-reached does not page.
+	act(() => pending$.next(true));
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('drops an armed end-reached when the level is covered before pending clears', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...binding, pending$ } });
+	const { rerender } = render(<TermLevelGrid {...props} />);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	rerender(<TermLevelGrid {...props} settled={false} />);
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 
 it('does not page the shared products query from a level that shows only subcategories', () => {

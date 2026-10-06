@@ -344,6 +344,7 @@ const makeBinding = () => ({
 	result$: new BehaviorSubject({ hits: HITS }),
 	total$: new BehaviorSubject<number | null>(80),
 	active$: of(false),
+	pending$: of(false),
 	sync: jest.fn(),
 });
 type Props = React.ComponentProps<typeof BrowseStage>;
