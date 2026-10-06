@@ -98,10 +98,13 @@ export function useReaderActions() {
 	);
 	// Forget asks first (the Printers and Customer display pages do the same).
 	const [pendingForget, setPendingForget] = React.useState<PaymentMethodDescriptor | null>(null);
-	const askForget = React.useCallback(
-		(method: PaymentMethodDescriptor) => setPendingForget(method),
-		[]
-	);
+	// The dialog is open while `pendingForget` is set; `forgetTarget` outlives it so the title
+	// keeps naming the reader through the exit animation instead of reading "Forget ?".
+	const [forgetTarget, setForgetTarget] = React.useState<PaymentMethodDescriptor | null>(null);
+	const askForget = React.useCallback((method: PaymentMethodDescriptor) => {
+		setForgetTarget(method);
+		setPendingForget(method);
+	}, []);
 	const cancelForget = React.useCallback(() => setPendingForget(null), []);
 	const confirmForget = React.useCallback(() => {
 		const method = pendingForget;
@@ -125,6 +128,7 @@ export function useReaderActions() {
 		cancelScan,
 		disconnect,
 		pendingForget,
+		forgetTarget,
 		askForget,
 		cancelForget,
 		confirmForget,

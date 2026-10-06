@@ -76,13 +76,14 @@ export function CardReadersSettings() {
 	);
 	// Every provider stays offered: scanning again is how a reader is changed.
 	const connectable = devices;
-	const forgetName = actions.pendingForget
+	// Named from the target, not the pending flag, so the title survives the dialog's exit.
+	const forgetName = actions.forgetTarget
 		? readerName(
-				getDriver(actions.pendingForget.capture.provider)?.status$.get().reader ??
-					remembered[actions.pendingForget.id] ??
+				getDriver(actions.forgetTarget.capture.provider)?.status$.get().reader ??
+					remembered[actions.forgetTarget.id] ??
 					null,
 				t
-			) || actions.pendingForget.title
+			) || actions.forgetTarget.title
 		: '';
 
 	const connectButton = (variant: 'default' | 'outline') =>

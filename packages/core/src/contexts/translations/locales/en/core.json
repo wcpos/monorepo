@@ -1263,7 +1263,6 @@
 	"settings.card_readers.reader_guide": "Reader guide",
 	"settings.card_readers.open_provider_settings": "Open {title} reader settings",
 	"settings.card_readers.saved_in_app": "Saved in the {title} app",
-	"settings.card_readers.not_connected": "Not connected",
 	"settings.card_readers.connected": "Connected",
 	"settings.card_readers.looking": "Looking for readers… Turn the reader on and keep it near this device.",
 	"settings.card_readers.found_n": "{n} readers found. Which one is yours?",

@@ -214,8 +214,9 @@ it('scans in place, connects with a bootstrap handoff, remembers, then disconnec
 		fireEvent.click(screen.getByTestId(`${row}-disconnect`));
 	});
 	expect(screen.queryByTestId(`${row}-status`)).toBeNull();
-	// Remembered but disconnected: the row stays, says so, and offers Connect and Forget.
-	expect(screen.getByTestId(`${row}-line`).textContent).toBe('Not connected');
+	// Remembered but disconnected: the row stays with no third line (the Connect button says
+	// it), and offers Connect and Forget.
+	expect(screen.queryByTestId(`${row}-line`)).toBeNull();
 	expect(screen.getByTestId(`${row}-connect`)).toBeTruthy();
 	fireEvent.click(screen.getByTestId(`${row}-forget`));
 	// The row and the dialog name the model, as the box does; the label is the SDK's.

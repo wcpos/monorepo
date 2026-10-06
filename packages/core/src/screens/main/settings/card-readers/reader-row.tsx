@@ -128,10 +128,10 @@ export function ReaderRow({
 		);
 	} else if (status.connection === 'connecting' || status.connection === 'discovering')
 		line = t('settings.card_readers.connecting_to', { name });
-	else if (connected && reader?.transport === 'tap_to_pay') line = t('settings.card_readers.ready');
-	else if (connected) line = t('settings.card_readers.connected');
-	else if (sdkUi && reader) line = t('settings.card_readers.saved_in_app', { title: method.title });
-	else line = t('settings.card_readers.not_connected');
+	else if (!connected && sdkUi && reader)
+		line = t('settings.card_readers.saved_in_app', { title: method.title });
+	// Connected says so in the status chip, and a plain Connect button already means "not
+	// connected": neither state earns a third line (the Printers row has two).
 
 	if (found)
 		below = (
