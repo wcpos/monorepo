@@ -125,11 +125,13 @@ const result = (payloads: Payload[]): Result => ({
  * One hook's binding as the real one behaves: a new `result$` per compiled query that answers
  * only when it emits (a disabled read answers empty on subscribe), beside ONE resource whose
  * `valueRef$$` keeps the last answer of whichever query emitted (ObservableResource.reload) —
- * the stale value the hook must not read.
+ * the stale value the hook must not read. Its `pending$` is the hook's one demand flag, settled
+ * (false) unless a test holds a refresh in flight.
  */
 function fakeBinding() {
 	const reads = new Map<string, Subject<Result>>();
 	const valueRef$$ = new BehaviorSubject<{ current: Result } | undefined>(undefined);
+	const pending$ = new BehaviorSubject(false);
 	return {
 		read(key: string, answered?: Result) {
 			let result$ = reads.get(key);
@@ -138,10 +140,13 @@ function fakeBinding() {
 				result$.subscribe((current) => valueRef$$.next({ current }));
 				reads.set(key, result$);
 			}
-			return { result$, resource: { valueRef$$ } };
+			return { result$, pending$, resource: { valueRef$$ } };
 		},
 		emit(key: string, payloads: Payload[]) {
 			act(() => reads.get(key)!.next(result(payloads)));
+		},
+		pend(pending: boolean) {
+			act(() => pending$.next(pending));
 		},
 	};
 }
@@ -195,6 +200,27 @@ describe('useBrowseCounts', () => {
 		]);
 		terms['products/brands'].emit('products/brands', []);
 		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+	});
+	// A cold collection's local read answers empty at once; its refresh has not landed yet.
+	it('counts nothing for a cold source while its refresh is pending, then its answer', () => {
+		fakeCarrying();
+		terms['products/categories'].pend(true);
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', []);
+		expect(counts.current.categories).toBeUndefined();
+
+		// Settled — met, or failed offline — an empty answer is one.
+		terms['products/categories'].pend(false);
+		expect(counts.current.categories).toBe(0);
+	});
+	it('keeps a warm source counted while a refresh is pending', () => {
+		fakeCarrying();
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+		]);
+		terms['products/categories'].pend(true);
+		expect(counts.current.categories).toBe(1);
 	});
 	// A POS-only store: every term is zero-count, kept only by the products that carry it. The
 	// products read starts disabled (no terms yet) and answers empty — that answer is not the

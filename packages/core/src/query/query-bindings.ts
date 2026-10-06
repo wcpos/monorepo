@@ -1167,7 +1167,10 @@ export function useProductsCarryingTermsBinding(
 			'products',
 			{
 				search: '',
-				filters: { categories: [], tags: [], brands: [], [taxonomy]: ids },
+				// Published only, as the selling surface reads: a cached draft must not keep its
+				// zero-count term on the stage. Catalogue visibility is not filtered — a published
+				// product hidden from the catalogue is exactly what this read is for.
+				filters: { categories: [], tags: [], brands: [], status: 'publish', [taxonomy]: ids },
 				sort: { field: 'name', direction: 'asc' },
 			},
 			{ id: bindingId }

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -134,7 +136,14 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 	// Read as state, never suspend: the tiles are on a stage that must not swap for a skeleton.
 	// THIS collection's answer: a source switch is unanswered until its own query emits, never
 	// the previous taxonomy's records projected as the new source.
-	const hits = useAnswerOf(binding.result$)?.hits as Hit<TermRecord>[] | undefined;
+	const answer = useAnswerOf(binding.result$)?.hits as Hit<TermRecord>[] | undefined;
+	// A cold collection answers its empty local rows at once, before its refresh has landed: no
+	// terms is not an answer while the demand is pending. Once it settles — met, or failed
+	// offline — an empty answer is one; a disabled binding is never pending. Local rows are shown
+	// while a re-declaration is pending, so a warm stage does not collapse on a refresh.
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- QueryBinding.pending$ is the demand's stable BehaviorSubject, not an RxDB $-getter; exception dated 2026-10-06.
+	const pending = useObservableEagerState(binding.pending$);
+	const hits = pending && answer?.length === 0 ? undefined : answer;
 	// The catalog recount leaves out POS-only products, so ask the local products which of the
 	// zero-count terms they carry (see `visibleTerms`).
 	const zeroCountIds = React.useMemo(
