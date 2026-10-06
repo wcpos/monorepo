@@ -206,8 +206,8 @@ export function TermLevelGrid({
 	const total = shown?.total;
 	const total$ = React.useMemo(() => (total === undefined ? NO_TOTAL$ : of(total)), [total]);
 	// The query is windowed (#1221): the level asks for more as the cashier nears its end, as the
-	// products grid does. A level of subcategories alone has nothing to page, and must not move
-	// the shared query.
+	// products grid does. A level of subcategories alone has nothing to page, and a level a child
+	// is over does not own the query: neither may move it.
 	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
 
 	// Until the query answers, a row's worth of product slots is held, so the deal never waits.
@@ -236,7 +236,7 @@ export function TermLevelGrid({
 		if (index === 0) return <ParentTermTile term={term} onPress={back} />;
 		if (index <= children.length) {
 			const child = children[index - 1];
-			return <TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} />;
+			return <TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} grow />;
 		}
 		const record = products[index - 1 - children.length];
 		if (!record) return <ProductPlaceholder />;
@@ -282,7 +282,10 @@ export function TermLevelGrid({
 						keyExtractor={(_, rowIndex) => String(rowIndex)}
 						CellRendererComponentStyle={frontRow}
 						onEndReachedThreshold={END_REACHED_THRESHOLD}
-						onEndReached={showProducts ? extend : undefined}
+						// Android detaches rows outside the viewport by default, so a tile bound below the
+						// fold flew unseen; rows outside the render window still unmount.
+						removeClippedSubviews={false}
+						onEndReached={showProducts && settled ? extend : undefined}
 						renderItem={({ item: row, index: rowIndex }) => (
 							<View className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
 								{row.map((index) =>
@@ -303,7 +306,10 @@ export function TermLevelGrid({
 							</View>
 						)}
 						ListFooterComponent={
-							isEmpty ? <View className="items-center justify-center p-4">{empty}</View> : undefined
+							// Furniture, as the crumb and the footer are: it fades with the deal.
+							isEmpty ? (
+								<DealFade className="items-center justify-center p-4">{empty}</DealFade>
+							) : undefined
 						}
 					/>
 				</View>

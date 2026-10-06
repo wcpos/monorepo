@@ -130,10 +130,13 @@ export function TermTile({
 	term,
 	onPress,
 	lifted,
+	grow,
 }: {
 	term: BrowseTerm;
 	onPress: (term: BrowseTerm, target?: Measurable) => void;
 	lifted?: boolean;
+	/** In a dealt cell (a level's child term) the tile grows to its row. */
+	grow?: boolean;
 }) {
 	const t = useT();
 	const tile = React.useRef<ViewInstance>(null);
@@ -145,7 +148,7 @@ export function TermTile({
 			style={lifted ? LIFTED : undefined}
 			accessibilityRole="button"
 			accessibilityLabel={label}
-			className={tileClass(term, 'flex-1')}
+			className={tileClass(term, grow ? 'grow' : 'flex-1')}
 			testID={termTestId(term)}
 		>
 			<TermBody term={term} />

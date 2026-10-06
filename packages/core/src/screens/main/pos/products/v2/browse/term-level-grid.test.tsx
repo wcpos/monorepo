@@ -64,6 +64,18 @@ jest.mock('../grid/variable-product-tile', () => ({
 		/>
 	),
 }));
+// The real tiles, each reporting whether the level asked it to grow to its row.
+jest.mock('./term-tile', () => {
+	const actual = jest.requireActual('./term-tile');
+	return {
+		...actual,
+		TermTile: (props: { grow?: boolean }) => (
+			<div data-grow={String(!!props.grow)}>
+				<actual.TermTile {...props} />
+			</div>
+		),
+	};
+});
 jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		count,
@@ -107,6 +119,7 @@ jest.mock('react-native-reanimated', () => ({
 			onEndReached,
 			ListFooterComponent,
 			CellRendererComponentStyle,
+			removeClippedSubviews,
 		}: {
 			data: unknown[];
 			renderItem: (input: { item: unknown; index: number }) => React.ReactNode;
@@ -115,8 +128,13 @@ jest.mock('react-native-reanimated', () => ({
 			onEndReached: () => void;
 			ListFooterComponent?: React.ReactNode;
 			CellRendererComponentStyle?: (input: { item: unknown; index: number }) => unknown;
+			removeClippedSubviews?: boolean;
 		}) => (
-			<div data-testid={testID} onScroll={onEndReached}>
+			<div
+				data-testid={testID}
+				data-remove-clipped={String(removeClippedSubviews)}
+				onScroll={onEndReached}
+			>
 				{data.map((item, index) => (
 					<div
 						key={keyExtractor(item, index)}
@@ -225,6 +243,11 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	// A dealt product tile grows to its row (the cell gives it no height of its own).
 	expect(screen.getByTestId('product-f').dataset.grow).toBe('true');
 	expect(screen.getByTestId('variable-l').dataset).toMatchObject({ grow: 'true', style: 'drill' });
+	// So does a child term: a subcategories level has rows made only of them.
+	expect(screen.getByTestId('browse-term-2').parentElement!.dataset.grow).toBe('true');
+	// Rows below the fold but inside the render window stay attached, so their tiles are seen
+	// for the whole of their flight (Android detaches clipped subviews by default).
+	expect(screen.getByTestId('browse-level-scroller').dataset.removeClipped).toBe('false');
 	// The parent's row stays above the rows that come out from under it.
 	expect(screen.getByTestId('row-0').dataset.cellStyle).toBe('{"zIndex":1}');
 	expect(screen.getByTestId('row-1').dataset.cellStyle).toBe('null');
@@ -327,6 +350,13 @@ it('does not page the shared products query from a level that shows only subcate
 	expect(guarded).not.toHaveBeenCalled();
 });
 
+it('does not page the shared products query from a level a child is over', () => {
+	const props = level({ settled: false });
+	render(<TermLevelGrid {...props} />);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+});
+
 it('shows the empty state under the parent tile when the level answered with nothing and has no children', () => {
 	render(<TermLevelGrid {...level({ children: [], answer: { hits: [], total: 0 } })} />);
 	expect(screen.getByTestId('browse-parent')).not.toBeNull();
@@ -336,6 +366,11 @@ it('shows the empty state under the parent tile when the level answered with not
 	expect(
 		screen.getByTestId('browse-level-scroller').contains(screen.getByTestId('no-data-message'))
 	).toBe(true);
+	// Furniture, not a cell: it fades with the crumb and the footer, never drawn at rest over a
+	// deal in flight nor blinking out on the way back.
+	const fade = screen.getByTestId('no-data-message').closest('[data-testid="fades"]');
+	expect(fade).not.toBeNull();
+	expect(screen.getByTestId('browse-level-scroller').contains(fade)).toBe(true);
 });
 
 it('Escape goes back one level', () => {
