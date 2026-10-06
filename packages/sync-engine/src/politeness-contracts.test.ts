@@ -58,7 +58,6 @@ function product(wooId: number): Record<string, unknown> {
 		stockStatus: 'instock',
 		type: 'simple',
 		categoryIds: [],
-		tagIds: [],
 		brandIds: [],
 		onSale: false,
 		featured: false,

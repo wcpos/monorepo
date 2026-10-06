@@ -52,8 +52,7 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
  * legacy: the purge that runs after a store is sale-ready removes it (#2242).
  * History is on `scopeDatabaseName`.
  */
-// 6: products promoted `tagIds` (an indexed-membership tag filter) — every resident re-ingests.
-export const SCOPE_DATABASE_GENERATION = 6;
+export const SCOPE_DATABASE_GENERATION = 5;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,
@@ -135,7 +134,6 @@ export function scopeKeyFor(identity: StoreScopeIdentity): string {
  * generation-3 database is abandoned wholesale rather than migrated (house
  * ruling: no migrations for unreleased schema; 1.10 ships a fresh database).
  * v5 = the 2.0 storage engine: promoted scope/sort columns and indexes (#2242).
- * v6 = products promote `tagIds`, so a tag filter is numeric membership, not a payload scan.
  */
 export function scopeDatabaseName(
 	identity: StoreScopeIdentity,

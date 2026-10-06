@@ -13,7 +13,6 @@ const product = {
 	featured: true,
 	onSale: false,
 	categoryIds: [2, 7],
-	tagIds: [9],
 	brandIds: [4],
 	price: 12.35,
 	stockQuantity: 3,
@@ -144,7 +143,7 @@ describe('translateSelector', () => {
 		);
 	});
 
-	it('translates category, tag and brand object matches to numeric membership prefilters', () => {
+	it('translates category and brand object matches to numeric membership prefilters', () => {
 		const translated = translateSelector('products', {
 			categories: { $elemMatch: { id: 7 } },
 			brands: { $elemMatch: { id: { $eq: 4 } } },
@@ -154,7 +153,7 @@ describe('translateSelector', () => {
 		expect(translated.prefilter).toEqual({
 			categoryIds: { $in: [7] },
 			brandIds: { $in: [4] },
-			tagIds: { $in: [9] },
+			'payload.tags': { $elemMatch: { id: 9 } },
 		});
 		expect(translated.residual(product)).toBe(true);
 	});

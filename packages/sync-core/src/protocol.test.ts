@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkpointInstantMs, normalizeCheckpoint, withProductColumns } from './protocol';
+import { checkpointInstantMs, normalizeCheckpoint } from './protocol';
 import { customerDocumentId, orderDocumentId, productDocumentId } from './woo/documentKeys';
 import { mintRemoteId } from './woo/remoteIdCodec';
 
@@ -68,21 +68,5 @@ describe('productDocumentId', () => {
 describe('customerDocumentId', () => {
 	it('uses a stable Woo customer document prefix (the Woo-id-space coverage key)', () => {
 		expect(customerDocumentId(mintRemoteId(7, 'customer id'))).toBe('woo-customer:7');
-	});
-});
-
-describe('withProductColumns', () => {
-	it('promotes every product taxonomy to a numeric id column, tags included', () => {
-		const stored = withProductColumns({
-			payload: {
-				id: 9,
-				categories: [{ id: 3, name: 'Coffee' }],
-				tags: [{ id: 4, name: 'Decaf' }, 12, { id: 0 }],
-				brands: [{ id: 11, name: 'WCPOS' }],
-			},
-		});
-
-		expect(stored).toMatchObject({ categoryIds: [3], tagIds: [4, 12], brandIds: [11] });
-		expect(withProductColumns({ payload: { id: 10 } }).tagIds).toEqual([]);
 	});
 });

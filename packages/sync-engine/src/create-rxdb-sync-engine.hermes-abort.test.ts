@@ -226,7 +226,6 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
-			tagIds: [],
 			brandIds: [],
 			onSale: false,
 			featured: false,

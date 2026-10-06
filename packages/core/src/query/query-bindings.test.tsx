@@ -247,7 +247,7 @@ describe('query bindings', () => {
 		expect(engine.requireCalls).toEqual([]);
 	});
 
-	it('compiles the existence read to promoted tag membership inside the selling baseline', () => {
+	it('compiles the existence read taxonomy filter inside the selling baseline', () => {
 		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
 		const { rerender } = renderHook(
 			({ showOutOfStock }) => useProductsCarryingTermsBinding('tags', [9, 5], { showOutOfStock }),
@@ -260,19 +260,21 @@ describe('query bindings', () => {
 				>
 			).read.prefilter;
 
-		// A numeric membership on the promoted column, never an `$elemMatch` over the payload.
-		expect(prefilter()).toEqual({
-			$and: [
-				{ tagIds: { $in: [5, 9] } },
-				{ 'payload.status': 'publish' },
-				{ stockStatus: 'instock' },
+		// Tags are still a payload field (one `$elemMatch` per id); categories and brands are
+		// promoted membership columns.
+		const tags = {
+			$or: [
+				{ 'payload.tags': { $elemMatch: { id: 5 } } },
+				{ 'payload.tags': { $elemMatch: { id: 9 } } },
 			],
+		};
+		expect(prefilter()).toEqual({
+			$and: [tags, { 'payload.status': 'publish' }, { stockStatus: 'instock' }],
 		});
-		expect(JSON.stringify(prefilter())).not.toContain('payload.tags');
 
 		rerender({ showOutOfStock: true });
 		expect(prefilter()).toEqual({
-			$and: [{ tagIds: { $in: [5, 9] } }, { 'payload.status': 'publish' }],
+			$and: [tags, { 'payload.status': 'publish' }],
 		});
 		compileQuery.mockRestore();
 	});

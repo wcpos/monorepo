@@ -464,7 +464,6 @@ describe('product-trickle maintenance lane', () => {
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
-			tagIds: [],
 			brandIds: [],
 			onSale: false,
 			featured: false,

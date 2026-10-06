@@ -117,8 +117,7 @@ export function finiteOrNull(value: unknown): number | null {
 
 /**
  * Promoted product filter/sort columns (INC-2a; the attribute "any" facet array is INC-2b). `price`
- * is numeric for range filters; `categoryIds`/`tagIds`/`brandIds` are membership arrays for
- * multi-select.
+ * is numeric for range filters; `categoryIds`/`brandIds` are membership arrays for multi-select.
  */
 export type PromotedProductColumns = {
 	sortName: string;
@@ -126,7 +125,6 @@ export type PromotedProductColumns = {
 	stockStatus: string;
 	type: string;
 	categoryIds: number[];
-	tagIds: number[];
 	brandIds: number[];
 	onSale: boolean;
 	featured: boolean;
@@ -152,7 +150,6 @@ export function promotedProductColumns(payload: WooProductPayload): PromotedProd
 		stockStatus: String(payload.stock_status ?? ''),
 		type: String(payload.type ?? ''),
 		categoryIds: taxonomyIds(payload.categories),
-		tagIds: taxonomyIds(payload.tags),
 		brandIds: taxonomyIds(payload.brands),
 		onSale: Boolean(payload.on_sale),
 		featured: Boolean(payload.featured),

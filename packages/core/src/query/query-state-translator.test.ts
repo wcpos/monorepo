@@ -331,7 +331,7 @@ describe('query-state translator', () => {
 		expect(products.read.prefilter).toEqual({
 			$and: [
 				{ categoryIds: { $in: [2, 7] } },
-				{ tagIds: { $in: [5] } },
+				{ $or: [{ 'payload.tags': { $elemMatch: { id: 5 } } }] },
 				{ brandIds: { $in: [9] } },
 				{ featured: true },
 				{ onSale: false },
@@ -781,7 +781,7 @@ describe('query-state translator', () => {
 		});
 	});
 
-	it('pushes tag membership to the promoted tagIds column, not a payload scan', () => {
+	it('pushes payload taxonomies without forcing the residual slow path', () => {
 		const compiled = compileQuery(
 			'products',
 			{
@@ -793,7 +793,12 @@ describe('query-state translator', () => {
 			{ id: 'products' }
 		);
 
-		expect(compiled.read.prefilter).toEqual({ tagIds: { $in: [5, 9] } });
+		expect(compiled.read.prefilter).toEqual({
+			$or: [
+				{ 'payload.tags': { $elemMatch: { id: 5 } } },
+				{ 'payload.tags': { $elemMatch: { id: 9 } } },
+			],
+		});
 		expect(compiled.read.complete).toBe(true);
 	});
 

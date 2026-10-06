@@ -1210,11 +1210,11 @@ export const EXISTENCE_RECHECK_MS = 30_000;
 
 /**
  * The local products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
- * category/tag/brand pill applies (each taxonomy is a promoted id column, so the filter is
- * numeric membership, never a payload scan). Local only, no remote pull: whether a zero-count
- * term has products is decided by what the till has synced, since the catalogue recount is the
- * storefront's. An empty id list would compile to no filter (every product), so the binding
- * is disabled then: no read at all.
+ * category/tag/brand pill applies (categories and brands are promoted id columns; tags are a
+ * payload scan, bounded here by the re-check window). Local only, no remote pull: whether a
+ * zero-count term has products is decided by what the till has synced, since the catalogue
+ * recount is the storefront's. An empty id list would compile to no filter (every product), so
+ * the binding is disabled then: no read at all.
  *
  * Not live: answered once, then re-checked at most every `EXISTENCE_RECHECK_MS` after a write.
  * The engine has no field projection, so the answer is still the matching records.

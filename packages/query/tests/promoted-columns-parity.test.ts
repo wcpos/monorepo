@@ -17,7 +17,6 @@ describe('promoted product columns parity', () => {
 			stock_quantity: 3.6,
 			type: 'simple',
 			categories: [{ id: 3, name: 'Coffee' }],
-			tags: [{ id: 5, name: 'Decaf' }],
 			brands: [{ id: 7, name: 'WCPOS' }],
 			on_sale: true,
 			featured: false,
@@ -37,16 +36,14 @@ describe('promoted product columns parity', () => {
 	});
 
 	it('accepts bare-number taxonomy ids on both faces (ruled)', () => {
-		const payload = { categories: [3], tags: [5], brands: [7] };
+		const payload = { categories: [3], brands: [7] };
 
 		expect(promotedColumnsFor('products', payload)).toMatchObject({
 			categoryIds: [3],
-			tagIds: [5],
 			brandIds: [7],
 		});
 		expect(promotedProductColumns(payload)).toMatchObject({
 			categoryIds: [3],
-			tagIds: [5],
 			brandIds: [7],
 		});
 	});

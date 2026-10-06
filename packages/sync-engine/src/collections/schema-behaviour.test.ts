@@ -33,7 +33,6 @@ import {
 	promotedOrderColumns,
 	promotedProductColumns,
 	referenceDocumentId,
-	SCOPE_DATABASE_GENERATION,
 	taxRateDocumentId,
 } from '@wcpos/sync-core';
 import {
@@ -123,7 +122,6 @@ const PRODUCT_PAYLOAD = {
 	stock_status: 'instock',
 	type: 'simple',
 	categories: [{ id: 3 }, { id: 5 }],
-	tags: [{ id: 4 }],
 	brands: [{ id: 11 }],
 	on_sale: true,
 	featured: false,
@@ -485,9 +483,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	 * fresh-database test, so the schemas are pinned here on purpose.
 	 *
 	 * To change a schema: bump its `version`, add the migration strategy, and update the
-	 * digest below in the same commit. The friction IS the guard. Pre-GA the version stays at
-	 * 0 and the scope database GENERATION moves instead (see `productSchema`): update the
-	 * digest AND `PINNED_SCOPE_GENERATION` together.
+	 * digest below in the same commit. The friction IS the guard.
 	 */
 	function canonicalJson(value: unknown): string {
 		if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -508,8 +504,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 
 	const PINNED_DIGESTS: Record<string, string> = {
 		orders: 'bc0b35ca7829dad7',
-		// tagIds promoted at scope generation 6.
-		products: 'dc0ab793f15f4e7a',
+		products: '533f385dbba3bd58',
 		variations: 'df92c9203ba108c1',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
@@ -536,22 +531,12 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
 
-	/** The scope database generation the pinned digests above ship under. */
-	const PINNED_SCOPE_GENERATION = 6;
-
 	it('every engine collection schema matches its pinned digest', () => {
 		const creators = engineCollectionCreators();
 		const actual = Object.fromEntries(
 			Object.entries(creators).map(([name, creator]) => [name, digest(creator.schema)])
 		);
 		expect(actual).toEqual(PINNED_DIGESTS);
-	});
-
-	it('a moved digest moved the scope database generation with it (no in-place edit reaches a resident database)', () => {
-		expect(SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION);
-		expect(productSchema.version).toBe(0);
-		expect(productSchema.properties.tagIds).toEqual({ type: 'array', items: { type: 'number' } });
-		expect(productSchema.required).toContain('tagIds');
 	});
 
 	it('every versioned schema ships the migration strategies its version needs', () => {
