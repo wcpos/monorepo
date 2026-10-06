@@ -29,6 +29,16 @@ jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+// The term level's leaves (term-grid.tsx) are native motion and the till's furniture; only the
+// root term set is on stage here.
+jest.mock('@wcpos/components/breadcrumb', () => ({ Breadcrumb: () => null }));
+jest.mock('../level-back', () => ({
+	LevelBack: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('../grid/product-tile', () => ({ ProductTile: () => null }));
+jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
+jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
+jest.mock('../footer', () => ({ ProductsFooter: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	List: ({

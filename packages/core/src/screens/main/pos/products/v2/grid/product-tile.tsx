@@ -40,10 +40,13 @@ interface ProductTileProps {
 	/** The tile itself goes along, so a drill-in can start from where it sits. */
 	onDrill?: (record: EngineRecord<'products'>, target?: Measurable) => void;
 	lifted?: boolean;
+	/** In a dealt cell the tile grows to its row's height; `flex-1` would give it no height of
+	 * its own inside the cell (as `VariationTile`). */
+	grow?: boolean;
 }
 
 /** Renders a product tile with the fields enabled for the product grid. */
-export function ProductTile({ record, gridFields, onDrill, lifted }: ProductTileProps) {
+export function ProductTile({ record, gridFields, onDrill, lifted, grow }: ProductTileProps) {
 	const t = useT();
 	const tile = React.useRef<ViewInstance>(null);
 	const count = useProductCount(record);
@@ -128,7 +131,7 @@ export function ProductTile({ record, gridFields, onDrill, lifted }: ProductTile
 			ref={tile}
 			onPress={handlePress}
 			style={lifted ? LIFTED : undefined}
-			className="bg-card border-border active:bg-muted m-1 flex-1 overflow-hidden rounded-lg border"
+			className={`bg-card border-border active:bg-muted m-1 ${grow ? 'grow' : 'flex-1'} overflow-hidden rounded-lg border`}
 			testID={onDrill ? 'variable-product-tile' : 'product-tile'}
 		>
 			<View

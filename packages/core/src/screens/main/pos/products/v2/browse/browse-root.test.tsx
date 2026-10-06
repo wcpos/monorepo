@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import * as React from 'react';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { DealStagedContext } from '../deal-stack';
 import { BrowseRootGrid } from './term-grid';
@@ -24,6 +25,20 @@ jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+// The term level's leaves (term-grid.tsx) are native motion and the till's furniture; only the
+// root term set is on stage here.
+jest.mock('@wcpos/components/breadcrumb', () => ({ Breadcrumb: () => null }));
+jest.mock('../level-back', () => ({
+	LevelBack: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('../grid/product-tile', () => ({ ProductTile: () => null }));
+jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
+jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
+jest.mock('../footer', () => ({
+	ProductsFooter: ({ count, collectionName }: { count: number; collectionName: string }) => (
+		<footer data-testid="products-footer" data-count={count} data-collection={collectionName} />
+	),
+}));
 // The list renders every row it is handed, in order: the root's order is what is tested.
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -91,6 +106,24 @@ it('the root grid fills a short last row with spacers', () => {
 	const lastRow = screen.getByTestId('browse-term-2').parentElement!;
 	expect(lastRow.children).toHaveLength(2);
 	expect(within(lastRow).getAllByRole('button')).toHaveLength(1);
+});
+
+it('the root grid carries the till’s footer: the catalogue total, not the loaded window', () => {
+	const { rerender } = render(<BrowseRootGrid terms={terms} onOpen={jest.fn()} />);
+	expect(screen.queryByTestId('products-footer')).toBeNull();
+	const result$ = new BehaviorSubject({ hits: [{}, {}, {}] });
+	const binding = (total: number | null) =>
+		({ total$: of(total), result$, active$: of(false), sync: jest.fn() }) as unknown as NonNullable<
+			React.ComponentProps<typeof BrowseRootGrid>['binding']
+		>;
+	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding(80)} />);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
+		count: '80',
+		collection: 'products',
+	});
+	// Nothing vouches for a total: the loaded rows are the only number there is.
+	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding(null)} />);
+	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });
 
 it('the root grid lifts the tile whose copy is out on the stage', () => {
