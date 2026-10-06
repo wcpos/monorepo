@@ -5,6 +5,7 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import {
 	forgetUnsentChanges,
 	readUnsentChanges,
+	rememberLegacyUnsentChanges,
 	rememberUnsentChanges,
 } from '@wcpos/utils/unsent-changes';
 
@@ -70,6 +71,16 @@ describe('countUnsentChanges', () => {
 		expect(countUnsentChanges(fakeEngine({ count$: new BehaviorSubject(0) }))).resolves.toEqual({
 			status: 'unknown',
 		}));
+
+	it('adds what a kept previous-generation database holds: Clear local data deletes it too', async () => {
+		rememberLegacyUnsentChanges('pos_v5_0123456789ab_s1_c2', 3);
+		await expect(
+			countUnsentChanges(fakeEngine({ count$: new BehaviorSubject(0) }))
+		).resolves.toEqual({ status: 'some', count: 3 });
+		await expect(
+			countUnsentChanges(fakeEngine({ count$: new BehaviorSubject(2) }))
+		).resolves.toEqual({ status: 'some', count: 5 });
+	});
 
 	it('falls back promptly when the live queue count never settles', async () => {
 		jest.useFakeTimers();

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { legacyUnsentChangesMayRemain } from '@wcpos/utils/unsent-changes';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import {
@@ -69,12 +70,16 @@ export function SaleCompletionBridge(): null {
 					)) as unknown as EngineRecord<'orders'> | null;
 					if (current.stopped) return;
 					if (!resident) {
+						// A previous-generation scope database the drain has not emptied (kept, or not
+						// yet reported) may still hold this order: it is not resident YET, which is
+						// not a missed start. Abandoning it would drop a captured payment's completion.
+						const awaitingLegacyDrain = legacyUnsentChangesMayRemain();
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
 							expectAt: attempt.at,
-							missingStart: true,
+							missingStart: !awaitingLegacyDrain,
 						});
 						if (current.stopped) return;
-						if ((attempt.missingStarts ?? 0) + 1 >= 3) {
+						if (!awaitingLegacyDrain && (attempt.missingStarts ?? 0) + 1 >= 3) {
 							await resolveCompletionAttempt(storeDB, uuid, attempt.at);
 							logger.warn('Pending sale completion abandoned: order not resident', {
 								code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,

@@ -7,6 +7,7 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { forgetUnsentChanges, rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import * as journal from './completion-journal';
 import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
@@ -203,6 +204,29 @@ it('finishes on the second start when the normal pull has made the unpaid reside
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(mockCatchUp).toHaveBeenCalledTimes(1);
 	expect(mockRefresh).toHaveBeenCalledTimes(1);
+});
+
+it('never abandons a missing order while a previous-generation database may still hold it', async () => {
+	await record();
+	mockFind.mockResolvedValue(null);
+	rememberLegacyUnsentChanges('pos_v5_0123456789ab_s1_c2', 2);
+	try {
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3, 4]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = {};
+			view.rerender(<SaleCompletionBridge />);
+		}
+		expect(mockWarn).not.toHaveBeenCalled();
+	} finally {
+		forgetUnsentChanges();
+	}
 });
 
 it('counts missing orders once per session and abandons with one warning on the third start', async () => {
