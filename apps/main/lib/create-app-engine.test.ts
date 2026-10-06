@@ -85,7 +85,9 @@ function createEngineDouble(
 function loadCreateAppEngine(
 	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble,
 	platformIsWeb = false,
-	initiallyActive = true
+	initiallyActive = true,
+	/** The platform's scope database files: a native listing fake, or null (web/Electron). */
+	scopeDatabaseFiles: { list(): Promise<string[]> } | null = null
 ) {
 	jest.resetModules();
 	const purgeLegacyDatabases = jest.fn(async () => undefined);
@@ -145,7 +147,7 @@ function loadCreateAppEngine(
 			databaseName: scopeDatabaseName(scope, { generation: 5 }),
 		})
 	);
-	jest.doMock('@wcpos/database/scope-database-files', () => ({ scopeDatabaseFiles: null }));
+	jest.doMock('@wcpos/database/scope-database-files', () => ({ scopeDatabaseFiles }));
 
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
@@ -182,12 +184,17 @@ function loadCreateAppEngine(
 		getMetricsEpoch: jest.fn(() => 0),
 	}));
 
-	const { createAppSyncEngine, switchAppEngineScope, createSessionFetcherOptions } =
-		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
+	const {
+		createAppSyncEngine,
+		switchAppEngineScope,
+		createSessionFetcherOptions,
+		inventoryLegacyScopeDatabases,
+	} = jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	const { setAppOnlineStatus } =
 		jest.requireActual<typeof import('./connectivity')>('./connectivity');
 	return {
 		createAppSyncEngine,
+		inventoryLegacyScopeDatabases,
 		drainLegacyScopeDatabase,
 		setAppOnlineStatus,
 		networkDebug,
@@ -2266,6 +2273,105 @@ describe('previous-generation database drain', () => {
 		report({ status: 'absent', databaseName: LEGACY });
 		await settle();
 		expect(settled).toBe('reported');
+	});
+
+	describe('the boot inventory: an unvisited previous-generation database keeps the reset count unknown', () => {
+		const TARGET = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const TARGET_LEGACY = scopeDatabaseName(TARGET, { generation: 5 });
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+		const drainsAbsent = async (_ports: unknown, scope: ScopeIdentity) =>
+			({
+				status: 'absent',
+				databaseName: scopeDatabaseName(scope, { generation: 5 }),
+			}) as LegacyScopeDrainOutcome;
+
+		/** A browser-storage fake for the web/Electron marker; restored after each test. */
+		let restoreStorage: (() => void) | null = null;
+		const fakeLocalStorage = (initial: Record<string, string>) => {
+			const values = new Map(Object.entries(initial));
+			const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+			Object.defineProperty(globalThis, 'localStorage', {
+				configurable: true,
+				value: {
+					getItem: (key: string) => values.get(key) ?? null,
+					setItem: (key: string, value: string) => void values.set(key, value),
+				},
+			});
+			restoreStorage = () => {
+				if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+				else delete (globalThis as { localStorage?: unknown }).localStorage;
+			};
+			return values;
+		};
+		afterEach(() => {
+			restoreStorage?.();
+			restoreStorage = null;
+		});
+
+		it('native: two pos_v5 files, one visited → unknown; both visited (one drained, one absent) → exact', async () => {
+			const engine = createEngineDouble();
+			const list = jest.fn(async () => [
+				// `list()` returns database names only (its sidecars never reach the host).
+				LEGACY,
+				TARGET_LEGACY,
+				scopeDatabaseName(BASE_OPTIONS.scope),
+			]);
+			const loaded = loadCreateAppEngine(() => engine, false, true, { list });
+			loaded.drainLegacyScopeDatabase.mockImplementation(async (ports, scope) =>
+				scope.storeId === TARGET.storeId
+					? drainsAbsent(ports, scope)
+					: {
+							status: 'drained',
+							databaseName: LEGACY,
+							pushed: 1,
+							carried: 0,
+							fileRemoved: true,
+						}
+			);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases([]);
+			// The visited scope drained; the other store's pos_v5 is still there, unread.
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('web: a till that never ran the drainable generation counts exactly', async () => {
+			fakeLocalStorage({ 'wcpos.scopeGenerationSeen': '6' });
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases([BASE_OPTIONS.scope, TARGET]);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('web: a till that may have run it is unknown while a registry scope is unvisited; exact (and remembered) once every one reported', async () => {
+			const values = fakeLocalStorage({});
+			const engine = createEngineDouble();
+			const loaded = loadCreateAppEngine(() => engine);
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases([BASE_OPTIONS.scope, TARGET]);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(values.has('wcpos.scopeGenerationSeen')).toBe(false);
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			// Every registry scope reported nothing kept: later boots skip the inventory.
+			expect(values.get('wcpos.scopeGenerationSeen')).toBe('6');
+		});
 	});
 
 	it('a scope whose engine never became ready releases its mark as uncountable instead of leaving waiters hanging', async () => {

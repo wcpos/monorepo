@@ -41,8 +41,13 @@ import { setAppOnlineStatus } from '../../lib/connectivity';
 import {
 	createAppSyncEngine,
 	createSessionFetcherOptions,
+	inventoryLegacyScopeDatabases,
 	switchAppEngineScope,
 } from '../../lib/create-app-engine';
+import {
+	registryScopeIdentities,
+	type ScopeRegistryDatabase,
+} from '../../lib/legacy-scope-registry';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
@@ -70,9 +75,23 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
+
+	React.useEffect(() => {
+		// Every previous-generation scope database the till may hold — not only the ones it
+		// visits — keeps "Clear all local data" from stating an exact count until it reports.
+		let cancelled = false;
+		void registryScopeIdentities(userDB as unknown as ScopeRegistryDatabase)
+			.then((registry) => (cancelled ? undefined : inventoryLegacyScopeDatabases(registry)))
+			.catch(() => {
+				// Best effort: without an inventory only the visited scopes are counted, as before.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [userDB]);
 
 	React.useEffect(() => {
 		// The diagnostic timers belong to the app lifecycle and must stop on unmount. Every

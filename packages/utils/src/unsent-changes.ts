@@ -86,6 +86,15 @@ export function markLegacyDrainPending(databaseName: string): void {
 	legacyReports().set(databaseName, { pending: true, count: null, orderUuids: [] });
 }
 
+/**
+ * True while one database still stands between a wipe and an exact count: it is
+ * pending, uncountable, or kept with work. False once it reported nothing kept
+ * (drained or absent) — or was never marked.
+ */
+export function legacyUnsentReportOutstanding(databaseName: string): boolean {
+	return legacyReports().has(databaseName);
+}
+
 /** True while one database is marked pending and its drain has not reported. */
 export function legacyDrainMarked(databaseName: string): boolean {
 	return legacyReports().get(databaseName)?.pending === true;

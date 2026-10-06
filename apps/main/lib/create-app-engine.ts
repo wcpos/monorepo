@@ -31,7 +31,10 @@ import { reportNetworkResponse } from '@wcpos/hooks';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import {
 	composeObservers,
+	containsDrainableScopeDatabaseName,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isScopeDatabaseName,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	type SyncEvent,
 } from '@wcpos/sync-core';
@@ -60,6 +63,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 import {
 	legacyDrainMarked,
+	legacyUnsentReportOutstanding,
 	markLegacyDrainPending,
 	rememberLegacyUnsentChanges,
 } from '@wcpos/utils/unsent-changes';
@@ -190,6 +194,93 @@ type LegacyDrainState =
 	| { phase: 'waiting'; retries: number; notBeforeMs: number }
 	| { phase: 'done' };
 const legacyDrainStates = new Map<string, LegacyDrainState>();
+
+/**
+ * Previous-generation databases the till may hold, besides the ones it visits. "Clear all local
+ * data" deletes every one of them, so the reset count stays UNKNOWN until each has reported
+ * (drained, absent, or kept with a count). How they are found differs by platform:
+ *  - NATIVE lists `Documents/wcpos-sqlite` (`scopeDatabaseFiles.list()`): every drainable
+ *    `pos_v5_…` file there is marked pending at boot, and only a visit (its drain) reports it.
+ *  - WEB and ELECTRON cannot list their files (the sahpool worker / the main process own them).
+ *    They keep `SCOPE_GENERATION_SEEN_KEY`: the oldest scope generation this till may still hold a
+ *    database of. Absent means unknown history, read as "may have run the drainable generation"
+ *    (a build before this one never wrote it). While it is at or below the drainable generation,
+ *    every scope in the app's store registry is marked pending at boot; once every one has reported
+ *    nothing kept, it moves to the current generation and later boots count exactly.
+ */
+const SCOPE_GENERATION_SEEN_KEY = 'wcpos.scopeGenerationSeen';
+/** Names the boot inventory marked; the web marker moves once none of them is outstanding. */
+const legacyInventory = new Set<string>();
+/** Names this process has a drain report for: a later inventory must not re-mark them pending. */
+const legacyReported = new Set<string>();
+
+function storageSlot(): Pick<Storage, 'getItem' | 'setItem'> | null {
+	try {
+		const storage = (globalThis as { localStorage?: Storage }).localStorage;
+		return storage ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function readScopeGenerationSeen(): number | null {
+	try {
+		const value = Number(storageSlot()?.getItem(SCOPE_GENERATION_SEEN_KEY));
+		return Number.isInteger(value) && value > 0 ? value : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Web/Electron: once every inventoried database reported nothing kept, the till holds none. */
+function settleScopeGenerationSeen(): void {
+	if (scopeDatabaseFiles !== null || legacyInventory.size === 0) return;
+	for (const name of legacyInventory) if (legacyUnsentReportOutstanding(name)) return;
+	try {
+		storageSlot()?.setItem(SCOPE_GENERATION_SEEN_KEY, String(SCOPE_DATABASE_GENERATION));
+	} catch {
+		// Best effort: an unwritable marker only means the next boot inventories again.
+	}
+}
+
+function reportLegacyDrain(
+	databaseName: string,
+	count: number | null,
+	orderUuids?: readonly string[]
+): void {
+	legacyReported.add(databaseName);
+	rememberLegacyUnsentChanges(databaseName, count, orderUuids);
+	settleScopeGenerationSeen();
+}
+
+/**
+ * The boot inventory of previous-generation databases (see `SCOPE_GENERATION_SEEN_KEY`): mark
+ * every one this till may hold pending, so the reset count reads unknown until each reports.
+ * `registry` is every scope the app's user database knows (the web/Electron source).
+ */
+export async function inventoryLegacyScopeDatabases(
+	registry: readonly StoreScopeIdentity[]
+): Promise<void> {
+	let names: string[];
+	if (scopeDatabaseFiles !== null) {
+		names = (await scopeDatabaseFiles.list()).filter(
+			(name) => isScopeDatabaseName(name) && containsDrainableScopeDatabaseName(name)
+		);
+	} else {
+		const seen = readScopeGenerationSeen();
+		names =
+			seen !== null && seen > DRAINABLE_SCOPE_DATABASE_GENERATION
+				? []
+				: registry.map((scope) =>
+						scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+					);
+	}
+	for (const name of names) {
+		legacyInventory.add(name);
+		if (!legacyReported.has(name) && !legacyDrainMarked(name)) markLegacyDrainPending(name);
+	}
+	settleScopeGenerationSeen();
+}
 
 function legacyDrainBackoffMs(retries: number): number {
 	return Math.min(LEGACY_DRAIN_FIRST_RETRY_MS * 2 ** retries, LEGACY_DRAIN_MAX_RETRY_MS);
@@ -380,7 +471,7 @@ function logLegacyDrainWriteEvent(databaseName: string, event: LegacyScopeDrainW
  */
 /** Report a marked-but-not-drained database as uncountable, so nothing waits on it. */
 function releaseLegacyDrainMark(databaseName: string): void {
-	if (legacyDrainMarked(databaseName)) rememberLegacyUnsentChanges(databaseName, null);
+	if (legacyDrainMarked(databaseName)) reportLegacyDrain(databaseName, null);
 }
 
 async function drainLegacyScopeOnce(
@@ -422,16 +513,12 @@ async function drainLegacyScopeOnce(
 		// A blocked drain logs as a retry would: the warn waits for a real attempt.
 		logLegacyDrainOutcome(outcome, retries > 0 || pushBlockedReason !== null);
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
-			rememberLegacyUnsentChanges(databaseName, 0);
+			reportLegacyDrain(databaseName, 0);
 		} else if (outcome.status === 'failed') {
 			// Reported, but uncountable: a wipe stays "unknown", and nothing waits on it any longer.
-			rememberLegacyUnsentChanges(databaseName, null);
+			reportLegacyDrain(databaseName, null);
 		} else {
-			rememberLegacyUnsentChanges(
-				databaseName,
-				remainingCount(outcome.remaining),
-				outcome.keptOrderUuids
-			);
+			reportLegacyDrain(databaseName, remainingCount(outcome.remaining), outcome.keptOrderUuids);
 			if (outcome.retryable && pushBlockedReason !== null) {
 				next = { phase: 'waiting', retries, notBeforeMs: 0 };
 			} else if (outcome.retryable) {
@@ -444,7 +531,7 @@ async function drainLegacyScopeOnce(
 		}
 	} catch (error) {
 		// The drain itself never throws; this is the host failing to build its ports.
-		rememberLegacyUnsentChanges(databaseName, null);
+		reportLegacyDrain(databaseName, null);
 		engineLogger.error('Failed to start draining the previous database version', {
 			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },

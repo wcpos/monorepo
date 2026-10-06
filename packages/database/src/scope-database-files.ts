@@ -18,6 +18,8 @@
 import { NATIVE_SQLITE_ROOT } from './adapters/storage/sqlite-root';
 
 export type ScopeDatabaseFiles = {
+	/** Every database file in the SQLite root, by name (sidecars excluded). Never opens one. */
+	list(): Promise<string[]>;
 	/** True when the database's own file exists. Never opens it. */
 	exists(databaseName: string): Promise<boolean>;
 	/** Delete the database's file and its sidecars; returns how many files went. Call only once it is closed. */
@@ -36,6 +38,12 @@ function entriesOf(databaseName: string) {
 }
 
 export const scopeDatabaseFiles: ScopeDatabaseFiles | null = {
+	async list() {
+		if (!NATIVE_SQLITE_ROOT.exists) return [];
+		return NATIVE_SQLITE_ROOT.list()
+			.map((entry) => entry.name)
+			.filter((name) => !SQLITE_SIDECAR_SUFFIXES.some((suffix) => name.endsWith(suffix)));
+	},
 	async exists(databaseName) {
 		return entriesOf(databaseName).some((entry) => entry.name === databaseName);
 	},

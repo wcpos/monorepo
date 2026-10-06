@@ -49,6 +49,17 @@ describe('native scope database files', () => {
 		await expect(scopeDatabaseFiles!.exists(DRAINABLE)).resolves.toBe(false);
 	});
 
+	it('lists every database by name, without sidecars, and nothing when the root is missing', async () => {
+		const { scopeDatabaseFiles } = await import('./scope-database-files');
+		await expect(scopeDatabaseFiles!.list()).resolves.toEqual([
+			DRAINABLE,
+			'pos_v5_0123456789ab_s1_c22',
+			'pos_v6_0123456789ab_s1_c2',
+		]);
+		mockRootExists = false;
+		await expect(scopeDatabaseFiles!.list()).resolves.toEqual([]);
+	});
+
 	it('deletes the database file and its sidecars, and nothing else', async () => {
 		const { scopeDatabaseFiles } = await import('./scope-database-files');
 		await expect(scopeDatabaseFiles!.remove(DRAINABLE)).resolves.toBe(3);
