@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { TermLevelTable } from './term-table';
 
@@ -16,6 +17,10 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: Record<string, unknown>, read: (value: Record<string, unknown>) => unknown) =>
 		read(doc),
+}));
+// The guard is the products grid's own (#1221); here it passes through.
+jest.mock('../../../../../../query', () => ({
+	useGuardedExtendLimit: (extend: () => void) => () => extend(),
 }));
 // The real export pulls in the whole products screen; the level only hands it on.
 jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
@@ -38,8 +43,8 @@ const mockPatchUI = jest.fn();
 // As the real DataTable: rows are `tableConfig.data`, keyed by `getRowId` and drawn through
 // `renderItem`; an empty list draws `noDataMessage`, and an `undefined` one falls back to the
 // translated default; the footer gets the table's own props (its `count` the LIVE binding's
-// loaded rows); an end-reached is a scroll and calls the extend it was handed; a header sort
-// persists as the real one does.
+// loaded rows); an end-reached is a scroll and calls the `onEndReached` it was handed, which
+// replaces the extend behind its own guard; a header sort persists as the real one does.
 jest.mock('../../../../components/data-table/v2', () => ({
 	DataTable: ({
 		id,
@@ -55,6 +60,7 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		sync,
 		cellsForRow: cells,
 		ListFooterComponent,
+		onEndReached,
 	}: {
 		id: string;
 		persistSort?: boolean;
@@ -74,13 +80,14 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		sync: unknown;
 		cellsForRow: unknown;
 		ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
+		onEndReached?: () => void;
 	}) => (
 		<div
 			data-testid="table"
 			data-meta={tableConfig.meta?.marker}
 			data-cells={String(cells === jest.requireMock('../../index').cellsForRow)}
 			data-list-footer={String(!!ListFooterComponent)}
-			onScroll={() => actions.extendLimit()}
+			onScroll={() => (onEndReached ?? actions.extendLimit)()}
 		>
 			<button
 				data-testid="table-sort-price"
@@ -234,7 +241,7 @@ const base = () => ({
 	onOpenTerm: jest.fn(),
 	onDrillProduct: jest.fn(),
 	variationsStyle: 'drill',
-	binding: { resource: {}, active$: {}, sync: jest.fn() },
+	binding: { resource: {}, active$: {}, pending$: new BehaviorSubject(false), sync: jest.fn() },
 	state: { sort: { field: 'name', direction: 'asc' } },
 	actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 	tableConfig: {
@@ -405,6 +412,32 @@ it('persists a header sort to the products table settings, as the products table
 		sortDirection: 'desc',
 	});
 	expect(props.actions.setSort).toHaveBeenCalledWith('price', 'desc');
+});
+
+// On native, FlashList's first end-reached can land while the demand is pending; the guard
+// ignores it, and the list will not fire again for the same content length.
+it('pages once when pending clears after an end-reached it ignored while pending', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...base().binding, pending$ } });
+	render(<TermLevelTable {...props} />);
+	fireEvent.scroll(screen.getByTestId('table'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	// Armed once, fired once: a later pending round-trip with no end-reached does not page.
+	act(() => pending$.next(true));
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('drops an armed end-reached when a child pane covers the level before pending clears', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...base().binding, pending$ } });
+	const { rerender } = render(<TermLevelTable {...props} />);
+	fireEvent.scroll(screen.getByTestId('table'));
+	rerender(<TermLevelTable {...props} settled={false} />);
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 
 it('is the All products pane too: no child rows, the catalogue under the crumb', () => {

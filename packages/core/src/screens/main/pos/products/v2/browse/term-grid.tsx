@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 import { of } from 'rxjs';
 
@@ -28,6 +27,7 @@ import { BrowseRootFooter } from './browse-root-footer';
 import { type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
+import { useArmedEndReached } from './use-armed-end-reached';
 
 import type { useRelationalCollectionBinding } from '../../../../../../query';
 import type { GridFields } from '../grid/product-tile';
@@ -106,7 +106,6 @@ const PLACEHOLDER_ROWS = 1;
 // The products grid's onEndReachedThreshold.
 const END_REACHED_THRESHOLD = 0.1;
 const NO_TOTAL$ = of(null);
-const NO_EXTEND = () => {};
 
 // The parent's row stays above the rows dealt out from under it. A list wraps each row in a
 // cell of its own, so the lift goes on the cell: a row's own zIndex stops at that wrapper.
@@ -193,26 +192,10 @@ export function TermLevelGrid({
 	// products grid does. A level of subcategories alone has nothing to page, and a level a child
 	// is over does not own the query: neither may move it.
 	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
-	// The guard ignores an end-reached while the demand is pending, but the list counts that
-	// content length as notified and will not fire again for it: when pending clears over the
-	// same rows, paging would stall until the cashier scrolls away and back (impossible on a short
-	// page). So an end-reached while pending is armed, and fired once when pending clears.
-	const { pending$ } = binding;
-	const pending = useObservableEagerState(pending$);
-	const armed = React.useRef(false);
-	// A level covered (or emptied of products) meanwhile no longer owns the query: an armed
-	// end-reached is then fired at nothing.
+	// An end-reached while the demand is pending is armed and fired once it clears (the list
+	// will not fire again for the same rows): use-armed-end-reached.
 	const owned = showProducts && settled;
-	const extendOwned = owned ? extend : NO_EXTEND;
-	const onEndReached = React.useCallback(() => {
-		if (pending) armed.current = true;
-		else extendOwned();
-	}, [extendOwned, pending]);
-	React.useEffect(() => {
-		if (pending || !armed.current) return;
-		armed.current = false;
-		extendOwned();
-	}, [extendOwned, pending]);
+	const onEndReached = useArmedEndReached(extend, binding.pending$, owned);
 
 	// Until the query answers, a row's worth of product slots is held, so the deal never waits.
 	const products: (EngineRecord<'products'> | null)[] = !showProducts

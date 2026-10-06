@@ -8,6 +8,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
+import { useGuardedExtendLimit } from '../../../../../../query';
 import { DataTable } from '../../../../components/data-table/v2';
 import { TableSurface } from '../../../../components/data-table/surface';
 import { cellsForRow } from '../../index';
@@ -19,6 +20,7 @@ import { BrowseRootFooter } from './browse-root-footer';
 import { type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow } from './term-row';
+import { useArmedEndReached } from './use-armed-end-reached';
 
 import type {
 	QueryStateActions,
@@ -88,8 +90,6 @@ const HELD: HeldItem[] = Array.from({ length: SKELETON_PRODUCT_ROWS }, (_, index
 	held: true,
 }));
 const NO_TOTAL$ = of(null);
-// A covered level does not own the shared query: its scroll must not move it.
-const NO_EXTEND = () => {};
 
 // The footer's sync button already turns while the products pull (as the variations pane's
 // does). The list's own loading strip reads the LIVE query, which a pushed pane's open starts
@@ -177,12 +177,12 @@ export function TermLevelTable({
 		),
 		[total$, loaded]
 	);
-	// The query is windowed (#1221): the table extends it as the cashier nears the end (its own
-	// guard, on the live rows). A pane a child is over does not own the query: it may not move it.
-	const tableActions = React.useMemo(
-		() => (settled ? actions : { ...actions, extendLimit: NO_EXTEND }),
-		[actions, settled]
-	);
+	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
+	// its own rows, as the level grid does — and an end-reached while the demand is pending is
+	// armed and fired once it clears (FlashList will not fire again for the same rows):
+	// use-armed-end-reached. A pane a child is over does not own the query: it may not move it.
+	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
+	const onEndReached = useArmedEndReached(extend, binding.pending$, settled);
 	// The child terms lead the table's rows, so they scroll with the products under them.
 	const rows = React.useMemo<LevelRow[]>(
 		() => [
@@ -232,7 +232,8 @@ export function TermLevelTable({
 						resource={binding.resource}
 						tableConfig={config}
 						sort={state.sort}
-						actions={tableActions}
+						actions={actions}
+						onEndReached={onEndReached}
 						active$={binding.active$}
 						total$={total$}
 						sync={binding.sync}
