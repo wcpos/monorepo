@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	canonicalSiteKey,
+	containsDrainableScopeDatabaseName,
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
@@ -160,5 +161,22 @@ describe('DRAINABLE_SCOPE_DATABASE_GENERATION', () => {
 				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
 			)
 		).toBe(true);
+	});
+});
+
+describe('containsDrainableScopeDatabaseName', () => {
+	it('matches the drainable generation by containment, and nothing else', () => {
+		const drainable = scopeDatabaseName(identity, {
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		});
+		expect(containsDrainableScopeDatabaseName(drainable)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(`rxdb-${drainable}--0--orders`)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(scopeDatabaseName(identity))).toBe(false);
+		expect(
+			containsDrainableScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION - 1 })
+			)
+		).toBe(false);
+		expect(containsDrainableScopeDatabaseName('unrelated-shop-data')).toBe(false);
 	});
 });
