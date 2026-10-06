@@ -50,17 +50,25 @@ export function isBlankSearch(search: string): boolean {
 	return search.trim() === '';
 }
 
+const isEmptyFilter = (value: unknown) =>
+	value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+
 /**
- * True when no filter narrows the list beyond the provider's initial filters: every key
- * either equals its initial value or is empty (unset, an empty string, an empty list).
+ * True when the filters are exactly the provider's initial filters: every key, live or initial,
+ * either equals its initial value or is empty on both sides (unset, an empty string, an empty
+ * list). Symmetric: an initial key the live filters no longer carry (the default In-stock pill
+ * cleared, which deletes `stock_status`) broadens the query, and that is not the baseline either.
  */
 export function filtersAtBaseline(
 	filters: Record<string, unknown>,
 	initialFilters: Record<string, unknown>
 ): boolean {
-	return Object.entries(filters).every(([key, value]) => {
-		if (key in initialFilters) return JSON.stringify(value) === JSON.stringify(initialFilters[key]);
-		return value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+	const keys = new Set([...Object.keys(filters), ...Object.keys(initialFilters)]);
+	return [...keys].every((key) => {
+		const value = filters[key];
+		const initial = initialFilters[key];
+		if (isEmptyFilter(value) && isEmptyFilter(initial)) return true;
+		return key in initialFilters && JSON.stringify(value) === JSON.stringify(initial);
 	});
 }
 

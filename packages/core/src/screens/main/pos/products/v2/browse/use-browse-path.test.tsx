@@ -4,7 +4,7 @@ import { startTransition } from 'react';
 import { act, renderHook } from '@testing-library/react';
 
 import { inOneBatch } from '../one-batch.web';
-import { useBrowsePath } from './use-browse-path';
+import { filtersAtBaseline, useBrowsePath } from './use-browse-path';
 
 // A tiny in-memory store, so the hook is tested against real state transitions. It keeps the
 // real store's shape (query-state-store.tsx): the taxonomy fields are always present, cleared to
@@ -508,6 +508,21 @@ it('a backTo from a non-discrete callback, in one batch, moves the query and the
 	expect(
 		seen.filter(({ depth, categories }) => depth === 2 && isEqualIds(categories, [1, 2]))
 	).toEqual([]);
+});
+
+describe('filtersAtBaseline', () => {
+	const initial = { status: 'publish', stock_status: 'instock' };
+	it('reads the initial filters, with the taxonomies cleared, as the baseline', () => {
+		expect(filtersAtBaseline({ ...CLEARED, ...initial }, initial)).toBe(true);
+	});
+	it('reads a narrowing filter as not at baseline', () => {
+		expect(filtersAtBaseline({ ...CLEARED, ...initial, categories: [9] }, initial)).toBe(false);
+	});
+	// The default In-stock pill cleared deletes stock_status: the query is BROADER than the
+	// baseline, which is not the baseline either.
+	it('reads an initial filter the live filters no longer carry as not at baseline', () => {
+		expect(filtersAtBaseline({ ...CLEARED, status: 'publish' }, initial)).toBe(false);
+	});
 });
 
 function isEqualIds(left: unknown, right: number[]) {

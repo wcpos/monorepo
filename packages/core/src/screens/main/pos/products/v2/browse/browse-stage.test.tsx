@@ -488,6 +488,22 @@ it('a pill narrowing the query at the root shows its products, not the term set;
 	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
 });
 
+// showOutOfStock off: the baseline carries stock_status 'instock', and clearing the default
+// In-stock pill DELETES it — a broader query, which is not the baseline either.
+it('the default In-stock pill cleared at the root shows the broadened products, not the term set', () => {
+	mockState = { ...mockState, filters: { ...baseline(), stock_status: 'instock' } };
+	render(
+		<BrowseStage
+			{...stageProps({ initialFilters: { status: 'publish', stock_status: 'instock' } })}
+		/>
+	);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	act(() => queryActions.clearFilter('stock_status'));
+	expect(mockState.filters.stock_status).toBeUndefined();
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+});
+
 it('a pill pressed inside a level leaves its products at the root, not the term tiles over a filtered query', () => {
 	render(<BrowseStage {...stageProps()} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
