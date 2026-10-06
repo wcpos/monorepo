@@ -99,12 +99,21 @@ const SHAKE_STEP = { duration: SHAKE_TICK, easing: Easing.linear, ...SYSTEM };
 // Literal class names, so Tailwind emits every one (a border built from a bg string at
 // runtime is never scanned).
 const TONES = {
-	primary: { bg: 'bg-primary', border: 'border-primary' },
-	success: { bg: 'bg-success', border: 'border-success' },
-	// The path behind a failed or stopped step: present, but not the thing to look at.
-	quiet: { bg: 'bg-muted-foreground/50', border: 'border-muted-foreground/50' },
-	destructive: { bg: 'bg-destructive', border: 'border-destructive' },
-	muted: { bg: 'bg-muted-foreground', border: 'border-muted-foreground' },
+	primary: { bg: 'bg-primary', border: 'border-primary', mark: 'text-primary-foreground' },
+	success: { bg: 'bg-success', border: 'border-success', mark: 'text-success-foreground' },
+	// The path behind a failed or stopped step: present, but not the thing to look at. Its
+	// half-strength disc sits close to the surface, so the mark is the foreground, not white.
+	quiet: {
+		bg: 'bg-muted-foreground/50',
+		border: 'border-muted-foreground/50',
+		mark: 'text-foreground',
+	},
+	destructive: {
+		bg: 'bg-destructive',
+		border: 'border-destructive',
+		mark: 'text-destructive-foreground',
+	},
+	muted: { bg: 'bg-muted-foreground', border: 'border-muted-foreground', mark: 'text-card' },
 } as const;
 type DoneTone = 'primary' | 'success' | 'quiet';
 
@@ -264,21 +273,27 @@ function StepNode({
 			);
 			return;
 		}
-		// Closing: done, failed or stopped. A badge that was not open yet (a jump of two steps,
-		// or a failure before the first poll answered) opens and closes in one motion; one that
-		// was open and mid-beat settles to size as it closes.
-		badge.value = withSpring(1, BOINK);
-		core.value = withTiming(CORE_FULL, CLOSE_TIMING);
+		// Closing: done, failed or stopped. A badge that was open and mid-beat settles to size as
+		// it closes. One that was not open yet (a jump of two steps, or a failure before the first
+		// poll answered) waits for the fill to reach it, then opens and closes in one motion, so
+		// nothing on the rail is ever ahead of the fill.
+		const wait = from === 'todo' ? ARRIVE : 0;
+		if (wait) badge.value = 0;
+		badge.value = withDelay(wait, withSpring(1, BOINK));
+		core.value = withDelay(wait, withTiming(CORE_FULL, CLOSE_TIMING));
 		face.value = withDelay(
-			FACE,
+			wait + FACE,
 			withTiming(1, { duration: FACE_SNAP, easing: Easing.linear, ...SYSTEM })
 		);
 		mark.value = withDelay(
-			MARK,
+			wait + MARK,
 			withSequence(withTiming(POP, POP_TIMING), withSpring(1, POP_SETTLE))
 		);
 		if (state === 'failed') {
-			shake.value = withDelay(MARK, withSequence(...SHAKE.map((x) => withTiming(x, SHAKE_STEP))));
+			shake.value = withDelay(
+				wait + MARK,
+				withSequence(...SHAKE.map((x) => withTiming(x, SHAKE_STEP)))
+			);
 		}
 	}, [state, badge, core, face, mark, shake]);
 
@@ -295,16 +310,19 @@ function StepNode({
 	}));
 	const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 
-	const { bg: tone, border } =
-		TONES[
-			state === 'failed'
-				? 'destructive'
-				: state === 'stopped'
-					? 'muted'
-					: state === 'done'
-						? doneTone
-						: 'primary'
-		];
+	const {
+		bg: tone,
+		border,
+		mark: markTone,
+	} = TONES[
+		state === 'failed'
+			? 'destructive'
+			: state === 'stopped'
+				? 'muted'
+				: state === 'done'
+					? doneTone
+					: 'primary'
+	];
 	const labelTone =
 		state === 'failed'
 			? 'text-destructive'
@@ -361,7 +379,7 @@ function StepNode({
 					/>
 					<Animated.View className={cn('absolute inset-0 rounded-full', tone)} style={faceStyle} />
 					<Animated.View className="absolute inset-0 items-center justify-center" style={markStyle}>
-						<Icon name={icon} className={cn('text-primary-foreground', geometry.mark)} />
+						<Icon name={icon} className={cn(markTone, geometry.mark)} />
 					</Animated.View>
 				</Animated.View>
 			</Animated.View>
