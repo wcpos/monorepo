@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 import { of } from 'rxjs';
 
@@ -24,6 +23,7 @@ import { ProductsFooter } from '../footer';
 import { ProductTile } from '../grid/product-tile';
 import { VariableProductTile } from '../grid/variable-product-tile';
 import { LevelBack } from '../level-back';
+import { BrowseRootFooter } from './browse-root-footer';
 import { type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
@@ -94,27 +94,6 @@ export function BrowseRootGrid({
 			</VirtualizedList.Root>
 			{binding && <BrowseRootFooter binding={binding} />}
 		</View>
-	);
-}
-
-/**
- * The till's footer under a term set: the catalogue total, the tax basis line and the sync
- * button, unchanged. The loaded window means nothing over terms, so the count is the total;
- * with no total to vouch for one (`QueryBinding.total$`), the loaded rows are all there is.
- */
-function BrowseRootFooter({ binding }: { binding: Binding }) {
-	// The binding's own observables (plain streams, as the footer reads them).
-	const { total$, result$ } = binding;
-	const total = useObservableState(total$, null);
-	const loaded = useObservableState(result$, undefined)?.hits.length ?? 0;
-	return (
-		<ProductsFooter
-			collectionName="products"
-			active$={binding.active$}
-			total$={total$}
-			sync={binding.sync}
-			count={total ?? loaded}
-		/>
 	);
 }
 

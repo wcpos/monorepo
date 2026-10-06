@@ -2,8 +2,8 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { DealStagedContext } from '../deal-stack';
 import { BrowseRootGrid } from './term-grid';
@@ -129,6 +129,33 @@ it('the root grid carries the till’s footer: the catalogue total, not the load
 	// Nothing vouches for a total: the loaded rows are the only number there is.
 	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding(null)} />);
 	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
+});
+
+it('the root footer counts only the query now asked: a return never shows the level’s total', () => {
+	type Binding = NonNullable<React.ComponentProps<typeof BrowseRootGrid>['binding']>;
+	const level = {
+		total$: of(12),
+		result$: new BehaviorSubject({ hits: [{}] }),
+		active$: of(false),
+		sync: jest.fn(),
+	};
+	const { rerender } = render(
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={level as unknown as Binding} />
+	);
+	expect(screen.getByTestId('products-footer').dataset.count).toBe('12');
+	// Back at the root: the catalogue's query has not answered yet.
+	const total$ = new Subject<number | null>();
+	const result$ = new Subject<{ hits: object[] }>();
+	const root = { ...level, total$, result$ };
+	rerender(
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={root as unknown as Binding} />
+	);
+	expect(screen.getByTestId('products-footer').dataset.count).not.toBe('12');
+	act(() => {
+		result$.next({ hits: [{}, {}] });
+		total$.next(80);
+	});
+	expect(screen.getByTestId('products-footer').dataset.count).toBe('80');
 });
 
 it('the root grid lifts the tile whose copy is out on the stage', () => {
