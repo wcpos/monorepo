@@ -217,21 +217,28 @@ export async function retireStashedPrintCounts(
 	}
 }
 
-/** Add entries to the print-count stash, keeping the larger of two counts for one order. */
+/**
+ * THE merge rule for the print-count stash, for every writer: an entry keeps the LARGER of the
+ * stashed count and the incoming one — a receipt count only ever goes up.
+ */
+function mergePrintCounts(
+	stashed: Record<string, number>,
+	incoming: Readonly<Record<string, number>>
+): Record<string, number> {
+	for (const [uuid, count] of Object.entries(incoming)) {
+		stashed[uuid] = Math.max(stashed[uuid] ?? 0, count);
+	}
+	return stashed;
+}
+
+/** Add entries to the print-count stash (atomically, by `mergePrintCounts`). */
 export function stashPrintCounts(
 	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
 	entries: Readonly<Record<string, number>>
 ): Promise<void> {
-	return modifyStashedPrintCounts(
-		orders,
-		(counts) => {
-			for (const [uuid, count] of Object.entries(entries)) {
-				counts[uuid] = Math.max(counts[uuid] ?? 0, count);
-			}
-			return counts;
-		},
-		{ createIfMissing: true }
-	);
+	return modifyStashedPrintCounts(orders, (counts) => mergePrintCounts(counts, entries), {
+		createIfMissing: true,
+	});
 }
 
 export class EngineOrderRepository {
@@ -487,9 +494,7 @@ export class EngineOrderRepository {
 		// Persist before deleting orders: the next pull batch uses a new repository. Atomic: the
 		// previous-generation drain may be stashing at the same time.
 		if (Object.keys(counts).length > 0) {
-			await modifyStashedPrintCounts(this.db.orders, (stashed) => ({ ...stashed, ...counts }), {
-				createIfMissing: true,
-			});
+			await stashPrintCounts(this.db.orders, counts);
 		}
 		if (removable.length > 0)
 			assertBulkSuccess(

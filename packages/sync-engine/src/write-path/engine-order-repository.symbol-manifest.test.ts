@@ -161,6 +161,31 @@ it('retains the till receipt count across reset-for-resync and repull', async ()
 	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
 });
 
+it('a larger stashed count survives a reset-for-resync that reads a lower resident count', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 1 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	// The previous-generation drain stashed 3 for this order before the reset read its resident (1).
+	await db.orders.insertLocal('resync-receipt-print-counts', {
+		counts: { [storedDocument.uuid]: 3 },
+	});
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect((await db.orders.getLocal('resync-receipt-print-counts'))?.get('counts')).toEqual({
+		[storedDocument.uuid]: 3,
+	});
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 3 } });
+});
+
 it('restores resync print counts in a new repository and consumes the stash', async () => {
 	const { createEngineHarness } = await import('../engine-harness');
 	const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
