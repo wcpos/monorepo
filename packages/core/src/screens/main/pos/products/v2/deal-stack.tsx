@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { Platform, View, type ViewInstance, type ViewProps } from 'react-native';
+import { Platform, View, type ViewInstance, type ViewProps, type ViewStyle } from 'react-native';
 
 import Animated, {
 	cancelAnimation,
 	ReduceMotion,
 	type SharedValue,
+	useAnimatedReaction,
 	useAnimatedStyle,
 	useSharedValue,
 	withDelay,
@@ -45,6 +46,16 @@ type Deal = {
 	/** The dealt grid reports the node its slots are laid out in; the stage places it against itself. */
 	placeGrid: (node: Measurable) => void;
 	furniture?: SharedValue<number>;
+	/** The detail on stage: a copy's report names the deal it was made for. */
+	generation: number;
+	/**
+	 * The parent's copy reports to the stage: `false` as it mounts (it will say when it can be
+	 * shown), then `true` once its first frame on the tapped tile has been applied on the UI
+	 * thread and its picture has painted (`DealCell`).
+	 */
+	placeCopy: (asked: number, placed: boolean) => void;
+	/** The copy may be shown, the tapped tile may step aside, and the deal may set off. */
+	copyPlaced: boolean;
 };
 
 // Outside a stage a cell is simply where it belongs.
@@ -55,6 +66,9 @@ const AT_REST: Deal = {
 	stageWidth: 0,
 	grid: null,
 	placeGrid: () => {},
+	generation: 0,
+	placeCopy: () => {},
+	copyPlaced: true,
 };
 const DealContext = React.createContext<Deal>(AT_REST);
 
@@ -74,6 +88,10 @@ const SCALE_FROM = 0.92;
 // How long the stage waits for the tile's frame and the pane's first layout before it deals
 // in place. Both normally arrive within two frames; a tap must never be lost to a measurement.
 const MEASURE_GRACE = 120;
+// How long the copy waits for its picture to paint before it is shown anyway: a picture that
+// never loads (offline, a deleted file) must not hold the deal. A cached picture paints within a
+// frame or two of mounting.
+const PICTURE_GRACE = 150;
 // The whole deal, from the frame it sets off to the last tile landing: the parent's walk, or
 // the capped stagger of the tiles and one landing, whichever is longer.
 const DEAL_SPAN = Math.max(
@@ -157,6 +175,10 @@ export function DealStack<T>({
 	const [generation, setGeneration] = React.useState(0);
 	const [origin, setOrigin] = React.useState<Rect | null | undefined>(undefined);
 	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
+	// Whether the parent's copy stands on the tapped tile on the UI thread: `undefined` while no
+	// copy has said it will report (a detail without one is shown as it is), `false` once it has,
+	// `true` once it has.
+	const [placed, setPlaced] = React.useState<boolean | undefined>(undefined);
 	const [dealt, setDealt] = React.useState(false);
 	const [settled, setSettled] = React.useState(false);
 	// Not `settled`: that is the furniture's clock, which runs out long before the last tile lands.
@@ -173,6 +195,7 @@ export function DealStack<T>({
 		setGeneration(generation + 1);
 		setOrigin(undefined);
 		setGrid(undefined);
+		setPlaced(undefined);
 		setDealt(false);
 	}
 
@@ -199,6 +222,17 @@ export function DealStack<T>({
 			})
 		);
 	}, []);
+	// The copy's word that it will report comes from its own layout effect in the commit that
+	// mounts it, so it belongs to this staging (a stale copy has unmounted). Its word that it is
+	// placed comes frames later, from the UI thread, and is dropped if another detail opened since.
+	const placeCopy = React.useCallback((asked: number, ready: boolean) => {
+		if (!ready) {
+			setPlaced((known) => known ?? false);
+			return;
+		}
+		if (current.current === asked) setPlaced(true);
+	}, []);
+	const copyPlaced = placed !== false;
 	// A cross-fade is decided in the render that hears of the close, before any tile turns home.
 	if (!open && collapse && staged !== null && !fading) setFading(true);
 	if (open && fading) setFading(false);
@@ -265,7 +299,8 @@ export function DealStack<T>({
 		};
 	}, [detail, target]);
 
-	const armed = origin !== undefined && grid !== undefined;
+	// Not before the copy is placed: the deal's first frame moves it off the tapped tile.
+	const armed = origin !== undefined && grid !== undefined && copyPlaced;
 	React.useEffect(() => {
 		// The staging this clock is started for: its completion clears the stage only for it.
 		const asked = current.current;
@@ -344,8 +379,22 @@ export function DealStack<T>({
 			grid,
 			placeGrid,
 			furniture,
+			generation,
+			placeCopy,
+			copyPlaced,
 		}),
-		[origin, dealt, landed, stageWidth, grid, placeGrid, furniture]
+		[
+			origin,
+			dealt,
+			landed,
+			stageWidth,
+			grid,
+			placeGrid,
+			furniture,
+			generation,
+			placeCopy,
+			copyPlaced,
+		]
 	);
 
 	// Clamped for the reason `PaneStack` clamps: a first frame stamped before the animation's
@@ -364,12 +413,15 @@ export function DealStack<T>({
 			testID={testID}
 			onLayout={(event) => setStageWidth(event.nativeEvent.layout.width)}
 		>
-			{/* The tapped tile steps aside only once its copy can stand on it — the copy needs the
+			{/* The tapped tile steps aside only once its copy stands on it — the copy needs the
 			    grid's frame as well as the tile's, and on Android the two arrive frames apart:
 			    lifting on the tile's frame alone left the slot empty for two frames (Pixel,
-			    2026-10-05; then the crumb's height, now the grid's own measured frame). In a
-			    cross-fade no copy comes home, so the tile is back in the root that fades in. */}
-			<DealStagedContext.Provider value={origin && grid !== undefined && !fading ? staged : null}>
+			    2026-10-05; then the crumb's height, now the grid's own measured frame) — and only
+			    once the copy's own first frame is on the UI thread (`copyPlaced`, see DealCell).
+			    In a cross-fade no copy comes home, so the tile is back in the root that fades in. */}
+			<DealStagedContext.Provider
+				value={origin && grid !== undefined && copyPlaced && !fading ? staged : null}
+			>
 				<Animated.View
 					className="flex-1"
 					aria-hidden={open}
@@ -432,7 +484,7 @@ export function DealCell({
 	restY?: number;
 	children: React.ReactNode;
 }) {
-	const { origin, dealt, landed, stageWidth, grid } = useDeal();
+	const { origin, dealt, landed, stageWidth, grid, generation, placeCopy, copyPlaced } = useDeal();
 	// A cell that mounts while the deal is still in the air (more slots than the placeholders
 	// held, the list's next batch) starts under the parent, unseen, and is dealt from there, so it
 	// is not painted at rest while the first row still flies. One that mounts after the deal has
@@ -490,10 +542,46 @@ export function DealCell({
 	// painted the parent at its own slot, and it snapped onto the tapped tile a frame later (web
 	// film, 2026-10-06). Written in a layout effect, the mapper reruns in that commit's
 	// microtask, before the paint.
-	const offset = useSharedValue({ x: fromX, y: fromY, flies });
+	// Pictures on the copy that have not painted yet (`useCopyPicture`).
+	const [pictures, setPictures] = React.useState(0);
+	// `ready`: the offset is the one the copy is first shown at (the frames are known), and the
+	// copy's pictures have painted.
+	const ready = !waiting && pictures === 0;
+	const offset = useSharedValue({ x: fromX, y: fromY, flies, ready });
 	React.useLayoutEffect(() => {
-		offset.value = { x: fromX, y: fromY, flies };
-	}, [offset, fromX, fromY, flies]);
+		offset.value = { x: fromX, y: fromY, flies, ready };
+	}, [offset, fromX, fromY, flies, ready]);
+
+	// The copy is shown, and the tapped tile steps aside, in one React commit — and on Android a
+	// React commit carries the props the UI thread has already applied, not the ones a shared value
+	// written in that same commit will produce a frame later. Shown on the commit that knew the
+	// frames, the copy painted for a frame at its own slot, at rest, before its offset reached it
+	// (Pixel, 2026-10-06: Tops cold f004, Hoodie f004). So the copy says it will report as it
+	// mounts, and is shown only once the UI thread has run its style with the offset — a frame
+	// after the reaction that sees it — and once its picture has painted (`useCopyPicture`).
+	React.useLayoutEffect(() => {
+		if (parent) placeCopy(generation, false);
+	}, [parent, placeCopy, generation]);
+	useAnimatedReaction(
+		() => parent && offset.value.ready,
+		(ready, was) => {
+			if (!ready || was) return;
+			requestAnimationFrame(() => scheduleOnRN(placeCopy, generation, true));
+		},
+		[parent, placeCopy, generation]
+	);
+	const holdPicture = React.useCallback(() => {
+		let held = true;
+		setPictures((count) => count + 1);
+		const release = () => {
+			if (!held) return;
+			held = false;
+			clearTimeout(grace);
+			setPictures((count) => count - 1);
+		};
+		const grace = setTimeout(release, PICTURE_GRACE);
+		return release;
+	}, []);
 
 	const style = useAnimatedStyle(() => {
 		// Clamped for the reason the stage clamps: a first frame stamped before the animation's
@@ -517,11 +605,51 @@ export function DealCell({
 		};
 	});
 
+	// The copy IS the tapped tile, at its size, from the frame it appears to the frame it lands
+	// home: its row in the level may be taller (a product tile beside it), and a cold level's
+	// answer replaced the placeholders with taller tiles while the copy stood on the tapped tile,
+	// so it grew 244 → 431 px in one frame (Pixel, 2026-10-06, Clothing › Men f009) — and walked
+	// home taller than the tile it lands on.
+	const size = parent && flies ? { height: origin.height + 2 * TILE_MARGIN } : null;
+
 	return (
-		<Animated.View className="flex-1" style={[style, parent && FRONT, parent && waiting && UNSEEN]}>
-			{children}
+		<Animated.View
+			className="flex-1"
+			style={[style, parent && FRONT, size, parent && (waiting || !copyPlaced) && UNSEEN]}
+		>
+			{parent ? (
+				<CopyPictureContext.Provider value={holdPicture}>{children}</CopyPictureContext.Provider>
+			) : (
+				children
+			)}
 		</Animated.View>
 	);
+}
+
+// The parent's copy, to a picture on it: hold the copy unseen until you have painted.
+const CopyPictureContext = React.createContext<(() => () => void) | null>(null);
+
+/**
+ * For a picture on the parent tile: the copy is not shown until the picture has painted — it
+ * appeared with a blank square for a frame, the picture decoding after the copy mounted (Pixel,
+ * 2026-10-06, Hoodie f004). Returns the image's `onDisplay` / `onError` handler, which lets the
+ * copy go; outside a copy it is `undefined`. A picture that never paints is waited for only
+ * `PICTURE_GRACE`.
+ */
+export function useCopyPicture(): (() => void) | undefined {
+	const hold = React.useContext(CopyPictureContext);
+	const release = React.useRef<(() => void) | null>(null);
+	React.useLayoutEffect(() => {
+		if (!hold) return;
+		const done = hold();
+		release.current = done;
+		return () => {
+			release.current = null;
+			done();
+		};
+	}, [hold]);
+	const painted = React.useCallback(() => release.current?.(), []);
+	return hold ? painted : undefined;
 }
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */
@@ -529,6 +657,45 @@ export const FRONT = { zIndex: 1 };
 // The parent before it can stand on the tapped tile. A plain style, not a worklet prop: it
 // has to commit on the same frame as the tapped tile stepping aside.
 const UNSEEN = { opacity: 0 };
+
+const NO_AIR: { frame?: ViewStyle; scroller?: ViewStyle } = {};
+const VISIBLE: ViewStyle = { overflow: 'visible' };
+
+/**
+ * The air above a dealt grid, for the tiles in flight. The grid's scroller clips what it holds,
+ * and a tile tapped in the products' first row sits where the level's crumb row is: its copy set
+ * off with its top ~92 px — the tile's name — cut away by the scroller's edge, and walked home
+ * the same way (Pixel, 2026-10-06: Clothing warm f004–f008, return f006–f016). While a deal or a
+ * gather is in the air over a grid at its top, the scroller lets its tiles out, and a frame
+ * around it (`frame`, reaching up to the stage's top) clips them at its bottom instead, so no row
+ * below shows over the footer. A grid scrolled away from its top keeps its own edge: rows above
+ * it would show over the crumb. Both styles are empty at rest.
+ */
+export function useAirspace(scroll: SharedValue<number>): {
+	frame?: ViewStyle;
+	scroller?: ViewStyle;
+} {
+	const { landed, grid } = useDeal();
+	const [atTop, setAtTop] = React.useState(true);
+	useAnimatedReaction(
+		() => scroll.value <= 0,
+		(top, was) => {
+			if (top !== was) scheduleOnRN(setAtTop, top);
+		}
+	);
+	// Native only: a web scroller made `overflow: visible` stops being one and loses its offset.
+	if (Platform.OS === 'web' || landed || !atTop || !grid) return NO_AIR;
+	return {
+		// `box-none`: the frame reaches over the crumb row, whose presses must still land on it.
+		frame: {
+			marginTop: -grid.y,
+			paddingTop: grid.y,
+			overflow: 'hidden',
+			pointerEvents: 'box-none',
+		},
+		scroller: VISIBLE,
+	};
+}
 
 /** The pane's furniture (breadcrumb, footer): it fades in as the products fade out. */
 export function DealFade({ children, style, ...props }: ViewProps) {

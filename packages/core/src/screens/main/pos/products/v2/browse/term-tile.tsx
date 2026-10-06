@@ -8,9 +8,8 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../../components/product/product-image-placeholder';
+import { type Measurable, useCopyPicture } from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
-
-import type { Measurable } from '../deal-stack';
 
 // A tile the deal has lifted off the grid: its copy is out on the stage.
 const LIFTED = { opacity: 0 };
@@ -49,12 +48,18 @@ function TermImage({
 }) {
 	// A term image the store has since deleted shows the product placeholder, not an empty square.
 	const [failed, setFailed] = React.useState(false);
+	// On a dealt parent's copy, the copy waits for this picture to paint (deal-stack.tsx).
+	const painted = useCopyPicture();
 	return (
 		<Image
 			source={{ uri: failed ? PRODUCT_IMAGE_PLACEHOLDER : src }}
 			recyclingKey={recyclingKey}
 			className="h-full w-full"
-			onError={() => setFailed(true)}
+			onDisplay={painted}
+			onError={() => {
+				setFailed(true);
+				painted?.();
+			}}
 			{...(still ? STILL : {})}
 		/>
 	);

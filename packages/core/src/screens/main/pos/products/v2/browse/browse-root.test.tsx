@@ -23,6 +23,7 @@ jest.mock('@wcpos/query', () => ({
 // The stage itself is native motion; the root only reads which term is out on it.
 jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
+	useCopyPicture: () => undefined,
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
 // The term level's leaves (term-grid.tsx) are native motion and the till's furniture; only the

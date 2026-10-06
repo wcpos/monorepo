@@ -8,6 +8,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../components/product/product-image-placeholder';
+import { useCopyPicture } from '../v2/deal-stack';
 
 // An image that is already on screen and only changing place does not fade in again.
 const STILL = { transition: 0 };
@@ -23,12 +24,16 @@ function TileImageInner({
 }) {
 	const { uri, error } = useImageAttachment(record, imageUrl);
 	const imageSource = !uri || error ? { uri: PRODUCT_IMAGE_PLACEHOLDER } : { uri };
+	// On a dealt parent's copy, the copy waits for this picture to paint (deal-stack.tsx).
+	const painted = useCopyPicture();
 
 	return (
 		<Image
 			source={imageSource}
 			recyclingKey={record.uuid}
 			className="h-full w-full"
+			onDisplay={painted}
+			onError={painted}
 			{...(still ? STILL : {})}
 		/>
 	);

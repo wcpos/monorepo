@@ -19,6 +19,9 @@ const mockInitial: number[] = [];
 const mockCancelled: { value: number }[] = [];
 const mockStyles = new Map<string, () => Style>();
 const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
+// Every animated reaction mounted: the UI thread runs them on its frames (`uiFrame`).
+const mockReactions = new Set<() => void>();
+let mockOS = 'web';
 // The stage's own frame in the window; a tile's frame is given relative to the same window.
 const STAGE = { x: 10, y: 20 };
 
@@ -28,7 +31,11 @@ const flatten = (style: unknown): Record<string, unknown> =>
 jest.mock('react-native', () => {
 	const ReactActual = jest.requireActual('react');
 	return {
-		Platform: { OS: 'web' },
+		Platform: {
+			get OS() {
+				return mockOS;
+			},
+		},
 		View: ReactActual.forwardRef(function View(
 			{ children, onLayout, testID, style, ...rest }: ViewProps,
 			ref: React.Ref<unknown>
@@ -73,6 +80,7 @@ jest.mock('react-native-reanimated', () => {
 						data-pointer={flat.pointerEvents as string}
 						data-front={flat.zIndex === 1}
 						data-opacity={flat.opacity as number}
+						data-height={flat.height as number}
 						aria-hidden={rest['aria-hidden']}
 					>
 						{children}
@@ -87,6 +95,25 @@ jest.mock('react-native-reanimated', () => {
 			mockCancelled.push(shared);
 		},
 		useAnimatedStyle: (factory: () => Style) => ({ factory }),
+		// The UI thread sees what a commit's layout effects wrote once that commit is done: here, in a
+		// passive effect after every render, and again on every `uiFrame`.
+		useAnimatedReaction: <T,>(prepare: () => T, react: (now: T, was: T | null) => void) => {
+			const last = ReactActual.useRef(null as T | null);
+			ReactActual.useEffect(() => {
+				const run = () => {
+					const now = prepare();
+					if (now === last.current) return;
+					const was = last.current;
+					last.current = now;
+					react(now, was);
+				};
+				mockReactions.add(run);
+				run();
+				return () => {
+					mockReactions.delete(run);
+				};
+			});
+		},
 		useSharedValue: (value: number) => {
 			const shared = ReactActual.useRef({ value }).current;
 			// The clocks only: a cell's offset (an object) is read through its style, not driven.
@@ -120,6 +147,8 @@ import {
 	DealStack,
 	DealStagedContext,
 	type Measurable,
+	useAirspace,
+	useCopyPicture,
 	useDeal,
 } from './deal-stack';
 /* eslint-enable import/first */
@@ -142,6 +171,17 @@ const COLUMNS = 4;
 // One column of the grid's own width, not the stage's.
 const COLUMN = GRID.width / COLUMNS;
 
+// A picture on the parent tile: it paints when the test says so.
+function Picture() {
+	const painted = useCopyPicture();
+	return (
+		<button data-testid="paint" data-on-copy={String(!!painted)} onClick={() => painted?.()} />
+	);
+}
+// What the grid's scroller and the frame around it are given.
+function Air({ scroll }: { scroll: { value: number } }) {
+	return <output data-testid="air">{JSON.stringify(useAirspace(scroll as never))}</output>;
+}
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
 }
@@ -150,11 +190,13 @@ function Pane({
 	count,
 	scroll,
 	rowTops,
+	picture,
 }: {
 	name: string;
 	count: number;
 	scroll?: { value: number };
 	rowTops?: Record<number, number>;
+	picture?: boolean;
 }) {
 	const { origin, dealt, grid, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
@@ -190,8 +232,10 @@ function Pane({
 					restY={rowTops?.[Math.floor(index / COLUMNS)]}
 				>
 					<span data-testid={`cell-${index}`} />
+					{index === 0 && picture ? <Picture /> : null}
 				</DealCell>
 			))}
+			{scroll ? <Air scroll={scroll} /> : null}
 		</>
 	);
 }
@@ -202,6 +246,7 @@ function Stage({
 	scroll,
 	rowTops,
 	collapse,
+	picture,
 }: {
 	detail: string | null;
 	target?: Measurable;
@@ -209,6 +254,7 @@ function Stage({
 	scroll?: { value: number };
 	rowTops?: Record<number, number>;
 	collapse?: boolean;
+	picture?: boolean;
 }) {
 	return (
 		<DealStack
@@ -216,7 +262,9 @@ function Stage({
 			detail={detail}
 			target={target}
 			collapse={collapse}
-			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} rowTops={rowTops} />}
+			renderDetail={(name) => (
+				<Pane name={name} count={count} scroll={scroll} rowTops={rowTops} picture={picture} />
+			)}
 		>
 			<Lifted />
 		</DealStack>
@@ -250,6 +298,8 @@ beforeEach(() => {
 	mockCancelled.length = 0;
 	mockStyles.clear();
 	mockLayouts.length = 0;
+	mockReactions.clear();
+	mockOS = 'web';
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
 		callback(0);
 		return 1;
@@ -796,4 +846,151 @@ it('a stack inside a detail that cross-fades away holds what it shows', () => {
 	expect(screen.getByTestId('inner-detail').textContent).toBe('Tees');
 	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
 	expect(mockDelays.length).toBe(delays);
+});
+
+// Android: a React commit carries the props the UI thread has ALREADY applied. A copy shown on
+// the commit that wrote its offset painted at its own slot, at rest, for a frame (Pixel,
+// 2026-10-06: Tops cold f004, Hoodie f004). It is shown, and the tapped tile steps aside, only
+// once a UI frame has run its style with the offset.
+it('shows the copy and lifts the tile only after a UI frame has applied the copy’s offset', () => {
+	const frames: FrameRequestCallback[] = [];
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+		frames.push(callback);
+		return frames.length;
+	});
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	// The frames are known and the worklet has the offset that stands the copy on the tile …
+	const [, , , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(styleOf('cell-0').transform).toEqual([
+		{ translateX: 100 - (GRID.x + 4) },
+		{ translateY: 200 - (GRID.y + 4) },
+	]);
+	// … but no UI frame has applied it yet: the copy is still unseen, the tile still in place, and
+	// nothing has set off.
+	expect(seen('cell-0')).toBe(false);
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	expect(deal().dealt).toBe(false);
+	// The frame after the one that ran the style: shown and lifted in one commit.
+	act(() => frames.splice(0).forEach((frame) => frame(0)));
+	expect(seen('cell-0')).toBe(true);
+	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
+	act(() => frames.splice(0).forEach((frame) => frame(0)));
+	expect(deal().dealt).toBe(true);
+});
+
+it('a copy placed for a detail that has since been replaced does not show the new one', () => {
+	const frames: FrameRequestCallback[] = [];
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+		frames.push(callback);
+		return frames.length;
+	});
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	const late = frames.splice(0);
+	// Another tile is tapped before Hoodie's copy reports.
+	rerender(<Stage detail="Tee" />);
+	act(() => late.forEach((frame) => frame(0)));
+	expect(deal().name).toBe('Tee');
+	// Tee's frames are known, its own copy has not been applied by a UI frame yet: Hoodie's
+	// report must not stand in for it.
+	layOut();
+	expect(seen('cell-0')).toBe(false);
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	act(() => frames.splice(0).forEach((frame) => frame(0)));
+	expect(seen('cell-0')).toBe(true);
+	expect(screen.getByTestId('lifted').textContent).toBe('Tee');
+});
+
+it('holds the copy until its picture has painted, and only so long', () => {
+	const { rerender } = render(<Stage detail={null} picture />);
+	rerender(<Stage detail="Hoodie" picture />);
+	expect(screen.getByTestId('paint').dataset.onCopy).toBe('true');
+	layOut();
+	// The frames are known, the picture has not painted: the copy would show a blank square.
+	expect(seen('cell-0')).toBe(false);
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	act(() => screen.getByTestId('paint').click());
+	expect(seen('cell-0')).toBe(true);
+	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
+	expect(deal().dealt).toBe(true);
+
+	// A picture that never paints holds the deal for its grace period only.
+	rerender(<Stage detail={null} picture />);
+	finish(0);
+	rerender(<Stage detail="Tee" picture />);
+	layOut();
+	expect(seen('cell-0')).toBe(false);
+	act(() => jest.advanceTimersByTime(150));
+	expect(seen('cell-0')).toBe(true);
+});
+
+it('a picture off any copy holds nothing', () => {
+	render(<Picture />);
+	expect(screen.getByTestId('paint').dataset.onCopy).toBe('false');
+});
+
+it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt in place it fills its row', () => {
+	const height = () =>
+		screen.getByTestId('cell-0').closest('[data-style]')!.getAttribute('data-height');
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	// The tile plus its margins, whatever the products beside it in the level's first row make
+	// of that row (Pixel, 2026-10-06: Men's copy grew 244 → 431 px on the tapped tile).
+	expect(height()).toBe(String(TILE.height + 8));
+	rerender(<Stage detail={null} />);
+	expect(height()).toBe(String(TILE.height + 8));
+	finish(0);
+	rerender(<Stage detail="Tee" target={null} />);
+	act(() => jest.advanceTimersByTime(120));
+	expect(height()).toBeNull();
+});
+
+// The scroller clipped the copy of a tile from the products' first row where it overlapped the
+// level's crumb row: its name was cut away for the whole walk (Pixel, 2026-10-06, 1c/1d).
+it('lets the tiles in the air out over the crumb, native only, while the grid is at its top', () => {
+	mockOS = 'android';
+	const scroll = { value: 0 };
+	const air = () => JSON.parse(screen.getByTestId('air').textContent!);
+	const { rerender } = render(<Stage detail={null} scroll={scroll} />);
+	rerender(<Stage detail="Hoodie" scroll={scroll} />);
+	layOut();
+	// In the air: the scroller lets go, and the frame around it reaches up to the stage's top
+	// (the grid's own top within the stage) and clips at the grid's bottom instead.
+	expect(air()).toEqual({
+		frame: {
+			marginTop: -GRID.y,
+			paddingTop: GRID.y,
+			overflow: 'hidden',
+			pointerEvents: 'box-none',
+		},
+		scroller: { overflow: 'visible' },
+	});
+	// Landed: the scroller is a scroller again.
+	act(() => jest.advanceTimersByTime(1000));
+	expect(air()).toEqual({});
+	// Scrolled, then on the way home: rows above the grid's top would show over the crumb.
+	act(() => {
+		scroll.value = 40;
+		mockReactions.forEach((run) => run());
+	});
+	rerender(<Stage detail={null} scroll={scroll} />);
+	expect(air()).toEqual({});
+	act(() => {
+		scroll.value = 0;
+		mockReactions.forEach((run) => run());
+	});
+	expect(air().scroller).toEqual({ overflow: 'visible' });
+});
+
+it('the web keeps its scroller: overflow visible would end the scrolling', () => {
+	const scroll = { value: 0 };
+	const { rerender } = render(<Stage detail={null} scroll={scroll} />);
+	rerender(<Stage detail="Hoodie" scroll={scroll} />);
+	layOut();
+	expect(JSON.parse(screen.getByTestId('air').textContent!)).toEqual({});
 });

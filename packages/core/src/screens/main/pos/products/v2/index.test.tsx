@@ -574,6 +574,7 @@ jest.mock('./deal-stack', () => ({
 	DealStack: ({ children }: React.PropsWithChildren) => (
 		<div data-testid="deal-stage">{children}</div>
 	),
+	useCopyPicture: () => undefined,
 }));
 jest.mock('./footer', () => ({ ProductsFooter: () => null }));
 jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (n: number) => n }));

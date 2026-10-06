@@ -21,6 +21,8 @@ jest.mock('@wcpos/components/text', () => ({
 		<span className={className}>{children}</span>
 	),
 }));
+// Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
+jest.mock('../deal-stack', () => ({ useCopyPicture: () => undefined }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));

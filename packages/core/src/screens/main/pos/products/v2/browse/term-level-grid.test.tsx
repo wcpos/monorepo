@@ -125,6 +125,8 @@ jest.mock('../deal-stack', () => ({
 	FRONT: { zIndex: 1 },
 	DealStagedContext: jest.requireActual('react').createContext(null),
 	useDeal: () => ({ placeGrid }),
+	useAirspace: () => ({}),
+	useCopyPicture: () => undefined,
 }));
 // The list renders every row it is handed, wrapped as its cells are (with the cell style the
 // grid asks for), and an end-reached is a scroll on it.
