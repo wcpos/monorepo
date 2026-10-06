@@ -12,7 +12,7 @@
  * and a store that does not serve the payments contract SKIPS with a reason rather than
  * failing — a store that serves it and then misbehaves fails.
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
@@ -62,6 +62,31 @@ async function enterAmount(page: Page, methodId: string, amountMinor: number): P
 	await expect
 		.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 10_000 })
 		.toBe(amountMinor);
+}
+
+async function isSwitchOn(toggle: Locator): Promise<boolean> {
+	return toggle.evaluate((node) => {
+		const element = node as HTMLElement & { checked?: boolean };
+		const ariaChecked = element.getAttribute('aria-checked');
+		if (ariaChecked !== null) return ariaChecked === 'true';
+		const dataState = element.getAttribute('data-state');
+		if (dataState !== null) return dataState === 'checked';
+		return element.checked === true;
+	});
+}
+
+/**
+ * Set the cart's auto-print setting from the UI itself (never storage internals), with the
+ * cart on screen. Reactive: the receipt stage reads the setting live, so no reload is needed.
+ */
+async function setAutoPrintReceipt(page: Page, on: boolean): Promise<void> {
+	await page.getByTestId('cart-settings-button').filter({ visible: true }).click();
+	const toggle = page.getByTestId('cart-setting-auto-print-receipt').first();
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	if ((await isSwitchOn(toggle)) !== on) await toggle.click();
+	await expect.poll(() => isSwitchOn(toggle), { timeout: 10_000 }).toBe(on);
+	await page.keyboard.press('Escape');
+	await expect(toggle).toBeHidden({ timeout: 10_000 });
 }
 
 /** On a phone the cart and the products grid are separate tabs; only the shown one is visible. */
@@ -175,6 +200,52 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				Number(server.total),
 				2
 			);
+		}
+	);
+
+	liveTest(
+		'auto-prints the receipt on the receipt stage when the setting is on',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			// The receipt stage is the one surface that auto-prints (9614cda7c): the standalone
+			// receipt modal never does. The setting is reactive and persisted, so it is set with
+			// the cart on screen before the order exists, and put back at the end.
+			await ensureRegisterOpen(page);
+			await setAutoPrintReceipt(page, true);
+			try {
+				const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
+				const { descriptors } = await requireTenderCheckout(
+					request,
+					testInfo,
+					storeAuthorization,
+					mode
+				);
+				const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
+				liveTest.skip(!cash, 'store declares no manual cash method');
+
+				const balance = await readAmountMinor(page, 'checkout-balance');
+				await page.getByTestId(`checkout-method-${cash!.id}`).click();
+				await expect
+					.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
+					.toBe(balance);
+				await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
+
+				await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({
+					timeout: 120_000,
+				});
+				// `receipt-printed-to` renders only once a print was dispatched (`printedTo` is set
+				// on a `true` return): the auto-print fired, through the system print on web. That
+				// waits for the receipt frame to load and then for `afterprint`, which headless
+				// Chromium may never fire — the adapter settles on its 60 s fallback — so the window
+				// covers the fallback, not a UI delay.
+				await expect(page.getByTestId('receipt-printed-to')).toBeVisible({ timeout: 90_000 });
+				// New sale is held while the auto-print is pending; once printed it is live again.
+				await expect(page.getByTestId('receipt-new-sale')).toBeEnabled();
+				await page.getByTestId('receipt-new-sale').click();
+				await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+			} finally {
+				await setAutoPrintReceipt(page, false).catch(() => undefined);
+			}
 		}
 	);
 
