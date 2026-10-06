@@ -532,8 +532,11 @@ async function settle(input: {
 	const before = await classify(database);
 	const carry = await carryOverOpenCarts(ports, identity, database, before.carriable);
 	const after = carry.carried > 0 ? await classify(database) : before;
+	// POS-local state is carried on EVERY pass, kept or drained: a database kept for a dead letter
+	// may stay indefinitely, and its synced orders reach the live database by pull meanwhile.
+	// Idempotent (the larger count wins; stash entries merge).
+	const localState = await carryPosLocalState(ports, identity, database);
 	if (after.total === 0) {
-		const localState = await carryPosLocalState(ports, identity, database);
 		if (localState.error !== null) {
 			// The database holds no unsent work, but it holds a receipt count the till cannot yet
 			// put anywhere: it stays until a pass with the live engine on this scope carries it.
@@ -558,7 +561,10 @@ async function settle(input: {
 	// A cart that could not be carried (the live engine moved to another scope mid-drain, a
 	// write failed) is retried: it is live work, and the next attempt on this scope can move it.
 	const retryable =
-		input.tickProblem !== null || (after.remaining.unsent ?? 0) > 0 || carry.error !== null;
+		input.tickProblem !== null ||
+		(after.remaining.unsent ?? 0) > 0 ||
+		carry.error !== null ||
+		localState.error !== null;
 	// A cart whose live create was refused is counted as the dead letter it is, not as held.
 	const remaining: LegacyScopeRemainingWork = { ...after.remaining };
 	for (const cart of carry.deadLettered) {
@@ -573,6 +579,9 @@ async function settle(input: {
 				? 'sendable work is left in the queue'
 				: 'unsent work is left in the queue'),
 		...(carry.error !== null ? [`open carts not carried over: ${carry.error}`] : []),
+		...(localState.error !== null
+			? [`receipt print counts not carried over: ${localState.error}`]
+			: []),
 		...carry.deadLettered.map(
 			(cart) =>
 				`open cart ${cart.recordId} not carried over: its create is a dead letter in the live database (resolve it in Store health)`

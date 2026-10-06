@@ -1178,6 +1178,37 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			}
 		}, 30_000);
 
+		it('is carried on a pass that KEEPS v5 (a dead letter stays): the stash holds the count', async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+			const order = manifest.orders.find((o) => o.case === 'a')!;
+			const legacy = await openLegacy(storage, server);
+			try {
+				const doc = await legacy.collection('orders').findOne(order.uuid).exec();
+				await doc!.incrementalModify((data: Json) => ({
+					...data,
+					local: { ...(data.local as Json), receiptPrintCount: 2 },
+				}));
+			} finally {
+				await legacy.dispose();
+			}
+			const app = await appOn(storage, server);
+			try {
+				expect(
+					await drainLegacyScopeDatabase(
+						drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+						manifest.identity
+					)
+				).toMatchObject({ status: 'kept', remaining: { deadLetters: 1, conflicts: 1 } });
+				const stash = await app.collection('orders').getLocal('resync-receipt-print-counts');
+				expect((stash?.get('counts') as Json)[order.uuid]).toBe(2);
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+
 		it('a pull that snapshotted the resident before the drain carried its count does not lower it', async () => {
 			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 			const storage = restore(work);
