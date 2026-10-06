@@ -1667,6 +1667,7 @@
 	"pos_products.scan_not_found": "Barcode not found",
 	"pos_products.scan_not_found_description": "{code} — not in this store, locally or online",
 	"pos_products.scan_several_matches": "Several matches",
+	"pos_products.scan_choose_variation": "Choose a variation",
 	"pos_products.scan_lookup_failed": "Lookup failed",
 	"pos_products.scan_lookup_failed_description": "{code} — Store didn’t respond — check your connection and scan again",
 	"pos_products.scan_unavailable": "Scanning unavailable",
