@@ -154,6 +154,29 @@ it('All products clears a pill on the source taxonomy so it opens, and is shown 
 	expect(result.current.path).toEqual([]);
 });
 
+it('a Brand pill pressed under All products drops the level and leaves the pill; a sort keeps it', () => {
+	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
+	act(() => result.current.enter({ kind: 'all' }));
+	act(() => actions.setSort('sortable_price', 'desc'));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
+	act(() => actions.setFilter('brands', [8]));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.brands).toEqual([8]);
+});
+
+it('All products tapped over a held shortcut records the filters its own entry left, not the shortcut’s', () => {
+	const { result } = renderHook(() => useBrowsePath('shortcuts', terms as never));
+	// A second tap on the root while the shortcut's level is held off stage (a cold table).
+	act(() => result.current.enter(breakfast, undefined, 0));
+	expect(mockState.filters.categories).toEqual([3]);
+	act(() => result.current.enter({ kind: 'all' }, undefined, 0));
+	expect(mockState.filters.categories).toEqual([]);
+	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
+	act(() => actions.setFilter('on_sale', true));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.on_sale).toBe(true);
+});
+
 it('a shortcut applies the quick filter exactly as its chip does and is shown while active', () => {
 	const { result } = renderHook(() => useBrowsePath('shortcuts', terms as never));
 	act(() => result.current.enter(breakfast));

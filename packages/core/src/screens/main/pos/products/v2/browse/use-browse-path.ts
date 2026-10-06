@@ -36,10 +36,12 @@ type TaxonomyField = 'categories' | 'tags' | 'brands';
 /**
  * What the path put into the query, so that exactly that can be taken back out. A taxonomy
  * projection also records every OTHER filter as it stood when it was made (`rest`): the level
- * is live only while they still stand.
+ * is live only while they still stand. All products puts nothing in (it only clears the
+ * source's own field), but it records `rest` the same way, for the same liveness.
  */
 type Projection =
 	| { kind: 'taxonomy'; field: TaxonomyField; ids: number[]; rest: Partial<FiltersOf<'products'>> }
+	| { kind: 'all'; rest?: Partial<FiltersOf<'products'>> }
 	| { kind: 'shortcut'; quickFilter: QuickFilter };
 
 /**
@@ -85,11 +87,15 @@ const sameSort = (
 	right: { field: string; direction: string }
 ) => left.field === right.field && left.direction === right.direction;
 
-/** The filters other than `field`: what a taxonomy level must find unchanged to stay live. */
+/**
+ * The filters other than `field`: what a taxonomy level (or All products) must find unchanged
+ * to stay live. No field (All products under Shortcuts): every filter.
+ */
 function filtersBesides(
 	filters: FiltersOf<'products'>,
-	field: TaxonomyField
+	field: TaxonomyField | null
 ): Partial<FiltersOf<'products'>> {
+	if (!field) return filters;
 	const { [field]: _projected, ...rest } = filters;
 	return rest;
 }
@@ -230,7 +236,8 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		(dropped = false) => {
 			const current = projected.get();
 			projected.set(null);
-			if (!current) return;
+			// All products put nothing into the query: there is nothing to take back out.
+			if (!current || current.kind === 'all') return;
 			const { state: now, actions: act, resetState: baseline } = latest.current;
 			const before = liveQuery.current;
 			if (dropped && before?.of === current && movedBesidesSearch(now, before)) return;
@@ -263,9 +270,13 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			if (entry.term.kind === 'all') {
 				// The whole catalogue: a pill on the source's own taxonomy would contradict the tile
 				// the cashier just tapped, so it goes too (it is not restored — All products means
-				// all). Nothing is recorded: the level is live while the field stays empty.
+				// all). The level is live while the field stays empty and the other filters stand
+				// as they did on entry (`rest`, as a term level records it). `rest` is taken from
+				// the commit the entry lands in (below), not from here: what `unproject` just took
+				// out of the last commit's query (a shortcut's patch) is not in it.
 				if (field && (latest.current.state.filters[field] as number[] | undefined)?.length)
 					actions.clearFilter(field);
+				projected.set({ kind: 'all' });
 				return;
 			}
 			const { term } = entry;
@@ -312,9 +323,13 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	if (deepest) {
 		const { term } = deepest;
 		if (term.kind === 'all')
+			// As a term level: a Brand, Tag or stock pill pressed under All products asks for the
+			// catalogue narrowed by it, which is not All products any more.
 			live =
 				isBlankSearch(state.search) &&
-				(!field || !(state.filters[field] as number[] | undefined)?.length);
+				(!field || !(state.filters[field] as number[] | undefined)?.length) &&
+				projection?.kind === 'all' &&
+				(!projection.rest || isEqual(filtersBesides(state.filters, field), projection.rest));
 		else if (term.kind === 'term')
 			// …and the whole chain must still stand in the source: every stored term present, each
 			// still the child of the one before (a parent deleted or reparented on the server
@@ -368,6 +383,12 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	React.useLayoutEffect(() => {
 		if (live && projection)
 			liveQuery.current = { of: projection, filters: state.filters, sort: state.sort };
+	});
+	// All products' `rest`: the other filters as the entry's own commit has them, recorded before
+	// paint (the store re-renders this at once, still live).
+	React.useLayoutEffect(() => {
+		if (live && projection?.kind === 'all' && !projection.rest)
+			projected.set({ kind: 'all', rest: filtersBesides(state.filters, field) });
 	});
 	React.useLayoutEffect(() => {
 		if (stored.length === 0 && projection) unproject(true);

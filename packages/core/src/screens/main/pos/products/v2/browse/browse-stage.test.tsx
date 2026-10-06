@@ -438,6 +438,16 @@ it('All products is a dealt level with the All products tile in slot 0', () => {
 	expect(screen.queryByTestId('products')).toBeNull();
 });
 
+it('a Brand pill pressed under All products drops its crumb and shows the narrowed products', () => {
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-all-products'));
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.queryByTestId('browse-level')).toBeNull();
+	expect(screen.queryByTestId('products-breadcrumb')).toBeNull();
+	expect(screen.getByTestId('products')).toBeTruthy();
+});
+
 it('a product drilled inside a term gets the term crumb as its ancestors, and the term crumb closes the drill', () => {
 	const onDrilledChange = jest.fn();
 	render(<BrowseStage {...stageProps({ viewMode: 'table', onDrilledChange })} />);
