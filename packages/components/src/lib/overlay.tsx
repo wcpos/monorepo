@@ -112,7 +112,9 @@ const OUTSIDE_PRESS_LAYER: StyleProp<ViewStyle> = [
 ];
 export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
-	bottom: 'bg-card border-border w-full max-h-[92%] rounded-t-2xl border-t p-2',
+	// `max-w-full`: the phone sheet is the phone's width, whatever cap an anchored caller set
+	// (`max-w-80` on the variations popover left a 280 dp sheet, Pixel 2026-10-06).
+	bottom: 'bg-card border-border w-full max-w-full max-h-[92%] rounded-t-2xl border-t p-2',
 };
 export const OVERLAY_MOTION: Record<
 	OverlayPresentation,
