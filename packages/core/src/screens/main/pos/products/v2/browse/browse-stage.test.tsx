@@ -583,6 +583,35 @@ it('a persisted settings sort change moves the baseline with it: the root is not
 	expect(screen.queryByTestId('browse-root')).toBeNull();
 });
 
+// The stock toggle moves `initialFilters` at once; `state.filters` follows through the screen's
+// effect (index.tsx rebaseFilter) one commit later. Same mechanism as the sort: a rebase, never
+// a displacement, in either direction.
+it('a showOutOfStock change moves the filter baseline with it: the root is not displaced, not even for the commit before the query follows', () => {
+	const props = stageProps();
+	const { rerender } = render(<BrowseStage {...props} />);
+	const root = screen.getByTestId('browse-root');
+	// Out-of-stock hidden: the baseline gains stock_status; the query has not yet.
+	rerender(
+		<BrowseStage {...props} initialFilters={{ status: 'publish', stock_status: 'instock' }} />
+	);
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root); // the same node: never unmounted
+	act(() => queryActions.setFilter('stock_status', 'instock'));
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	// Shown again: the baseline drops stock_status before the query does.
+	rerender(<BrowseStage {...props} initialFilters={{ status: 'publish' }} />);
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	act(() => queryActions.clearFilter('stock_status'));
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	// A pill then moving a filter is a displacement.
+	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+});
+
 it('a settings sort and the query sort moved in one event is not a displacement either', () => {
 	const props = stageProps();
 	const { rerender } = render(<BrowseStage {...props} />);

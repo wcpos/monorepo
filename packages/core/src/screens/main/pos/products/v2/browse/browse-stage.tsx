@@ -79,6 +79,34 @@ export type BrowseStageProps = {
 	initialFilters: Record<string, unknown>;
 };
 
+/**
+ * Whether the query is being rebased onto a baseline that has just moved: a device setting moved
+ * it (a header sort writes the settings sort; the stock toggle moves the initial filters) and the
+ * screen's passive effect (v2/index.tsx) has not yet moved the query to follow. For that commit
+ * the query still reads as the OLD baseline, and must not count as displaced — the tiles would
+ * swap for the products view and back, and the root grid would unmount, its scroll and held
+ * state lost. React's "previous render" pattern: the last baseline seen, and the one it left
+ * while the query still carries it. Once the query moves — catches up, or elsewhere — the
+ * ordinary comparison resumes, so a chip or pill setting that old value again later is a
+ * displacement. One mechanism for every baseline the root is compared against.
+ */
+function useRebasing<B, L>(
+	baseline: B,
+	live: L,
+	sameBaseline: (left: B, right: B) => boolean,
+	liveAt: (live: L, baseline: B) => boolean
+): boolean {
+	const [seen, setSeen] = React.useState<{ of: B; left: B | null }>({ of: baseline, left: null });
+	if (!sameBaseline(seen.of, baseline))
+		// A second move before the query followed the first keeps the one the query still carries.
+		setSeen({
+			of: baseline,
+			left: seen.left !== null && liveAt(live, seen.left) ? seen.left : seen.of,
+		});
+	else if (seen.left !== null && !liveAt(live, seen.left)) setSeen({ of: baseline, left: null });
+	return seen.left !== null && liveAt(live, seen.left);
+}
+
 function useSourceLabel(source: Exclude<BrowseBy, 'all'>): string {
 	const t = useT();
 	switch (source) {
@@ -264,27 +292,21 @@ export function BrowseStage(props: BrowseStageProps) {
 	// sort (use-browse-path's `useSettingsSort`): a header sort writes that too, so the baseline
 	// moves with it. Inside a level the sort is the cashier's (a level's liveness ignores it).
 	const settingsSort = useSettingsSort();
-	// The baseline moves one commit BEFORE the query follows it (index.tsx's effect sets
-	// `state.sort` from uiSettings), and for that commit `state.sort` still equals the sort the
-	// baseline just left: the query is being rebased, not displaced — the tiles must not swap
-	// for the products view and back (the root grid would unmount, its scroll and held state
-	// lost). React's "previous render" pattern: the last baseline seen, and the one it left while
-	// the query still carries it. Once `state.sort` moves — catches up, or elsewhere — the
-	// ordinary comparison resumes: a chip setting that old sort again later is a displacement.
-	const [baseline, setBaseline] = React.useState<{
-		seen: QueryStateOf<'products'>['sort'];
-		left: QueryStateOf<'products'>['sort'] | null;
-	}>({ seen: settingsSort, left: null });
-	if (!sameSort(baseline.seen, settingsSort))
-		setBaseline({ seen: settingsSort, left: baseline.seen });
-	else if (baseline.left && !sameSort(state.sort, baseline.left))
-		setBaseline({ seen: settingsSort, left: null });
-	const rebasing = baseline.left !== null && sameSort(state.sort, baseline.left);
+	// Either baseline moves one commit BEFORE the query follows it (useRebasing): a settings sort
+	// written by a header, or the stock toggle moving `initialFilters` (compared by content: the
+	// screen builds that object per render).
+	const sortRebasing = useRebasing(settingsSort, state.sort, sameSort, sameSort);
+	const filtersRebasing = useRebasing(
+		props.initialFilters,
+		state.filters,
+		isEqual,
+		filtersAtBaseline
+	);
 	const displaced =
 		path.length === 0 &&
 		(!isBlankSearch(state.search) ||
-			!filtersAtBaseline(state.filters, props.initialFilters) ||
-			(!rebasing && !sameSort(state.sort, settingsSort)));
+			(!filtersRebasing && !filtersAtBaseline(state.filters, props.initialFilters)) ||
+			(!sortRebasing && !sameSort(state.sort, settingsSort)));
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored
 	// objects themselves (identity, see Detail).
