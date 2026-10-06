@@ -189,17 +189,24 @@ function useTaxonomyTerms(
 	// Otherwise the source is unanswered until the products have answered — a POS-only store's
 	// terms are all zero-count, and must not read as empty while their read is in flight.
 	const existence = zeroCountIds.length === 0 ? NO_IDS : carried;
-	// A changed id set is a new read: the last answer holds meanwhile, so the stage does not
-	// collapse for a frame (state set while rendering — React's "previous render" pattern). Only
-	// a products read's own answer is held: the disabled read's "nothing to lift" says nothing
-	// about zero-count terms, and holding it would hide them all on a POS-only store's first load.
+	// The same id set re-read (the stock baseline changed, say): the last answer for THAT set
+	// holds meanwhile, so the stage does not collapse for a frame (state set while rendering —
+	// React's "previous render" pattern). A CHANGED id set is pending, not held: the last answer
+	// is for other ids, and a term that has just dropped to zero count is absent from it — served
+	// as known, the term would read as deleted and drop an open path for good. Only a products
+	// read's own answer is held: the disabled read's "nothing to lift" says nothing about
+	// zero-count terms, and holding it would hide them all on a POS-only store's first load.
+	const zeroCountKey = [...zeroCountIds].sort((a, b) => a - b).join(',');
 	const [held, setHeld] = React.useState<{
 		taxonomy: TaxonomySource;
+		key: string;
 		ids: ReadonlySet<number>;
 	}>();
 	if (carried !== undefined && zeroCountIds.length > 0)
-		if (held?.ids !== carried || held.taxonomy !== taxonomy) setHeld({ taxonomy, ids: carried });
-	const knownNonEmpty = existence ?? (held?.taxonomy === taxonomy ? held.ids : undefined);
+		if (held?.ids !== carried || held.taxonomy !== taxonomy || held.key !== zeroCountKey)
+			setHeld({ taxonomy, key: zeroCountKey, ids: carried });
+	const knownNonEmpty =
+		existence ?? (held?.taxonomy === taxonomy && held.key === zeroCountKey ? held.ids : undefined);
 	return React.useMemo(
 		() =>
 			projectTerms(
