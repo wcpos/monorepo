@@ -2070,7 +2070,7 @@ describe('previous-generation database drain', () => {
 			'write-drain skipped: offline'
 		);
 		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
-		expect([...legacyUnsentOrderUuids()]).toEqual(['order-held-cart', 'order-unsent']);
+		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held-cart', 'order-unsent']);
 		// A blocked drain is not the attempt the warn is for.
 		expect(networkWarn).not.toHaveBeenCalled();
 
@@ -2200,7 +2200,7 @@ describe('previous-generation database drain', () => {
 			target.storeId,
 			BASE_OPTIONS.scope.storeId,
 		]);
-		expect(legacyUnsentOrderUuids().size).toBe(0);
+		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
 	});
 
 	it('a kept database with nothing sendable, or one that failed to open, is not retried in this process', async () => {
@@ -2229,7 +2229,7 @@ describe('previous-generation database drain', () => {
 		await settle();
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
 		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
-		expect([...legacyUnsentOrderUuids()]).toEqual(['order-held', 'order-unsent']);
+		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held', 'order-unsent']);
 
 		jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
 		drainLegacyScopeDatabase.mockResolvedValue({
@@ -2242,7 +2242,7 @@ describe('previous-generation database drain', () => {
 		engine.emit(writeDrainRan);
 		await settle();
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
-		expect(legacyUnsentOrderUuids().size).toBe(0);
+		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
 	});
 
 	it('the drain is marked pending at engine construction and its report releases a waiting reader', async () => {

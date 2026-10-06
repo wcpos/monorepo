@@ -94,22 +94,29 @@ describe('a kept previous-generation database', () => {
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 	});
 
-	it('a database not yet reported (or not countable) is never "nothing to lose"', () => {
+	it('a database not yet reported (or not countable) makes the reading unknown, whatever the active count', () => {
 		markLegacyDrainPending('pos_v5_a');
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
-		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
 		rememberLegacyUnsentChanges('pos_v5_a', null);
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+		// Active 2 + an uncountable legacy database: never an exact "2".
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
 		rememberLegacyUnsentChanges('pos_v5_a', 0);
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		rememberLegacyUnsentChanges('pos_v5_a', 3);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 3 });
 	});
 
 	it('remembers WHICH orders a kept database holds, per database', () => {
 		rememberLegacyUnsentChanges('pos_v5_a', 2, ['order-1', 'order-2']);
 		rememberLegacyUnsentChanges('pos_v5_b', 1, ['order-3']);
-		expect([...legacyUnsentOrderUuids()].sort()).toEqual(['order-1', 'order-2', 'order-3']);
+		expect([...legacyUnsentOrderUuids('pos_v5_a')].sort()).toEqual(['order-1', 'order-2']);
+		expect([...legacyUnsentOrderUuids('pos_v5_b')]).toEqual(['order-3']);
 		rememberLegacyUnsentChanges('pos_v5_a', 0);
-		expect([...legacyUnsentOrderUuids()]).toEqual(['order-3']);
+		expect(legacyUnsentOrderUuids('pos_v5_a').size).toBe(0);
+		expect([...legacyUnsentOrderUuids('pos_v5_b')]).toEqual(['order-3']);
 	});
 
 	it('a reader can wait for the drain to report, bounded', async () => {

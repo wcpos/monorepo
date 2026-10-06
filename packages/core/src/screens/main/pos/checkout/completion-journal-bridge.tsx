@@ -149,10 +149,13 @@ export function SaleCompletionBridge(): null {
 						// drop a captured payment's completion. A later start with a countable report counts.
 						const legacy = await legacyDrainReported();
 						if (current.stopped) return;
+						// Only the ACTIVE scope's database is asked: a uuid another scope's v5 keeps says
+						// nothing about this one.
 						const keptInLegacyDatabase =
-							legacyUnsentOrderUuids().has(uuid) ||
 							legacy.unknown ||
-							(legacy.database !== null && legacyUnsentReportUncountable(legacy.database));
+							(legacy.database !== null &&
+								(legacyUnsentOrderUuids(legacy.database).has(uuid) ||
+									legacyUnsentReportUncountable(legacy.database)));
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
 							expectAt: attempt.at,
 							missingStart: !keptInLegacyDatabase,

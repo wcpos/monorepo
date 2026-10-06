@@ -119,12 +119,9 @@ export function legacyUnsentChangesCount(): number {
 	return total;
 }
 
-/** The orders a kept previous-generation database still holds unsent work for. */
-export function legacyUnsentOrderUuids(): ReadonlySet<string> {
-	const uuids = new Set<string>();
-	for (const report of legacyReports().values())
-		for (const uuid of report.orderUuids) uuids.add(uuid);
-	return uuids;
+/** The orders ONE kept previous-generation database (a scope's) still holds unsent work for. */
+export function legacyUnsentOrderUuids(databaseName: string): ReadonlySet<string> {
+	return new Set(legacyReports().get(databaseName)?.orderUuids ?? []);
 }
 
 /**
@@ -176,13 +173,13 @@ function normalize(count: number | null | undefined): number | null {
 export function classifyUnsentChanges(count: number | null | undefined): UnsentChanges {
 	const normalized = normalize(count);
 	if (normalized === null) return { status: 'unknown' };
+	// A previous-generation database the drain has not reported on (or could not count) makes the
+	// whole reading unknown: a wipe deletes it too, and it may hold more than any number stated.
+	if ([...legacyReports().values()].some((report) => report.count === null)) {
+		return { status: 'unknown' };
+	}
 	const total = normalized + legacyUnsentChangesCount();
-	if (total > 0) return { status: 'some', count: total };
-	// A previous-generation database the drain has not reported on (or could not count) is not
-	// proof of nothing.
-	return [...legacyReports().values()].some((report) => report.count === null)
-		? { status: 'unknown' }
-		: { status: 'none' };
+	return total > 0 ? { status: 'some', count: total } : { status: 'none' };
 }
 
 /**

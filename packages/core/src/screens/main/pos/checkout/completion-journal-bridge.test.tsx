@@ -375,6 +375,21 @@ describe('a previous-generation database the drain keeps', () => {
 		);
 	});
 
+	it("another scope's kept uuid does not spare this scope's order", async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		// Scope A (visited earlier) keeps the uuid; the ACTIVE scope's v5 keeps nothing.
+		rememberLegacyUnsentChanges('pos_v5_ffffffffffff_s9_c9', 1, ['order']);
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+	});
+
 	it("does not wait on another scope's mark", async () => {
 		await record();
 		mockFind.mockResolvedValue(null);
