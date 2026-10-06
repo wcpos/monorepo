@@ -33,9 +33,13 @@ export type BrowsePath = {
 };
 
 type TaxonomyField = 'categories' | 'tags' | 'brands';
-/** What the path put into the query, so that exactly that can be taken back out. */
+/**
+ * What the path put into the query, so that exactly that can be taken back out. A taxonomy
+ * projection also records every OTHER filter as it stood when it was made (`rest`): the level
+ * is live only while they still stand.
+ */
 type Projection =
-	| { kind: 'taxonomy'; field: TaxonomyField; ids: number[] }
+	| { kind: 'taxonomy'; field: TaxonomyField; ids: number[]; rest: Partial<FiltersOf<'products'>> }
 	| { kind: 'shortcut'; quickFilter: QuickFilter };
 
 /**
@@ -58,6 +62,15 @@ const sameSort = (
 	left: { field: string; direction: string },
 	right: { field: string; direction: string }
 ) => left.field === right.field && left.direction === right.direction;
+
+/** The filters other than `field`: what a taxonomy level must find unchanged to stay live. */
+function filtersBesides(
+	filters: FiltersOf<'products'>,
+	field: TaxonomyField
+): Partial<FiltersOf<'products'>> {
+	const { [field]: _projected, ...rest } = filters;
+	return rest;
+}
 
 /**
  * Whether anything but the search moved since the path was last live — any filter, the
@@ -237,7 +250,9 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			if (term.kind === 'term' && field) {
 				const ids = terms.idsFor(term);
 				actions.setFilter(field, ids as never);
-				projected.set({ kind: 'taxonomy', field, ids });
+				// Entering writes only `field`, so the rest stands as it was committed.
+				const rest = filtersBesides(latest.current.state.filters, field);
+				projected.set({ kind: 'taxonomy', field, ids, rest });
 				return;
 			}
 			const quickFilter = terms.quickFilterFor(term);
@@ -287,11 +302,17 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			// current derived set: a child added or removed under the open term changes `idsFor`
 			// without the cashier touching anything — that is re-projected below, not treated as a
 			// pill press.
+			// No OTHER filter may have moved either (a sort may: the cashier sorts inside a level):
+			// a Brand pill pressed in a Categories level asks for the catalogue-wide Brand results,
+			// not Brand within the term. The drop then leaves the query as the cashier set it — the
+			// term's ids are NOT taken out (see `unproject`): their pill now owns the query, and the
+			// Category pill shows the term's ids for them to clear.
 			live =
 				isBlankSearch(state.search) &&
 				!!field &&
 				projection?.kind === 'taxonomy' &&
 				sameSet(state.filters[field], projection.ids) &&
+				isEqual(filtersBesides(state.filters, field), projection.rest) &&
 				chainStands(stored, terms.all);
 		else {
 			// Once entered, a shortcut level holds while its filters and search do: the sort is the
@@ -340,7 +361,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		if (!live || derivedKey === undefined || !field || current?.kind !== 'taxonomy') return;
 		const derived = derivedKey === '' ? [] : derivedKey.split(',').map(Number);
 		if (sameSet(current.ids, derived)) return;
-		projected.set({ kind: 'taxonomy', field, ids: derived });
+		projected.set({ ...current, ids: derived });
 		actions.setFilter(field, derived as never);
 	}, [live, derivedKey, field, actions, projected]);
 

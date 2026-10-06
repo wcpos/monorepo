@@ -276,6 +276,33 @@ it('a search typed inside a term still takes the term out, even after a sort cha
 	expect(mockState.search).toBe('lat');
 });
 
+it('a Brand pill pressed inside a Categories level drops the path and leaves both pills as the cashier sees them', () => {
+	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
+	act(() => result.current.enter(drinks));
+	act(() => actions.setFilter('brands', [8]));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.brands).toEqual([8]);
+	// The cashier's pill owns the query now: the term's ids are not taken out from under it.
+	expect(mockState.filters.categories).toEqual([1, 2]);
+});
+
+it('a sort inside a term level, or a child added under it, keeps the level live', () => {
+	let children = [2];
+	const dynamic = {
+		...terms,
+		idsFor: (term: { id?: number }) =>
+			term.id === 1 ? [1, ...children] : term.id ? [term.id] : [],
+	};
+	const { result, rerender } = renderHook(() => useBrowsePath('categories', dynamic as never));
+	act(() => result.current.enter(drinks));
+	act(() => actions.setSort('sortable_price', 'desc'));
+	expect(result.current.path.length).toBe(1);
+	children = [2, 7];
+	rerender();
+	expect(result.current.path.length).toBe(1);
+	expect(mockState.filters.categories).toEqual([1, 2, 7]);
+});
+
 it('a Category pill set to another value inside a term drops the path and leaves the pill', () => {
 	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
 	act(() => result.current.enter(drinks));
