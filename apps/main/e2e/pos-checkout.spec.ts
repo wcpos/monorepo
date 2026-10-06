@@ -275,7 +275,7 @@ test.describe('POS Checkout', () => {
 	});
 
 	// Auto-print is covered in checkout-tender.spec.ts, on the checkout's receipt stage: that
-	// is the one surface that auto-prints on `next` (9614cda7c); the `/cart/receipt/<id>` modal
+	// is the one surface that auto-prints on `next` (f61fdc7f6); the `/cart/receipt/<id>` modal
 	// never does, so a test asserting the print button disabled there was only ever reading the
 	// new order's sync-in-progress `loading` state.
 });

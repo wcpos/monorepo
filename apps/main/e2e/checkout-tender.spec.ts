@@ -80,7 +80,11 @@ async function isSwitchOn(toggle: Locator): Promise<boolean> {
  * cart on screen. Reactive: the receipt stage reads the setting live, so no reload is needed.
  */
 async function setAutoPrintReceipt(page: Page, on: boolean): Promise<void> {
-	await page.getByTestId('cart-settings-button').filter({ visible: true }).click();
+	// Bounded: the config sets no actionTimeout, and this also runs from a `finally`.
+	await page
+		.getByTestId('cart-settings-button')
+		.filter({ visible: true })
+		.click({ timeout: 15_000 });
 	const toggle = page.getByTestId('cart-setting-auto-print-receipt').first();
 	await expect(toggle).toBeVisible({ timeout: 15_000 });
 	if ((await isSwitchOn(toggle)) !== on) await toggle.click();
@@ -207,9 +211,11 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		'auto-prints the receipt on the receipt stage when the setting is on',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
-			// The receipt stage is the one surface that auto-prints (9614cda7c): the standalone
+			// The receipt stage is the one surface that auto-prints (f61fdc7f6): the standalone
 			// receipt modal never does. The setting is reactive and persisted, so it is set with
-			// the cart on screen before the order exists, and put back at the end.
+			// the cart on screen before the order exists, and put back at the end. The till needs
+			// an active receipt template (dev-next Pro has one): without it no frame loads and no
+			// print is attempted, which reads as a bare timeout below, not a skip.
 			await ensureRegisterOpen(page);
 			await setAutoPrintReceipt(page, true);
 			try {
@@ -235,11 +241,15 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				});
 				// `receipt-printed-to` renders only once a print was dispatched (`printedTo` is set
 				// on a `true` return): the auto-print fired, through the system print on web. That
-				// waits for the receipt frame to load and then for `afterprint`, which headless
-				// Chromium may never fire — the adapter settles on its 60 s fallback — so the window
-				// covers the fallback, not a UI delay.
-				await expect(page.getByTestId('receipt-printed-to')).toBeVisible({ timeout: 90_000 });
-				// New sale is held while the auto-print is pending; once printed it is live again.
+				// waits for the receipt frame to load, a live fetch of the receipt for printing (the
+				// http client's 30 s timeout on a store that stalls), and then for `afterprint`,
+				// which headless Chromium may never fire — the adapter settles on its 60 s fallback.
+				// The window covers the sum of those, as the stage waits above do, not a UI delay.
+				await expect(page.getByTestId('receipt-printed-to')).toBeVisible({
+					timeout: 120_000,
+				});
+				// New sale is held only until the auto-print is ATTEMPTED (`autoPrintPending`), so by
+				// now it is live; the click below is the test's way back to the cart.
 				await expect(page.getByTestId('receipt-new-sale')).toBeEnabled();
 				await page.getByTestId('receipt-new-sale').click();
 				await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
