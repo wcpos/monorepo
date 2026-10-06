@@ -1,7 +1,9 @@
 import {
+	awaitLegacyUnsentReports,
 	classifyUnsentChanges,
 	forgetUnsentChanges,
-	legacyUnsentChangesMayRemain,
+	legacyUnsentOrderUuids,
+	markLegacyDrainPending,
 	readUnsentChanges,
 	rememberLegacyUnsentChanges,
 	rememberUnsentChanges,
@@ -91,16 +93,46 @@ describe('a kept previous-generation database', () => {
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 	});
 
-	it('may still hold work while kept OR not yet reported', () => {
-		expect(legacyUnsentChangesMayRemain()).toBe(false);
-		rememberLegacyUnsentChanges('pos_v5_a', null);
-		expect(legacyUnsentChangesMayRemain()).toBe(true);
-		// Not yet reported is not "nothing to lose".
+	it('a database not yet reported (or not countable) is never "nothing to lose"', () => {
+		markLegacyDrainPending('pos_v5_a');
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
-		rememberLegacyUnsentChanges('pos_v5_a', 2);
-		expect(legacyUnsentChangesMayRemain()).toBe(true);
+		rememberLegacyUnsentChanges('pos_v5_a', null);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 		rememberLegacyUnsentChanges('pos_v5_a', 0);
-		expect(legacyUnsentChangesMayRemain()).toBe(false);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+	});
+
+	it('remembers WHICH orders a kept database holds, per database', () => {
+		rememberLegacyUnsentChanges('pos_v5_a', 2, ['order-1', 'order-2']);
+		rememberLegacyUnsentChanges('pos_v5_b', 1, ['order-3']);
+		expect([...legacyUnsentOrderUuids()].sort()).toEqual(['order-1', 'order-2', 'order-3']);
+		rememberLegacyUnsentChanges('pos_v5_a', 0);
+		expect([...legacyUnsentOrderUuids()]).toEqual(['order-3']);
+	});
+
+	it('a reader can wait for the drain to report, bounded', async () => {
+		await expect(awaitLegacyUnsentReports(1_000)).resolves.toBe('reported');
+		markLegacyDrainPending('pos_v5_a');
+		const reported = awaitLegacyUnsentReports(60_000);
+		rememberLegacyUnsentChanges('pos_v5_a', 1, ['order-1']);
+		await expect(reported).resolves.toBe('reported');
+
+		jest.useFakeTimers();
+		try {
+			markLegacyDrainPending('pos_v5_b');
+			const waited = awaitLegacyUnsentReports(5_000);
+			await jest.advanceTimersByTimeAsync(4_999);
+			let settled: string | null = null;
+			void waited.then((result) => {
+				settled = result;
+			});
+			await Promise.resolve();
+			expect(settled).toBeNull();
+			await jest.advanceTimersByTimeAsync(1);
+			await expect(waited).resolves.toBe('timed-out');
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 });

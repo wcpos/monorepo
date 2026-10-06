@@ -18,7 +18,9 @@
  *    longer reach in the old database. It is CARRIED OVER: the order is copied
  *    into the current database and its create is enqueued there through the
  *    live engine's write path, then it leaves the old one. Nothing else is
- *    carried.
+ *    carried — in particular a held cart whose order already has a remote id (a
+ *    server order reopened for edits) is never carried over or sent: it keeps
+ *    the old database (`held`) until Store health can resolve it.
  *  - a retryable failure, a row backing off, or a sendable row the tick could
  *    not reach keeps the database (`kept`, `retryable`) for a later attempt.
  *  - a dead letter or a parked conflict (and the rows queued behind a conflict)
@@ -130,6 +132,11 @@ export type LegacyScopeDrainOutcome =
 			pushed: number;
 			carried: number;
 			remaining: LegacyScopeRemainingWork;
+			/**
+			 * The orders whose queue rows are left (sendable or not) — what a reader that
+			 * would give up on an order for "not being here" asks about.
+			 */
+			keptOrderUuids: string[];
 			/** Un-sendable work is due its once-a-day report (always true when retryable). */
 			reportDue: boolean;
 	  }
@@ -168,6 +175,8 @@ type CarriableCart = {
 type Classified = {
 	total: number;
 	remaining: LegacyScopeRemainingWork;
+	/** The orders the rows left belong to, sorted. */
+	orderUuids: string[];
 	carriable: CarriableCart[];
 };
 
@@ -256,7 +265,10 @@ async function classify(database: RxDatabase): Promise<Classified> {
 			carriable.push({ recordId, order, rows: held });
 		}
 	}
-	return { total: rows.length, remaining, carriable };
+	const orderUuids = [
+		...new Set(rows.filter((row) => row.collectionName === 'orders').map((row) => row.recordId)),
+	].sort();
+	return { total: rows.length, remaining, carriable, orderUuids };
 }
 
 /**
@@ -390,6 +402,7 @@ async function settle(input: {
 		pushed,
 		carried: carry.carried,
 		remaining: after.remaining,
+		keptOrderUuids: after.orderUuids,
 		reportDue,
 	};
 }
@@ -408,7 +421,7 @@ async function drainWithEngine(
 	ports: LegacyScopeDrainPorts,
 	identity: StoreScopeIdentity,
 	databaseName: string,
-	before: LegacyScopeRemainingWork
+	before: Pick<Classified, 'remaining' | 'orderUuids'>
 ): Promise<LegacyScopeDrainOutcome> {
 	const { databaseFiles: _files, liveEngine: _live, onWriteEvent, ...enginePorts } = ports;
 	let engine: RxdbSyncEngine | null = null;
@@ -462,7 +475,8 @@ async function drainWithEngine(
 			retryable: true,
 			pushed: 0,
 			carried: 0,
-			remaining: before,
+			remaining: before.remaining,
+			keptOrderUuids: before.orderUuids,
 			reportDue: true,
 		};
 	} finally {
@@ -547,5 +561,5 @@ export async function drainLegacyScopeDatabase(
 		if (probe !== null) await probe.close().catch(() => undefined);
 		return { status: 'failed', databaseName, error: errorMessage(error) };
 	}
-	return drainWithEngine(ports, identity, databaseName, before.remaining);
+	return drainWithEngine(ports, identity, databaseName, before);
 }

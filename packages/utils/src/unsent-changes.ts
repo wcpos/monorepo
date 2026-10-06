@@ -41,55 +41,113 @@ const SLOT_KEY = '__wcposUnsentChanges';
 
 /**
  * `count` is the ACTIVE scope's queue. `legacy` is what the previous-generation
- * drain left behind, by database name: a `kept` database still holds unsent
- * work that lives in NO active queue — but "Clear all local data" deletes it
- * with everything else, so it belongs in the same number. `null` there means
- * the drain has not reported on that database yet in this process.
+ * drain reported, by database name: a `kept` database still holds unsent work
+ * that lives in NO active queue — but "Clear all local data" deletes it with
+ * everything else, so it belongs in the same number.
  */
-type Slot = { count: number | null; legacy?: Map<string, number | null> };
+type LegacyReport = {
+	/** The drain has not reported on this database yet in this process. */
+	pending: boolean;
+	/** Unsent rows it kept; `null` when it could not be counted (the drain failed to open it). */
+	count: number | null;
+	/** The orders those rows belong to. */
+	orderUuids: readonly string[];
+};
+
+type Slot = {
+	count: number | null;
+	legacy?: Map<string, LegacyReport>;
+	legacyListeners?: Set<() => void>;
+};
 
 function slot(): Slot {
 	const host = globalThis as unknown as Record<string, Slot | undefined>;
-	const existing = host[SLOT_KEY];
-	if (existing) {
-		existing.legacy ??= new Map();
-		return existing;
-	}
-	const created: Slot = { count: null, legacy: new Map() };
-	host[SLOT_KEY] = created;
-	return created;
+	const existing = host[SLOT_KEY] ?? { count: null };
+	existing.legacy ??= new Map();
+	existing.legacyListeners ??= new Set();
+	host[SLOT_KEY] = existing;
+	return existing;
 }
 
-function legacyCounts(): Map<string, number | null> {
+function legacyReports(): Map<string, LegacyReport> {
 	return slot().legacy!;
 }
 
+function notifyLegacyListeners(): void {
+	for (const listener of [...slot().legacyListeners!]) listener();
+}
+
 /**
- * Record what the previous-generation drain found in one database: the count of
- * unsent rows it KEPT, 0 once it is drained or absent, or `null` while the drain
- * has not reported (it is pending, waiting to retry, or could not open it).
+ * The previous-generation drain is about to look at one database: until it
+ * reports, that database MAY hold unsent work (a wipe cannot say "none", and a
+ * reader that needs the report can wait for it — `awaitLegacyUnsentReports`).
  */
-export function rememberLegacyUnsentChanges(databaseName: string, count: number | null): void {
+export function markLegacyDrainPending(databaseName: string): void {
+	legacyReports().set(databaseName, { pending: true, count: null, orderUuids: [] });
+}
+
+/**
+ * Record what the previous-generation drain reported for one database: the
+ * count of unsent rows it KEPT and the orders they belong to, 0 once it is
+ * drained or absent, or `null` when it could not count them (it failed to open).
+ */
+export function rememberLegacyUnsentChanges(
+	databaseName: string,
+	count: number | null,
+	orderUuids: readonly string[] = []
+): void {
 	const normalized = normalize(count);
-	if (normalized === 0) legacyCounts().delete(databaseName);
-	else legacyCounts().set(databaseName, normalized);
+	if (normalized === 0) legacyReports().delete(databaseName);
+	else
+		legacyReports().set(databaseName, {
+			pending: false,
+			count: normalized,
+			orderUuids: [...orderUuids],
+		});
+	notifyLegacyListeners();
 }
 
 /** Unsent rows every kept previous-generation database is known to hold. */
 export function legacyUnsentChangesCount(): number {
 	let total = 0;
-	for (const count of legacyCounts().values()) total += count ?? 0;
+	for (const report of legacyReports().values()) total += report.count ?? 0;
 	return total;
 }
 
-/**
- * True while a previous-generation database may still hold work that has not
- * reached the active database: it was kept, or the drain has not reported yet.
- * Anything that would give up on a record for "not being here" waits for this.
- */
-export function legacyUnsentChangesMayRemain(): boolean {
-	for (const count of legacyCounts().values()) if (count === null || count > 0) return true;
+/** The orders a kept previous-generation database still holds unsent work for. */
+export function legacyUnsentOrderUuids(): ReadonlySet<string> {
+	const uuids = new Set<string>();
+	for (const report of legacyReports().values())
+		for (const uuid of report.orderUuids) uuids.add(uuid);
+	return uuids;
+}
+
+function legacyReportPending(): boolean {
+	for (const report of legacyReports().values()) if (report.pending) return true;
 	return false;
+}
+
+/**
+ * Wait until no previous-generation drain is still to report — at most
+ * `timeoutMs`. Resolves `'reported'` at once when nothing is pending, and
+ * `'timed-out'` when the bound elapses first (an offline till's drain waits for
+ * the store; its report may be a long way off).
+ */
+export function awaitLegacyUnsentReports(timeoutMs: number): Promise<'reported' | 'timed-out'> {
+	if (!legacyReportPending()) return Promise.resolve('reported');
+	return new Promise((resolve) => {
+		const listeners = slot().legacyListeners!;
+		const settle = (result: 'reported' | 'timed-out') => {
+			clearTimeout(timer);
+			listeners.delete(check);
+			resolve(result);
+		};
+		const check = () => {
+			if (!legacyReportPending()) settle('reported');
+		};
+		const timer = setTimeout(() => settle('timed-out'), timeoutMs);
+		listeners.add(check);
+	});
 }
 
 function normalize(count: number | null | undefined): number | null {
@@ -106,8 +164,11 @@ export function classifyUnsentChanges(count: number | null | undefined): UnsentC
 	if (normalized === null) return { status: 'unknown' };
 	const total = normalized + legacyUnsentChangesCount();
 	if (total > 0) return { status: 'some', count: total };
-	// A previous-generation database the drain has not reported on yet is not proof of nothing.
-	return [...legacyCounts().values()].includes(null) ? { status: 'unknown' } : { status: 'none' };
+	// A previous-generation database the drain has not reported on (or could not count) is not
+	// proof of nothing.
+	return [...legacyReports().values()].some((report) => report.count === null)
+		? { status: 'unknown' }
+		: { status: 'none' };
 }
 
 /**
@@ -123,7 +184,8 @@ export function rememberUnsentChanges(count: number | null | undefined): void {
 /** Forget the count — after a wipe there is nothing left to lose. */
 export function forgetUnsentChanges(): void {
 	slot().count = null;
-	legacyCounts().clear();
+	legacyReports().clear();
+	notifyLegacyListeners();
 }
 
 /** The last recorded reading. Never throws; `unknown` when nothing was recorded. */

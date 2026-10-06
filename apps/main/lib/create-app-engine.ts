@@ -58,7 +58,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { hostIsVisible, onHostVisibilityChange } from '@wcpos/utils/host-visibility';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
-import { rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
+import { markLegacyDrainPending, rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
@@ -165,9 +165,9 @@ let legacyPurgeStarted = false;
 
 /**
  * A drain that kept SENDABLE work (offline, a refused session, a failed push, a
- * row still backing off) retries within the process — after the live engine's
- * next successful write-drain tick, which proves the store is reachable with this
- * session, and no sooner than this backoff. A minute first: long enough for a
+ * row still backing off) retries within the process — on the live engine's next
+ * write-drain tick that finished `ran` (the lane ran; not proof the store
+ * answered), and no sooner than this backoff. A minute first: long enough for a
  * reconnect or a session renewal to settle, short enough that a sale made just
  * before the upgrade reaches the store within the shift.
  */
@@ -387,8 +387,9 @@ async function drainLegacyScopeOnce(
 	const databaseName = scopeDatabaseName(scope, {
 		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 	});
-	// Until the drain reports, a previous-generation database MAY hold unsent work.
-	if (state === undefined) rememberLegacyUnsentChanges(databaseName, null);
+	// Until the drain reports, a previous-generation database MAY hold unsent work (usually
+	// already marked at engine construction; a switched-to scope is marked here).
+	if (state === undefined) markLegacyDrainPending(databaseName);
 	const retries = state?.retries ?? 0;
 	if (sessionRefused() || getEngineConnectivity() === 'offline') {
 		// Not an attempt: the next successful live write-drain tick proves both are back.
@@ -402,8 +403,15 @@ async function drainLegacyScopeOnce(
 		logLegacyDrainOutcome(outcome, retries > 0);
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
 			rememberLegacyUnsentChanges(databaseName, 0);
-		} else if (outcome.status === 'kept') {
-			rememberLegacyUnsentChanges(databaseName, remainingCount(outcome.remaining));
+		} else if (outcome.status === 'failed') {
+			// Reported, but uncountable: a wipe stays "unknown", and nothing waits on it any longer.
+			rememberLegacyUnsentChanges(databaseName, null);
+		} else {
+			rememberLegacyUnsentChanges(
+				databaseName,
+				remainingCount(outcome.remaining),
+				outcome.keptOrderUuids
+			);
 			if (outcome.retryable) {
 				next = {
 					phase: 'waiting',
@@ -414,6 +422,7 @@ async function drainLegacyScopeOnce(
 		}
 	} catch (error) {
 		// The drain itself never throws; this is the host failing to build its ports.
+		rememberLegacyUnsentChanges(databaseName, null);
 		engineLogger.error('Failed to start draining the previous database version', {
 			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },
@@ -700,6 +709,14 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// standing update-required gate for the site (the latch itself lives on the
 	// engine instance and died with the previous one).
 	clearUpdateRequired(options.scope.site);
+	// Marked now, during render — before any readiness callback or store-session effect — so a
+	// reader that waits on the drain's report (the completion journal) can never ask before the
+	// drain is known to be coming.
+	if (!legacyDrainStates.has(cacheKey)) {
+		markLegacyDrainPending(
+			scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+		);
+	}
 	const engine = createRxdbSyncEngine(
 		{
 			site: {
@@ -787,8 +804,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				(authExhaustedToken !== null &&
 					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token)
 		);
-	// A drain waiting to retry runs after a successful live write-drain tick: the store
-	// answered this session, so the old database's sales can go too.
+	// A drain waiting to retry runs after a live write-drain tick that finished `ran`. That
+	// proves the LANE ran (online, session not held, scope open) — not that the store answered
+	// (a tick over an empty queue sends nothing). So the trigger is only a cue: the backoff is
+	// what bounds real attempts (about four an hour at the 15-minute cap), and attempts per
+	// process are unbounded while sendable work stays kept.
 	engine.events((event) => {
 		if (event.type !== 'lane-finish' || event.lane !== 'write-drain' || event.status !== 'ran')
 			return;

@@ -202,6 +202,10 @@ afterEach(() => {
 /** The fixture's un-sendable work, by kind: the held open cart, the dead letter, the parked conflict. */
 const UNSENDABLE = { held: 1, deadLetters: 1, conflicts: 1 };
 
+/** The orders the fixture's un-sendable rows belong to: the held cart, the dead letter, the conflict. */
+const uuidOf = (key: string) => manifest.orders.find((order) => order.case === key)!.uuid;
+const KEPT_ORDERS = ['e', 'f', 'g'].map(uuidOf).sort();
+
 /** A next-day start: past any backoff a refused push scheduled. */
 const LATER_START_MS = 24 * 60 * 60_000;
 
@@ -347,6 +351,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 				pushed: sendOnce.length,
 				carried: 0,
 				remaining: UNSENDABLE,
+				keptOrderUuids: KEPT_ORDERS,
 				reportDue: true,
 			});
 			expect(opened.length).toBeGreaterThan(0);
@@ -524,6 +529,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 				carried: 1,
 				// The dead letter and the parked conflict stay in v5; the cart moved.
 				remaining: { deadLetters: 1, conflicts: 1 },
+				keptOrderUuids: ['f', 'g'].map(uuidOf).sort(),
 				reportDue: true,
 			});
 			const live = await stored(app);
@@ -559,6 +565,56 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			});
 			expect((await stored(app)).rows.size).toBe(1);
 			expect(server.received).toHaveLength(sendOnce.length);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(false);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(false);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
+	it('a till killed after the cart reached pos_v6 but before it left pos_v5: no second create, and the old copy goes', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			// What the crashed start left: the copy and its queued create in v6, the cart still in v5.
+			await app
+				.collection('orders')
+				.insert({ ...cart.stored, local: { dirty: false, pendingMutationIds: [] } });
+			const { mutationId } = await app.engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: cart.uuid,
+				payload: heldRow.stored.payload as Json,
+			});
+
+			const drain = drainPorts(storage, storeFetch(server), { liveEngine: app.engine });
+			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toMatchObject({
+				status: 'kept',
+				carried: 1,
+				remaining: { deadLetters: 1, conflicts: 1 },
+			});
+			const live = await stored(app);
+			expect([...live.rows.keys()]).toEqual([mutationId]);
+			expect(server.received.map((envelope) => envelope.recordId)).not.toContain(cart.uuid);
 		} finally {
 			await app.dispose();
 		}

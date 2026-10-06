@@ -1,6 +1,11 @@
 import { scopeDatabaseName } from '@wcpos/sync-core';
 import type { LegacyScopeDrainOutcome, LegacyScopeDrainPorts } from '@wcpos/sync-engine';
-import { classifyUnsentChanges, forgetUnsentChanges } from '@wcpos/utils/unsent-changes';
+import {
+	awaitLegacyUnsentReports,
+	classifyUnsentChanges,
+	forgetUnsentChanges,
+	legacyUnsentOrderUuids,
+} from '@wcpos/utils/unsent-changes';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
@@ -1947,6 +1952,7 @@ describe('previous-generation database drain', () => {
 		pushed: 0,
 		carried: 0,
 		remaining: { unsent: 4, held: 1 },
+		keptOrderUuids: ['order-held', 'order-unsent'],
 		reportDue: true,
 	};
 	const keptUnsendable: LegacyScopeDrainOutcome = {
@@ -1957,10 +1963,12 @@ describe('previous-generation database drain', () => {
 		pushed: 4,
 		carried: 1,
 		remaining: { deadLetters: 1, conflicts: 1 },
+		keptOrderUuids: ['order-conflicted', 'order-rejected'],
 		reportDue: true,
 	};
 	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
 
+	beforeEach(() => forgetUnsentChanges());
 	afterEach(() => {
 		forgetUnsentChanges();
 		jest.restoreAllMocks();
@@ -2139,6 +2147,7 @@ describe('previous-generation database drain', () => {
 		await settle();
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
 		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
+		expect([...legacyUnsentOrderUuids()]).toEqual(['order-held', 'order-unsent']);
 
 		jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
 		drainLegacyScopeDatabase.mockResolvedValue({
@@ -2151,6 +2160,43 @@ describe('previous-generation database drain', () => {
 		engine.emit(writeDrainRan);
 		await settle();
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+		expect(legacyUnsentOrderUuids().size).toBe(0);
+	});
+
+	it('the drain is marked pending at engine construction and its report releases a waiting reader', async () => {
+		let report!: (outcome: LegacyScopeDrainOutcome) => void;
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine();
+		drainLegacyScopeDatabase.mockImplementation(
+			() =>
+				new Promise<LegacyScopeDrainOutcome>((resolve) => {
+					report = resolve;
+				})
+		);
+		const engine = createAppSyncEngine(BASE_OPTIONS);
+		// Before readiness has run anything: a reader that waits is already told to wait.
+		let settled: string | null = null;
+		void awaitLegacyUnsentReports(60_000).then((result) => {
+			settled = result;
+		});
+		await engine.ready;
+		await settle();
+		expect(settled).toBeNull();
+		report({ status: 'absent', databaseName: LEGACY });
+		await settle();
+		expect(settled).toBe('reported');
+	});
+
+	it('a drain that failed to open is reported (nothing waits on it) but stays uncountable', async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine();
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'failed',
+			databaseName: LEGACY,
+			error: 'DB6',
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		await expect(awaitLegacyUnsentReports(1)).resolves.toBe('reported');
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 	});
 
 	it('logs one line per outcome: failed is an error with a code, kept warns when due, drained says whether the file went', async () => {

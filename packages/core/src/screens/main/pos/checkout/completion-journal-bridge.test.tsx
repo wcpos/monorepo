@@ -7,7 +7,12 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { forgetUnsentChanges, rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
+import * as unsentChanges from '@wcpos/utils/unsent-changes';
+import {
+	forgetUnsentChanges,
+	markLegacyDrainPending,
+	rememberLegacyUnsentChanges,
+} from '@wcpos/utils/unsent-changes';
 
 import * as journal from './completion-journal';
 import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
@@ -206,11 +211,37 @@ it('finishes on the second start when the normal pull has made the unpaid reside
 	expect(mockRefresh).toHaveBeenCalledTimes(1);
 });
 
-it('never abandons a missing order while a previous-generation database may still hold it', async () => {
-	await record();
-	mockFind.mockResolvedValue(null);
-	rememberLegacyUnsentChanges('pos_v5_0123456789ab_s1_c2', 2);
-	try {
+describe('a previous-generation database the drain keeps', () => {
+	const LEGACY = 'pos_v5_0123456789ab_s1_c2';
+	afterEach(() => forgetUnsentChanges());
+
+	it('waits for the drain to report before deciding, then counts the start when nothing is kept', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+		await drain();
+		// Still waiting: nothing recorded against the order yet.
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+				lastError: 'order_not_resident',
+			})
+		);
+		// Looked again after the report: a carried-over cart would be found here.
+		expect(mockFind).toHaveBeenCalledTimes(2);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('never counts or abandons an order the kept database still holds work for', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, 2, ['order', 'another-order']);
 		const view = render(<SaleCompletionBridge />);
 		for (const attempts of [1, 2, 3, 4]) {
 			await waitFor(async () =>
@@ -224,9 +255,43 @@ it('never abandons a missing order while a previous-generation database may stil
 			view.rerender(<SaleCompletionBridge />);
 		}
 		expect(mockWarn).not.toHaveBeenCalled();
-	} finally {
-		forgetUnsentChanges();
-	}
+	});
+
+	it('still counts the start when the kept work belongs to another order', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, 1, ['another-order']);
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+	});
+
+	it('replays without the report once the bounded wait elapses, and warns once', async () => {
+		await record();
+		await record('second-order');
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		const wait = jest
+			.spyOn(unsentChanges, 'awaitLegacyUnsentReports')
+			.mockResolvedValue('timed-out');
+		render(<SaleCompletionBridge />);
+		await waitFor(async () => {
+			const pending = await pendingCompletions(mockContext.storeDB);
+			expect(pending.order).toMatchObject({ attempts: 1, missingStarts: 1 });
+			expect(pending['second-order']).toMatchObject({ attempts: 1, missingStarts: 1 });
+		});
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(wait).toHaveBeenCalledWith(30_000);
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'Replaying sale completions without the previous database version report',
+			expect.anything()
+		);
+	});
 });
 
 it('counts missing orders once per session and abandons with one warning on the third start', async () => {
@@ -246,7 +311,8 @@ it('counts missing orders once per session and abandons with one warning on the 
 		view.rerender(<SaleCompletionBridge />);
 	}
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(mockFind).toHaveBeenCalledTimes(3);
+	// Twice per start: once, then again after the (immediate) previous-version drain report.
+	expect(mockFind).toHaveBeenCalledTimes(6);
 	expect(mockWarn).toHaveBeenCalledTimes(1);
 	expect(mockWarn).toHaveBeenCalledWith(
 		expect.any(String),
@@ -419,7 +485,8 @@ it('does not abandon the first missing lookup after two finish failures', async 
 	}
 	mockFind.mockResolvedValue(null);
 	render(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+	// A missing order is looked up again after the previous-version drain report.
+	await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(2));
 	await drain();
 	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 		attempts: 3,

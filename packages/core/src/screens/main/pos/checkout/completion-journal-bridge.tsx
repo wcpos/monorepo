@@ -3,7 +3,7 @@ import * as React from 'react';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { legacyUnsentChangesMayRemain } from '@wcpos/utils/unsent-changes';
+import { awaitLegacyUnsentReports, legacyUnsentOrderUuids } from '@wcpos/utils/unsent-changes';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import {
@@ -20,6 +20,17 @@ import { useSaleContext } from './hooks/use-sale-context';
 import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
+
+/**
+ * How long a replay waits for the previous-generation drain to report before it
+ * decides an order is missing. The drain sends one write-drain tick and carries
+ * open carts over; on a healthy store that settles in a few seconds even with a
+ * full queue. Thirty seconds is well clear of that and still well inside one
+ * session, so a completion the drain is about to make resident is not counted
+ * as a missed start. An offline till's drain waits for the store, so the bound
+ * — not the report — ends that wait.
+ */
+const LEGACY_DRAIN_REPORT_WAIT_MS = 30_000;
 
 /** Replays outstanding finishes at store-session start, never collecting or pushing money. */
 export function SaleCompletionBridge(): null {
@@ -58,28 +69,48 @@ export function SaleCompletionBridge(): null {
 		}
 		const current = { storeDB, manager, ctx, startVersion, stopped: false };
 		session.current = current;
+		// Awaited once per replay, and only when an order is missing: a resident order never waits.
+		let legacyReport: Promise<void> | null = null;
+		const legacyDrainReported = () =>
+			(legacyReport ??= awaitLegacyUnsentReports(LEGACY_DRAIN_REPORT_WAIT_MS).then((result) => {
+				if (result === 'timed-out') {
+					logger.warn('Replaying sale completions without the previous database version report', {
+						context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
+					});
+				}
+			}));
+		const findOrder = async (uuid: string) =>
+			(await findEngineResident(
+				manager,
+				'orders',
+				uuid
+			)) as unknown as EngineRecord<'orders'> | null;
 		const replay = async () => {
 			const pending = await pendingCompletions(storeDB);
 			for (const [uuid, attempt] of Object.entries(pending)) {
 				if (current.stopped) return;
 				try {
-					const resident = (await findEngineResident(
-						manager,
-						'orders',
-						uuid
-					)) as unknown as EngineRecord<'orders'> | null;
+					let resident = await findOrder(uuid);
 					if (current.stopped) return;
 					if (!resident) {
-						// A previous-generation scope database the drain has not emptied (kept, or not
-						// yet reported) may still hold this order: it is not resident YET, which is
-						// not a missed start. Abandoning it would drop a captured payment's completion.
-						const awaitingLegacyDrain = legacyUnsentChangesMayRemain();
+						// The previous-generation drain may be about to make it resident (a carried-over
+						// cart): wait for its report, bounded, then look again.
+						await legacyDrainReported();
+						if (current.stopped) return;
+						resident = await findOrder(uuid);
+						if (current.stopped) return;
+					}
+					if (!resident) {
+						// A kept previous-generation database still holds work for THIS order: it is not
+						// resident YET, which is not a missed start — abandoning it would drop a captured
+						// payment's completion. Any other missing order counts as before.
+						const keptInLegacyDatabase = legacyUnsentOrderUuids().has(uuid);
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
 							expectAt: attempt.at,
-							missingStart: !awaitingLegacyDrain,
+							missingStart: !keptInLegacyDatabase,
 						});
 						if (current.stopped) return;
-						if (!awaitingLegacyDrain && (attempt.missingStarts ?? 0) + 1 >= 3) {
+						if (!keptInLegacyDatabase && (attempt.missingStarts ?? 0) + 1 >= 3) {
 							await resolveCompletionAttempt(storeDB, uuid, attempt.at);
 							logger.warn('Pending sale completion abandoned: order not resident', {
 								code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
