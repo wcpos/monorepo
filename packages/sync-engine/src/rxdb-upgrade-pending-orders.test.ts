@@ -579,6 +579,32 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
+	it('a push the host blocks still probes and reports every kept order, opening no engine and sending nothing', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		const opened: string[] = [];
+		const outcome = await drainLegacyScopeDatabase(
+			{
+				...drainPorts(storage, storeFetch(server), {
+					diagnostics: (event) => opened.push(event.type),
+				}),
+				pushBlockedReason: 'the store refused the session',
+			},
+			manifest.identity
+		);
+		expect(outcome).toMatchObject({
+			status: 'kept',
+			reason: 'the store refused the session',
+			retryable: true,
+			pushed: 0,
+			remaining: { unsent: sendOnce.length, ...UNSENDABLE },
+			keptOrderUuids: manifest.orders.map((order) => order.uuid).sort(),
+		});
+		expect(opened).toEqual([]);
+		expect(server.received).toEqual([]);
+	}, 30_000);
+
 	it('a till killed after the cart reached pos_v6 but before it left pos_v5: no second create, and the old copy goes', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);

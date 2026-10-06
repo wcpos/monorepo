@@ -367,10 +367,12 @@ function logLegacyDrainWriteEvent(databaseName: string, event: LegacyScopeDrainW
 /**
  * A scope generation bump opens a fresh database; the previous one may still
  * hold unsent sales. Drain it only while it is the engine's active scope (so the
- * session's credentials are that cashier's), never while the session is refused
- * (a refused push would dead-letter them) and never offline — those wait for the
- * live engine's next successful write-drain tick. A drain that kept sendable
- * work re-arms with a bounded backoff; anything else is once per process.
+ * session's credentials are that cashier's). While the session is refused (a
+ * refused push would dead-letter them) or the till is offline it never PUSHES —
+ * but it still probes (local), carries open carts over and reports what it kept,
+ * then waits for the live engine's next write-drain tick that ran. A drain that
+ * kept sendable work after a real attempt re-arms with a bounded backoff;
+ * anything else is once per process.
  */
 async function drainLegacyScopeOnce(
 	engine: RxdbSyncEngine,
@@ -391,16 +393,20 @@ async function drainLegacyScopeOnce(
 	// already marked at engine construction; a switched-to scope is marked here).
 	if (state === undefined) markLegacyDrainPending(databaseName);
 	const retries = state?.retries ?? 0;
-	if (sessionRefused() || getEngineConnectivity() === 'offline') {
-		// Not an attempt: the next successful live write-drain tick proves both are back.
-		legacyDrainStates.set(key, { phase: 'waiting', retries, notBeforeMs: 0 });
-		return;
-	}
+	// Offline or a refused session blocks only the PUSH: the probe is local, so the drain still
+	// checks, carries open carts over and reports what it kept — the report never waits on the
+	// network. A blocked drain is not an attempt: no backoff, the next live tick re-arms it.
+	const pushBlockedReason = sessionRefused()
+		? 'the store refused the session'
+		: getEngineConnectivity() === 'offline'
+			? 'write-drain skipped: offline'
+			: null;
 	legacyDrainStates.set(key, { phase: 'running', retries });
 	let next: LegacyDrainState = { phase: 'done' };
 	try {
-		const outcome = await drainLegacyScopeDatabase(ports(), scope);
-		logLegacyDrainOutcome(outcome, retries > 0);
+		const outcome = await drainLegacyScopeDatabase({ ...ports(), pushBlockedReason }, scope);
+		// A blocked drain logs as a retry would: the warn waits for a real attempt.
+		logLegacyDrainOutcome(outcome, retries > 0 || pushBlockedReason !== null);
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
 			rememberLegacyUnsentChanges(databaseName, 0);
 		} else if (outcome.status === 'failed') {
@@ -412,7 +418,9 @@ async function drainLegacyScopeOnce(
 				remainingCount(outcome.remaining),
 				outcome.keptOrderUuids
 			);
-			if (outcome.retryable) {
+			if (outcome.retryable && pushBlockedReason !== null) {
+				next = { phase: 'waiting', retries, notBeforeMs: 0 };
+			} else if (outcome.retryable) {
 				next = {
 					phase: 'waiting',
 					retries: retries + 1,

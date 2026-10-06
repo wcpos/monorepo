@@ -94,6 +94,13 @@ export type LegacyScopeDrainPorts = Pick<
 	liveEngine?: Pick<RxdbSyncEngine, 'whenActive' | 'write'>;
 	/** Every write-rejected / write-conflict the drain's push produces. */
 	onWriteEvent?: (event: LegacyScopeDrainWriteEvent) => void;
+	/**
+	 * Why the host will not let this drain push right now (its session is refused),
+	 * or null. The probe is LOCAL, so a blocked drain still checks, classifies,
+	 * carries open carts over and reports what it kept — it only opens no engine
+	 * and sends nothing. Offline is read from `connectivity` the same way.
+	 */
+	pushBlockedReason?: string | null;
 };
 
 /**
@@ -538,8 +545,11 @@ export async function drainLegacyScopeDatabase(
 			...(stored.has('orders') ? { orders: creators.orders as never } : {}),
 		});
 		before = await classify(probe);
-		const offline = ports.connectivity?.() === 'offline';
-		if ((before.remaining.unsent ?? 0) === 0 || offline) {
+		const blocked =
+			ports.connectivity?.() === 'offline'
+				? 'write-drain skipped: offline'
+				: (ports.pushBlockedReason ?? null);
+		if ((before.remaining.unsent ?? 0) === 0 || blocked !== null) {
 			// Nothing the engine could send now: no engine. Carry carts over, remove if empty, else count.
 			// (`probe` stays set: a failure part-way closes it below; closing twice is a no-op.)
 			const opened = probe;
@@ -550,8 +560,7 @@ export async function drainLegacyScopeDatabase(
 				database: opened,
 				close: () => opened.close(),
 				pushed: 0,
-				tickProblem:
-					offline && (before.remaining.unsent ?? 0) > 0 ? 'write-drain skipped: offline' : null,
+				tickProblem: blocked !== null && (before.remaining.unsent ?? 0) > 0 ? blocked : null,
 			});
 		}
 		const opened = probe;

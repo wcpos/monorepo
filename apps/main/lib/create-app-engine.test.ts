@@ -2026,45 +2026,63 @@ describe('previous-generation database drain', () => {
 		]);
 	});
 
-	it('never drains while the session is refused, and drains on the first successful tick after', async () => {
+	it('never PUSHES while the session is refused, but still probes and reports; the first tick after pushes', async () => {
 		const engine = createEngineDouble();
 		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
 			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
 		const { requestStateManager } = jest.requireActual<
 			typeof import('@wcpos/hooks/use-http-client')
 		>('@wcpos/hooks/use-http-client');
 		const isAuthFailed = jest.spyOn(requestStateManager, 'isAuthFailed').mockReturnValue(true);
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
-		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase.mock.calls[0]![0].pushBlockedReason).toBe(
+			'the store refused the session'
+		);
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
-		// Until the drain reports, the old database MAY hold unsent work: a wipe cannot say "none".
-		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
 
+		// Not an attempt: no backoff — the next tick that ran pushes, unblocked.
 		isAuthFailed.mockReturnValue(false);
 		engine.emit(writeDrainRan);
 		await settle();
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		expect(drainLegacyScopeDatabase.mock.calls[1]![0].pushBlockedReason).toBeNull();
 	});
 
-	it('offline at boot is not an attempt: the first successful write-drain tick drains', async () => {
+	it('offline at boot with a kept v5 cart: the report carries its uuid before any tick or backoff', async () => {
 		const engine = createEngineDouble();
-		const { createAppSyncEngine, drainLegacyScopeDatabase, setAppOnlineStatus } =
+		const { createAppSyncEngine, drainLegacyScopeDatabase, setAppOnlineStatus, networkWarn } =
 			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue({
+			...keptRetryable,
+			reason: 'write-drain skipped: offline',
+			keptOrderUuids: ['order-held-cart', 'order-unsent'],
+		});
 		setAppOnlineStatus('offline');
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
-		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase.mock.calls[0]![0].pushBlockedReason).toBe(
+			'write-drain skipped: offline'
+		);
+		await expect(awaitLegacyUnsentReports(1)).resolves.toBe('reported');
+		expect([...legacyUnsentOrderUuids()]).toEqual(['order-held-cart', 'order-unsent']);
+		// A blocked drain is not the attempt the warn is for.
+		expect(networkWarn).not.toHaveBeenCalled();
 
 		setAppOnlineStatus('online-website-available');
 		// A tick that did not run (skipped, error) proves nothing.
 		engine.emit({ type: 'lane-finish', lane: 'write-drain', status: 'skipped' });
 		engine.emit({ type: 'lane-finish', lane: 'pull', status: 'ran' });
 		await settle();
-		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
 		engine.emit(writeDrainRan);
 		await settle();
-		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		expect(drainLegacyScopeDatabase.mock.calls[1]![0].pushBlockedReason).toBeNull();
 	});
 
 	it('re-arms a drain that kept sendable work: after the next successful tick, no sooner than a bounded backoff', async () => {
