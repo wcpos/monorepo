@@ -15,9 +15,13 @@
  * this build. If the app database already existed when this build first wrote
  * the history, earlier scopes (and their pos_v5) may be unnamed: the history is
  * incomplete for the life of that install, and the reset count never becomes
- * exact on it. "Already existed" is read from the user database's storage token
- * — rxdb writes it once, when the database is created — against the time this
- * process started.
+ * exact on it. "Created in this run" is read from IDENTITY, not time: rxdb writes
+ * the user database's storage token once, when the database is created, and
+ * stamps it with the creating database instance's token (`data.instanceToken`).
+ * The history is complete only when that is THIS database instance. (A clock
+ * moved backwards makes an old token look newer than the process; an identity
+ * cannot be fooled that way.) A token without an instance id falls back to time,
+ * with a token from the future read as inconclusive — incomplete.
  *
  * `cleared`: the names that reported nothing kept (drained or absent) — a
  * pos_v5 cannot come back once gone, so a cleared name is never inventoried
@@ -35,6 +39,14 @@ const HISTORY_LOCAL_ID = 'legacy-scope-history';
 
 /** Any epoch time before this is not a real process start (an origin a platform does not report). */
 const PLAUSIBLE_EPOCH_MS = Date.UTC(2020, 0, 1);
+
+/**
+ * Only for a storage token without an instance id: how far in the future its write time may be
+ * before it proves nothing. Five minutes covers ordinary clock drift and NTP corrections; a token
+ * further ahead than that was written under a clock that has since moved back, so it cannot show
+ * the database was created in this run.
+ */
+const STORAGE_TOKEN_CLOCK_SKEW_MS = 5 * 60_000;
 
 /**
  * When this process started: the platform's time origin where it has one (web,
@@ -65,15 +77,29 @@ export type ScopeHistoryDatabase = {
 		): Promise<unknown>;
 	} | null>;
 	insertLocal(id: string, data: HistoryData): Promise<unknown>;
+	/** This database instance's token (rxdb's `RxDatabase.token`). */
+	token: string;
 	internalStore: {
-		findDocumentsById(ids: string[], withDeleted: boolean): Promise<{ _meta: { lwt: number } }[]>;
+		findDocumentsById(
+			ids: string[],
+			withDeleted: boolean
+		): Promise<{ _meta: { lwt: number }; data?: { instanceToken?: unknown } }[]>;
 	};
 };
 
-async function appDatabasePredatesThisRun(db: ScopeHistoryDatabase): Promise<boolean> {
-	const [token] = await db.internalStore.findDocumentsById([STORAGE_TOKEN_DOCUMENT_ID], false);
+async function appDatabaseCreatedInThisRun(db: ScopeHistoryDatabase): Promise<boolean> {
+	const [storageToken] = await db.internalStore.findDocumentsById(
+		[STORAGE_TOKEN_DOCUMENT_ID],
+		false
+	);
 	// No token is no evidence of a fresh database: read it as late (never settles — the safe side).
-	return token === undefined || token._meta.lwt < PROCESS_STARTED_AT_MS;
+	if (storageToken === undefined) return false;
+	const instanceToken = storageToken.data?.instanceToken;
+	if (typeof instanceToken === 'string') return instanceToken === db.token;
+	const writtenAt = storageToken._meta.lwt;
+	return (
+		writtenAt >= PROCESS_STARTED_AT_MS && writtenAt <= Date.now() + STORAGE_TOKEN_CLOCK_SKEW_MS
+	);
 }
 
 function strings(value: unknown): string[] {
@@ -113,7 +139,7 @@ async function modifyHistory(
 		}
 		const created = modify({
 			names: [],
-			complete: !(await appDatabasePredatesThisRun(db)),
+			complete: await appDatabaseCreatedInThisRun(db),
 			cleared: [],
 		});
 		try {
