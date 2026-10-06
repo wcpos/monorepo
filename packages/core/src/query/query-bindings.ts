@@ -1187,6 +1187,18 @@ export function useSearchSelect(
 export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
 /**
+ * Whether a (non-empty) result's rows were read from the database the engine has active now: a
+ * read's replayed answer can be the previous scope's for the moment between a scope switch and
+ * the new database's first answer. With no active database to compare (or a row that does not
+ * say where it came from), it is taken as read.
+ */
+function readFromActiveScope(engine: RxdbSyncEngine, result: QueryResult<RxCollection>): boolean {
+	const active = engine.active()?.database;
+	const source = result.hits[0]?.record.collection?.database;
+	return !active || !source || source === active;
+}
+
+/**
  * Full reference-lane residents of one product taxonomy: the category tree, the browse tiles.
  * `residentsOnly` reads what the till holds and declares no refresh — for a surface that only
  * summarises (the settings dialog's counts), so opening it pulls nothing; the reference seed
@@ -1276,10 +1288,22 @@ export function useAllTermsBinding(
 	}, [collection, enabled, engine, generation, pulling, whenReady]);
 	// A disabled binding's empty answer is its answer (it is never pending).
 	const withholdEmpty = residentsOnly && enabled && refresh !== 'done';
+	// The withheld stream is one per SCOPE: a same-site switch keeps the engine (and so the very
+	// same `residents$`), and its new scope may be empty — a stream kept across the switch would
+	// withhold the new scope's empty answer while its pull runs, and `useAnswerOf` would go on
+	// showing the old scope's terms. A new stream is unanswered until it emits. And it passes
+	// only the ACTIVE scope's rows: the engine swaps the database first and bumps the generation
+	// a microtask later, before the new database's read has answered, so `residents$` still
+	// replays the old scope's terms to the new stream — they are not this scope's answer.
+	const withheldFor = withholdEmpty ? generation : null;
 	const result$ = React.useMemo(
 		() =>
-			withholdEmpty ? residents$.pipe(filter((result) => result.hits.length > 0)) : residents$,
-		[residents$, withholdEmpty]
+			withheldFor === null
+				? residents$
+				: residents$.pipe(
+						filter((result) => result.hits.length > 0 && readFromActiveScope(engine, result))
+					),
+		[engine, residents$, withheldFor]
 	);
 	return React.useMemo(() => ({ ...binding, result$ }), [binding, result$]);
 }

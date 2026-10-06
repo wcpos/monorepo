@@ -490,6 +490,74 @@ describe('query bindings', () => {
 		expect(engine.requireCalls).toHaveLength(2);
 	});
 
+	it('answers nothing for a same-site switch into an empty scope while its pull runs, never the old scope’s terms', async () => {
+		// The same engine over two scopes' databases, switched as the engine does: the database
+		// first (`db$`), the coverage generation a microtask later — before the new database's
+		// read has answered.
+		const scopeB = await createEngineDatabase(['categories']);
+		let activeDatabase: RxDatabase = engineDB;
+		const databaseListeners = new Set<(database: RxDatabase | null) => void>();
+		const active = engine.active;
+		engine.active = () => ({ ...active()!, database: activeDatabase }) as never;
+		engine.db$ = ((listener: (database: RxDatabase | null) => void) => {
+			databaseListeners.add(listener);
+			return () => databaseListeners.delete(listener);
+		}) as never;
+		try {
+			await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
+			const { result } = renderHook(
+				() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+				{ wrapper: Provider }
+			);
+			const before: number[] = [];
+			const first = result.current.result$.subscribe((answer) => before.push(answer.hits.length));
+			await waitFor(() => expect(before.at(-1)).toBe(1));
+			first.unsubscribe();
+			expect(engine.requireCalls).toEqual([]);
+
+			// Scope B holds no terms; its pull is held in flight.
+			let settle: (() => void) | undefined;
+			const require = engine.require;
+			engine.require = (requirement) => {
+				const handle = require(requirement);
+				if (requirement.kind !== 'refresh') return handle;
+				const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
+					settle = () => void handle.ready.then(resolve);
+				});
+				return { ...handle, ready };
+			};
+			const scopeA$ = result.current.result$;
+			const during: number[] = [];
+			act(() => {
+				activeDatabase = scopeB;
+				databaseListeners.forEach((listener) => listener(scopeB));
+				engine.setCollectionStatus('categories', { coverageGeneration: 1 });
+				// Subscribed in the same tick as the switch: the read has not answered for B yet.
+			});
+			// A new stream for the new scope: whoever attributes answers to it starts unanswered…
+			expect(result.current.result$).not.toBe(scopeA$);
+			const second = result.current.result$.subscribe((answer) => during.push(answer.hits.length));
+			await waitFor(() =>
+				expect(engine.requireCalls).toEqual([
+					expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+				])
+			);
+			// …and stays so while the pull runs: never scope A's one term.
+			expect(during).toEqual([]);
+			second.unsubscribe();
+
+			await act(async () => settle?.());
+			const after: number[] = [];
+			await waitFor(() => {
+				const third = result.current.result$.subscribe((answer) => after.push(answer.hits.length));
+				third.unsubscribe();
+				expect(after.at(-1)).toBe(0);
+			});
+		} finally {
+			if (!scopeB.destroyed) await scopeB.remove();
+		}
+	});
+
 	it('moves the scope key on a same-site switch and on a new engine, and holds it otherwise', () => {
 		let active: FakeEngine = engine;
 		function Swappable({ children }: { children: React.ReactNode }) {
