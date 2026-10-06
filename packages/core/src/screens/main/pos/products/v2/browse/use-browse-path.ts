@@ -297,6 +297,14 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		actions.setFilter(field, derived as never);
 	}, [live, derivedKey, field, actions, projected]);
 
+	// BATCHING INVARIANT: `enter` must run from a discrete event handler (every caller is a
+	// `Pressable` press today). Its writes to the query and the projection store (both read
+	// through `useSyncExternalStore`, so they render at sync priority) and `setStored` have to
+	// land in the SAME render — which only a discrete event gives `setStored`. Rendered apart, the
+	// query moves with no path stored over it (or the path is stored over a query that does not
+	// carry it yet), `live` reads false, and the drop above throws the tap away. Never call it
+	// from a gesture-handler or animation callback, a timer or a promise, or inside
+	// `startTransition`, without forcing one sync batch around it (`flushSync`).
 	const enter = React.useCallback(
 		(term: BrowseTerm, target?: Measurable, depth?: number) => {
 			const entry: PathEntry = { kind: 'term', term, target };
