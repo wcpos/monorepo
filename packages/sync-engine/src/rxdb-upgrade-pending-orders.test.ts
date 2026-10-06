@@ -187,6 +187,9 @@ afterEach(() => {
 	work = undefined;
 });
 
+/** The fixture's un-sendable work, by kind: the held open cart, the dead letter, the parked conflict. */
+const UNSENDABLE = { held: 1, deadLetters: 1, conflicts: 1 };
+
 /** A next-day start: past any backoff a refused push scheduled. */
 const LATER_START_MS = 24 * 60 * 60_000;
 
@@ -296,7 +299,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
-	it('the app at v6 opens pos_v6, drains pos_v5 exactly once, then removes it', async () => {
+	it('the app at v6 opens pos_v6, drains pos_v5 exactly once, and keeps it while un-sendable work is left', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
 		const server = createFakeWriteServer();
@@ -314,13 +317,14 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			expect(app.engine.active()?.database.name).toBe(scopeDatabaseName(manifest.identity));
 			expect((await stored(app)).orders.size).toBe(0);
 
-			// Held cart, dead letter and parked conflict are not sendable: discarded with pos_v5.
+			// The held cart, the dead letter and the parked conflict are unsent work: pos_v5 stays.
 			const drain = drainPorts(storage, storeFetch(server));
 			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
-				status: 'drained',
+				status: 'kept',
 				databaseName: manifest.databaseName,
+				reason: 'unsent work is left in the queue',
 				pushed: sendOnce.length,
-				discarded: untouchedRows.length,
+				remaining: UNSENDABLE,
 			});
 			const received = sendOnce.map((row) => row.mutationId);
 			expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
@@ -328,16 +332,60 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 				sentOrders.map((order) => order.uuid).sort()
 			);
 
-			// pos_v5 is gone: the next start finds nothing and sends nothing.
-			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
-				status: 'absent',
-				databaseName: manifest.databaseName,
+			// The next start sends nothing again and still keeps it.
+			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toMatchObject({
+				status: 'kept',
+				pushed: 0,
+				remaining: UNSENDABLE,
 			});
 			expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
 			expect(app.engine.active()?.database.name).toBe(scopeDatabaseName(manifest.identity));
 		} finally {
 			await app.dispose();
 		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect([...kept.orders.keys()].sort()).toEqual(
+				manifest.orders.map((order) => order.uuid).sort()
+			);
+			expectSent(kept, server.applied);
+			expectUntouched(kept);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
+	it('removes pos_v5 once a drain leaves no unsent work of any kind', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+
+		// A till whose only unsent work is sendable: no held cart, dead letter or conflict.
+		const legacy = await openLegacy(storage, server);
+		try {
+			await legacy.collection('mutations').bulkRemove(untouchedRows.map((row) => row.mutationId));
+		} finally {
+			await legacy.dispose();
+		}
+
+		const drain = drainPorts(storage, storeFetch(server));
+		expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
+			status: 'drained',
+			databaseName: manifest.databaseName,
+			pushed: sendOnce.length,
+		});
+		const received = sendOnce.map((row) => row.mutationId);
+		expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
+
+		// pos_v5 is gone: the next start finds nothing and sends nothing.
+		expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
+			status: 'absent',
+			databaseName: manifest.databaseName,
+		});
+		expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
 	}, 30_000);
 
 	it('a drain that fails leaves pos_v5 in place; a later start sends it exactly once', async () => {
@@ -380,19 +428,21 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			await legacy.dispose();
 		}
 
-		// A later start, past the refusal's backoff: sent exactly once, then removed.
+		// A later start, past the refusal's backoff: sent exactly once (the un-sendable rows still keep it).
 		const later = drainPorts(storage, storeFetch(server), {
 			atMs: manifest.drainAtMs + LATER_START_MS,
 		});
 		expect(await drainLegacyScopeDatabase(later, manifest.identity)).toMatchObject({
-			status: 'drained',
+			status: 'kept',
 			pushed: sendOnce.length,
+			remaining: UNSENDABLE,
 		});
 		expect(server.received.map((envelope) => envelope.mutationId)).toEqual(
 			sendOnce.map((row) => row.mutationId)
 		);
 		expect(await drainLegacyScopeDatabase(later, manifest.identity)).toMatchObject({
-			status: 'absent',
+			status: 'kept',
+			pushed: 0,
 		});
 		expect(server.received).toHaveLength(sendOnce.length);
 	}, 30_000);

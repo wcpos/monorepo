@@ -261,28 +261,23 @@ function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome): void {
 		return;
 	}
 	if (outcome.status === 'kept') {
+		// Held carts, dead letters and parked conflicts keep it too: live work is never removed.
 		engineLogger.warn(
 			'Unsent changes from the previous database version are kept until they can be sent',
-			{ context: { databaseName: outcome.databaseName, reason: outcome.reason } }
-		);
-		return;
-	}
-	const context = {
-		databaseName: outcome.databaseName,
-		pushed: outcome.pushed,
-		discarded: outcome.discarded,
-	};
-	if (outcome.discarded > 0) {
-		// Held carts, dead letters and parked conflicts: nothing could send them.
-		engineLogger.warn(
-			`Sent ${outcome.pushed} unsent changes from the previous database version; ${outcome.discarded} that could not be sent were removed with it`,
-			{ context }
+			{
+				context: {
+					databaseName: outcome.databaseName,
+					reason: outcome.reason,
+					...(outcome.pushed !== undefined ? { pushed: outcome.pushed } : {}),
+					...(outcome.remaining !== undefined ? { remaining: outcome.remaining } : {}),
+				},
+			}
 		);
 		return;
 	}
 	engineLogger.info(
 		`Sent ${outcome.pushed} unsent changes from the previous database version and removed it`,
-		{ context }
+		{ context: { databaseName: outcome.databaseName, pushed: outcome.pushed } }
 	);
 }
 

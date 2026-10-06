@@ -125,8 +125,14 @@ function loadCreateAppEngine(
 				databaseName: scopeDatabaseName(scope, { generation: 5 }),
 			}) as const as
 				| { status: 'absent'; databaseName: string }
-				| { status: 'drained'; databaseName: string; pushed: number; discarded: number }
-				| { status: 'kept'; databaseName: string; reason: string }
+				| { status: 'drained'; databaseName: string; pushed: number }
+				| {
+						status: 'kept';
+						databaseName: string;
+						reason: string;
+						pushed?: number;
+						remaining?: Record<string, number>;
+				  }
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({
@@ -1986,22 +1992,31 @@ describe('previous-generation database drain', () => {
 		}
 	});
 
-	it('logs one line per outcome: kept and partly discarded warn, drained informs', async () => {
-		for (const [outcome, level, message] of [
+	it('logs one line per outcome: kept warns with what is left, drained informs', async () => {
+		for (const [outcome, level, message, context] of [
 			[
 				{ status: 'kept', databaseName: 'pos_v5_x', reason: 'write-drain skipped: offline' },
 				'warn',
 				'Unsent changes from the previous database version are kept until they can be sent',
+				{ databaseName: 'pos_v5_x', reason: 'write-drain skipped: offline' },
 			],
 			[
-				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4, discarded: 3 },
+				{
+					status: 'kept',
+					databaseName: 'pos_v5_x',
+					reason: 'unsent work is left in the queue',
+					pushed: 4,
+					remaining: { held: 1, deadLetters: 1, conflicts: 1 },
+				},
 				'warn',
-				'Sent 4 unsent changes from the previous database version; 3 that could not be sent were removed with it',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ pushed: 4, remaining: { held: 1, deadLetters: 1, conflicts: 1 } },
 			],
 			[
-				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4, discarded: 0 },
+				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4 },
 				'info',
 				'Sent 4 unsent changes from the previous database version and removed it',
+				{ databaseName: 'pos_v5_x', pushed: 4 },
 			],
 		] as const) {
 			const { createAppSyncEngine, drainLegacyScopeDatabase, networkInfo, networkWarn } =
@@ -2012,9 +2027,7 @@ describe('previous-generation database drain', () => {
 			const logged = level === 'warn' ? networkWarn : networkInfo;
 			expect(logged).toHaveBeenCalledWith(
 				message,
-				expect.objectContaining({
-					context: expect.objectContaining({ databaseName: 'pos_v5_x' }),
-				})
+				expect.objectContaining({ context: expect.objectContaining(context) })
 			);
 		}
 	});

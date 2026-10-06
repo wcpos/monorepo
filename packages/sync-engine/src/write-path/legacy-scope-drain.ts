@@ -9,16 +9,15 @@
  * engine with the schemas that generation shipped
  * (`collections/drainable-generation.ts`), one `write-drain` tick sends the
  * queue in seq order (the same lane, acks, claim leases and server-side
- * mutationId dedupe as a live till), and only a drain that left nothing
- * retryable behind removes the database. Anything else leaves it in place for a
- * later start to try again.
+ * mutationId dedupe as a live till), and the database is removed ONLY when its
+ * queue is then empty. Anything left — a retryable failure, a row backing off,
+ * an open cart's held edits, a dead letter, a parked conflict — keeps it in
+ * place for a later start, and the outcome counts what is left (ruled: a
+ * cashier's in-progress cart is live work, and a dead letter or conflict is
+ * never deleted silently alongside it).
  *
  * Bounded on purpose: one scope, one legacy generation, one tick. A database
  * whose queue is empty is removed without opening an engine at all.
- *
- * What the removal discards: queue rows the drain deliberately does not send —
- * an open cart's held edits, dead letters, parked conflicts. They are counted
- * in the outcome (`discarded`) so the host's log line names them.
  */
 
 import {
@@ -54,10 +53,19 @@ export type LegacyScopeDrainPorts = Pick<
 export type LegacyScopeDrainOutcome =
 	/** No drainable-generation database exists for this scope. */
 	| { status: 'absent'; databaseName: string }
-	/** Every sendable mutation was sent (or there were none) and the database is removed. */
-	| { status: 'drained'; databaseName: string; pushed: number; discarded: number }
-	/** Not drained — the database stays for a later start. */
-	| { status: 'kept'; databaseName: string; reason: string };
+	/** Every queued mutation was sent (or there were none) and the database is removed. */
+	| { status: 'drained'; databaseName: string; pushed: number }
+	/**
+	 * Unsent work is left — the database stays for a later start. `remaining` counts
+	 * the queue rows still there, by kind, when the drain ran.
+	 */
+	| {
+			status: 'kept';
+			databaseName: string;
+			reason: string;
+			pushed?: number;
+			remaining?: Record<string, number>;
+	  };
 
 /**
  * An expired session is a property of THIS start, not a verdict on the sale:
@@ -94,6 +102,28 @@ async function queuedRows(database: RxDatabase): Promise<number | null> {
 		},
 	});
 	return database.collections[MUTATION_QUEUE_RXDB_COLLECTION]!.count().exec();
+}
+
+/**
+ * The kind of work a queue row still left after a drain is. Once nothing failed
+ * or is backing off, a row still `pending` is one the open-cart hold kept back.
+ */
+const REMAINING_KIND: Record<string, string> = {
+	pending: 'held',
+	rejected: 'deadLetters',
+	conflicted: 'conflicts',
+	'needs-revision': 'conflicts',
+};
+
+async function remainingWork(database: RxDatabase): Promise<Record<string, number>> {
+	const rows = await database.collections[MUTATION_QUEUE_RXDB_COLLECTION]!.find().exec();
+	const remaining: Record<string, number> = {};
+	for (const row of rows) {
+		const status = String((row.toJSON() as { status?: unknown }).status ?? 'pending');
+		const kind = REMAINING_KIND[status] ?? status;
+		remaining[kind] = (remaining[kind] ?? 0) + 1;
+	}
+	return remaining;
 }
 
 function sessionRefusalIsRetryable(fetcher: EngineFetcher): EngineFetcher {
@@ -140,12 +170,22 @@ async function drainWithEngine(
 				reason: `${failed} failed, ${deferred} still backing off`,
 			};
 		}
+		const pushed = report.pushed ?? 0;
 		const { database } = await engine.whenActive();
-		const discarded = await database.collections[MUTATION_QUEUE_RXDB_COLLECTION]!.count().exec();
+		const remaining = await remainingWork(database as unknown as RxDatabase);
+		if (Object.keys(remaining).length > 0) {
+			return {
+				status: 'kept',
+				databaseName,
+				reason: 'unsent work is left in the queue',
+				pushed,
+				remaining,
+			};
+		}
 		await engine.dispose();
 		engine = null;
 		await removeRxDatabase(databaseName, storageFor(ports, identity), ports.multiInstance ?? false);
-		return { status: 'drained', databaseName, pushed: report.pushed ?? 0, discarded };
+		return { status: 'drained', databaseName, pushed };
 	} finally {
 		// Deliberate swallow: the outcome (or the open failure) already says what happened; a
 		// close failure on top of it changes nothing about whether the database stays.
@@ -188,7 +228,7 @@ export async function drainLegacyScopeDatabase(
 			const existed = rows !== null;
 			await probe.remove();
 			return existed
-				? { status: 'drained', databaseName, pushed: 0, discarded: 0 }
+				? { status: 'drained', databaseName, pushed: 0 }
 				: { status: 'absent', databaseName };
 		}
 		await probe.close();
