@@ -101,8 +101,14 @@ describe.each([
 				payload: { ...page[1].payload, meta_data: [{ key: 'nested', value: { a: [2, 1] } }] },
 			};
 			await repository.upsertMany([page[0], update]);
-			expect(bulkUpsert).toHaveBeenCalledTimes(1);
-			expect(bulkUpsert.mock.calls[0][0].map((doc) => doc.uuid)).toEqual(['document-2']);
+			if (name === 'orders') {
+				// An order already resident is written through its own incremental write (so a receipt
+				// count raised since the pull's read is kept) — not through bulkUpsert; still one change.
+				expect(bulkUpsert).not.toHaveBeenCalled();
+			} else {
+				expect(bulkUpsert).toHaveBeenCalledTimes(1);
+				expect(bulkUpsert.mock.calls[0][0].map((doc) => doc.uuid)).toEqual(['document-2']);
+			}
 			expect(changed).toHaveBeenCalledTimes(1);
 			expect((await collection.findOne(update.uuid).exec())?.toJSON().payload).toEqual(
 				update.payload
