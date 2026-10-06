@@ -272,7 +272,13 @@ export async function enqueueWriteIntent(input: {
 						collection: requested.collection,
 						operation: 'update',
 						recordId: requested.recordId,
-						payload: requested.payload,
+						// With `payloadFromResident` the caller's snapshot is not the truth — the
+						// resident read in THIS turn is (it holds every edit since, e.g. a checkout
+						// that sent the create this one was racing); otherwise the caller's payload.
+						payload:
+							input.payloadFromResident && stored?.payload !== undefined
+								? storablePayload(requested.collection, stored.payload)
+								: requested.payload,
 						...(requested.explicit ? { explicit: true } : {}),
 					}
 				: requested;

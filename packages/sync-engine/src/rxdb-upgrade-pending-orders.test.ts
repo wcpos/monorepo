@@ -1007,6 +1007,67 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
+	it('a checkout that creates the order while the repair is placing its create: the converted update carries the edited resident, not the snapshot', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const original = [{ product_id: 41, quantity: 1, name: 'Coffee' }];
+		const edited = [{ product_id: 41, quantity: 3, name: 'Coffee' }];
+		const legacy = await openLegacy(storage, server);
+		try {
+			const order = await legacy.collection('orders').findOne(cart.uuid).exec();
+			await order!.incrementalModify((data: Json) => ({
+				...data,
+				payload: { ...(data.payload as Json), line_items: original },
+			}));
+		} finally {
+			await legacy.dispose();
+		}
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const racing: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: () => app.engine.whenActive(),
+				write: async (intent, options) => {
+					// After the drain's proof saw no create: the cashier edits the copy and checks it
+					// out — its create is sent and acknowledged (server id set, no queue row left).
+					const resident = await app.collection('orders').findOne(cart.uuid).exec();
+					await resident!.incrementalModify((data: Json) => ({
+						...data,
+						remoteId: '9002',
+						remoteKey: '9002',
+						sync: { ...(data.sync as Json), revision: 'sha256:checkout' },
+						payload: { ...(data.payload as Json), line_items: edited },
+					}));
+					return app.engine.write(intent, options);
+				},
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: racing }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'kept', carried: 1 });
+			const rows = [...(await stored(app)).rows.values()];
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				operation: 'update',
+				recordId: cart.uuid,
+				payload: expect.objectContaining({ line_items: [expect.objectContaining(edited[0])] }),
+			});
+		} finally {
+			await app.dispose();
+		}
+	}, 30_000);
+
 	it('a store switch landing between the scope check and the write refuses the carried create: nothing reaches the new scope', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
