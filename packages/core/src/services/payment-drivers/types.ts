@@ -58,7 +58,10 @@ export interface PaymentDriver {
 	 * can stop its scan early does so the moment that reader appears, instead of running the
 	 * whole discovery window (a remembered reader otherwise costs the cashier ~10 s per tile pick).
 	 */
-	discoverReaders?(transport: PaymentTransport, options?: { until?: string }): Promise<ReaderInfo[]>;
+	discoverReaders?(
+		transport: PaymentTransport,
+		options?: { until?: string }
+	): Promise<ReaderInfo[]>;
 	connect?(reader: ReaderInfo, handoff: Record<string, unknown> | null): Promise<void>;
 	disconnect?(): Promise<void>;
 	openReaderSettings?(): Promise<void>;
