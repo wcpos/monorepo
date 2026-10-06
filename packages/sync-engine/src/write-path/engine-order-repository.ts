@@ -32,7 +32,13 @@ import type { ExistenceManifestDocument } from '../local-coverage/existence-mani
 import type { LocalRefundDocument } from '../collections/refund-schema';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
-const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
+/**
+ * The orders collection's local document holding receipt print counts for orders not resident
+ * yet: `upsertMany` (the pull's materialisation) applies an entry when its order lands, then
+ * deletes it. A resync stashes counts here before clearing orders; the previous-generation drain
+ * stashes the counts its database held for orders the current one does not hold yet.
+ */
+export const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
 
 /** POS identity metadata whose resident values must survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [

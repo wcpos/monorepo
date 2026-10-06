@@ -64,6 +64,7 @@ import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 } from '../create-rxdb-sync-engine';
+import { RESYNC_RECEIPT_PRINT_COUNTS_ID } from './engine-order-repository';
 import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 
 /** A push outcome the drain's engine reports — what the host logs with its reason. */
@@ -438,6 +439,66 @@ async function carryOverOpenCarts(
 	return { carried, error: errors.length > 0 ? errors.join('; ') : null };
 }
 
+/**
+ * POS-LOCAL STATE on a synced order is carried, never dropped with the old database. The order
+ * resident's `local` holds sync bookkeeping (`dirty`, `pendingMutationIds` — meaningless once the
+ * queue is empty) and one piece of state the till alone owns: `receiptPrintCount`, which labels
+ * the next receipt a COPY and numbers it (`use-receipt-document.ts`). Dropping it would make the
+ * first receipt printed after the bump an "original" again. So, before the database is removed:
+ * an order the live database already holds gets the larger of the two counts on its resident; any
+ * other is stashed in the live orders collection's print-count document
+ * (`RESYNC_RECEIPT_PRINT_COUNTS_ID`), which the pull's materialisation applies once when that
+ * order lands, then deletes.
+ */
+async function carryPosLocalState(
+	ports: LegacyScopeDrainPorts,
+	identity: StoreScopeIdentity,
+	legacy: RxDatabase
+): Promise<{ error: string | null }> {
+	const legacyOrders = legacy.collections.orders;
+	if (!legacyOrders) return { error: null };
+	const counts = new Map<string, number>();
+	for (const doc of await legacyOrders.find().exec()) {
+		const order = doc.toJSON() as { uuid: string; local?: { receiptPrintCount?: unknown } };
+		const count = order.local?.receiptPrintCount;
+		if (typeof count === 'number' && count > 0) counts.set(order.uuid, count);
+	}
+	if (counts.size === 0) return { error: null };
+	const live = ports.liveEngine;
+	if (!live) return { error: 'no live engine to carry them into' };
+	try {
+		const active = await live.whenActive();
+		if (scopeKeyFor(active.identity) !== scopeKeyFor(identity)) {
+			return { error: 'the live engine is on another scope' };
+		}
+		const liveOrders = active.database.collections.orders;
+		if (!liveOrders) return { error: 'the live database has no orders' };
+		const residents = await liveOrders.findByIds([...counts.keys()]).exec();
+		const stash: Record<string, number> = {
+			...(((await liveOrders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID))?.get('counts') ??
+				{}) as Record<string, number>),
+		};
+		let stashed = false;
+		for (const [uuid, count] of counts) {
+			const resident = residents.get(uuid);
+			if (resident) {
+				await resident.incrementalModify((data: Record<string, unknown>) => {
+					const local = (data.local ?? {}) as { receiptPrintCount?: number };
+					if ((local.receiptPrintCount ?? 0) >= count) return data;
+					return { ...data, local: { ...local, receiptPrintCount: count } };
+				});
+			} else {
+				stash[uuid] = Math.max(stash[uuid] ?? 0, count);
+				stashed = true;
+			}
+		}
+		if (stashed) await liveOrders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts: stash });
+		return { error: null };
+	} catch (error) {
+		return { error: errorMessage(error) };
+	}
+}
+
 /** True when the kept database's un-sendable work has not been reported within the interval; stamps it. */
 async function unsendableReportDue(database: RxDatabase, nowMs: number): Promise<boolean> {
 	// The queue: the one collection every drain opens, with local documents in the drainable recipe.
@@ -475,6 +536,23 @@ async function settle(input: {
 	const carry = await carryOverOpenCarts(ports, identity, database, before.carriable);
 	const after = carry.carried > 0 ? await classify(database) : before;
 	if (after.total === 0) {
+		const localState = await carryPosLocalState(ports, identity, database);
+		if (localState.error !== null) {
+			// The database holds no unsent work, but it holds a receipt count the till cannot yet
+			// put anywhere: it stays until a pass with the live engine on this scope carries it.
+			await input.close();
+			return {
+				status: 'kept',
+				databaseName,
+				reason: `receipt print counts not carried over: ${localState.error}`,
+				retryable: true,
+				pushed,
+				carried: carry.carried,
+				remaining: {},
+				keptOrderUuids: [],
+				reportDue: true,
+			};
+		}
 		await input.close();
 		await removeRxDatabase(databaseName, storageFor(ports, identity), ports.multiInstance ?? false);
 		const fileRemoved = await removeFiles(ports, databaseName);

@@ -44,6 +44,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from './collections/engine-collections';
+import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { createEngineHarness, type EngineHarness, memoryEngineStorage, remoteId } from './testing';
 import {
 	drainLegacyScopeDatabase,
@@ -1060,6 +1061,92 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			await legacy.dispose();
 		}
 	}, 30_000);
+
+	describe('POS-local state on a synced order', () => {
+		/** v5 with nothing unsent: one synced order whose receipt was printed twice. */
+		async function printedTwice(storage: RxStorage<unknown, unknown>, server: FakeWriteServer) {
+			const order = manifest.orders.find((o) => o.case === 'a')!;
+			const legacy = await openLegacy(storage, server);
+			try {
+				await legacy
+					.collection('mutations')
+					.bulkRemove(manifest.queue.map((row) => row.mutationId));
+				await legacy
+					.collection('orders')
+					.bulkRemove(manifest.orders.filter((o) => o.case !== 'a').map((o) => o.uuid));
+				const doc = await legacy.collection('orders').findOne(order.uuid).exec();
+				await doc!.incrementalModify((data: Json) => ({
+					...data,
+					local: { dirty: false, pendingMutationIds: [], receiptPrintCount: 2 },
+				}));
+			} finally {
+				await legacy.dispose();
+			}
+			return order;
+		}
+		const appOn = (storage: RxStorage<unknown, unknown>, server: FakeWriteServer) =>
+			createEngineHarness({
+				site: manifest.identity.site,
+				identity: manifest.identity,
+				storage,
+				startAtMs: manifest.drainAtMs,
+				fetch: storeFetch(server),
+			});
+
+		it('an order v6 already holds gets the count onto its resident before v5 goes', async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			const order = await printedTwice(storage, server);
+			const app = await appOn(storage, server);
+			try {
+				await app
+					.collection('orders')
+					.insert({ ...order.stored, local: { dirty: false, pendingMutationIds: [] } });
+				expect(
+					await drainLegacyScopeDatabase(
+						drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+						manifest.identity
+					)
+				).toMatchObject({ status: 'drained', pushed: 0 });
+				const resident = (await stored(app)).orders.get(order.uuid)!;
+				expect((resident.local as Json).receiptPrintCount).toBe(2);
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+
+		it('an order v6 does not hold yet is stashed, and the count lands when a pull materialises it', async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			const order = await printedTwice(storage, server);
+			const app = await appOn(storage, server);
+			try {
+				expect(
+					await drainLegacyScopeDatabase(
+						drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+						manifest.identity
+					)
+				).toMatchObject({ status: 'drained', pushed: 0 });
+				const orders = app.collection('orders');
+				expect((await orders.getLocal('resync-receipt-print-counts'))?.get('counts')).toEqual({
+					[order.uuid]: 2,
+				});
+
+				// The pull materialises the order: the count is applied once, and the stash entry goes.
+				const { database } = await app.engine.whenActive();
+				await new EngineOrderRepository(database.collections as never).upsertMany([
+					{ ...order.stored, local: { dirty: false, pendingMutationIds: [] } } as never,
+				]);
+				const resident = (await stored(app)).orders.get(order.uuid)!;
+				expect((resident.local as Json).receiptPrintCount).toBe(2);
+				expect(await orders.getLocal('resync-receipt-print-counts')).toBeNull();
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+	});
 
 	it('a push the store applied but whose answer was lost is re-sent under the same mutationId, never applied twice', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
