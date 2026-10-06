@@ -37,8 +37,11 @@ export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution'
  * database: the host drains it through this before anything removes it. */
 export {
 	drainLegacyScopeDatabase,
+	type LegacyScopeDatabaseFiles,
 	type LegacyScopeDrainOutcome,
 	type LegacyScopeDrainPorts,
+	type LegacyScopeDrainWriteEvent,
+	type LegacyScopeRemainingWork,
 } from './write-path/legacy-scope-drain';
 /** The open-cart hold (see the module essay): the drain wiring and the health
  * counters must decide "is this row held?" by the same rule, never by two. The

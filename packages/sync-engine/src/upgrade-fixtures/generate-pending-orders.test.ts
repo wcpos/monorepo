@@ -7,6 +7,13 @@
  * WCPOS_GENERATE_UPGRADE_FIXTURE=1, then copy `rxdb-17.4.0-pending-orders/` into
  * the tree under test. Without the env var it is skipped. The reader is
  * `../rxdb-upgrade-pending-orders.test.ts`.
+ *
+ * The reader now requires the fixture to be the DRAINABLE scope generation
+ * (`pos_v5`, one before the `pos_v6` this tree opens): it drains it with
+ * `drainLegacyScopeDatabase`. Run at the commit in `manifest.writer.sourceCommit`
+ * (generation 5, rxdb 17.4.0) this generator still writes `pos_v5`; run in this
+ * tree it would write `pos_v6`, which the reader rejects — regenerate only at a
+ * commit whose generation is the drainable one.
  */
 import { DatabaseSync } from 'node:sqlite';
 import * as fs from 'node:fs';

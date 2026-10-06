@@ -5,7 +5,8 @@
  * a scope GENERATION bump the same way: the fixture is a `pos_v5` database, the
  * till now opens `pos_v6`, and `drainLegacyScopeDatabase` sends the v5 queue
  * through the current write path before it removes `pos_v5`. A drain that
- * fails leaves `pos_v5` in place for a later start.
+ * fails leaves `pos_v5` in place for a later start; the held open cart is
+ * carried into `pos_v6` when the live engine is given.
  *
  * The fixture under `upgrade-fixtures/rxdb-17.4.0-pending-orders/` was WRITTEN
  * by the real 17.4.0 engine (`upgrade-fixtures/generate-pending-orders.test.ts`,
@@ -15,14 +16,22 @@
  * parked conflict. Each run opens a fresh COPY, never the committed files.
  */
 import { DatabaseSync } from 'node:sqlite';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { RXDB_VERSION, type RxStorage } from 'rxdb';
+import { createRxDatabase, RXDB_VERSION, type RxStorage } from 'rxdb';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { getRxStorageSQLite, getSQLiteBasicsNodeNative } from 'rxdb-premium/plugins/storage-sqlite';
 
@@ -34,10 +43,13 @@ import {
 	type StoreScopeIdentity,
 } from '@wcpos/sync-core';
 
+import { engineCollectionCreators } from './collections/engine-collections';
 import { createEngineHarness, type EngineHarness } from './testing';
 import {
 	drainLegacyScopeDatabase,
+	LEGACY_UNSENDABLE_REPORT_INTERVAL_MS,
 	type LegacyScopeDrainPorts,
+	type LegacyScopeDrainWriteEvent,
 } from './write-path/legacy-scope-drain';
 
 import type { EngineConnectivity } from './create-rxdb-sync-engine';
@@ -210,14 +222,19 @@ function storeFetch(server: FakeWriteServer, push?: () => Response | undefined) 
 function drainPorts(
 	storage: RxStorage<unknown, unknown>,
 	fetcher: LegacyScopeDrainPorts['fetcher'],
-	options: { atMs?: number; connectivity?: EngineConnectivity } = {}
+	options: { atMs?: number; connectivity?: EngineConnectivity } & Pick<
+		LegacyScopeDrainPorts,
+		'liveEngine' | 'diagnostics' | 'onWriteEvent' | 'databaseFiles'
+	> = {}
 ): LegacyScopeDrainPorts {
+	const { atMs, connectivity, ...rest } = options;
 	return {
 		site: SITE,
 		storage,
 		fetcher,
-		now: () => options.atMs ?? manifest.drainAtMs,
-		connectivity: () => options.connectivity ?? 'online',
+		now: () => atMs ?? manifest.drainAtMs,
+		connectivity: () => connectivity ?? 'online',
+		...rest,
 	};
 }
 
@@ -318,27 +335,51 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			expect((await stored(app)).orders.size).toBe(0);
 
 			// The held cart, the dead letter and the parked conflict are unsent work: pos_v5 stays.
-			const drain = drainPorts(storage, storeFetch(server));
+			const opened: string[] = [];
+			const drain = drainPorts(storage, storeFetch(server), {
+				diagnostics: (event) => opened.push(event.type),
+			});
 			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
 				status: 'kept',
 				databaseName: manifest.databaseName,
 				reason: 'unsent work is left in the queue',
+				retryable: false,
 				pushed: sendOnce.length,
+				carried: 0,
 				remaining: UNSENDABLE,
+				reportDue: true,
 			});
+			expect(opened.length).toBeGreaterThan(0);
+			opened.length = 0;
 			const received = sendOnce.map((row) => row.mutationId);
 			expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
 			expect([...server.applied.keys()].sort()).toEqual(
 				sentOrders.map((order) => order.uuid).sort()
 			);
 
-			// The next start sends nothing again and still keeps it.
+			// The next start sends nothing again and still keeps it — WITHOUT opening an engine
+			// (nothing in it is sendable), and the un-sendable work is not re-reported the same day.
 			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toMatchObject({
 				status: 'kept',
+				retryable: false,
 				pushed: 0,
 				remaining: UNSENDABLE,
+				reportDue: false,
 			});
+			expect(opened).toEqual([]);
 			expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
+			// A day later it is reported once more.
+			const nextDay = drainPorts(storage, storeFetch(server), {
+				atMs: manifest.drainAtMs + LEGACY_UNSENDABLE_REPORT_INTERVAL_MS,
+			});
+			expect(await drainLegacyScopeDatabase(nextDay, manifest.identity)).toMatchObject({
+				status: 'kept',
+				reportDue: true,
+			});
+			expect(await drainLegacyScopeDatabase(nextDay, manifest.identity)).toMatchObject({
+				status: 'kept',
+				reportDue: false,
+			});
 			expect(app.engine.active()?.database.name).toBe(scopeDatabaseName(manifest.identity));
 		} finally {
 			await app.dispose();
@@ -376,6 +417,9 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			status: 'drained',
 			databaseName: manifest.databaseName,
 			pushed: sendOnce.length,
+			carried: 0,
+			// No file access in this harness: the tables are dropped, the file is not deleted.
+			fileRemoved: false,
 		});
 		const received = sendOnce.map((row) => row.mutationId);
 		expect(server.received.map((envelope) => envelope.mutationId)).toEqual(received);
@@ -399,7 +443,11 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			drainPorts(storage, storeFetch(server), { connectivity: 'offline' }),
 			manifest.identity
 		);
-		expect(offline).toMatchObject({ status: 'kept', databaseName: manifest.databaseName });
+		expect(offline).toMatchObject({
+			status: 'kept',
+			databaseName: manifest.databaseName,
+			retryable: true,
+		});
 		expect(offline.status === 'kept' && offline.reason).toContain('offline');
 
 		// The store refuses the session: a host condition, not a verdict on the sales.
@@ -410,7 +458,11 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			),
 			manifest.identity
 		);
-		expect(refused).toMatchObject({ status: 'kept', databaseName: manifest.databaseName });
+		expect(refused).toMatchObject({
+			status: 'kept',
+			databaseName: manifest.databaseName,
+			retryable: true,
+		});
 		expect(server.received).toEqual([]);
 
 		let legacy = await openLegacy(storage, server);
@@ -446,4 +498,335 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		});
 		expect(server.received).toHaveLength(sendOnce.length);
 	}, 30_000);
+	it('carries the held open cart into pos_v6 through the live write path, and never sends it', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const drain = drainPorts(storage, storeFetch(server), { liveEngine: app.engine });
+			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toEqual({
+				status: 'kept',
+				databaseName: manifest.databaseName,
+				reason: 'unsent work is left in the queue',
+				retryable: false,
+				pushed: sendOnce.length,
+				carried: 1,
+				// The dead letter and the parked conflict stay in v5; the cart moved.
+				remaining: { deadLetters: 1, conflicts: 1 },
+				reportDue: true,
+			});
+			const live = await stored(app);
+			const carried = live.orders.get(cart.uuid)!;
+			expect(carried).toMatchObject({
+				uuid: cart.uuid,
+				status: 'pos-open',
+				remoteId: null,
+				payload: cart.stored.payload,
+			});
+			const queued = [...live.rows.values()];
+			expect(queued).toHaveLength(1);
+			expect(queued[0]).toMatchObject({
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: cart.uuid,
+				status: 'pending',
+				payload: heldRow.stored.payload,
+			});
+			expect((carried.local as { pendingMutationIds: string[] }).pendingMutationIds).toEqual([
+				queued[0]!.mutationId,
+			]);
+			// Held in v6 exactly as it was in v5: an open cart is never pushed.
+			expect(await app.engine.sync('write-drain')).toMatchObject({ pushed: 0, held: 1 });
+			expect(server.received.map((envelope) => envelope.recordId)).not.toContain(cart.uuid);
+
+			// A later start: the cart is not copied twice, and nothing is sent again.
+			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toMatchObject({
+				status: 'kept',
+				pushed: 0,
+				carried: 0,
+				remaining: { deadLetters: 1, conflicts: 1 },
+			});
+			expect((await stored(app)).rows.size).toBe(1);
+			expect(server.received).toHaveLength(sendOnce.length);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(false);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(false);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
+	it('a push the store applied but whose answer was lost is re-sent under the same mutationId, never applied twice', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const first = sendOnce[0]!;
+
+		let lost = false;
+		const losesFirstAnswer = async (url: string, init?: RequestInit): Promise<Response> => {
+			const response = await storeFetch(server)(url, init);
+			if (!lost && url.includes('/push/')) {
+				lost = true;
+				throw new TypeError('Network request failed');
+			}
+			return response;
+		};
+		const kept = await drainLegacyScopeDatabase(
+			drainPorts(storage, losesFirstAnswer),
+			manifest.identity
+		);
+		expect(kept).toMatchObject({ status: 'kept', retryable: true });
+		expect([...server.applied.keys()]).toContain(first.uuid);
+		const appliedFirst = server.applied.get(first.uuid);
+
+		// A later start, past the failed push's backoff: the same mutationId again, deduped.
+		const later = drainPorts(storage, storeFetch(server), {
+			atMs: manifest.drainAtMs + LATER_START_MS,
+		});
+		expect(await drainLegacyScopeDatabase(later, manifest.identity)).toMatchObject({
+			status: 'kept',
+			retryable: false,
+			remaining: UNSENDABLE,
+		});
+		const sentFirst = server.received.filter(
+			(envelope) => envelope.mutationId === first.mutationId
+		);
+		expect(sentFirst).toHaveLength(2);
+		expect(server.applied.get(first.uuid)).toEqual(appliedFirst);
+		expect([...server.applied.keys()].sort()).toEqual(sentOrders.map((order) => order.uuid).sort());
+	}, 30_000);
+
+	it('a till killed between disposing the drain and removing pos_v5 finds an empty queue: drained, nothing pushed', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		// Every row acked (gone) before the kill; the orders and the database itself remain.
+		const legacy = await openLegacy(storage, server);
+		try {
+			await legacy.collection('mutations').bulkRemove(manifest.queue.map((row) => row.mutationId));
+		} finally {
+			await legacy.dispose();
+		}
+		expect(
+			await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+		).toEqual({
+			status: 'drained',
+			databaseName: manifest.databaseName,
+			pushed: 0,
+			carried: 0,
+			fileRemoved: false,
+		});
+		expect(server.received).toEqual([]);
+		expect(
+			await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+		).toEqual({ status: 'absent', databaseName: manifest.databaseName });
+	}, 30_000);
+
+	it('counts rows queued behind a parked conflict as conflicts, and never sends them', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const conflicted = manifest.queue.find((row) => row.case === 'g')!;
+		const behind = {
+			...conflicted.stored,
+			mutationId: '17400000-0000-4000-8000-000000000199',
+			seq: manifest.queue.length + 1,
+			status: 'pending',
+		} as Json;
+		delete behind.claimedBy;
+		delete behind.claimedUntil;
+		delete behind.conflictDocument;
+		delete behind.conflictRevision;
+		const legacy = await openLegacy(storage, server);
+		try {
+			await legacy.collection('mutations').insert(behind);
+		} finally {
+			await legacy.dispose();
+		}
+		expect(
+			await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+		).toMatchObject({
+			status: 'kept',
+			retryable: false,
+			remaining: { held: 1, deadLetters: 1, conflicts: 2 },
+		});
+		expect(server.received.map((envelope) => envelope.mutationId)).not.toContain(behind.mutationId);
+	}, 30_000);
+
+	it('reports each push the store rejects, with its reason and message', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		let refusedOne = false;
+		const refusesFirst = () => {
+			if (refusedOne) return undefined;
+			refusedOne = true;
+			return Response.json(
+				{
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): line_items',
+					data: { status: 400 },
+				},
+				{ status: 400 }
+			);
+		};
+		const events: LegacyScopeDrainWriteEvent[] = [];
+		const outcome = await drainLegacyScopeDatabase(
+			drainPorts(storage, storeFetch(server, refusesFirst), {
+				onWriteEvent: (event) => events.push(event),
+			}),
+			manifest.identity
+		);
+		expect(outcome).toMatchObject({
+			status: 'kept',
+			retryable: false,
+			remaining: { ...UNSENDABLE, deadLetters: 2 },
+		});
+		expect(events).toEqual([
+			expect.objectContaining({
+				type: 'write-rejected',
+				recordId: sendOnce[0]!.uuid,
+				status: 400,
+				reason: 'rest_invalid_param',
+				serverMessage: 'Invalid parameter(s): line_items',
+			}),
+		]);
+	}, 30_000);
+});
+
+describe('drainLegacyScopeDatabase — failures and file access', () => {
+	const identity: StoreScopeIdentity = {
+		site: 'https://drain-failures.example.test',
+		storeId: 3,
+		cashierId: 9,
+	};
+	const legacyName = scopeDatabaseName(identity, {
+		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+	});
+	const noFetch = async (): Promise<Response> => {
+		throw new Error('no request expected');
+	};
+
+	function sqliteIn(dir: string): RxStorage<unknown, unknown> {
+		const basics = getSQLiteBasicsNodeNative(DatabaseSync);
+		const open = basics.open;
+		basics.open = async (name: string) => open(join(dir, `${name}.sqlite`));
+		return getRxStorageSQLite({ sqliteBasics: basics }) as RxStorage<unknown, unknown>;
+	}
+
+	/** File access the way native has it: a listing, and a delete of the file and its sidecars. */
+	function filesIn(dir: string): NonNullable<LegacyScopeDrainPorts['databaseFiles']> {
+		return {
+			exists: async (name) => existsSync(join(dir, `${name}.sqlite`)),
+			remove: async (name) => {
+				for (const suffix of ['', '-wal', '-shm'])
+					rmSync(join(dir, `${name}.sqlite${suffix}`), { force: true });
+			},
+		};
+	}
+
+	const ports = (
+		storage: RxStorage<unknown, unknown>,
+		extra: Partial<LegacyScopeDrainPorts> = {}
+	): LegacyScopeDrainPorts => ({
+		site: {
+			syncBaseUrl: `${identity.site}/wp-json/wcpos/v2`,
+			wpJsonRoot: `${identity.site}/wp-json`,
+		},
+		storage,
+		fetcher: noFetch,
+		connectivity: () => 'online',
+		...extra,
+	});
+
+	it('with a file listing, a missing database is never opened (no file is created)', async () => {
+		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
+		const outcome = await drainLegacyScopeDatabase(
+			ports(sqliteIn(work), { databaseFiles: filesIn(work) }),
+			identity
+		);
+		expect(outcome).toEqual({ status: 'absent', databaseName: legacyName });
+		expect(existsSync(join(work, `${legacyName}.sqlite`))).toBe(false);
+	});
+
+	it('with file access, a drained database is deleted, not only emptied', async () => {
+		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
+		const storage = sqliteIn(work);
+		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
+		await db.addCollections({
+			recordMutations: engineCollectionCreators().recordMutations as never,
+		});
+		await db.close();
+		expect(existsSync(join(work, `${legacyName}.sqlite`))).toBe(true);
+
+		expect(
+			await drainLegacyScopeDatabase(ports(storage, { databaseFiles: filesIn(work) }), identity)
+		).toEqual({
+			status: 'drained',
+			databaseName: legacyName,
+			pushed: 0,
+			carried: 0,
+			fileRemoved: true,
+		});
+		expect(existsSync(join(work, `${legacyName}.sqlite`))).toBe(false);
+	});
+
+	it('a database the drainable schemas cannot open is failed, not kept', async () => {
+		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
+		const storage = sqliteIn(work);
+		// Written with TODAY's schemas under the drainable name: products differ, so opening it as
+		// the drainable generation throws DB6.
+		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
+		await db.addCollections(engineCollectionCreators() as never);
+		await db.collections.recordMutations!.insert({
+			mutationId: 'drain-failure-1',
+			collectionName: 'orders',
+			operation: 'create',
+			recordId: 'drain-failure-order',
+			origin: 'existing',
+			payload: { status: 'completed' },
+			baseRevision: null,
+			queuedAt: '2026-09-30T08:00:00.000Z',
+			seq: 1,
+			status: 'pending',
+		});
+		await db.close();
+
+		const outcome = await drainLegacyScopeDatabase(ports(storage), identity);
+		expect(outcome).toMatchObject({ status: 'failed', databaseName: legacyName });
+		expect(outcome.status === 'failed' && outcome.error).toMatch(/DB6/);
+	});
+
+	it('a storage that cannot open is failed, not kept', async () => {
+		const broken = {
+			name: 'broken',
+			rxdbVersion: RXDB_VERSION,
+			createStorageInstance: () => Promise.reject(new Error('disk unavailable')),
+		} as unknown as RxStorage<unknown, unknown>;
+		expect(await drainLegacyScopeDatabase(ports(broken), identity)).toEqual({
+			status: 'failed',
+			databaseName: legacyName,
+			error: 'disk unavailable',
+		});
+	});
 });
