@@ -41,8 +41,14 @@ import { setAppOnlineStatus } from '../../lib/connectivity';
 import {
 	createAppSyncEngine,
 	createSessionFetcherOptions,
+	runLegacyInventory,
 	switchAppEngineScope,
 } from '../../lib/create-app-engine';
+import { recordScopeOpened, type ScopeHistoryDatabase } from '../../lib/legacy-scope-history';
+import {
+	registryScopeIdentities,
+	type ScopeRegistryDatabase,
+} from '../../lib/legacy-scope-registry';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
@@ -70,7 +76,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
@@ -176,6 +182,20 @@ function AppStack() {
 			t,
 		]
 	);
+
+	React.useEffect(() => {
+		// Every previous-generation scope database the till may hold — not only the ones it
+		// visits — keeps "Clear all local data" from stating an exact count until it reports.
+		// This scope joins the till's history first (web/Electron read it; native lists its files).
+		const scope = { site: wpApiUrl, storeId: storeID, cashierId: cashierID };
+		void runLegacyInventory(async () => {
+			const history = await recordScopeOpened(userDB as unknown as ScopeHistoryDatabase, scope);
+			const { scopes, unresolved } = await registryScopeIdentities(
+				userDB as unknown as ScopeRegistryDatabase
+			);
+			return { registry: scopes, unresolvedReferences: unresolved, history };
+		});
+	}, [userDB, wpApiUrl, storeID, cashierID]);
 
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>

@@ -261,14 +261,9 @@ describe('query bindings', () => {
 				>
 			).read.prefilter;
 
-		// Tags are still a payload field (one `$elemMatch` per id); categories and brands are
-		// promoted membership columns.
-		const tags = {
-			$or: [
-				{ 'payload.tags': { $elemMatch: { id: 5 } } },
-				{ 'payload.tags': { $elemMatch: { id: 9 } } },
-			],
-		};
+		// Tags, categories and brands are all promoted membership columns (tagIds since scope
+		// generation 6, #2404): numeric membership, never a payload scan.
+		const tags = { tagIds: { $in: [5, 9] } };
 		expect(prefilter()).toEqual({
 			$and: [tags, { 'payload.status': 'publish' }, { stockStatus: 'instock' }],
 		});
@@ -580,6 +575,36 @@ describe('query bindings', () => {
 		rerender();
 		expect(result.current).not.toBe(switched);
 		expect(result.current).not.toBe(first);
+	});
+
+	it('compiles the tag existence read to promoted tag membership, never a payload scan', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'tagged', id: 1, status: 'publish', tags: [{ id: 5 }] }),
+			engineProduct({ uuid: 'untagged', id: 2, status: 'publish', tags: [{ id: 6 }] }),
+		]);
+		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
+		const { result } = renderHook(() => useProductsCarryingTermsBinding('tags', [9, 5]), {
+			wrapper: Provider,
+		});
+
+		const prefilter = (
+			compileQuery.mock.results.at(-1)?.value as ReturnType<
+				typeof queryStateTranslator.compileQuery
+			>
+		).read.prefilter;
+		// Inside the selling baseline (the test above): in stock unless out-of-stock is shown.
+		expect(prefilter).toEqual({
+			$and: [
+				{ tagIds: { $in: [5, 9] } },
+				{ 'payload.status': 'publish' },
+				{ stockStatus: 'instock' },
+			],
+		});
+		expect(JSON.stringify(prefilter)).not.toContain('payload.tags');
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['tagged'])
+		);
+		compileQuery.mockRestore();
 	});
 
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {

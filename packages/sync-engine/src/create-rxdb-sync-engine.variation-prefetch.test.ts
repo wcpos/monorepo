@@ -40,6 +40,7 @@ function product(id: number, variations: number[]): Record<string, unknown> {
 		stockStatus: 'instock',
 		type: 'variable',
 		categoryIds: [],
+		tagIds: [],
 		brandIds: [],
 		onSale: false,
 		featured: false,

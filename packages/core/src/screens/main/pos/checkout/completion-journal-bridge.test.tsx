@@ -6,7 +6,14 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import * as unsentChanges from '@wcpos/utils/unsent-changes';
+import {
+	forgetUnsentChanges,
+	markLegacyDrainPending,
+	rememberLegacyUnsentChanges,
+} from '@wcpos/utils/unsent-changes';
 
 import * as journal from './completion-journal';
 import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
@@ -205,6 +212,296 @@ it('finishes on the second start when the normal pull has made the unpaid reside
 	expect(mockRefresh).toHaveBeenCalledTimes(1);
 });
 
+describe('a previous-generation database the drain keeps', () => {
+	const IDENTITY = { site: 'https://store.example.test', storeId: 1, cashierId: 2 };
+	const LEGACY = scopeDatabaseName(IDENTITY, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION });
+	/** A fresh runtime (a new session start) whose engine is active on IDENTITY. */
+	const onScope = () => ({
+		engine: {
+			active: () => ({ identity: IDENTITY }),
+			whenActive: async () => ({ identity: IDENTITY }),
+		},
+	});
+	beforeEach(() => {
+		mockManager = onScope();
+	});
+	afterEach(() => forgetUnsentChanges());
+
+	it('waits for the drain to report before deciding, then counts the start when nothing is kept', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+		await drain();
+		// Still waiting: nothing recorded against the order yet.
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+				lastError: 'order_not_resident',
+			})
+		);
+		// Looked again after the report: a carried-over cart would be found here.
+		expect(mockFind).toHaveBeenCalledTimes(2);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	describe('when the active scope cannot be resolved', () => {
+		/** The 30 s bound elapses at once; every other timer runs as scheduled. */
+		const boundElapsesAtOnce = () => {
+			const realSetTimeout = globalThis.setTimeout;
+			return jest
+				.spyOn(globalThis, 'setTimeout')
+				.mockImplementation(((fn: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+					realSetTimeout(fn, ms === 30_000 ? 0 : ms, ...args)) as typeof setTimeout);
+		};
+
+		it('a lookup that outlasts the bound is unknown: replayed, warned once, not counted', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			boundElapsesAtOnce();
+			mockManager = { engine: { active: () => null, whenActive: () => new Promise(() => {}) } };
+			render(<SaleCompletionBridge />);
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			expect(mockWarn).toHaveBeenCalledTimes(1);
+		});
+
+		it('a lookup that rejects is unknown: not counted', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			mockManager = {
+				engine: {
+					active: () => null,
+					whenActive: () => Promise.reject(new Error('no store scope')),
+				},
+			};
+			render(<SaleCompletionBridge />);
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+		});
+
+		it('a lookup that resolves to a scope with no v5 is countable', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			let activate!: () => void;
+			const opening = new Promise<{ identity: typeof IDENTITY }>((resolve) => {
+				activate = () => resolve({ identity: IDENTITY });
+			});
+			mockManager = { engine: { active: () => null, whenActive: () => opening } };
+			render(<SaleCompletionBridge />);
+			await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+			activate();
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+					missingStarts: 1,
+				})
+			);
+			expect(mockWarn).not.toHaveBeenCalled();
+		});
+	});
+
+	it('a replay that starts before the engine is active (cold boot) waits for the scope, then for its report', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		let activate!: () => void;
+		const opening = new Promise<{ identity: typeof IDENTITY }>((resolve) => {
+			activate = () => resolve({ identity: IDENTITY });
+		});
+		mockManager = { engine: { active: () => null, whenActive: () => opening } };
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+		await drain();
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+
+		// The engine opens; then the drain reports it kept THIS order: the start is not counted.
+		activate();
+		await drain();
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+		rememberLegacyUnsentChanges(LEGACY, 1, ['order']);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				lastError: 'order_not_resident',
+			})
+		);
+		expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('never counts or abandons an order the kept database still holds work for', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, 2, ['order', 'another-order']);
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3, 4]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = onScope();
+			view.rerender(<SaleCompletionBridge />);
+		}
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('still counts the start when the kept work belongs to another order', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, 1, ['another-order']);
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+	});
+
+	it('replays once the bounded wait elapses, warns once, and does NOT count the start (unknown)', async () => {
+		await record();
+		await record('second-order');
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		const wait = jest
+			.spyOn(unsentChanges, 'awaitLegacyUnsentReport')
+			.mockResolvedValue('timed-out');
+		render(<SaleCompletionBridge />);
+		await waitFor(async () => {
+			const pending = await pendingCompletions(mockContext.storeDB);
+			expect(pending.order).toMatchObject({ attempts: 1, lastError: 'order_not_resident' });
+			expect(pending['second-order']).toMatchObject({ attempts: 1 });
+		});
+		const pending = await pendingCompletions(mockContext.storeDB);
+		expect(pending.order?.missingStarts).toBeUndefined();
+		expect(pending['second-order']?.missingStarts).toBeUndefined();
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(wait).toHaveBeenCalledWith(LEGACY, 30_000);
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'Replaying sale completions without the previous database version report',
+			expect.anything()
+		);
+	});
+
+	it('three starts whose report times out never abandon; a later start with a real report counts', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		const wait = jest
+			.spyOn(unsentChanges, 'awaitLegacyUnsentReport')
+			.mockResolvedValue('timed-out');
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts })
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = onScope();
+			view.rerender(<SaleCompletionBridge />);
+		}
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 4 })
+		);
+		expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+		expect(mockWarn).not.toHaveBeenCalledWith(
+			'Pending sale completion abandoned: order not resident',
+			expect.anything()
+		);
+
+		// The drain reports: nothing kept. That start counts.
+		wait.mockRestore();
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		mockManager = onScope();
+		view.rerender(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 5,
+				missingStarts: 1,
+			})
+		);
+	});
+
+	it("another scope's kept uuid does not spare this scope's order", async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		// Scope A (visited earlier) keeps the uuid; the ACTIVE scope's v5 keeps nothing.
+		rememberLegacyUnsentChanges('pos_v5_ffffffffffff_s9_c9', 1, ['order']);
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+	});
+
+	it("does not wait on another scope's mark", async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending('pos_v5_ffffffffffff_s9_c9');
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('an uncountable report (the drain failed to open it) does not count the start; a later countable one does', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, null);
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = onScope();
+			view.rerender(<SaleCompletionBridge />);
+		}
+		// A later start whose drain reports nothing kept: that start counts.
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 4 })
+		);
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		mockManager = onScope();
+		view.rerender(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 5,
+				missingStarts: 1,
+			})
+		);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+});
+
 it('counts missing orders once per session and abandons with one warning on the third start', async () => {
 	await record();
 	mockFind.mockResolvedValue(null);
@@ -222,7 +519,8 @@ it('counts missing orders once per session and abandons with one warning on the 
 		view.rerender(<SaleCompletionBridge />);
 	}
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(mockFind).toHaveBeenCalledTimes(3);
+	// Twice per start: once, then again after the (immediate) previous-version drain report.
+	expect(mockFind).toHaveBeenCalledTimes(6);
 	expect(mockWarn).toHaveBeenCalledTimes(1);
 	expect(mockWarn).toHaveBeenCalledWith(
 		expect.any(String),
@@ -395,7 +693,8 @@ it('does not abandon the first missing lookup after two finish failures', async 
 	}
 	mockFind.mockResolvedValue(null);
 	render(<SaleCompletionBridge />);
-	await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+	// A missing order is looked up again after the previous-version drain report.
+	await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(2));
 	await drain();
 	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 		attempts: 3,

@@ -42,6 +42,13 @@ jest.mock('@wcpos/core/screens/main/hooks/use-payment-methods', () => ({
 	usePaymentMethods: jest.fn(),
 }));
 jest.mock('@wcpos/utils/logger', () => ({ log: { warn: jest.fn() } }));
+// The default run is a simulator; a test sets `global.mockIsDevice` to stand on a real device.
+// (A getter, because the driver's import resolves the mock before any test-scope variable exists.)
+jest.mock('expo-device', () => ({
+	get isDevice() {
+		return (globalThis as { mockIsDevice?: boolean }).mockIsDevice === true;
+	},
+}));
 
 const reader = { id: 'tmr_1', serialNumber: 'R1', deviceType: 'stripeM2', batteryLevel: 0.8 };
 const info = {
@@ -665,25 +672,31 @@ it.each(['result', 'callback', 'rejection'])(
 );
 
 it.each([
-	{ dev: true, testMode: true, simulated: true },
-	{ dev: true, testMode: false, simulated: false },
-	{ dev: true, testMode: 'true', simulated: false },
-	{ dev: true, testMode: undefined, simulated: false },
-	{ dev: false, testMode: true, simulated: false },
-])('resolves discovery test mode before collect: %j', async ({ dev, testMode, simulated }) => {
-	const originalDev = __DEV__;
-	try {
-		Object.assign(global, { __DEV__: dev });
-		resolveMethod.mockReturnValue({ ...method, provider_data: { test_mode: testMode } });
-		await discover();
-		expect(api.discoverReaders).toHaveBeenLastCalledWith({
-			discoveryMethod: 'bluetoothScan',
-			simulated,
-		});
-	} finally {
-		Object.assign(global, { __DEV__: originalDev });
+	{ dev: true, device: false, testMode: true, simulated: true },
+	{ dev: true, device: false, testMode: false, simulated: false },
+	{ dev: true, device: false, testMode: 'true', simulated: false },
+	{ dev: true, device: false, testMode: undefined, simulated: false },
+	{ dev: false, device: false, testMode: true, simulated: false },
+	// A real phone or tablet scans for real hardware even against a test-mode gateway.
+	{ dev: true, device: true, testMode: true, simulated: false },
+	{ dev: false, device: true, testMode: true, simulated: false },
+])(
+	'resolves discovery test mode before collect: %j',
+	async ({ dev, device, testMode, simulated }) => {
+		const originalDev = __DEV__;
+		try {
+			Object.assign(global, { __DEV__: dev, mockIsDevice: device });
+			resolveMethod.mockReturnValue({ ...method, provider_data: { test_mode: testMode } });
+			await discover();
+			expect(api.discoverReaders).toHaveBeenLastCalledWith({
+				discoveryMethod: 'bluetoothScan',
+				simulated,
+			});
+		} finally {
+			Object.assign(global, { __DEV__: originalDev, mockIsDevice: false });
+		}
 	}
-});
+);
 
 it('prefers the current resolved descriptor over previously collected test mode', async () => {
 	await driver.collect({ ...input, method: { ...method, provider_data: { test_mode: true } } });

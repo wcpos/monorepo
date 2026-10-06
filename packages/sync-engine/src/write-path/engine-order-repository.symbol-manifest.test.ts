@@ -27,8 +27,22 @@ function orderDatabase() {
 					? {
 							get: () => localDocs.get(id)!.counts,
 							remove: async () => localDocs.delete(id),
+							incrementalModify: async (
+								modify: (data: { counts: Record<string, number> }) => {
+									counts: Record<string, number>;
+								}
+							) => {
+								localDocs.set(
+									id,
+									structuredClone(await modify(structuredClone(localDocs.get(id)!)))
+								);
+							},
 						}
 					: null,
+			insertLocal: async (id: string, data: { counts: Record<string, number> }) => {
+				if (localDocs.has(id)) throw new Error('conflict');
+				localDocs.set(id, structuredClone(data));
+			},
 			upsertLocal: async (id: string, data: { counts: Record<string, number> }) => {
 				localDocs.set(id, structuredClone(data));
 			},
@@ -135,6 +149,14 @@ it('retains the till receipt count across reset-for-resync and repull', async ()
 		ids.forEach((id) => rows.delete(id));
 		return [];
 	};
+	// The upsert lands the document (retirement checks the materialised order holds the count).
+	const upsert = db.orders.bulkUpsert.bind(db.orders);
+	db.orders.bulkUpsert = async (documents: unknown[]) => {
+		for (const document of documents as { uuid: string }[]) {
+			rows.set(document.uuid, { toJSON: () => document as typeof resident });
+		}
+		return upsert(documents);
+	};
 	const repository = new EngineOrderRepository(db);
 
 	await repository.resetForResync();
@@ -143,8 +165,34 @@ it('retains the till receipt count across reset-for-resync and repull', async ()
 
 	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 2 } });
 	// Once restored, a later unrelated removal must not reuse the saved count.
+	rows.delete(storedDocument.uuid);
 	await repository.upsertMany([storedDocument]);
 	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
+});
+
+it('a larger stashed count survives a reset-for-resync that reads a lower resident count', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 1 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	// The previous-generation drain stashed 3 for this order before the reset read its resident (1).
+	await db.orders.insertLocal('resync-receipt-print-counts', {
+		counts: { [storedDocument.uuid]: 3 },
+	});
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect((await db.orders.getLocal('resync-receipt-print-counts'))?.get('counts')).toEqual({
+		[storedDocument.uuid]: 3,
+	});
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 3 } });
 });
 
 it('restores resync print counts in a new repository and consumes the stash', async () => {

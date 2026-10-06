@@ -387,6 +387,13 @@ function taxonomyMembership(condition: unknown): number | undefined {
 	return typeof value === 'number' ? value : undefined;
 }
 
+/** A product taxonomy's object array → the promoted numeric id column its membership pushes to. */
+const PROMOTED_TAXONOMY_COLUMNS = {
+	categories: 'categoryIds',
+	tags: 'tagIds',
+	brands: 'brandIds',
+} as const;
+
 type PrefilterBuild = {
 	prefilter?: Record<string, unknown>;
 	complete: boolean;
@@ -438,10 +445,13 @@ function buildPrefilter(
 			continue;
 		}
 
-		if (collection === 'products' && (field === 'categories' || field === 'brands')) {
+		if (
+			collection === 'products' &&
+			(field === 'categories' || field === 'tags' || field === 'brands')
+		) {
 			const membership = taxonomyMembership(condition);
 			if (membership !== undefined) {
-				result[field === 'categories' ? 'categoryIds' : 'brandIds'] = {
+				result[PROMOTED_TAXONOMY_COLUMNS[field]] = {
 					$in: [membership],
 				};
 			} else {

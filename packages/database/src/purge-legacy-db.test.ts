@@ -104,6 +104,27 @@ describe('purgeLegacyDatabases native', () => {
 		]);
 	});
 
+	it('never reaches a kept drainable scope database, by name or by directory', async () => {
+		const drainable = 'pos_v5_0123456789ab_s1_c2';
+		const older = 'pos_v4_0123456789ab_s1_c2';
+		const added = [drainable, `${drainable}-wal`, older].map((name) => ({
+			name,
+			delete: jest.fn(),
+		}));
+		sqliteEntries.push(...added);
+		try {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db');
+			await purgeLegacyDatabases();
+			expect(
+				added.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
+			).toEqual([older]);
+			// The live root, where a kept drainable database actually lives, is never deleted.
+			expect(mockDeleteDirectory).not.toHaveBeenCalledWith('document-dir/wcpos-sqlite');
+		} finally {
+			sqliteEntries.splice(-added.length);
+		}
+	});
+
 	it('clearAllDB removes the live directory and both legacy roots', async () => {
 		const { clearAllDB } = await import('./clear-all-db');
 		await expect(clearAllDB()).resolves.toMatchObject({ success: true });

@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	canonicalSiteKey,
+	containsDrainableScopeDatabaseName,
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	isScopeDatabaseName,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	type StoreScopeIdentity,
@@ -76,9 +79,9 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('defaults to the v5 scope generation for the storage engine', () => {
+	it('defaults to the v6 scope generation (products promote tagIds)', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v5_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v6_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
@@ -87,7 +90,7 @@ describe('scopeDatabaseName', () => {
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v5_${scopeKeyFor(identity)}_run7`
+			`pos_v6_${scopeKeyFor(identity)}_run7`
 		);
 	});
 
@@ -144,5 +147,36 @@ describe('containsLegacyScopeDatabaseName', () => {
 			false
 		);
 		expect(containsLegacyScopeDatabaseName('unrelated-shop-data')).toBe(false);
+	});
+});
+
+describe('DRAINABLE_SCOPE_DATABASE_GENERATION', () => {
+	it('is exactly the generation before the current one (v5 while v6 is current)', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })).toBe(
+			`pos_v5_${scopeKeyFor(identity)}`
+		);
+		expect(
+			containsLegacyScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+			)
+		).toBe(true);
+	});
+});
+
+describe('containsDrainableScopeDatabaseName', () => {
+	it('matches the drainable generation by containment, and nothing else', () => {
+		const drainable = scopeDatabaseName(identity, {
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		});
+		expect(containsDrainableScopeDatabaseName(drainable)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(`rxdb-${drainable}--0--orders`)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(scopeDatabaseName(identity))).toBe(false);
+		expect(
+			containsDrainableScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION - 1 })
+			)
+		).toBe(false);
+		expect(containsDrainableScopeDatabaseName('unrelated-shop-data')).toBe(false);
 	});
 });

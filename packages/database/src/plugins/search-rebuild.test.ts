@@ -63,6 +63,79 @@ const couponsConfig = {
 	options: { searchFields: ['name'] },
 };
 
+it.each(['read', 'open', 'damaged'])(
+	'rebuilds a persisted index after a destination %s failure without changing source documents',
+	async (failure) => {
+		const storage = getRxStorageMemory();
+		const config = { name: `searchrecovery${failure}`, storage, multiInstance: false };
+		database = await createRxDatabase(config);
+		const { coupons } = await database.addCollections({ coupons: couponsConfig });
+		await coupons.bulkInsert([
+			{ id: 'coupon-1', name: 'Discount' },
+			{ id: 'coupon-2', name: 'Voucher' },
+		]);
+		const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+		await first.pipeline.awaitIdle();
+		await first.pipeline.close();
+		await first.close();
+		const before = (await coupons.find().exec()).map((doc) => doc.toJSON(true));
+		await database.close();
+
+		const createStorageInstance = storage.createStorageInstance.bind(storage);
+		const readError = new SyntaxError("Expected ',' or ']' after array element in JSON");
+		let failed = false;
+		// 'damaged': every read of the persisted index fails until its storage is removed.
+		let damaged = failure === 'damaged';
+		storage.createStorageInstance = async (params) => {
+			if (damaged && params.collectionName.endsWith('_flexsearch')) {
+				const instance = await createStorageInstance(params);
+				const query = instance.query.bind(instance);
+				const remove = instance.remove.bind(instance);
+				instance.query = async (prepared) => {
+					if (damaged) {
+						failed = true;
+						throw readError;
+					}
+					return query(prepared);
+				};
+				instance.remove = async () => {
+					damaged = false;
+					return remove();
+				};
+				return instance;
+			}
+			if (params.collectionName.endsWith('_flexsearch') && !failed && failure === 'open') {
+				failed = true;
+				throw readError;
+			}
+			const instance = await createStorageInstance(params);
+			if (params.collectionName.endsWith('_flexsearch') && !failed) {
+				const query = instance.query.bind(instance);
+				instance.query = async (prepared) => {
+					if (!failed) {
+						failed = true;
+						throw readError;
+					}
+					return query(prepared);
+				};
+			}
+			return instance;
+		};
+		database = await createRxDatabase(config);
+		const { coupons: reopened } = await database.addCollections({ coupons: couponsConfig });
+		const sourceBefore = (await reopened.find().exec()).map((doc) => doc.toJSON(true));
+		expect(sourceBefore).toEqual(before);
+		const rebuilt = (await reopened.initSearch!('en')) as unknown as SearchIndex;
+		await rebuilt.pipeline.awaitIdle();
+		expect(failed).toBe(true);
+		expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
+		expect((await rebuilt.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
+		expect((await reopened.find().exec()).map((doc) => doc.toJSON(true))).toEqual(sourceBefore);
+		await rebuilt.pipeline.close();
+		await rebuilt.close();
+	}
+);
+
 it.each([false, true])(
 	'reopens persisted storage and rebuilds only an oversized index (oversized=%s)',
 	async (oversized) => {

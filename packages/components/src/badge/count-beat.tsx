@@ -41,8 +41,8 @@ const ROLL = { duration: BEAT, easing: EASE, reduceMotion: ReduceMotion.System }
 const FADE = { duration: COUNT_FADE, easing: Easing.linear, reduceMotion: ReduceMotion.System };
 const WAS_GONE_BY = 0.45;
 const NOW_FADES_IN = [0.3, 0.8];
-// The new number overshoots further than the badge that carries it.
-const NUMBER_BOUNCE = 1.6;
+// The new number overshoots a touch further than the badge that carries it.
+const NUMBER_BOUNCE = 1.2;
 
 type Seen = {
 	identity: string;

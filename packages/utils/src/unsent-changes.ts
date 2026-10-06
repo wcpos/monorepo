@@ -39,15 +39,135 @@ export type UnsentChanges =
  */
 const SLOT_KEY = '__wcposUnsentChanges';
 
-type Slot = { count: number | null };
+/**
+ * `count` is the ACTIVE scope's queue. `legacy` is what the previous-generation
+ * drain reported, by database name: a `kept` database still holds unsent work
+ * that lives in NO active queue — but "Clear all local data" deletes it with
+ * everything else, so it belongs in the same number.
+ */
+type LegacyReport = {
+	/** The drain has not reported on this database yet in this process. */
+	pending: boolean;
+	/** Unsent rows it kept; `null` when it could not be counted (the drain failed to open it). */
+	count: number | null;
+	/** The orders those rows belong to. */
+	orderUuids: readonly string[];
+};
+
+type Slot = {
+	count: number | null;
+	legacy?: Map<string, LegacyReport>;
+	legacyListeners?: Set<() => void>;
+};
 
 function slot(): Slot {
 	const host = globalThis as unknown as Record<string, Slot | undefined>;
-	const existing = host[SLOT_KEY];
-	if (existing) return existing;
-	const created: Slot = { count: null };
-	host[SLOT_KEY] = created;
-	return created;
+	const existing = host[SLOT_KEY] ?? { count: null };
+	existing.legacy ??= new Map();
+	existing.legacyListeners ??= new Set();
+	host[SLOT_KEY] = existing;
+	return existing;
+}
+
+function legacyReports(): Map<string, LegacyReport> {
+	return slot().legacy!;
+}
+
+function notifyLegacyListeners(): void {
+	for (const listener of [...slot().legacyListeners!]) listener();
+}
+
+/**
+ * The previous-generation drain is about to look at one database: until it
+ * reports, that database MAY hold unsent work (a wipe cannot say "none", and a
+ * reader that needs the report can wait for it — `awaitLegacyUnsentReport`).
+ */
+export function markLegacyDrainPending(databaseName: string): void {
+	legacyReports().set(databaseName, { pending: true, count: null, orderUuids: [] });
+}
+
+/**
+ * True while one database still stands between a wipe and an exact count: it is
+ * pending, uncountable, or kept with work. False once it reported nothing kept
+ * (drained or absent) — or was never marked.
+ */
+export function legacyUnsentReportOutstanding(databaseName: string): boolean {
+	return legacyReports().has(databaseName);
+}
+
+/** True while one database is marked pending and its drain has not reported. */
+export function legacyDrainMarked(databaseName: string): boolean {
+	return legacyReports().get(databaseName)?.pending === true;
+}
+
+/**
+ * Record what the previous-generation drain reported for one database: the
+ * count of unsent rows it KEPT and the orders they belong to, 0 once it is
+ * drained or absent, or `null` when it could not count them (it failed to open).
+ */
+export function rememberLegacyUnsentChanges(
+	databaseName: string,
+	count: number | null,
+	orderUuids: readonly string[] = []
+): void {
+	const normalized = normalize(count);
+	if (normalized === 0) legacyReports().delete(databaseName);
+	else
+		legacyReports().set(databaseName, {
+			pending: false,
+			count: normalized,
+			orderUuids: [...orderUuids],
+		});
+	notifyLegacyListeners();
+}
+
+/** Unsent rows every kept previous-generation database is known to hold. */
+export function legacyUnsentChangesCount(): number {
+	let total = 0;
+	for (const report of legacyReports().values()) total += report.count ?? 0;
+	return total;
+}
+
+/** The orders ONE kept previous-generation database (a scope's) still holds unsent work for. */
+export function legacyUnsentOrderUuids(databaseName: string): ReadonlySet<string> {
+	return new Set(legacyReports().get(databaseName)?.orderUuids ?? []);
+}
+
+/**
+ * True when one database's report is in and could not be counted (the drain
+ * failed to open it, or the host never ran it): whether it holds work for any
+ * given order is UNKNOWN, which a reader must not mistake for "nothing kept".
+ */
+export function legacyUnsentReportUncountable(databaseName: string): boolean {
+	const report = legacyReports().get(databaseName);
+	return report !== undefined && !report.pending && report.count === null;
+}
+
+/**
+ * Wait until one database's drain has reported — at most `timeoutMs`. Resolves
+ * `'reported'` at once when that database is not pending (never marked, or
+ * already reported), and `'timed-out'` when the bound elapses first (an offline
+ * till's drain may be a long way off). Other databases' marks never hold it up.
+ */
+export function awaitLegacyUnsentReport(
+	databaseName: string,
+	timeoutMs: number
+): Promise<'reported' | 'timed-out'> {
+	const pending = () => legacyReports().get(databaseName)?.pending === true;
+	if (!pending()) return Promise.resolve('reported');
+	return new Promise((resolve) => {
+		const listeners = slot().legacyListeners!;
+		const settle = (result: 'reported' | 'timed-out') => {
+			clearTimeout(timer);
+			listeners.delete(check);
+			resolve(result);
+		};
+		const check = () => {
+			if (!pending()) settle('reported');
+		};
+		const timer = setTimeout(() => settle('timed-out'), timeoutMs);
+		listeners.add(check);
+	});
 }
 
 function normalize(count: number | null | undefined): number | null {
@@ -55,10 +175,20 @@ function normalize(count: number | null | undefined): number | null {
 	return Math.floor(count);
 }
 
+/**
+ * Classify the ACTIVE queue's count, adding what kept previous-generation
+ * databases hold (`rememberLegacyUnsentChanges`) — a wipe destroys both.
+ */
 export function classifyUnsentChanges(count: number | null | undefined): UnsentChanges {
 	const normalized = normalize(count);
 	if (normalized === null) return { status: 'unknown' };
-	return normalized === 0 ? { status: 'none' } : { status: 'some', count: normalized };
+	// A previous-generation database the drain has not reported on (or could not count) makes the
+	// whole reading unknown: a wipe deletes it too, and it may hold more than any number stated.
+	if ([...legacyReports().values()].some((report) => report.count === null)) {
+		return { status: 'unknown' };
+	}
+	const total = normalized + legacyUnsentChangesCount();
+	return total > 0 ? { status: 'some', count: total } : { status: 'none' };
 }
 
 /**
@@ -74,6 +204,8 @@ export function rememberUnsentChanges(count: number | null | undefined): void {
 /** Forget the count — after a wipe there is nothing left to lose. */
 export function forgetUnsentChanges(): void {
 	slot().count = null;
+	legacyReports().clear();
+	notifyLegacyListeners();
 }
 
 /** The last recorded reading. Never throws; `unknown` when nothing was recorded. */

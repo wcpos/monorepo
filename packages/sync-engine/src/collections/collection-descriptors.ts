@@ -80,7 +80,7 @@ type WooPayload = Record<string, unknown> & { id?: number };
  * pure, so every caller must hand the scope it is writing into — omitting them
  * materializes no `barcode` field.
  */
-type RecordProjection = (
+export type RecordProjection = (
 	payload: WooPayload,
 	barcodeSelectors?: BarcodeSelectors
 ) => Record<string, unknown>;
@@ -437,7 +437,8 @@ export const variationMaterialized: MaterializedProjection = (rawPayload, barcod
 const customerMaterialized: MaterializedProjection = (rawPayload) =>
 	materializeTargeted('customers', rawPayload);
 
-const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
+/** The CURRENT generation's stored product document (the drainable generation derives its own). */
+export const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
 	productMaterialized(rawPayload, barcodeSelectors).storedDocument;
 
 export const variationDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
@@ -558,15 +559,25 @@ function catalogAckPatch(
 	return patch;
 }
 
-const productsWriteFacet = createWriteFacet({
-	collection: 'products',
-	remoteIdField: 'remoteId',
-	pullPath: '/products',
-	parse: parseBareArray,
-	project: productDocument,
-	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(productDocument, document, barcodeSelectors),
-});
+/**
+ * The products write facet over a given stored-document projection. The current
+ * generation uses `productDocument`; the drainable generation passes the
+ * projection its schema shipped (`drainable-generation.ts`), so an ack written
+ * into a previous-generation database fits that database's schema.
+ */
+export function productsWriteFacetProjectedBy(project: RecordProjection): CollectionWriteFacet {
+	return createWriteFacet({
+		collection: 'products',
+		remoteIdField: 'remoteId',
+		pullPath: '/products',
+		parse: parseBareArray,
+		project,
+		documentPatchFromAckDocument: (document, barcodeSelectors) =>
+			catalogAckPatch(project, document, barcodeSelectors),
+	});
+}
+
+const productsWriteFacet = productsWriteFacetProjectedBy(productDocument);
 const variationsWriteFacet = createWriteFacet({
 	collection: 'variations',
 	remoteIdField: 'remoteId',

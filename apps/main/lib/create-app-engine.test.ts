@@ -1,4 +1,13 @@
 import { scopeDatabaseName } from '@wcpos/sync-core';
+import type { LegacyScopeDrainOutcome, LegacyScopeDrainPorts } from '@wcpos/sync-engine';
+import {
+	awaitLegacyUnsentReport,
+	classifyUnsentChanges,
+	forgetUnsentChanges,
+	legacyUnsentOrderUuids,
+	legacyUnsentReportOutstanding,
+	legacyUnsentReportUncountable,
+} from '@wcpos/utils/unsent-changes';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
@@ -25,11 +34,17 @@ const OTHER_SITE_OPTIONS = {
 
 type ScopeIdentity = { site: string; storeId: string | number; cashierId: string | number };
 
+/** Let readiness maintenance (drain, then purge) run its awaited steps to completion. */
+async function settle(): Promise<void> {
+	for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+}
+
 function createEngineDouble(
 	dispose: () => Promise<void> = () => Promise.resolve(),
 	switchScope?: (identity: ScopeIdentity) => Promise<void>
 ) {
 	const dbListeners = new Set<(db: unknown) => void>();
+	const eventListeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
 	let active: { identity: ScopeIdentity } | null = null;
 	const activate = (identity: ScopeIdentity | null) => {
 		active = identity ? { identity } : null;
@@ -55,6 +70,14 @@ function createEngineDouble(
 			return () => dbListeners.delete(cb);
 		}),
 		active: jest.fn(() => active),
+		events: jest.fn((cb: (event: { type: string; [key: string]: unknown }) => void) => {
+			eventListeners.add(cb);
+			return () => eventListeners.delete(cb);
+		}),
+		/** An engine event, fanned out to every `events()` subscriber. */
+		emit(event: { type: string; [key: string]: unknown }) {
+			for (const cb of eventListeners) cb(event);
+		},
 		/** The engine landing on `identity`: active() flips and db$ fans out, as the real engine does inside scope.switch. */
 		activate,
 	};
@@ -63,7 +86,9 @@ function createEngineDouble(
 function loadCreateAppEngine(
 	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble,
 	platformIsWeb = false,
-	initiallyActive = true
+	initiallyActive = true,
+	/** The platform's scope database files: a native listing fake, or null (web/Electron). */
+	scopeDatabaseFiles: { list(): Promise<string[]> } | null = null
 ) {
 	jest.resetModules();
 	const purgeLegacyDatabases = jest.fn(async () => undefined);
@@ -72,12 +97,13 @@ function loadCreateAppEngine(
 	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
 	const recordServerLoad = jest.fn();
+	const networkDebug = jest.fn();
 	const networkInfo = jest.fn();
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
 	const setSyncEngineLogger = jest.fn();
 	const getLogger = jest.fn(() => ({
-		debug: jest.fn(),
+		debug: networkDebug,
 		info: networkInfo,
 		warn: networkWarn,
 		error: networkError,
@@ -113,8 +139,20 @@ function loadCreateAppEngine(
 		}
 	);
 
+	const drainLegacyScopeDatabase = jest.fn(
+		async (
+			_ports: LegacyScopeDrainPorts,
+			scope: ScopeIdentity
+		): Promise<LegacyScopeDrainOutcome> => ({
+			status: 'absent',
+			databaseName: scopeDatabaseName(scope, { generation: 5 }),
+		})
+	);
+	jest.doMock('@wcpos/database/scope-database-files', () => ({ scopeDatabaseFiles }));
+
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
+		drainLegacyScopeDatabase,
 		setSyncEngineLogger,
 		// The engine fetcher hydrates 2xx responses through this seam (B9); an
 		// identity stub keeps these engine-lifecycle tests transport-free.
@@ -147,10 +185,22 @@ function loadCreateAppEngine(
 		getMetricsEpoch: jest.fn(() => 0),
 	}));
 
-	const { createAppSyncEngine, switchAppEngineScope, createSessionFetcherOptions } =
-		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
+	const {
+		createAppSyncEngine,
+		switchAppEngineScope,
+		createSessionFetcherOptions,
+		inventoryLegacyScopeDatabases,
+		runLegacyInventory,
+	} = jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
+	const { setAppOnlineStatus } =
+		jest.requireActual<typeof import('./connectivity')>('./connectivity');
 	return {
 		createAppSyncEngine,
+		inventoryLegacyScopeDatabases,
+		runLegacyInventory,
+		drainLegacyScopeDatabase,
+		setAppOnlineStatus,
+		networkDebug,
 		purgeLegacyDatabases,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
@@ -1871,10 +1921,10 @@ describe('legacy database purge', () => {
 		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
 		ready();
 		await engine.ready;
-		await Promise.resolve();
+		await settle();
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
 		createAppSyncEngine(OTHER_SITE_OPTIONS);
-		await Promise.resolve();
+		await settle();
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
 	});
 
@@ -1883,7 +1933,7 @@ describe('legacy database purge', () => {
 		purgeLegacyDatabases.mockRejectedValue(new Error('purge failed'));
 		const engine = createAppSyncEngine(BASE_OPTIONS);
 		await expect(engine.ready).resolves.toBeUndefined();
-		await Promise.resolve();
+		await settle();
 		expect(networkError).toHaveBeenCalledWith(
 			'Failed to purge legacy databases',
 			expect.any(Object)
@@ -1892,10 +1942,883 @@ describe('legacy database purge', () => {
 
 	it('does not purge when engine readiness fails', async () => {
 		const engine = createEngineDouble();
-		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
+			loadCreateAppEngine(() => engine);
 		engine.ready = Promise.reject(new Error('open failed'));
 		createAppSyncEngine(BASE_OPTIONS);
 		await expect(engine.ready).rejects.toThrow('open failed');
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
 		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
+	});
+});
+
+describe('previous-generation database drain', () => {
+	const LEGACY = scopeDatabaseName(BASE_OPTIONS.scope, { generation: 5 });
+	const keptRetryable: LegacyScopeDrainOutcome = {
+		status: 'kept',
+		databaseName: LEGACY,
+		reason: 'write-drain skipped: offline',
+		retryable: true,
+		pushed: 0,
+		carried: 0,
+		remaining: { unsent: 4, held: 1 },
+		keptOrderUuids: ['order-held', 'order-unsent'],
+		reportDue: true,
+	};
+	const keptUnsendable: LegacyScopeDrainOutcome = {
+		status: 'kept',
+		databaseName: LEGACY,
+		reason: 'unsent work is left in the queue',
+		retryable: false,
+		pushed: 4,
+		carried: 1,
+		remaining: { deadLetters: 1, conflicts: 1 },
+		keptOrderUuids: ['order-conflicted', 'order-rejected'],
+		reportDue: true,
+	};
+	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
+	/** Discovery completes and names nothing beyond the visited scope (a settled history). */
+	const discoveryFindsNothingElse = (loaded: ReturnType<typeof loadCreateAppEngine>) =>
+		loaded.inventoryLegacyScopeDatabases({
+			registry: [],
+			history: {
+				names: [],
+				complete: true,
+				cleared: [],
+				settled: true,
+				markCleared: async () => undefined,
+			},
+		});
+
+	beforeEach(() => forgetUnsentChanges());
+	afterEach(() => {
+		forgetUnsentChanges();
+		jest.restoreAllMocks();
+	});
+
+	it('drains the ready scope before the purge, with a transport pinned to that scope and the live engine to carry carts into', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
+			loadCreateAppEngine(() => engine);
+		const order: string[] = [];
+		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
+			order.push('drain');
+			return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+		});
+		purgeLegacyDatabases.mockImplementation(async () => {
+			order.push('purge');
+		});
+
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+
+		expect(order).toEqual(['drain', 'purge']);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		const [ports, scope] = drainLegacyScopeDatabase.mock.calls[0]!;
+		expect(scope).toEqual(BASE_OPTIONS.scope);
+		expect(ports).toMatchObject({ storage: { name: 'test-storage' }, databaseFiles: null });
+		expect(ports.liveEngine).toBe(engine);
+		expect(typeof ports.fetcher).toBe('function');
+		expect(typeof ports.diagnostics).toBe('function');
+	});
+
+	it('drains each scope once per process, the switched-to one too', async () => {
+		const first = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, switchAppEngineScope } =
+			loadCreateAppEngine(() => first);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+
+		await switchAppEngineScope(session(target));
+		await settle();
+		await switchAppEngineScope(session(BASE_OPTIONS.scope));
+		await settle();
+		first.emit(writeDrainRan);
+		await settle();
+
+		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope)).toEqual([
+			BASE_OPTIONS.scope,
+			target,
+		]);
+	});
+
+	it('never PUSHES while the session is refused, but still probes and reports; the first tick after pushes', async () => {
+		const engine = createEngineDouble();
+		const loaded = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } = loaded;
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
+		const { requestStateManager } = jest.requireActual<
+			typeof import('@wcpos/hooks/use-http-client')
+		>('@wcpos/hooks/use-http-client');
+		const isAuthFailed = jest.spyOn(requestStateManager, 'isAuthFailed').mockReturnValue(true);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase.mock.calls[0]![0].pushBlockedReason).toBe(
+			'the store refused the session'
+		);
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		await discoveryFindsNothingElse(loaded);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
+
+		// Not an attempt: no backoff — the next tick that ran pushes, unblocked.
+		isAuthFailed.mockReturnValue(false);
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		expect(drainLegacyScopeDatabase.mock.calls[1]![0].pushBlockedReason).toBeNull();
+	});
+
+	it('offline at boot with a kept v5 cart: the report carries its uuid before any tick or backoff', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, setAppOnlineStatus, networkWarn } =
+			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue({
+			...keptRetryable,
+			reason: 'write-drain skipped: offline',
+			keptOrderUuids: ['order-held-cart', 'order-unsent'],
+		});
+		setAppOnlineStatus('offline');
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		expect(drainLegacyScopeDatabase.mock.calls[0]![0].pushBlockedReason).toBe(
+			'write-drain skipped: offline'
+		);
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
+		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held-cart', 'order-unsent']);
+		// A blocked drain is not the attempt the warn is for.
+		expect(networkWarn).not.toHaveBeenCalled();
+
+		setAppOnlineStatus('online-website-available');
+		// A tick that did not run (skipped, error) proves nothing.
+		engine.emit({ type: 'lane-finish', lane: 'write-drain', status: 'skipped' });
+		engine.emit({ type: 'lane-finish', lane: 'pull', status: 'ran' });
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		expect(drainLegacyScopeDatabase.mock.calls[1]![0].pushBlockedReason).toBeNull();
+	});
+
+	it('re-arms a drain that kept sendable work: after the next successful tick, no sooner than a bounded backoff', async () => {
+		let now = 1_000_000;
+		jest.spyOn(Date, 'now').mockImplementation(() => now);
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn, networkDebug } =
+			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		const tickAt = async (ms: number) => {
+			now = ms;
+			engine.emit(writeDrainRan);
+			await settle();
+		};
+
+		await tickAt(1_000_000 + 59_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		await tickAt(1_000_000 + 60_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		// Doubled: two minutes after the second attempt.
+		await tickAt(1_060_000 + 119_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		await tickAt(1_060_000 + 120_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(3);
+		// Capped at fifteen minutes however long it keeps failing.
+		let at = 1_180_000;
+		for (const backoff of [240_000, 480_000, 900_000, 900_000]) {
+			await tickAt(at + backoff - 1);
+			const calls = drainLegacyScopeDatabase.mock.calls.length;
+			await tickAt(at + backoff);
+			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(calls + 1);
+			at += backoff;
+		}
+		// Warned once; the retries are quiet.
+		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkDebug).toHaveBeenCalledWith(
+			'Unsent changes from the previous database version are kept until they can be sent',
+			expect.anything()
+		);
+
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'drained',
+			databaseName: LEGACY,
+			pushed: 4,
+			carried: 0,
+			fileRemoved: true,
+		});
+		await tickAt(at + 900_000);
+		const total = drainLegacyScopeDatabase.mock.calls.length;
+		await tickAt(at + 10 * 900_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(total);
+	});
+
+	it('a cart transfer cut short by a store switch is retried once the scope is back', async () => {
+		let now = 1_000_000;
+		jest.spyOn(Date, 'now').mockImplementation(() => now);
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, switchAppEngineScope } =
+			loadCreateAppEngine(() => engine);
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+		let finishFirst!: (outcome: LegacyScopeDrainOutcome) => void;
+		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
+			if (scope.storeId === target.storeId) {
+				return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+			}
+			if (drainLegacyScopeDatabase.mock.calls.length === 1) {
+				return new Promise<LegacyScopeDrainOutcome>((resolve) => {
+					finishFirst = resolve;
+				});
+			}
+			return {
+				status: 'drained',
+				databaseName: LEGACY,
+				pushed: 0,
+				carried: 1,
+				fileRemoved: true,
+			};
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		// The cashier switches store while the drain is moving the cart: the live engine left.
+		await switchAppEngineScope(session(target));
+		await settle();
+		finishFirst({
+			status: 'kept',
+			databaseName: LEGACY,
+			reason:
+				'unsent work is left in the queue; open carts not carried over: the live engine is on another scope',
+			retryable: true,
+			pushed: 0,
+			carried: 0,
+			remaining: { held: 1 },
+			keptOrderUuids: ['order-held-cart'],
+			reportDue: true,
+		});
+		await settle();
+
+		// Back on the scope; the next write-drain tick that ran, past the backoff, carries it.
+		await switchAppEngineScope(session(BASE_OPTIONS.scope));
+		await settle();
+		now += 60_000;
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope.storeId)).toEqual([
+			BASE_OPTIONS.scope.storeId,
+			target.storeId,
+			BASE_OPTIONS.scope.storeId,
+		]);
+		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
+	});
+
+	it('a kept database with nothing sendable, or one that failed to open, is not retried in this process', async () => {
+		for (const outcome of [
+			keptUnsendable,
+			{ status: 'failed', databaseName: LEGACY, error: 'DB6' } as const,
+		]) {
+			const engine = createEngineDouble();
+			const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
+			drainLegacyScopeDatabase.mockResolvedValue(outcome);
+			await createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
+			engine.emit(writeDrainRan);
+			await settle();
+			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+			jest.restoreAllMocks();
+		}
+	});
+
+	it('what a kept database holds is counted by the Clear local data warning; a drained one is not', async () => {
+		const engine = createEngineDouble();
+		const loaded = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loaded;
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		await discoveryFindsNothingElse(loaded);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
+		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held', 'order-unsent']);
+
+		jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'drained',
+			databaseName: LEGACY,
+			pushed: 4,
+			carried: 1,
+			fileRemoved: false,
+		});
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+		expect(legacyUnsentOrderUuids(LEGACY).size).toBe(0);
+	});
+
+	it('the drain is marked pending at engine construction and its report releases a waiting reader', async () => {
+		let report!: (outcome: LegacyScopeDrainOutcome) => void;
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine();
+		drainLegacyScopeDatabase.mockImplementation(
+			() =>
+				new Promise<LegacyScopeDrainOutcome>((resolve) => {
+					report = resolve;
+				})
+		);
+		const engine = createAppSyncEngine(BASE_OPTIONS);
+		// Before readiness has run anything: a reader that waits is already told to wait.
+		let settled: string | null = null;
+		void awaitLegacyUnsentReport(LEGACY, 60_000).then((result) => {
+			settled = result;
+		});
+		await engine.ready;
+		await settle();
+		expect(settled).toBeNull();
+		report({ status: 'absent', databaseName: LEGACY });
+		await settle();
+		expect(settled).toBe('reported');
+	});
+
+	describe('the boot inventory: an unvisited previous-generation database keeps the reset count unknown', () => {
+		const TARGET = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const TARGET_LEGACY = scopeDatabaseName(TARGET, { generation: 5 });
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+		const drainsAbsent = async (_ports: unknown, scope: ScopeIdentity) =>
+			({
+				status: 'absent',
+				databaseName: scopeDatabaseName(scope, { generation: 5 }),
+			}) as LegacyScopeDrainOutcome;
+
+		/** A web/Electron scope history; `markCleared` records names that reported nothing kept. */
+		const history = (names: string[], complete: boolean, cleared: string[] = []) => ({
+			names,
+			complete,
+			cleared,
+			settled: complete && names.every((name) => cleared.includes(name)),
+			markCleared: jest.fn(async (_names: readonly string[]) => undefined),
+		});
+		const clearedBy = (h: ReturnType<typeof history>) =>
+			h.markCleared.mock.calls.flatMap(([names]) => [...names]);
+
+		it('native: two pos_v5 files, one visited → unknown; both visited (one drained, one absent) → exact', async () => {
+			const engine = createEngineDouble();
+			const list = jest.fn(async () => [
+				// `list()` returns database names only (its sidecars never reach the host).
+				LEGACY,
+				TARGET_LEGACY,
+				scopeDatabaseName(BASE_OPTIONS.scope),
+			]);
+			const loaded = loadCreateAppEngine(() => engine, false, true, { list });
+			loaded.drainLegacyScopeDatabase.mockImplementation(async (ports, scope) =>
+				scope.storeId === TARGET.storeId
+					? drainsAbsent(ports, scope)
+					: {
+							status: 'drained',
+							databaseName: LEGACY,
+							pushed: 1,
+							carried: 0,
+							fileRemoved: true,
+						}
+			);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({ registry: [] });
+			// The visited scope drained; the other store's pos_v5 is still there, unread.
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('native: a dangling registry reference does not make the count unknown (the file listing decides)', async () => {
+			const engine = createEngineDouble();
+			const list = jest.fn(async () => [LEGACY]);
+			const loaded = loadCreateAppEngine(() => engine, false, true, { list });
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [],
+				unresolvedReferences: ['stores:store-gone'],
+			});
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			expect(loaded.networkWarn).not.toHaveBeenCalled();
+		});
+
+		it('web: a fresh install (complete history) counts exactly once its scopes report, and settles', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const fresh = history([LEGACY, TARGET_LEGACY], true);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: fresh,
+			});
+			// The second store has not been visited yet.
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(clearedBy(fresh)).toEqual([LEGACY]);
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			// Every name is now recorded cleared: the history is settled for later boots.
+			expect(clearedBy(fresh)).toEqual([LEGACY, TARGET_LEGACY]);
+		});
+
+		it('web: a settled history counts exactly at once, marking nothing', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: history([LEGACY, TARGET_LEGACY], true, [LEGACY, TARGET_LEGACY]),
+			});
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('web: an upgraded install (history began late) stays unknown even when every registry scope reported', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const late = history([LEGACY, TARGET_LEGACY], false);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: late,
+			});
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(legacyUnsentReportUncountable(LEGACY)).toBe(false);
+			expect(legacyUnsentReportUncountable(TARGET_LEGACY)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+		});
+
+		it('web: a registry reference with no document (a removed store) keeps the count unknown and the history unsettled, warning once', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const fresh = history([LEGACY], true);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			for (let start = 0; start < 2; start += 1) {
+				await loaded.inventoryLegacyScopeDatabases({
+					registry: [BASE_OPTIONS.scope],
+					unresolvedReferences: ['stores:store-gone'],
+					history: fresh,
+				});
+			}
+			// Every named scope reported nothing kept; the unresolved reference still blocks.
+			expect(legacyUnsentReportOutstanding(LEGACY)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
+				String(message).startsWith('The store registry names records that are missing')
+			);
+			expect(warned).toEqual([
+				[
+					expect.any(String),
+					expect.objectContaining({ context: { unresolved: ['stores:store-gone'] } }),
+				],
+			]);
+		});
+
+		it('web: a scope opened and then its site removed stays in the history, and pending', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const removedSite = scopeDatabaseName(
+				{ site: 'https://removed.example.test', storeId: 1, cashierId: 1 },
+				{ generation: 5 }
+			);
+			const opened = history([LEGACY, removedSite], true);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			// The removed site is gone from the registry; the history still names its pos_v5.
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope],
+				history: opened,
+			});
+			expect(legacyUnsentReportOutstanding(removedSite)).toBe(true);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(clearedBy(opened)).not.toContain(removedSite);
+		});
+
+		it('web: a settled history that gains a newly opened scope is unsettled until that scope reports, and only it is pending', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			// Settled on an earlier boot (an older scope cleared, not visited this run); TARGET was just
+			// opened for the first time.
+			const older = scopeDatabaseName(
+				{ ...BASE_OPTIONS.scope, storeId: 'store-old' },
+				{ generation: 5 }
+			);
+			const reopened = history([LEGACY, older, TARGET_LEGACY], true, [LEGACY, older]);
+			expect(reopened.settled).toBe(false);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope],
+				history: reopened,
+			});
+			expect(legacyUnsentReportOutstanding(TARGET_LEGACY)).toBe(true);
+			// A cleared name is gone for good: never pending again.
+			expect(legacyUnsentReportOutstanding(older)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			expect(clearedBy(reopened)).toEqual([TARGET_LEGACY]);
+		});
+	});
+
+	describe('the overall inventory', () => {
+		it('a reset opened before discovery resolves reads unknown; discovery that finds nothing kept makes it exact', async () => {
+			const loaded = loadCreateAppEngine();
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			// The active scope reported absent; the other scopes are not yet discovered.
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			let resolve!: () => void;
+			const discovery = loaded.runLegacyInventory(
+				() =>
+					new Promise((done) => {
+						resolve = () =>
+							done({
+								registry: [],
+								history: {
+									names: [],
+									complete: true,
+									cleared: [],
+									settled: true,
+									markCleared: async () => undefined,
+								},
+							});
+					})
+			);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			resolve();
+			await discovery;
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('a discovery that cannot read leaves the count unknown for the process, warning once', async () => {
+			const loaded = loadCreateAppEngine();
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			for (let start = 0; start < 2; start += 1) {
+				await loaded.runLegacyInventory(async () => {
+					throw new Error('user database unavailable');
+				});
+			}
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
+				String(message).startsWith("Could not list the previous database version's scope databases")
+			);
+			expect(warned).toHaveLength(1);
+			// A later engine construction does not re-mark it as merely pending.
+			loaded.createAppSyncEngine(OTHER_SITE_OPTIONS);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+		});
+
+		it('native: a registry read that fails still lists the files', async () => {
+			const list = jest.fn(async () => [] as string[]);
+			const loaded = loadCreateAppEngine(createEngineDouble, false, true, { list });
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.runLegacyInventory(async () => {
+				throw new Error('user database unavailable');
+			});
+			expect(list).toHaveBeenCalledTimes(1);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+	});
+
+	it('a drain that outlives a store switch logs nothing into the new store (its outcome and its late rejection are dropped)', async () => {
+		const engine = createEngineDouble();
+		const loaded = loadCreateAppEngine(() => engine);
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		let finish!: (outcome: LegacyScopeDrainOutcome) => void;
+		loaded.drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) =>
+			scope.storeId === target.storeId
+				? { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) }
+				: new Promise<LegacyScopeDrainOutcome>((resolve) => {
+						finish = resolve;
+					})
+		);
+		await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const [ports] = loaded.drainLegacyScopeDatabase.mock.calls[0]!;
+		await loaded.switchAppEngineScope({
+			site: { wp_api_url: target.site },
+			wpCredentials: { id: target.cashierId },
+			store: { id: target.storeId },
+		});
+		await settle();
+
+		ports.onWriteEvent!({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 400,
+			reason: 'rest_invalid_param',
+		});
+		finish({ ...keptUnsendable, reportDue: true });
+		await settle();
+		expect(loaded.networkWarn).not.toHaveBeenCalled();
+		expect(loaded.networkInfo).not.toHaveBeenCalledWith(
+			expect.stringContaining('previous database version'),
+			expect.anything()
+		);
+		// The outcome still counts: what the old scope keeps is still unsent work.
+		await discoveryFindsNothingElse(loaded);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 2 });
+	});
+
+	it('a scope whose engine never became ready releases its mark as uncountable instead of leaving waiters hanging', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
+		engine.ready = Promise.reject(new Error('open failed'));
+		createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).rejects.toThrow('open failed');
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
+		expect(legacyUnsentReportUncountable(LEGACY)).toBe(true);
+	});
+
+	it('a drain that failed to open is reported (nothing waits on it) but stays uncountable', async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine();
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'failed',
+			databaseName: LEGACY,
+			error: 'DB6',
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+	});
+
+	it('logs one line per outcome: failed is an error with a code, kept warns when due, drained says whether the file went', async () => {
+		for (const [outcome, level, message, context] of [
+			[
+				{ status: 'failed', databaseName: LEGACY, error: 'DB6: schema mismatch' },
+				'error',
+				'Could not open the previous database version to send its unsent changes',
+				{ databaseName: LEGACY, error: 'DB6: schema mismatch' },
+			],
+			[
+				keptRetryable,
+				'warn',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ reason: 'write-drain skipped: offline', retryable: true },
+			],
+			[
+				keptUnsendable,
+				'warn',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ pushed: 4, carried: 1, remaining: { deadLetters: 1, conflicts: 1 } },
+			],
+			[
+				{ ...keptUnsendable, reportDue: false },
+				'debug',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ retryable: false },
+			],
+			[
+				{ status: 'drained', databaseName: LEGACY, pushed: 4, carried: 0, fileRemoved: true },
+				'info',
+				'Sent 4 unsent changes from the previous database version and removed it',
+				{ databaseName: LEGACY, pushed: 4 },
+			],
+			[
+				{ status: 'drained', databaseName: LEGACY, pushed: 2, carried: 1, fileRemoved: false },
+				'info',
+				'Sent 2 unsent changes and moved 1 open carts from the previous database version and dropped its tables (its file remains)',
+				{ fileRemoved: false },
+			],
+		] as const) {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockResolvedValue(outcome as LegacyScopeDrainOutcome);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			const logged = {
+				error: loaded.networkError,
+				warn: loaded.networkWarn,
+				info: loaded.networkInfo,
+				debug: loaded.networkDebug,
+			}[level];
+			expect(logged).toHaveBeenCalledWith(
+				message,
+				expect.objectContaining({ context: expect.objectContaining(context) })
+			);
+			if (level === 'error') {
+				expect(logged).toHaveBeenCalledWith(
+					message,
+					expect.objectContaining({ code: expect.any(String) })
+				);
+			}
+			if (level === 'debug') expect(loaded.networkWarn).not.toHaveBeenCalled();
+		}
+	});
+
+	it('with the REAL drain: the host ports send a closed v5 sale once through its pinned transport, then remove pos_v5', async () => {
+		const { getRxStorageMemory } = jest.requireActual<typeof import('rxdb/plugins/storage-memory')>(
+			'rxdb/plugins/storage-memory'
+		);
+		const { createRxDatabase } = jest.requireActual<typeof import('rxdb')>('rxdb');
+		const actual = jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
+		const { engineCollectionCreators } = jest.requireActual<
+			typeof import('@wcpos/sync-engine/testing')
+		>('@wcpos/sync-engine/testing');
+		const { createFakeWriteServer } = jest.requireActual<typeof import('@wcpos/sync-core/testing')>(
+			'@wcpos/sync-core/testing'
+		);
+		// The engine opens more collections than open-core rxdb allows without the premium flag.
+		jest
+			.requireActual<typeof import('rxdb-premium/plugins/shared')>('rxdb-premium/plugins/shared')
+			.setPremiumFlag();
+		const storage = getRxStorageMemory();
+		const recordId = '17400000-0000-4000-8000-0000000000aa';
+		const mutationId = '17400000-0000-4000-8000-0000000000ab';
+		const payload = {
+			status: 'completed',
+			total: '9.00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+		};
+		// A till that closed a sale under v5 and upgraded before it was sent.
+		const legacy = await createRxDatabase({ name: LEGACY, storage, multiInstance: false });
+		const creators = engineCollectionCreators();
+		await legacy.addCollections({
+			orders: creators.orders as never,
+			recordMutations: creators.recordMutations as never,
+		});
+		await legacy.collections.orders!.insert({
+			posUserId: '',
+			posStoreId: '',
+			uuid: recordId,
+			remoteId: null,
+			remoteKey: '',
+			number: '',
+			dateCreatedGmt: '2026-09-30T08:00:00',
+			status: 'completed',
+			total: '9.00',
+			customerId: 0,
+			payload,
+			sync: { revision: '', partial: false, source: 'skeleton' },
+			local: { dirty: true, pendingMutationIds: [mutationId] },
+		});
+		await legacy.collections.recordMutations!.insert({
+			mutationId,
+			collectionName: 'orders',
+			operation: 'create',
+			recordId,
+			origin: 'existing',
+			payload,
+			baseRevision: null,
+			queuedAt: '2026-09-30T08:00:00.000Z',
+			seq: 1,
+			status: 'pending',
+		});
+		await legacy.close();
+
+		const server = createFakeWriteServer();
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = String(input);
+				if (!url.includes('/push/')) {
+					return Response.json({ changes: [], complete: true, documents: [] });
+				}
+				// The fake answers a bare { status, json }; the host's fetcher reads real headers.
+				const answer = await server.fetch(url.split('?')[0]!, {
+					...init,
+					headers: new Headers(init?.headers),
+				} as never);
+				return Response.json(await answer.json(), { status: answer.status });
+			});
+		const loaded = loadCreateAppEngine();
+		jest.requireMock<{ defaultConfig: { storage: unknown } }>(
+			'@wcpos/database/adapters/default'
+		).defaultConfig.storage = storage;
+		loaded.drainLegacyScopeDatabase.mockImplementation(actual.drainLegacyScopeDatabase as never);
+		try {
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			for (
+				let turn = 0;
+				turn < 200 &&
+				!loaded.networkInfo.mock.calls.some(([message]) => String(message).startsWith('Sent ')) &&
+				loaded.networkWarn.mock.calls.length === 0 &&
+				loaded.networkError.mock.calls.length === 0;
+				turn += 1
+			) {
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			expect([loaded.networkWarn.mock.calls, loaded.networkError.mock.calls]).toEqual([[], []]);
+			expect(server.received.map((envelope) => envelope.mutationId)).toEqual([mutationId]);
+			expect([...server.applied.keys()]).toEqual([recordId]);
+			expect(loaded.networkInfo).toHaveBeenCalledWith(
+				'Sent 1 unsent changes from the previous database version and dropped its tables (its file remains)',
+				expect.anything()
+			);
+			// Pinned to the drained scope's store: the push carries that store's id on the wire.
+			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
+			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
+			expect(wire).toContain('store-1');
+			await discoveryFindsNothingElse(loaded);
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+		} finally {
+			fetch.mockRestore();
+		}
+	}, 30_000);
+
+	it("logs a push the store refused during the drain with the store's reason and message", async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn } = loadCreateAppEngine();
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const [ports] = drainLegacyScopeDatabase.mock.calls[0]!;
+		ports.onWriteEvent!({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 400,
+			reason: 'rest_invalid_param',
+			serverMessage: 'Invalid parameter(s): billing',
+		});
+		expect(networkWarn).toHaveBeenCalledWith(
+			'The store refused a change from the previous database version',
+			expect.objectContaining({
+				context: expect.objectContaining({
+					databaseName: LEGACY,
+					recordId: 'order-1',
+					status: 400,
+					reason: 'rest_invalid_param',
+					serverMessage: 'Invalid parameter(s): billing',
+				}),
+			})
+		);
 	});
 });

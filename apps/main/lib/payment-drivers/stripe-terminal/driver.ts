@@ -1,3 +1,5 @@
+import { isDevice } from 'expo-device';
+
 import type {
 	CollectResult,
 	DevControl,
@@ -332,7 +334,11 @@ export function createStripeTerminalDriver({
 				}, 10000);
 				finishDiscovery = finish;
 				const method = resolveMethod();
-				const simulated = __DEV__ && (method?.provider_data ?? lastProviderData).test_mode === true;
+				// A simulator has no Bluetooth, so a test-mode gateway gets the SDK's simulated reader
+				// there. On a real device a test-mode gateway still means real hardware: Stripe's
+				// sandbox drives a physical reader with its physical test cards.
+				const simulated =
+					__DEV__ && !isDevice && (method?.provider_data ?? lastProviderData).test_mode === true;
 				if (__DEV__)
 					console.log('[stripe-driver] discover', {
 						transport: nextTransport,

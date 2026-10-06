@@ -3,6 +3,10 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { WriteDeferredError, WriteOutcomeError } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { usePushDocument } from './use-push-document';
 
 jest.mock('../pos/contexts/current-order/temporary-order', () => ({
@@ -232,25 +236,51 @@ describe('usePushDocument', () => {
 	});
 
 	it.each([
-		['rejected', new Error('write-rejected for mutation "mutation-1"')],
-		['timed out', new Error('Timed out waiting for mutation "mutation-1"')],
-	])('throws when an order write outcome is %s', async (_label, error) => {
-		const resident: Record<string, unknown> = {
-			remoteId: null,
-			payload: { status: 'pos-open' },
-		};
-		resident.get = (field: string) => resident[field];
-		mockFindOneExec.mockResolvedValue(resident);
-		mockAwaitWriteOutcome.mockRejectedValueOnce(error);
-		const doc = {
-			uuid: 'order-uuid',
-			id: null,
-			collection: { name: 'orders' },
-			getLatest: () => doc,
-		};
+		[
+			'rejected',
+			new Error('write-rejected for mutation "mutation-1"'),
+			ERROR_CODES.SYNC_UNEXPECTED,
+		],
+		[
+			'timed out',
+			new Error('Timed out waiting for mutation "mutation-1"'),
+			ERROR_CODES.SYNC_UNEXPECTED,
+		],
+		['deferred 401', new WriteDeferredError('mutation-1', 401), ERROR_CODES.SESSION_EXPIRED],
+		[
+			'rejected 401',
+			new WriteOutcomeError('write-rejected', 'mutation-1', 401),
+			ERROR_CODES.SESSION_EXPIRED,
+		],
+		[
+			'rejected 403',
+			new WriteOutcomeError('write-rejected', 'mutation-1', 403),
+			ERROR_CODES.INSUFFICIENT_ROLE,
+		],
+	])(
+		'throws and logs the failure code when an order write outcome is %s',
+		async (_label, error, code) => {
+			const resident: Record<string, unknown> = {
+				remoteId: null,
+				payload: { status: 'pos-open' },
+			};
+			resident.get = (field: string) => resident[field];
+			mockFindOneExec.mockResolvedValue(resident);
+			mockAwaitWriteOutcome.mockRejectedValueOnce(error);
+			const doc = {
+				uuid: 'order-uuid',
+				id: null,
+				collection: { name: 'orders' },
+				getLatest: () => doc,
+			};
 
-		const { result } = renderHook(() => usePushDocument());
+			const { result } = renderHook(() => usePushDocument());
 
-		await expect(result.current(doc as never)).rejects.toThrow(error.message);
-	});
+			await expect(result.current(doc as never)).rejects.toThrow(error.message);
+			expect(getLogger(['wcpos', 'sync', 'push']).error).toHaveBeenCalledWith(
+				'Failed to send document to server',
+				expect.objectContaining({ code })
+			);
+		}
+	);
 });

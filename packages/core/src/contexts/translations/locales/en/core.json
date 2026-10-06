@@ -1766,6 +1766,7 @@
 	"health.logs.col_status": "Status",
 	"health.logs.level_error": "error",
 	"health.logs.level_warn": "warn",
+	"health.logs.level_ok": "ok",
 	"health.logs.level_action": "action",
 	"health.logs.level_sync": "sync",
 	"health.logs.level_debug": "debug",

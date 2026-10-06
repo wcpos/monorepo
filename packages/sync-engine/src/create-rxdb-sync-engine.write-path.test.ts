@@ -302,6 +302,75 @@ function withAckDocument(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it.each([false, true])(
+		'settles A before unrelated B completes only after durable acknowledgement (ack fails: %s)',
+		async (ackFails) => {
+			const server = createFakeWriteServer();
+			let releaseB!: () => void;
+			const blockedB = new Promise<void>((resolve) => {
+				releaseB = resolve;
+			});
+			let startedB!: () => void;
+			const pushingB = new Promise<void>((resolve) => {
+				startedB = resolve;
+			});
+			let pushes = 0;
+			const engine = engineWith({
+				fetch: async (url, init) => {
+					if (url.includes('/push/') && ++pushes === 2) {
+						startedB();
+						await blockedB;
+					}
+					return server.fetch(url, init as never);
+				},
+			});
+			const events: EngineEvent[] = [];
+			let drain: ReturnType<typeof engine.sync> | undefined;
+			let ackSpy: ReturnType<typeof vi.spyOn> | undefined;
+			try {
+				await engine.ready;
+				engine.events((event) => events.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await insertBornLocalOrder(engine, UUID_MINT);
+				const a = await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_MINT,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				const queue = queueFor(engine.active()!.database as never);
+				if (ackFails)
+					ackSpy = vi.spyOn(queue, 'acknowledge').mockRejectedValueOnce(new Error('storage down'));
+				drain = engine.sync('write-drain');
+				await pushingB;
+				const acks = () =>
+					events.filter(
+						(event) => event.type === 'write-acknowledged' && event.mutationId === a.mutationId
+					);
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+				expect((await queue.pending()).some((row) => row.mutationId === a.mutationId)).toBe(
+					ackFails
+				);
+				releaseB();
+				expect(await drain).toMatchObject({ pushed: ackFails ? 1 : 2, failed: ackFails ? 1 : 0 });
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+			} finally {
+				releaseB();
+				await drain;
+				ackSpy?.mockRestore();
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('holds a non-explicit pos-open create without touching retry bookkeeping', async () => {
 		const server = createFakeWriteServer();
 		const events: SyncEvent[] = [];
@@ -1338,6 +1407,63 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		// Conflicts await caller resolution — the queue keeps the mutation.
 		expect(engine.status().queueDepth).toBe(1);
 		await engine.dispose();
+	});
+
+	it('a 401 emits write-deferred, not write-rejected, and leaves the order queued', async () => {
+		const server = createFakeWriteServer();
+		const bridge = {
+			publish: vi.fn(),
+			subscribe: () => () => {},
+			publishDrainNudge: vi.fn(),
+			subscribeDrainNudge: () => () => {},
+		};
+		const engine = engineWith({
+			ports: { writeOutcomeBridge: bridge },
+			fetch: (url, init) =>
+				init?.method === 'POST'
+					? Promise.resolve(
+							new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+								status: 401,
+							})
+						)
+					: server.fetch(url, init as never),
+		});
+		try {
+			await engine.ready;
+			const events: EngineEvent[] = [];
+			engine.events((event) => events.push(event));
+			await insertBornLocalOrder(engine, UUID_A);
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+				},
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({
+				status: 'ran',
+				failed: 1,
+				rejected: 0,
+			});
+			expect(events.filter((event) => event.type === 'write-deferred')).toEqual([
+				{
+					type: 'write-deferred',
+					collection: 'orders',
+					recordId: UUID_A,
+					mutationId: receipt.mutationId,
+					status: 401,
+					reason: 'woocommerce_pos_rest_unauthorized',
+				},
+			]);
+			expect(events.some((event) => event.type === 'write-rejected')).toBe(false);
+			expect(engine.status().queueDepth).toBe(1);
+			expect(bridge.publish).not.toHaveBeenCalled();
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('a permanent 4xx dead-letters: write-rejected event, queue drained of it', async () => {
@@ -4365,7 +4491,6 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { note: 'U2', discount: '5.00' },
-				explicit: true,
 			});
 			gate!();
 			expect((await drain1).failed).toBe(1);
