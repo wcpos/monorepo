@@ -36,6 +36,9 @@ export async function tokenProvider(): Promise<string> {
 	if (!provideToken) throw new Error('Stripe Terminal is not enabled on this store');
 	return provideToken();
 }
+// iOS and the simulator report a cancel as `Canceled`; the Android SDK reports `CANCELED`
+// (WisePad 3 run, 2026-10-06), so a cashier's cancel was rendered as a reader error.
+const isCanceled = (code: string | undefined) => /^canceled$/i.test(code ?? '');
 const discoveryMethod = (transport: PaymentTransport) =>
 	transport === 'tap_to_pay' ? 'tapToPay' : 'bluetoothScan';
 const readerInfo = (reader: Reader.Type, transport: PaymentTransport): ReaderInfo => ({
@@ -68,6 +71,7 @@ export function createStripeTerminalDriver({
 	let simulatedCard = '4242424242424242';
 	let simulatedOffline = false;
 	let finishDiscovery: ((error?: SdkError) => void) | undefined;
+	let settleDiscovery: ((next: Reader.Type[]) => void) | undefined;
 	const listeners = new Set<(s: DriverStatus) => void>();
 	const settlements = new Set<(e: OfflineSettlement) => void>();
 	const bindings = new Set<(api: Sdk) => void>();
@@ -141,6 +145,7 @@ export function createStripeTerminalDriver({
 	const callbacks = {
 		onUpdateDiscoveredReaders: (next: Reader.Type[]) => {
 			readers = next;
+			settleDiscovery?.(next);
 		},
 		onFinishDiscoveringReaders: (error?: SdkError) => finishDiscovery?.(error),
 		onDidChangeConnectionStatus: (connection: Reader.ConnectionStatus) => {
@@ -295,15 +300,21 @@ export function createStripeTerminalDriver({
 				bindings.forEach((bind) => bind(api));
 			} else lastMethodId = undefined;
 		},
-		async discoverReaders(nextTransport: PaymentTransport): Promise<ReaderInfo[]> {
+		async discoverReaders(
+			nextTransport: PaymentTransport,
+			options?: { until?: string }
+		): Promise<ReaderInfo[]> {
 			const api = await ready();
 			await cancelDiscovery(api);
 			// The SDK refuses to scan while a reader is connected ("Already connected to a
 			// reader"); a new search is the cashier changing readers, so let go of the current one.
-			if (status.connection === 'connected') {
-				check(await api.disconnectReader());
-				disconnected();
-			}
+			// The SDK may still hold a reader this driver has forgotten — a logout or a store
+			// switch resets the driver, not the SDK (WisePad 3 run, 2026-10-06) — so the disconnect
+			// is unconditional, and its "not connected" answer only matters when we thought we were.
+			const released = await api.disconnectReader();
+			if (status.connection === 'connected') check(released);
+			// A retained reader — connected, or kept through a reconnect or update — is gone now.
+			if (status.reader) disconnected();
 			transport = nextTransport;
 			readers = [];
 			bluetoothOff = false;
@@ -312,9 +323,10 @@ export function createStripeTerminalDriver({
 				const finish = (error?: SdkError) => {
 					if (finishDiscovery !== finish) return;
 					finishDiscovery = undefined;
+					settleDiscovery = undefined;
 					clearTimeout(timer);
 					publish({ connection: status.reader ? 'connected' : 'disconnected' });
-					if (error && error.code !== 'Canceled') reject(reportError(error));
+					if (error && !isCanceled(error.code)) reject(reportError(error));
 					else {
 						const found = readers.map((reader) => readerInfo(reader, nextTransport));
 						if (__DEV__)
@@ -325,14 +337,23 @@ export function createStripeTerminalDriver({
 						resolve(found);
 					}
 				};
-				const timer = setTimeout(() => {
+				// Stop scanning and report what is there — at the window's end, or as soon as the
+				// reader the caller is waiting for shows up (a remembered WisePad appears within a
+				// second; waiting out the full window made every tile pick take 10 s).
+				const settle = () => {
 					finish();
 					void api
 						.cancelDiscovering()
 						.then(check)
 						.catch((error: Error) => publish({ message: error.message }));
-				}, 10000);
+				};
+				const timer = setTimeout(settle, 10000);
 				finishDiscovery = finish;
+				settleDiscovery = options?.until
+					? (next: Reader.Type[]) => {
+							if (next.some((reader) => reader.serialNumber === options.until)) settle();
+						}
+					: undefined;
 				const method = resolveMethod();
 				// A simulator has no Bluetooth, so a test-mode gateway gets the SDK's simulated reader
 				// there. On a real device a test-mode gateway still means real hardware: Stripe's
@@ -491,7 +512,7 @@ export function createStripeTerminalDriver({
 						confirming,
 						handoffKeys: Object.keys(input.handoff ?? {}),
 					});
-				if (failure.code === 'Canceled') return failed('cancelled');
+				if (isCanceled(failure.code)) return failed('cancelled');
 				const decline = failure.declineCode ?? failure.apiError?.declineCode;
 				if (confirming && (decline || failure.code === 'DeclinedByStripeAPI'))
 					return failed('declined', decline ?? 'card_declined');
