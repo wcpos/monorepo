@@ -39,6 +39,11 @@ jest.mock('../grid/product-tile', () => ({ ProductTile: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
+// The term level's products table (term-table.tsx) is the till's own table; not on stage here.
+jest.mock('../../../../components/data-table/v2', () => ({ DataTable: () => null }));
+jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
+jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
+jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	List: ({

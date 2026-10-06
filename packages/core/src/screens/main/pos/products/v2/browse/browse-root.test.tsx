@@ -32,6 +32,11 @@ jest.mock('../level-back', () => ({
 	LevelBack: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('../grid/product-tile', () => ({ ProductTile: () => null }));
+// The term level's products table (term-table.tsx) is the till's own table; not on stage here.
+jest.mock('../../../../components/data-table/v2', () => ({ DataTable: () => null }));
+jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
+jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
+jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
 jest.mock('../footer', () => ({
@@ -147,4 +152,26 @@ it('the root table shows All products first, then the terms in order', () => {
 	]);
 	fireEvent.click(screen.getByTestId('browse-all-products'));
 	expect(onOpen).toHaveBeenCalledWith({ kind: 'all' });
+});
+
+it('the root table carries the till’s footer under its card: the catalogue total, not the loaded window', () => {
+	const { rerender } = render(<BrowseRootTable terms={terms} onOpen={jest.fn()} />);
+	expect(screen.queryByTestId('products-footer')).toBeNull();
+	const result$ = new BehaviorSubject({ hits: [{}, {}, {}] });
+	const binding = (total: number | null) =>
+		({ total$: of(total), result$, active$: of(false), sync: jest.fn() }) as unknown as NonNullable<
+			React.ComponentProps<typeof BrowseRootTable>['binding']
+		>;
+	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} binding={binding(80)} />);
+	const footer = screen.getByTestId('products-footer');
+	expect(footer.dataset).toMatchObject({ count: '80', collection: 'products' });
+	// On the ground beneath the rows' card, as the products table's footer is: never on the card.
+	expect(screen.getByTestId('browse-root').contains(footer)).toBe(true);
+	expect(screen.getByTestId('browse-root-rows').contains(footer)).toBe(false);
+	expect(screen.getByTestId('browse-term-3').compareDocumentPosition(footer)).toBe(
+		Node.DOCUMENT_POSITION_FOLLOWING
+	);
+	// Nothing vouches for a total: the loaded rows are the only number there is.
+	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} binding={binding(null)} />);
+	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });
