@@ -354,7 +354,8 @@ async function carryOverOpenCarts(
 	for (const cart of carts) {
 		try {
 			let resident = await liveOrders.findOne(cart.recordId).exec();
-			let inserted = false;
+			/** The revision this drain's insert produced; null when the copy was already live. */
+			let insertedRevision: string | null = null;
 			if (!resident) {
 				const order = plainCopy(cart.order);
 				const local = (order.local ?? {}) as Record<string, unknown>;
@@ -362,7 +363,7 @@ async function carryOverOpenCarts(
 					...order,
 					local: { ...local, dirty: false, pendingMutationIds: [] },
 				});
-				inserted = true;
+				insertedRevision = resident.revision;
 			}
 			const residentJson = resident.toJSON() as { remoteId?: unknown; payload?: unknown };
 			const carriesSale = async () =>
@@ -401,8 +402,20 @@ async function carryOverOpenCarts(
 						{ inScope: identity, payloadFromResident: true }
 					);
 				} catch (error) {
-					// Leave nothing half-copied: the cart stays (held) in the old database.
-					if (inserted) await resident.remove().catch(() => undefined);
+					// Undo the copy ONLY while it is provably untouched: no queue row for it, and the
+					// revision is still the one this insert produced. Once the cashier has edited it (or
+					// the create was in fact enqueued before the failure), the cart lives in v6 now —
+					// removing it would drop that edit, and a retry would restore the stale v5 snapshot.
+					// It is left exactly as it is; v5 keeps its copy until the proof rule above (a queued
+					// create or a remote id) holds, which the next pass's create-repair establishes.
+					if (insertedRevision !== null) {
+						const latest = await liveOrders.findOne(cart.recordId).exec();
+						const untouched =
+							latest !== null &&
+							latest.revision === insertedRevision &&
+							(await liveRowsFor(cart.recordId)).length === 0;
+						if (untouched) await latest.remove().catch(() => undefined);
+					}
 					throw error;
 				}
 				if (!(await carriesSale())) {

@@ -931,6 +931,81 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
+	it('a write that fails after the copy was edited leaves the copy and its edit in v6; the next pass repairs the create and retires v5', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+		const edited = [{ product_id: 41, quantity: 3, name: 'Coffee' }];
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const failing: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: () => app.engine.whenActive(),
+				write: async () => {
+					// The cashier edits the visible copy, then the carried create fails.
+					const resident = await app.collection('orders').findOne(cart.uuid).exec();
+					await resident!.incrementalModify((data: Json) => ({
+						...data,
+						payload: { ...(data.payload as Json), line_items: edited },
+					}));
+					await app.engine.write({
+						collection: 'orders',
+						operation: 'update',
+						recordId: cart.uuid,
+						payload: { line_items: edited },
+					});
+					throw new Error('write: scope moved during enqueue');
+				},
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: failing }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'kept', retryable: true, carried: 0 });
+			// The copy and its edit survive; v5 still has its cart.
+			let live = await stored(app);
+			expect((live.orders.get(cart.uuid)?.payload as Json).line_items).toEqual(edited);
+			expect([...live.rows.values()].map((row) => row.operation)).toEqual(['update']);
+
+			// The next pass: the update is not proof of transfer, so the create is repaired from the
+			// live resident (the edited line), and only then does v5 let go.
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'kept', retryable: false, carried: 1 });
+			live = await stored(app);
+			const rows = [...live.rows.values()];
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				operation: 'create',
+				payload: expect.objectContaining({ line_items: edited }),
+			});
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(false);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(false);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
 	it('a store switch landing between the scope check and the write refuses the carried create: nothing reaches the new scope', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
