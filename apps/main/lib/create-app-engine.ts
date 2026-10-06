@@ -290,7 +290,9 @@ export async function inventoryLegacyScopeDatabases(input: {
 	unresolvedReferences?: readonly string[];
 	history?: LegacyScopeHistory;
 }): Promise<void> {
-	const unresolved = input.unresolvedReferences ?? [];
+	// Only where the registry IS the inventory (web/Electron). On native the SQLite file listing
+	// is authoritative: a dangling registry reference cannot hide a pos_v5 file from it.
+	const unresolved = scopeDatabaseFiles === null ? (input.unresolvedReferences ?? []) : [];
 	legacyRegistryIncomplete = unresolved.length > 0;
 	// Re-read every inventory: a reference resolved since the last one no longer blocks.
 	rememberLegacyUnsentChanges(LEGACY_REGISTRY_UNRESOLVED, legacyRegistryIncomplete ? null : 0);
@@ -568,6 +570,19 @@ function releaseLegacyDrainMark(databaseName: string): void {
 	if (legacyDrainMarked(databaseName)) reportLegacyDrain(databaseName, null);
 }
 
+/**
+ * True while `engine` is still the app's engine and `scope` its active scope — when a line about
+ * that scope's previous-version database belongs in the log the app is writing to now. A store
+ * or site switch rebinds that log to the NEW store's database; a late line about the old scope
+ * would land in the new store's Health log, so it is dropped instead (as `diagnostics` does for a
+ * superseded engine).
+ */
+function stillLoggingFor(engine: RxdbSyncEngine, scope: StoreScopeIdentity): boolean {
+	if (cachedEngine?.engine !== engine) return false;
+	const active = engine.active();
+	return active !== null && scopeCacheKey(active.identity) === scopeCacheKey(scope);
+}
+
 async function drainLegacyScopeOnce(
 	engine: RxdbSyncEngine,
 	scope: StoreScopeIdentity,
@@ -605,7 +620,9 @@ async function drainLegacyScopeOnce(
 	try {
 		const outcome = await drainLegacyScopeDatabase({ ...ports(), pushBlockedReason }, scope);
 		// A blocked drain logs as a retry would: the warn waits for a real attempt.
-		logLegacyDrainOutcome(outcome, retries > 0 || pushBlockedReason !== null);
+		if (stillLoggingFor(engine, scope)) {
+			logLegacyDrainOutcome(outcome, retries > 0 || pushBlockedReason !== null);
+		}
 		if (outcome.status === 'absent' || outcome.status === 'drained') {
 			reportLegacyDrain(databaseName, 0);
 		} else if (outcome.status === 'failed') {
@@ -998,7 +1015,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
 				syncLogObserver.observe(event);
 			},
-			onWriteEvent: (event) => logLegacyDrainWriteEvent(databaseName, event),
+			onWriteEvent: (event) => {
+				if (stillLoggingFor(engine, scope)) logLegacyDrainWriteEvent(databaseName, event);
+			},
 		};
 	};
 	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>

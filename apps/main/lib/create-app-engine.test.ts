@@ -2351,6 +2351,21 @@ describe('previous-generation database drain', () => {
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
 		});
 
+		it('native: a dangling registry reference does not make the count unknown (the file listing decides)', async () => {
+			const engine = createEngineDouble();
+			const list = jest.fn(async () => [LEGACY]);
+			const loaded = loadCreateAppEngine(() => engine, false, true, { list });
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [],
+				unresolvedReferences: ['stores:store-gone'],
+			});
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			expect(loaded.networkWarn).not.toHaveBeenCalled();
+		});
+
 		it('web: a fresh install (complete history) counts exactly once its scopes report, and settles', async () => {
 			const loaded = loadCreateAppEngine();
 			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
@@ -2537,6 +2552,48 @@ describe('previous-generation database drain', () => {
 			expect(list).toHaveBeenCalledTimes(1);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
 		});
+	});
+
+	it('a drain that outlives a store switch logs nothing into the new store (its outcome and its late rejection are dropped)', async () => {
+		const engine = createEngineDouble();
+		const loaded = loadCreateAppEngine(() => engine);
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		let finish!: (outcome: LegacyScopeDrainOutcome) => void;
+		loaded.drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) =>
+			scope.storeId === target.storeId
+				? { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) }
+				: new Promise<LegacyScopeDrainOutcome>((resolve) => {
+						finish = resolve;
+					})
+		);
+		await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const [ports] = loaded.drainLegacyScopeDatabase.mock.calls[0]!;
+		await loaded.switchAppEngineScope({
+			site: { wp_api_url: target.site },
+			wpCredentials: { id: target.cashierId },
+			store: { id: target.storeId },
+		});
+		await settle();
+
+		ports.onWriteEvent!({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 400,
+			reason: 'rest_invalid_param',
+		});
+		finish({ ...keptUnsendable, reportDue: true });
+		await settle();
+		expect(loaded.networkWarn).not.toHaveBeenCalled();
+		expect(loaded.networkInfo).not.toHaveBeenCalledWith(
+			expect.stringContaining('previous database version'),
+			expect.anything()
+		);
+		// The outcome still counts: what the old scope keeps is still unsent work.
+		await discoveryFindsNothingElse(loaded);
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 2 });
 	});
 
 	it('a scope whose engine never became ready releases its mark as uncountable instead of leaving waiters hanging', async () => {
