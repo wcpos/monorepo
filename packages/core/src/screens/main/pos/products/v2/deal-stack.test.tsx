@@ -14,6 +14,8 @@ type TimingCall = {
 const mockTimings: TimingCall[] = [];
 const mockDelays: number[] = [];
 const mockShared: { value: number }[] = [];
+// What each clock started at, before any effect drove it: what its first paint shows.
+const mockInitial: number[] = [];
 const mockCancelled: { value: number }[] = [];
 const mockStyles = new Map<string, () => Style>();
 const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
@@ -87,7 +89,11 @@ jest.mock('react-native-reanimated', () => {
 		useAnimatedStyle: (factory: () => Style) => ({ factory }),
 		useSharedValue: (value: number) => {
 			const shared = ReactActual.useRef({ value }).current;
-			if (!mockShared.includes(shared)) mockShared.push(shared);
+			// The clocks only: a cell's offset (an object) is read through its style, not driven.
+			if (typeof value === 'number' && !mockShared.includes(shared)) {
+				mockShared.push(shared);
+				mockInitial.push(value);
+			}
 			return shared;
 		},
 		withDelay: (delay: number, value: number) => {
@@ -143,10 +149,12 @@ function Pane({
 	name,
 	count,
 	scroll,
+	rowTops,
 }: {
 	name: string;
 	count: number;
 	scroll?: { value: number };
+	rowTops?: Record<number, number>;
 }) {
 	const { origin, dealt, grid, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
@@ -179,6 +187,7 @@ function Pane({
 					count={count}
 					columns={COLUMNS}
 					scroll={scroll as never}
+					restY={rowTops?.[Math.floor(index / COLUMNS)]}
 				>
 					<span data-testid={`cell-${index}`} />
 				</DealCell>
@@ -191,18 +200,23 @@ function Stage({
 	target = tile,
 	count = 6,
 	scroll,
+	rowTops,
+	collapse,
 }: {
 	detail: string | null;
 	target?: Measurable;
 	count?: number;
 	scroll?: { value: number };
+	rowTops?: Record<number, number>;
+	collapse?: boolean;
 }) {
 	return (
 		<DealStack
 			testID="stage"
 			detail={detail}
 			target={target}
-			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} />}
+			collapse={collapse}
+			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} rowTops={rowTops} />}
 		>
 			<Lifted />
 		</DealStack>
@@ -232,6 +246,7 @@ beforeEach(() => {
 	mockTimings.length = 0;
 	mockDelays.length = 0;
 	mockShared.length = 0;
+	mockInitial.length = 0;
 	mockCancelled.length = 0;
 	mockStyles.clear();
 	mockLayouts.length = 0;
@@ -349,6 +364,27 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	expect(styleOf('cell-5').transform![2]).toEqual({ scale: 0.92 });
 });
 
+it('starts a cell under a taller row from the row top the grid measured, not from equal rows', () => {
+	// Term tiles in row 0, product tiles with SKU and stock lines below: row 1 starts 230 px down,
+	// not the tapped tile's 158. Row 0 is not given, so its cells keep the arithmetic.
+	const rowTops = { 1: 230 };
+	const { rerender } = render(<Stage detail={null} rowTops={rowTops} />);
+	rerender(<Stage detail="Hoodie" rowTops={rowTops} />);
+	layOut();
+	const [, , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(styleOf('cell-0').transform).toEqual([
+		{ translateX: 100 - (GRID.x + 4) },
+		{ translateY: 200 - (GRID.y + 4) },
+	]);
+	// Slot 5 (row 1) starts from under the parent: its offset reaches back from where it rests.
+	expect(styleOf('cell-5').transform).toEqual([
+		{ translateX: 100 - (GRID.x + COLUMN + 4) },
+		{ translateY: 200 - (GRID.y + 230 + 4) },
+		{ scale: 0.92 },
+	]);
+});
+
 it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	const { rerender } = render(<Stage detail={null} count={12} />);
 	rerender(<Stage detail="Hoodie" count={12} />);
@@ -457,6 +493,24 @@ it('a grid measurement that lands after the grace period dealt in place does not
 	expect(deal().grid).toBe('null');
 });
 
+it('the worklet laid down before the frames are known already stands the parent on the tapped tile', () => {
+	// On web the mapper keeps running the worklet it started with until a passive effect restarts
+	// it, and a heavy commit lets the browser paint first: a closed-over offset painted the parent
+	// at its own slot on the frame UNSEEN dropped (web film, 2026-10-06). The offset the parent
+	// first shows at must reach the worklet that is already running.
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	const id = screen.getByTestId('cell-0').closest('[data-style]')!.getAttribute('data-style')!;
+	const mounted = mockStyles.get(id)!;
+	layOut();
+	expect(seen('cell-0')).toBe(true);
+	const [, , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(mounted()).toEqual({
+		transform: [{ translateX: 100 - (GRID.x + 4) }, { translateY: 200 - (GRID.y + 4) }],
+	});
+});
+
 it('a cell in the air keeps going when the slot count changes under it', () => {
 	const { rerender } = render(<Stage detail={null} count={4} />);
 	rerender(<Stage detail="Hoodie" count={4} />);
@@ -468,10 +522,36 @@ it('a cell in the air keeps going when the slot count changes under it', () => {
 	const delays = mockDelays.length;
 	// A cold query fills in: the grid gains a slot, so every cell's `count` changes.
 	rerender(<Stage detail="Hoodie" count={5} />);
-	// The four cells already going are not sent off again; only the new slot starts (at rest).
-	expect(mockTimings.length).toBe(timings);
-	expect(mockDelays.length).toBe(delays);
-	expect(mockShared.at(-1)!.value).toBe(1);
+	// The four cells already going are not sent off again; only the new slot sets off.
+	expect(mockTimings.length).toBe(timings + 1);
+	expect(mockDelays.length).toBe(delays + 1);
+});
+
+it('a cell that mounts mid-deal joins it from under the parent; one after the deal landed is at rest', () => {
+	const { rerender } = render(<Stage detail={null} count={4} />);
+	rerender(<Stage detail="Hoodie" count={4} />);
+	layOut();
+	const timings = mockTimings.length;
+	// The deal is in the air when the answer brings a fifth slot: it is not painted at rest
+	// among tiles still flying, but starts unseen under the parent and is dealt at once, its
+	// turn in the stagger long gone.
+	rerender(<Stage detail="Hoodie" count={5} />);
+	expect(mockInitial.at(-1)).toBe(0);
+	expect(mockDelays.at(-1)).toBe(0);
+	expect(mockTimings.slice(timings)).toEqual([
+		expect.objectContaining({ toValue: 1, duration: BEATS.newTiles.duration }),
+	]);
+	// The last tile has landed: a slot that mounts now (the list's next batch) is where it
+	// belongs, and nothing animates on mount.
+	act(() =>
+		jest.advanceTimersByTime(
+			(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
+		)
+	);
+	const landed = mockTimings.length;
+	rerender(<Stage detail="Hoodie" count={6} />);
+	expect(mockInitial.at(-1)).toBe(1);
+	expect(mockTimings.length).toBe(landed);
 });
 
 it('a return interrupted by the same tile leaves the detail mounted', () => {
@@ -542,4 +622,178 @@ it('brings the products back over the whole return, accelerating, so they stay d
 		duration: PANE,
 		easing: EASE,
 	});
+});
+
+it('a collapsing stack cross-fades its detail out and the root in; nothing travels home', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	expect(styleOf('deal').opacity).toBe(1);
+	const timings = mockTimings.length;
+	const delays = mockDelays.length;
+	rerender(<Stage detail={null} collapse />);
+	// The tiles are not turned for home: no stagger, no walk, the deal stays dealt.
+	expect(deal().dealt).toBe(true);
+	expect(mockDelays.length).toBe(delays);
+	// One clock: the detail out where it stands, the products in over it.
+	expect(mockTimings.slice(timings)).toEqual([
+		expect.objectContaining({
+			toValue: 0,
+			duration: PANE,
+			easing: EASE,
+			done: expect.any(Function),
+		}),
+		expect.objectContaining({ toValue: 1, duration: PANE, easing: EASE }),
+	]);
+	expect(styleOf('deal').opacity).toBe(0);
+	expect(styleOf('lifted').opacity).toBe(1);
+	// No copy walks home onto the tapped tile, so it is back in the root that fades in.
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	// The detail stays mounted until the fade ends, as a gather's does.
+	expect(screen.getByTestId('deal')).toBeTruthy();
+	finish(0);
+	expect(screen.queryByTestId('deal')).toBeNull();
+});
+
+it('the next detail after a cross-fade starts from rest: its veil up, its furniture down', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	finish(0);
+	expect(screen.queryByTestId('deal')).toBeNull();
+	const [furniture, , veil] = mockShared;
+	// The fade left its veil down.
+	expect(veil.value).toBe(0);
+
+	// The next detail, before its deal sets off: shown (the veil up), its crumb and footer still
+	// to join the deal (the furniture down) — not hidden then snapping in, nor there whole.
+	rerender(<Stage detail="Beanie" collapse />);
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+	expect(styleOf('deal').opacity).toBe(1);
+	expect(styleOf('furniture').opacity).toBe(0);
+	layOut();
+	expect(furniture.value).toBe(1);
+});
+
+it('a detail staged after a cross-fade has its clocks at rest before it first paints', () => {
+	// What the detail's own first effects see: every layout effect (the stack's reset among them)
+	// has run by then, but no parent's passive effect yet — the frame it is painted in.
+	const firstSeen: { veil: number; furniture: number }[] = [];
+	function Probe() {
+		React.useEffect(() => {
+			const [furniture, , veil] = mockShared;
+			firstSeen.push({ veil: veil.value, furniture: furniture.value });
+		}, []);
+		return null;
+	}
+	function Probed({ detail, collapse }: { detail: string | null; collapse?: boolean }) {
+		return (
+			<DealStack
+				testID="stage"
+				detail={detail}
+				target={tile}
+				collapse={collapse}
+				renderDetail={(name) => (
+					<>
+						<Pane name={name} count={2} />
+						{name === 'Beanie' ? <Probe /> : null}
+					</>
+				)}
+			>
+				<Lifted />
+			</DealStack>
+		);
+	}
+	const { rerender } = render(<Probed detail={null} />);
+	rerender(<Probed detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Probed detail={null} collapse />);
+	finish(0); // the fade completes: the veil stays down
+	rerender(<Probed detail="Beanie" collapse />);
+	expect(firstSeen).toEqual([{ veil: 1, furniture: 0 }]);
+});
+
+it('a detail opened during a cross-fade is shown whole and its furniture joins its deal', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	const [furniture, , veil] = mockShared;
+	// Mid-fade: the leaving detail's veil going down, its furniture still up.
+	expect(veil.value).toBe(0);
+	expect(furniture.value).toBe(1);
+	rerender(<Stage detail="Beanie" collapse />);
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+});
+
+// On the fade's FIRST frame its `withTiming(0)` has not advanced: the veil still reads 1. A tile
+// opened then must still find every clock cancelled and at rest, and the old fade, running out a
+// frame later under the new detail, must not clear it.
+it('a tile opened on the first frame of a cross-fade is shown whole, and the old fade does not clear it', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	const fade = mockTimings.filter((call) => call.toValue === 0 && call.done).at(-1)!;
+	const [furniture, under, veil] = mockShared;
+	// The clocks were started but have not advanced: the veil still up, the furniture still up.
+	veil.value = 1;
+	furniture.value = 1;
+	mockCancelled.length = 0;
+	rerender(<Stage detail="Beanie" collapse />);
+	// Cancelled before anything was read, and put at rest for the new detail.
+	expect(mockCancelled).toEqual(expect.arrayContaining([veil, furniture, under]));
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+	expect(styleOf('deal').opacity).toBe(1);
+	expect(deal().name).toBe('Beanie');
+	// The old fade runs out anyway (its cancel came a frame late): it clears nothing of Beanie's.
+	act(() => fade.done!(true));
+	expect(screen.getByTestId('deal')).toBeTruthy();
+	expect(deal().name).toBe('Beanie');
+});
+
+it('a stack inside a detail that cross-fades away holds what it shows', () => {
+	function Nested({ inner, collapse }: { inner: string | null; collapse?: boolean }) {
+		return (
+			<DealStack
+				testID="outer"
+				detail={inner === null ? null : 'Clothing'}
+				target={tile}
+				collapse={collapse}
+				renderDetail={() => (
+					<DealStack
+						testID="inner"
+						detail={inner}
+						target={tile}
+						renderDetail={(name) => <output data-testid="inner-detail">{name}</output>}
+					>
+						<span data-testid="inner-root" />
+					</DealStack>
+				)}
+			>
+				<span data-testid="outer-root" />
+			</DealStack>
+		);
+	}
+	const { rerender } = render(<Nested inner={null} />);
+	rerender(<Nested inner="Tees" />);
+	const innerRoot = () => screen.getByTestId('inner-root').closest('[data-style]')!;
+	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
+	const delays = mockDelays.length;
+	// The path is cut two levels at once: both stacks' details clear in the same render.
+	rerender(<Nested inner={null} collapse />);
+	// The inner stack does not gather or bring its own root back: it is frozen as it was, and
+	// leaves with the surface that holds it.
+	expect(screen.getByTestId('inner-detail').textContent).toBe('Tees');
+	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
+	expect(mockDelays.length).toBe(delays);
 });

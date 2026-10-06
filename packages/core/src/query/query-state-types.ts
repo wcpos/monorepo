@@ -108,4 +108,11 @@ export type QueryStateActions<C extends CollectionKey> = {
 	/** Re-size the paging step; raises `limit` to the new size when the current window is smaller. */
 	setPageSize(pageSize: number): void;
 	extendLimit(): void;
+	/**
+	 * Restore a result window a caller recorded (a browse level's, paged past its first window,
+	 * on the way back to it): `limit` becomes that window, never smaller than the page size. A
+	 * result change (`setFilter`, a search) resets the window to the page size, so this is called
+	 * in the same batch as the filter it belongs with.
+	 */
+	setLimit(limit: number): void;
 };

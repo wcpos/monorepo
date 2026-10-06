@@ -29,6 +29,11 @@ jest.mock('../../../../contexts/ui-settings', () => ({ useUISettings: jest.fn() 
 jest.mock('../../../../hooks/use-currency-format', () => ({ useCurrencyFormat: jest.fn() }));
 
 const rec = (payload: Record<string, unknown>) => ({ payload });
+/** The products UI settings each `useDocField` selector reads. */
+const settings = (value: Record<string, unknown>) =>
+	(useDocField as jest.Mock).mockImplementation(
+		(_doc: unknown, select: (settings: Record<string, unknown>) => unknown) => select(value)
+	);
 // The existence read's answer when nothing is lifted.
 const NONE_CARRIED = new Set<number>();
 
@@ -179,19 +184,21 @@ describe('useBrowseCounts', () => {
 			terms[collection].read(collection)
 		);
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
-		(useDocField as jest.Mock).mockReturnValue([]);
+		settings({ filterBar: [] });
 	});
 	it("counts each source's root terms, and nothing for a source that has not answered", () => {
 		fakeCarrying();
-		(useDocField as jest.Mock).mockReturnValue([
-			{ type: 'pill', id: 'stock_status', show: true },
-			{
-				type: 'quick',
-				id: 'qf-1',
-				label: 'Under 3',
-				conditions: [{ field: 'price', value: { max: 3 } }],
-			},
-		]);
+		settings({
+			filterBar: [
+				{ type: 'pill', id: 'stock_status', show: true },
+				{
+					type: 'quick',
+					id: 'qf-1',
+					label: 'Under 3',
+					conditions: [{ field: 'price', value: { max: 3 } }],
+				},
+			],
+		});
 		const { result: counts } = renderHook(() => useBrowseCounts());
 		terms['products/categories'].emit('products/categories', [
 			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
@@ -200,6 +207,29 @@ describe('useBrowseCounts', () => {
 		]);
 		terms['products/brands'].emit('products/brands', []);
 		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+	});
+	// Opening the dialog pulls nothing it holds: thousands of tags, or a brands route that 404s
+	// before WooCommerce 9.4, must not be fetched on a settings tap (an empty source is pulled
+	// once by the binding itself — see the query bindings' tests).
+	it('reads every source from resident terms only, and asks the stage baseline of the products', () => {
+		(useAllTermsBinding as jest.Mock).mockClear();
+		fakeCarrying();
+		(useProductsCarryingTermsBinding as jest.Mock).mockClear();
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseCounts());
+		const termCalls = (useAllTermsBinding as jest.Mock).mock.calls;
+		expect(new Set(termCalls.map((call) => JSON.stringify(call)))).toEqual(
+			new Set(
+				['products/categories', 'products/tags', 'products/brands'].map((collection) =>
+					JSON.stringify([collection, true, { residentsOnly: true }])
+				)
+			)
+		);
+		expect(
+			(useProductsCarryingTermsBinding as jest.Mock).mock.calls.every(
+				(call) => call[2]?.showOutOfStock === true
+			)
+		).toBe(true);
 	});
 	// A cold collection's local read answers empty at once; its refresh has not landed yet.
 	it('counts nothing for a cold source while its refresh is pending, then its answer', () => {
@@ -237,13 +267,14 @@ describe('useBrowseCounts', () => {
 		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
 		expect(counts.current.categories).toBe(2);
 
-		// A changed id set is a new read; the last answer holds while it is pending.
+		// A changed id set is a new read, pending until it answers: the stage holds its list, but
+		// a held list is not a count — the row shows none (and is not dimmed).
 		terms['products/categories'].emit('products/categories', [
 			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
 			{ id: 5, name: 'Counter', parent: 0, count: 0 },
 			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
 		]);
-		expect(counts.current.categories).toBe(2);
+		expect(counts.current.categories).toBeUndefined();
 		carrying.emit('categories', [5, 6], [{ categories: [{ id: 5 }] }, { categories: [{ id: 6 }] }]);
 		expect(counts.current.categories).toBe(3);
 	});
@@ -265,7 +296,7 @@ describe('useBrowseTerms', () => {
 		);
 		fakeCarrying();
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
-		(useDocField as jest.Mock).mockReturnValue([]);
+		settings({ filterBar: [] });
 		(useT as jest.Mock).mockReturnValue((key: string) => key);
 		(useCurrencyFormat as jest.Mock).mockReturnValue({ format: String });
 	});
@@ -274,10 +305,105 @@ describe('useBrowseTerms', () => {
 		expect(asked(useAllTermsBinding)).toEqual(['["products/tags",true]']);
 		expect(asked(useProductsCarryingTermsBinding)).toEqual(['["tags",[]]']);
 	});
+	it("fetches the stage's terms, and lifts a zero-count term only inside the stock baseline", () => {
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useAllTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			residentsOnly: false,
+		});
+		expect((useProductsCarryingTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: false,
+		});
+
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useProductsCarryingTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: true,
+		});
+	});
 	it('reads no taxonomy for the shortcuts', () => {
 		renderHook(() => useBrowseTerms('shortcuts'));
 		expect(asked(useAllTermsBinding)).toEqual(['["products/categories",false]']);
 	});
+	// The open term's count drops to zero beside another zero-count term: the existence read for
+	// the new id set has not answered, and the last one never asked about this term. The list is
+	// held as it was (no blink), the newly-zero term in it, and marked pending.
+	it('holds the visible list, pending, while a term that has just dropped to zero count is looked for', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(false);
+
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 0 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(true);
+		// Answered without a product carrying Drinks: it goes, and the list is no longer held.
+		carrying.emit('categories', [1, 5], [{ categories: [{ id: 5 }] }]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5]);
+		expect(browse.current.pending).toBe(false);
+	});
+
+	// A term new to the source at zero count (a fresh record from taxonomy sync) was never shown:
+	// while its existence read is pending it is unknown, and unknown is hidden — never a live
+	// tile that blinks out when the read answers. The terms shown before are held meanwhile.
+	it('hides a newly synced zero-count term until its existence read answers, holding the terms shown before', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// Visible {Drinks}; Counter (zero count) was asked about and is not carried: hidden.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		carrying.emit('categories', [5], []);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		// Kiosk syncs in at zero count: the read for {Counter, Kiosk} is pending — Drinks stays,
+		// Kiosk is not shown as live.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		// A product carries Kiosk: shown.
+		carrying.emit('categories', [5, 6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+		// Answered again with nothing carrying it: hidden.
+		carrying.emit('categories', [5, 6], []);
+		expect(ids()).toEqual([1]);
+	});
+
+	it('holds the terms shown before while the FIRST zero-count term is looked for, the new one hidden', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// No zero-count terms: nothing to look for, the list is settled.
+		terms.emit('products/categories:true', [{ id: 1, name: 'Drinks', parent: 0, count: 12 }]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		carrying.emit('categories', [6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+	});
+
 	it("has no terms after a source switch until the new source's own query answers", () => {
 		const names = (all: BrowseTerm[] | undefined) =>
 			all?.map((term) => term.kind === 'term' && term.name);

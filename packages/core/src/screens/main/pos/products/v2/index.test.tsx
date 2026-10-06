@@ -28,6 +28,8 @@ let mockDataTableProps: Record<string, unknown> = {};
 let mockGridProps: Record<string, unknown> = {};
 let mockFilterBarProps: Record<string, unknown> = {};
 let mockBrowseStageProps: Record<string, unknown> | null = null;
+let mockBrowseStageMounts = 0;
+let mockScopeKey = '0:0';
 let mockShowOutOfStock = false;
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
@@ -68,6 +70,7 @@ jest.mock('../../../../../query', () => {
 	return {
 		...actual,
 		useRelationalCollectionBinding: (state: unknown) => mockUseRelationalCollectionBinding(state),
+		useScopeKey: () => mockScopeKey,
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -217,6 +220,8 @@ describe('POSProducts query-state wiring', () => {
 		mockGridProps = {};
 		mockFilterBarProps = {};
 		mockBrowseStageProps = null;
+		mockBrowseStageMounts = 0;
+		mockScopeKey = '0:0';
 		mockBrowseBy = undefined;
 		mockShowOutOfStock = false;
 		mockSortBy = 'name';
@@ -430,7 +435,7 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().limit).toBe(20);
 	});
 
-	it('puts the browse stage in place of the products in a browse mode, until a search', () => {
+	it('puts the browse stage in place of the products in a browse mode', () => {
 		mockBrowseBy = 'categories';
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories', viewMode: 'table' });
@@ -440,20 +445,42 @@ describe('POSProducts query-state wiring', () => {
 			level: 'products',
 			initialFilters: { status: 'publish', stock_status: 'instock' },
 		});
-
-		// A search is served by today's stack, whose variable products drill.
-		mockBrowseStageProps = null;
-		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
-		expect(screen.getByTestId('products-pane-stack')).toBeTruthy();
-		expect(mockBrowseStageProps).toBeNull();
 	});
 
-	// The query compiler trims the term, so blanks search for nothing.
-	it('keeps the browse stage for a whitespace-only search', () => {
+	it('hands the browse stage the screen’s plumbing, and its drill sets the filter bar’s level', () => {
 		mockBrowseBy = 'categories';
 		render(<POSProducts />);
-		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('  '));
-		expect(latestState().search).toBe('  ');
+		expect(mockBrowseStageProps).toMatchObject({
+			binding: mockBinding,
+			// The baseline its root measures the query against (term set, or displaced products).
+			initialFilters: { status: 'publish', stock_status: 'instock' },
+			variationsStyle: 'drill',
+			stockStatus: 'instock',
+			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),
+			actions: expect.objectContaining({ extendLimit: expect.any(Function) }),
+			tableConfig: expect.objectContaining({
+				meta: expect.objectContaining({ variationStockStatus: 'instock' }),
+			}),
+		});
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+		render(mockBrowseStageProps?.empty as React.ReactElement);
+		expect(screen.getByTestId('no-data-message')).toBeTruthy();
+
+		const onDrilledChange = mockBrowseStageProps?.onDrilledChange as (drilled: boolean) => void;
+		act(() => onDrilledChange(true));
+		expect(mockFilterBarProps.level).toBe('variations');
+		act(() => onDrilledChange(false));
+		expect(mockFilterBarProps.level).toBe('products');
+	});
+
+	// The stage owns search: it drops its path and shows the catalogue-wide products itself, so
+	// a search never swaps the stage out (a shortcut's own search would bounce it otherwise).
+	it('keeps the browse stage, not the products stack, under a search', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		mockBrowseStageProps = null;
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
+		expect(latestState().search).toBe('lat');
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
 		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
 	});
@@ -475,6 +502,35 @@ describe('POSProducts query-state wiring', () => {
 		rerender(<POSProducts />);
 		expect(mockFilterBarProps.level).toBe('products');
 	});
+
+	// A same-site store or cashier switch keeps the source, search, filters and path, and changes
+	// the database the products are read from: the stage's drill and held answers are stale.
+	it('remounts the browse stage when the scope changes, and only then', () => {
+		mockBrowseBy = 'categories';
+		const { rerender } = render(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(2);
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+	});
+
+	it('drops a product drill when the scope changes', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
+			onDrill: (record: unknown) => void;
+		}>;
+		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
 });
 
 // The new rows and tiles are tested in their own suites.
@@ -488,6 +544,11 @@ jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }
 jest.mock('./browse/browse-stage', () => ({
 	BrowseStage: (props: Record<string, unknown>) => {
 		mockBrowseStageProps = props;
+		// A mount is a fresh stage: its drill, held answers and snapshots start empty.
+		const { useEffect } = jest.requireActual('react');
+		useEffect(() => {
+			mockBrowseStageMounts += 1;
+		}, []);
 		return null;
 	},
 }));

@@ -97,6 +97,12 @@ interface CommonProps<TData extends RowData> {
 	tableConfig?: DataTableConfig<TData>;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
+	/**
+	 * Replaces the table's own end-reached (`actions.extendLimit` behind its guard) for a caller
+	 * that guards and arms its paging itself (a browse level, which pages on its own rows and
+	 * re-fires an end-reached the guard ignored while pending).
+	 */
+	onEndReached?: () => void;
 }
 
 type BindingProps<TSortField extends string> = {
@@ -153,6 +159,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		tableConfig,
 		getItemType,
 		ListFooterComponent,
+		onEndReached,
 	} = props;
 	const pointer = usePointer();
 	const resource = props.resource;
@@ -303,7 +310,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 							parentComponent={TableBody as unknown as typeof import('react-native').View}
 							getItemType={getItemType}
 							onEndReachedThreshold={0.1}
-							onEndReached={handleEndReached}
+							onEndReached={onEndReached ?? handleEndReached}
 							ListEmptyComponent={() => {
 								/* "No results" may only ever mean the search ANSWERED with nothing.
 						   A pending search (index building, engine database not bound yet)

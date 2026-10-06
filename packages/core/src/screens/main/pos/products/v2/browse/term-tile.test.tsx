@@ -130,6 +130,16 @@ describe('TermTile', () => {
 		const classes = screen.getByTestId('browse-term-7').getAttribute('data-class-name')!.split(' ');
 		expect(classes).toEqual(expect.arrayContaining(['bg-card', 'active:bg-muted', 'flex-1']));
 	});
+	it('grows to its row in a dealt cell, and shares the row with flex-1 elsewhere', () => {
+		const { rerender } = render(<TermTile term={snacks} onPress={jest.fn()} />);
+		const size = () =>
+			screen.getByTestId('browse-term-8').getAttribute('data-class-name')!.split(' ');
+		expect(size()).toContain('flex-1');
+		expect(size()).not.toContain('grow');
+		rerender(<TermTile term={snacks} onPress={jest.fn()} grow />);
+		expect(size()).toContain('grow');
+		expect(size()).not.toContain('flex-1');
+	});
 	it('lets its picture fade in, and falls back to the placeholder when it fails', () => {
 		render(<TermTile term={drinks} onPress={jest.fn()} />);
 		const image = screen.getByTestId('term-image');

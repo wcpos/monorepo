@@ -26,12 +26,15 @@ import {
 import type { FakeEngine } from '@wcpos/query/testing';
 
 import {
+	EXISTENCE_RECHECK_MS,
 	useAllCategoriesBinding,
+	useAllTermsBinding,
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useLogsBinding,
 	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
+	useScopeKey,
 	useSearchSelect,
 } from './query-bindings';
 import * as queryStateTranslator from './query-state-translator';
@@ -245,6 +248,335 @@ describe('query bindings', () => {
 		expect(engine.requireCalls).toEqual([]);
 	});
 
+	it('compiles the existence read taxonomy filter inside the selling baseline', () => {
+		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
+		const { rerender } = renderHook(
+			({ showOutOfStock }) => useProductsCarryingTermsBinding('tags', [9, 5], { showOutOfStock }),
+			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
+		);
+		const prefilter = () =>
+			(
+				compileQuery.mock.results.at(-1)?.value as ReturnType<
+					typeof queryStateTranslator.compileQuery
+				>
+			).read.prefilter;
+
+		// Tags, categories and brands are all promoted membership columns (tagIds since scope
+		// generation 6, #2404): numeric membership, never a payload scan.
+		const tags = { tagIds: { $in: [5, 9] } };
+		expect(prefilter()).toEqual({
+			$and: [tags, { 'payload.status': 'publish' }, { stockStatus: 'instock' }],
+		});
+
+		rerender({ showOutOfStock: true });
+		expect(prefilter()).toEqual({
+			$and: [tags, { 'payload.status': 'publish' }],
+		});
+		compileQuery.mockRestore();
+	});
+
+	it('lifts a term only for a published product the stage would show (in stock unless shown)', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'stocked', id: 1, status: 'publish', tags: [{ id: 5 }] }),
+			engineProduct({
+				uuid: 'sold-out',
+				id: 2,
+				status: 'publish',
+				stock_status: 'outofstock',
+				tags: [{ id: 6 }],
+			}),
+			engineProduct({ uuid: 'draft', id: 3, status: 'draft', tags: [{ id: 7 }] }),
+		]);
+		const ids = (resource: Resource) =>
+			current(resource)
+				?.hits.map((hit) => hit.id)
+				.sort();
+		const { result, rerender } = renderHook(
+			({ showOutOfStock }) =>
+				useProductsCarryingTermsBinding('tags', [5, 6, 7], { showOutOfStock }),
+			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
+		);
+
+		await waitFor(() => expect(ids(result.current.resource)).toEqual(['stocked']));
+		rerender({ showOutOfStock: true });
+		await waitFor(() => expect(ids(result.current.resource)).toEqual(['sold-out', 'stocked']));
+	});
+
+	it('answers the existence read once, and re-checks a product write only after the window', async () => {
+		jest.useFakeTimers();
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'first', id: 1, status: 'publish', tags: [{ id: 5 }] })
+		);
+		const answers: string[][] = [];
+		const { result, rerender } = renderHook(
+			({ ids }) => useProductsCarryingTermsBinding('tags', ids),
+			{ wrapper: Provider, initialProps: { ids: [5] } }
+		);
+		const subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.map((hit) => hit.id).sort())
+		);
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		expect(answers.at(-1)).toEqual(['first']);
+		const settled = answers.length;
+
+		// A sale-like write inside the window: no re-read, so no new answer.
+		await act(async () => {
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'second', id: 2, status: 'publish', tags: [{ id: 5 }] })
+			);
+		});
+		await act(async () => jest.advanceTimersByTimeAsync(EXISTENCE_RECHECK_MS - 1_000));
+		expect(answers).toHaveLength(settled);
+
+		// The window closes: one re-check, which sees the write.
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		expect(answers).toHaveLength(settled + 1);
+		expect(answers.at(-1)).toEqual(['first', 'second']);
+
+		// Quiet: nothing written, nothing re-read (not a poll).
+		await act(async () => jest.advanceTimersByTimeAsync(EXISTENCE_RECHECK_MS * 3));
+		expect(answers).toHaveLength(settled + 1);
+		subscription.unsubscribe();
+
+		// A changed id set is a new read, answered at once — not at the window's end.
+		rerender({ ids: [5, 6] });
+		const next: string[][] = [];
+		const nextSubscription = result.current.result$.subscribe((answer) =>
+			next.push(answer.hits.map((hit) => hit.id).sort())
+		);
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		expect(next.at(-1)).toEqual(['first', 'second']);
+		nextSubscription.unsubscribe();
+	});
+
+	const residentCategory = (id: number, name: string) => ({
+		uuid: `category-${id}`,
+		remoteId: String(id),
+		remoteKey: String(id),
+		payload: { id, name },
+		sync: { revision: '1', partial: false, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	});
+
+	it('reads resident terms without declaring a refresh when asked for residents only', async () => {
+		await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		const subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		await waitFor(() => expect(answers.at(-1)).toBe(1));
+		expect(engine.requireCalls).toEqual([]);
+		subscription.unsubscribe();
+
+		// The stage's binding still fetches.
+		renderHook(() => useAllTermsBinding('products/categories'), { wrapper: Provider });
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+	});
+
+	it('pulls an empty collection once for a residents-only read, unanswered until the pull settles', async () => {
+		let settle: (() => void) | undefined;
+		const require = engine.require;
+		engine.require = (requirement) => {
+			const handle = require(requirement);
+			if (requirement.kind !== 'refresh') return handle;
+			const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
+				settle = () => void handle.ready.then(resolve);
+			});
+			return { ...handle, ready };
+		};
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		const latest = () => result.current.result$;
+		let subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
+
+		// A fresh till: no residents is not an answer while the one refresh is in flight.
+		await waitFor(() =>
+			expect(engine.requireCalls).toEqual([
+				expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+			])
+		);
+		await act(async () => Promise.resolve());
+		expect(answers).toEqual([]);
+
+		// Settled and still empty: the collection's own answer — no terms (dimmed).
+		await act(async () => settle?.());
+		subscription.unsubscribe();
+		subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
+		await waitFor(() => expect(answers.at(-1)).toBe(0));
+		// One pull, then residents-only again: nothing re-declared.
+		expect(engine.requireCalls).toHaveLength(1);
+		subscription.unsubscribe();
+	});
+
+	it('pulls the new store’s empty collection again when the engine changes under a residents-only read', async () => {
+		let active: FakeEngine = engine;
+		function Swappable({ children }: { children: React.ReactNode }) {
+			return <Provider value={active}>{children}</Provider>;
+		}
+		const answers: number[] = [];
+		const { result, rerender } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Swappable }
+		);
+		let subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		// The first store's one-shot: pulled, settled, answered empty.
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+		await waitFor(() => {
+			subscription.unsubscribe();
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			expect(answers.at(-1)).toBe(0);
+		});
+		subscription.unsubscribe();
+
+		// A store switch: a new engine, its collection empty too — pulled once again.
+		const next = createFakeEngine(engineDB);
+		active = next;
+		rerender();
+		await waitFor(() =>
+			expect(next.requireCalls).toEqual([
+				expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+			])
+		);
+		expect(engine.requireCalls).toHaveLength(1);
+	});
+
+	it('pulls the new scope’s empty collection again when a same-site switch keeps the engine', async () => {
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		let subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		// The first scope's one-shot: pulled, settled, answered empty.
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+		await waitFor(() => {
+			subscription.unsubscribe();
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			expect(answers.at(-1)).toBe(0);
+		});
+		subscription.unsubscribe();
+
+		// A store or cashier switch on the same site: `scope.switch()` keeps the engine and bumps
+		// every collection's coverage generation. The new scope's collection is empty too.
+		act(() => engine.setCollectionStatus('categories', { coverageGeneration: 1 }));
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(2));
+		expect(engine.requireCalls.at(-1)).toEqual(
+			expect.objectContaining({ kind: 'refresh', collection: 'categories' })
+		);
+		// …and once only: settled, the empty answer is the new scope's own, and nothing more is
+		// declared.
+		answers.length = 0;
+		await waitFor(() => {
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			subscription.unsubscribe();
+			expect(answers.at(-1)).toBe(0);
+		});
+		expect(engine.requireCalls).toHaveLength(2);
+	});
+
+	it('answers nothing for a same-site switch into an empty scope while its pull runs, never the old scope’s terms', async () => {
+		// The same engine over two scopes' databases, switched as the engine does: the database
+		// first (`db$`), the coverage generation a microtask later — before the new database's
+		// read has answered.
+		const scopeB = await createEngineDatabase(['categories']);
+		let activeDatabase: RxDatabase = engineDB;
+		const databaseListeners = new Set<(database: RxDatabase | null) => void>();
+		const active = engine.active;
+		engine.active = () => ({ ...active()!, database: activeDatabase }) as never;
+		engine.db$ = ((listener: (database: RxDatabase | null) => void) => {
+			databaseListeners.add(listener);
+			return () => databaseListeners.delete(listener);
+		}) as never;
+		try {
+			await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
+			const { result } = renderHook(
+				() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+				{ wrapper: Provider }
+			);
+			const before: number[] = [];
+			const first = result.current.result$.subscribe((answer) => before.push(answer.hits.length));
+			await waitFor(() => expect(before.at(-1)).toBe(1));
+			first.unsubscribe();
+			expect(engine.requireCalls).toEqual([]);
+
+			// Scope B holds no terms; its pull is held in flight.
+			let settle: (() => void) | undefined;
+			const require = engine.require;
+			engine.require = (requirement) => {
+				const handle = require(requirement);
+				if (requirement.kind !== 'refresh') return handle;
+				const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
+					settle = () => void handle.ready.then(resolve);
+				});
+				return { ...handle, ready };
+			};
+			const scopeA$ = result.current.result$;
+			const during: number[] = [];
+			act(() => {
+				activeDatabase = scopeB;
+				databaseListeners.forEach((listener) => listener(scopeB));
+				engine.setCollectionStatus('categories', { coverageGeneration: 1 });
+				// Subscribed in the same tick as the switch: the read has not answered for B yet.
+			});
+			// A new stream for the new scope: whoever attributes answers to it starts unanswered…
+			expect(result.current.result$).not.toBe(scopeA$);
+			const second = result.current.result$.subscribe((answer) => during.push(answer.hits.length));
+			await waitFor(() =>
+				expect(engine.requireCalls).toEqual([
+					expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+				])
+			);
+			// …and stays so while the pull runs: never scope A's one term.
+			expect(during).toEqual([]);
+			second.unsubscribe();
+
+			await act(async () => settle?.());
+			const after: number[] = [];
+			await waitFor(() => {
+				const third = result.current.result$.subscribe((answer) => after.push(answer.hits.length));
+				third.unsubscribe();
+				expect(after.at(-1)).toBe(0);
+			});
+		} finally {
+			if (!scopeB.destroyed) await scopeB.remove();
+		}
+	});
+
+	it('moves the scope key on a same-site switch and on a new engine, and holds it otherwise', () => {
+		let active: FakeEngine = engine;
+		function Swappable({ children }: { children: React.ReactNode }) {
+			return <Provider value={active}>{children}</Provider>;
+		}
+		const { result, rerender } = renderHook(() => useScopeKey('products'), {
+			wrapper: Swappable,
+		});
+		const first = result.current;
+		rerender();
+		expect(result.current).toBe(first);
+
+		// A same-site store or cashier switch: the same engine, the products' generation bumped.
+		act(() => engine.setCollectionStatus('products', { coverageGeneration: 1 }));
+		const switched = result.current;
+		expect(switched).not.toBe(first);
+
+		// A cross-site change: a new engine, whose generation starts at 0 again.
+		active = createFakeEngine(engineDB);
+		rerender();
+		expect(result.current).not.toBe(switched);
+		expect(result.current).not.toBe(first);
+	});
+
 	it('compiles the tag existence read to promoted tag membership, never a payload scan', async () => {
 		await engineDB.collections.products.bulkInsert([
 			engineProduct({ uuid: 'tagged', id: 1, status: 'publish', tags: [{ id: 5 }] }),
@@ -260,8 +592,13 @@ describe('query bindings', () => {
 				typeof queryStateTranslator.compileQuery
 			>
 		).read.prefilter;
+		// Inside the selling baseline (the test above): in stock unless out-of-stock is shown.
 		expect(prefilter).toEqual({
-			$and: [{ tagIds: { $in: [5, 9] } }, { 'payload.status': 'publish' }],
+			$and: [
+				{ tagIds: { $in: [5, 9] } },
+				{ 'payload.status': 'publish' },
+				{ stockStatus: 'instock' },
+			],
 		});
 		expect(JSON.stringify(prefilter)).not.toContain('payload.tags');
 		await waitFor(() =>

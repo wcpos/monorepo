@@ -43,8 +43,9 @@ import {
 	useQueryStateActions,
 	useQueryStateStore,
 	useRelationalCollectionBinding,
+	useScopeKey,
 } from '../../../../../query';
-import { cellsForRow, filtersAtBaseline } from '../index';
+import { cellsForRow } from '../index';
 import { ProductRow as ProductRowView } from './rows/product-row';
 import { VariableProductRow } from './rows/variable-product-row';
 import { ProductTile } from './grid/product-tile';
@@ -54,6 +55,7 @@ import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
+import { filtersAtBaseline } from './browse/use-browse-path';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
@@ -200,6 +202,10 @@ function POSProductsContent({
 	const viewMode = useDocField(uiSettings, (value) => value.viewMode) === 'grid' ? 'grid' : 'table';
 	const variationsStyle = useDocField(uiSettings, (value) => value.variationsStyle) ?? 'drill';
 	const browseBy = readBrowseBy(useDocField(uiSettings, (value) => value.browseBy));
+	// The scope the products are read from: a same-site store or cashier switch changes it with
+	// no change to the source, search, filters or path, and the stage's drill, held answers and
+	// snapshots are the previous scope's records.
+	const scopeKey = useScopeKey('products');
 	// A drill-in remembers the search it opened under: typing a new product search is a return
 	// to the products (the search writes to the outer query, which the pane does not show).
 	const [drill, setDrill] = React.useState<{
@@ -215,13 +221,17 @@ function POSProductsContent({
 		[state.search]
 	);
 	// A drill does not outlive its stage: a browse source taking over (or handing back) starts
-	// from its root, never under the old variations' filter bar, nor resurrecting their pane.
-	// Dropped while rendering (React's "previous render" pattern), so no frame shows it.
-	const [drillStage, setDrillStage] = React.useState(browseBy);
-	if (drillStage !== browseBy) {
-		setDrillStage(browseBy);
+	// from its root, never under the old variations' filter bar, nor resurrecting their pane; a
+	// scope switch drops it too (its record is the previous scope's). Dropped while rendering
+	// (React's "previous render" pattern), so no frame shows it.
+	const stageKey = `${browseBy}:${scopeKey}`;
+	const [drillStage, setDrillStage] = React.useState(stageKey);
+	if (drillStage !== stageKey) {
+		setDrillStage(stageKey);
 		setDrill(null);
 	}
+	// A product drilled inside the browse stage: the stage owns that drill; the filter bar reads it.
+	const [browseDrilled, setBrowseDrilled] = React.useState(false);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
@@ -429,7 +439,7 @@ function POSProductsContent({
 							</ErrorBoundary>
 							<ErrorBoundary>
 								<POSFilterBar
-									level={drilled ? 'variations' : 'products'}
+									level={drilled || browseDrilled ? 'variations' : 'products'}
 									initialFilters={initialFilters}
 								/>
 							</ErrorBoundary>
@@ -471,17 +481,26 @@ function POSProductsContent({
 						}}
 					>
 						<ErrorBoundary>
-							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. A
-							    search is served by today's stack in every mode for now, so its
-							    variable products drill (the browse stage takes it over in Slice 2). Blank
-							    is no search, trimmed as the query compiler trims it. Keyed by source: a
-							    switch starts the stage afresh. */}
-							{browseBy !== 'all' && state.search.trim() === '' ? (
+							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
+							    a browse source on, the stage owns search too: a search drops the path and
+							    shows the catalogue-wide products at its root, drilling into the stage's
+							    own drill; a shortcut's own search keeps its level. Keyed by source and
+							    scope: either switch starts the stage afresh. */}
+							{browseBy !== 'all' ? (
 								<BrowseStage
-									key={browseBy}
+									key={stageKey}
 									source={browseBy}
 									viewMode={viewMode}
 									renderProducts={renderProducts}
+									empty={noDataMessage}
+									variationsStyle={variationsStyle}
+									stockStatus={stockStatusFilter}
+									binding={binding}
+									state={state}
+									actions={tableActions}
+									tableConfig={tableConfig}
+									onDrilledChange={setBrowseDrilled}
+									initialFilters={initialFilters}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack

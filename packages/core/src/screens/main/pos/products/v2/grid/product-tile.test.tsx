@@ -14,6 +14,12 @@ jest.mock('react-native', () => {
 		View: ({ className, ...props }: React.ComponentProps<typeof actual.View>) => (
 			<actual.View {...props} dataSet={{ className }} />
 		),
+		Pressable: jest.requireActual('react').forwardRef(function Pressable(
+			{ className, ...props }: React.ComponentProps<typeof actual.Pressable>,
+			ref: React.Ref<unknown>
+		) {
+			return <actual.Pressable {...props} ref={ref} dataSet={{ className }} />;
+		}),
 	};
 });
 
@@ -78,8 +84,10 @@ jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
 jest.mock('../../grid/variable-product-tile', () => ({
-	VariableProductTile: ({ record }: { record: { uuid: string } }) => (
-		<div data-testid="inline-tile">{record.uuid}</div>
+	VariableProductTile: ({ record, grow }: { record: { uuid: string }; grow?: boolean }) => (
+		<div data-testid="inline-tile" data-grow={String(!!grow)}>
+			{record.uuid}
+		</div>
 	),
 }));
 const record = {
@@ -215,6 +223,50 @@ it('steps aside while its copy is out on the stage, and only then', () => {
 	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('');
 	rerender(tile({ uuid: 'product' }));
 	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('0');
+	// A browse level stages its product drill, not the record: the drilled tile steps aside too.
+	rerender(tile({ kind: 'term', term: { kind: 'all' } }));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('');
+	rerender(tile({ kind: 'product', record: { uuid: 'another' } }));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('');
+	rerender(tile({ kind: 'product', record: { uuid: 'product' } }));
+	expect(screen.getByTestId('variable-product-tile').style.opacity).toBe('0');
+});
+it('grows to its row in a dealt cell, and shares the row with flex-1 elsewhere', () => {
+	const { rerender } = render(<ProductTile record={record} gridFields={gridFields} />);
+	const size = () =>
+		(screen.getByTestId('product-tile').getAttribute('data-class-name') ?? '').split(' ');
+	expect(size()).toContain('flex-1');
+	expect(size()).not.toContain('grow');
+	rerender(<ProductTile record={record} gridFields={gridFields} grow />);
+	expect(size()).toContain('grow');
+	expect(size()).not.toContain('flex-1');
+	rerender(
+		<VariableProductTile
+			record={record}
+			gridFields={gridFields}
+			variationsStyle="drill"
+			onDrill={jest.fn()}
+			grow
+		/>
+	);
+	expect(
+		(screen.getByTestId('variable-product-tile').getAttribute('data-class-name') ?? '').split(' ')
+	).toContain('grow');
+});
+it('hands a dealt cell’s grow to the inline variable tile, and only there', () => {
+	const inline = (grow?: boolean) => (
+		<VariableProductTile
+			record={record}
+			gridFields={gridFields}
+			variationsStyle="inline"
+			onDrill={jest.fn()}
+			grow={grow}
+		/>
+	);
+	const { rerender } = render(inline());
+	expect(screen.getByTestId('inline-tile').getAttribute('data-grow')).toBe('false');
+	rerender(inline(true));
+	expect(screen.getByTestId('inline-tile').getAttribute('data-grow')).toBe('true');
 });
 
 it('shows the minimum variable price with from and keeps sale strikethrough', () => {

@@ -34,6 +34,12 @@ import { useAnswerOf } from './use-answer-of';
 export type BrowseTerms = {
 	/** Every visible term of the source, in order; undefined until the collection has answered. */
 	all: BrowseTerm[] | undefined;
+	/**
+	 * The existence read for the current zero-count terms has not answered: `all` is the list
+	 * held from the last answer meanwhile (no blink), so a term missing from it is UNKNOWN, not
+	 * gone. False when there is nothing to look for.
+	 */
+	pending: boolean;
 	rootsOf: () => BrowseTerm[];
 	childrenOf: (term: BrowseTerm) => BrowseTerm[];
 	idsFor: (term: BrowseTerm) => number[];
@@ -57,12 +63,14 @@ const NO_IDS: ReadonlySet<number> = new Set();
 /**
  * Pure: the taxonomy records → the source's terms. Exported for its test. `knownNonEmpty`
  * undefined is an existence read that has not answered yet: the source is then unanswered too,
- * as it is before its records arrive — a zero-count term may yet be shown.
+ * as it is before its records arrive — a zero-count term may yet be shown. `pending`: the read
+ * for the current zero-count terms is in flight and `knownNonEmpty` is a held answer.
  */
 export function projectTerms(
 	records: TermRecord[] | undefined,
 	source: TaxonomySource,
-	knownNonEmpty: ReadonlySet<number> | undefined
+	knownNonEmpty: ReadonlySet<number> | undefined,
+	pending = false
 ): BrowseTerms {
 	const payloads = (records ?? []).map((record) => record.payload);
 	const byId = new Map(payloads.map((term) => [term.id, term]));
@@ -73,6 +81,7 @@ export function projectTerms(
 			known === undefined
 				? undefined
 				: orderTerms(visibleTerms(payloads, known), hierarchical).map(toTerm),
+		pending,
 		rootsOf: () =>
 			known === undefined
 				? []
@@ -108,6 +117,7 @@ export function projectShortcuts(
 	}));
 	return {
 		all: terms,
+		pending: false,
 		rootsOf: () => terms,
 		childrenOf: () => [],
 		idsFor: () => [],
@@ -120,6 +130,7 @@ export function projectShortcuts(
 
 const NONE: BrowseTerms = {
 	all: [],
+	pending: false,
 	rootsOf: () => [],
 	childrenOf: () => [],
 	idsFor: () => [],
@@ -129,10 +140,22 @@ const NONE: BrowseTerms = {
 type Hit<T> = { record: T };
 type ProductRecord = { payload: Partial<Record<TaxonomySource, { id?: number }[]>> };
 
+type TaxonomyTermsOptions = {
+	/** Read the till's resident terms — the settings dialog's counts (see `useAllTermsBinding`). */
+	residentsOnly?: boolean;
+	/** The products baseline: without it, only an in-stock product lifts a zero-count term. */
+	showOutOfStock?: boolean;
+};
+
 /** One taxonomy's terms; no taxonomy (a shortcuts stage) binds nothing, in the same hook order. */
-function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
+function useTaxonomyTerms(
+	source: TaxonomySource | undefined,
+	{ residentsOnly = false, showOutOfStock = false }: TaxonomyTermsOptions = {}
+): BrowseTerms {
 	const taxonomy = source ?? 'categories';
-	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined);
+	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined, {
+		residentsOnly,
+	});
 	// Read as state, never suspend: the tiles are on a stage that must not swap for a skeleton.
 	// THIS collection's answer: a source switch is unanswered until its own query emits, never
 	// the previous taxonomy's records projected as the new source.
@@ -153,7 +176,7 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 				.map((hit) => hit.record.payload.id),
 		[hits]
 	);
-	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds);
+	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds, { showOutOfStock });
 	// THIS id set's answer (a disabled read emits its empty answer on subscribe).
 	const products = useAnswerOf(carrying.result$)?.hits as Hit<ProductRecord>[] | undefined;
 	// Keyed on the sorted ids, so a product write that leaves the set as it was keeps the same
@@ -177,25 +200,75 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 	// Otherwise the source is unanswered until the products have answered — a POS-only store's
 	// terms are all zero-count, and must not read as empty while their read is in flight.
 	const existence = zeroCountIds.length === 0 ? NO_IDS : carried;
-	// A changed id set is a new read: the last answer holds meanwhile, so the stage does not
-	// collapse for a frame (state set while rendering — React's "previous render" pattern). Only
-	// a products read's own answer is held: the disabled read's "nothing to lift" says nothing
-	// about zero-count terms, and holding it would hide them all on a POS-only store's first load.
+	// A new existence read (a changed id set, or the same set re-read) is PENDING, and the last
+	// answer holds meanwhile, so the stage does not blink (state set while rendering — React's
+	// "previous render" pattern). Held, the visible list stays what it was: the last answer for
+	// the ids it asked about, and every term that has just dropped to zero count — visible a
+	// moment ago, and not asked about yet — kept. `pending` says the list is held: a term missing
+	// from it is unknown, not deleted, so an open path on it stays. Only a products read's own
+	// answer is held: the disabled read's "nothing to lift" says nothing about zero-count terms,
+	// and holding it would hide them all on a POS-only store's first load.
+	const zeroCountKey = [...zeroCountIds].sort((a, b) => a - b).join(',');
 	const [held, setHeld] = React.useState<{
 		taxonomy: TaxonomySource;
+		key: string;
 		ids: ReadonlySet<number>;
 	}>();
 	if (carried !== undefined && zeroCountIds.length > 0)
-		if (held?.ids !== carried || held.taxonomy !== taxonomy) setHeld({ taxonomy, ids: carried });
-	const knownNonEmpty = existence ?? (held?.taxonomy === taxonomy ? held.ids : undefined);
+		if (held?.ids !== carried || held.taxonomy !== taxonomy || held.key !== zeroCountKey)
+			setHeld({ taxonomy, key: zeroCountKey, ids: carried });
+	const looking = hits !== undefined && existence === undefined;
+	// What the last SETTLED projection showed: every term with a count, and every zero-count term
+	// its read found carried. Keyed on the sorted ids (state set while rendering — the "previous
+	// render" pattern), and recorded only while nothing is being looked for, so through a pending
+	// read it is the set from BEFORE the recount: what that read may preserve, and no more.
+	const settledKey = React.useMemo(() => {
+		if (hits === undefined || existence === undefined) return undefined;
+		const ids = new Set<number>(existence);
+		for (const hit of hits) if ((hit.record.payload.count ?? 0) > 0) ids.add(hit.record.payload.id);
+		return [...ids].sort((a, b) => a - b).join(',');
+	}, [hits, existence]);
+	const [shownBefore, setShownBefore] = React.useState<{ taxonomy: TaxonomySource; key: string }>();
+	if (
+		settledKey !== undefined &&
+		(shownBefore?.taxonomy !== taxonomy || shownBefore.key !== settledKey)
+	)
+		setShownBefore({ taxonomy, key: settledKey });
+	// A term new to the zero-count set is kept through the read only if it was KNOWN VISIBLE
+	// before the recount (a term that has just dropped to zero count). One the previous answer
+	// never showed — a fresh zero-count record from taxonomy sync — is neither known visible nor
+	// known empty: a pending existence read is unknown, and unknown is hidden, never a live tile
+	// that blinks out when the read answers.
+	const heldKnown = React.useMemo(() => {
+		const before =
+			shownBefore?.taxonomy === taxonomy
+				? new Set(shownBefore.key === '' ? [] : shownBefore.key.split(',').map(Number))
+				: undefined;
+		const zero = zeroCountKey === '' ? [] : zeroCountKey.split(',').map(Number);
+		if (held !== undefined && held.taxonomy === taxonomy) {
+			if (held.key === zeroCountKey) return held.ids;
+			const asked = new Set(held.key === '' ? [] : held.key.split(',').map(Number));
+			return new Set([
+				...held.ids,
+				...zero.filter((id) => !asked.has(id) && before !== undefined && before.has(id)),
+			]);
+		}
+		// No products read has answered yet (there were no zero-count terms to ask about): the
+		// settled list is held the same way. Nothing to hold before the first settled answer — a
+		// POS-only store's first load reads unanswered until its read answers, never as empty.
+		if (before === undefined || before.size === 0) return undefined;
+		return new Set(zero.filter((id) => before.has(id)));
+	}, [held, taxonomy, zeroCountKey, shownBefore]);
+	const knownNonEmpty = existence ?? heldKnown;
 	return React.useMemo(
 		() =>
 			projectTerms(
 				hits?.map((hit) => hit.record),
 				taxonomy,
-				knownNonEmpty
+				knownNonEmpty,
+				looking
 			),
-		[hits, taxonomy, knownNonEmpty]
+		[hits, taxonomy, knownNonEmpty, looking]
 	);
 }
 
@@ -203,15 +276,23 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
  * How many terms each source would show — for the settings row's count and its dimming.
  * `undefined` until the source's collection has answered: a source that is still loading is
  * not an empty one, and the dialog can open before the browse bindings have (All products).
+ * Resident terms only: opening the dialog pulls nothing (the reference seed lane keeps the
+ * terms current, and the stage's own binding refreshes the source it shows) — except a source
+ * with no residents, which is pulled once and reads unanswered until that pull settles, so a
+ * fresh till does not dim every source as empty.
  */
 export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | undefined> {
-	const categories = useTaxonomyTerms('categories');
-	const tags = useTaxonomyTerms('tags');
-	const brands = useTaxonomyTerms('brands');
 	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	const options = { residentsOnly: true, showOutOfStock };
+	const categories = useTaxonomyTerms('categories', options);
+	const tags = useTaxonomyTerms('tags', options);
+	const brands = useTaxonomyTerms('brands', options);
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
+	// A held list is not a count: while its existence read is pending the row shows none (and is
+	// not dimmed).
 	const answered = (terms: BrowseTerms) =>
-		terms.all === undefined ? undefined : terms.rootsOf().length;
+		terms.all === undefined || terms.pending ? undefined : terms.rootsOf().length;
 	return {
 		categories: answered(categories),
 		tags: answered(tags),
@@ -221,9 +302,10 @@ export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | und
 }
 
 export function useBrowseTerms(source: BrowseBy): BrowseTerms {
-	// Only the active source is read (the settings dialog's counts read all three).
-	const taxonomy = useTaxonomyTerms(isTaxonomy(source) ? source : undefined);
 	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	// Only the active source is read (the settings dialog's counts read all three).
+	const taxonomy = useTaxonomyTerms(isTaxonomy(source) ? source : undefined, { showOutOfStock });
 	const filterBar = useDocField(uiSettings, (value) => value.filterBar);
 	const t = useT();
 	const { format } = useCurrencyFormat();

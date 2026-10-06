@@ -4,20 +4,25 @@ import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
+	defer,
 	firstValueFrom,
 	from,
+	merge,
 	Observable,
 	of,
 	race,
 	timer,
 } from 'rxjs';
 import {
+	auditTime,
 	distinctUntilChanged,
+	exhaustMap,
 	filter,
 	map,
 	shareReplay,
 	startWith,
 	switchMap,
+	take,
 } from 'rxjs/operators';
 
 import {
@@ -27,6 +32,7 @@ import {
 	LEGACY_SEARCH_FIELDS,
 	observeCollectionActive,
 	observeCoverage,
+	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryResult,
 	useLocalQuery,
@@ -207,6 +213,32 @@ function useCoverageGeneration(engine: RxdbSyncEngine, collection: SyncCollectio
 		[collection, engine]
 	);
 	return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+// A number per engine, so a scope key can carry the engine's identity in a string.
+const engineKeys = new WeakMap<RxdbSyncEngine, number>();
+let nextEngineKey = 0;
+function engineKeyOf(engine: RxdbSyncEngine): number {
+	let key = engineKeys.get(engine);
+	if (key === undefined) {
+		key = nextEngineKey++;
+		engineKeys.set(engine, key);
+	}
+	return key;
+}
+
+/**
+ * The scope a collection is read from now, as a string: the engine (a cross-site change brings a
+ * new one) and the collection's coverage generation (a same-site `scope.switch()` keeps the engine
+ * and changes its database in place, and bumps every collection's generation; a reset of the
+ * collection bumps it too, and leaves it empty). The same identity `useAllTermsBinding` keys its
+ * one-shot refresh to. A surface holding records across renders keys itself to this, so a scope
+ * switch starts it afresh instead of showing the previous scope's records.
+ */
+export function useScopeKey(collection: LegacyCollectionName): string {
+	const { engine } = useQueryRuntime();
+	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
+	return `${engineKeyOf(engine)}:${generation}`;
 }
 
 function useDemand(
@@ -655,11 +687,41 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 	};
 }
 
+/**
+ * A read answered once, then asked again at most once per `windowMs` after its collection is
+ * written — never a live query, whose every write re-runs it. A write starts the window; more
+ * writes inside it are the same re-check, and the answer converges at the window's end. A new
+ * database (scope move, reset) is asked at once.
+ */
+function recheckedRead$<T>(
+	read$: Observable<T>,
+	collection$: Observable<{ eventBulks$: Observable<unknown> } | null>,
+	windowMs: number
+): Observable<T> {
+	const once$ = defer(() => read$.pipe(take(1)));
+	return collection$.pipe(
+		distinctUntilChanged(),
+		switchMap((collection) =>
+			collection
+				? merge(
+						once$,
+						collection.eventBulks$.pipe(
+							auditTime(windowMs),
+							exhaustMap(() => once$)
+						)
+					)
+				: once$
+		)
+	);
+}
+
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
 	compiled: CompiledQuery,
 	enabled = true,
-	compiledId?: string
+	compiledId?: string,
+	/** Not live: re-check at most this often after a write (see `recheckedRead$`). */
+	recheckMs?: number
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
 	whenReady(): Promise<DemandReadiness>;
@@ -692,14 +754,25 @@ function useEngineBinding(
 	);
 	const result$ = React.useMemo(() => {
 		if (!enabled) return of(emptyResult());
-		return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+		const read$ = observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
 			map((result) => ({
 				...result,
 				searchActive: Boolean((descriptor.read?.search ?? descriptor.search)?.trim()),
-			})),
-			shareReplay({ bufferSize: 1, refCount: true })
+			}))
 		);
-	}, [descriptor, enabled, runtime.engine, runtime.locale]);
+		const collectionName = engineCollectionNameFor(descriptor.collection);
+		return (
+			recheckMs === undefined
+				? read$
+				: recheckedRead$(
+						read$,
+						observeEngineDatabases(runtime.engine).pipe(
+							map((database) => database?.collections[collectionName] ?? null)
+						),
+						recheckMs
+					)
+		).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+	}, [descriptor, enabled, recheckMs, runtime.engine, runtime.locale]);
 	const census$ = React.useMemo(
 		() =>
 			compiled.censusScoped
@@ -1113,26 +1186,74 @@ export function useSearchSelect(
 
 export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
-/** Full reference-lane residents of one product taxonomy: the category tree, the browse tiles. */
+/**
+ * Whether a (non-empty) result's rows were read from the database the engine has active now: a
+ * read's replayed answer can be the previous scope's for the moment between a scope switch and
+ * the new database's first answer. With no active database to compare (or a row that does not
+ * say where it came from), it is taken as read.
+ */
+function readFromActiveScope(engine: RxdbSyncEngine, result: QueryResult<RxCollection>): boolean {
+	const active = engine.active()?.database;
+	const source = result.hits[0]?.record.collection?.database;
+	return !active || !source || source === active;
+}
+
+/**
+ * Full reference-lane residents of one product taxonomy: the category tree, the browse tiles.
+ * `residentsOnly` reads what the till holds and declares no refresh — for a surface that only
+ * summarises (the settings dialog's counts), so opening it pulls nothing; the reference seed
+ * lane and the stage's own binding keep the residents current.
+ *
+ * Except an empty collection: a fresh till holds no terms until the reference lane lands, and
+ * no residents is not an answer then. While it has none, a residents-only binding declares ONE
+ * refresh, and its `result$` withholds the empty answer until that refresh has settled — met,
+ * released or failed — so a still-loading source reads unanswered, never empty. The refresh,
+ * once declared, stands until it settles (releasing it mid-pull would abort it) and is then
+ * dropped; an empty answer after that is the collection's own. Residents present: no demand.
+ * The one-shot is the ENGINE's, the collection's and the SCOPE's: a cross-site change (a new
+ * engine from `QueryProvider`) and a same-site store or cashier switch (the same engine,
+ * `scope.switch()`, which bumps every collection's coverage generation — as a collection reset
+ * does) both start over, so the new scope's empty collection is pulled too.
+ */
 export function useAllTermsBinding(
 	collection: 'products/categories' | 'products/tags' | 'products/brands',
-	enabled = true
+	enabled = true,
+	{ residentsOnly = false }: { residentsOnly?: boolean } = {}
 ) {
 	const bindingId = React.useId();
-	const compiled = React.useMemo(
-		() =>
-			compileQuery(
-				collection,
-				{
-					search: '',
-					filters: {},
-					sort: { field: 'name', direction: 'asc' },
-				},
-				{ id: bindingId }
-			),
-		[bindingId, collection]
-	);
-	return useEngineBinding(
+	const { engine } = useQueryRuntime();
+	// The scope the engine reads now: a same-site switch keeps the engine and changes its
+	// database in place, and bumps this generation (so does a reset of the collection).
+	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
+	// The empty-collection refresh: 'idle' until an empty answer, 'pull' while declared, then
+	// 'done' — for the engine, collection and generation it was recorded under; any other
+	// reads 'idle'.
+	const [refreshFor, setRefreshFor] = React.useState<{
+		engine: RxdbSyncEngine;
+		collection: string;
+		generation: number;
+		phase: 'idle' | 'pull' | 'done';
+	}>({ engine, collection, generation, phase: 'idle' });
+	const refresh =
+		refreshFor.engine === engine &&
+		refreshFor.collection === collection &&
+		refreshFor.generation === generation
+			? refreshFor.phase
+			: 'idle';
+	const pulling = residentsOnly && refresh === 'pull';
+	const compiled = React.useMemo(() => {
+		const query = compileQuery(
+			collection,
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'name', direction: 'asc' },
+			},
+			{ id: bindingId }
+		);
+		return residentsOnly && !pulling ? { ...query, demand: [] } : query;
+	}, [bindingId, collection, pulling, residentsOnly]);
+	const binding = useEngineBinding(
 		{
 			collection,
 			selector: {},
@@ -1142,6 +1263,49 @@ export function useAllTermsBinding(
 		enabled,
 		bindingId
 	);
+	const watchEmpty = residentsOnly && enabled && refresh === 'idle';
+	const residents$ = binding.result$;
+	React.useEffect(() => {
+		if (!watchEmpty) return undefined;
+		const subscription = residents$.subscribe((result) => {
+			if (result.hits.length === 0)
+				setRefreshFor({ engine, collection, generation, phase: 'pull' });
+		});
+		return () => subscription.unsubscribe();
+	}, [collection, engine, generation, residents$, watchEmpty]);
+	// Runs after the demand effect (declared earlier, inside `useEngineBinding`), so the barrier
+	// it waits on is the refresh this commit declared.
+	const { whenReady } = binding;
+	React.useEffect(() => {
+		if (!pulling || !enabled) return undefined;
+		let live = true;
+		void whenReady().then(() => {
+			if (live) setRefreshFor({ engine, collection, generation, phase: 'done' });
+		});
+		return () => {
+			live = false;
+		};
+	}, [collection, enabled, engine, generation, pulling, whenReady]);
+	// A disabled binding's empty answer is its answer (it is never pending).
+	const withholdEmpty = residentsOnly && enabled && refresh !== 'done';
+	// The withheld stream is one per SCOPE: a same-site switch keeps the engine (and so the very
+	// same `residents$`), and its new scope may be empty — a stream kept across the switch would
+	// withhold the new scope's empty answer while its pull runs, and `useAnswerOf` would go on
+	// showing the old scope's terms. A new stream is unanswered until it emits. And it passes
+	// only the ACTIVE scope's rows: the engine swaps the database first and bumps the generation
+	// a microtask later, before the new database's read has answered, so `residents$` still
+	// replays the old scope's terms to the new stream — they are not this scope's answer.
+	const withheldFor = withholdEmpty ? generation : null;
+	const result$ = React.useMemo(
+		() =>
+			withheldFor === null
+				? residents$
+				: residents$.pipe(
+						filter((result) => result.hits.length > 0 && readFromActiveScope(engine, result))
+					),
+		[engine, residents$, withheldFor]
+	);
+	return React.useMemo(() => ({ ...binding, result$ }), [binding, result$]);
 }
 
 export function useAllCategoriesBinding() {
@@ -1149,15 +1313,28 @@ export function useAllCategoriesBinding() {
 }
 
 /**
+ * How often the existence read may re-check after a product write. Which zero-count terms a
+ * POS-only product keeps on the stage changes when the catalogue does, not per sale — and
+ * every sale writes stock, so a live read would re-run per sale. Half a minute keeps a newly
+ * synced product's term appearing promptly without paying for the read on every write.
+ */
+export const EXISTENCE_RECHECK_MS = 30_000;
+
+/**
  * The local products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
- * category/tag/brand pill applies. Local only, no remote pull: whether a zero-count term has
- * products is decided by what the till has synced, since the catalogue recount is the
- * storefront's. An empty id list would compile to no filter (every product), so the binding
- * is disabled then: no read at all.
+ * category/tag/brand pill applies (categories and brands are promoted id columns; tags are a
+ * payload scan, bounded here by the re-check window). Local only, no remote pull: whether a
+ * zero-count term has products is decided by what the till has synced, since the catalogue
+ * recount is the storefront's. An empty id list would compile to no filter (every product), so
+ * the binding is disabled then: no read at all.
+ *
+ * Not live: answered once, then re-checked at most every `EXISTENCE_RECHECK_MS` after a write.
+ * The engine has no field projection, so the answer is still the matching records.
  */
 export function useProductsCarryingTermsBinding(
 	taxonomy: 'categories' | 'tags' | 'brands',
-	termIds: readonly number[]
+	termIds: readonly number[],
+	{ showOutOfStock = false }: { showOutOfStock?: boolean } = {}
 ) {
 	const bindingId = React.useId();
 	const idsKey = [...new Set(termIds)].sort((a, b) => a - b).join(',');
@@ -1167,21 +1344,30 @@ export function useProductsCarryingTermsBinding(
 			'products',
 			{
 				search: '',
-				// Published only, as the selling surface reads: a cached draft must not keep its
-				// zero-count term on the stage. Catalogue visibility is not filtered — a published
-				// product hidden from the catalogue is exactly what this read is for.
-				filters: { categories: [], tags: [], brands: [], status: 'publish', [taxonomy]: ids },
+				// The selling surface's baseline, so a lifted term opens onto something: published
+				// only (a cached draft must not keep its zero-count term on the stage), and in stock
+				// unless the merchant shows out-of-stock products. Catalogue visibility is not
+				// filtered — a published product hidden from the catalogue is what this read is for.
+				filters: {
+					categories: [],
+					tags: [],
+					brands: [],
+					status: 'publish',
+					...(showOutOfStock ? {} : { stock_status: 'instock' }),
+					[taxonomy]: ids,
+				},
 				sort: { field: 'name', direction: 'asc' },
 			},
 			{ id: bindingId }
 		);
 		return { ...query, demand: [] };
-	}, [bindingId, idsKey, taxonomy]);
+	}, [bindingId, idsKey, showOutOfStock, taxonomy]);
 	return useEngineBinding(
 		{ collection: compiled.collection, read: compiled.read },
 		compiled,
 		idsKey !== '',
-		bindingId
+		bindingId,
+		EXISTENCE_RECHECK_MS
 	);
 }
 

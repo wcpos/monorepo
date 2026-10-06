@@ -28,6 +28,12 @@ type Deal = {
 	origin: Rect | null | undefined;
 	/** Where the tiles are headed: out on the grid, or back in the parent. */
 	dealt: boolean;
+	/**
+	 * The deal has had time to land every tile. Until then a cell that mounts (a cold level's
+	 * answer filling more slots, a list rendering its next batch) joins the deal in the air
+	 * rather than painting at rest among tiles still flying.
+	 */
+	landed: boolean;
 	stageWidth: number;
 	/**
 	 * The dealt grid's frame within the stage, where its slots rest: `undefined` until the grid
@@ -45,6 +51,7 @@ type Deal = {
 const AT_REST: Deal = {
 	origin: null,
 	dealt: true,
+	landed: true,
 	stageWidth: 0,
 	grid: null,
 	placeGrid: () => {},
@@ -56,6 +63,9 @@ export const DealStagedContext = React.createContext<unknown>(null);
 
 export const useDeal = () => React.useContext(DealContext);
 
+// A stack inside a detail that is cross-fading away: it holds what it shows until it goes.
+const DealHeldContext = React.createContext(false);
+
 // The tile's `m-1`: a cell is the tile plus this much on every side.
 const TILE_MARGIN = 4;
 // The parent and the tiles come from one frame; a variation fades in over the first of its travel.
@@ -64,6 +74,12 @@ const SCALE_FROM = 0.92;
 // How long the stage waits for the tile's frame and the pane's first layout before it deals
 // in place. Both normally arrive within two frames; a tap must never be lost to a measurement.
 const MEASURE_GRACE = 120;
+// The whole deal, from the frame it sets off to the last tile landing: the parent's walk, or
+// the capped stagger of the tiles and one landing, whichever is longer.
+const DEAL_SPAN = Math.max(
+	PANE,
+	(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
+);
 const REDUCE = { reduceMotion: ReduceMotion.System };
 
 // Web only: covered products leave the tab order and the accessibility tree but keep their
@@ -78,8 +94,36 @@ export type DealStackProps<T> = {
 	renderDetail: (detail: T) => React.ReactNode;
 	/** The root grid. It stays mounted underneath the detail. */
 	children: React.ReactNode;
+	/**
+	 * The detail leaves by cross-fading rather than gathering: it fades out where it stands while
+	 * the root fades in, and the stacks inside it hold still. For a jump back of more than one
+	 * level, where a gather would walk each level's parent home to a slot of ITS level, over
+	 * tiles of this one, with every level ghosting over the others (web film, 2026-10-06).
+	 */
+	collapse?: boolean;
 	testID?: string;
 };
+
+/**
+ * The clocks a cross-fade leaves (the veil down, the furniture up, the products coming in) put
+ * back at rest for the next detail: shown, its furniture still to fade in with its deal. Every
+ * clock is cancelled BEFORE anything is read or set: a clock started on this very frame
+ * (`withTiming(0)` not yet advanced) still reads its old value, and left running it would hide
+ * the new detail and run its completion under it. Called only after a cross-fade was started
+ * (`fadePending`), never after a gather, which leaves the veil up and runs the furniture home
+ * itself.
+ */
+function restAfterCrossFade(
+	veil: SharedValue<number>,
+	furniture: SharedValue<number>,
+	under: SharedValue<number>
+): void {
+	cancelAnimation(veil);
+	cancelAnimation(furniture);
+	cancelAnimation(under);
+	veil.value = 1;
+	furniture.value = 0;
+}
 
 /**
  * A grid of tiles and the grid of one tile's children, on one stage (owner's pick,
@@ -95,6 +139,7 @@ export function DealStack<T>({
 	target,
 	renderDetail,
 	children,
+	collapse = false,
 	testID,
 }: DealStackProps<T>) {
 	const stage = React.useRef<ViewInstance>(null);
@@ -104,6 +149,8 @@ export function DealStack<T>({
 	// the variations gather (the gaps between gathering tiles showed them at once, which
 	// read as a flash) and reach full on the frame the parent lands (owner, 2026-10-05).
 	const under = useSharedValue(1);
+	// The detail's own opacity: 1 but while it cross-fades away.
+	const veil = useSharedValue(1);
 	const [stageWidth, setStageWidth] = React.useState(0);
 	// The detail on stage outlives `detail` by one return, so its tiles can travel home.
 	const [staged, setStaged] = React.useState<T | null>(null);
@@ -112,9 +159,17 @@ export function DealStack<T>({
 	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
 	const [dealt, setDealt] = React.useState(false);
 	const [settled, setSettled] = React.useState(false);
-	const open = detail !== null;
-	if (open && detail !== staged) {
-		setStaged(detail);
+	// Not `settled`: that is the furniture's clock, which runs out long before the last tile lands.
+	const [landed, setLanded] = React.useState(false);
+	const [fading, setFading] = React.useState(false);
+	// Inside a detail that is cross-fading away, a stack keeps what it has on stage: its detail
+	// clears in the same render (the path was cut under it), and a gather would walk its parent
+	// home inside a surface that is already leaving.
+	const held = React.useContext(DealHeldContext);
+	const shown = held && detail === null ? staged : detail;
+	const open = shown !== null;
+	if (open && shown !== staged) {
+		setStaged(shown);
 		setGeneration(generation + 1);
 		setOrigin(undefined);
 		setGrid(undefined);
@@ -144,9 +199,29 @@ export function DealStack<T>({
 			})
 		);
 	}, []);
+	// A cross-fade is decided in the render that hears of the close, before any tile turns home.
+	if (!open && collapse && staged !== null && !fading) setFading(true);
+	if (open && fading) setFading(false);
 	if (!open && settled) setSettled(false);
-	// Closing turns the tiles for home in the same render that hears of it.
-	if (!open && dealt) setDealt(false);
+	if (!open && landed) setLanded(false);
+	// Closing turns the tiles for home in the same render that hears of it; a cross-fade leaves
+	// them where they stand.
+	if (!open && dealt && !collapse && !fading) setDealt(false);
+	// A leaving detail's clock (a gather's, a cross-fade's) clears the stage when it runs out —
+	// only if the stage still holds the detail it was started for. A clock whose cancel came a
+	// frame late (a tile opened on the first frame of a cross-fade) runs out under a NEWER
+	// detail, and must never clear what it did not stage. After a cross-fade the tiles are put
+	// back undealt for the next deal too.
+	const clearedBy = React.useCallback((asked: number, afterFade: boolean) => {
+		if (current.current !== asked) return;
+		setStaged(null);
+		if (afterFade) {
+			setFading(false);
+			setDealt(false);
+		}
+	}, []);
+	// A cross-fade started and not yet put to rest for the next detail (see restAfterCrossFade).
+	const fadePending = React.useRef(false);
 
 	// What had focus when the tile was tapped (the tile) gets it back when the parent walks
 	// home, if the control that sent it home was inside the dealt grid, which is leaving. Focus
@@ -192,12 +267,28 @@ export function DealStack<T>({
 
 	const armed = origin !== undefined && grid !== undefined;
 	React.useEffect(() => {
+		// The staging this clock is started for: its completion clears the stage only for it.
+		const asked = current.current;
+		if (!open && fading) {
+			// Out where it stands, and the root in over it, on one clock: nothing travels. A frame
+			// later, as the deal sets off: the cut that sent it is a heavy commit, and a clock started
+			// under it had spent half the fade before its first frame painted (web film, 2026-10-06).
+			fadePending.current = true;
+			const frame = requestAnimationFrame(() => {
+				veil.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
+					'worklet';
+					if (finished) scheduleOnRN(clearedBy, asked, true);
+				});
+				under.value = withTiming(1, { duration: PANE, easing: EASE, ...REDUCE });
+			});
+			return () => cancelAnimationFrame(frame);
+		}
 		if (!open) {
 			// The products and the parent share one clock: the detail leaves the stage on the frame
 			// the parent tile reaches home, and the breadcrumb is gone before it passes underneath.
 			furniture.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
 				'worklet';
-				if (finished) scheduleOnRN(setStaged, null);
+				if (finished) scheduleOnRN(clearedBy, asked, false);
 			});
 			under.value = withTiming(1, { duration: PANE, easing: EASE_EXIT, ...REDUCE });
 			return;
@@ -206,11 +297,15 @@ export function DealStack<T>({
 		// detail when it ran out, taking the new tile's measurement with it.
 		cancelAnimation(furniture);
 		cancelAnimation(under);
+		// So does a tap during a cross-fade: the new detail is shown whole (its veil was put back
+		// up before its first paint, above).
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
+		let landing: ReturnType<typeof setTimeout> | undefined;
 		const frame = requestAnimationFrame(() => {
 			setDealt(true);
+			landing = setTimeout(() => setLanded(true), DEAL_SPAN);
 			furniture.value = withTiming(
 				1,
 				{ duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE },
@@ -221,25 +316,45 @@ export function DealStack<T>({
 			);
 			under.value = withTiming(0, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE });
 		});
-		return () => cancelAnimationFrame(frame);
-	}, [open, armed, furniture, under]);
+		return () => {
+			cancelAnimationFrame(frame);
+			clearTimeout(landing);
+		};
+	}, [open, armed, fading, clearedBy, furniture, under, veil]);
+
+	// A detail put on stage after (or during) a cross-fade starts every opacity clock from rest,
+	// before its first paint. A gather runs the furniture home to 0 and leaves the veil up; a
+	// cross-fade leaves the veil down and the furniture up — the new detail would mount hidden,
+	// then snap in a frame later, with its crumb and footer there whole instead of joining its
+	// deal. A layout effect, on the staging itself: `origin` and `grid` are reset the same way, in
+	// the render that stages it. On the fact that a fade was started, never on what its clock
+	// reads: on the fade's first frame the veil still reads 1.
+	React.useLayoutEffect(() => {
+		if (!open || !fadePending.current) return;
+		fadePending.current = false;
+		restAfterCrossFade(veil, furniture, under);
+	}, [open, generation, furniture, under, veil]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
 			origin,
 			dealt,
+			landed,
 			stageWidth,
 			grid,
 			placeGrid,
 			furniture,
 		}),
-		[origin, dealt, stageWidth, grid, placeGrid, furniture]
+		[origin, dealt, landed, stageWidth, grid, placeGrid, furniture]
 	);
 
 	// Clamped for the reason `PaneStack` clamps: a first frame stamped before the animation's
 	// start asks the easing for a negative time.
 	const rootStyle = useAnimatedStyle(() => ({
 		opacity: Math.min(1, Math.max(0, under.value)),
+	}));
+	const veilStyle = useAnimatedStyle(() => ({
+		opacity: Math.min(1, Math.max(0, veil.value)),
 	}));
 
 	return (
@@ -252,8 +367,9 @@ export function DealStack<T>({
 			{/* The tapped tile steps aside only once its copy can stand on it — the copy needs the
 			    grid's frame as well as the tile's, and on Android the two arrive frames apart:
 			    lifting on the tile's frame alone left the slot empty for two frames (Pixel,
-			    2026-10-05; then the crumb's height, now the grid's own measured frame). */}
-			<DealStagedContext.Provider value={origin && grid !== undefined ? staged : null}>
+			    2026-10-05; then the crumb's height, now the grid's own measured frame). In a
+			    cross-fade no copy comes home, so the tile is back in the root that fades in. */}
+			<DealStagedContext.Provider value={origin && grid !== undefined && !fading ? staged : null}>
 				<Animated.View
 					className="flex-1"
 					aria-hidden={open}
@@ -272,7 +388,11 @@ export function DealStack<T>({
 						aria-hidden={!open}
 						style={{ pointerEvents: open ? 'auto' : 'none' }}
 					>
-						{renderDetail(staged)}
+						<DealHeldContext.Provider value={held || fading}>
+							<Animated.View className="flex-1" style={veilStyle}>
+								{renderDetail(staged)}
+							</Animated.View>
+						</DealHeldContext.Provider>
 					</View>
 				</DealContext.Provider>
 			)}
@@ -284,15 +404,18 @@ export function DealStack<T>({
  * One slot of the dealt grid. Slot 0 is the parent tile, which travels from the tapped
  * tile's frame; every other slot starts underneath it and lands in turn.
  *
- * A slot's resting place is arithmetic within the grid's measured frame (column, row, the
- * tapped tile's height): only slot 0 has to start exactly on the tapped tile, and its place is
- * exact because the frame is measured, not assumed to be the stage.
+ * A slot's resting place is within the grid's measured frame: its column, and its row's top.
+ * The row's top is measured when the grid gives it (`restY`); otherwise it is arithmetic on the
+ * tapped tile's height, which holds while every row is that tall. Only slot 0 has to start
+ * exactly on the tapped tile, and its place is exact because the frame is measured, not assumed
+ * to be the stage.
  */
 export function DealCell({
 	index,
 	count,
 	columns,
 	scroll,
+	restY,
 	children,
 }: {
 	index: number;
@@ -301,15 +424,28 @@ export function DealCell({
 	columns: number;
 	/** The grid's scroll offset: a scrolled grid gathers from where its tiles are on screen. */
 	scroll?: SharedValue<number>;
+	/**
+	 * The top of this slot's row within the grid's frame, unscrolled, where the grid measured it.
+	 * A grid whose rows differ in height (term tiles above taller product tiles) gives it, so a
+	 * cell below a taller row starts under the parent rather than a row's difference away.
+	 */
+	restY?: number;
 	children: React.ReactNode;
 }) {
-	const { origin, dealt, stageWidth, grid } = useDeal();
-	const travel = useSharedValue(dealt ? 1 : 0);
+	const { origin, dealt, landed, stageWidth, grid } = useDeal();
+	// A cell that mounts while the deal is still in the air (more slots than the placeholders
+	// held, the list's next batch) starts under the parent, unseen, and is dealt from there, so it
+	// is not painted at rest while the first row still flies. One that mounts after the deal has
+	// landed is simply where it belongs: nothing animates on mount.
+	const atRest = dealt && landed;
+	const travel = useSharedValue(atRest ? 1 : 0);
 	const parent = index === 0;
 
 	// A cell sets off only when its direction changes. `count` moves while a cold query fills
 	// its placeholders; a tile already in the air must not stop for a fresh delay.
-	const aimed = React.useRef(dealt);
+	const aimed = React.useRef(atRest);
+	// Joining late, its turn in the stagger has already come: it sets off at once.
+	const late = React.useRef(dealt && !landed);
 	React.useEffect(() => {
 		if (aimed.current === dealt) return;
 		aimed.current = dealt;
@@ -319,7 +455,8 @@ export function DealCell({
 		}
 		// Out: in order, each landing on the beat. Back: last out is first home, speeding up
 		// into the parent rather than creeping onto it.
-		const turn = dealt ? index - 1 : count - 1 - index;
+		const turn = dealt ? (late.current ? 0 : index - 1) : count - 1 - index;
+		late.current = false;
 		const beat = dealt ? BEATS.newTiles : BEATS.oldTiles;
 		travel.value = withDelay(
 			Math.min(turn, beat.cap - 1) * beat.step,
@@ -337,15 +474,26 @@ export function DealCell({
 	const fromX = flies
 		? origin.x - (frame.x + (index % columns) * (frame.width / columns) + TILE_MARGIN)
 		: 0;
-	const fromY = flies
-		? origin.y -
-			(frame.y + Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN) + TILE_MARGIN)
+	const rowTop = flies
+		? (restY ?? Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN))
 		: 0;
+	const fromY = flies ? origin.y - (frame.y + rowTop + TILE_MARGIN) : 0;
 	// Hidden until BOTH the tile's frame and the grid's frame are known: the offset needs both,
 	// and on Android the two measurements answer frames apart, so a cell that waited for the
 	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile
 	// (Pixel, 2026-10-05, when the second was the crumb's height). The stage arms on the same pair.
 	const waiting = origin === undefined || grid === undefined;
+	// The offset is a shared value written as the commit lands, not a value the worklet closes
+	// over. A closed-over value reaches the view only when the style's mapper restarts: on web
+	// in a passive effect, then the next animation frame. When a heavy commit (a term level's
+	// list) yields to the browser before its passive effects run, the frame that dropped UNSEEN
+	// painted the parent at its own slot, and it snapped onto the tapped tile a frame later (web
+	// film, 2026-10-06). Written in a layout effect, the mapper reruns in that commit's
+	// microtask, before the paint.
+	const offset = useSharedValue({ x: fromX, y: fromY, flies });
+	React.useLayoutEffect(() => {
+		offset.value = { x: fromX, y: fromY, flies };
+	}, [offset, fromX, fromY, flies]);
 
 	const style = useAnimatedStyle(() => {
 		// Clamped for the reason the stage clamps: a first frame stamped before the animation's
@@ -354,9 +502,10 @@ export function DealCell({
 		// (Pixel, 2026-10-05) — `1 - travel` went negative.
 		const t = Math.min(1, Math.max(0, travel.value));
 		const left = 1 - t;
+		const from = offset.value;
 		const translate = [
-			{ translateX: fromX * left },
-			{ translateY: (flies ? fromY + (scroll?.value ?? 0) : 0) * left },
+			{ translateX: from.x * left },
+			{ translateY: (from.flies ? from.y + (scroll?.value ?? 0) : 0) * left },
 		];
 		// The parent's visibility is NOT in here: a worklet's props land on the UI thread a frame after
 		// the commit on Android, and the tapped tile steps aside at the commit, so the slot was empty

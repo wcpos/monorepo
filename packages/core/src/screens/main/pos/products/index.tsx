@@ -18,6 +18,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { filtersAtBaseline } from './v2/browse/use-browse-path';
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
 import { Price } from './cells/price';
@@ -145,19 +146,6 @@ function TableFooter(props: BindingDataTableFooterProps) {
 /**
  *
  */
-/**
- * True when no filter narrows the list beyond the provider's initial filters: every key
- * either equals its initial value or is empty (unset, an empty string, an empty list).
- */
-export function filtersAtBaseline(
-	filters: Record<string, unknown>,
-	initialFilters: Record<string, unknown>
-): boolean {
-	return Object.entries(filters).every(([key, value]) => {
-		if (key in initialFilters) return JSON.stringify(value) === JSON.stringify(initialFilters[key]);
-		return value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
-	});
-}
 
 function POSProductsContent({
 	isColumn = false,

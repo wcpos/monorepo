@@ -124,6 +124,12 @@ function createStore<C extends CollectionKey>(
 				if (state.limit < pageSize) publish({ ...state, limit: pageSize });
 			},
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
+			setLimit: (limit) => {
+				if (!Number.isInteger(limit) || limit <= 0) {
+					throw new Error('Query state limit must be a positive integer');
+				}
+				publish({ ...state, limit: Math.max(limit, pageSize) });
+			},
 		},
 	};
 }
