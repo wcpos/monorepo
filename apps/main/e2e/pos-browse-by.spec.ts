@@ -17,6 +17,7 @@ import {
 	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
 	type SearchProbe,
+	sweepOrphanedProbeCategories,
 } from './search-probe';
 
 /**
@@ -26,20 +27,36 @@ import {
  * disposable ROOT category under the writer credentials and a probe product in it, so a clean
  * CI store has coverage and no existing category, product or count is ever assumed. In BOTH
  * views it proves the whole pipeline: the root term set shows the new category (a wire pull of
- * the taxonomy on the stage's own demand), opening it shows the probe under its crumb (the
- * level's filtered query), the crumb goes back, and a search typed at the root spans the
- * catalogue and gives the root back on clear.
+ * the taxonomy on the stage's own demand), All products opens as a level and comes back,
+ * opening the category shows the probe under its crumb (the level's filtered query), the crumb
+ * goes back, and a search typed at the root spans the catalogue and gives the root back on clear.
  *
  * The writer credentials are a declared capability: absent, the spec skips with that reason
  * (at collection, before the costly login); present and failing, it fails.
  */
 
 /**
- * The root set is ordered by `menu_order` then name and virtualized, so a term that sorts past
- * the first screen is not in the DOM to be found. A lead that sorts before any letter or digit
- * puts the probe category beside All products on every store; the token keeps it unique.
+ * How a categories stage learns about a category created after the app booted — traced, since
+ * the spec's whole first assertion rests on it:
+ *
+ *  - Mounting the stage declares the taxonomy binding's demand (`useEngineBinding`'s standing
+ *    declaration, `packages/core/src/query/query-bindings.ts` 273–400, `declare(true)`); for
+ *    `products/categories` that demand is one `kind: 'refresh'` requirement
+ *    (`query-state-translator.ts` 648–668).
+ *  - The require plane runs that refresh as an on-demand reference pull
+ *    (`packages/sync-engine/src/require-plane.ts` 1101–1150) and dedupes it ONLY against its
+ *    own last demand pull, in memory, inside `REFERENCE_DEMAND_REFRESH_DEDUPE_MS` (15 s,
+ *    `maintenance/maintenance-lanes.ts` 128); the seed is passed `completedDedupeForMs: 0`, so
+ *    neither met coverage nor the idle lane's 4-minute window suppresses it.
+ *
+ * So a REMOUNT more than 15 s after the previous demand pull forces a fresh wire pull; inside
+ * that window it is served local, and the next wire read is the idle lane's (30 min), which no
+ * spec can wait for. A stage already mounted at boot under a leftover `categories` setting
+ * pulled BEFORE the category existed: the spec therefore parks the setting on `all` first and
+ * mounts the stage afresh after the category is made, and keeps that mount at least the dedupe
+ * window away from boot.
  */
-const CATEGORY_LEAD = '0000 E2E Browse';
+const DEMAND_DEDUPE_WINDOW_MS = 15_000;
 /** The taxonomy pull the stage declares on mount has to reach the wire and come back. */
 const TERM_PULL_TIMEOUT_MS = 45_000;
 /** A level's products are a filtered window: a sync budget, as the category filter spec's. */
@@ -61,18 +78,21 @@ test.describe('Browse by categories', () => {
 		posPage: page,
 		request,
 	}, testInfo) => {
+		// The page booted inside the fixture; this is the latest a boot-time taxonomy pull can be.
+		const bootedAt = Date.now();
 		const storeUrl = getStoreUrl(testInfo);
 		const authorization = await productWriterAuthorization(request, storeUrl);
 		if (!authorization) {
 			throw new Error('Configured product-writer credentials did not produce authorization');
 		}
+		await sweepOrphanedProbeCategories({ request, storeUrl, authorization });
+		// Park the setting on `all` BEFORE the category exists, so no categories stage is up to
+		// have pulled the taxonomy without it (see DEMAND_DEDUPE_WINDOW_MS).
+		await ensureRegisterOpen(page);
+		await setBrowseBy(page, 'all');
+
 		const token = mintSearchProbeToken(testInfo.workerIndex);
-		const category = await createProbeCategory({
-			request,
-			storeUrl,
-			authorization,
-			name: `${CATEGORY_LEAD} ${token}`,
-		});
+		const category = await createProbeCategory({ request, storeUrl, authorization, token });
 		// Everything after the category exists runs inside the cleanup scope: a failure creating
 		// the probe, in the server wait or in the register setup must still delete what was made.
 		let probe: SearchProbe | undefined;
@@ -95,30 +115,47 @@ test.describe('Browse by categories', () => {
 			if (!created.ok) throw new Error(created.reason);
 			probe = created.probe;
 
-			await ensureRegisterOpen(page);
-			const search = page.getByTestId('screen-pos').getByTestId('search-products');
-			const clear = page.getByTestId('search-products-clear');
-			// The probe is resident before the browse starts: a level's products come from the
-			// local replica, and the search is also what proves the store has it.
+			const screen = page.getByTestId('screen-pos');
+			const search = screen.getByTestId('search-products');
+			const clear = screen.getByTestId('search-products-clear');
+			// The store has the probe, and the till has rendered it once: the helper returns on the
+			// server's answer OR a local hit, so the explicit wait after it is what makes the tile
+			// (or row) resident before the browse starts.
 			await searchAndWaitForServer(page, search, 'products', token, probeLocator(page, probe));
+			await expect(probeLocator(page, probe)).toBeVisible({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
 			await clear.click();
-			// `all` first, whatever a leftover setting says: the categories stage then MOUNTS below,
-			// and a mount is the demand that pulls the taxonomy from the wire (a stage already up
-			// since boot would have pulled before the category existed).
-			await setBrowseBy(page, 'all');
-			await setBrowseBy(page, 'categories');
+			await expect(probeLocator(page, probe)).toBeHidden({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
+			// Usually already elapsed; a fast store is the one case this waits for.
+			const sinceBoot = Date.now() - bootedAt;
+			if (sinceBoot < DEMAND_DEDUPE_WINDOW_MS) {
+				await page.waitForTimeout(DEMAND_DEDUPE_WINDOW_MS - sinceBoot);
+			}
 
 			const root = page.getByTestId('browse-root');
+			const allProducts = page.getByTestId('browse-all-products');
 			const term = page.getByTestId(`browse-term-${category.id}`);
+			const crumb = page.getByTestId('products-breadcrumb');
+			const back = page.getByTestId('products-breadcrumb-back');
 			for (const ensureView of [ensureGridView, ensureTableView]) {
+				// Each view's stage mounts fresh: the view is set on the products (`all`), and the
+				// categories stage then mounts in that view with a pull of its own.
+				await setBrowseBy(page, 'all');
 				await ensureView(page);
+				await setBrowseBy(page, 'categories');
 				await expect(root).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
-				await expect(page.getByTestId('browse-all-products')).toBeVisible();
+				await expect(allProducts).toBeVisible();
 				await expect(term).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
+				// All products is a level of its own: the whole catalogue under its crumb, and back.
+				await allProducts.click();
+				await expect(crumb).toBeVisible();
+				await expect(root).toBeHidden();
+				await back.click();
+				await expect(root).toBeVisible();
+				// The category: its products under its crumb, the probe among them.
 				await term.click();
-				await expect(page.getByTestId('products-breadcrumb')).toBeVisible();
+				await expect(crumb).toBeVisible();
 				await expect(probeLocator(page, probe)).toBeVisible({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
-				await page.getByTestId('products-breadcrumb-back').click();
+				await back.click();
 				await expect(root).toBeVisible();
 				// A search at the root spans the catalogue: the term set steps aside for the results.
 				await search.fill(probe.token);
@@ -128,9 +165,8 @@ test.describe('Browse by categories', () => {
 				await expect(root).toBeVisible();
 			}
 		} finally {
-			// Three independent best-effort cleanups: a broken dialog must not keep the probe alive,
-			// and a probe that would not delete must not keep the category.
-			await setBrowseBy(page, 'all').catch(() => undefined);
+			// Three independent best-effort cleanups, the API deletes FIRST: a hung dialog must not
+			// keep the probe alive, and a probe that would not delete must not keep the category.
 			if (probe) {
 				await deleteSearchProbe({
 					request,
@@ -143,6 +179,7 @@ test.describe('Browse by categories', () => {
 			await deleteProbeCategory({ request, storeUrl, authorization, id: category.id }).catch(
 				() => undefined
 			);
+			await setBrowseBy(page, 'all').catch(() => undefined);
 		}
 	});
 });

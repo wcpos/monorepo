@@ -1,4 +1,21 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+
+/**
+ * The products stage under a Browse by source (roadmap#392) opens on its term set, not the
+ * products: `BrowseRootGrid` and `BrowseRootTable` render neither the products grid's scroller
+ * nor the table's header or scroller, so the indicators below would read a browse root as
+ * "neither view". The root carries `browse-root` in both views and `browse-root-rows` (the
+ * table card) only in table view, so the view is told from that pair.
+ */
+function browseRootTable(page: Page): Locator {
+	return page.getByTestId('browse-root-rows').first();
+}
+function browseRootGrid(page: Page): Locator {
+	return page
+		.getByTestId('browse-root')
+		.filter({ hasNot: page.getByTestId('browse-root-rows') })
+		.first();
+}
 
 /**
  * Ensure the POS products list is in table view (not grid view).
@@ -14,6 +31,7 @@ export async function ensureTableView(page: Page) {
 	// The v2 table renders no sortable header on a coarse pointer and no popover button under
 	// the drill-in style; its list root is the one indicator every rendering shares.
 	const tableScroller = page.getByTestId('data-table-scroller-products').first();
+	const browseRoot = browseRootTable(page);
 
 	// Check if table indicators are already present (wait up to 2s for visibility).
 	// Note: isVisible({ timeout }) is deprecated in Playwright v1.40+ and silently ignores timeout.
@@ -28,7 +46,7 @@ export async function ensureTableView(page: Page) {
 				return true;
 			} catch {
 				try {
-					await tableScroller.waitFor({ state: 'visible', timeout: 500 });
+					await tableScroller.or(browseRoot).first().waitFor({ state: 'visible', timeout: 500 });
 					return true;
 				} catch {
 					return false;
@@ -49,7 +67,8 @@ export async function ensureTableView(page: Page) {
 			async () =>
 				(await tableHeader.isVisible().catch(() => false)) ||
 				(await variablePopoverButton.isVisible().catch(() => false)) ||
-				(await tableScroller.isVisible().catch(() => false)),
+				(await tableScroller.isVisible().catch(() => false)) ||
+				(await browseRoot.isVisible().catch(() => false)),
 			{ timeout: 15_000 }
 		)
 		.toBeTruthy();
@@ -62,14 +81,18 @@ export async function ensureTableView(page: Page) {
  */
 export async function ensureGridView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
-	const gridScroller = page.getByTestId('pos-products-grid-scroller');
+	// The products grid's scroller, or a browse root with no table card under it.
+	const gridIndicator = page
+		.getByTestId('pos-products-grid-scroller')
+		.or(browseRootGrid(page))
+		.first();
 
 	// `isVisible()` samples, it does not wait (it is documented as returning immediately). On a
 	// grid that has not painted yet that sample reads false, this helper "corrects" a view that
 	// was already right, and the toggle lands the test in TABLE view — the opposite of what it
 	// was asked for. `waitFor` is the waiting form; the same reasoning is why ensureTableView
 	// above is written this way.
-	const alreadyGrid = await gridScroller
+	const alreadyGrid = await gridIndicator
 		.waitFor({ state: 'visible', timeout: 2_000 })
 		.then(() => true)
 		.catch(() => false);
@@ -79,5 +102,5 @@ export async function ensureGridView(page: Page) {
 
 	await expect(toggle).toBeVisible({ timeout: 15_000 });
 	await toggle.click();
-	await expect(gridScroller).toBeVisible({ timeout: 15_000 });
+	await expect(gridIndicator).toBeVisible({ timeout: 15_000 });
 }

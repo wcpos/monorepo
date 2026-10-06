@@ -1024,6 +1024,21 @@ export async function createOrderArrivalProbe(options: {
 }
 
 /**
+ * The lead of every probe category's name. It sorts before any letter or digit, so on a root
+ * term set ordered by `menu_order` then name (and virtualized: a term past the first screen is
+ * not in the DOM) the probe category sits beside All products on every store; the token after
+ * it keeps the name unique. The sweep below recognises orphans by it.
+ */
+export const PROBE_CATEGORY_LEAD = '0000 E2E Browse';
+/**
+ * A wc/v3 category carries no creation date, so the probe stamps its own in the description:
+ * the sweep's age check reads it back, and a category another run made minutes ago is left alone.
+ */
+const PROBE_CATEGORY_STAMP = /^e2e-created-ms=(\d+)$/;
+/** Orphans older than this are swept; a live run is never this long. */
+const PROBE_CATEGORY_ORPHAN_AGE_MS = 2 * 60 * 60 * 1_000;
+
+/**
  * Create a disposable ROOT product category under the writer credentials, so a browse spec
  * never assumes a category the store happens to have (CLAUDE.md, E2E store-agnostic policy):
  * a clean CI store has coverage too. Default display: it shows its products. The writer is
@@ -1034,12 +1049,18 @@ export async function createProbeCategory(options: {
 	request: APIRequestContext;
 	storeUrl: string;
 	authorization: StoreAuthorization;
-	name: string;
+	token: string;
 }): Promise<{ id: number; name: string }> {
-	const { request, storeUrl, authorization, name } = options;
+	const { request, storeUrl, authorization, token } = options;
+	const name = `${PROBE_CATEGORY_LEAD} ${token}`;
 	const response = await probeRequest(request, 'post', storeUrl, 'products/categories', undefined, {
 		...storeRequestOptions(authorization),
-		data: { name, parent: 0, display: 'default' },
+		data: {
+			name,
+			parent: 0,
+			display: 'default',
+			description: `e2e-created-ms=${Date.now()}`,
+		},
 	});
 	if (!response.ok()) {
 		throw new Error(
@@ -1076,6 +1097,47 @@ export async function deleteProbeCategory(options: {
 	} catch {
 		// Do not print the request error: query-auth stores can include the JWT in its URL.
 		log.warn(`[search-probe] delete products/categories ${id} threw`);
+	}
+}
+
+/**
+ * Best-effort cleanup for probe categories left behind when a prior run was interrupted, so
+ * the root term set stays short (every leftover sorts to its front). Never fails a test.
+ */
+export async function sweepOrphanedProbeCategories(
+	options: Pick<CreateSearchProbeOptions, 'request' | 'storeUrl' | 'authorization'>
+): Promise<void> {
+	const { request, storeUrl, authorization } = options;
+	try {
+		const auth = storeRequestOptions(authorization);
+		const response = await probeGet(request, storeUrl, 'products/categories', {
+			...auth,
+			params: { ...auth.params, search: PROBE_CATEGORY_LEAD, per_page: '100' },
+		});
+		if (!response.ok()) throw new Error(`HTTP ${response.status()}`);
+		const body: unknown = await response.json();
+		if (!Array.isArray(body)) throw new Error('response was not a category list');
+		const cutoff = Date.now() - PROBE_CATEGORY_ORPHAN_AGE_MS;
+		for (const value of body) {
+			const category = asRecord(value);
+			const id = positiveId(category);
+			const name = typeof category?.name === 'string' ? category.name : '';
+			const description =
+				typeof category?.description === 'string' ? category.description.trim() : '';
+			const createdMs = Number(PROBE_CATEGORY_STAMP.exec(description)?.[1] ?? NaN);
+			// Only a stamped probe category is ever swept: a merchant's own category that happens
+			// to carry the lead has no stamp, and an unstamped one is not this helper's to delete.
+			if (
+				id !== null &&
+				name.startsWith(PROBE_CATEGORY_LEAD) &&
+				Number.isFinite(createdMs) &&
+				createdMs < cutoff
+			) {
+				await deleteProbeCategory({ request, storeUrl, authorization, id });
+			}
+		}
+	} catch {
+		log.warn('[search-probe] orphan category sweep failed');
 	}
 }
 
