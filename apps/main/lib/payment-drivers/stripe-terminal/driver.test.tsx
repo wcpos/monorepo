@@ -147,8 +147,21 @@ it('bootstraps before SDK binding and uses the current resolver on each token re
 	await tokenProvider();
 	expect(bootstrap).toHaveBeenLastCalledWith('updated_method');
 	resolveMethod.mockReturnValue(null);
-	await expect(tokenProvider()).rejects.toThrow('Stripe Terminal is not enabled on this store');
-	expect(bootstrap).toHaveBeenCalledTimes(2);
+	// No method yet: the provider waits for one before concluding the store has none…
+	const waiting = tokenProvider();
+	await jest.advanceTimersByTimeAsync(1000);
+	resolveMethod.mockReturnValue({ ...method, id: 'late_method' });
+	await jest.advanceTimersByTimeAsync(200);
+	await expect(waiting).resolves.toBe('fresh');
+	expect(bootstrap).toHaveBeenLastCalledWith('late_method');
+	// …and gives up only after the wait.
+	resolveMethod.mockReturnValue(null);
+	const rejected = expect(tokenProvider()).rejects.toThrow(
+		'Stripe Terminal is not enabled on this store'
+	);
+	await jest.advanceTimersByTimeAsync(5000);
+	await rejected;
+	expect(bootstrap).toHaveBeenCalledTimes(3);
 });
 it('connects without a token and uses the handoff method hint until cleared', async () => {
 	await discover();
@@ -194,6 +207,21 @@ it.each([
 // The SDK can hold a reader the driver no longer knows about (a logout or store switch resets
 // the driver, not the SDK), so the release runs on every scan; the driver's own state only
 // changes when it believed it was connected.
+it('a "not connected" answer while the driver believed it was connected counts as released', async () => {
+	await discover();
+	await driver.connect(info, handoff);
+	api.disconnectReader.mockClear();
+	api.disconnectReader.mockResolvedValueOnce({
+		error: { code: 'NOT_CONNECTED_TO_READER', message: 'No reader is connected.' },
+	});
+	const pending = driver.discoverReaders('bluetooth');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.disconnectReader).toHaveBeenCalledTimes(1);
+	expect(driver.status$.get()).toMatchObject({ connection: 'discovering', reader: null });
+	driver.callbacks.onFinishDiscoveringReaders();
+	await expect(pending).resolves.toEqual([]);
+	expect(driver.status$.get().connection).toBe('disconnected');
+});
 it.each([true, false])(
 	'releases the SDK reader before every scan (connected=%s)',
 	async (connected) => {
@@ -363,6 +391,20 @@ it('a scan started mid-reconnect clears the reader the SDK kept, so the result n
 	await expect(pending).resolves.toEqual([]);
 	expect(driver.status$.get()).toMatchObject({ connection: 'disconnected', reader: null });
 });
+// The reader already has the card and the SDK is confirming: nothing to cancel, nothing to report.
+it.each(['CancelFailedAlreadyCompleted', 'CANCEL_FAILED_ALREADY_COMPLETED'])(
+	'cancel treats %s as "too late", not as an error',
+	async (code) => {
+		api.cancelCollectPaymentMethod.mockResolvedValueOnce({ error: { code, message: 'done' } });
+		await expect(driver.cancel()).resolves.toBeUndefined();
+	}
+);
+it('cancel still reports a real failure', async () => {
+	api.cancelCollectPaymentMethod.mockResolvedValueOnce({
+		error: { code: 'CANCEL_FAILED', message: 'No collect in progress' },
+	});
+	await expect(driver.cancel()).rejects.toThrow('No collect in progress');
+});
 // iOS and the simulator say `Canceled`; the Android SDK says `CANCELED` (a WisePad 3 cancel
 // from the till rendered as "reader_error" until both were accepted, 2026-10-06).
 it.each([
@@ -411,6 +453,9 @@ it('without `until`, a discovered reader does not end the scan early', async () 
 it.each([
 	{ code: 'DeclinedByStripeAPI', declineCode: 'insufficient_funds' },
 	{ code: 'DeclinedByStripeAPI' },
+	// The Android SDK spells the same code from its catalogue.
+	{ code: 'DECLINED_BY_STRIPE_API' },
+	{ code: 'DECLINED_BY_STRIPE_API', declineCode: 'insufficient_funds' },
 	{ code: 'DeclinedByStripeAPI', apiError: { declineCode: 'expired_card' } },
 ])('maps a confirmation decline: %j', async (error) => {
 	api.confirmPaymentIntent.mockResolvedValue({ error: { ...error, message: 'declined' } });
@@ -605,7 +650,11 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 		]);
 		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
 		expect(api.initialize).not.toHaveBeenCalled();
-		await expect(tokenProvider()).rejects.toThrow('not enabled');
+		const notEnabled = expect(tokenProvider()).rejects.toThrow('not enabled');
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(5000);
+		});
+		await notEnabled;
 		descriptors([
 			{
 				...method,
@@ -648,7 +697,13 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 		expect(getDriver('stripe')).toBe(registered);
 		descriptors([]);
 		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
-		await expect(tokenProvider()).rejects.toThrow('Stripe Terminal is not enabled on this store');
+		const rejected = expect(tokenProvider()).rejects.toThrow(
+			'Stripe Terminal is not enabled on this store'
+		);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(5000);
+		});
+		await rejected;
 		descriptors([
 			{
 				...method,
