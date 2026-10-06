@@ -104,18 +104,21 @@ export function SaleCompletionBridge(): null {
 			}
 		};
 		// Awaited once per replay, and only when an order is missing: a resident order never waits.
-		let legacyReport: Promise<string | null> | null = null;
+		// `unknown`: the active scope's report did not arrive within the bound. The replay goes on,
+		// but whether that database holds an order is UNKNOWN — read like an uncountable report,
+		// never as "nothing kept" (three slow starts must not abandon a completion it still holds).
+		let legacyReport: Promise<{ database: string | null; unknown: boolean }> | null = null;
 		const legacyDrainReported = () =>
 			(legacyReport ??= (async () => {
-				const legacyDatabase = await activeLegacyDatabase();
-				if (legacyDatabase === null || current.stopped) return legacyDatabase;
-				const result = await awaitLegacyUnsentReport(legacyDatabase, LEGACY_DRAIN_REPORT_WAIT_MS);
+				const database = await activeLegacyDatabase();
+				if (database === null || current.stopped) return { database, unknown: false };
+				const result = await awaitLegacyUnsentReport(database, LEGACY_DRAIN_REPORT_WAIT_MS);
 				if (result === 'timed-out') {
 					logger.warn('Replaying sale completions without the previous database version report', {
 						context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
 					});
 				}
-				return legacyDatabase;
+				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) =>
 			(await findEngineResident(
@@ -140,14 +143,16 @@ export function SaleCompletionBridge(): null {
 					}
 					if (!resident) {
 						// A kept previous-generation database still holds work for THIS order — or the active
-						// scope's one could not be counted at all (it failed to open), so it MAY: either way
+						// scope's one could not be counted (it failed to open, or its report did not arrive
+						// within the bound), so it MAY: either way
 						// the order is not resident YET, which is not a missed start, and abandoning it would
 						// drop a captured payment's completion. A later start with a countable report counts.
-						const legacyDatabase = await legacyDrainReported();
+						const legacy = await legacyDrainReported();
 						if (current.stopped) return;
 						const keptInLegacyDatabase =
 							legacyUnsentOrderUuids().has(uuid) ||
-							(legacyDatabase !== null && legacyUnsentReportUncountable(legacyDatabase));
+							legacy.unknown ||
+							(legacy.database !== null && legacyUnsentReportUncountable(legacy.database));
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
 							expectAt: attempt.at,
 							missingStart: !keptInLegacyDatabase,

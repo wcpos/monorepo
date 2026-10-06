@@ -311,7 +311,7 @@ describe('a previous-generation database the drain keeps', () => {
 		);
 	});
 
-	it('replays without the report once the bounded wait elapses, and warns once', async () => {
+	it('replays once the bounded wait elapses, warns once, and does NOT count the start (unknown)', async () => {
 		await record();
 		await record('second-order');
 		mockFind.mockResolvedValue(null);
@@ -322,15 +322,56 @@ describe('a previous-generation database the drain keeps', () => {
 		render(<SaleCompletionBridge />);
 		await waitFor(async () => {
 			const pending = await pendingCompletions(mockContext.storeDB);
-			expect(pending.order).toMatchObject({ attempts: 1, missingStarts: 1 });
-			expect(pending['second-order']).toMatchObject({ attempts: 1, missingStarts: 1 });
+			expect(pending.order).toMatchObject({ attempts: 1, lastError: 'order_not_resident' });
+			expect(pending['second-order']).toMatchObject({ attempts: 1 });
 		});
+		const pending = await pendingCompletions(mockContext.storeDB);
+		expect(pending.order?.missingStarts).toBeUndefined();
+		expect(pending['second-order']?.missingStarts).toBeUndefined();
 		expect(wait).toHaveBeenCalledTimes(1);
 		expect(wait).toHaveBeenCalledWith(LEGACY, 30_000);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockWarn).toHaveBeenCalledWith(
 			'Replaying sale completions without the previous database version report',
 			expect.anything()
+		);
+	});
+
+	it('three starts whose report times out never abandon; a later start with a real report counts', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		const wait = jest
+			.spyOn(unsentChanges, 'awaitLegacyUnsentReport')
+			.mockResolvedValue('timed-out');
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts })
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = onScope();
+			view.rerender(<SaleCompletionBridge />);
+		}
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 4 })
+		);
+		expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+		expect(mockWarn).not.toHaveBeenCalledWith(
+			'Pending sale completion abandoned: order not resident',
+			expect.anything()
+		);
+
+		// The drain reports: nothing kept. That start counts.
+		wait.mockRestore();
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		mockManager = onScope();
+		view.rerender(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 5,
+				missingStarts: 1,
+			})
 		);
 	});
 
