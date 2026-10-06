@@ -220,7 +220,7 @@ export async function enqueueWriteIntent(input: {
 	/** The pending row this enqueue coalesced INTO and replaced — its id is now orphaned. */
 	supersededMutationId?: string;
 }> {
-	const intent =
+	const requested: WriteIntent =
 		input.intent.operation !== 'delete'
 			? {
 					...input.intent,
@@ -229,7 +229,7 @@ export async function enqueueWriteIntent(input: {
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
 	const canCoalesce = input.canCoalesce ?? true;
-	const collection = collectionOf(input.db, intent.collection);
+	const collection = collectionOf(input.db, requested.collection);
 	const queue = queueFor(input.db);
 
 	// Chain links a partial annihilation consumed before a CAS refusal forced a
@@ -247,14 +247,35 @@ export async function enqueueWriteIntent(input: {
 	for (let attempt = 0; attempt < 10; attempt += 1) {
 		const rows = await queue.pending();
 		const isRecordRow = (item: QueuedMutation) =>
-			item.collectionName === intent.collection && item.recordId === intent.recordId;
+			item.collectionName === requested.collection && item.recordId === requested.recordId;
 		const recordRows = rows.filter(isRecordRow);
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
-		const doc = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+		const doc = (await collection.findOne(requested.recordId).exec()) as MutationDoc | null;
 		const stored = doc
-			? (doc.toJSON() as { sync?: { revision?: string }; payload?: Record<string, unknown> })
+			? (doc.toJSON() as {
+					sync?: { revision?: string };
+					payload?: Record<string, unknown>;
+					remoteId?: unknown;
+				})
 			: undefined;
+		// CREATE OR UPDATE IS SETTLED HERE, by the one read every placement decision uses: a create
+		// for a record whose resident already carries a server id (an earlier create was
+		// acknowledged — e.g. a caller that chose 'create' from a read taken just before that ack
+		// landed) is enqueued as an UPDATE of that record. Belt and braces, not the only defence:
+		// the server's born-twice contract already matches a create under the same uuid
+		// (`_woocommerce_pos_uuid`) and answers with the existing record. The receipt is the
+		// enqueued mutation's, so a caller waiting on its outcome is still answered.
+		const intent: WriteIntent =
+			requested.operation === 'create' && remoteIdOrNull(stored?.remoteId) !== null
+				? {
+						collection: requested.collection,
+						operation: 'update',
+						recordId: requested.recordId,
+						payload: requested.payload,
+						...(requested.explicit ? { explicit: true } : {}),
+					}
+				: requested;
 		const storedRevision = stored?.sync?.revision ?? '';
 		const placement = decideWritePlacement({
 			rows: recordRows,
@@ -364,15 +385,6 @@ export async function enqueueWriteIntent(input: {
 			if (!doc) {
 				throw new Error(
 					`write(create): record "${intent.recordId}" is not resident in "${intent.collection}" — insert the born-local row first`
-				);
-			}
-			// A record the server already holds (its resident carries a server id — an earlier
-			// create was acknowledged) is never created again: a second create under a new mutation id
-			// is a duplicate the server cannot dedupe. Read inside this placement turn, so an ack that
-			// landed a moment ago is seen.
-			if (remoteIdOrNull((stored as { remoteId?: unknown } | undefined)?.remoteId) !== null) {
-				throw new Error(
-					`write(create): record "${intent.recordId}" in "${intent.collection}" already has a server id — a second create would duplicate it`
 				);
 			}
 			const built = buildCreateMutation(
@@ -606,7 +618,7 @@ export async function enqueueWriteIntent(input: {
 		};
 	}
 	throw new Error(
-		`write(${intent.operation}): the mutation queue kept changing under "${intent.recordId}" — retry the intent`
+		`write(${requested.operation}): the mutation queue kept changing under "${requested.recordId}" — retry the intent`
 	);
 }
 
