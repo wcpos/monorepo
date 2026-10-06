@@ -545,6 +545,38 @@ it('a child added under the open term re-projects the level in place instead of 
 	expect(mockState.filters.categories).toEqual([1, 2, 7]);
 });
 
+// The in-place re-projection writes the level's filter, and a result change resets the window:
+// a live level paged past its first window must keep it, in the same state as the new ids.
+it('a child added under a paged open term re-projects it with its window kept, in one state', () => {
+	let children = [2];
+	const dynamic = {
+		...terms,
+		idsFor: (term: { id?: number }) =>
+			term.id === 1 ? [1, ...children] : term.id ? [term.id] : [],
+	};
+	const seen: { categories: unknown; limit: number }[] = [];
+	const { result, rerender } = renderHook(() => {
+		const browse = useBrowsePath('categories', dynamic as never);
+		seen.push({ categories: mockState.filters.categories, limit: mockState.limit });
+		return browse;
+	});
+	act(() => result.current.enter(drinks));
+	act(() => {
+		actions.extendLimit();
+		actions.extendLimit();
+	});
+	expect(mockState).toMatchObject({ filters: { categories: [1, 2] }, limit: PAGE * 3 });
+	children = [2, 7];
+	seen.length = 0;
+	rerender();
+	expect(result.current.path.length).toBe(1);
+	expect(mockState).toMatchObject({ filters: { categories: [1, 2, 7] }, limit: PAGE * 3 });
+	// Never the new ids under the base page: the filter and the window land together.
+	expect(
+		seen.filter(({ categories, limit }) => isEqualIds(categories, [1, 2, 7]) && limit === PAGE)
+	).toEqual([]);
+});
+
 it('a root term reparented under another visible term drops the path', () => {
 	const food = { kind: 'term' as const, id: 5, name: 'Food', count: 3 };
 	let all: unknown[] = [drinks, food];

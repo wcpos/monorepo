@@ -435,7 +435,13 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		const derived = derivedKey === '' ? [] : derivedKey.split(',').map(Number);
 		if (sameSet(current.ids, derived)) return;
 		projected.set({ ...current, ids: derived });
+		// The level is live and keeps its result window: a result change resets it to the page
+		// size, and the level's held snapshot (paged) would be replaced by the first page. The
+		// committed window is read before the write and restored in the same handler, as `project`
+		// does for a parent on the way back.
+		const { limit } = latest.current.state;
 		actions.setFilter(field, derived as never);
+		if (typeof limit === 'number') actions.setLimit(limit);
 	}, [live, derivedKey, field, actions, projected]);
 
 	// BATCHING INVARIANT (`enter` and `backTo`): both must run from a discrete event handler
