@@ -733,6 +733,34 @@ it('a detail opened during a cross-fade is shown whole and its furniture joins i
 	expect(furniture.value).toBe(0);
 });
 
+// On the fade's FIRST frame its `withTiming(0)` has not advanced: the veil still reads 1. A tile
+// opened then must still find every clock cancelled and at rest, and the old fade, running out a
+// frame later under the new detail, must not clear it.
+it('a tile opened on the first frame of a cross-fade is shown whole, and the old fade does not clear it', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	rerender(<Stage detail={null} collapse />);
+	const fade = mockTimings.filter((call) => call.toValue === 0 && call.done).at(-1)!;
+	const [furniture, under, veil] = mockShared;
+	// The clocks were started but have not advanced: the veil still up, the furniture still up.
+	veil.value = 1;
+	furniture.value = 1;
+	mockCancelled.length = 0;
+	rerender(<Stage detail="Beanie" collapse />);
+	// Cancelled before anything was read, and put at rest for the new detail.
+	expect(mockCancelled).toEqual(expect.arrayContaining([veil, furniture, under]));
+	expect(veil.value).toBe(1);
+	expect(furniture.value).toBe(0);
+	expect(styleOf('deal').opacity).toBe(1);
+	expect(deal().name).toBe('Beanie');
+	// The old fade runs out anyway (its cancel came a frame late): it clears nothing of Beanie's.
+	act(() => fade.done!(true));
+	expect(screen.getByTestId('deal')).toBeTruthy();
+	expect(deal().name).toBe('Beanie');
+});
+
 it('a stack inside a detail that cross-fades away holds what it shows', () => {
 	function Nested({ inner, collapse }: { inner: string | null; collapse?: boolean }) {
 		return (

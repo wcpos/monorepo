@@ -105,15 +105,23 @@ export type DealStackProps<T> = {
 };
 
 /**
- * The clocks a cross-fade leaves (the veil down, the furniture up) put back at rest for the
- * next detail: shown, its furniture still to fade in with its deal. Nothing to do after a gather,
- * which leaves the veil up and runs the furniture home itself.
+ * The clocks a cross-fade leaves (the veil down, the furniture up, the products coming in) put
+ * back at rest for the next detail: shown, its furniture still to fade in with its deal. Every
+ * clock is cancelled BEFORE anything is read or set: a clock started on this very frame
+ * (`withTiming(0)` not yet advanced) still reads its old value, and left running it would hide
+ * the new detail and run its completion under it. Called only after a cross-fade was started
+ * (`fadePending`), never after a gather, which leaves the veil up and runs the furniture home
+ * itself.
  */
-function restAfterCrossFade(veil: SharedValue<number>, furniture: SharedValue<number>): void {
-	if (veil.value >= 1) return;
+function restAfterCrossFade(
+	veil: SharedValue<number>,
+	furniture: SharedValue<number>,
+	under: SharedValue<number>
+): void {
 	cancelAnimation(veil);
-	veil.value = 1;
 	cancelAnimation(furniture);
+	cancelAnimation(under);
+	veil.value = 1;
 	furniture.value = 0;
 }
 
@@ -199,12 +207,21 @@ export function DealStack<T>({
 	// Closing turns the tiles for home in the same render that hears of it; a cross-fade leaves
 	// them where they stand.
 	if (!open && dealt && !collapse && !fading) setDealt(false);
-	// The faded detail leaves the stage, and the tiles are put back undealt for the next deal.
-	const faded = React.useCallback(() => {
+	// A leaving detail's clock (a gather's, a cross-fade's) clears the stage when it runs out —
+	// only if the stage still holds the detail it was started for. A clock whose cancel came a
+	// frame late (a tile opened on the first frame of a cross-fade) runs out under a NEWER
+	// detail, and must never clear what it did not stage. After a cross-fade the tiles are put
+	// back undealt for the next deal too.
+	const clearedBy = React.useCallback((asked: number, afterFade: boolean) => {
+		if (current.current !== asked) return;
 		setStaged(null);
-		setFading(false);
-		setDealt(false);
+		if (afterFade) {
+			setFading(false);
+			setDealt(false);
+		}
 	}, []);
+	// A cross-fade started and not yet put to rest for the next detail (see restAfterCrossFade).
+	const fadePending = React.useRef(false);
 
 	// What had focus when the tile was tapped (the tile) gets it back when the parent walks
 	// home, if the control that sent it home was inside the dealt grid, which is leaving. Focus
@@ -250,14 +267,17 @@ export function DealStack<T>({
 
 	const armed = origin !== undefined && grid !== undefined;
 	React.useEffect(() => {
+		// The staging this clock is started for: its completion clears the stage only for it.
+		const asked = current.current;
 		if (!open && fading) {
 			// Out where it stands, and the root in over it, on one clock: nothing travels. A frame
 			// later, as the deal sets off: the cut that sent it is a heavy commit, and a clock started
 			// under it had spent half the fade before its first frame painted (web film, 2026-10-06).
+			fadePending.current = true;
 			const frame = requestAnimationFrame(() => {
 				veil.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
 					'worklet';
-					if (finished) scheduleOnRN(faded);
+					if (finished) scheduleOnRN(clearedBy, asked, true);
 				});
 				under.value = withTiming(1, { duration: PANE, easing: EASE, ...REDUCE });
 			});
@@ -268,7 +288,7 @@ export function DealStack<T>({
 			// the parent tile reaches home, and the breadcrumb is gone before it passes underneath.
 			furniture.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
 				'worklet';
-				if (finished) scheduleOnRN(setStaged, null);
+				if (finished) scheduleOnRN(clearedBy, asked, false);
 			});
 			under.value = withTiming(1, { duration: PANE, easing: EASE_EXIT, ...REDUCE });
 			return;
@@ -300,17 +320,20 @@ export function DealStack<T>({
 			cancelAnimationFrame(frame);
 			clearTimeout(landing);
 		};
-	}, [open, armed, fading, faded, furniture, under, veil]);
+	}, [open, armed, fading, clearedBy, furniture, under, veil]);
 
 	// A detail put on stage after (or during) a cross-fade starts every opacity clock from rest,
 	// before its first paint. A gather runs the furniture home to 0 and leaves the veil up; a
 	// cross-fade leaves the veil down and the furniture up — the new detail would mount hidden,
 	// then snap in a frame later, with its crumb and footer there whole instead of joining its
 	// deal. A layout effect, on the staging itself: `origin` and `grid` are reset the same way, in
-	// the render that stages it.
+	// the render that stages it. On the fact that a fade was started, never on what its clock
+	// reads: on the fade's first frame the veil still reads 1.
 	React.useLayoutEffect(() => {
-		if (open) restAfterCrossFade(veil, furniture);
-	}, [open, generation, furniture, veil]);
+		if (!open || !fadePending.current) return;
+		fadePending.current = false;
+		restAfterCrossFade(veil, furniture, under);
+	}, [open, generation, furniture, under, veil]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
