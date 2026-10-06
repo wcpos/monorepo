@@ -383,7 +383,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					>
 						<ButtonText decodeHtml>
 							{unavailable.length === 1
-								? t('pos_checkout.not_available_right_now_one', {
+								? t('pos_checkout.method_not_available_right_now', {
 										method: unavailable[0].method.title,
 									})
 								: t('pos_checkout.not_available_right_now_n', { n: unavailable.length })}

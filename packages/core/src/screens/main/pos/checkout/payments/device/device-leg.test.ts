@@ -329,7 +329,8 @@ it.each([
 	}
 );
 // The SDK was re-initialised under the leg (or the reader is gone): cancel throws and no result
-// will ever come. The leg voids the intent and finishes instead of waiting forever.
+// will ever come. After a grace period for a result that might have been seconds away, the leg
+// voids the intent and finishes instead of waiting forever.
 it.each(['cashier', 'deadline'] as const)(
 	'when the reader cannot be cancelled (%s), the leg voids the intent and ends',
 	async (who) => {
@@ -337,8 +338,17 @@ it.each(['cashier', 'deadline'] as const)(
 		jest.mocked(c.driver.cancel!).mockRejectedValueOnce(new Error('Stripe Terminal is not ready'));
 		const start = c.leg.start();
 		await tick();
-		if (who === 'deadline') await jest.advanceTimersByTimeAsync(120000);
-		else await c.leg.cancel();
+		const cancelled = who === 'deadline' ? jest.advanceTimersByTimeAsync(120000) : c.leg.cancel();
+		await tick();
+		// Inside the grace period the leg still waits, and says why.
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'collecting',
+			cancelRequested: true,
+			error: { message: 'Stripe Terminal is not ready' },
+		});
+		expect(c.post).toHaveBeenCalledTimes(1);
+		await jest.advanceTimersByTimeAsync(30000);
+		await cancelled;
 		await tick();
 		expect(c.post.mock.calls.map(([url]) => url.split('/').pop())).toEqual(['intent', 'void']);
 		expect(c.post.mock.calls[1][1]).toEqual({ reason: who });
@@ -355,6 +365,47 @@ it.each(['cashier', 'deadline'] as const)(
 		expect(c.post.mock.calls.some(([url]) => url.endsWith('/capture'))).toBe(false);
 	}
 );
+// Rule 9: the cancel "failed" because the reader already had the card — the result wins.
+it('a result that arrives during the cancel grace period is captured, not voided', async () => {
+	const c = setup();
+	jest.mocked(c.driver.cancel!).mockRejectedValueOnce(new Error('CANCEL_FAILED'));
+	const start = c.leg.start();
+	await tick();
+	const cancelled = c.leg.cancel();
+	await tick();
+	await jest.advanceTimersByTimeAsync(5000);
+	c.collection.resolve(approved);
+	await start;
+	await jest.advanceTimersByTimeAsync(30000);
+	await cancelled;
+	expect(c.leg.getState().outcome).toBe('captured');
+	expect(c.post.mock.calls.map(([url]) => url.split('/').pop())).toEqual(['intent', 'capture']);
+});
+// Offline there is no intent to void and the reader's stored payment forwards regardless.
+it('offline, a cancel the reader refuses leaves the leg waiting for the reader', async () => {
+	const c = setup(true);
+	jest.mocked(c.driver.cancel!).mockRejectedValueOnce(new Error('CANCEL_FAILED'));
+	const start = c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	await jest.advanceTimersByTimeAsync(60000);
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'collecting',
+		cancelRequested: false,
+		outcome: null,
+		error: { message: 'CANCEL_FAILED' },
+	});
+	c.collection.resolve({
+		...approved,
+		outcome: 'authorized',
+		provider_refs: { payment_intent: null },
+		amount: '10.00',
+	});
+	await start;
+	expect(c.leg.getState().outcome).toBe('captured');
+	expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
+	expect(c.post).not.toHaveBeenCalled();
+});
 it('deadline requests cancellation at 120 seconds, and waits for the reader', async () => {
 	const c = setup();
 	const start = c.leg.start();

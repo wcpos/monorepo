@@ -391,6 +391,20 @@ it('a scan started mid-reconnect clears the reader the SDK kept, so the result n
 	await expect(pending).resolves.toEqual([]);
 	expect(driver.status$.get()).toMatchObject({ connection: 'disconnected', reader: null });
 });
+// The reader already has the card and the SDK is confirming: nothing to cancel, nothing to report.
+it.each(['CancelFailedAlreadyCompleted', 'CANCEL_FAILED_ALREADY_COMPLETED'])(
+	'cancel treats %s as "too late", not as an error',
+	async (code) => {
+		api.cancelCollectPaymentMethod.mockResolvedValueOnce({ error: { code, message: 'done' } });
+		await expect(driver.cancel()).resolves.toBeUndefined();
+	}
+);
+it('cancel still reports a real failure', async () => {
+	api.cancelCollectPaymentMethod.mockResolvedValueOnce({
+		error: { code: 'CANCEL_FAILED', message: 'No collect in progress' },
+	});
+	await expect(driver.cancel()).rejects.toThrow('No collect in progress');
+});
 // iOS and the simulator say `Canceled`; the Android SDK says `CANCELED` (a WisePad 3 cancel
 // from the till rendered as "reader_error" until both were accepted, 2026-10-06).
 it.each([

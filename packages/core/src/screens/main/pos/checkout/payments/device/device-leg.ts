@@ -31,6 +31,10 @@ export type DeviceLegDeps = Omit<ServerLegDeps, 'onFinal'> & {
 // forever on its own; the cashier can always cancel sooner. Two minutes covers a customer digging
 // for a card and clears a forgotten sale before the next one (Paul, 2026-10-07; was 5 minutes).
 export const DEVICE_LEG_DEADLINE_MS = 120000;
+// When the SDK refuses a cancel, either the reader already has the card and is confirming (a
+// result is seconds away) or the SDK was re-initialised under the leg and nothing will ever
+// come. This is how long the leg waits for that result before treating the reader as gone.
+export const CANCEL_GRACE_MS = 30000;
 /** Offline rows must satisfy the ledger wire contract, not silently drop opaque refs. */
 export function offlineProviderRefs(refs: Record<string, unknown>): PaymentRow['provider_refs'] {
 	const result: PaymentRow['provider_refs'] = {};
@@ -63,6 +67,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	const listeners = new Set<() => void>();
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let graceTimer: ReturnType<typeof setTimeout> | undefined;
 	let result: CollectResult | null = null;
 	// When the reader answered. A failed local write is retried through capture(), and
 	// the approval time must not drift to the time of the retry.
@@ -277,6 +282,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			} catch (error) {
 				if (!active()) return;
 				const body = errorState(error);
+				intentRefused = true;
 				if (body?.data?.payment)
 					await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
@@ -284,7 +290,6 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				// ends failed where it stood and the cashier reads the store's refusal of the intent,
 				// not the void's bookkeeping (a 400 here once showed as "Approved · payment not
 				// found", three steps along — WisePad 3 run, 2026-10-06).
-				intentRefused = true;
 				try {
 					const response = await deps.post(url('void'), { reason: 'intent_refused' });
 					await apply(response.data as ServerLegResponse);
@@ -359,11 +364,22 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				await deps.driver.cancel?.();
 			} catch (error) {
 				if (!active() || result) return;
-				// The reader will not answer — the SDK was re-initialised under the leg, or the
-				// session is gone — so no result is coming and the till cannot sit on a leg nothing
-				// will end (a walk-away did exactly that for 10+ minutes, 2026-10-06). Void the
-				// intent, after which a late approval can no longer capture, and finish.
 				errorState(error);
+				// Offline there is no intent to void and the reader's stored payment forwards
+				// regardless: the leg must live until the reader answers.
+				if (input.offline) {
+					set({ cancelRequested: false });
+					return;
+				}
+				// Give a result that may be seconds away its chance (LEDGER rule 9: never void
+				// against a confirmation in flight). After that the reader is gone — the SDK was
+				// re-initialised under the leg, the session lost — and the till cannot sit on a
+				// leg nothing will end (a walk-away did exactly that for 10+ minutes, 2026-10-06).
+				// Void the intent, after which a late approval can no longer capture, and finish.
+				await new Promise<void>((resolve) => {
+					graceTimer = deps.setTimeout(resolve, CANCEL_GRACE_MS);
+				});
+				if (!active() || result) return;
 				result = {
 					outcome: 'cancelled',
 					failure_reason: 'reader_unresponsive',
@@ -379,6 +395,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	function stop() {
 		stopped = true;
 		if (timer) deps.clearTimeout(timer);
+		if (graceTimer) deps.clearTimeout(graceTimer);
 	}
 	return {
 		start,

@@ -545,7 +545,11 @@ export function createStripeTerminalDriver({
 			}
 		},
 		async cancel(): Promise<void> {
-			check(await (await ready()).cancelCollectPaymentMethod());
+			const result = await (await ready()).cancelCollectPaymentMethod();
+			// Too late: the reader has the card and the SDK is confirming — the result is
+			// seconds away, so this is not a failure to report; the leg waits for it.
+			if (sameCode(result.error?.code, 'CancelFailedAlreadyCompleted')) return;
+			check(result);
 		},
 		async disconnect(): Promise<void> {
 			check(await (await ready()).disconnectReader());
