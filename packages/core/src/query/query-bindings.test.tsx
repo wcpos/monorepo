@@ -353,16 +353,70 @@ describe('query bindings', () => {
 		nextSubscription.unsubscribe();
 	});
 
+	const residentCategory = (id: number, name: string) => ({
+		uuid: `category-${id}`,
+		remoteId: String(id),
+		remoteKey: String(id),
+		payload: { id, name },
+		sync: { revision: '1', partial: false, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	});
+
 	it('reads resident terms without declaring a refresh when asked for residents only', async () => {
-		renderHook(() => useAllTermsBinding('products/categories', true, { residentsOnly: true }), {
-			wrapper: Provider,
-		});
-		await act(async () => Promise.resolve());
+		await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		const subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		await waitFor(() => expect(answers.at(-1)).toBe(1));
 		expect(engine.requireCalls).toEqual([]);
+		subscription.unsubscribe();
 
 		// The stage's binding still fetches.
 		renderHook(() => useAllTermsBinding('products/categories'), { wrapper: Provider });
 		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+	});
+
+	it('pulls an empty collection once for a residents-only read, unanswered until the pull settles', async () => {
+		let settle: (() => void) | undefined;
+		const require = engine.require;
+		engine.require = (requirement) => {
+			const handle = require(requirement);
+			if (requirement.kind !== 'refresh') return handle;
+			const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
+				settle = () => void handle.ready.then(resolve);
+			});
+			return { ...handle, ready };
+		};
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		const latest = () => result.current.result$;
+		let subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
+
+		// A fresh till: no residents is not an answer while the one refresh is in flight.
+		await waitFor(() =>
+			expect(engine.requireCalls).toEqual([
+				expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+			])
+		);
+		await act(async () => Promise.resolve());
+		expect(answers).toEqual([]);
+
+		// Settled and still empty: the collection's own answer — no terms (dimmed).
+		await act(async () => settle?.());
+		subscription.unsubscribe();
+		subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
+		await waitFor(() => expect(answers.at(-1)).toBe(0));
+		// One pull, then residents-only again: nothing re-declared.
+		expect(engine.requireCalls).toHaveLength(1);
+		subscription.unsubscribe();
 	});
 
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {

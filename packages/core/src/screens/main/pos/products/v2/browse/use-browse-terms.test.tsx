@@ -208,8 +208,9 @@ describe('useBrowseCounts', () => {
 		terms['products/brands'].emit('products/brands', []);
 		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
 	});
-	// Opening the dialog pulls nothing: thousands of tags, or a brands route that 404s before
-	// WooCommerce 9.4, must not be fetched on a settings tap.
+	// Opening the dialog pulls nothing it holds: thousands of tags, or a brands route that 404s
+	// before WooCommerce 9.4, must not be fetched on a settings tap (an empty source is pulled
+	// once by the binding itself — see the query bindings' tests).
 	it('reads every source from resident terms only, and asks the stage baseline of the products', () => {
 		(useAllTermsBinding as jest.Mock).mockClear();
 		fakeCarrying();

@@ -130,7 +130,7 @@ type Hit<T> = { record: T };
 type ProductRecord = { payload: Partial<Record<TaxonomySource, { id?: number }[]>> };
 
 type TaxonomyTermsOptions = {
-	/** Read the till's resident terms and pull nothing — the settings dialog's counts. */
+	/** Read the till's resident terms — the settings dialog's counts (see `useAllTermsBinding`). */
 	residentsOnly?: boolean;
 	/** The products baseline: without it, only an in-stock product lifts a zero-count term. */
 	showOutOfStock?: boolean;
@@ -216,7 +216,9 @@ function useTaxonomyTerms(
  * `undefined` until the source's collection has answered: a source that is still loading is
  * not an empty one, and the dialog can open before the browse bindings have (All products).
  * Resident terms only: opening the dialog pulls nothing (the reference seed lane keeps the
- * terms current, and the stage's own binding refreshes the source it shows).
+ * terms current, and the stage's own binding refreshes the source it shows) — except a source
+ * with no residents, which is pulled once and reads unanswered until that pull settles, so a
+ * fresh till does not dim every source as empty.
  */
 export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | undefined> {
 	const { uiSettings } = useUISettings('pos-products');

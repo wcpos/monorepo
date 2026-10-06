@@ -1165,6 +1165,13 @@ export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
  * `residentsOnly` reads what the till holds and declares no refresh — for a surface that only
  * summarises (the settings dialog's counts), so opening it pulls nothing; the reference seed
  * lane and the stage's own binding keep the residents current.
+ *
+ * Except an empty collection: a fresh till holds no terms until the reference lane lands, and
+ * no residents is not an answer then. While it has none, a residents-only binding declares ONE
+ * refresh, and its `result$` withholds the empty answer until that refresh has settled — met,
+ * released or failed — so a still-loading source reads unanswered, never empty. The refresh,
+ * once declared, stands until it settles (releasing it mid-pull would abort it) and is then
+ * dropped; an empty answer after that is the collection's own. Residents present: no demand.
  */
 export function useAllTermsBinding(
 	collection: 'products/categories' | 'products/tags' | 'products/brands',
@@ -1172,6 +1179,10 @@ export function useAllTermsBinding(
 	{ residentsOnly = false }: { residentsOnly?: boolean } = {}
 ) {
 	const bindingId = React.useId();
+	// The empty-collection refresh: 'idle' until an empty answer, 'pull' while declared, then
+	// 'done' for the life of the binding.
+	const [refresh, setRefresh] = React.useState<'idle' | 'pull' | 'done'>('idle');
+	const pulling = residentsOnly && refresh === 'pull';
 	const compiled = React.useMemo(() => {
 		const query = compileQuery(
 			collection,
@@ -1182,9 +1193,9 @@ export function useAllTermsBinding(
 			},
 			{ id: bindingId }
 		);
-		return residentsOnly ? { ...query, demand: [] } : query;
-	}, [bindingId, collection, residentsOnly]);
-	return useEngineBinding(
+		return residentsOnly && !pulling ? { ...query, demand: [] } : query;
+	}, [bindingId, collection, pulling, residentsOnly]);
+	const binding = useEngineBinding(
 		{
 			collection,
 			selector: {},
@@ -1194,6 +1205,36 @@ export function useAllTermsBinding(
 		enabled,
 		bindingId
 	);
+	const watchEmpty = residentsOnly && enabled && refresh === 'idle';
+	const residents$ = binding.result$;
+	React.useEffect(() => {
+		if (!watchEmpty) return undefined;
+		const subscription = residents$.subscribe((result) => {
+			if (result.hits.length === 0) setRefresh('pull');
+		});
+		return () => subscription.unsubscribe();
+	}, [residents$, watchEmpty]);
+	// Runs after the demand effect (declared earlier, inside `useEngineBinding`), so the barrier
+	// it waits on is the refresh this commit declared.
+	const { whenReady } = binding;
+	React.useEffect(() => {
+		if (!pulling || !enabled) return undefined;
+		let live = true;
+		void whenReady().then(() => {
+			if (live) setRefresh('done');
+		});
+		return () => {
+			live = false;
+		};
+	}, [enabled, pulling, whenReady]);
+	// A disabled binding's empty answer is its answer (it is never pending).
+	const withholdEmpty = residentsOnly && enabled && refresh !== 'done';
+	const result$ = React.useMemo(
+		() =>
+			withholdEmpty ? residents$.pipe(filter((result) => result.hits.length > 0)) : residents$,
+		[residents$, withholdEmpty]
+	);
+	return React.useMemo(() => ({ ...binding, result$ }), [binding, result$]);
 }
 
 export function useAllCategoriesBinding() {
