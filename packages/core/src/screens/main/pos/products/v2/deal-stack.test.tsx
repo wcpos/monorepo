@@ -144,10 +144,12 @@ function Pane({
 	name,
 	count,
 	scroll,
+	rowTops,
 }: {
 	name: string;
 	count: number;
 	scroll?: { value: number };
+	rowTops?: Record<number, number>;
 }) {
 	const { origin, dealt, grid, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
@@ -180,6 +182,7 @@ function Pane({
 					count={count}
 					columns={COLUMNS}
 					scroll={scroll as never}
+					restY={rowTops?.[Math.floor(index / COLUMNS)]}
 				>
 					<span data-testid={`cell-${index}`} />
 				</DealCell>
@@ -192,18 +195,20 @@ function Stage({
 	target = tile,
 	count = 6,
 	scroll,
+	rowTops,
 }: {
 	detail: string | null;
 	target?: Measurable;
 	count?: number;
 	scroll?: { value: number };
+	rowTops?: Record<number, number>;
 }) {
 	return (
 		<DealStack
 			testID="stage"
 			detail={detail}
 			target={target}
-			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} />}
+			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} rowTops={rowTops} />}
 		>
 			<Lifted />
 		</DealStack>
@@ -348,6 +353,27 @@ it('starts the parent exactly on the tapped tile and every other tile underneath
 	]);
 	expect(styleOf('cell-5').opacity).toBe(0);
 	expect(styleOf('cell-5').transform![2]).toEqual({ scale: 0.92 });
+});
+
+it('starts a cell under a taller row from the row top the grid measured, not from equal rows', () => {
+	// Term tiles in row 0, product tiles with SKU and stock lines below: row 1 starts 230 px down,
+	// not the tapped tile's 158. Row 0 is not given, so its cells keep the arithmetic.
+	const rowTops = { 1: 230 };
+	const { rerender } = render(<Stage detail={null} rowTops={rowTops} />);
+	rerender(<Stage detail="Hoodie" rowTops={rowTops} />);
+	layOut();
+	const [, , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(styleOf('cell-0').transform).toEqual([
+		{ translateX: 100 - (GRID.x + 4) },
+		{ translateY: 200 - (GRID.y + 4) },
+	]);
+	// Slot 5 (row 1) starts from under the parent: its offset reaches back from where it rests.
+	expect(styleOf('cell-5').transform).toEqual([
+		{ translateX: 100 - (GRID.x + COLUMN + 4) },
+		{ translateY: 200 - (GRID.y + 230 + 4) },
+		{ scale: 0.92 },
+	]);
 });
 
 it('deals in order on the beat, capped, and gathers last-out-first', () => {

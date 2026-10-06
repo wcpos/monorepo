@@ -218,6 +218,33 @@ export function TermLevelGrid({
 			),
 		[count, columns]
 	);
+	// Where each row rests. A level mixes term tiles with product tiles, and product tiles grow
+	// with the grid fields (SKU, stock, cost lines), so rows are not the tapped tile's height and
+	// a cell's start is reached back from its row's measured top. A list wraps each row in a cell
+	// of its own, so a row's own layout `y` is 0 within it: a row's top is the sum of the measured
+	// heights above it (the list has no header or separators), known once all of them are. A row
+	// that is not known yet leaves its cells on the arithmetic.
+	const [heights, setHeights] = React.useState<readonly (number | undefined)[]>([]);
+	const measureRow = React.useCallback((row: number, height: number) => {
+		setHeights((known) => {
+			if (known[row] === height) return known;
+			const next = Array.from({ length: Math.max(known.length, row + 1) }, (_, i) => known[i]);
+			next[row] = height;
+			return next;
+		});
+	}, []);
+	const rowTops = React.useMemo(() => {
+		const tops: number[] = [];
+		let top = 0;
+		for (let row = 0; row < rows.length; row += 1) {
+			tops.push(top);
+			const height = heights[row];
+			if (height === undefined) break;
+			top += height;
+		}
+		return tops;
+	}, [heights, rows.length]);
+
 	// The last parent is the crumb's back control; it keeps the stable back testID.
 	const parents = crumb.parents.map((entry, index) =>
 		index === crumb.parents.length - 1 ? { ...entry, testID: 'products-breadcrumb-back' } : entry
@@ -280,8 +307,14 @@ export function TermLevelGrid({
 						// fold flew unseen; rows outside the render window still unmount.
 						removeClippedSubviews={false}
 						onEndReached={owned ? onEndReached : undefined}
+						// A row's measured top reaches cells the list would otherwise not re-render.
+						extraData={rowTops}
 						renderItem={({ item: row, index: rowIndex }) => (
-							<View className="flex-row" style={rowIndex === 0 ? FRONT : undefined}>
+							<View
+								className="flex-row"
+								style={rowIndex === 0 ? FRONT : undefined}
+								onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
+							>
 								{row.map((index) =>
 									index >= count ? (
 										<View key={index} className="flex-1" />
@@ -292,6 +325,7 @@ export function TermLevelGrid({
 											count={count}
 											columns={columns}
 											scroll={scroll}
+											restY={rowTops[rowIndex]}
 										>
 											{renderSlot(index)}
 										</DealCell>

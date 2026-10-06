@@ -284,15 +284,18 @@ export function DealStack<T>({
  * One slot of the dealt grid. Slot 0 is the parent tile, which travels from the tapped
  * tile's frame; every other slot starts underneath it and lands in turn.
  *
- * A slot's resting place is arithmetic within the grid's measured frame (column, row, the
- * tapped tile's height): only slot 0 has to start exactly on the tapped tile, and its place is
- * exact because the frame is measured, not assumed to be the stage.
+ * A slot's resting place is within the grid's measured frame: its column, and its row's top.
+ * The row's top is measured when the grid gives it (`restY`); otherwise it is arithmetic on the
+ * tapped tile's height, which holds while every row is that tall. Only slot 0 has to start
+ * exactly on the tapped tile, and its place is exact because the frame is measured, not assumed
+ * to be the stage.
  */
 export function DealCell({
 	index,
 	count,
 	columns,
 	scroll,
+	restY,
 	children,
 }: {
 	index: number;
@@ -301,6 +304,12 @@ export function DealCell({
 	columns: number;
 	/** The grid's scroll offset: a scrolled grid gathers from where its tiles are on screen. */
 	scroll?: SharedValue<number>;
+	/**
+	 * The top of this slot's row within the grid's frame, unscrolled, where the grid measured it.
+	 * A grid whose rows differ in height (term tiles above taller product tiles) gives it, so a
+	 * cell below a taller row starts under the parent rather than a row's difference away.
+	 */
+	restY?: number;
 	children: React.ReactNode;
 }) {
 	const { origin, dealt, stageWidth, grid } = useDeal();
@@ -337,10 +346,10 @@ export function DealCell({
 	const fromX = flies
 		? origin.x - (frame.x + (index % columns) * (frame.width / columns) + TILE_MARGIN)
 		: 0;
-	const fromY = flies
-		? origin.y -
-			(frame.y + Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN) + TILE_MARGIN)
+	const rowTop = flies
+		? (restY ?? Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN))
 		: 0;
+	const fromY = flies ? origin.y - (frame.y + rowTop + TILE_MARGIN) : 0;
 	// Hidden until BOTH the tile's frame and the grid's frame are known: the offset needs both,
 	// and on Android the two measurements answer frames apart, so a cell that waited for the
 	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile

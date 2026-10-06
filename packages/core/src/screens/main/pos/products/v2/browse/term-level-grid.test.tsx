@@ -97,8 +97,19 @@ jest.mock('../deal-stack', () => ({
 		index,
 		count,
 		columns,
-	}: React.PropsWithChildren<{ index: number; count: number; columns: number }>) => (
-		<div data-testid={`cell-${index}`} data-count={count} data-columns={columns}>
+		restY,
+	}: React.PropsWithChildren<{
+		index: number;
+		count: number;
+		columns: number;
+		restY?: number;
+	}>) => (
+		<div
+			data-testid={`cell-${index}`}
+			data-count={count}
+			data-columns={columns}
+			data-rest-y={String(restY)}
+		>
 			{children}
 		</div>
 	),
@@ -300,6 +311,30 @@ it('reports the node its slots rest in, so the deal lands on the grid', () => {
 	expect(slots.contains(screen.getByTestId('browse-level-scroller'))).toBe(true);
 	layOut(600);
 	expect(placeGrid).toHaveBeenCalledWith(slots);
+});
+
+it('rests each cell on the measured top of its row, summing the rows above it', () => {
+	// Two columns: the parent and the child term in row 0, two product tiles in row 1.
+	render(<TermLevelGrid {...level()} />);
+	const row = (index: number) => screen.getByTestId(`row-${index}`).firstElementChild as LaidOut;
+	// Row 0's top is the grid's top; row 1's waits for row 0, and keeps the arithmetic until then.
+	expect(screen.getByTestId('cell-0').dataset.restY).toBe('0');
+	expect(screen.getByTestId('cell-2').dataset.restY).toBe('undefined');
+	// The list wraps each row in a cell of its own, so the row's own `y` is 0: only its height counts.
+	act(() =>
+		row(0).__reactLayoutHandler?.({
+			nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 230 } },
+		})
+	);
+	expect(screen.getByTestId('cell-2').dataset.restY).toBe('230');
+	expect(screen.getByTestId('cell-3').dataset.restY).toBe('230');
+	// A row that grows (placeholders replaced by taller product tiles) moves the rows under it.
+	act(() =>
+		row(0).__reactLayoutHandler?.({
+			nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 250 } },
+		})
+	);
+	expect(screen.getByTestId('cell-2').dataset.restY).toBe('250');
 });
 
 it('keeps its own products while a child level is over it', () => {
