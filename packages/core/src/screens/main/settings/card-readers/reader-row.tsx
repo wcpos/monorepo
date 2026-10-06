@@ -322,10 +322,7 @@ export function ReaderRow({
 										onPress={() => actions.askForget(method)}
 										testID={`reader-row-${method.id}-forget`}
 									>
-										<Icon
-											name="trash"
-											className="fill-destructive web:group-focus:fill-accent-foreground"
-										/>
+										<Icon name="trash" className="fill-destructive" />
 										<Text>{t('settings.card_readers.forget')}</Text>
 									</DropdownMenuItem>
 								) : null}
