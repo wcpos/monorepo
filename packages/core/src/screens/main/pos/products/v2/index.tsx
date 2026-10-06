@@ -473,12 +473,12 @@ function POSProductsContent({
 						}}
 					>
 						<ErrorBoundary>
-							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. A
-							    search is served by today's stack in every mode, so its variable products
-							    drill there (the stage then unmounts, handing the filter bar's level
-							    back). Blank is no search, trimmed as the query compiler trims it. Keyed
-							    by source: a switch starts the stage afresh. */}
-							{browseBy !== 'all' && state.search.trim() === '' ? (
+							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
+							    a browse source on, the stage owns search too: a search drops the path and
+							    shows the catalogue-wide products at its root, drilling into the stage's
+							    own drill; a shortcut's own search keeps its level. Keyed by source: a
+							    switch starts the stage afresh. */}
+							{browseBy !== 'all' ? (
 								<BrowseStage
 									key={browseBy}
 									source={browseBy}

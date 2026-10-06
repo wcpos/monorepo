@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 
+import { isQuickFilterActive } from '../../filter-bar/apply-quick-filter';
 import { BrowseStage } from './browse-stage';
 
 // A tiny in-memory query store (as use-browse-path.test.tsx's), so the stage's path is driven
@@ -76,7 +77,30 @@ jest.mock('./use-browse-terms', () => {
 			term.id === 1 ? [1, 2] : term.id === 2 ? [2] : term.id === 3 ? [3] : [],
 		quickFilterFor: () => undefined,
 	};
-	return { useBrowseTerms: () => terms };
+	// A shortcut whose own conditions carry a search (and a filter and a sort).
+	const lattes = {
+		type: 'quick',
+		id: 'qf-lattes',
+		label: 'Lattes',
+		conditions: [
+			{ field: 'search', value: 'latte' },
+			{ field: 'on_sale', value: true },
+		],
+		sort: { field: 'sortable_price', direction: 'desc' },
+	};
+	const shortcut = { kind: 'shortcut', id: 'qf-lattes', name: 'Lattes', description: '' };
+	const shortcuts = {
+		all: [shortcut],
+		rootsOf: () => [shortcut],
+		childrenOf: () => [],
+		idsFor: () => [],
+		quickFilterFor: (term: { kind: string; id?: string }) =>
+			term.kind === 'shortcut' && term.id === lattes.id ? lattes : undefined,
+	};
+	return {
+		useBrowseTerms: (source: string) => (source === 'shortcuts' ? shortcuts : terms),
+		mockLattes: lattes,
+	};
 });
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number }) =>
@@ -461,6 +485,26 @@ it('a product drilled from the search-displaced root opens in the stage, through
 	expect(screen.queryByTestId('drill-in')).toBeNull();
 	act(() => queryActions.setSearch('latt'));
 	expect(screen.queryByTestId('drill-in')).toBeNull();
+});
+
+it('a shortcut with its own search keeps its level live with its chip lit, and the root takes all of it back out', () => {
+	const { mockLattes: lattes } = jest.requireMock('./use-browse-terms');
+	const resetState = { filters: baseline(), sort: { field: 'name', direction: 'asc' } };
+	const before = mockState;
+	render(<BrowseStage {...stageProps({ source: 'shortcuts' })} />);
+	fireEvent.click(screen.getByTestId('browse-shortcut-qf-lattes'));
+	// The shortcut's search is its own: the level stays, under its crumb — not displaced.
+	expect(mockState.search).toBe('latte');
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Lattes');
+	expect(screen.queryByTestId('products')).toBeNull();
+	// …and the chip's own rule reads it active.
+	expect(isQuickFilterActive(lattes, mockState as never, resetState as never)).toBe(true);
+	fireEvent.click(screen.getByTestId('products-breadcrumb-back')); // Shortcuts: the root
+	expect(screen.queryByTestId('browse-level')).toBeNull();
+	expect(screen.getByTestId('browse-shortcut-qf-lattes')).toBeTruthy();
+	// No residue: filters, search and sort are the baseline again.
+	expect(mockState).toEqual(before);
 });
 
 it('a level stays rendered from its staged entry while its stack gathers after the path was truncated', () => {

@@ -430,7 +430,7 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().limit).toBe(20);
 	});
 
-	it('puts the browse stage in place of the products in a browse mode, until a search', () => {
+	it('puts the browse stage in place of the products in a browse mode', () => {
 		mockBrowseBy = 'categories';
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories', viewMode: 'table' });
@@ -440,12 +440,6 @@ describe('POSProducts query-state wiring', () => {
 			level: 'products',
 			initialFilters: { status: 'publish', stock_status: 'instock' },
 		});
-
-		// A search is served by today's stack, whose variable products drill.
-		mockBrowseStageProps = null;
-		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
-		expect(screen.getByTestId('products-pane-stack')).toBeTruthy();
-		expect(mockBrowseStageProps).toBeNull();
 	});
 
 	it('hands the browse stage the screen’s plumbing, and its drill sets the filter bar’s level', () => {
@@ -472,12 +466,14 @@ describe('POSProducts query-state wiring', () => {
 		expect(mockFilterBarProps.level).toBe('products');
 	});
 
-	// The query compiler trims the term, so blanks search for nothing.
-	it('keeps the browse stage for a whitespace-only search', () => {
+	// The stage owns search: it drops its path and shows the catalogue-wide products itself, so
+	// a search never swaps the stage out (a shortcut's own search would bounce it otherwise).
+	it('keeps the browse stage, not the products stack, under a search', () => {
 		mockBrowseBy = 'categories';
 		render(<POSProducts />);
-		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('  '));
-		expect(latestState().search).toBe('  ');
+		mockBrowseStageProps = null;
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
+		expect(latestState().search).toBe('lat');
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
 		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
 	});

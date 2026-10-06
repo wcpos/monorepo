@@ -47,8 +47,8 @@ export type BrowseStageProps = {
 	viewMode: 'grid' | 'table';
 	/**
 	 * Today's products grid or table, wired to the given drill handler: the catalogue-wide
-	 * products a search shows over an empty path. (The screen serves a search from today's stack
-	 * for now, so it does not reach the stage there.)
+	 * products a search shows over an empty path (the screen mounts the stage whatever the
+	 * search, so a search typed in a level gathers it home and shows these at the root).
 	 */
 	renderProducts: (onDrill: DrillHandler) => React.ReactNode;
 	/** index.tsx's `noDataMessage`, for a level that answered with nothing. */
@@ -120,8 +120,8 @@ export function BrowseStage(props: BrowseStageProps) {
 			: null;
 	// A layout effect: the filter bar's level and the staged surface commit in the same frame.
 	React.useLayoutEffect(() => onDrilledChange(drilled !== null), [drilled, onDrilledChange]);
-	// An unmounting stage (a search hands over to today's stack, or the source changes) hands
-	// the filter bar's level back before paint.
+	// An unmounting stage (Browse by back to All products, or the source changes) hands the
+	// filter bar's level back before paint.
 	React.useLayoutEffect(() => () => onDrilledChange(false), [onDrilledChange]);
 	// A drill whose search, source or entry has moved is forgotten — not merely hidden: restoring
 	// the same search later must show the results, not the old variations. Dropped while
