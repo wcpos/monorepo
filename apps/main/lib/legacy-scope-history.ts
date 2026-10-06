@@ -57,8 +57,14 @@ export type LegacyScopeHistory = Readonly<HistoryData> & {
 
 /** Structural: the user database's local documents and internal store. */
 export type ScopeHistoryDatabase = {
-	getLocal(id: string): Promise<{ get(key: string): unknown } | null>;
-	upsertLocal(id: string, data: HistoryData): Promise<unknown>;
+	getLocal(id: string): Promise<{
+		get(key: string): unknown;
+		/** rxdb's write queue: the modifier re-runs on the LATEST data until it lands. */
+		incrementalModify(
+			modifier: (data: HistoryData) => HistoryData | Promise<HistoryData>
+		): Promise<unknown>;
+	} | null>;
+	insertLocal(id: string, data: HistoryData): Promise<unknown>;
 	internalStore: {
 		findDocumentsById(ids: string[], withDeleted: boolean): Promise<{ _meta: { lwt: number } }[]>;
 	};
@@ -70,47 +76,79 @@ async function appDatabasePredatesThisRun(db: ScopeHistoryDatabase): Promise<boo
 	return token === undefined || token._meta.lwt < PROCESS_STARTED_AT_MS;
 }
 
-async function readHistory(db: ScopeHistoryDatabase): Promise<HistoryData | null> {
-	const doc = await db.getLocal(HISTORY_LOCAL_ID);
-	if (!doc) return null;
-	const strings = (value: unknown): string[] =>
-		Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
+function strings(value: unknown): string[] {
+	return Array.isArray(value)
+		? value.filter((name): name is string => typeof name === 'string')
+		: [];
+}
+
+function normalized(data: Partial<HistoryData> | undefined): HistoryData {
 	return {
-		names: strings(doc.get('names')),
-		complete: doc.get('complete') === true,
-		cleared: strings(doc.get('cleared')),
+		names: strings(data?.names),
+		complete: data?.complete === true,
+		cleared: strings(data?.cleared),
 	};
+}
+
+/**
+ * Change the history ATOMICALLY: the modifier runs inside rxdb's incremental write of the latest
+ * local document (re-run on a conflict) — two layout effects on a rapid scope change, or a clear
+ * landing beside an open, must never write back a stale copy and drop the other's name. A
+ * missing history is created (deciding completeness); a creation that loses the race modifies
+ * the winner's document instead. Returns the history as written.
+ */
+async function modifyHistory(
+	db: ScopeHistoryDatabase,
+	modify: (data: HistoryData) => HistoryData
+): Promise<HistoryData> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const doc = await db.getLocal(HISTORY_LOCAL_ID);
+		if (doc) {
+			let written: HistoryData | null = null;
+			await doc.incrementalModify((data) => {
+				written = modify(normalized(data));
+				return written;
+			});
+			return written ?? normalized(undefined);
+		}
+		const created = modify({
+			names: [],
+			complete: !(await appDatabasePredatesThisRun(db)),
+			cleared: [],
+		});
+		try {
+			await db.insertLocal(HISTORY_LOCAL_ID, created);
+			return created;
+		} catch (error) {
+			// Another writer created it first: modify theirs on the next turn.
+			if (attempt > 0) throw error;
+		}
+	}
+	throw new Error('legacy scope history: could not be written');
 }
 
 /**
  * Record that `scope` is open (its drainable-generation name joins the history)
  * and return the history as it now stands. The first call on an install decides
- * whether the history is complete.
+ * whether the history is complete. A new name is uncleared: the history is no
+ * longer settled until it reports.
  */
 export async function recordScopeOpened(
 	db: ScopeHistoryDatabase,
 	scope: StoreScopeIdentity
 ): Promise<LegacyScopeHistory> {
 	const name = scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION });
-	let data = (await readHistory(db)) ?? {
-		names: [],
-		complete: !(await appDatabasePredatesThisRun(db)),
-		cleared: [],
-	};
-	// A missing history has no names, so its first scope always writes it (completeness included).
-	// A new name is uncleared: the history is no longer settled until it reports.
-	if (!data.names.includes(name)) {
-		data = { ...data, names: [...data.names, name] };
-		await db.upsertLocal(HISTORY_LOCAL_ID, data);
-	}
+	const data = await modifyHistory(db, (latest) =>
+		latest.names.includes(name) ? latest : { ...latest, names: [...latest.names, name] }
+	);
 	return {
 		...data,
 		settled: data.complete && data.names.every((known) => data.cleared.includes(known)),
 		markCleared: async (names) => {
-			const latest = (await readHistory(db)) ?? data;
-			const cleared = [...new Set([...latest.cleared, ...names])];
-			if (cleared.length === latest.cleared.length) return;
-			await db.upsertLocal(HISTORY_LOCAL_ID, { ...latest, cleared });
+			await modifyHistory(db, (latest) => ({
+				...latest,
+				cleared: [...new Set([...latest.cleared, ...names])],
+			}));
 		},
 	};
 }

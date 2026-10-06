@@ -9,12 +9,29 @@ const v5 = (scope: typeof A) => scopeDatabaseName(scope, { generation: 5 });
 /** A user database fake: local documents in a map, and a storage token written at `tokenAtMs`. */
 function userDatabase(tokenAtMs: number | null) {
 	const locals = new Map<string, Record<string, unknown>>();
+	let writes: Promise<void> = Promise.resolve();
 	const db: ScopeHistoryDatabase = {
-		getLocal: async (id) => {
-			const data = locals.get(id);
-			return data ? { get: (key: string) => data[key] } : null;
+		// Like rxdb's local documents: reads see the latest data, and a modifier runs against the
+		// LATEST data when its write lands (after a turn, as rxdb's write queue does).
+		getLocal: async (id) =>
+			locals.has(id)
+				? {
+						get: (key: string) => locals.get(id)![key],
+						incrementalModify: (modify) => {
+							// rxdb's write queue: one modifier at a time, each against the latest data.
+							writes = writes.then(async () => {
+								const latest = { ...locals.get(id) } as Parameters<typeof modify>[0];
+								locals.set(id, { ...(await modify(latest)) });
+							});
+							return writes;
+						},
+					}
+				: null,
+		insertLocal: async (id, data) => {
+			await Promise.resolve();
+			if (locals.has(id)) throw new Error('conflict: the document exists');
+			locals.set(id, { ...data });
 		},
-		upsertLocal: async (id, data) => void locals.set(id, { ...data }),
 		internalStore: {
 			findDocumentsById: async () => (tokenAtMs === null ? [] : [{ _meta: { lwt: tokenAtMs } }]),
 		},
@@ -76,5 +93,24 @@ describe('the scope history', () => {
 		const history = await recordScopeOpened(db, A);
 		await history.markCleared([v5(A)]);
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: false });
+	});
+
+	it('two scopes opened at once both join the history', async () => {
+		const { db, locals } = userDatabase(Date.now() + 1_000);
+		await Promise.all([recordScopeOpened(db, A), recordScopeOpened(db, B)]);
+		expect([...((locals.get('legacy-scope-history')?.names as string[]) ?? [])].sort()).toEqual(
+			[v5(A), v5(B)].sort()
+		);
+	});
+
+	it('a clear landing beside a newly opened scope keeps both', async () => {
+		const C = { site: 'https://c.example.test', storeId: 5, cashierId: 6 };
+		const { db, locals } = userDatabase(Date.now() + 1_000);
+		const history = await recordScopeOpened(db, A);
+		await Promise.all([history.markCleared([v5(A)]), recordScopeOpened(db, C)]);
+		expect(locals.get('legacy-scope-history')).toMatchObject({
+			names: [v5(A), v5(C)],
+			cleared: [v5(A)],
+		});
 	});
 });
