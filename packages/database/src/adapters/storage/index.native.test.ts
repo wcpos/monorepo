@@ -117,6 +117,24 @@ describe('native SQLite storage seam', () => {
 		expect(statement.finalizeAsync).toHaveBeenCalledTimes(1);
 	});
 
+	it('run names the failing statement after the platform message, once', async () => {
+		const { db } = statementDb({
+			execute: async () => {
+				throw new Error('Error code ');
+			},
+		});
+		const config = await settings();
+		const query = 'INSERT INTO "products-0"\n  (id, revision)\n  VALUES (?, ?)';
+		const failure = await config.sqliteBasics
+			.run(db as never, { query, params: ['a', 'b'] } as never)
+			.catch((error: Error) => error);
+		expect(failure).toBeInstanceOf(Error);
+		expect((failure as Error).message).toBe(
+			'Error code  [sql: INSERT INTO "products-0" (id, revision) VALUES (?, ?)]'
+		);
+		expect((failure as Error).message.match(/\[sql:/g)).toHaveLength(1);
+	});
+
 	it('all prepares, executes with the params array, reads every row and finalizes once', async () => {
 		const { db, statement, executed } = statementDb({});
 		const config = await settings();
