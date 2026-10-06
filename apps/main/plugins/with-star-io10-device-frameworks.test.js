@@ -28,7 +28,8 @@ test('defines the fix before prepare_react_native_project! and calls it after re
 	const call = patched.indexOf('    fix_star_io10_device_framework_search_paths(installer)');
 	assert.ok(def > -1 && def < prepare);
 	assert.ok(call > postInstall);
-	assert.match(patched, /next if value\.include\?\('\$\(inherited\)'\)/);
+	assert.match(patched, /base_configuration_reference/);
+	assert.match(patched, /FRAMEWORK_SEARCH_PATHS/);
 });
 
 test('is idempotent', () => {

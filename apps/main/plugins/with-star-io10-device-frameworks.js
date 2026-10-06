@@ -11,15 +11,20 @@ const { createRunOncePlugin, withDangerousMod } = require('@expo/config-plugins'
 // for the Tap to Pay dev client). This post_install hook puts `$(inherited)` back.
 const POST_INSTALL_FIX = `
 def fix_star_io10_device_framework_search_paths(installer)
+  # pod_target_xcconfig values live in the generated .xcconfig files, not in the project's
+  # build settings, so the file is what has to change.
   installer.pods_project.targets.each do |target|
     next unless target.name == 'react-native-star-io10'
     target.build_configurations.each do |config|
-      key = 'FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]'
-      value = config.build_settings[key]
-      next if value.nil?
-      value = value.join(' ') if value.is_a?(Array)
-      next if value.include?('$(inherited)')
-      config.build_settings[key] = "$(inherited) #{value}"
+      ref = config.base_configuration_reference
+      next if ref.nil?
+      path = ref.real_path
+      contents = File.read(path)
+      patched = contents.sub(
+        /^(FRAMEWORK_SEARCH_PATHS\\[sdk=iphoneos\\*\\] = )(?!\\$\\(inherited\\))/,
+        '\\1$(inherited) '
+      )
+      File.write(path, patched) unless patched == contents
     end
   end
 end
