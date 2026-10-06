@@ -191,14 +191,18 @@ it.each([
 	driver.callbacks.onFinishDiscoveringReaders();
 	await expect(pending).resolves.toEqual([{ ...info, battery }]);
 });
+// The SDK can hold a reader the driver no longer knows about (a logout or store switch resets
+// the driver, not the SDK), so the release runs on every scan; the driver's own state only
+// changes when it believed it was connected.
 it.each([true, false])(
-	'disconnects before scanning only when connected (connected=%s)',
+	'releases the SDK reader before every scan (connected=%s)',
 	async (connected) => {
 		if (connected) {
 			await discover();
 			await driver.connect(info, handoff);
 		}
 		api.discoverReaders.mockClear();
+		api.disconnectReader.mockClear();
 		const listener = jest.fn();
 		const unsubscribe = driver.status$.subscribe(listener);
 		try {
@@ -208,9 +212,9 @@ it.each([true, false])(
 			);
 			const pending = driver.discoverReaders('bluetooth');
 			await jest.advanceTimersByTimeAsync(0);
+			expect(api.disconnectReader).toHaveBeenCalledTimes(1);
+			expect(api.discoverReaders).not.toHaveBeenCalled();
 			if (connected) {
-				expect(api.disconnectReader).toHaveBeenCalledTimes(1);
-				expect(api.discoverReaders).not.toHaveBeenCalled();
 				expect(driver.status$.get().connection).toBe('connected');
 				finishDisconnect({});
 				await jest.advanceTimersByTimeAsync(0);
@@ -222,7 +226,12 @@ it.each([true, false])(
 					api.discoverReaders.mock.invocationCallOrder[0]
 				);
 			} else {
-				expect(api.disconnectReader).not.toHaveBeenCalled();
+				// A "not connected" answer from the SDK is the expected case here and is not an error.
+				finishDisconnect({ error: { code: 'NotConnectedToReader', message: 'No reader' } });
+				await jest.advanceTimersByTimeAsync(0);
+				expect(listener).not.toHaveBeenCalledWith(
+					expect.objectContaining({ connection: 'disconnected' })
+				);
 			}
 			expect(api.discoverReaders).toHaveBeenCalledTimes(1);
 			expect(driver.status$.get()).toMatchObject({ connection: 'discovering', reader: null });
@@ -337,17 +346,68 @@ it.each([
 		});
 	}
 );
-it.each(['retrievePaymentIntent', 'collectPaymentMethod', 'confirmPaymentIntent'] as const)(
-	'maps Canceled from %s',
-	async (operation) => {
-		api[operation].mockResolvedValue({ error: { code: 'Canceled', message: 'cancelled' } });
-		await expect(driver.collect(input)).resolves.toMatchObject({
-			outcome: 'cancelled',
-			provider_refs: {},
-			amount: null,
-		});
-	}
-);
+it('a scan started mid-reconnect clears the reader the SDK kept, so the result never reads "connected"', async () => {
+	await discover();
+	await driver.connect(info, handoff);
+	driver.callbacks.onDidStartReaderReconnect(rawReader);
+	expect(driver.status$.get()).toMatchObject({ connection: 'connecting', reader: info });
+	api.disconnectReader.mockClear();
+	api.disconnectReader.mockResolvedValueOnce({
+		error: { code: 'NotConnectedToReader', message: '' },
+	});
+	const pending = driver.discoverReaders('bluetooth');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.disconnectReader).toHaveBeenCalledTimes(1);
+	expect(driver.status$.get()).toMatchObject({ connection: 'discovering', reader: null });
+	driver.callbacks.onFinishDiscoveringReaders();
+	await expect(pending).resolves.toEqual([]);
+	expect(driver.status$.get()).toMatchObject({ connection: 'disconnected', reader: null });
+});
+// iOS and the simulator say `Canceled`; the Android SDK says `CANCELED` (a WisePad 3 cancel
+// from the till rendered as "reader_error" until both were accepted, 2026-10-06).
+it.each([
+	...(['retrievePaymentIntent', 'collectPaymentMethod', 'confirmPaymentIntent'] as const).flatMap(
+		(operation) => [
+			{ operation, code: 'Canceled' },
+			{ operation, code: 'CANCELED' },
+		]
+	),
+])('maps $code from $operation to a cancelled outcome', async ({ operation, code }) => {
+	api[operation].mockResolvedValue({ error: { code, message: 'User canceled the transaction.' } });
+	await expect(driver.collect(input)).resolves.toMatchObject({
+		outcome: 'cancelled',
+		provider_refs: {},
+		amount: null,
+	});
+});
+it('stops a scan the moment the awaited reader appears instead of running the window out', async () => {
+	const pending = driver.discoverReaders('bluetooth', { until: rawReader.serialNumber });
+	await jest.advanceTimersByTimeAsync(0);
+	api.cancelDiscovering.mockClear(); // the start-of-scan cancel of any previous discovery
+	driver.callbacks.onUpdateDiscoveredReaders([{ ...rawReader, serialNumber: 'OTHER' }]);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.cancelDiscovering).not.toHaveBeenCalled();
+	driver.callbacks.onUpdateDiscoveredReaders([{ ...rawReader, serialNumber: 'OTHER' }, rawReader]);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.cancelDiscovering).toHaveBeenCalledTimes(1);
+	await expect(pending).resolves.toEqual([
+		{ ...info, id: 'OTHER', serial: 'OTHER', label: 'stripeM2 OTHER' },
+		info,
+	]);
+	// The window's own timer must not fire a second cancel later.
+	await jest.advanceTimersByTimeAsync(10000);
+	expect(api.cancelDiscovering).toHaveBeenCalledTimes(1);
+});
+it('without `until`, a discovered reader does not end the scan early', async () => {
+	const pending = driver.discoverReaders('bluetooth');
+	await jest.advanceTimersByTimeAsync(0);
+	api.cancelDiscovering.mockClear();
+	driver.callbacks.onUpdateDiscoveredReaders([rawReader]);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.cancelDiscovering).not.toHaveBeenCalled();
+	driver.callbacks.onFinishDiscoveringReaders();
+	await expect(pending).resolves.toEqual([info]);
+});
 it.each([
 	{ code: 'DeclinedByStripeAPI', declineCode: 'insufficient_funds' },
 	{ code: 'DeclinedByStripeAPI' },

@@ -90,7 +90,7 @@ export function ReaderConnection({
 		setWorking(true);
 		void (async () => {
 			for (const item of deviceTransports(method)) {
-				const reader = (await driver.discoverReaders!(item.transport)).find(
+				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
 					(r) => r.id === remembered
 				);
 				if (!active) return;

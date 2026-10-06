@@ -32,6 +32,8 @@ export interface ScanFeedbackHandle {
 	addFailed: (name: string) => void;
 	notFound: (code: string) => void;
 	ambiguous: (count: number, code: string) => void;
+	/** The scan matched a variable parent: the cashier must pick a variation (#2413). */
+	chooseVariation: (name: string, code: string) => void;
 	error: (code: string) => void;
 	outOfStock: (name: string, code: string) => void;
 	unavailable: (code: string) => void;
@@ -145,6 +147,16 @@ export const useScanFeedback = () => {
 					type: 'warning',
 					title: t('pos_products.scan_several_matches'),
 					description: `${t('common.product_found_locally', { count })} — ${code}`,
+					duration: ALERT_DURATION,
+				});
+			},
+			chooseVariation: (name, code) => {
+				failure();
+				Toast.show({
+					id,
+					type: 'warning',
+					title: t('pos_products.scan_choose_variation'),
+					description: `${name} — ${code}`,
 					duration: ALERT_DURATION,
 				});
 			},
