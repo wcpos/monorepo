@@ -32,12 +32,18 @@ jest.mock('../level-back', () => ({
 	),
 }));
 type Row = { id?: string; record?: { uuid: string } };
+// The real DataTable's header sort: written to its settings id's `sortBy`/`sortDirection` unless
+// `persistSort` is off, then applied to the query.
+const mockPatchUI = jest.fn();
 // As the real DataTable: rows are `tableConfig.data`, keyed by `getRowId` and drawn through
 // `renderItem`; an empty list draws `noDataMessage`, and an `undefined` one falls back to the
 // translated default; the footer gets the table's own props (its `count` the LIVE binding's
-// loaded rows); an end-reached is a scroll and calls the extend it was handed.
+// loaded rows); an end-reached is a scroll and calls the extend it was handed; a header sort
+// persists as the real one does.
 jest.mock('../../../../components/data-table/v2', () => ({
 	DataTable: ({
+		id,
+		persistSort = true,
 		tableConfig,
 		renderItem,
 		noDataMessage,
@@ -50,6 +56,8 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		cellsForRow: cells,
 		ListFooterComponent,
 	}: {
+		id: string;
+		persistSort?: boolean;
 		tableConfig: {
 			data: Row[];
 			getRowId?: (row: Row) => string;
@@ -59,7 +67,7 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
 		noDataMessage?: React.ReactNode;
 		getItemType: (row: { original: Row }) => string;
-		actions: { extendLimit: () => void };
+		actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
 		TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
 		total$: unknown;
 		active$: unknown;
@@ -74,6 +82,13 @@ jest.mock('../../../../components/data-table/v2', () => ({
 			data-list-footer={String(!!ListFooterComponent)}
 			onScroll={() => actions.extendLimit()}
 		>
+			<button
+				data-testid="table-sort-price"
+				onClick={() => {
+					if (persistSort) mockPatchUI(id, { sortBy: 'price', sortDirection: 'desc' });
+					actions.setSort('price', 'desc');
+				}}
+			/>
 			{tableConfig.data.length === 0 ? (
 				noDataMessage === undefined ? (
 					<span>common.no_results_found</span>
@@ -377,6 +392,19 @@ it('pages the products query from the deepest level only', () => {
 	render(<TermLevelTable {...covered} />);
 	fireEvent.scroll(screen.getByTestId('table'));
 	expect(covered.actions.extendLimit).not.toHaveBeenCalled();
+});
+
+// Every products table under a browse source is this one: a header sort lost on remount would
+// be lost for good.
+it('persists a header sort to the products table settings, as the products table does', () => {
+	const props = level();
+	render(<TermLevelTable {...props} />);
+	fireEvent.click(screen.getByTestId('table-sort-price'));
+	expect(mockPatchUI).toHaveBeenCalledWith('pos-products', {
+		sortBy: 'price',
+		sortDirection: 'desc',
+	});
+	expect(props.actions.setSort).toHaveBeenCalledWith('price', 'desc');
 });
 
 it('is the All products pane too: no child rows, the catalogue under the crumb', () => {

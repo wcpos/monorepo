@@ -222,9 +222,11 @@ export function TermLevelTable({
 			/>
 			<View className="min-h-0 flex-1">
 				{showProducts ? (
+					// The products table's own settings id, for the same collection: a header sort here
+					// persists as it does there (`persistSort` is off only for a table that borrows the id
+					// for another collection, as the variations pane does).
 					<DataTable<ProductHit>
 						id="pos-products"
-						persistSort={false}
 						collectionName="products"
 						binding={binding}
 						resource={binding.resource}

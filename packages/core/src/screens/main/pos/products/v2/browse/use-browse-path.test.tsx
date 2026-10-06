@@ -12,6 +12,8 @@ import { filtersAtBaseline, useBrowsePath } from './use-browse-path';
 // stock_status: 'instock' when out-of-stock products are hidden.
 const CLEARED = { categories: [] as number[], tags: [] as number[], brands: [] as number[] };
 let mockShowOutOfStock = true;
+// The products table settings' sort: a level's header sort persists here (term-table.tsx).
+let mockSettingsSort = { sortBy: 'name', sortDirection: 'asc' };
 const baseline = (): Record<string, unknown> => ({
 	...CLEARED,
 	status: 'publish',
@@ -71,7 +73,7 @@ jest.mock('../../../../../../query', () => {
 });
 jest.mock('../../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
-		uiSettings: { sortBy: 'name', sortDirection: 'asc', showOutOfStock: mockShowOutOfStock },
+		uiSettings: { ...mockSettingsSort, showOutOfStock: mockShowOutOfStock },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
@@ -99,6 +101,7 @@ const terms = {
 
 beforeEach(() => {
 	mockShowOutOfStock = true;
+	mockSettingsSort = { sortBy: 'name', sortDirection: 'asc' };
 	mockState = { search: '', filters: baseline(), sort: { field: 'name', direction: 'asc' } };
 	jest.clearAllMocks();
 });
@@ -286,6 +289,23 @@ it('a sort picked inside a shortcut level keeps the level and its filters', () =
 		on_sale: true,
 	});
 	expect(mockState.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+});
+
+// The level's products table persists a header sort to the settings, which moves the baseline
+// sort the shortcut is compared under: the level must hold all the same.
+it('a header sort persisted to the settings inside a shortcut level keeps the level and its filters', () => {
+	const { result, rerender } = renderHook(() => useBrowsePath('shortcuts', withA as never));
+	act(() => result.current.enter(shortcutA));
+	act(() => actions.setSort('sortable_price', 'desc'));
+	mockSettingsSort = { sortBy: 'sortable_price', sortDirection: 'desc' };
+	rerender();
+	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcutA]);
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [3],
+		status: 'publish',
+		on_sale: true,
+	});
 });
 
 it('a search typed inside a term still takes the term out, even after a sort changed in the level', () => {
