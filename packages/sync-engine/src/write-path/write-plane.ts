@@ -36,6 +36,8 @@ export type WriteOptions = {
 	 * switch takes — so it can never land in a scope the caller did not mean.
 	 */
 	scopeId?: string;
+	/** A create takes its payload from the latest resident (see `enqueueWriteIntent`). */
+	payloadFromResident?: boolean;
 };
 export type WritePlane = {
 	write(intent: WriteIntent, options?: WriteOptions): Promise<WriteReceipt>;
@@ -169,6 +171,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						now: () => new Date(deps.now()).toISOString(),
 						observe: deps.diagnostics,
 						canCoalesce: true,
+						...(options?.payloadFromResident ? { payloadFromResident: true } : {}),
 					});
 					await onQueueChanged(database);
 				});

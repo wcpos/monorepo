@@ -381,22 +381,13 @@ async function carryOverOpenCarts(
 						`the live copy of ${cart.recordId} has an edit in flight with no create ahead of it`
 					);
 				}
-				// A fresh copy carries the held chain coalesced as the old queue held it (the create's
-				// payload with each later edit layered on, in seq order) — or, for an orphan skeleton
-				// with no chain, its resident payload; a copy already live carries its own resident
-				// payload, which already holds every later edit.
-				const payload =
-					inserted && cart.rows.length > 0
-						? (Object.assign(
-								{},
-								...cart.rows.map((row) => plainCopy((row.payload ?? {}) as Record<string, unknown>))
-							) as Record<string, unknown>)
-						: plainCopy(
-								((inserted ? cart.order.payload : residentJson.payload) ?? {}) as Record<
-									string,
-									unknown
-								>
-							);
+				// The create carries the LIVE resident as the enqueue reads it inside its own CAS turn
+				// (`payloadFromResident`), not a snapshot taken here: once copied, the cart is visible
+				// and the cashier can edit it, and an edit landing between this line and the enqueue
+				// must be in the create — a stale snapshot layered last on the coalesce would drop it.
+				// (A fresh copy's resident IS the v5 resident, which holds every held edit.) The
+				// payload below is only the intent's required shape.
+				const payload = plainCopy((residentJson.payload ?? {}) as Record<string, unknown>);
 				try {
 					// Bound to the drained scope: a switch landing between the check above and this
 					// enqueue refuses the write instead of queueing this cart in another store's database.
@@ -407,7 +398,7 @@ async function carryOverOpenCarts(
 							recordId: cart.recordId,
 							payload,
 						},
-						{ inScope: identity }
+						{ inScope: identity, payloadFromResident: true }
 					);
 				} catch (error) {
 					// Leave nothing half-copied: the cart stays (held) in the old database.

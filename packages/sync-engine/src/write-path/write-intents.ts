@@ -202,6 +202,16 @@ export async function enqueueWriteIntent(input: {
 	/** False for a web follower whose cross-tab `_rev` cache cannot safely CAS an
 	 * existing queue row. It may only append a fresh mutation. Default true. */
 	canCoalesce?: boolean;
+	/**
+	 * A CREATE takes its payload from the resident as read INSIDE this enqueue's
+	 * CAS turn (the read every placement decision is made from), not from the
+	 * intent's snapshot. For a create whose caller cannot hold the record still
+	 * between its own read and this call (the previous-generation drain carrying a
+	 * cart the cashier can already edit): a same-record edit landing first is then
+	 * in the resident this create carries — never overwritten by a stale snapshot
+	 * layered last on a coalesce.
+	 */
+	payloadFromResident?: boolean;
 }): Promise<{
 	mutationId: string;
 	recordId: string;
@@ -358,7 +368,9 @@ export async function enqueueWriteIntent(input: {
 			const built = buildCreateMutation(
 				{
 					collectionName: intent.collection,
-					payload: intent.payload as never,
+					payload: (input.payloadFromResident && stored?.payload !== undefined
+						? storablePayload(intent.collection, stored.payload)
+						: intent.payload) as never,
 					currentId: intent.recordId,
 				},
 				deps

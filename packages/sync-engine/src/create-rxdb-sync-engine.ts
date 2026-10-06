@@ -605,10 +605,13 @@ export type RxdbSyncEngine = {
 	 * `options.inScope` binds the write to that scope: it is refused (nothing
 	 * enqueued) unless that scope is the active one when the enqueue takes the
 	 * scope guard. For work that belongs to one scope and must never follow a
-	 * switch into another (the previous-generation drain's carried carts). */
+	 * switch into another (the previous-generation drain's carried carts).
+	 * `options.payloadFromResident` makes a create carry the resident as read
+	 * inside the enqueue, not the intent's snapshot (same-record edits that land
+	 * first are kept). */
 	write(
 		intent: WriteIntent,
-		options?: { inScope?: StoreScopeIdentity }
+		options?: { inScope?: StoreScopeIdentity; payloadFromResident?: boolean }
 	): Promise<{
 		mutationId: string;
 		recordId: string;
@@ -2366,10 +2369,10 @@ export function createRxdbSyncEngine(
 			},
 		},
 		write: async (intent, options) => {
-			const receipt = await writePlane.write(
-				intent,
-				options?.inScope ? { scopeId: scopeKeyFor(options.inScope) } : undefined
-			);
+			const receipt = await writePlane.write(intent, {
+				...(options?.inScope ? { scopeId: scopeKeyFor(options.inScope) } : {}),
+				...(options?.payloadFromResident ? { payloadFromResident: true } : {}),
+			});
 			// An annihilated delete never enqueued anything — nothing to drain.
 			if (!receipt.annihilated) {
 				writeDrainNudge.nudge();

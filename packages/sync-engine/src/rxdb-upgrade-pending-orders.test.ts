@@ -853,6 +853,84 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		).toEqual({ status: 'absent', databaseName: manifest.databaseName });
 	}, 30_000);
 
+	it('an edit to the carried cart landing between the copy and the create is kept: the create and its ack carry the edited lines', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const original = [{ product_id: 41, quantity: 1, name: 'Coffee' }];
+		const edited = [{ product_id: 41, quantity: 3, name: 'Coffee' }];
+		// The v5 cart already has a line: a stale snapshot would carry it back over the edit.
+		const legacy = await openLegacy(storage, server);
+		try {
+			const order = await legacy.collection('orders').findOne(cart.uuid).exec();
+			await order!.incrementalModify((data: Json) => ({
+				...data,
+				payload: { ...(data.payload as Json), line_items: original },
+			}));
+		} finally {
+			await legacy.dispose();
+		}
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const editing: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: () => app.engine.whenActive(),
+				write: async (intent, options) => {
+					// The cashier adds a line to the now-visible cart just before the carried create
+					// is enqueued: the resident changes, then its update is queued (as the app does).
+					const resident = await app.collection('orders').findOne(cart.uuid).exec();
+					await resident!.incrementalModify((data: Json) => ({
+						...data,
+						payload: { ...(data.payload as Json), line_items: edited },
+					}));
+					await app.engine.write({
+						collection: 'orders',
+						operation: 'update',
+						recordId: cart.uuid,
+						payload: { line_items: edited },
+					});
+					return app.engine.write(intent, options);
+				},
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: editing }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'kept', carried: 1 });
+			const rows = [...(await stored(app)).rows.values()];
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				operation: 'create',
+				payload: expect.objectContaining({ line_items: [expect.objectContaining(edited[0])] }),
+			});
+
+			// Checked out and pushed: the store gets the edited lines, and the ack keeps them.
+			const resident = await app.collection('orders').findOne(cart.uuid).exec();
+			await resident!.incrementalModify((data: Json) => ({
+				...data,
+				status: 'completed',
+				payload: { ...(data.payload as Json), status: 'completed' },
+			}));
+			expect(await app.engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const [create] = server.received.filter((envelope) => envelope.recordId === cart.uuid);
+			expect(create?.operation).toBe('create');
+			expect(create?.payload?.line_items).toEqual([expect.objectContaining(edited[0])]);
+			const acked = (await app.collection('orders').findOne(cart.uuid).exec())!.toJSON() as Json;
+			expect((acked.payload as Json).line_items).toEqual([expect.objectContaining(edited[0])]);
+		} finally {
+			await app.dispose();
+		}
+	}, 30_000);
+
 	it('a store switch landing between the scope check and the write refuses the carried create: nothing reaches the new scope', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
