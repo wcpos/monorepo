@@ -117,6 +117,26 @@ it('Escape returns to products', () => {
 	fireEvent.keyDown(screen.getByTestId('products-variations-pane'), { key: 'Escape' });
 	expect(screen.getByTestId('products-list')).not.toBeNull();
 });
+it('renders the given ancestors before the product and keeps the last one as the way back', () => {
+	const back = jest.fn();
+	const toRoot = jest.fn();
+	render(
+		<DrillIn
+			parent={parent}
+			back={back}
+			parents={[
+				{ label: 'Categories', onPress: toRoot },
+				{ label: 'Hot', onPress: back },
+			]}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('products-breadcrumb-parent-0'));
+	expect(toRoot).toHaveBeenCalled();
+	expect(back).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('products-breadcrumb-back'));
+	expect(back).toHaveBeenCalled();
+	expect(screen.queryByText('pos_products.products_crumb')).toBeNull();
+});
 it('keeps the existing expanded row under inline and drills with a chevron otherwise', () => {
 	const item = { original: { record: parent } } as unknown as React.ComponentProps<
 		typeof VariableProductRow
