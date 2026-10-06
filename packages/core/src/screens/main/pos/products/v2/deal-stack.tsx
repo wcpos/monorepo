@@ -28,6 +28,12 @@ type Deal = {
 	origin: Rect | null | undefined;
 	/** Where the tiles are headed: out on the grid, or back in the parent. */
 	dealt: boolean;
+	/**
+	 * The deal has had time to land every tile. Until then a cell that mounts (a cold level's
+	 * answer filling more slots, a list rendering its next batch) joins the deal in the air
+	 * rather than painting at rest among tiles still flying.
+	 */
+	landed: boolean;
 	stageWidth: number;
 	/**
 	 * The dealt grid's frame within the stage, where its slots rest: `undefined` until the grid
@@ -45,6 +51,7 @@ type Deal = {
 const AT_REST: Deal = {
 	origin: null,
 	dealt: true,
+	landed: true,
 	stageWidth: 0,
 	grid: null,
 	placeGrid: () => {},
@@ -64,6 +71,12 @@ const SCALE_FROM = 0.92;
 // How long the stage waits for the tile's frame and the pane's first layout before it deals
 // in place. Both normally arrive within two frames; a tap must never be lost to a measurement.
 const MEASURE_GRACE = 120;
+// The whole deal, from the frame it sets off to the last tile landing: the parent's walk, or
+// the capped stagger of the tiles and one landing, whichever is longer.
+const DEAL_SPAN = Math.max(
+	PANE,
+	(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
+);
 const REDUCE = { reduceMotion: ReduceMotion.System };
 
 // Web only: covered products leave the tab order and the accessibility tree but keep their
@@ -112,6 +125,8 @@ export function DealStack<T>({
 	const [grid, setGrid] = React.useState<Rect | null | undefined>(undefined);
 	const [dealt, setDealt] = React.useState(false);
 	const [settled, setSettled] = React.useState(false);
+	// Not `settled`: that is the furniture's clock, which runs out long before the last tile lands.
+	const [landed, setLanded] = React.useState(false);
 	const open = detail !== null;
 	if (open && detail !== staged) {
 		setStaged(detail);
@@ -145,6 +160,7 @@ export function DealStack<T>({
 		);
 	}, []);
 	if (!open && settled) setSettled(false);
+	if (!open && landed) setLanded(false);
 	// Closing turns the tiles for home in the same render that hears of it.
 	if (!open && dealt) setDealt(false);
 
@@ -209,8 +225,10 @@ export function DealStack<T>({
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
+		let landing: ReturnType<typeof setTimeout> | undefined;
 		const frame = requestAnimationFrame(() => {
 			setDealt(true);
+			landing = setTimeout(() => setLanded(true), DEAL_SPAN);
 			furniture.value = withTiming(
 				1,
 				{ duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE },
@@ -221,19 +239,23 @@ export function DealStack<T>({
 			);
 			under.value = withTiming(0, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE });
 		});
-		return () => cancelAnimationFrame(frame);
+		return () => {
+			cancelAnimationFrame(frame);
+			clearTimeout(landing);
+		};
 	}, [open, armed, furniture, under]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
 			origin,
 			dealt,
+			landed,
 			stageWidth,
 			grid,
 			placeGrid,
 			furniture,
 		}),
-		[origin, dealt, stageWidth, grid, placeGrid, furniture]
+		[origin, dealt, landed, stageWidth, grid, placeGrid, furniture]
 	);
 
 	// Clamped for the reason `PaneStack` clamps: a first frame stamped before the animation's
@@ -312,13 +334,20 @@ export function DealCell({
 	restY?: number;
 	children: React.ReactNode;
 }) {
-	const { origin, dealt, stageWidth, grid } = useDeal();
-	const travel = useSharedValue(dealt ? 1 : 0);
+	const { origin, dealt, landed, stageWidth, grid } = useDeal();
+	// A cell that mounts while the deal is still in the air (more slots than the placeholders
+	// held, the list's next batch) starts under the parent, unseen, and is dealt from there, so it
+	// is not painted at rest while the first row still flies. One that mounts after the deal has
+	// landed is simply where it belongs: nothing animates on mount.
+	const atRest = dealt && landed;
+	const travel = useSharedValue(atRest ? 1 : 0);
 	const parent = index === 0;
 
 	// A cell sets off only when its direction changes. `count` moves while a cold query fills
 	// its placeholders; a tile already in the air must not stop for a fresh delay.
-	const aimed = React.useRef(dealt);
+	const aimed = React.useRef(atRest);
+	// Joining late, its turn in the stagger has already come: it sets off at once.
+	const late = React.useRef(dealt && !landed);
 	React.useEffect(() => {
 		if (aimed.current === dealt) return;
 		aimed.current = dealt;
@@ -328,7 +357,8 @@ export function DealCell({
 		}
 		// Out: in order, each landing on the beat. Back: last out is first home, speeding up
 		// into the parent rather than creeping onto it.
-		const turn = dealt ? index - 1 : count - 1 - index;
+		const turn = dealt ? (late.current ? 0 : index - 1) : count - 1 - index;
+		late.current = false;
 		const beat = dealt ? BEATS.newTiles : BEATS.oldTiles;
 		travel.value = withDelay(
 			Math.min(turn, beat.cap - 1) * beat.step,

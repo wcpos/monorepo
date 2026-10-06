@@ -14,6 +14,8 @@ type TimingCall = {
 const mockTimings: TimingCall[] = [];
 const mockDelays: number[] = [];
 const mockShared: { value: number }[] = [];
+// What each clock started at, before any effect drove it: what its first paint shows.
+const mockInitial: number[] = [];
 const mockCancelled: { value: number }[] = [];
 const mockStyles = new Map<string, () => Style>();
 const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
@@ -88,7 +90,10 @@ jest.mock('react-native-reanimated', () => {
 		useSharedValue: (value: number) => {
 			const shared = ReactActual.useRef({ value }).current;
 			// The clocks only: a cell's offset (an object) is read through its style, not driven.
-			if (typeof value === 'number' && !mockShared.includes(shared)) mockShared.push(shared);
+			if (typeof value === 'number' && !mockShared.includes(shared)) {
+				mockShared.push(shared);
+				mockInitial.push(value);
+			}
 			return shared;
 		},
 		withDelay: (delay: number, value: number) => {
@@ -238,6 +243,7 @@ beforeEach(() => {
 	mockTimings.length = 0;
 	mockDelays.length = 0;
 	mockShared.length = 0;
+	mockInitial.length = 0;
 	mockCancelled.length = 0;
 	mockStyles.clear();
 	mockLayouts.length = 0;
@@ -513,10 +519,36 @@ it('a cell in the air keeps going when the slot count changes under it', () => {
 	const delays = mockDelays.length;
 	// A cold query fills in: the grid gains a slot, so every cell's `count` changes.
 	rerender(<Stage detail="Hoodie" count={5} />);
-	// The four cells already going are not sent off again; only the new slot starts (at rest).
-	expect(mockTimings.length).toBe(timings);
-	expect(mockDelays.length).toBe(delays);
-	expect(mockShared.at(-1)!.value).toBe(1);
+	// The four cells already going are not sent off again; only the new slot sets off.
+	expect(mockTimings.length).toBe(timings + 1);
+	expect(mockDelays.length).toBe(delays + 1);
+});
+
+it('a cell that mounts mid-deal joins it from under the parent; one after the deal landed is at rest', () => {
+	const { rerender } = render(<Stage detail={null} count={4} />);
+	rerender(<Stage detail="Hoodie" count={4} />);
+	layOut();
+	const timings = mockTimings.length;
+	// The deal is in the air when the answer brings a fifth slot: it is not painted at rest
+	// among tiles still flying, but starts unseen under the parent and is dealt at once, its
+	// turn in the stagger long gone.
+	rerender(<Stage detail="Hoodie" count={5} />);
+	expect(mockInitial.at(-1)).toBe(0);
+	expect(mockDelays.at(-1)).toBe(0);
+	expect(mockTimings.slice(timings)).toEqual([
+		expect.objectContaining({ toValue: 1, duration: BEATS.newTiles.duration }),
+	]);
+	// The last tile has landed: a slot that mounts now (the list's next batch) is where it
+	// belongs, and nothing animates on mount.
+	act(() =>
+		jest.advanceTimersByTime(
+			(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
+		)
+	);
+	const landed = mockTimings.length;
+	rerender(<Stage detail="Hoodie" count={6} />);
+	expect(mockInitial.at(-1)).toBe(1);
+	expect(mockTimings.length).toBe(landed);
 });
 
 it('a return interrupted by the same tile leaves the detail mounted', () => {
