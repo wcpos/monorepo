@@ -39,10 +39,28 @@ jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
+// The footer reads `total$` as the real one does (`useObservableState`: a replaced stream keeps
+// its last value until the new one emits), and reports the denominator it would show.
 jest.mock('../footer', () => ({
-	ProductsFooter: ({ count, collectionName }: { count: number; collectionName: string }) => (
-		<footer data-testid="products-footer" data-count={count} data-collection={collectionName} />
-	),
+	ProductsFooter: ({
+		count,
+		collectionName,
+		total$,
+	}: {
+		count: number;
+		collectionName: string;
+		total$: import('rxjs').Observable<number | null>;
+	}) => {
+		const total = jest.requireActual('observable-hooks').useObservableState(total$, null);
+		return (
+			<footer
+				data-testid="products-footer"
+				data-count={count}
+				data-total={String(total)}
+				data-collection={collectionName}
+			/>
+		);
+	},
 }));
 // The list renders every row it is handed, in order: the root's order is what is tested.
 jest.mock('@wcpos/components/virtualized-list', () => ({
@@ -142,7 +160,7 @@ it('the root footer counts only the query now asked: a return never shows the le
 	const { rerender } = render(
 		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={level as unknown as Binding} />
 	);
-	expect(screen.getByTestId('products-footer').dataset.count).toBe('12');
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '12', total: '12' });
 	// Back at the root: the catalogue's query has not answered yet.
 	const total$ = new Subject<number | null>();
 	const result$ = new Subject<{ hits: object[] }>();
@@ -150,12 +168,14 @@ it('the root footer counts only the query now asked: a return never shows the le
 	rerender(
 		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={root as unknown as Binding} />
 	);
+	// Neither the count nor the denominator is the level's.
 	expect(screen.getByTestId('products-footer').dataset.count).not.toBe('12');
+	expect(screen.getByTestId('products-footer').dataset.total).not.toBe('12');
 	act(() => {
 		result$.next({ hits: [{}, {}] });
 		total$.next(80);
 	});
-	expect(screen.getByTestId('products-footer').dataset.count).toBe('80');
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '80', total: '80' });
 });
 
 it('the root grid lifts the tile whose copy is out on the stage', () => {
