@@ -144,12 +144,14 @@ export function StepProgress({
 	const was = React.useRef(target);
 	React.useLayoutEffect(() => {
 		if (was.current === target) return;
+		was.current = target;
 		// Forwards travels after the badge behind it has closed; backwards (a retry) just goes.
+		// Direction is judged from where the fill actually is, not from the last target: a
+		// forward jump superseded inside its wait has not moved yet.
 		progress.value =
-			target > was.current
+			target > progress.value
 				? withDelay(FILL_START, withTiming(target, FILL_TIMING))
 				: withTiming(target, FILL_TIMING);
-		was.current = target;
 	}, [target, progress]);
 	// Positioned at the left edge and pushed back by what is not yet travelled, so the only
 	// animated property is a transform and no transform origin is involved.
