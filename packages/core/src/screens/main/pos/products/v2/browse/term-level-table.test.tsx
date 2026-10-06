@@ -255,6 +255,16 @@ type Props = React.ComponentProps<typeof TermLevelTable>;
 const level = (overrides: Record<string, unknown> = {}) =>
 	({ ...base(), ...overrides }) as unknown as Props & ReturnType<typeof base>;
 
+// react-native-web drives `onLayout` from a ResizeObserver jsdom lacks; it leaves the handler on
+// the node, so a layout is delivered the way the observer would.
+type LaidOut = HTMLElement & { __reactLayoutHandler?: (event: unknown) => void };
+const layOut = (height: number) =>
+	act(() =>
+		(screen.getByTestId('browse-level-rows') as LaidOut).__reactLayoutHandler?.({
+			nativeEvent: { layout: { x: 0, y: 0, width: 400, height } },
+		})
+	);
+
 const before = (a: HTMLElement, b: HTMLElement) =>
 	!!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
@@ -392,11 +402,13 @@ it('keeps its own rows while a child pane is over it', () => {
 it('pages the products query from the deepest level only', () => {
 	const props = level();
 	const { unmount } = render(<TermLevelTable {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
 	unmount();
 	const covered = level({ settled: false });
 	render(<TermLevelTable {...covered} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	expect(covered.actions.extendLimit).not.toHaveBeenCalled();
 });
@@ -420,6 +432,7 @@ it('pages once when pending clears after an end-reached it ignored while pending
 	const pending$ = new BehaviorSubject(true);
 	const props = level({ binding: { ...base().binding, pending$ } });
 	render(<TermLevelTable {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 	act(() => pending$.next(false));
@@ -434,9 +447,57 @@ it('drops an armed end-reached when a child pane covers the level before pending
 	const pending$ = new BehaviorSubject(true);
 	const props = level({ binding: { ...base().binding, pending$ } });
 	const { rerender } = render(<TermLevelTable {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	rerender(<TermLevelTable {...props} settled={false} />);
 	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+});
+
+// On native small screens the products screen stays mounted at `display: 'none'` while Cart
+// shows, and zero geometry reads as end-reached: the hidden level must not extend the shared
+// query (each new limit would hand the list a new handler and page again), and the end it saw is
+// checked once when it shows again.
+it('ignores an end-reached on a zero-size viewport, and pages once when the viewport is back', () => {
+	const props = level();
+	render(<TermLevelTable {...props} />);
+	// Not measured yet: no viewport.
+	fireEvent.scroll(screen.getByTestId('table'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('table'));
+	fireEvent.scroll(screen.getByTestId('table'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	// Shown again: the held end-reached is fired once, not once per zero-size report.
+	layOut(600);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	layOut(640);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('holds an end-reached armed while pending until the viewport is back too', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...base().binding, pending$ } });
+	render(<TermLevelTable {...props} />);
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('table'));
+	// Pending clears while the screen is still hidden: nothing moves yet.
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	layOut(600);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('pages on an end-reached once the viewport is measured, and stops when it goes to zero', () => {
+	const props = level();
+	render(<TermLevelTable {...props} />);
+	layOut(600);
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	fireEvent.scroll(screen.getByTestId('table'));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	(props.actions.extendLimit as jest.Mock).mockClear();
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('table'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 

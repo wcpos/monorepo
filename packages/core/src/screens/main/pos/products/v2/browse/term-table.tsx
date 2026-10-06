@@ -180,9 +180,14 @@ export function TermLevelTable({
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
 	// its own rows, as the level grid does — and an end-reached while the demand is pending is
 	// armed and fired once it clears (FlashList will not fire again for the same rows):
-	// use-armed-end-reached. A pane a child is over does not own the query: it may not move it.
+	// use-armed-end-reached. So is one before the rows measure a positive height: a products screen
+	// kept mounted but inactive (native small screens, Cart showing) lays out at zero size, and
+	// zero geometry reads as end-reached. A pane a child is over does not own the query: it may
+	// not move it.
 	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
-	const { onEndReached } = useArmedEndReached(extend, binding.pending$, settled);
+	const { onEndReached, onViewport } = useArmedEndReached(extend, binding.pending$, settled, {
+		measuresViewport: true,
+	});
 	// The child terms lead the table's rows, so they scroll with the products under them.
 	const rows = React.useMemo<LevelRow[]>(
 		() => [
@@ -220,7 +225,11 @@ export function TermLevelTable({
 				autoFocus
 				testID="products-breadcrumb"
 			/>
-			<View className="min-h-0 flex-1">
+			<View
+				className="min-h-0 flex-1"
+				testID="browse-level-rows"
+				onLayout={(event) => onViewport(event.nativeEvent.layout.height)}
+			>
 				{showProducts ? (
 					// The products table's own settings id, for the same collection: a header sort here
 					// persists as it does there (`persistSort` is off only for a table that borrows the id
