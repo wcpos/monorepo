@@ -245,7 +245,8 @@ function StepNode({
 			// Arriving from ahead waits, hidden, for the fill to reach it; a retry from a closed
 			// badge opens at once. Either way the spring starts from a little under size.
 			const wait = from === 'todo' ? ARRIVE : 0;
-			if (wait === 0) badge.value = 0.55;
+			// A badge caught mid-fade-out must not wait half-visible.
+			badge.value = wait === 0 ? 0.55 : 0;
 			badge.value = withDelay(
 				wait,
 				withSequence(
