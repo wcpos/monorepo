@@ -34,6 +34,7 @@ import {
 	useLogsBinding,
 	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
+	useScopeKey,
 	useSearchSelect,
 } from './query-bindings';
 import * as queryStateTranslator from './query-state-translator';
@@ -487,6 +488,30 @@ describe('query bindings', () => {
 			expect(answers.at(-1)).toBe(0);
 		});
 		expect(engine.requireCalls).toHaveLength(2);
+	});
+
+	it('moves the scope key on a same-site switch and on a new engine, and holds it otherwise', () => {
+		let active: FakeEngine = engine;
+		function Swappable({ children }: { children: React.ReactNode }) {
+			return <Provider value={active}>{children}</Provider>;
+		}
+		const { result, rerender } = renderHook(() => useScopeKey('products'), {
+			wrapper: Swappable,
+		});
+		const first = result.current;
+		rerender();
+		expect(result.current).toBe(first);
+
+		// A same-site store or cashier switch: the same engine, the products' generation bumped.
+		act(() => engine.setCollectionStatus('products', { coverageGeneration: 1 }));
+		const switched = result.current;
+		expect(switched).not.toBe(first);
+
+		// A cross-site change: a new engine, whose generation starts at 0 again.
+		active = createFakeEngine(engineDB);
+		rerender();
+		expect(result.current).not.toBe(switched);
+		expect(result.current).not.toBe(first);
 	});
 
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {

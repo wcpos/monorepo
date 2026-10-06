@@ -21,6 +21,7 @@ export {
 	useAppliedCouponReferenceDemand,
 	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
+	useScopeKey,
 	useSearchSelect,
 } from './query-bindings';
 export type {

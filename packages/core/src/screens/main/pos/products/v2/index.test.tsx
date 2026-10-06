@@ -28,6 +28,8 @@ let mockDataTableProps: Record<string, unknown> = {};
 let mockGridProps: Record<string, unknown> = {};
 let mockFilterBarProps: Record<string, unknown> = {};
 let mockBrowseStageProps: Record<string, unknown> | null = null;
+let mockBrowseStageMounts = 0;
+let mockScopeKey = '0:0';
 let mockShowOutOfStock = false;
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
@@ -68,6 +70,7 @@ jest.mock('../../../../../query', () => {
 	return {
 		...actual,
 		useRelationalCollectionBinding: (state: unknown) => mockUseRelationalCollectionBinding(state),
+		useScopeKey: () => mockScopeKey,
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -217,6 +220,8 @@ describe('POSProducts query-state wiring', () => {
 		mockGridProps = {};
 		mockFilterBarProps = {};
 		mockBrowseStageProps = null;
+		mockBrowseStageMounts = 0;
+		mockScopeKey = '0:0';
 		mockBrowseBy = undefined;
 		mockShowOutOfStock = false;
 		mockSortBy = 'name';
@@ -497,6 +502,35 @@ describe('POSProducts query-state wiring', () => {
 		rerender(<POSProducts />);
 		expect(mockFilterBarProps.level).toBe('products');
 	});
+
+	// A same-site store or cashier switch keeps the source, search, filters and path, and changes
+	// the database the products are read from: the stage's drill and held answers are stale.
+	it('remounts the browse stage when the scope changes, and only then', () => {
+		mockBrowseBy = 'categories';
+		const { rerender } = render(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(1);
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockBrowseStageMounts).toBe(2);
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+	});
+
+	it('drops a product drill when the scope changes', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
+			onDrill: (record: unknown) => void;
+		}>;
+		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockScopeKey = '0:1';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
 });
 
 // The new rows and tiles are tested in their own suites.
@@ -510,6 +544,11 @@ jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }
 jest.mock('./browse/browse-stage', () => ({
 	BrowseStage: (props: Record<string, unknown>) => {
 		mockBrowseStageProps = props;
+		// A mount is a fresh stage: its drill, held answers and snapshots start empty.
+		const { useEffect } = jest.requireActual('react');
+		useEffect(() => {
+			mockBrowseStageMounts += 1;
+		}, []);
 		return null;
 	},
 }));
