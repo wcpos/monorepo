@@ -1282,7 +1282,7 @@
 	"settings.card_readers.could_not_disconnect": "Could not disconnect: {message}",
 	"settings.card_readers.could_not_forget": "Could not forget the reader: {message}",
 	"settings.card_readers.could_not_open": "Could not open the reader settings: {message}",
-	"settings.card_readers.found_one": "1 reader found. Is this yours?",
+	"settings.card_readers.found_single": "1 reader found. Is this yours?",
 	"settings.card_readers.bluetooth_off": "Turn on Bluetooth to connect a reader.",
 	"settings.card_readers.permission": "Allow access to the reader in app settings.",
 	"settings.card_readers.not_logged_in": "Sign in to {title} to use its reader.",

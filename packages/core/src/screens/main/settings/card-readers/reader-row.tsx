@@ -117,7 +117,7 @@ export function ReaderRow({
 			found.length === 0
 				? t('settings.card_readers.none_found')
 				: found.length === 1
-					? t('settings.card_readers.found_one')
+					? t('settings.card_readers.found_single')
 					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
