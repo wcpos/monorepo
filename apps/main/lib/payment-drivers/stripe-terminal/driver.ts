@@ -30,15 +30,18 @@ type SdkError = {
 	declineCode?: string;
 	apiError?: { declineCode?: string };
 };
-let provideToken: (() => Promise<string>) | undefined;
 // The SDK asks for a token the moment it initialises — before the driver has bound or the
 // store's methods have resolved after a cold start or a JS reload. Give those a moment before
 // concluding the store has no Stripe Terminal; the cashier saw four "not enabled on this store"
 // toasts for exactly this on 2026-10-06.
 const TOKEN_RESOLVE_WAIT_MS = 5000;
 const TOKEN_RESOLVE_POLL_MS = 100;
-const waitFor = async <T>(read: () => T | undefined | null): Promise<T | undefined | null> => {
-	const deadline = Date.now() + TOKEN_RESOLVE_WAIT_MS;
+// One deadline covers both waits (binding, then method), so a late binding cannot stack a
+// second five seconds on top of the first.
+const waitFor = async <T>(
+	read: () => T | undefined | null,
+	deadline: number
+): Promise<T | undefined | null> => {
 	let value = read();
 	while (!value && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, TOKEN_RESOLVE_POLL_MS));
@@ -46,11 +49,13 @@ const waitFor = async <T>(read: () => T | undefined | null): Promise<T | undefin
 	}
 	return value;
 };
+let provideToken: ((deadline: number) => Promise<string>) | undefined;
 // The provider must see the same function identity on every render.
 export async function tokenProvider(): Promise<string> {
-	const provide = await waitFor(() => provideToken);
+	const deadline = Date.now() + TOKEN_RESOLVE_WAIT_MS;
+	const provide = await waitFor(() => provideToken, deadline);
 	if (!provide) throw new Error('Stripe Terminal is not enabled on this store');
-	return provide();
+	return provide(deadline);
 }
 // iOS and the simulator report codes in PascalCase (`Canceled`, `DeclinedByStripeAPI`); the
 // Android SDK reports the catalogue's SCREAMING_SNAKE (`CANCELED`, `DECLINED_BY_STRIPE_API`).
@@ -135,8 +140,8 @@ export function createStripeTerminalDriver({
 		if (!active && error?.code === 'CANCEL_FAILED') return;
 		check(result);
 	};
-	const nextToken = async () => {
-		const id = await waitFor(() => lastMethodId ?? resolveMethod()?.id);
+	const nextToken = async (deadline: number = Date.now() + TOKEN_RESOLVE_WAIT_MS) => {
+		const id = await waitFor(() => lastMethodId ?? resolveMethod()?.id, deadline);
 		if (!id) throw new Error('Stripe Terminal is not enabled on this store');
 		const fresh = (await bootstrap(id)).connection_token;
 		if (typeof fresh !== 'string' || !fresh) throw new Error('No Stripe Terminal connection token');

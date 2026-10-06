@@ -358,11 +358,15 @@ it.each(['cashier', 'deadline'] as const)(
 			deadlineHandled: who === 'deadline',
 			failureReason: 'reader_unresponsive',
 		});
+		// The hold around collect() is released with finality, not left to a collect that may
+		// never answer.
+		expect(releaseHold).toHaveBeenCalledTimes(1);
 		// The orphaned collection resolving later changes nothing.
 		c.collection.resolve(approved);
 		await start;
 		expect(c.leg.getState().outcome).toBe('voided');
 		expect(c.post.mock.calls.some(([url]) => url.endsWith('/capture'))).toBe(false);
+		expect(releaseHold).toHaveBeenCalledTimes(1);
 	}
 );
 // Rule 9: the cancel "failed" because the reader already had the card — the result wins.

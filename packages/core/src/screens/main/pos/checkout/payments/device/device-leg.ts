@@ -68,6 +68,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let graceTimer: ReturnType<typeof setTimeout> | undefined;
+	// The live-tab hold taken around collect(); released on finality as well as when collect
+	// settles, because a leg the cancel path ends may outlive a collect that never answers.
+	let collectHold: (() => void) | undefined;
 	let result: CollectResult | null = null;
 	// When the reader answered. A failed local write is retried through capture(), and
 	// the approval time must not drift to the time of the retry.
@@ -85,6 +88,8 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		if (!active()) return;
 		deps.clearTimeout(timer!);
 		set({ ...changes, phase: 'final', outcome, capturing: false });
+		collectHold?.();
+		collectHold = undefined;
 		deps.onFinal?.(state);
 	};
 	const errorState = (error: unknown) => {
@@ -313,12 +318,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			return;
 		}
 		set({ phase: 'collecting' });
-		let release: (() => void) | undefined;
 		try {
 			try {
 				approvedAt = null;
 				// collect may capture on the reader; preparation above owns no payment hold.
-				release = holdLiveTab('payment');
+				collectHold = holdLiveTab('payment');
 				result = await deps.driver.collect({
 					dp: input.dp,
 					row: state.row,
@@ -348,7 +352,8 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			if (active()) await confirm();
 		} finally {
 			// Keep the reader result protected until confirmation has persisted it.
-			release?.();
+			collectHold?.();
+			collectHold = undefined;
 		}
 	}
 	async function cancel(reason = 'cashier') {
