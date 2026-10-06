@@ -25,7 +25,9 @@ function moduleConfig(name) {
 
 // expo-blob 58.0.2 ships the same block (found by the first Android device run of
 // `next`, 2026-09-30, right after the SDK-58 bump of expo-blob); `patches/expo-blob@58.0.2.patch`.
-for (const name of ['expo-observe', 'expo-app-metrics', 'expo-blob']) {
+// expo-device 58.0.5 too (caught by the test below when it was added, 2026-10-06);
+// `patches/expo-device@58.0.5.patch`.
+for (const name of ['expo-observe', 'expo-app-metrics', 'expo-blob', 'expo-device']) {
 	test(`${name} declares no Android publication (none is shipped; the patch removes the stray block)`, () => {
 		const config = moduleConfig(name);
 		assert.ok(config, `${name} is installed with an expo-module.config.json`);

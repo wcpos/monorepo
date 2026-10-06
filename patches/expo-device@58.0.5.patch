@@ -1,0 +1,16 @@
+diff --git a/expo-module.config.json b/expo-module.config.json
+--- a/expo-module.config.json
++++ b/expo-module.config.json
+@@ -4,11 +4,6 @@
+     "modules": ["DeviceModule"]
+   },
+   "android": {
+-    "modules": ["expo.modules.device.DeviceModule"],
+-    "publication": {
+-      "groupId": "host.exp.exponent",
+-      "artifactId": "expo.modules.device",
+-      "repository": "local-maven-repo"
+-    }
++    "modules": ["expo.modules.device.DeviceModule"]
+   }
+ }
