@@ -74,25 +74,49 @@ export function SaleCompletionBridge(): null {
 		}
 		const current = { storeDB, manager, ctx, startVersion, stopped: false };
 		session.current = current;
-		// The ACTIVE scope's previous-generation database: the only report this replay waits on.
-		const activeIdentity = manager.engine?.active()?.identity;
-		const legacyDatabase = activeIdentity
-			? scopeDatabaseName(activeIdentity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
-			: null;
+		/**
+		 * The ACTIVE scope's previous-generation database — the only report this replay waits on.
+		 * Resolved by waiting for the engine's active scope, not by reading it once: on a cold boot
+		 * the bridge mounts before the engine's open completes, and deciding "no legacy database"
+		 * then would count a missed start before the drain could carry the order over. Bounded
+		 * like the report wait; an engine with no scope to give (logged out, disposed) has none.
+		 */
+		const activeLegacyDatabase = async (): Promise<string | null> => {
+			const engine = manager.engine;
+			if (!engine) return null;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			try {
+				const active =
+					engine.active() ??
+					(await Promise.race([
+						engine.whenActive(),
+						new Promise<null>((resolve) => {
+							timer = setTimeout(() => resolve(null), LEGACY_DRAIN_REPORT_WAIT_MS);
+						}),
+					]));
+				return active
+					? scopeDatabaseName(active.identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+					: null;
+			} catch {
+				return null;
+			} finally {
+				if (timer !== undefined) clearTimeout(timer);
+			}
+		};
 		// Awaited once per replay, and only when an order is missing: a resident order never waits.
-		let legacyReport: Promise<void> | null = null;
+		let legacyReport: Promise<string | null> | null = null;
 		const legacyDrainReported = () =>
-			(legacyReport ??= (
-				legacyDatabase === null
-					? Promise.resolve('reported' as const)
-					: awaitLegacyUnsentReport(legacyDatabase, LEGACY_DRAIN_REPORT_WAIT_MS)
-			).then((result) => {
+			(legacyReport ??= (async () => {
+				const legacyDatabase = await activeLegacyDatabase();
+				if (legacyDatabase === null || current.stopped) return legacyDatabase;
+				const result = await awaitLegacyUnsentReport(legacyDatabase, LEGACY_DRAIN_REPORT_WAIT_MS);
 				if (result === 'timed-out') {
 					logger.warn('Replaying sale completions without the previous database version report', {
 						context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
 					});
 				}
-			}));
+				return legacyDatabase;
+			})());
 		const findOrder = async (uuid: string) =>
 			(await findEngineResident(
 				manager,
@@ -119,6 +143,8 @@ export function SaleCompletionBridge(): null {
 						// scope's one could not be counted at all (it failed to open), so it MAY: either way
 						// the order is not resident YET, which is not a missed start, and abandoning it would
 						// drop a captured payment's completion. A later start with a countable report counts.
+						const legacyDatabase = await legacyDrainReported();
+						if (current.stopped) return;
 						const keptInLegacyDatabase =
 							legacyUnsentOrderUuids().has(uuid) ||
 							(legacyDatabase !== null && legacyUnsentReportUncountable(legacyDatabase));

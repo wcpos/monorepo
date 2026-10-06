@@ -216,7 +216,12 @@ describe('a previous-generation database the drain keeps', () => {
 	const IDENTITY = { site: 'https://store.example.test', storeId: 1, cashierId: 2 };
 	const LEGACY = scopeDatabaseName(IDENTITY, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION });
 	/** A fresh runtime (a new session start) whose engine is active on IDENTITY. */
-	const onScope = () => ({ engine: { active: () => ({ identity: IDENTITY }) } });
+	const onScope = () => ({
+		engine: {
+			active: () => ({ identity: IDENTITY }),
+			whenActive: async () => ({ identity: IDENTITY }),
+		},
+	});
 	beforeEach(() => {
 		mockManager = onScope();
 	});
@@ -242,6 +247,35 @@ describe('a previous-generation database the drain keeps', () => {
 		);
 		// Looked again after the report: a carried-over cart would be found here.
 		expect(mockFind).toHaveBeenCalledTimes(2);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('a replay that starts before the engine is active (cold boot) waits for the scope, then for its report', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending(LEGACY);
+		let activate!: () => void;
+		const opening = new Promise<{ identity: typeof IDENTITY }>((resolve) => {
+			activate = () => resolve({ identity: IDENTITY });
+		});
+		mockManager = { engine: { active: () => null, whenActive: () => opening } };
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+		await drain();
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+
+		// The engine opens; then the drain reports it kept THIS order: the start is not counted.
+		activate();
+		await drain();
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 0 });
+		rememberLegacyUnsentChanges(LEGACY, 1, ['order']);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				lastError: 'order_not_resident',
+			})
+		);
+		expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
 		expect(mockWarn).not.toHaveBeenCalled();
 	});
 
