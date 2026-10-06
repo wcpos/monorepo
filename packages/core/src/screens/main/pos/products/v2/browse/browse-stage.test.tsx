@@ -96,14 +96,29 @@ jest.mock('./use-browse-terms', () => {
 		],
 		sort: { field: 'sortable_price', direction: 'desc' },
 	};
-	const shortcut = { kind: 'shortcut', id: 'qf-lattes', name: 'Lattes', description: '' };
+	// A shortcut that is a filter alone (the common one): Food, from the stored filter bar.
+	const breakfast = {
+		type: 'quick',
+		id: 'qf-breakfast',
+		label: 'Breakfast',
+		conditions: [{ field: 'categories', value: [3] }],
+	};
+	const quickFilters = [breakfast, lattes];
+	const shortcutTerms = quickFilters.map((quickFilter) => ({
+		kind: 'shortcut',
+		id: quickFilter.id,
+		name: quickFilter.label,
+		description: '',
+	}));
 	const shortcuts = {
-		all: [shortcut],
-		rootsOf: () => [shortcut],
+		all: shortcutTerms,
+		rootsOf: () => shortcutTerms,
 		childrenOf: () => [],
 		idsFor: () => [],
 		quickFilterFor: (term: { kind: string; id?: string }) =>
-			term.kind === 'shortcut' && term.id === lattes.id ? lattes : undefined,
+			term.kind === 'shortcut'
+				? quickFilters.find((quickFilter) => quickFilter.id === term.id)
+				: undefined,
 	};
 	return {
 		useBrowseTerms: (source: string) => (source === 'shortcuts' ? shortcuts : terms),
@@ -671,6 +686,24 @@ it('a product drilled inside a level stays open when the level is re-projected u
 	expect(mockState.filters.categories).toEqual([1, 2, 7]);
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('drill-in')).toBeTruthy();
+});
+
+it('shortcuts: the stored quick filters are the root; tapping one applies it and shows its products', () => {
+	render(<BrowseStage {...stageProps({ source: 'shortcuts', viewMode: 'grid' })} />);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	expect(screen.getByTestId('browse-shortcut-qf-breakfast')).toBeTruthy();
+	expect(screen.getByTestId('browse-shortcut-qf-lattes')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('browse-shortcut-qf-breakfast'));
+	// Applied as the chip applies it: the baseline first, then the shortcut's own conditions.
+	expect(queryActions.resetFilters).toHaveBeenCalled();
+	expect(queryActions.setFilter).toHaveBeenCalledWith('categories', [3]);
+	expect(mockState.filters.categories).toEqual([3]);
+	// Its products on a level under its crumb, as a term's are.
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Breakfast');
+	expect(screen.getByTestId('product-s')).toBeTruthy();
+	expect(screen.queryByTestId('products')).toBeNull();
 });
 
 it('a shortcut with its own search keeps its level live with its chip lit, and the root takes all of it back out', () => {

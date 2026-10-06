@@ -23,6 +23,7 @@ import { stories as checkbox } from '@wcpos/components/checkbox/gallery';
 import { stories as textarea } from '@wcpos/components/textarea/gallery';
 import { stories as iconButton } from '@wcpos/components/icon-button/gallery';
 import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
+import { stories as browseTiles } from '@wcpos/core/screens/main/pos/products/v2/browse/gallery';
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as chip } from '@wcpos/components/chip/gallery';
 import { stories as keypad } from '@wcpos/components/keypad/gallery';
@@ -103,6 +104,7 @@ const registry: Record<string, Story[]> = {
 	'empty-state': emptyState,
 	notice,
 	breadcrumb,
+	'browse-tiles': browseTiles,
 	'page-bar': pageBar,
 	'pane-stack': paneStack,
 	'slide-over': slideOver,
