@@ -42,6 +42,7 @@ export {
 	canonicalSiteKey,
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,

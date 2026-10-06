@@ -4,7 +4,9 @@ import {
 	canonicalSiteKey,
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	isScopeDatabaseName,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	type StoreScopeIdentity,
@@ -144,5 +146,19 @@ describe('containsLegacyScopeDatabaseName', () => {
 			false
 		);
 		expect(containsLegacyScopeDatabaseName('unrelated-shop-data')).toBe(false);
+	});
+});
+
+describe('DRAINABLE_SCOPE_DATABASE_GENERATION', () => {
+	it('is exactly the generation before the current one (v5 while v6 is current)', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })).toBe(
+			`pos_v5_${scopeKeyFor(identity)}`
+		);
+		expect(
+			containsLegacyScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+			)
+		).toBe(true);
 	});
 });

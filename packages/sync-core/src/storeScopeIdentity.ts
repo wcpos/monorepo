@@ -52,7 +52,7 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
  * legacy: the purge that runs after a store is sale-ready removes it (#2242).
  * History is on `scopeDatabaseName`.
  */
-// 6: products promoted `tagIds` (an indexed-membership tag filter) — every resident re-ingests.
+// 6: products promoted `tagIds` (a numeric-membership tag filter) — every resident re-ingests.
 export const SCOPE_DATABASE_GENERATION = 6;
 
 /**
@@ -169,3 +169,11 @@ export function containsLegacyScopeDatabaseName(name: string): boolean {
 	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
 	return match !== null && Number(match[1]) < SCOPE_DATABASE_GENERATION;
 }
+
+/**
+ * The one legacy generation a till DRAINS: its scope database is opened with
+ * that generation's schemas, its unsent writes are pushed through the current
+ * write path, and only then is it removed (`drainLegacyScopeDatabase`). Older
+ * generations cannot be opened by this build's schemas.
+ */
+export const DRAINABLE_SCOPE_DATABASE_GENERATION = SCOPE_DATABASE_GENERATION - 1;

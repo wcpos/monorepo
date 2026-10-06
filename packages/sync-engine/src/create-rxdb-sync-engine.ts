@@ -39,10 +39,12 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	hasPosRefundStamp,
 	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
@@ -68,6 +70,7 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from './collections/engine-collections';
+import { drainableGenerationCollectionCreators } from './collections/drainable-generation';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
@@ -250,6 +253,13 @@ export type RxdbSyncEnginePorts = {
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
 	databaseOpenBarrier?: Promise<void>;
+	/**
+	 * Which scope-database generation to open. Default: the current one — hosts
+	 * never set this. `drainLegacyScopeDatabase` sets the DRAINABLE generation to
+	 * open the previous generation's database with the schemas it shipped
+	 * (`collections/drainable-generation.ts`); any other value throws.
+	 */
+	scopeDatabaseGeneration?: number;
 	/** One of the two required adapter ports. A factory receives the full scope
 	 * identity so per-scope storage decisions stay possible. */
 	storage:
@@ -735,6 +745,19 @@ export function createRxdbSyncEngine(
 ): RxdbSyncEngine {
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
+	const scopeDatabaseGeneration = ports.scopeDatabaseGeneration ?? SCOPE_DATABASE_GENERATION;
+	if (
+		scopeDatabaseGeneration !== SCOPE_DATABASE_GENERATION &&
+		scopeDatabaseGeneration !== DRAINABLE_SCOPE_DATABASE_GENERATION
+	) {
+		throw new Error(
+			`Scope database generation ${scopeDatabaseGeneration} cannot be opened: this build opens v${SCOPE_DATABASE_GENERATION} and drains v${DRAINABLE_SCOPE_DATABASE_GENERATION}`
+		);
+	}
+	const collectionCreators =
+		scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
+			? engineCollectionCreators
+			: drainableGenerationCollectionCreators;
 	// A ledger rebuild replaces the derivable collections, and live coverage
 	// subscriptions hold handles to the dropped ones (coverage-changes.ts opens
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
@@ -1106,7 +1129,7 @@ export function createRxdbSyncEngine(
 		setLifecyclePhase('create-database');
 		const storage = typeof ports.storage === 'function' ? ports.storage(identity) : ports.storage;
 		const db = await createRxDatabase({
-			name: scopeDatabaseName(identity),
+			name: scopeDatabaseName(identity, { generation: scopeDatabaseGeneration }),
 			storage,
 			// Adapter counts run payload selectors (for example meta_data $elemMatch) with no index.
 			// Storage executes them worker-side in production, matching the legacy 1.9 configuration.
@@ -1118,7 +1141,7 @@ export function createRxdbSyncEngine(
 		});
 		try {
 			setLifecyclePhase('add-collections');
-			await db.addCollections(engineCollectionCreators() as never);
+			await db.addCollections(collectionCreators() as never);
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =

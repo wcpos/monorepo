@@ -30,6 +30,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 
 import {
 	customerDocumentId,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	promotedOrderColumns,
 	promotedProductColumns,
 	referenceDocumentId,
@@ -45,6 +46,7 @@ import {
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
+import { drainableGenerationCollectionCreators } from './drainable-generation';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -552,6 +554,28 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		expect(productSchema.version).toBe(0);
 		expect(productSchema.properties.tagIds).toEqual({ type: 'array', items: { type: 'number' } });
 		expect(productSchema.required).toContain('tagIds');
+	});
+
+	/**
+	 * The DRAINABLE generation's schemas (`drainable-generation.ts`) are what that generation
+	 * shipped: every digest it pinned. A wrong one throws DB6 on the very database the drain
+	 * exists to send, so the drain would keep it forever.
+	 */
+	const PINNED_DRAINABLE_DIGESTS: Record<string, string> = {
+		...PINNED_DIGESTS,
+		// v5's products, before tagIds was promoted.
+		products: '533f385dbba3bd58',
+	};
+
+	it('the drainable generation opens with the schemas it shipped', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
+		const actual = Object.fromEntries(
+			Object.entries(drainableGenerationCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+		expect(actual).toEqual(PINNED_DRAINABLE_DIGESTS);
 	});
 
 	it('every versioned schema ships the migration strategies its version needs', () => {
