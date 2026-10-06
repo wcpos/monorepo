@@ -142,7 +142,6 @@ export function ReaderConnection({
 			{!connected && !working && status.connection === 'disconnected' ? (
 				<Button
 					testID="checkout-reader-settings-link"
-					size="sm"
 					variant="link"
 					disabled={disabled}
 					onPress={() => router.push(CARD_READERS_SETTINGS_HREF)}

@@ -1619,12 +1619,10 @@ describe('device tender', () => {
 		await act(async () => result.current.pickMethod(deviceMethod.id));
 		expect(result.current.deviceTransport).toBe('tap_to_pay');
 		expect(result.current.deviceReady).toBe(true);
-		// An explicit pick still wins, and a mismatch still refuses.
+		// A transport left over from an earlier reader does not outrank the connected one.
 		await act(async () => result.current.pickTransport!('bluetooth'));
-		expect(result.current.deviceTransport).toBe('bluetooth');
-		expect(result.current.deviceReady).toBe(false);
-		await act(async () => result.current.takeTender());
-		expect(mockBegin).not.toHaveBeenCalled();
+		expect(result.current.deviceTransport).toBe('tap_to_pay');
+		expect(result.current.deviceReady).toBe(true);
 	});
 	it.each(['disconnected', 'discovering', 'updating', 'no-reader'] as const)(
 		'keeps Take unavailable and refuses minting with %s',

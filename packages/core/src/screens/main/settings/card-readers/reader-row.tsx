@@ -26,6 +26,14 @@ import type { ReaderActions } from './use-reader-actions';
 import type { ReaderInfo } from '../../../../services/payment-drivers/types';
 import type { RememberedReader } from '../../pos/checkout/tender/remembered-readers';
 
+// Literal keys so the translation extractor sees them.
+const ERROR_KEYS = {
+	connect: 'settings.card_readers.could_not_connect',
+	disconnect: 'settings.card_readers.could_not_disconnect',
+	forget: 'settings.card_readers.could_not_forget',
+	open: 'settings.card_readers.could_not_open',
+} as const;
+
 // Stripe reports the SDK's device type; the cashier knows the name on the box.
 const MODEL_NAMES: Record<string, string> = {
 	wisePad3: 'WisePad 3',
@@ -101,14 +109,16 @@ export function ReaderRow({
 	let lineClass = 'text-muted-foreground text-xs';
 	let below: React.ReactNode = null;
 	if (error) {
-		line = t('settings.card_readers.could_not_connect', { message: error });
+		line = t(ERROR_KEYS[error.kind], { message: error.message });
 		lineClass = 'text-destructive text-xs';
 	} else if (scan && found === null) line = t('settings.card_readers.looking');
 	else if (found)
 		line =
 			found.length === 0
 				? t('settings.card_readers.none_found')
-				: t('settings.card_readers.found_n', { n: found.length });
+				: found.length === 1
+					? t('settings.card_readers.found_one')
+					: t('settings.card_readers.found_n', { n: found.length });
 	else if (unavailable) {
 		line = unavailable;
 		lineClass = 'text-warning text-xs';
@@ -232,7 +242,8 @@ export function ReaderRow({
 								variant="outline"
 								size="sm"
 								disabled={busy}
-								onPress={() => void actions.start(method)}
+								// A failed Tap to Pay set-up retries Tap to Pay, not a Bluetooth scan.
+								onPress={() => void actions.start(method, error.transport)}
 								testID={`reader-row-${method.id}-retry`}
 							>
 								<ButtonText>{t('settings.card_readers.try_again')}</ButtonText>

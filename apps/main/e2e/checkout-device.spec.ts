@@ -25,19 +25,32 @@ function simulatedDevice(descriptors: Descriptor[]) {
 async function connect(page: Page, methodId: string, reader: string) {
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
 	const status = page.getByTestId('checkout-reader-status');
-	if (!(await status.innerText()).includes('Simulated')) {
+	// A remembered reader may still be reconnecting; decide on the settled line.
+	await expect(status).not.toContainText('Connecting', { timeout: 15_000 });
+	const viaLink = !(await status.innerText()).includes('Simulated');
+	if (viaLink) {
 		await page.getByTestId('checkout-reader-settings-link').click();
-		await expect(page.getByTestId('screen-settings-card-readers')).toBeVisible();
 	} else {
+		// A reader is already connected, so the sheet shows no link: the drawer route adds two
+		// history entries (settings index, then the page).
 		await page.getByTestId('drawer-item-settings').click();
 		await page.getByTestId('settings-nav-card-readers').click();
 	}
+	await expect(page.getByTestId('screen-settings-card-readers')).toBeVisible();
 	await page.getByTestId('card-readers-connect').click();
 	const option = page.getByTestId(`reader-row-${methodId}-connect-${reader}`);
 	await expect(option).toBeVisible();
 	await option.click();
 	await expect(page.getByTestId(`reader-row-${methodId}-status`)).toContainText('Connected');
 	await page.goBack();
+	if (
+		!viaLink &&
+		!(await page
+			.getByTestId('checkout-keypad')
+			.isVisible()
+			.catch(() => false))
+	)
+		await page.goBack();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible();
 	await expect(page.getByTestId('checkout-reader-status')).toContainText('Simulated');
 	await expect(page.getByTestId('checkout-commit')).toBeEnabled();

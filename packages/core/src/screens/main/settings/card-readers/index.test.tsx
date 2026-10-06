@@ -285,6 +285,41 @@ it('shows a failed connect as one line with Try again, and the update progress a
 	expect(screen.queryByTestId(`${row}-retry`)).toBeNull();
 });
 
+it('Cancel during a scan frees the row and drops the late result', async () => {
+	let finish!: () => void;
+	const pending = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	const driver = createSimulatedDriver();
+	registerDriver({
+		...driver,
+		discoverReaders: async (transport) => {
+			await pending;
+			return driver.discoverReaders!(transport);
+		},
+	});
+	render(<CardReadersSettings />);
+	await flush();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-connect'));
+	});
+	const row = `reader-row-${deviceMethod.id}`;
+	expect(screen.getByTestId(`${row}-line`).textContent).toContain('Looking for readers');
+	await act(async () => {
+		fireEvent.click(screen.getByTestId(`${row}-cancel-scan`));
+	});
+	// Nothing remembered, nothing connected, no scan: the empty state is back and the button is live.
+	expect(screen.getByTestId('card-readers-empty')).toBeTruthy();
+	expect((screen.getByTestId('card-readers-connect') as HTMLButtonElement).disabled).toBe(false);
+	await act(async () => {
+		finish();
+		await pending;
+	});
+	await flush();
+	expect(screen.queryByTestId(`${row}-found`)).toBeNull();
+	expect(screen.getByTestId('card-readers-empty')).toBeTruthy();
+});
+
 it("a provider whose SDK owns pairing gets one button that opens the provider's screen", async () => {
 	const driver = sdkUiDriver({
 		id: 'solo',
