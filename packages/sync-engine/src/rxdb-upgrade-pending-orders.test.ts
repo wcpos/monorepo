@@ -1178,6 +1178,57 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			}
 		}, 30_000);
 
+		it('a pull that snapshotted the resident before the drain carried its count does not lower it', async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			const order = await printedTwice(storage, server);
+			const app = await appOn(storage, server);
+			try {
+				const synced: Json = { ...order.stored, local: { dirty: false, pendingMutationIds: [] } };
+				await app.collection('orders').insert(synced);
+				const { database } = await app.engine.whenActive();
+				const realOrders = database.collections.orders!;
+				// The pull reads the resident (no count), then the drain carries count 2, then the pull
+				// commits its snapshot-based document.
+				let drained: Promise<unknown> | null = null;
+				const pullOrders = new Proxy(realOrders, {
+					get(target, property) {
+						if (property === 'findByIds') {
+							return (ids: string[]) => ({
+								exec: async () => {
+									const snapshot = await target.findByIds(ids).exec();
+									drained ??= drainLegacyScopeDatabase(
+										drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+										manifest.identity
+									);
+									await drained;
+									return snapshot;
+								},
+							});
+						}
+						const value = Reflect.get(target, property, target) as unknown;
+						return typeof value === 'function' ? value.bind(target) : value;
+					},
+				});
+				await new EngineOrderRepository({
+					...database.collections,
+					orders: pullOrders,
+				} as never).upsertMany([
+					{
+						...synced,
+						payload: { ...(synced.payload as Json), customer_note: 'changed on the store' },
+					} as never,
+				]);
+				await expect(drained).resolves.toMatchObject({ status: 'drained' });
+				const resident = (await stored(app)).orders.get(order.uuid)!;
+				expect((resident.payload as Json).customer_note).toBe('changed on the store');
+				expect((resident.local as Json).receiptPrintCount).toBe(2);
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+
 		it('an order v6 does not hold yet is stashed, and the count lands when a pull materialises it', async () => {
 			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 			const storage = restore(work);

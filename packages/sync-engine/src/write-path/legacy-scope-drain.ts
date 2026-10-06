@@ -64,7 +64,7 @@ import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 } from '../create-rxdb-sync-engine';
-import { retireStashedPrintCounts, stashPrintCounts } from './engine-order-repository';
+import { applyStashedPrintCounts, stashPrintCounts } from './engine-order-repository';
 import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 
 /** A push outcome the drain's engine reports — what the host logs with its reason. */
@@ -174,10 +174,6 @@ export const LEGACY_UNSENDABLE_REPORT_INTERVAL_MS = 24 * 60 * 60_000;
 const UNSENDABLE_REPORT_LOCAL_ID = 'legacy-drain-unsendable-report';
 
 type QueueRow = QueuedMutation & { claimedBy?: string };
-
-type RxDocumentModify = (
-	modifier: (data: Record<string, unknown>) => Record<string, unknown>
-) => Promise<unknown>;
 
 type CarriableCart = {
 	recordId: string;
@@ -488,30 +484,12 @@ async function carryPosLocalState(
 		}
 		const liveOrders = active.database.collections.orders;
 		if (!liveOrders) return { error: 'the live database has no orders' };
-		const applyTo = async (resident: { incrementalModify: RxDocumentModify }, count: number) =>
-			resident.incrementalModify((data: Record<string, unknown>) => {
-				const local = (data.local ?? {}) as { receiptPrintCount?: number };
-				if ((local.receiptPrintCount ?? 0) >= count) return data;
-				return { ...data, local: { ...local, receiptPrintCount: count } };
-			});
-		const residents = await liveOrders.findByIds([...counts.keys()]).exec();
-		const toStash = new Map<string, number>();
-		for (const [uuid, count] of counts) {
-			const resident = residents.get(uuid);
-			if (resident) await applyTo(resident, count);
-			else toStash.set(uuid, count);
-		}
-		if (toStash.size > 0) {
-			// Merged atomically into the stash's latest content (a pull may be retiring entries now).
-			await stashPrintCounts(liveOrders as never, Object.fromEntries(toStash));
-			// A pull that materialised one of these orders after the residency read above, but read
-			// the stash before this write, left its resident without the count: re-check, apply, and
-			// retire those entries. (An order materialising after this re-check reads the stash entry
-			// itself — the pull applies a stashed count over a resident too.)
-			const landed = await liveOrders.findByIds([...toStash.keys()]).exec();
-			for (const [uuid, resident] of landed) await applyTo(resident, toStash.get(uuid)!);
-			if (landed.size > 0) await retireStashedPrintCounts(liveOrders as never, [...landed.keys()]);
-		}
+		// One writer path for print counts — the repository's: stash every count (atomic, larger
+		// wins), then have the repository apply what is stashed to the orders already resident (their
+		// own incremental write, never lowering a count). A pull's commit applies the rest when it
+		// materialises those orders. The drain never writes a resident itself.
+		await stashPrintCounts(liveOrders as never, Object.fromEntries(counts));
+		await applyStashedPrintCounts(liveOrders as never, [...counts.keys()]);
 		return { error: null };
 	} catch (error) {
 		return { error: errorMessage(error) };
