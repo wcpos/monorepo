@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -16,7 +15,7 @@ import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useFirstAnswer } from '../../../hooks/use-first-answer';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
-import { ProductsFooter } from './footer';
+import { OwnFooter, OwnFooterContext, type OwnFooterNumbers } from './own-footer';
 import { VariationsGrid } from './variations-grid';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from '../cells/price';
@@ -98,48 +97,54 @@ function VariationsTable({
 	);
 	const name = useDocField(parent, (value) => value.payload.name);
 	const parentCount = useDocField(parent, (value) => value.payload.variations?.length);
-	// The parent is the denominator, floored at resident count; absent lists use the binding total.
-	const total$ = React.useMemo(
-		() => (parentCount === undefined ? binding.total$ : of(Math.max(parentCount, hits.length))),
-		[parentCount, hits.length, binding.total$]
-	);
 	const t = useT();
+	// The footer's numbers are the pane's own (own-footer.tsx): the shown rows, and the parent as
+	// the denominator, floored at the resident count — as a value, so it lands in the same commit
+	// as the count; an absent list leaves the binding's total$ to the footer.
+	const footer = React.useMemo<OwnFooterNumbers>(
+		() => ({
+			count: hits.length,
+			total: parentCount === undefined ? undefined : Math.max(parentCount, hits.length),
+			children: (
+				<Text className="text-muted-foreground text-sm" numberOfLines={1}>
+					{t('pos_products.n_variations_of', { count: parentCount ?? hits.length, name })}
+				</Text>
+			),
+		}),
+		[hits.length, parentCount, name, t]
+	);
 	return (
-		<DataTable<{ record: EngineRecord<'variations'> }>
-			id="pos-products"
-			persistSort={false}
-			collectionName="variations"
-			binding={binding}
-			resource={binding.resource}
-			tableConfig={{ data: hits }}
-			sort={state.sort}
-			actions={actions}
-			active$={binding.active$}
-			total$={binding.total$}
-			sync={binding.sync}
-			cells={{
-				name: VariationName,
-				price: Price,
-				stock_quantity: VariationStock,
-				sku: SKU,
-				cost_of_goods_sold: COGS,
-				image: ProductVariationImage,
-				actions: () => null,
-			}}
-			// The rows travel with their pane; none of them animates on its own.
-			renderItem={({ item }) => (
-				<VirtualizedList.Item>
-					<VariationRow item={item} parent={parent} />
-				</VirtualizedList.Item>
-			)}
-			ListFooterComponent={NoListFooter}
-			TableFooterComponent={(props) => (
-				<ProductsFooter {...props} count={hits.length} total$={total$}>
-					<Text className="text-muted-foreground text-sm" numberOfLines={1}>
-						{t('pos_products.n_variations_of', { count: parentCount ?? hits.length, name })}
-					</Text>
-				</ProductsFooter>
-			)}
-		/>
+		<OwnFooterContext.Provider value={footer}>
+			<DataTable<{ record: EngineRecord<'variations'> }>
+				id="pos-products"
+				persistSort={false}
+				collectionName="variations"
+				binding={binding}
+				resource={binding.resource}
+				tableConfig={{ data: hits }}
+				sort={state.sort}
+				actions={actions}
+				active$={binding.active$}
+				total$={binding.total$}
+				sync={binding.sync}
+				cells={{
+					name: VariationName,
+					price: Price,
+					stock_quantity: VariationStock,
+					sku: SKU,
+					cost_of_goods_sold: COGS,
+					image: ProductVariationImage,
+					actions: () => null,
+				}}
+				// The rows travel with their pane; none of them animates on its own.
+				renderItem={({ item }) => (
+					<VirtualizedList.Item>
+						<VariationRow item={item} parent={parent} />
+					</VirtualizedList.Item>
+				)}
+				ListFooterComponent={NoListFooter}
+				TableFooterComponent={OwnFooter}
+			/>
+		</OwnFooterContext.Provider>
 	);
 }

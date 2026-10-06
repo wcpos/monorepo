@@ -368,6 +368,33 @@ it('footers a replaced total in the same commit as its new count, never the old 
 	expect(mockFooterRenders).toEqual(mockFooterRenders.map(() => ({ count: 3, total: 81 })));
 });
 
+// The footer DataTable mounts must be ONE component identity: one made per count would remount
+// the footer, and its sync button, on every page.
+it('keeps the same footer node across a count change: the footer is never remounted', () => {
+	const { rerender } = render(<TermLevelTable {...level()} />);
+	const footer = screen.getByTestId('products-footer');
+	const other = { uuid: 'x', payload: { type: 'simple' } };
+	rerender(
+		<TermLevelTable
+			{...level({
+				answer: {
+					hits: [
+						{ id: 'hit-l', record: latte },
+						{ id: 'hit-f', record: flat },
+						{ id: 'hit-x', record: other },
+					],
+					total: 81,
+				},
+			})}
+		/>
+	);
+	expect(screen.getByTestId('products-footer')).toBe(footer);
+	expect(footer.dataset).toMatchObject({ count: '3', total: '81' });
+	// A re-ask (no answer) is the same node too; its numbers are the held snapshot's.
+	rerender(<TermLevelTable {...level({ answer: undefined })} />);
+	expect(screen.getByTestId('products-footer')).toBe(footer);
+});
+
 it('holds row-shaped slots under the child rows until the products answer, the total pending', () => {
 	render(<TermLevelTable {...level({ answer: undefined })} />);
 	expect(screen.getByTestId('browse-term-2')).not.toBeNull();

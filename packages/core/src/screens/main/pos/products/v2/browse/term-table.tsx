@@ -10,8 +10,8 @@ import { useGuardedExtendLimit } from '../../../../../../query';
 import { DataTable } from '../../../../components/data-table/v2';
 import { TableSurface } from '../../../../components/data-table/surface';
 import { cellsForRow } from '../../index';
-import { ProductsFooter } from '../footer';
 import { LevelBack } from '../level-back';
+import { OwnFooter, OwnFooterContext } from '../own-footer';
 import { ProductRow } from '../rows/product-row';
 import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
@@ -169,13 +169,9 @@ export function TermLevelTable({
 	// stream lands one commit after the count, and a changed answer would paint the new count over
 	// the old denominator for a frame.
 	const total = shown?.total ?? null;
-	// The table's footer counts the pane's own rows, never the live binding's window.
-	const Footer = React.useCallback(
-		(props: React.ComponentProps<typeof ProductsFooter>) => (
-			<ProductsFooter {...props} total={total} count={loaded} />
-		),
-		[total, loaded]
-	);
+	// The table's footer counts the pane's own rows, never the live binding's window — through
+	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
+	const footer = React.useMemo(() => ({ total, count: loaded }), [total, loaded]);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
 	// its own rows, as the level grid does — and an end-reached while the demand is pending is
 	// armed and fired once it clears (FlashList will not fire again for the same rows):
@@ -233,49 +229,51 @@ export function TermLevelTable({
 					// The products table's own settings id, for the same collection: a header sort here
 					// persists as it does there (`persistSort` is off only for a table that borrows the id
 					// for another collection, as the variations pane does).
-					<DataTable<ProductHit>
-						id="pos-products"
-						collectionName="products"
-						binding={binding}
-						resource={binding.resource}
-						tableConfig={config}
-						sort={state.sort}
-						actions={actions}
-						onEndReached={onEndReached}
-						active$={binding.active$}
-						total$={binding.total$}
-						sync={binding.sync}
-						cellsForRow={cellsForRow}
-						// The rows are never empty under child terms; with neither, the empty state (and
-						// its Clear filters) sits in the table under the crumb.
-						noDataMessage={empty as React.ReactElement}
-						renderItem={({ item, index, table }) => {
-							const row = item.original as LevelRow;
-							return (
-								<VirtualizedList.Item>
-									{'term' in row ? (
-										<TermRow term={row.term} onPress={onOpenTerm} />
-									) : 'held' in row ? (
-										<RowPlaceholder />
-									) : row.record.payload.type === 'variable' ? (
-										<VariableProductRow
-											item={item}
-											index={index}
-											table={table}
-											variationsStyle={variationsStyle}
-											onDrill={onDrillProduct}
-										/>
-									) : (
-										<ProductRow item={item} />
-									)}
-								</VirtualizedList.Item>
-							);
-						}}
-						estimatedItemSize={100}
-						ListFooterComponent={NoListFooter}
-						TableFooterComponent={Footer}
-						getItemType={itemType}
-					/>
+					<OwnFooterContext.Provider value={footer}>
+						<DataTable<ProductHit>
+							id="pos-products"
+							collectionName="products"
+							binding={binding}
+							resource={binding.resource}
+							tableConfig={config}
+							sort={state.sort}
+							actions={actions}
+							onEndReached={onEndReached}
+							active$={binding.active$}
+							total$={binding.total$}
+							sync={binding.sync}
+							cellsForRow={cellsForRow}
+							// The rows are never empty under child terms; with neither, the empty state (and
+							// its Clear filters) sits in the table under the crumb.
+							noDataMessage={empty as React.ReactElement}
+							renderItem={({ item, index, table }) => {
+								const row = item.original as LevelRow;
+								return (
+									<VirtualizedList.Item>
+										{'term' in row ? (
+											<TermRow term={row.term} onPress={onOpenTerm} />
+										) : 'held' in row ? (
+											<RowPlaceholder />
+										) : row.record.payload.type === 'variable' ? (
+											<VariableProductRow
+												item={item}
+												index={index}
+												table={table}
+												variationsStyle={variationsStyle}
+												onDrill={onDrillProduct}
+											/>
+										) : (
+											<ProductRow item={item} />
+										)}
+									</VirtualizedList.Item>
+								);
+							}}
+							estimatedItemSize={100}
+							ListFooterComponent={NoListFooter}
+							TableFooterComponent={OwnFooter}
+							getItemType={itemType}
+						/>
+					</OwnFooterContext.Provider>
 				) : (
 					// Subcategories only: the child terms as the root's rows are, no product columns,
 					// no products footer, nothing to page.

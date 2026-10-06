@@ -96,20 +96,21 @@ jest.mock('./variations-grid', () => ({
 		</button>
 	),
 }));
+// The footer's denominator as the real one reads it: `total` when handed one, else `total$`.
 jest.mock('./footer', () => ({
 	ProductsFooter: ({
 		children,
 		count,
 		total$,
+		total: heldTotal,
 	}: React.PropsWithChildren<{
 		count: number;
 		total$: { subscribe: (next: (value: number) => void) => { unsubscribe: () => void } };
+		total?: number | null;
 	}>) => {
-		let total = 0;
-		const sub = total$.subscribe((value) => {
-			total = value;
-		});
-		sub.unsubscribe();
+		let total: number | null = 0;
+		if (heldTotal !== undefined) total = heldTotal;
+		else total$.subscribe((value) => (total = value)).unsubscribe();
 		return (
 			<footer data-testid="footer">
 				{children}
@@ -148,6 +149,18 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
 	expect(screen.getByTestId('footer').textContent).toContain('2 of 2');
 });
+// The footer DataTable mounts must be ONE component identity: one made per render would remount
+// the footer, and its sync button, every time the shown rows change.
+it('keeps the same footer node across a count change: the footer is never remounted', () => {
+	const { rerender } = render(<VariationsPane parent={parent} stockStatus="instock" />);
+	const footer = screen.getByTestId('footer');
+	expect(footer.textContent).toContain('1 of 2');
+	rerender(<VariationsPane parent={parent} />);
+	expect(screen.getByTestId('footer')).toBe(footer);
+	expect(footer.textContent).toContain('2 of 2');
+	expect(footer.textContent).toContain('pos_products.n_variations_of');
+});
+
 it('adds a variation with exactly the old cell’s sanitised metadata', () => {
 	const variation = {
 		remoteId: 2,
