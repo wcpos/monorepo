@@ -346,6 +346,23 @@ it.each([
 		});
 	}
 );
+it('a scan started mid-reconnect clears the reader the SDK kept, so the result never reads "connected"', async () => {
+	await discover();
+	await driver.connect(info, handoff);
+	driver.callbacks.onDidStartReaderReconnect(rawReader);
+	expect(driver.status$.get()).toMatchObject({ connection: 'connecting', reader: info });
+	api.disconnectReader.mockClear();
+	api.disconnectReader.mockResolvedValueOnce({
+		error: { code: 'NotConnectedToReader', message: '' },
+	});
+	const pending = driver.discoverReaders('bluetooth');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(api.disconnectReader).toHaveBeenCalledTimes(1);
+	expect(driver.status$.get()).toMatchObject({ connection: 'discovering', reader: null });
+	driver.callbacks.onFinishDiscoveringReaders();
+	await expect(pending).resolves.toEqual([]);
+	expect(driver.status$.get()).toMatchObject({ connection: 'disconnected', reader: null });
+});
 // iOS and the simulator say `Canceled`; the Android SDK says `CANCELED` (a WisePad 3 cancel
 // from the till rendered as "reader_error" until both were accepted, 2026-10-06).
 it.each([

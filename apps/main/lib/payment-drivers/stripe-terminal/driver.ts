@@ -312,10 +312,9 @@ export function createStripeTerminalDriver({
 			// switch resets the driver, not the SDK (WisePad 3 run, 2026-10-06) — so the disconnect
 			// is unconditional, and its "not connected" answer only matters when we thought we were.
 			const released = await api.disconnectReader();
-			if (status.connection === 'connected') {
-				check(released);
-				disconnected();
-			}
+			if (status.connection === 'connected') check(released);
+			// A retained reader — connected, or kept through a reconnect or update — is gone now.
+			if (status.reader) disconnected();
 			transport = nextTransport;
 			readers = [];
 			bluetoothOff = false;
