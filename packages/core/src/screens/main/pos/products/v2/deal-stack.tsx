@@ -63,6 +63,9 @@ export const DealStagedContext = React.createContext<unknown>(null);
 
 export const useDeal = () => React.useContext(DealContext);
 
+// A stack inside a detail that is cross-fading away: it holds what it shows until it goes.
+const DealHeldContext = React.createContext(false);
+
 // The tile's `m-1`: a cell is the tile plus this much on every side.
 const TILE_MARGIN = 4;
 // The parent and the tiles come from one frame; a variation fades in over the first of its travel.
@@ -91,6 +94,13 @@ export type DealStackProps<T> = {
 	renderDetail: (detail: T) => React.ReactNode;
 	/** The root grid. It stays mounted underneath the detail. */
 	children: React.ReactNode;
+	/**
+	 * The detail leaves by cross-fading rather than gathering: it fades out where it stands while
+	 * the root fades in, and the stacks inside it hold still. For a jump back of more than one
+	 * level, where a gather would walk each level's parent home to a slot of ITS level, over
+	 * tiles of this one, with every level ghosting over the others (web film, 2026-10-06).
+	 */
+	collapse?: boolean;
 	testID?: string;
 };
 
@@ -108,6 +118,7 @@ export function DealStack<T>({
 	target,
 	renderDetail,
 	children,
+	collapse = false,
 	testID,
 }: DealStackProps<T>) {
 	const stage = React.useRef<ViewInstance>(null);
@@ -117,6 +128,8 @@ export function DealStack<T>({
 	// the variations gather (the gaps between gathering tiles showed them at once, which
 	// read as a flash) and reach full on the frame the parent lands (owner, 2026-10-05).
 	const under = useSharedValue(1);
+	// The detail's own opacity: 1 but while it cross-fades away.
+	const veil = useSharedValue(1);
 	const [stageWidth, setStageWidth] = React.useState(0);
 	// The detail on stage outlives `detail` by one return, so its tiles can travel home.
 	const [staged, setStaged] = React.useState<T | null>(null);
@@ -127,9 +140,15 @@ export function DealStack<T>({
 	const [settled, setSettled] = React.useState(false);
 	// Not `settled`: that is the furniture's clock, which runs out long before the last tile lands.
 	const [landed, setLanded] = React.useState(false);
-	const open = detail !== null;
-	if (open && detail !== staged) {
-		setStaged(detail);
+	const [fading, setFading] = React.useState(false);
+	// Inside a detail that is cross-fading away, a stack keeps what it has on stage: its detail
+	// clears in the same render (the path was cut under it), and a gather would walk its parent
+	// home inside a surface that is already leaving.
+	const held = React.useContext(DealHeldContext);
+	const shown = held && detail === null ? staged : detail;
+	const open = shown !== null;
+	if (open && shown !== staged) {
+		setStaged(shown);
 		setGeneration(generation + 1);
 		setOrigin(undefined);
 		setGrid(undefined);
@@ -159,10 +178,20 @@ export function DealStack<T>({
 			})
 		);
 	}, []);
+	// A cross-fade is decided in the render that hears of the close, before any tile turns home.
+	if (!open && collapse && staged !== null && !fading) setFading(true);
+	if (open && fading) setFading(false);
 	if (!open && settled) setSettled(false);
 	if (!open && landed) setLanded(false);
-	// Closing turns the tiles for home in the same render that hears of it.
-	if (!open && dealt) setDealt(false);
+	// Closing turns the tiles for home in the same render that hears of it; a cross-fade leaves
+	// them where they stand.
+	if (!open && dealt && !collapse && !fading) setDealt(false);
+	// The faded detail leaves the stage, and the tiles are put back undealt for the next deal.
+	const faded = React.useCallback(() => {
+		setStaged(null);
+		setFading(false);
+		setDealt(false);
+	}, []);
 
 	// What had focus when the tile was tapped (the tile) gets it back when the parent walks
 	// home, if the control that sent it home was inside the dealt grid, which is leaving. Focus
@@ -208,6 +237,19 @@ export function DealStack<T>({
 
 	const armed = origin !== undefined && grid !== undefined;
 	React.useEffect(() => {
+		if (!open && fading) {
+			// Out where it stands, and the root in over it, on one clock: nothing travels. A frame
+			// later, as the deal sets off: the cut that sent it is a heavy commit, and a clock started
+			// under it had spent half the fade before its first frame painted (web film, 2026-10-06).
+			const frame = requestAnimationFrame(() => {
+				veil.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
+					'worklet';
+					if (finished) scheduleOnRN(faded);
+				});
+				under.value = withTiming(1, { duration: PANE, easing: EASE, ...REDUCE });
+			});
+			return () => cancelAnimationFrame(frame);
+		}
 		if (!open) {
 			// The products and the parent share one clock: the detail leaves the stage on the frame
 			// the parent tile reaches home, and the breadcrumb is gone before it passes underneath.
@@ -222,6 +264,9 @@ export function DealStack<T>({
 		// detail when it ran out, taking the new tile's measurement with it.
 		cancelAnimation(furniture);
 		cancelAnimation(under);
+		// So does a tap during a cross-fade: the new detail is shown whole.
+		cancelAnimation(veil);
+		veil.value = 1;
 		if (!armed) return;
 		// A frame later, so the tiles' first paint (stacked on the tapped tile) is not also
 		// their first move.
@@ -243,7 +288,7 @@ export function DealStack<T>({
 			cancelAnimationFrame(frame);
 			clearTimeout(landing);
 		};
-	}, [open, armed, furniture, under]);
+	}, [open, armed, fading, faded, furniture, under, veil]);
 
 	const deal = React.useMemo<Deal>(
 		() => ({
@@ -263,6 +308,9 @@ export function DealStack<T>({
 	const rootStyle = useAnimatedStyle(() => ({
 		opacity: Math.min(1, Math.max(0, under.value)),
 	}));
+	const veilStyle = useAnimatedStyle(() => ({
+		opacity: Math.min(1, Math.max(0, veil.value)),
+	}));
 
 	return (
 		<View
@@ -274,8 +322,9 @@ export function DealStack<T>({
 			{/* The tapped tile steps aside only once its copy can stand on it — the copy needs the
 			    grid's frame as well as the tile's, and on Android the two arrive frames apart:
 			    lifting on the tile's frame alone left the slot empty for two frames (Pixel,
-			    2026-10-05; then the crumb's height, now the grid's own measured frame). */}
-			<DealStagedContext.Provider value={origin && grid !== undefined ? staged : null}>
+			    2026-10-05; then the crumb's height, now the grid's own measured frame). In a
+			    cross-fade no copy comes home, so the tile is back in the root that fades in. */}
+			<DealStagedContext.Provider value={origin && grid !== undefined && !fading ? staged : null}>
 				<Animated.View
 					className="flex-1"
 					aria-hidden={open}
@@ -294,7 +343,11 @@ export function DealStack<T>({
 						aria-hidden={!open}
 						style={{ pointerEvents: open ? 'auto' : 'none' }}
 					>
-						{renderDetail(staged)}
+						<DealHeldContext.Provider value={held || fading}>
+							<Animated.View className="flex-1" style={veilStyle}>
+								{renderDetail(staged)}
+							</Animated.View>
+						</DealHeldContext.Provider>
 					</View>
 				</DealContext.Provider>
 			)}

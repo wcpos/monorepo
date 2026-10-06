@@ -137,17 +137,19 @@ function MockStack({
 	renderDetail,
 	children,
 	testID,
+	collapse,
 }: React.PropsWithChildren<{
 	detail: unknown;
 	renderDetail: (detail: unknown) => React.ReactNode;
 	testID?: string;
+	collapse?: boolean;
 }>) {
 	const [staged, setStaged] = React.useState(detail);
 	if (detail !== null && detail !== staged) setStaged(detail);
 	if (detail === null && staged !== null && !mockHoldGathers) setStaged(null);
 	const shown = detail ?? (mockHoldGathers ? staged : null);
 	return (
-		<div data-testid={testID}>
+		<div data-testid={testID} data-collapse={String(!!collapse)}>
 			<div data-testid="stack-root">{children}</div>
 			{shown ? <div data-testid="stack-detail">{renderDetail(shown)}</div> : null}
 		</div>
@@ -624,6 +626,34 @@ it('a header sort inside a shortcut level keeps the level and its filters', () =
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Lattes');
 	expect(mockState.search).toBe('latte');
 	expect(mockState.filters.on_sale).toBe(true);
+});
+
+it('a crumb jump of two levels cross-fades the stack it lands on; one step back still gathers', () => {
+	mockHoldGathers = true;
+	const collapse = (testID: string) => screen.getByTestId(testID).dataset.collapse;
+	const { unmount } = render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-2'));
+	// Opening never collapses anything.
+	expect(collapse('products-pane-stack')).toBe('false');
+	expect(collapse('browse-stack-1')).toBe('false');
+	// Categories, from Hot: two levels at once. The root's stack cross-fades; the stack inside
+	// its detail is not told to (it holds, inside the surface that fades).
+	fireEvent.click(screen.getByTestId('products-breadcrumb-parent-0'));
+	expect(collapse('products-pane-stack')).toBe('true');
+	expect(collapse('browse-stack-1')).toBe('false');
+	unmount();
+
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-2'));
+	const backs = screen.getAllByTestId('products-breadcrumb-back');
+	fireEvent.click(backs[backs.length - 1]); // Drinks, from Hot: one step
+	expect(collapse('products-pane-stack')).toBe('false');
+	expect(collapse('browse-stack-1')).toBe('false');
+	// …and from there to the root is one step too.
+	fireEvent.click(screen.getAllByTestId('products-breadcrumb-back')[0]);
+	expect(collapse('products-pane-stack')).toBe('false');
 });
 
 it('a level stays rendered from its staged entry while its stack gathers after the path was truncated', () => {

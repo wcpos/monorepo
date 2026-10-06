@@ -201,18 +201,21 @@ function Stage({
 	count = 6,
 	scroll,
 	rowTops,
+	collapse,
 }: {
 	detail: string | null;
 	target?: Measurable;
 	count?: number;
 	scroll?: { value: number };
 	rowTops?: Record<number, number>;
+	collapse?: boolean;
 }) {
 	return (
 		<DealStack
 			testID="stage"
 			detail={detail}
 			target={target}
+			collapse={collapse}
 			renderDetail={(name) => <Pane name={name} count={count} scroll={scroll} rowTops={rowTops} />}
 		>
 			<Lifted />
@@ -619,4 +622,73 @@ it('brings the products back over the whole return, accelerating, so they stay d
 		duration: PANE,
 		easing: EASE,
 	});
+});
+
+it('a collapsing stack cross-fades its detail out and the root in; nothing travels home', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	finish(1);
+	expect(styleOf('deal').opacity).toBe(1);
+	const timings = mockTimings.length;
+	const delays = mockDelays.length;
+	rerender(<Stage detail={null} collapse />);
+	// The tiles are not turned for home: no stagger, no walk, the deal stays dealt.
+	expect(deal().dealt).toBe(true);
+	expect(mockDelays.length).toBe(delays);
+	// One clock: the detail out where it stands, the products in over it.
+	expect(mockTimings.slice(timings)).toEqual([
+		expect.objectContaining({
+			toValue: 0,
+			duration: PANE,
+			easing: EASE,
+			done: expect.any(Function),
+		}),
+		expect.objectContaining({ toValue: 1, duration: PANE, easing: EASE }),
+	]);
+	expect(styleOf('deal').opacity).toBe(0);
+	expect(styleOf('lifted').opacity).toBe(1);
+	// No copy walks home onto the tapped tile, so it is back in the root that fades in.
+	expect(screen.getByTestId('lifted').textContent).toBe('null');
+	// The detail stays mounted until the fade ends, as a gather's does.
+	expect(screen.getByTestId('deal')).toBeTruthy();
+	finish(0);
+	expect(screen.queryByTestId('deal')).toBeNull();
+});
+
+it('a stack inside a detail that cross-fades away holds what it shows', () => {
+	function Nested({ inner, collapse }: { inner: string | null; collapse?: boolean }) {
+		return (
+			<DealStack
+				testID="outer"
+				detail={inner === null ? null : 'Clothing'}
+				target={tile}
+				collapse={collapse}
+				renderDetail={() => (
+					<DealStack
+						testID="inner"
+						detail={inner}
+						target={tile}
+						renderDetail={(name) => <output data-testid="inner-detail">{name}</output>}
+					>
+						<span data-testid="inner-root" />
+					</DealStack>
+				)}
+			>
+				<span data-testid="outer-root" />
+			</DealStack>
+		);
+	}
+	const { rerender } = render(<Nested inner={null} />);
+	rerender(<Nested inner="Tees" />);
+	const innerRoot = () => screen.getByTestId('inner-root').closest('[data-style]')!;
+	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
+	const delays = mockDelays.length;
+	// The path is cut two levels at once: both stacks' details clear in the same render.
+	rerender(<Nested inner={null} collapse />);
+	// The inner stack does not gather or bring its own root back: it is frozen as it was, and
+	// leaves with the surface that holds it.
+	expect(screen.getByTestId('inner-detail').textContent).toBe('Tees');
+	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
+	expect(mockDelays.length).toBe(delays);
 });

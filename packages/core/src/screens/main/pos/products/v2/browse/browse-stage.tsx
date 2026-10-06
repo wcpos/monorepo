@@ -228,6 +228,17 @@ export function BrowseStage(props: BrowseStageProps) {
 		[backTo]
 	);
 	const goRoot = React.useCallback(() => goBackTo(0), [goBackTo]);
+	// A path cut by more than one level at once (a crumb jump, a search typed deep in) cross-fades
+	// the stack it lands on; one step still gathers (owner's default, 2026-10-06). A gather there
+	// walks each level's parent home to a slot of ITS level, which sits over another tile of the
+	// destination, and every level ghosts over the others. Decided in the render that hears of the
+	// cut, so the stack knows before its detail clears.
+	const [depthSeen, setDepthSeen] = React.useState(path.length);
+	const [collapseAt, setCollapseAt] = React.useState<number | null>(null);
+	if (path.length !== depthSeen) {
+		setDepthSeen(path.length);
+		setCollapseAt(depthSeen - path.length >= 2 ? path.length : null);
+	}
 	// One array per projection, so the root grid's and table's memos hold across query changes.
 	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
 	// A query narrowed past its baseline over an empty path has displaced the term set — a search,
@@ -364,6 +375,7 @@ export function BrowseStage(props: BrowseStageProps) {
 				detail={detail}
 				target={detail?.target}
 				renderDetail={renderDetail}
+				collapse={collapseAt === depth}
 			>
 				{content}
 			</DealStack>
