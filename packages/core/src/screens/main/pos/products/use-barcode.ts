@@ -476,6 +476,18 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			// The scan toast owns success feedback; silence the add-hook's own toast so
 			// a scan produces exactly one notification (fixes the double popup per scan).
 			added = await addVariation(product, parent, metaData, { silent: true });
+			// A variable parent is never a cart line; the cashier picks the variation from search (#2413).
+		} else if (product.payload.type === 'variable') {
+			scan.chooseVariation(product.payload.name ?? '', barcodeStr);
+			barcodeLogger.warn('Barcode scan matched a variable product', {
+				context: {
+					barcode: barcodeStr,
+					productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),
+					productName: product.payload.name,
+				},
+			});
+			guardedSetSearch(barcodeStr);
+			return;
 		} else {
 			added = await addProduct(product, { silent: true });
 		}
