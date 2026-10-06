@@ -24,7 +24,11 @@ def fix_star_io10_device_framework_search_paths(installer)
         /^(FRAMEWORK_SEARCH_PATHS\\[sdk=iphoneos\\*\\] = )(?!\\$\\(inherited\\))/,
         '\\1$(inherited) '
       )
-      File.write(path, patched) unless patched == contents
+      if patched == contents
+        Pod::UI.warn "[with-star-io10-device-frameworks] no FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*] line to fix in #{path}" unless contents.include?('$(inherited)')
+      else
+        File.write(path, patched)
+      end
     end
   end
 end
