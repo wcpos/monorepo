@@ -1116,6 +1116,68 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			}
 		}, 30_000);
 
+		it('an order a pull materialises between the residency read and the stash write still gets its count', async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			const order = await printedTwice(storage, server);
+			const app = await appOn(storage, server);
+			try {
+				let pulled = false;
+				const racing: LegacyScopeDrainPorts['liveEngine'] = {
+					whenActive: async () => {
+						const active = await app.engine.whenActive();
+						const realOrders = active.database.collections.orders!;
+						// The pull lands the order just as the drain reaches the stash (it read the
+						// stash, still empty, before the drain's write).
+						const orders = new Proxy(realOrders, {
+							get(target, property) {
+								if (property === 'getLocal') {
+									return async (id: string) => {
+										if (!pulled) {
+											pulled = true;
+											await new EngineOrderRepository(
+												active.database.collections as never
+											).upsertMany([
+												{
+													...order.stored,
+													local: { dirty: false, pendingMutationIds: [] },
+												} as never,
+											]);
+										}
+										return target.getLocal(id);
+									};
+								}
+								const value = Reflect.get(target, property, target) as unknown;
+								return typeof value === 'function' ? value.bind(target) : value;
+							},
+						});
+						return {
+							...active,
+							database: {
+								...active.database,
+								collections: { ...active.database.collections, orders },
+							} as never,
+						};
+					},
+					write: (intent, options) => app.engine.write(intent, options),
+				};
+				expect(
+					await drainLegacyScopeDatabase(
+						drainPorts(storage, storeFetch(server), { liveEngine: racing }),
+						manifest.identity
+					)
+				).toMatchObject({ status: 'drained' });
+				expect(pulled).toBe(true);
+				const resident = (await stored(app)).orders.get(order.uuid)!;
+				expect((resident.local as Json).receiptPrintCount).toBe(2);
+				const stash = await app.collection('orders').getLocal('resync-receipt-print-counts');
+				expect((stash?.get('counts') as Json | undefined)?.[order.uuid]).toBeUndefined();
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+
 		it('an order v6 does not hold yet is stashed, and the count lands when a pull materialises it', async () => {
 			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 			const storage = restore(work);

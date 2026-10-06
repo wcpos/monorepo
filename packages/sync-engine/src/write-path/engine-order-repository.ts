@@ -81,6 +81,23 @@ export type OrderRepositoryDatabase = {
 	close(): Promise<unknown>; // RxDatabase.close() resolves boolean; the repository only awaits it
 };
 
+/**
+ * Drop applied entries from the print-count stash, against its LATEST content: another writer (the
+ * previous-generation drain) may have added entries since this one read it, and rewriting a stale
+ * copy would lose them.
+ */
+export async function retireStashedPrintCounts(
+	orders: Pick<OrdersCollection, 'getLocal' | 'upsertLocal'>,
+	uuids: readonly string[]
+): Promise<void> {
+	const latest = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+	if (!latest) return;
+	const counts = { ...latest.get('counts') };
+	for (const uuid of uuids) delete counts[uuid];
+	if (Object.keys(counts).length === 0) await latest.remove();
+	else await orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
+}
+
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
@@ -112,10 +129,17 @@ export class EngineOrderRepository {
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
 				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
-			// Pulls replace sync bookkeeping, but must not reset prints observed by this till.
-			const receiptPrintCount = resident
-				? resident.local?.receiptPrintCount
-				: counts[entry.storedDocument.uuid];
+			// Pulls replace sync bookkeeping, but must not reset prints observed by this till. A stashed
+			// count applies even over a resident: a writer that stashed it may have raced this order's
+			// first materialisation, and the larger count is the one the till printed.
+			const residentCount = resident?.local?.receiptPrintCount;
+			const stashedCount = counts[entry.storedDocument.uuid];
+			const receiptPrintCount =
+				residentCount === undefined
+					? stashedCount
+					: stashedCount === undefined
+						? residentCount
+						: Math.max(residentCount, stashedCount);
 			if (receiptPrintCount !== undefined) {
 				const local = {
 					...entry.storedDocument.local,
@@ -152,11 +176,10 @@ export class EngineOrderRepository {
 		);
 		if (changed.length > 0)
 			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
-		if (stash && changed.some((document) => counts[document.uuid] !== undefined)) {
-			for (const document of changed) delete counts[document.uuid];
-			if (Object.keys(counts).length === 0) await stash.remove();
-			else await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
-		}
+		const applied = changed
+			.map((document) => document.uuid)
+			.filter((uuid) => counts[uuid] !== undefined);
+		if (stash && applied.length > 0) await retireStashedPrintCounts(this.db.orders, applied);
 		const parents = applicable.filter(
 			(order) => order.remoteId !== null && Array.isArray(order.payload.refunds)
 		);
