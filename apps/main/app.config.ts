@@ -220,6 +220,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				},
 			],
 			'./plugins/with-printer-support',
+			// Every DEVICE build needs this (store builds included): the Star pod drops React's
+			// framework search path on iphoneos and fails to compile. See the plugin.
+			'./plugins/with-star-io10-device-frameworks',
 			'./plugins/with-wedge-key-events',
 			'./plugins/with-sumup-reader',
 			[
