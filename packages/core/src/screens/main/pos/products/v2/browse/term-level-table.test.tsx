@@ -48,6 +48,7 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		active$,
 		sync,
 		cellsForRow: cells,
+		ListFooterComponent,
 	}: {
 		tableConfig: {
 			data: Row[];
@@ -64,11 +65,13 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		active$: unknown;
 		sync: unknown;
 		cellsForRow: unknown;
+		ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
 	}) => (
 		<div
 			data-testid="table"
 			data-meta={tableConfig.meta?.marker}
 			data-cells={String(cells === jest.requireMock('../../index').cellsForRow)}
+			data-list-footer={String(!!ListFooterComponent)}
 			onScroll={() => actions.extendLimit()}
 		>
 			{tableConfig.data.length === 0 ? (
@@ -92,6 +95,12 @@ jest.mock('../../../../components/data-table/v2', () => ({
 						</div>
 					);
 				})
+			)}
+			{/* Undefined falls back to the list's loading strip, as the real DataTable does. */}
+			{ListFooterComponent ? (
+				<ListFooterComponent active$={active$} />
+			) : (
+				<span data-testid="list-loading-strip" />
 			)}
 			{TableFooterComponent && (
 				<TableFooterComponent
@@ -383,4 +392,13 @@ it('is the All products pane too: no child rows, the catalogue under the crumb',
 	expect(screen.queryByTestId('browse-term-2')).toBeNull();
 	expect(screen.getByTestId('row-f')).not.toBeNull();
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('All products');
+});
+
+it('draws no loading strip under its rows: the pane moves, and the live sync is not its own', () => {
+	render(<TermLevelTable {...level()} />);
+	expect(screen.getByTestId('table').dataset.listFooter).toBe('true');
+	expect(screen.queryByTestId('list-loading-strip')).toBeNull();
+	// Held slots too: the strip would sit under them through the push.
+	render(<TermLevelTable {...level({ answer: undefined })} />);
+	expect(screen.queryByTestId('list-loading-strip')).toBeNull();
 });

@@ -108,6 +108,13 @@ const NO_TOTAL$ = of(null);
 // A covered level does not own the shared query: its scroll must not move it.
 const NO_EXTEND = () => {};
 
+// The footer's sync button already turns while the products pull (as the variations pane's
+// does). The list's own loading strip reads the LIVE query, which a pushed pane's open starts
+// and a covered pane does not own, and it is a spinner on a moving surface.
+function NoListFooter() {
+	return null;
+}
+
 // A product keeps the id the products table gives it (`hit.id`), so an inline expansion
 // (keyed by row id in index.tsx's `expandedRef`) is the same row's here.
 const rowId = (row: LevelRow) => ('record' in row ? (row.id ?? row.record.uuid) : row.id);
@@ -271,6 +278,7 @@ export function TermLevelTable({
 							);
 						}}
 						estimatedItemSize={100}
+						ListFooterComponent={NoListFooter}
 						TableFooterComponent={Footer}
 						getItemType={itemType}
 					/>
