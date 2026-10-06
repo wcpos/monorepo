@@ -79,45 +79,60 @@ export function SaleCompletionBridge(): null {
 		 * Resolved by waiting for the engine's active scope, not by reading it once: on a cold boot
 		 * the bridge mounts before the engine's open completes, and deciding "no legacy database"
 		 * then would count a missed start before the drain could carry the order over. Bounded
-		 * like the report wait; an engine with no scope to give (logged out, disposed) has none.
+		 * like the report wait.
+		 *
+		 * Two outcomes, kept apart: `resolved` (an active scope, or an engine with no scope to
+		 * give — none to wait on, countable) and `unknown` (the lookup rejected or outlasted the
+		 * bound — the order may be waiting in a v5 we could not name, so it is NOT countable).
 		 */
-		const activeLegacyDatabase = async (): Promise<string | null> => {
+		type LegacyLookup = { kind: 'resolved'; database: string | null } | { kind: 'unknown' };
+		const activeLegacyDatabase = async (): Promise<LegacyLookup> => {
 			const engine = manager.engine;
-			if (!engine) return null;
+			if (!engine) return { kind: 'resolved', database: null };
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
 				const active =
 					engine.active() ??
 					(await Promise.race([
 						engine.whenActive(),
-						new Promise<null>((resolve) => {
-							timer = setTimeout(() => resolve(null), LEGACY_DRAIN_REPORT_WAIT_MS);
+						new Promise<'timed-out'>((resolve) => {
+							timer = setTimeout(() => resolve('timed-out'), LEGACY_DRAIN_REPORT_WAIT_MS);
 						}),
 					]));
-				return active
-					? scopeDatabaseName(active.identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
-					: null;
+				if (active === 'timed-out') return { kind: 'unknown' };
+				return {
+					kind: 'resolved',
+					database: scopeDatabaseName(active.identity, {
+						generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+					}),
+				};
 			} catch {
-				return null;
+				return { kind: 'unknown' };
 			} finally {
 				if (timer !== undefined) clearTimeout(timer);
 			}
 		};
 		// Awaited once per replay, and only when an order is missing: a resident order never waits.
-		// `unknown`: the active scope's report did not arrive within the bound. The replay goes on,
-		// but whether that database holds an order is UNKNOWN — read like an uncountable report,
-		// never as "nothing kept" (three slow starts must not abandon a completion it still holds).
+		// `unknown`: the active scope could not be resolved, or its report did not arrive, within the
+		// bound. The replay goes on, but whether that database holds an order is UNKNOWN — read like
+		// an uncountable report, never as "nothing kept" (three slow starts must not abandon a
+		// completion it still holds).
 		let legacyReport: Promise<{ database: string | null; unknown: boolean }> | null = null;
+		const warnUnreported = () =>
+			logger.warn('Replaying sale completions without the previous database version report', {
+				context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
+			});
 		const legacyDrainReported = () =>
 			(legacyReport ??= (async () => {
-				const database = await activeLegacyDatabase();
+				const lookup = await activeLegacyDatabase();
+				if (lookup.kind === 'unknown') {
+					if (!current.stopped) warnUnreported();
+					return { database: null, unknown: true };
+				}
+				const { database } = lookup;
 				if (database === null || current.stopped) return { database, unknown: false };
 				const result = await awaitLegacyUnsentReport(database, LEGACY_DRAIN_REPORT_WAIT_MS);
-				if (result === 'timed-out') {
-					logger.warn('Replaying sale completions without the previous database version report', {
-						context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
-					});
-				}
+				if (result === 'timed-out') warnUnreported();
 				return { database, unknown: result === 'timed-out' };
 			})());
 		const findOrder = async (uuid: string) =>

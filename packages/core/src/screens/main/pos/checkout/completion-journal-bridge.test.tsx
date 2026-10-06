@@ -250,6 +250,71 @@ describe('a previous-generation database the drain keeps', () => {
 		expect(mockWarn).not.toHaveBeenCalled();
 	});
 
+	describe('when the active scope cannot be resolved', () => {
+		/** The 30 s bound elapses at once; every other timer runs as scheduled. */
+		const boundElapsesAtOnce = () => {
+			const realSetTimeout = globalThis.setTimeout;
+			return jest
+				.spyOn(globalThis, 'setTimeout')
+				.mockImplementation(((fn: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+					realSetTimeout(fn, ms === 30_000 ? 0 : ms, ...args)) as typeof setTimeout);
+		};
+
+		it('a lookup that outlasts the bound is unknown: replayed, warned once, not counted', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			boundElapsesAtOnce();
+			mockManager = { engine: { active: () => null, whenActive: () => new Promise(() => {}) } };
+			render(<SaleCompletionBridge />);
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			expect(mockWarn).toHaveBeenCalledTimes(1);
+		});
+
+		it('a lookup that rejects is unknown: not counted', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			mockManager = {
+				engine: {
+					active: () => null,
+					whenActive: () => Promise.reject(new Error('no store scope')),
+				},
+			};
+			render(<SaleCompletionBridge />);
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+		});
+
+		it('a lookup that resolves to a scope with no v5 is countable', async () => {
+			await record();
+			mockFind.mockResolvedValue(null);
+			let activate!: () => void;
+			const opening = new Promise<{ identity: typeof IDENTITY }>((resolve) => {
+				activate = () => resolve({ identity: IDENTITY });
+			});
+			mockManager = { engine: { active: () => null, whenActive: () => opening } };
+			render(<SaleCompletionBridge />);
+			await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+			activate();
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts: 1,
+					missingStarts: 1,
+				})
+			);
+			expect(mockWarn).not.toHaveBeenCalled();
+		});
+	});
+
 	it('a replay that starts before the engine is active (cold boot) waits for the scope, then for its report', async () => {
 		await record();
 		mockFind.mockResolvedValue(null);
