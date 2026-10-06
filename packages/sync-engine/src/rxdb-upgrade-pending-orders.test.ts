@@ -44,7 +44,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from './collections/engine-collections';
-import { createEngineHarness, type EngineHarness, memoryEngineStorage } from './testing';
+import { createEngineHarness, type EngineHarness, memoryEngineStorage, remoteId } from './testing';
 import {
 	drainLegacyScopeDatabase,
 	LEGACY_UNSENDABLE_REPORT_INTERVAL_MS,
@@ -409,10 +409,11 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		const server = createFakeWriteServer();
 		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
 
-		// A till whose only unsent work is sendable: no held cart, dead letter or conflict.
+		// A till whose only unsent work is sendable: no held cart (row or order), dead letter or conflict.
 		const legacy = await openLegacy(storage, server);
 		try {
 			await legacy.collection('mutations').bulkRemove(untouchedRows.map((row) => row.mutationId));
+			await legacy.collection('orders').bulkRemove([uuidOf('e')]);
 		} finally {
 			await legacy.dispose();
 		}
@@ -749,7 +750,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 					...(await app.engine.whenActive()),
 					identity: { ...manifest.identity, storeId: 99 },
 				}),
-				write: (intent) => app.engine.write(intent),
+				write: (intent, options) => app.engine.write(intent, options),
 			};
 			expect(
 				await drainLegacyScopeDatabase(
@@ -780,6 +781,130 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			expect((await stored(app)).orders.has(cart.uuid)).toBe(true);
 		} finally {
 			await app.dispose();
+		}
+	}, 30_000);
+
+	it('an orphan skeleton (an open cart whose create was never queued) is carried into v6 with its line before v5 goes', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const line = { uuid: 'line-1', product_id: 41, quantity: 2, name: 'Coffee' };
+
+		// Only the orphan is left: every queue row gone (acked, or never written), the other orders
+		// gone with them; the cart has a line and no queue row.
+		const legacy = await openLegacy(storage, server);
+		try {
+			await legacy.collection('mutations').bulkRemove(manifest.queue.map((row) => row.mutationId));
+			await legacy
+				.collection('orders')
+				.bulkRemove(manifest.orders.filter((o) => o.case !== 'e').map((o) => o.uuid));
+			const skeleton = await legacy.collection('orders').findOne(cart.uuid).exec();
+			await skeleton!.incrementalModify((data: Json) => ({
+				...data,
+				payload: { ...(data.payload as Json), line_items: [line] },
+				local: { dirty: false, pendingMutationIds: [] },
+			}));
+		} finally {
+			await legacy.dispose();
+		}
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			// Without a live engine to carry it into, it is kept — never removed with the database.
+			expect(
+				await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+			).toMatchObject({
+				status: 'kept',
+				remaining: { held: 1 },
+				keptOrderUuids: [cart.uuid],
+			});
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'drained', pushed: 0, carried: 1 });
+			const live = await stored(app);
+			expect(live.orders.get(cart.uuid)).toMatchObject({
+				status: 'pos-open',
+				payload: expect.objectContaining({ line_items: [line] }),
+			});
+			expect([...live.rows.values()]).toEqual([
+				expect.objectContaining({
+					operation: 'create',
+					recordId: cart.uuid,
+					payload: expect.objectContaining({ line_items: [line] }),
+				}),
+			]);
+			expect(server.received).toEqual([]);
+		} finally {
+			await app.dispose();
+		}
+		expect(
+			await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+		).toEqual({ status: 'absent', databaseName: manifest.databaseName });
+	}, 30_000);
+
+	it('a store switch landing between the scope check and the write refuses the carried create: nothing reaches the new scope', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+		const otherStore = { ...manifest.identity, storeId: 99 };
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const switching: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: () => app.engine.whenActive(),
+				write: async (intent, options) => {
+					// The cashier's store switch completes just before the enqueue.
+					await app.engine.scope.switch(otherStore);
+					return app.engine.write(intent, options);
+				},
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: switching }),
+					manifest.identity
+				)
+			).toMatchObject({
+				status: 'kept',
+				retryable: true,
+				carried: 0,
+				reason: expect.stringContaining('not the one this write is bound to'),
+			});
+			expect(app.engine.active()?.identity.storeId).toBe(99);
+			// The new scope's queue and orders never saw the cart.
+			const elsewhere = await stored(app);
+			expect(elsewhere.rows.size).toBe(0);
+			expect(elsewhere.orders.has(cart.uuid)).toBe(false);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(true);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(true);
+		} finally {
+			await legacy.dispose();
 		}
 	}, 30_000);
 
@@ -828,10 +953,12 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
 		const server = createFakeWriteServer();
-		// Every row acked (gone) before the kill; the orders and the database itself remain.
+		// Every row acked (gone) before the kill; the sent orders and the database itself remain.
+		// (No open cart: one left with no queue row is an orphan skeleton, carried, not dropped.)
 		const legacy = await openLegacy(storage, server);
 		try {
 			await legacy.collection('mutations').bulkRemove(manifest.queue.map((row) => row.mutationId));
+			await legacy.collection('orders').bulkRemove([uuidOf('e')]);
 		} finally {
 			await legacy.dispose();
 		}
@@ -1131,6 +1258,72 @@ describe('a drainable-generation product acknowledgment', () => {
 			expect(acked.remoteId).not.toBeNull();
 			expect(acked).not.toHaveProperty('tagIds');
 			expect(acked.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+			expect((await legacy.collection('mutations').find().exec()).length).toBe(0);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
+	it('a discarded v5 product dead letter restores the server document in the v5 shape (no tagIds)', async () => {
+		const recordId = '17400000-0000-4000-8000-0000000006cc';
+		const meta = [{ key: '_woocommerce_pos_uuid', value: recordId }];
+		const server = {
+			id: 602,
+			name: 'Server truth',
+			type: 'simple',
+			price: '9.00',
+			stock_status: 'instock',
+			stock_quantity: null,
+			tags: [{ id: 4 }],
+			meta_data: meta,
+		};
+		const legacy = await createEngineHarness({
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			fetch: async (url: string) =>
+				new URL(url).pathname.endsWith('/products') ? Response.json([server]) : Response.json([]),
+			ports: { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION },
+		});
+		try {
+			await legacy.collection('products').insert({
+				uuid: recordId,
+				remoteId: remoteId(602),
+				remoteKey: String(remoteId(602)),
+				payload: { ...server, name: 'Local edit', tags: [] },
+				sync: { revision: 'sha256:r1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+				price: 9,
+				sortName: '',
+				stockStatus: 'instock',
+				type: 'simple',
+				categoryIds: [],
+				brandIds: [],
+				onSale: false,
+				featured: false,
+				stockQuantity: null,
+			});
+			await legacy.collection('mutations').insert({
+				mutationId: '17400000-0000-4000-8000-0000000006cd',
+				collectionName: 'products',
+				operation: 'update',
+				recordId,
+				origin: 'existing',
+				payload: { name: 'Local edit' },
+				baseRevision: 'sha256:r1',
+				queuedAt: '2026-09-30T08:00:00.000Z',
+				seq: 1,
+				status: 'rejected',
+				rejectedStatus: 400,
+				rejectedReason: 'rest_invalid_param',
+			});
+
+			await legacy.engine.resolveConflict('17400000-0000-4000-8000-0000000006cd', 'discard');
+			const restored = (await legacy
+				.collection('products')
+				.findOne(recordId)
+				.exec())!.toJSON() as Json;
+			expect(restored).not.toHaveProperty('tagIds');
+			expect((restored.payload as Json).name).toBe('Server truth');
 			expect((await legacy.collection('mutations').find().exec()).length).toBe(0);
 		} finally {
 			await legacy.dispose();

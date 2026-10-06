@@ -46,6 +46,7 @@ import {
 } from 'rxdb';
 
 import {
+	assertBulkSuccess,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	type QueuedMutation,
 	remoteIdOrNull,
@@ -272,10 +273,30 @@ async function classify(database: RxDatabase): Promise<Classified> {
 			carriable.push({ recordId, order, rows: held });
 		}
 	}
+	// ORPHAN SKELETONS: a till killed between inserting a new cart's order and enqueueing its
+	// create leaves a local-only open order with NO queue row (the app recovers it as an
+	// `orphanedSkeleton` on the next add). An empty queue is not "nothing unsent" while one
+	// exists: it is a cart, carried over like any other (it gets its create in the live
+	// database), and counted as held until it is.
+	const queued = new Set(rows.map((row) => row.recordId));
+	const orphans: Record<string, unknown>[] = orders
+		? (await orders.find({ selector: { status: OPEN_CART_ORDER_STATUS } }).exec())
+				.map((doc) => doc.toJSON() as Record<string, unknown>)
+				.filter(
+					(order) => !queued.has(String(order.uuid)) && remoteIdOrNull(order.remoteId) === null
+				)
+		: [];
+	for (const order of orphans) {
+		count('held');
+		carriable.push({ recordId: String(order.uuid), order, rows: [] });
+	}
 	const orderUuids = [
-		...new Set(rows.filter((row) => row.collectionName === 'orders').map((row) => row.recordId)),
+		...new Set([
+			...rows.filter((row) => row.collectionName === 'orders').map((row) => row.recordId),
+			...orphans.map((order) => String(order.uuid)),
+		]),
 	].sort();
-	return { total: rows.length, remaining, carriable, orderUuids };
+	return { total: rows.length + orphans.length, remaining, carriable, orderUuids };
 }
 
 /** A create still ahead in a queue for this record (pending or in flight). */
@@ -361,21 +382,33 @@ async function carryOverOpenCarts(
 					);
 				}
 				// A fresh copy carries the held chain coalesced as the old queue held it (the create's
-				// payload with each later edit layered on, in seq order); a copy already live carries
-				// its own resident payload, which already holds every later edit.
-				const payload = inserted
-					? (Object.assign(
-							{},
-							...cart.rows.map((row) => plainCopy((row.payload ?? {}) as Record<string, unknown>))
-						) as Record<string, unknown>)
-					: plainCopy((residentJson.payload ?? {}) as Record<string, unknown>);
+				// payload with each later edit layered on, in seq order) — or, for an orphan skeleton
+				// with no chain, its resident payload; a copy already live carries its own resident
+				// payload, which already holds every later edit.
+				const payload =
+					inserted && cart.rows.length > 0
+						? (Object.assign(
+								{},
+								...cart.rows.map((row) => plainCopy((row.payload ?? {}) as Record<string, unknown>))
+							) as Record<string, unknown>)
+						: plainCopy(
+								((inserted ? cart.order.payload : residentJson.payload) ?? {}) as Record<
+									string,
+									unknown
+								>
+							);
 				try {
-					await live.write({
-						collection: 'orders',
-						operation: 'create',
-						recordId: cart.recordId,
-						payload,
-					});
+					// Bound to the drained scope: a switch landing between the check above and this
+					// enqueue refuses the write instead of queueing this cart in another store's database.
+					await live.write(
+						{
+							collection: 'orders',
+							operation: 'create',
+							recordId: cart.recordId,
+							payload,
+						},
+						{ inScope: identity }
+					);
 				} catch (error) {
 					// Leave nothing half-copied: the cart stays (held) in the old database.
 					if (inserted) await resident.remove().catch(() => undefined);
@@ -385,7 +418,12 @@ async function carryOverOpenCarts(
 					throw new Error(`the live queue holds no create for ${cart.recordId}`);
 				}
 			}
-			await queueOf(legacy).bulkRemove(cart.rows.map((row) => row.mutationId));
+			if (cart.rows.length > 0) {
+				assertBulkSuccess(
+					await queueOf(legacy).bulkRemove(cart.rows.map((row) => row.mutationId)),
+					'legacy drain: retire carried cart rows'
+				);
+			}
 			const legacyOrder = await legacy.collections.orders?.findOne(cart.recordId).exec();
 			await legacyOrder?.remove();
 			carried += 1;

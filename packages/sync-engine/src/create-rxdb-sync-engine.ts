@@ -600,8 +600,16 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5). */
-	write(intent: WriteIntent): Promise<{
+	 * write facet (orders today) — anything else throws (invariant 5).
+	 *
+	 * `options.inScope` binds the write to that scope: it is refused (nothing
+	 * enqueued) unless that scope is the active one when the enqueue takes the
+	 * scope guard. For work that belongs to one scope and must never follow a
+	 * switch into another (the previous-generation drain's carried carts). */
+	write(
+		intent: WriteIntent,
+		options?: { inScope?: StoreScopeIdentity }
+	): Promise<{
 		mutationId: string;
 		recordId: string;
 		annihilated?: boolean;
@@ -2357,8 +2365,11 @@ export function createRxdbSyncEngine(
 				});
 			},
 		},
-		write: async (intent) => {
-			const receipt = await writePlane.write(intent);
+		write: async (intent, options) => {
+			const receipt = await writePlane.write(
+				intent,
+				options?.inScope ? { scopeId: scopeKeyFor(options.inScope) } : undefined
+			);
 			// An annihilated delete never enqueued anything — nothing to drain.
 			if (!receipt.annihilated) {
 				writeDrainNudge.nudge();

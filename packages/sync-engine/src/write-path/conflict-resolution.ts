@@ -7,7 +7,7 @@ import {
 	type SyncObserver,
 } from '@wcpos/sync-core';
 
-import { writeFacetFor } from '../collections/collection-descriptors';
+import { type CollectionWriteFacet, writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { requeueRejectedMutation } from './write-intents';
 import { removeRefundChildren } from './refund-children';
@@ -87,6 +87,13 @@ export type ConflictResolutionDeps = {
 	/** The active scope's barcode carriers — a discard rebuilds the optimistic
 	 * document through the same projection an ordinary pull uses. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
+	/**
+	 * The write facets a resolution refreshes and restores through. Default: the
+	 * current generation's; a drainable-generation engine passes the facets whose
+	 * projections fit its schemas (a discard must not restore a current-generation
+	 * document into a previous-generation collection).
+	 */
+	writeFacetFor?: (collection: string) => CollectionWriteFacet | null;
 };
 
 export type ConflictResolution = {
@@ -97,6 +104,7 @@ export type ConflictResolution = {
 export function createConflictResolution(deps: ConflictResolutionDeps): ConflictResolution {
 	// prettier-ignore
 	const { assertUsable, settled, manager, databaseFor, fetcher, syncBaseUrl, now, mintUuid, diagnostics, persistOrderRepull, repullOrdersNow, queueFor, resolutionInstanceIdFor, serializeResolution, onQueueChanged } = deps;
+	const facetFor = deps.writeFacetFor ?? writeFacetFor;
 	const activeDatabase = (): RxDatabase | null => {
 		const scopeId = manager.activeScope;
 		return scopeId === null ? null : databaseFor(scopeId);
@@ -215,7 +223,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						if (resolution === 'retry-with-server-base') {
 							serverBase = entry.conflictRevision ?? null;
 							if (!serverBase) {
-								const facet = writeFacetFor(entry.collectionName);
+								const facet = facetFor(entry.collectionName);
 								if (!facet) {
 									throw new Error(
 										`resolveConflict: no server revision on "${mutationId}" and no refresh seam for "${entry.collectionName}" — discard instead`
@@ -260,7 +268,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 						let discardServerDocument: Record<string, unknown> | null = null;
 						let discardRemovesResident = false;
 						if (resolution === 'discard' && entry.collectionName !== 'orders') {
-							const facet = writeFacetFor(entry.collectionName);
+							const facet = facetFor(entry.collectionName);
 							if (!facet) {
 								throw new Error(
 									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
@@ -321,7 +329,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								} = entry;
 								const graft =
 									entry.operation !== 'delete'
-										? writeFacetFor(entry.collectionName)?.graftAckIdentity
+										? facetFor(entry.collectionName)?.graftAckIdentity
 										: undefined;
 								const reconcile = (payload: Record<string, unknown>) =>
 									graft && entry.conflictDocument
@@ -375,7 +383,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									remove(): Promise<unknown>;
 								} | null;
 								const row = doc?.toJSON() as Record<string, unknown> | undefined;
-								const facet = writeFacetFor(entry.collectionName);
+								const facet = facetFor(entry.collectionName);
 								// BORN-LOCAL CREATE ⇒ discard DESTROYS the record (#832 follow-up,
 								// ruling R7b). A rejected create never reached the server: there is no
 								// server truth to restore and nothing will ever sync it again, so

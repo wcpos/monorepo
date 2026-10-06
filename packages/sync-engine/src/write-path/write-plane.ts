@@ -29,8 +29,16 @@ export type WriteReceipt = {
 	annihilated?: boolean;
 	supersededMutationId?: string;
 };
+export type WriteOptions = {
+	/**
+	 * Bind the write to this scope (its scope id): it is refused unless that scope
+	 * is the active one when the enqueue takes the scope guard — the same guard a
+	 * switch takes — so it can never land in a scope the caller did not mean.
+	 */
+	scopeId?: string;
+};
 export type WritePlane = {
-	write(intent: WriteIntent): Promise<WriteReceipt>;
+	write(intent: WriteIntent, options?: WriteOptions): Promise<WriteReceipt>;
 	conflicts(): Promise<QueuedMutation[]>;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
@@ -129,9 +137,10 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		serializeResolution,
 		onQueueChanged,
 		...(deps.barcodeSelectorsFor ? { barcodeSelectorsFor: deps.barcodeSelectorsFor } : {}),
+		...(deps.writeFacetFor ? { writeFacetFor: deps.writeFacetFor } : {}),
 	});
 	return {
-		write: async (intent) => {
+		write: async (intent, options) => {
 			deps.assertUsable();
 			if (!writeFacetFor(intent.collection)) {
 				throw new Error(
@@ -144,6 +153,11 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 			// them out rather than reject a caller-initiated durable write.
 			await deps.settled('write');
 			return deps.manager.runGuarded(async (bound) => {
+				if (options?.scopeId !== undefined && bound.scopeId !== options.scopeId) {
+					throw new Error(
+						'write: the active scope is not the one this write is bound to — nothing was enqueued'
+					);
+				}
 				const database = deps.databaseFor(bound.scopeId);
 				if (!database) throw new Error('write: scope database not open');
 				let result: WriteReceipt | null = null;
