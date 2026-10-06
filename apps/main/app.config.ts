@@ -30,7 +30,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	// The former `e2e-test` profile is gone: native E2E drives the same
 	// `development`-profile dev client developers use, with Metro serving the
 	// JS (e2e-native.yml, 2026-08-28).
-	const isDev = easProfile === 'development';
+	// `development-device` is the same dev client built for a registered iPhone
+	// instead of the simulator (eas.json): Tap to Pay on iPhone only runs on a device.
+	const isDev = easProfile === 'development' || easProfile === 'development-device';
 	const isAdhoc = easProfile === 'adhoc';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)
@@ -81,6 +83,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					? 'com.wcpos.main.adhoc'
 					: 'com.wcpos.main',
 			buildNumber: '1',
+			// Tap to Pay on iPhone. Apple granted the DEVELOPMENT entitlement on
+			// 2026-10-06 (roadmap#113): it provisions only for devices registered to
+			// the team, and a TestFlight or App Store build carrying it is refused
+			// until Apple grants the publishing entitlement after reviewing the
+			// mandated flows. So dev clients only, until that review passes.
+			...(isDev
+				? {
+						entitlements: {
+							...config.ios?.entitlements,
+							'com.apple.developer.proximity-reader.payment.acceptance': true,
+						},
+					}
+				: {}),
 			infoPlist: {
 				...iosInfoPlist,
 				ITSAppUsesNonExemptEncryption: false,
