@@ -194,6 +194,11 @@ patchedDependencies:
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
   # Backports pubkey/rxdb#9026: IncrementalWriteQueue.triggerRun() has no try/finally.
   # rxdb 17.5.0 still lacks it; drop this patch when upstream ships the fix.
+  # ALSO (2026-10-07): storage-sqlite's sqliteTransaction kept a REJECTED link in its per-database
+  # promise chain after a failed handler, so every later write replayed that error until the
+  # process died (the till could not save an order for a whole session on the Pixel, 2026-10-06).
+  # The patch rolls back and keeps the chain alive. Guarded by
+  # packages/database/src/adapters/storage/sqlite-transaction-queue.test.ts.
   rxdb@17.5.0: patches/rxdb@17.5.0.patch
   # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
   # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
@@ -205,6 +210,13 @@ patchedDependencies:
   expo-app-metrics@58.0.9: patches/expo-app-metrics@58.0.9.patch
   expo-blob@58.0.2: patches/expo-blob@58.0.2.patch
   expo-device@58.0.5: patches/expo-device@58.0.5.patch
+  # Android: convertSqlLiteErrorToSTLString appended the int error code as ONE CHAR, so code 0
+  # produced the bare "Error code " and other codes printed as control characters (Pixel run,
+  # 2026-10-06). std::to_string instead, so the next failure names its code. (Code 0 itself means
+  # SQLite's message was already "not an error" — the real code was lost upstream of this line;
+  # the patch is diagnostics, not the cure.) Native: needs an Android rebuild. Drop when expo-sqlite
+  # formats the code.
+  expo-sqlite@58.0.6: patches/expo-sqlite@58.0.6.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The SQLite query-translation fix for it lives in
