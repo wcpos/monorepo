@@ -419,6 +419,40 @@ describe('query bindings', () => {
 		subscription.unsubscribe();
 	});
 
+	it('pulls the new store’s empty collection again when the engine changes under a residents-only read', async () => {
+		let active: FakeEngine = engine;
+		function Swappable({ children }: { children: React.ReactNode }) {
+			return <Provider value={active}>{children}</Provider>;
+		}
+		const answers: number[] = [];
+		const { result, rerender } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Swappable }
+		);
+		let subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		// The first store's one-shot: pulled, settled, answered empty.
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+		await waitFor(() => {
+			subscription.unsubscribe();
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			expect(answers.at(-1)).toBe(0);
+		});
+		subscription.unsubscribe();
+
+		// A store switch: a new engine, its collection empty too — pulled once again.
+		const next = createFakeEngine(engineDB);
+		active = next;
+		rerender();
+		await waitFor(() =>
+			expect(next.requireCalls).toEqual([
+				expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
+			])
+		);
+		expect(engine.requireCalls).toHaveLength(1);
+	});
+
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident product' })
