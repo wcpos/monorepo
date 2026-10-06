@@ -1351,6 +1351,97 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
+	it('an acknowledgement landing between the snapshot and the queue check is seen: no second create, v5 retired on the server id', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			// A previous pass copied the cart and queued its create; the cashier checks it out now.
+			await app
+				.collection('orders')
+				.insert({ ...cart.stored, local: { dirty: false, pendingMutationIds: [] } });
+			const { mutationId } = await app.engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: cart.uuid,
+				payload: heldRow.stored.payload as Json,
+			});
+			let acknowledged = false;
+			const acking: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: async () => {
+					const active = await app.engine.whenActive();
+					const realQueue = active.database.collections.recordMutations!;
+					// The create's acknowledgement lands as the drain checks the queue: the server id is
+					// set on the resident, then the row is removed (the write path's ack order).
+					const queue = new Proxy(realQueue, {
+						get(target, property) {
+							if (property === 'find') {
+								return (query: unknown) => ({
+									exec: async () => {
+										if (!acknowledged) {
+											acknowledged = true;
+											const resident = await active.database.collections
+												.orders!.findOne(cart.uuid)
+												.exec();
+											await resident!.incrementalModify((data: Json) => ({
+												...data,
+												remoteId: '9001',
+												remoteKey: '9001',
+											}));
+											await target.bulkRemove([mutationId]);
+										}
+										return target.find(query as never).exec();
+									},
+								});
+							}
+							const value = Reflect.get(target, property, target) as unknown;
+							return typeof value === 'function' ? value.bind(target) : value;
+						},
+					});
+					return {
+						...active,
+						database: {
+							...active.database,
+							collections: { ...active.database.collections, recordMutations: queue },
+						} as never,
+					};
+				},
+				write: (intent, options) => app.engine.write(intent, options),
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: acking }),
+					manifest.identity
+				)
+			).toMatchObject({ status: 'kept', carried: 1, remaining: { deadLetters: 1, conflicts: 1 } });
+			expect(acknowledged).toBe(true);
+			// No second create was queued for the acknowledged order.
+			expect((await stored(app)).rows.size).toBe(0);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(false);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(false);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
 	it('a push the store applied but whose answer was lost is re-sent under the same mutationId, never applied twice', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);

@@ -64,6 +64,7 @@ import {
 	buildDeleteMutation,
 	buildUpdateMutation,
 	RecordMutationQueue,
+	remoteIdOrNull,
 	RxRecordMutationStorage,
 } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection, SyncObserver } from '@wcpos/sync-core';
@@ -363,6 +364,15 @@ export async function enqueueWriteIntent(input: {
 			if (!doc) {
 				throw new Error(
 					`write(create): record "${intent.recordId}" is not resident in "${intent.collection}" — insert the born-local row first`
+				);
+			}
+			// A record the server already holds (its resident carries a server id — an earlier
+			// create was acknowledged) is never created again: a second create under a new mutation id
+			// is a duplicate the server cannot dedupe. Read inside this placement turn, so an ack that
+			// landed a moment ago is seen.
+			if (remoteIdOrNull((stored as { remoteId?: unknown } | undefined)?.remoteId) !== null) {
+				throw new Error(
+					`write(create): record "${intent.recordId}" in "${intent.collection}" already has a server id — a second create would duplicate it`
 				);
 			}
 			const built = buildCreateMutation(

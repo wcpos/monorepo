@@ -370,9 +370,17 @@ async function carryOverOpenCarts(
 				insertedRevision = resident.revision;
 			}
 			const residentJson = resident.toJSON() as { remoteId?: unknown; payload?: unknown };
-			const carriesSale = async () =>
-				remoteIdOrNull(residentJson.remoteId) !== null ||
-				hasLiveCreate(await liveRowsFor(cart.recordId));
+			// The proof reads the QUEUE first and the resident's server id after it, both fresh: an
+			// acknowledgement of a queued create sets the id and only then removes the row, so it is
+			// seen in one or the other — never missed between a stale id and an emptied queue.
+			const carriesSale = async () => {
+				if (hasLiveCreate(await liveRowsFor(cart.recordId))) return true;
+				const latest = await liveOrders.findOne(cart.recordId).exec();
+				return (
+					remoteIdOrNull((latest?.toJSON() as { remoteId?: unknown } | undefined)?.remoteId) !==
+					null
+				);
+			};
 			if (!(await carriesSale())) {
 				// A create the store already REFUSED (enqueued before a crash, rejected before this
 				// launch) is a dead letter: a permanent refusal waits for Store health, and a fresh
