@@ -149,6 +149,14 @@ it('retains the till receipt count across reset-for-resync and repull', async ()
 		ids.forEach((id) => rows.delete(id));
 		return [];
 	};
+	// The upsert lands the document (retirement checks the materialised order holds the count).
+	const upsert = db.orders.bulkUpsert.bind(db.orders);
+	db.orders.bulkUpsert = async (documents: unknown[]) => {
+		for (const document of documents as { uuid: string }[]) {
+			rows.set(document.uuid, { toJSON: () => document as typeof resident });
+		}
+		return upsert(documents);
+	};
 	const repository = new EngineOrderRepository(db);
 
 	await repository.resetForResync();
@@ -157,6 +165,7 @@ it('retains the till receipt count across reset-for-resync and repull', async ()
 
 	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 2 } });
 	// Once restored, a later unrelated removal must not reuse the saved count.
+	rows.delete(storedDocument.uuid);
 	await repository.upsertMany([storedDocument]);
 	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
 });

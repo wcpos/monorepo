@@ -102,18 +102,23 @@ export type OrderRepositoryDatabase = {
  */
 export async function modifyStashedPrintCounts(
 	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
-	modify: (counts: Record<string, number>) => Record<string, number>,
+	modify: (
+		counts: Record<string, number>
+	) => Record<string, number> | Promise<Record<string, number>>,
 	options: { createIfMissing: boolean }
 ): Promise<void> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		const doc = await orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
 		if (doc) {
-			await doc.incrementalModify((data) => ({ ...data, counts: modify({ ...data?.counts }) }));
+			await doc.incrementalModify(async (data) => ({
+				...data,
+				counts: await modify({ ...data?.counts }),
+			}));
 			return;
 		}
 		if (!options.createIfMissing) return;
 		try {
-			await orders.insertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts: modify({}) });
+			await orders.insertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts: await modify({}) });
 			return;
 		} catch (error) {
 			// Another writer created it first: modify theirs on the next turn.
@@ -176,15 +181,24 @@ export async function applyStashedPrintCounts(
  * count stashed meanwhile stays for the next apply). An emptied stash goes, conditionally.
  */
 async function retireAppliedPrintCounts(
-	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal'>,
+	orders: Pick<OrdersCollection, 'getLocal' | 'insertLocal' | 'findByIds'>,
 	applied: Readonly<Record<string, number>>
 ): Promise<void> {
 	if (Object.keys(applied).length === 0) return;
 	await modifyStashedPrintCounts(
 		orders,
-		(current) => {
-			for (const [uuid, count] of Object.entries(applied)) {
-				if ((current[uuid] ?? 0) <= count) delete current[uuid];
+		async (current) => {
+			// Verified INSIDE the stash's write turn: an entry goes only while the order it was
+			// applied to is still resident and still holds at least that count. A reset-for-resync
+			// that removed the order meanwhile (keeping the entry for the repull) keeps it here too.
+			const residents = await orders.findByIds(Object.keys(applied)).exec();
+			for (const uuid of Object.keys(applied)) {
+				const resident = residents.get(uuid)?.toJSON() as
+					{ local?: { receiptPrintCount?: unknown } } | undefined;
+				const held = resident?.local?.receiptPrintCount;
+				if (resident && typeof held === 'number' && held >= (current[uuid] ?? 0)) {
+					delete current[uuid];
+				}
 			}
 			return current;
 		},
@@ -496,11 +510,24 @@ export class EngineOrderRepository {
 		if (Object.keys(counts).length > 0) {
 			await stashPrintCounts(this.db.orders, counts);
 		}
-		if (removable.length > 0)
-			assertBulkSuccess(
+		if (removable.length > 0) {
+			const removal = assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
-			);
+			) as { success?: { toJSON?(): unknown }[] } | undefined;
+			// …and again from what was actually removed: a count raised on a resident after the read
+			// above (an apply of a stashed count) must not be lost with it. Larger wins.
+			const removedCounts: Record<string, number> = {};
+			for (const doc of removal?.success ?? []) {
+				const row = doc.toJSON?.() as
+					{ uuid?: string; local?: { receiptPrintCount?: unknown } } | undefined;
+				const count = row?.local?.receiptPrintCount;
+				if (row?.uuid && typeof count === 'number') removedCounts[row.uuid] = count;
+			}
+			if (Object.keys(removedCounts).length > 0) {
+				await stashPrintCounts(this.db.orders, removedCounts);
+			}
+		}
 		// A retry may find the parents already gone. Sweep against current residency,
 		// retaining POS-stamped history even when its parent is not held locally.
 		const held = (await this.db.refunds.find({ selector: {} }).exec()).map((doc) => doc.toJSON());
