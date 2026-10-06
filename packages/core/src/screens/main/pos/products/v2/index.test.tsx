@@ -447,6 +447,34 @@ describe('POSProducts query-state wiring', () => {
 		expect(screen.getByTestId('products-pane-stack')).toBeTruthy();
 		expect(mockBrowseStageProps).toBeNull();
 	});
+
+	// The query compiler trims the term, so blanks search for nothing.
+	it('keeps the browse stage for a whitespace-only search', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('  '));
+		expect(latestState().search).toBe('  ');
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
+	});
+
+	it('drops a product drill when a browse source takes over, and does not bring it back', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
+			onDrill: (record: unknown) => void;
+		}>;
+		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockBrowseBy = 'categories';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+
+		mockBrowseBy = undefined;
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
 });
 
 // The new rows and tiles are tested in their own suites.

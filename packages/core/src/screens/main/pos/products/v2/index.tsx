@@ -214,6 +214,14 @@ function POSProductsContent({
 			setDrill(record ? { record, search: state.search, target } : null),
 		[state.search]
 	);
+	// A drill does not outlive its stage: a browse source taking over (or handing back) starts
+	// from its root, never under the old variations' filter bar, nor resurrecting their pane.
+	// Dropped while rendering (React's "previous render" pattern), so no frame shows it.
+	const [drillStage, setDrillStage] = React.useState(browseBy);
+	if (drillStage !== browseBy) {
+		setDrillStage(browseBy);
+		setDrill(null);
+	}
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
@@ -465,9 +473,10 @@ function POSProductsContent({
 						<ErrorBoundary>
 							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. A
 							    search is served by today's stack in every mode for now, so its
-							    variable products drill (the browse stage takes it over in Slice 2). Keyed
-							    by source: a switch starts the stage afresh. */}
-							{browseBy !== 'all' && state.search === '' ? (
+							    variable products drill (the browse stage takes it over in Slice 2). Blank
+							    is no search, trimmed as the query compiler trims it. Keyed by source: a
+							    switch starts the stage afresh. */}
+							{browseBy !== 'all' && state.search.trim() === '' ? (
 								<BrowseStage
 									key={browseBy}
 									source={browseBy}
