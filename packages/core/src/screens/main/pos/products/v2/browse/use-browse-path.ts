@@ -60,27 +60,15 @@ const sameSort = (
 ) => left.field === right.field && left.direction === right.direction;
 
 /**
- * Whether the query moved anywhere but where the projection writes (and the search) since the
- * path was last live: a taxonomy projection owns its field; a shortcut owns its patch's keys and
- * the sort (its chip sets one either way).
+ * Whether anything but the search moved since the path was last live — any filter, the
+ * projected ones included, or the sort. A typed search moves only the search; a pill, a chip or
+ * Clear filters moves something else, and the query is then theirs.
  */
-function movedElsewhere(
-	projection: Projection,
+function movedBesidesSearch(
 	now: { filters: FiltersOf<'products'>; sort: { field: string; direction: string } },
 	before: { filters: FiltersOf<'products'>; sort: { field: string; direction: string } }
 ): boolean {
-	const owned = new Set<string>(
-		projection.kind === 'taxonomy'
-			? [projection.field]
-			: Object.keys(quickFilterToQueryPatch(projection.quickFilter).filters)
-	);
-	const keys = new Set([...Object.keys(now.filters), ...Object.keys(before.filters)]);
-	for (const key of keys) {
-		if (owned.has(key)) continue;
-		const field = key as keyof FiltersOf<'products'>;
-		if (!isEqual(now.filters[field], before.filters[field])) return true;
-	}
-	return projection.kind === 'taxonomy' && !sameSort(now.sort, before.sort);
+	return !isEqual(now.filters, before.filters) || !sameSort(now.sort, before.sort);
 }
 
 /**
@@ -139,7 +127,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	const actions = useQueryStateActions<'products'>();
 	const { uiSettings } = useUISettings('pos-products');
 	// Exactly what the chip reads (filter-bar.tsx QuickChip), so a shortcut is active for the
-	// path precisely when its chip lights.
+	// path when its chip's filters and search hold (its sort aside, once entered — see below).
 	const settingsSort = useDocField(uiSettings, (value) =>
 		getPOSProductSort(value.sortBy, value.sortDirection)
 	);
@@ -197,10 +185,12 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	// Take back out exactly what the path put in, and only what is still there: a pill the
 	// cashier pressed inside a level is theirs and stays.
 	// On a DROP (the path invalidated by someone else's change, not `root`/`backTo`/a source
-	// change), only if nothing but the projected keys and the search moved since the path was
-	// last live: a quick-filter chip pressed inside a shortcut level that shares the shortcut's
-	// condition (`categories: [3]`) must keep it — another actor owns the query now, so the path
-	// is forgotten and the query left exactly as they set it.
+	// change), only if nothing but the search moved since the path was last live: a typed search
+	// spans the catalogue, and a term deleted on the server (nothing moved) still clears. A pill,
+	// a chip or Clear filters moved something else — a chip may share the shortcut's condition
+	// (`categories: [3]`), or write only some of its keys, or the same ones with another sort —
+	// so another actor owns the query now: the path is forgotten and the query left exactly as
+	// they set it.
 	const unproject = React.useCallback(
 		(dropped = false) => {
 			const current = projected.get();
@@ -208,7 +198,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			if (!current) return;
 			const { state: now, actions: act, resetState: baseline } = latest.current;
 			const before = liveQuery.current;
-			if (dropped && before?.of === current && movedElsewhere(current, now, before)) return;
+			if (dropped && before?.of === current && movedBesidesSearch(now, before)) return;
 			if (current.kind === 'taxonomy') {
 				if (sameSet(now.filters[current.field], current.ids)) act.clearFilter(current.field);
 				return;
@@ -304,8 +294,17 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 				sameSet(state.filters[field], projection.ids) &&
 				chainStands(stored, terms.all);
 		else {
+			// Once entered, a shortcut level holds while its filters and search do: the sort is the
+			// cashier's to change inside the level (a table header), never a way out of it. The
+			// chip's own lit state still compares the sort — that is the chip's business.
 			const quickFilter = terms.quickFilterFor(term);
-			live = !!quickFilter && isQuickFilterActive(quickFilter, state, resetState);
+			live =
+				!!quickFilter &&
+				isQuickFilterActive(
+					quickFilter,
+					{ ...state, sort: quickFilter.sort ?? resetState.sort },
+					resetState
+				);
 		}
 	}
 	const path = live ? stored : NO_PATH;

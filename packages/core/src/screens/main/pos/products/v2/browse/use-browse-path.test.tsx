@@ -195,6 +195,73 @@ it('a chip pressed inside a shortcut level keeps the condition it shares with th
 	expect(mockState.filters.categories).toEqual([3]);
 });
 
+// Shortcut A writes two keys; a chip pressed inside its level may write only some of them, or
+// the same ones under another sort. Either way the query is the chip's, untouched.
+const onSaleDrinks = {
+	type: 'quick',
+	id: 'qf-a',
+	label: 'Drinks on sale',
+	conditions: [
+		{ field: 'categories', value: [3] },
+		{ field: 'on_sale', value: true },
+	],
+};
+const shortcutA = {
+	kind: 'shortcut' as const,
+	id: 'qf-a',
+	name: 'Drinks on sale',
+	description: '',
+};
+const withA = { ...terms, quickFilterFor: () => onSaleDrinks };
+const applyChip = (
+	filters: Record<string, unknown>,
+	sort = { field: 'name', direction: 'asc' }
+) => {
+	actions.resetFilters();
+	actions.clearSearch();
+	for (const [field, value] of Object.entries(filters)) actions.setFilter(field, value);
+	actions.setSort(sort.field, sort.direction as 'asc' | 'desc');
+};
+
+it('a chip writing only some of the shortcut’s keys keeps its own condition', () => {
+	const { result } = renderHook(() => useBrowsePath('shortcuts', withA as never));
+	act(() => result.current.enter(shortcutA));
+	act(() => applyChip({ categories: [3] })); // chip B
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({ ...CLEARED, categories: [3], status: 'publish' });
+});
+
+it('a chip with the shortcut’s filters under another sort is left exactly as it set the query', () => {
+	const { result } = renderHook(() => useBrowsePath('shortcuts', withA as never));
+	act(() => result.current.enter(shortcutA));
+	act(() =>
+		applyChip({ categories: [3], on_sale: true }, { field: 'sortable_price', direction: 'desc' })
+	);
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [3],
+		status: 'publish',
+		on_sale: true,
+	});
+	expect(mockState.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+	// The level's filters still hold, so the level does too (its sort is the cashier's).
+	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcutA]);
+});
+
+it('a sort picked inside a shortcut level keeps the level and its filters', () => {
+	const { result } = renderHook(() => useBrowsePath('shortcuts', withA as never));
+	act(() => result.current.enter(shortcutA));
+	act(() => actions.setSort('sortable_price', 'desc'));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcutA]);
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [3],
+		status: 'publish',
+		on_sale: true,
+	});
+	expect(mockState.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+});
+
 it('a search typed inside a term still takes the term out, even after a sort changed in the level', () => {
 	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
 	act(() => result.current.enter(drinks));

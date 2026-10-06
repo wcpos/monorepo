@@ -237,16 +237,20 @@ jest.mock('../grid/variable-product-tile', () => ({
 	}) => <button data-testid="variable-product-drill" onClick={() => onDrill(record)} />,
 }));
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
-// As the real DataTable: rows are `tableConfig.data`, drawn through `renderItem`.
+// As the real DataTable: rows are `tableConfig.data`, drawn through `renderItem`; a header sort
+// is the `setSort` it was handed.
 jest.mock('../../../../components/data-table/v2', () => ({
 	DataTable: ({
 		tableConfig,
 		renderItem,
+		actions,
 	}: {
 		tableConfig: { data: { id?: string }[]; getRowId: (row: unknown) => string };
 		renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
+		actions: { setSort: (field: string, direction: 'asc' | 'desc') => void };
 	}) => (
 		<div data-testid="table">
+			<button data-testid="table-sort-name" onClick={() => actions.setSort('name', 'asc')} />
 			{tableConfig.data.map((row, index) => (
 				<React.Fragment key={tableConfig.getRowId(row)}>
 					{renderItem({ item: { id: tableConfig.getRowId(row), original: row }, index, table: {} })}
@@ -506,6 +510,27 @@ it('a shortcut with its own search keeps its level live with its chip lit, and t
 	expect(screen.getByTestId('browse-shortcut-qf-lattes')).toBeTruthy();
 	// No residue: filters, search and sort are the baseline again.
 	expect(mockState).toEqual(before);
+});
+
+it('a header sort inside a shortcut level keeps the level and its filters', () => {
+	render(
+		<BrowseStage
+			{...stageProps({
+				source: 'shortcuts',
+				viewMode: 'table',
+				actions: { ...queryActions, extendLimit: jest.fn() },
+			})}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('browse-shortcut-qf-lattes'));
+	expect(mockState.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+	fireEvent.click(screen.getByTestId('table-sort-name'));
+	expect(mockState.sort).toEqual({ field: 'name', direction: 'asc' });
+	// Still inside Lattes, its conditions untouched.
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Lattes');
+	expect(mockState.search).toBe('latte');
+	expect(mockState.filters.on_sale).toBe(true);
 });
 
 it('a level stays rendered from its staged entry while its stack gathers after the path was truncated', () => {
