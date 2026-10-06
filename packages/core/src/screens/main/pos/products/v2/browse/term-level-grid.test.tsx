@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { TermLevelGrid } from './term-grid';
 
@@ -77,16 +77,24 @@ jest.mock('./term-tile', () => {
 		),
 	};
 });
+// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
+// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
+// one commit after the swap). Every render's pair is logged, so a test can see what each commit
+// would have painted, not only where the DOM settled.
+const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		count,
 		total$,
+		total: heldTotal,
 	}: {
 		count: number;
-		total$: { subscribe: (next: (value: number | null) => void) => { unsubscribe: () => void } };
+		total$: import('rxjs').Observable<number | null>;
+		total?: number | null;
 	}) => {
-		let total: number | null = null;
-		total$.subscribe((value) => (total = value)).unsubscribe();
+		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
+		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},
 }));
@@ -219,7 +227,13 @@ const drinks = { kind: 'term' as const, id: 1, name: 'Drinks', count: 12 };
 const hot = { kind: 'term' as const, id: 2, name: 'Hot', count: 6, parent: 1 };
 const latte = { uuid: 'l', payload: { type: 'variable', name: 'Latte' } };
 const flat = { uuid: 'f', payload: { type: 'simple', name: 'Flat White' } };
-const binding = { active$: {}, pending$: new BehaviorSubject(false), sync: jest.fn() };
+// `total$` is the live binding's census — never a level's denominator (the level hands its own).
+const binding = {
+	active$: {},
+	pending$: new BehaviorSubject(false),
+	total$: of(220),
+	sync: jest.fn(),
+};
 const base = () => ({
 	term: drinks,
 	children: [hot],
@@ -335,6 +349,25 @@ it('rests each cell on the measured top of its row, summing the rows above it', 
 		})
 	);
 	expect(screen.getByTestId('cell-2').dataset.restY).toBe('250');
+});
+
+it('footers a replaced total in the same commit as its new count, never the old denominator for a frame', () => {
+	const { rerender } = render(<TermLevelGrid {...level()} />);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '2', total: '80' });
+	// The level's answer changes under it (a sync): both numbers land in ONE commit.
+	const other = { uuid: 'x', payload: { type: 'simple', name: 'Other' } };
+	mockFooterRenders.length = 0;
+	rerender(
+		<TermLevelGrid
+			{...level({
+				answer: { hits: [{ record: latte }, { record: flat }, { record: other }], total: 81 },
+			})}
+		/>
+	);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '3', total: '81' });
+	// …and no commit painted the new count over the old denominator ("3 of 80").
+	expect(mockFooterRenders.length).toBeGreaterThan(0);
+	expect(mockFooterRenders).toEqual(mockFooterRenders.map(() => ({ count: 3, total: 81 })));
 });
 
 it('keeps its own products while a child level is over it', () => {

@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
-import { of } from 'rxjs';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -105,7 +104,6 @@ export function BrowseRootGrid({
 const PLACEHOLDER_ROWS = 1;
 // The products grid's onEndReachedThreshold.
 const END_REACHED_THRESHOLD = 0.1;
-const NO_TOTAL$ = of(null);
 
 // The parent's row stays above the rows dealt out from under it. A list wraps each row in a
 // cell of its own, so the lift goes on the cell: a row's own zIndex stops at that wrapper.
@@ -185,9 +183,11 @@ export function TermLevelGrid({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this level's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's.
-	const total = shown?.total;
-	const total$ = React.useMemo(() => (total === undefined ? NO_TOTAL$ : of(total)), [total]);
+	// not the live binding's, which may already be another level's. Handed as a value (the
+	// footer's `total`), never wrapped as a stream: a stream lands one commit after the count,
+	// and a changed answer (a sync, the query settling on a return) would paint the new count
+	// over the old denominator for a frame. `null` while the level has no answer: no denominator.
+	const total = shown?.total ?? null;
 	// The query is windowed (#1221): the level asks for more as the cashier nears its end, as the
 	// products grid does. A level of subcategories alone has nothing to page, and a level a child
 	// is over does not own the query: neither may move it.
@@ -347,7 +347,8 @@ export function TermLevelGrid({
 						<ProductsFooter
 							collectionName="products"
 							active$={binding.active$}
-							total$={total$}
+							total$={binding.total$}
+							total={total}
 							sync={binding.sync}
 							count={loaded}
 						/>

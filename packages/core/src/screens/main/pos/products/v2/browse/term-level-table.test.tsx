@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { TermLevelTable } from './term-table';
 
@@ -158,16 +158,24 @@ jest.mock('../rows/variable-product-row', () => ({
 		/>
 	),
 }));
+// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
+// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
+// one commit after the swap). Every render's pair is logged, so a test can see what each commit
+// would have painted, not only where the DOM settled.
+const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		count,
 		total$,
+		total: heldTotal,
 	}: {
 		count: number;
-		total$: { subscribe: (next: (value: number | null) => void) => { unsubscribe: () => void } };
+		total$: import('rxjs').Observable<number | null>;
+		total?: number | null;
 	}) => {
-		let total: number | null = null;
-		total$.subscribe((value) => (total = value)).unsubscribe();
+		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
+		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},
 }));
@@ -241,7 +249,14 @@ const base = () => ({
 	onOpenTerm: jest.fn(),
 	onDrillProduct: jest.fn(),
 	variationsStyle: 'drill',
-	binding: { resource: {}, active$: {}, pending$: new BehaviorSubject(false), sync: jest.fn() },
+	// `total$` is the live binding's census — never a pane's denominator (the pane hands its own).
+	binding: {
+		resource: {},
+		active$: {},
+		pending$: new BehaviorSubject(false),
+		total$: of(220),
+		sync: jest.fn(),
+	},
 	state: { sort: { field: 'name', direction: 'asc' } },
 	actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 	tableConfig: {
@@ -325,6 +340,32 @@ it('footers the level’s own loaded rows and total, not the live binding’s', 
 		count: '2',
 		total: '80',
 	});
+});
+
+it('footers a replaced total in the same commit as its new count, never the old denominator for a frame', () => {
+	const { rerender } = render(<TermLevelTable {...level()} />);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '2', total: '80' });
+	// The pane's answer changes under it (a sync): both numbers land in ONE commit.
+	const other = { uuid: 'x', payload: { type: 'simple' } };
+	mockFooterRenders.length = 0;
+	rerender(
+		<TermLevelTable
+			{...level({
+				answer: {
+					hits: [
+						{ id: 'hit-l', record: latte },
+						{ id: 'hit-f', record: flat },
+						{ id: 'hit-x', record: other },
+					],
+					total: 81,
+				},
+			})}
+		/>
+	);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '3', total: '81' });
+	// …and no commit painted the new count over the old denominator ("3 of 80").
+	expect(mockFooterRenders.length).toBeGreaterThan(0);
+	expect(mockFooterRenders).toEqual(mockFooterRenders.map(() => ({ count: 3, total: 81 })));
 });
 
 it('holds row-shaped slots under the child rows until the products answer, the total pending', () => {

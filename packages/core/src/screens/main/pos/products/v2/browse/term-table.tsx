@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { of } from 'rxjs';
-
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord } from '@wcpos/query';
@@ -89,7 +87,6 @@ const HELD: HeldItem[] = Array.from({ length: SKELETON_PRODUCT_ROWS }, (_, index
 	id: `held-${index}`,
 	held: true,
 }));
-const NO_TOTAL$ = of(null);
 
 // The footer's sync button already turns while the products pull (as the variations pane's
 // does). The list's own loading strip reads the LIVE query, which a pushed pane's open starts
@@ -167,15 +164,17 @@ export function TermLevelTable({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this pane's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's; pending until it has one.
-	const total = shown?.total;
-	const total$ = React.useMemo(() => (total === undefined ? NO_TOTAL$ : of(total)), [total]);
+	// not the live binding's, which may already be another level's; `null` (no denominator)
+	// until it has one. Handed as a value (the footer's `total`), never wrapped as a stream: a
+	// stream lands one commit after the count, and a changed answer would paint the new count over
+	// the old denominator for a frame.
+	const total = shown?.total ?? null;
 	// The table's footer counts the pane's own rows, never the live binding's window.
 	const Footer = React.useCallback(
 		(props: React.ComponentProps<typeof ProductsFooter>) => (
-			<ProductsFooter {...props} total$={total$} count={loaded} />
+			<ProductsFooter {...props} total={total} count={loaded} />
 		),
-		[total$, loaded]
+		[total, loaded]
 	);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
 	// its own rows, as the level grid does — and an end-reached while the demand is pending is
@@ -244,7 +243,7 @@ export function TermLevelTable({
 						actions={actions}
 						onEndReached={onEndReached}
 						active$={binding.active$}
-						total$={total$}
+						total$={binding.total$}
 						sync={binding.sync}
 						cellsForRow={cellsForRow}
 						// The rows are never empty under child terms; with neither, the empty state (and
