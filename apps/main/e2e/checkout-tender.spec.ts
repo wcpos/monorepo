@@ -217,6 +217,21 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			// an active receipt template (dev-next Pro has one): without it no frame loads and no
 			// print is attempted, which reads as a bare timeout below, not a skip.
 			await ensureRegisterOpen(page);
+			// The system print on web fetches the receipt page (`printFromUrl`, a plain `fetch`)
+			// when the active template is served by URL rather than rendered locally. In production
+			// the plugin serves the bundle from the store's own origin, so that fetch is
+			// same-origin; the preview hosts the app elsewhere, and the browser refuses the
+			// cross-origin read (proof run 37545212845: "Receipt print failed … Failed to fetch",
+			// PRINT999). Forward the real response with the header the production origin never
+			// needs. Same predicate value for route and unroute: unroute matches by reference.
+			const receiptPage = (url: URL) => url.pathname.includes('/wcpos-receipt/');
+			await page.route(receiptPage, async (route) => {
+				const response = await route.fetch();
+				await route.fulfill({
+					response,
+					headers: { ...response.headers(), 'access-control-allow-origin': '*' },
+				});
+			});
 			await setAutoPrintReceipt(page, true);
 			try {
 				const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -255,6 +270,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
 			} finally {
 				await setAutoPrintReceipt(page, false).catch(() => undefined);
+				await page.unroute(receiptPage).catch(() => undefined);
 			}
 		}
 	);
