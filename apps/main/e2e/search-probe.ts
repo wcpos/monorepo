@@ -1023,6 +1023,62 @@ export async function createOrderArrivalProbe(options: {
 	}
 }
 
+/**
+ * Create a disposable ROOT product category under the writer credentials, so a browse spec
+ * never assumes a category the store happens to have (CLAUDE.md, E2E store-agnostic policy):
+ * a clean CI store has coverage too. Default display: it shows its products. The writer is
+ * configured by construction here, so a rejected write THROWS — a broken environment, never
+ * a skip.
+ */
+export async function createProbeCategory(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization;
+	name: string;
+}): Promise<{ id: number; name: string }> {
+	const { request, storeUrl, authorization, name } = options;
+	const response = await probeRequest(request, 'post', storeUrl, 'products/categories', undefined, {
+		...storeRequestOptions(authorization),
+		data: { name, parent: 0, display: 'default' },
+	});
+	if (!response.ok()) {
+		throw new Error(
+			`products/categories probe creation failed (HTTP ${response.status()}) — the writer credentials are configured, so a rejected write is a broken environment, not a missing fixture`
+		);
+	}
+	const record = unwrapRecord(await response.json().catch(() => null));
+	const id = positiveId(record);
+	if (!record || id === null) {
+		throw new Error('products/categories probe create succeeded without a record id');
+	}
+	return { id, name: typeof record.name === 'string' ? record.name : name };
+}
+
+/** Force-delete a probe category; best effort, as {@link deleteSearchProbe}. */
+export async function deleteProbeCategory(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization | null;
+	id: number;
+}): Promise<void> {
+	const { request, storeUrl, authorization, id } = options;
+	try {
+		const auth = storeRequestOptions(authorization);
+		const response = await probeRequest(request, 'delete', storeUrl, 'products/categories', id, {
+			...auth,
+			params: { ...auth.params, force: 'true' },
+		});
+		if (!response.ok()) {
+			log.warn(
+				`[search-probe] failed to delete products/categories ${id}: HTTP ${response.status()}`
+			);
+		}
+	} catch {
+		// Do not print the request error: query-auth stores can include the JWT in its URL.
+		log.warn(`[search-probe] delete products/categories ${id} threw`);
+	}
+}
+
 /** Force-delete a probe without ever turning teardown trouble into a test failure. */
 export async function deleteSearchProbe(options: {
 	request: APIRequestContext;

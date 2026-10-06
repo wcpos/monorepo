@@ -141,6 +141,27 @@ export async function setVariationsStyle(page: Page, style: 'drill' | 'inline'):
 }
 
 /**
+ * Pick the products stage's Browse by source in the same settings dialog. A source the store
+ * has no terms for is dimmed and refuses the press, so the radio is asserted checked before the
+ * dialog closes: a disabled row would otherwise leave the previous source in place silently.
+ */
+export async function setBrowseBy(
+	page: Page,
+	value: 'all' | 'categories' | 'tags' | 'brands' | 'shortcuts'
+): Promise<void> {
+	await page.getByTestId('products-settings-button').click();
+	const dialog = page
+		.getByRole('dialog')
+		.filter({ has: page.getByTestId(`ui-settings-browse-by-${value}`) });
+	const radio = dialog.getByTestId(`ui-settings-browse-by-${value}`);
+	await radio.click();
+	await expect(radio).toHaveAttribute('aria-checked', 'true');
+	// Forced, as setVariationsStyle: the toast host intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
+	await expect(dialog).toBeHidden();
+}
+
+/**
  * Open a real live-store session when the cart column shows the open-register
  * landing; leave it open so later runs can reuse it.
  *
