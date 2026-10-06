@@ -64,10 +64,7 @@ import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 } from '../create-rxdb-sync-engine';
-import {
-	RESYNC_RECEIPT_PRINT_COUNTS_ID,
-	retireStashedPrintCounts,
-} from './engine-order-repository';
+import { retireStashedPrintCounts, stashPrintCounts } from './engine-order-repository';
 import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 
 /** A push outcome the drain's engine reports — what the host logs with its reason. */
@@ -494,12 +491,8 @@ async function carryPosLocalState(
 			else toStash.set(uuid, count);
 		}
 		if (toStash.size > 0) {
-			// Merge into the stash as it stands NOW (a pull may have retired entries since).
-			const latest = ((await liveOrders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID))?.get('counts') ??
-				{}) as Record<string, number>;
-			const merged = { ...latest };
-			for (const [uuid, count] of toStash) merged[uuid] = Math.max(merged[uuid] ?? 0, count);
-			await liveOrders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts: merged });
+			// Merged atomically into the stash's latest content (a pull may be retiring entries now).
+			await stashPrintCounts(liveOrders as never, Object.fromEntries(toStash));
 			// A pull that materialised one of these orders after the residency read above, but read
 			// the stash before this write, left its resident without the count: re-check, apply, and
 			// retire those entries. (An order materialising after this re-check reads the stash entry

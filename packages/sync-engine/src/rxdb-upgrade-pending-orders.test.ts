@@ -1203,7 +1203,8 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 				]);
 				const resident = (await stored(app)).orders.get(order.uuid)!;
 				expect((resident.local as Json).receiptPrintCount).toBe(2);
-				expect(await orders.getLocal('resync-receipt-print-counts')).toBeNull();
+				const stash = await orders.getLocal('resync-receipt-print-counts');
+				expect((stash?.get('counts') as Json | undefined)?.[order.uuid]).toBeUndefined();
 			} finally {
 				await app.dispose();
 			}

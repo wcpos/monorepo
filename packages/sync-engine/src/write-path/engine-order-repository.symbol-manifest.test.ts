@@ -27,8 +27,22 @@ function orderDatabase() {
 					? {
 							get: () => localDocs.get(id)!.counts,
 							remove: async () => localDocs.delete(id),
+							incrementalModify: async (
+								modify: (data: { counts: Record<string, number> }) => {
+									counts: Record<string, number>;
+								}
+							) => {
+								localDocs.set(
+									id,
+									structuredClone(await modify(structuredClone(localDocs.get(id)!)))
+								);
+							},
 						}
 					: null,
+			insertLocal: async (id: string, data: { counts: Record<string, number> }) => {
+				if (localDocs.has(id)) throw new Error('conflict');
+				localDocs.set(id, structuredClone(data));
+			},
 			upsertLocal: async (id: string, data: { counts: Record<string, number> }) => {
 				localDocs.set(id, structuredClone(data));
 			},
