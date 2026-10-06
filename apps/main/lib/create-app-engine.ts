@@ -31,6 +31,9 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
+	drainLegacyScopeDatabase,
+	type LegacyScopeDrainOutcome,
+	type LegacyScopeDrainPorts,
 	type RxdbSyncEngine,
 	setSyncEngineLogger,
 	type StoreScopeIdentity,
@@ -145,10 +148,18 @@ type CachedEngine = {
 	fetcherScope: EngineFetcherScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
+	/** Drain the scope's previous-generation database once it is this engine's active scope. */
+	drainLegacyScope: (scope: StoreScopeIdentity) => Promise<void>;
 };
 
 let cachedEngine: CachedEngine | null = null;
 let legacyPurgeStarted = false;
+/**
+ * Scopes whose previous-generation database this process already tried to drain.
+ * Once per scope per process: a drain that could not finish keeps the database,
+ * and the next app start tries again.
+ */
+const legacyDrainAttempted = new Set<string>();
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function canonicalSite(site: string): string {
@@ -236,6 +247,69 @@ async function requestScope(
 			const active = entry.engine.active();
 			entry.renderKey = active ? scopeCacheKey(active.identity) : null;
 		}
+	}
+	// Maintenance, not part of the switch: the awaited store-switch flow never waits on it.
+	void entry.drainLegacyScope(scope);
+}
+
+/** One line per drain outcome; a quiet debug line when there was nothing to drain. */
+function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome): void {
+	if (outcome.status === 'absent') {
+		engineLogger.debug('No previous-version database to drain', {
+			context: { databaseName: outcome.databaseName },
+		});
+		return;
+	}
+	if (outcome.status === 'kept') {
+		engineLogger.warn(
+			'Unsent changes from the previous database version are kept until they can be sent',
+			{ context: { databaseName: outcome.databaseName, reason: outcome.reason } }
+		);
+		return;
+	}
+	const context = {
+		databaseName: outcome.databaseName,
+		pushed: outcome.pushed,
+		discarded: outcome.discarded,
+	};
+	if (outcome.discarded > 0) {
+		// Held carts, dead letters and parked conflicts: nothing could send them.
+		engineLogger.warn(
+			`Sent ${outcome.pushed} unsent changes from the previous database version; ${outcome.discarded} that could not be sent were removed with it`,
+			{ context }
+		);
+		return;
+	}
+	engineLogger.info(
+		`Sent ${outcome.pushed} unsent changes from the previous database version and removed it`,
+		{ context }
+	);
+}
+
+/**
+ * A scope generation bump opens a fresh database; the previous one may still
+ * hold unsent sales. Drain it — once per scope per process, only while it is the
+ * engine's active scope (so the session's credentials are that cashier's) and
+ * never while the session is refused (a refused push would dead-letter them).
+ */
+async function drainLegacyScopeOnce(
+	engine: RxdbSyncEngine,
+	scope: StoreScopeIdentity,
+	ports: () => LegacyScopeDrainPorts,
+	sessionRefused: () => boolean
+): Promise<void> {
+	const key = scopeCacheKey(scope);
+	if (legacyDrainAttempted.has(key)) return;
+	const active = engine.active();
+	if (!active || scopeCacheKey(active.identity) !== key || sessionRefused()) return;
+	legacyDrainAttempted.add(key);
+	try {
+		logLegacyDrainOutcome(await drainLegacyScopeDatabase(ports(), scope));
+	} catch (error) {
+		engineLogger.error('Failed to drain the previous database version', {
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },
+		});
 	}
 }
 
@@ -508,6 +582,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		markSyncStatusStale();
 	}
 
+	const multiInstance = isWeb
+		? REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE[WEB_STORAGE_ENGINE]
+		: (options.multiInstance ?? false);
 	const hostDefaultProductBrowseSort = defaultProductBrowseSort();
 	// A fresh engine re-probes the store, so its construction clears any
 	// standing update-required gate for the site (the latch itself lives on the
@@ -552,18 +629,44 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				guardedDiagnostics,
 				e2eEngineLedgerObserver
 			),
-			multiInstance: isWeb
-				? REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE[WEB_STORAGE_ENGINE]
-				: (options.multiInstance ?? false),
+			multiInstance,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
 	);
 	engineSelf = engine;
-	// Purging is session maintenance, not part of opening a store. Failed opens
-	// leave legacy data alone; a rejected purge never rejects engine.ready.
+	// The drain's own transport: pinned to the drained scope's store, with the
+	// session as it stands when the drain starts — a later cashier swap mutates
+	// `fetcherOptions` in place and must not re-sign a sale already in flight.
+	const legacyDrainPorts = (scope: StoreScopeIdentity): LegacyScopeDrainPorts => ({
+		site,
+		storage: defaultConfig.storage,
+		fetcher: createEngineFetcher({
+			auth: { ...fetcherOptions },
+			clockSkew: { generation: 0, evaluated: false },
+			scope: { storeId: scope.storeId },
+			emitTransport,
+			wpJsonRoot: site.wpJsonRoot,
+			...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
+		}),
+		connectivity: getEngineConnectivity,
+		multiInstance,
+	});
+	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>
+		drainLegacyScopeOnce(
+			engine,
+			scope,
+			() => legacyDrainPorts(scope),
+			() =>
+				requestStateManager.isAuthFailed() ||
+				(authExhaustedToken !== null &&
+					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token)
+		);
+	// Draining and purging are session maintenance, not part of opening a store.
+	// Failed opens leave legacy data alone; neither ever rejects engine.ready.
 	void engine.ready.then(
 		async () => {
+			await drainLegacyScope(options.scope);
 			if (legacyPurgeStarted) return;
 			legacyPurgeStarted = true;
 			try {
@@ -594,6 +697,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		fetcherOptions,
 		fetcherScope,
 		clockSkew,
+		drainLegacyScope,
 	};
 	cachedEngine = entry;
 	let publishedKey: string | null = cacheKey;

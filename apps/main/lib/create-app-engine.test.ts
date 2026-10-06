@@ -25,6 +25,11 @@ const OTHER_SITE_OPTIONS = {
 
 type ScopeIdentity = { site: string; storeId: string | number; cashierId: string | number };
 
+/** Let readiness maintenance (drain, then purge) run its awaited steps to completion. */
+async function settle(): Promise<void> {
+	for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+}
+
 function createEngineDouble(
 	dispose: () => Promise<void> = () => Promise.resolve(),
 	switchScope?: (identity: ScopeIdentity) => Promise<void>
@@ -113,8 +118,20 @@ function loadCreateAppEngine(
 		}
 	);
 
+	const drainLegacyScopeDatabase = jest.fn(
+		async (_ports: { fetcher: unknown; storage: unknown }, scope: ScopeIdentity) =>
+			({
+				status: 'absent',
+				databaseName: scopeDatabaseName(scope, { generation: 5 }),
+			}) as const as
+				| { status: 'absent'; databaseName: string }
+				| { status: 'drained'; databaseName: string; pushed: number; discarded: number }
+				| { status: 'kept'; databaseName: string; reason: string }
+	);
+
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
+		drainLegacyScopeDatabase,
 		setSyncEngineLogger,
 		// The engine fetcher hydrates 2xx responses through this seam (B9); an
 		// identity stub keeps these engine-lifecycle tests transport-free.
@@ -151,6 +168,7 @@ function loadCreateAppEngine(
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	return {
 		createAppSyncEngine,
+		drainLegacyScopeDatabase,
 		purgeLegacyDatabases,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
@@ -1871,10 +1889,10 @@ describe('legacy database purge', () => {
 		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
 		ready();
 		await engine.ready;
-		await Promise.resolve();
+		await settle();
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
 		createAppSyncEngine(OTHER_SITE_OPTIONS);
-		await Promise.resolve();
+		await settle();
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
 	});
 
@@ -1883,7 +1901,7 @@ describe('legacy database purge', () => {
 		purgeLegacyDatabases.mockRejectedValue(new Error('purge failed'));
 		const engine = createAppSyncEngine(BASE_OPTIONS);
 		await expect(engine.ready).resolves.toBeUndefined();
-		await Promise.resolve();
+		await settle();
 		expect(networkError).toHaveBeenCalledWith(
 			'Failed to purge legacy databases',
 			expect.any(Object)
@@ -1892,10 +1910,112 @@ describe('legacy database purge', () => {
 
 	it('does not purge when engine readiness fails', async () => {
 		const engine = createEngineDouble();
-		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
+			loadCreateAppEngine(() => engine);
 		engine.ready = Promise.reject(new Error('open failed'));
 		createAppSyncEngine(BASE_OPTIONS);
 		await expect(engine.ready).rejects.toThrow('open failed');
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
 		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
+	});
+});
+
+describe('previous-generation database drain', () => {
+	it('drains the ready scope before the purge, with a transport pinned to that scope', async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
+			loadCreateAppEngine();
+		const order: string[] = [];
+		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
+			order.push('drain');
+			return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+		});
+		purgeLegacyDatabases.mockImplementation(async () => {
+			order.push('purge');
+		});
+
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+
+		expect(order).toEqual(['drain', 'purge']);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		const [ports, scope] = drainLegacyScopeDatabase.mock.calls[0]!;
+		expect(scope).toEqual(BASE_OPTIONS.scope);
+		expect(ports).toMatchObject({ storage: { name: 'test-storage' } });
+		expect(typeof ports.fetcher).toBe('function');
+	});
+
+	it('drains each scope once per process, the switched-to one too', async () => {
+		const first = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, switchAppEngineScope } =
+			loadCreateAppEngine(() => first);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+
+		await switchAppEngineScope(session(target));
+		await settle();
+		await switchAppEngineScope(session(BASE_OPTIONS.scope));
+		await settle();
+
+		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope)).toEqual([
+			BASE_OPTIONS.scope,
+			target,
+		]);
+	});
+
+	it('never drains while the session is refused (a refused push would dead-letter the sales)', async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
+			loadCreateAppEngine();
+		const { requestStateManager } = jest.requireActual<
+			typeof import('@wcpos/hooks/use-http-client')
+		>('@wcpos/hooks/use-http-client');
+		const isAuthFailed = jest.spyOn(requestStateManager, 'isAuthFailed').mockReturnValue(true);
+		try {
+			await createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+			expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		} finally {
+			isAuthFailed.mockRestore();
+		}
+	});
+
+	it('logs one line per outcome: kept and partly discarded warn, drained informs', async () => {
+		for (const [outcome, level, message] of [
+			[
+				{ status: 'kept', databaseName: 'pos_v5_x', reason: 'write-drain skipped: offline' },
+				'warn',
+				'Unsent changes from the previous database version are kept until they can be sent',
+			],
+			[
+				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4, discarded: 3 },
+				'warn',
+				'Sent 4 unsent changes from the previous database version; 3 that could not be sent were removed with it',
+			],
+			[
+				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4, discarded: 0 },
+				'info',
+				'Sent 4 unsent changes from the previous database version and removed it',
+			],
+		] as const) {
+			const { createAppSyncEngine, drainLegacyScopeDatabase, networkInfo, networkWarn } =
+				loadCreateAppEngine();
+			drainLegacyScopeDatabase.mockResolvedValue(outcome);
+			await createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			const logged = level === 'warn' ? networkWarn : networkInfo;
+			expect(logged).toHaveBeenCalledWith(
+				message,
+				expect.objectContaining({
+					context: expect.objectContaining({ databaseName: 'pos_v5_x' }),
+				})
+			);
+		}
 	});
 });
