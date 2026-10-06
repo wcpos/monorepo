@@ -63,6 +63,8 @@ jest.mock('../../../../../../query', () => {
 });
 // Whether the root products binding has answered once (a cold open has not).
 let mockAnswered = true;
+// Child terms synced under Drinks on the server while it is open (its set re-projects in place).
+let mockAddedUnderDrinks: number[] = [];
 jest.mock('../../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => mockAnswered }));
 jest.mock('./use-browse-terms', () => {
 	const drinks = { kind: 'term', id: 1, name: 'Drinks', count: 12 };
@@ -74,7 +76,13 @@ jest.mock('./use-browse-terms', () => {
 		rootsOf: () => [drinks, food],
 		childrenOf: (term: { id?: number }) => (term.id === 1 ? [hot] : []),
 		idsFor: (term: { id?: number }) =>
-			term.id === 1 ? [1, 2] : term.id === 2 ? [2] : term.id === 3 ? [3] : [],
+			term.id === 1
+				? [1, 2, ...mockAddedUnderDrinks]
+				: term.id === 2
+					? [2]
+					: term.id === 3
+						? [3]
+						: [],
 		quickFilterFor: () => undefined,
 	};
 	// A shortcut whose own conditions carry a search (and a filter and a sort).
@@ -377,6 +385,7 @@ beforeEach(() => {
 	mockListeners.clear();
 	mockHoldGathers = false;
 	mockAnswered = true;
+	mockAddedUnderDrinks = [];
 	jest.clearAllMocks();
 });
 
@@ -541,6 +550,39 @@ it('a product drilled from the search-displaced root opens in the stage, through
 	expect(screen.queryByTestId('drill-in')).toBeNull();
 	act(() => queryActions.setSearch('latt'));
 	expect(screen.queryByTestId('drill-in')).toBeNull();
+});
+
+it('a product drilled from a pill-displaced root is forgotten when Clear filters brings the term set back', () => {
+	const onDrilledChange = jest.fn();
+	render(<BrowseStage {...stageProps({ onDrilledChange })} />);
+	act(() => queryActions.setFilter('brands', [8]));
+	fireEvent.click(screen.getByTestId('products'));
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
+	expect(onDrilledChange).toHaveBeenLastCalledWith(true);
+	act(() => queryActions.resetFilters());
+	expect(screen.queryByTestId('drill-in')).toBeNull();
+	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
+	// The filter bar is back at the products level.
+	expect(onDrilledChange).toHaveBeenLastCalledWith(false);
+	// Forgotten, not hidden: the same pill again shows its products, not the old drill.
+	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.queryByTestId('drill-in')).toBeNull();
+	expect(screen.getByTestId('products')).toBeTruthy();
+});
+
+it('a product drilled inside a level stays open when the level is re-projected under it', () => {
+	const props = stageProps();
+	const { rerender } = render(<BrowseStage {...props} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('variable-product-drill'));
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
+	// A child synced under Drinks: the level's filter moves with no cashier action, and the
+	// level stays — so does the drill over it (`under` is what holds a drill inside a level).
+	mockAddedUnderDrinks = [7];
+	rerender(<BrowseStage {...props} />);
+	expect(mockState.filters.categories).toEqual([1, 2, 7]);
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
 });
 
 it('a shortcut with its own search keeps its level live with its chip lit, and the root takes all of it back out', () => {

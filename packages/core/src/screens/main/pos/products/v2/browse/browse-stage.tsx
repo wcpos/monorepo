@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import isEqual from 'lodash/isEqual';
+
 import { PaneStack } from '@wcpos/components/pane-stack';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -26,7 +28,10 @@ import type { LevelAnswer } from './level-snapshot';
 type Binding = ReturnType<typeof useRelationalCollectionBinding>;
 type DrillHandler = (record: EngineRecord<'products'> | null, target?: Measurable) => void;
 type TableConfig = React.ComponentProps<typeof TermLevelTable>['tableConfig'];
-/** The product drilled at `depth`, under the path entry it opened in, for the search and source it opened under. */
+/**
+ * The product drilled at `depth`, under the path entry it opened in, for the search and source
+ * it opened under — and, at the root, the filters (see `filtersHold`).
+ */
 type ProductDrill = {
 	kind: 'product';
 	record: EngineRecord<'products'>;
@@ -34,6 +39,7 @@ type ProductDrill = {
 	under: PathEntry | undefined;
 	search: string;
 	source: BrowseBy;
+	filters: QueryStateOf<'products'>['filters'];
 	target?: Measurable;
 };
 /** A drill as the press made it: stamped with where the stage is on the render that follows. */
@@ -104,10 +110,18 @@ export function BrowseStage(props: BrowseStageProps) {
 			under: path[path.length - 1],
 			search: state.search,
 			source,
+			filters: state.filters,
 		});
 	// Searches compare as the query compiler reads them (trimmed): a space typed after the drill
 	// is the same query.
 	const sameSearch = (left: string, right: string) => left.trim() === right.trim();
+	// A drill from the root (a pill- or search-displaced root) holds only while the filters it
+	// opened under do: Clear filters brings the term set back, never under a still-open drill.
+	// Inside a level the entry's identity (`under`) already covers this — a filter moved there
+	// drops the level — and a re-projection under a live level (a child term added on the
+	// server) moves the filters without the cashier doing anything, which must not close it.
+	const filtersHold = (opened: ProductDrill) =>
+		opened.depth > 0 || isEqual(opened.filters, state.filters);
 	// Shown only for the source, depth, search and very path entry it opened under (`under`, by
 	// identity) — judged in the same render, so a path dropped by a pill or Clear filters and a
 	// new one opened at the same depth never brings the old drill back for a frame.
@@ -117,7 +131,8 @@ export function BrowseStage(props: BrowseStageProps) {
 		drill.source === source &&
 		sameSearch(drill.search, state.search) &&
 		drill.depth === path.length &&
-		path[drill.depth - 1] === drill.under
+		path[drill.depth - 1] === drill.under &&
+		filtersHold(drill)
 			? drill
 			: null;
 	// A layout effect: the filter bar's level and the staged surface commit in the same frame.
@@ -125,15 +140,17 @@ export function BrowseStage(props: BrowseStageProps) {
 	// An unmounting stage (Browse by back to All products, or the source changes) hands the
 	// filter bar's level back before paint.
 	React.useLayoutEffect(() => () => onDrilledChange(false), [onDrilledChange]);
-	// A drill whose search, source or entry has moved is forgotten — not merely hidden: restoring
-	// the same search later must show the results, not the old variations. Dropped while
-	// rendering (React's "previous render" pattern, as index.tsx drops its own drill).
+	// A drill whose search, source, entry or (at the root) filters have moved is forgotten — not
+	// merely hidden: restoring the same search later must show the results, not the old
+	// variations. Dropped while rendering (React's "previous render" pattern, as index.tsx drops
+	// its own drill).
 	if (
 		drill &&
 		'depth' in drill &&
 		(!sameSearch(drill.search, state.search) ||
 			drill.source !== source ||
-			path[drill.depth - 1] !== drill.under)
+			path[drill.depth - 1] !== drill.under ||
+			!filtersHold(drill))
 	)
 		setDrill(null);
 	// Stable: it is baked into the tiles' component identity through renderProducts, and a new
