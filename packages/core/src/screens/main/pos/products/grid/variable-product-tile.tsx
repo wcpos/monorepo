@@ -32,6 +32,9 @@ interface GridFields {
 interface VariableProductTileProps {
 	record: EngineRecord<'products'>;
 	gridFields: GridFields;
+	/** In a dealt cell the tile grows to its row's height; `flex-1` would give it no height of
+	 * its own inside the cell (as the v2 `ProductTile`). */
+	grow?: boolean;
 }
 
 interface VariablePriceRangeProps {
@@ -88,7 +91,7 @@ function VariablePriceRange({
 }
 
 /** Renders a variable product tile with the fields enabled for the product grid. */
-export function VariableProductTile({ record, gridFields }: VariableProductTileProps) {
+export function VariableProductTile({ record, gridFields, grow }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
 	// Read here, inside the products QueryStateProvider — PopoverContent portals out of it
@@ -148,7 +151,9 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 	);
 
 	return (
-		<Popover className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border">
+		<Popover
+			className={`bg-card border-border m-1 ${grow ? 'grow' : 'flex-1'} overflow-hidden rounded-lg border`}
+		>
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">
 					{/* Id-bearing testID, mirroring ProductTile: most of a real catalogue is

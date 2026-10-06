@@ -84,8 +84,10 @@ jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
 jest.mock('../../grid/variable-product-tile', () => ({
-	VariableProductTile: ({ record }: { record: { uuid: string } }) => (
-		<div data-testid="inline-tile">{record.uuid}</div>
+	VariableProductTile: ({ record, grow }: { record: { uuid: string }; grow?: boolean }) => (
+		<div data-testid="inline-tile" data-grow={String(!!grow)}>
+			{record.uuid}
+		</div>
 	),
 }));
 const record = {
@@ -250,6 +252,21 @@ it('grows to its row in a dealt cell, and shares the row with flex-1 elsewhere',
 	expect(
 		(screen.getByTestId('variable-product-tile').getAttribute('data-class-name') ?? '').split(' ')
 	).toContain('grow');
+});
+it('hands a dealt cell’s grow to the inline variable tile, and only there', () => {
+	const inline = (grow?: boolean) => (
+		<VariableProductTile
+			record={record}
+			gridFields={gridFields}
+			variationsStyle="inline"
+			onDrill={jest.fn()}
+			grow={grow}
+		/>
+	);
+	const { rerender } = render(inline());
+	expect(screen.getByTestId('inline-tile').getAttribute('data-grow')).toBe('false');
+	rerender(inline(true));
+	expect(screen.getByTestId('inline-tile').getAttribute('data-grow')).toBe('true');
 });
 
 it('shows the minimum variable price with from and keeps sale strikethrough', () => {

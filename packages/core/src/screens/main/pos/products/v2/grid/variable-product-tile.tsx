@@ -21,7 +21,7 @@ export function VariableProductTile({
 	const staged = React.useContext(DealStagedContext) as Staged;
 	const stagedUuid = staged?.record ? staged.record.uuid : staged?.uuid;
 	return variationsStyle === 'inline' ? (
-		<InlineTile {...props} />
+		<InlineTile {...props} grow={grow} />
 	) : (
 		<ProductTile
 			{...props}
