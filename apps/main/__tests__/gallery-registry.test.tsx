@@ -46,6 +46,8 @@ const registered = [
 	'chip',
 	'keypad',
 	"'segmented-control': segmentedControl",
+	"'step-progress': stepProgress",
+	"'log-view': logView",
 ];
 
 it('registers every new primitive before the gallery shoot', () => {

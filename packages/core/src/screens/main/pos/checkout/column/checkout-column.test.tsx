@@ -120,9 +120,18 @@ jest.mock('react-native-reanimated', () => ({
 	useSharedValue: (value: number) => React.useRef({ value }).current,
 	useAnimatedStyle: (style: () => object) => style(),
 	withTiming: (value: number) => value,
+	withSpring: (value: number) => value,
+	withDelay: (_delay: number, value: number) => value,
+	withSequence: (...steps: number[]) => steps.at(-1),
 	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
-	Easing: { bezier: jest.fn(), linear: (value: number) => value },
+	ReduceMotion: { System: 'system' },
+	Easing: {
+		bezier: jest.fn(),
+		linear: (value: number) => value,
+		inOut: (easing: unknown) => easing,
+		cubic: (value: number) => value,
+	},
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

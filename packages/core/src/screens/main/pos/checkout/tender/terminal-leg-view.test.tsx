@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
-import { AccessibilityInfo } from 'react-native';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
@@ -37,21 +36,32 @@ jest.mock('react-native', () => ({
 	),
 }));
 jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
-// The UI-thread animation runtime is unavailable in jsdom; retain the rendered View/styles.
+// The UI-thread animation runtime is unavailable in jsdom; every animation lands on its
+// target at once and the rendered View keeps its className (the step badges are read by it).
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
-	default: { View: jest.requireActual('react-native').View },
+	// The mocked View, so an animated layer keeps its className too.
+	default: {
+		get View() {
+			return jest.requireMock('react-native').View;
+		},
+	},
 	useSharedValue: (value: number) => React.useRef({ value }).current,
 	useAnimatedStyle: (style: () => object) => style(),
 	withTiming: (value: number) => value,
-	withRepeat: jest.fn((value: number) => value),
+	withSpring: (value: number) => value,
+	withDelay: (_delay: number, value: number) => value,
+	withSequence: (...steps: number[]) => steps.at(-1),
+	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
-	Easing: { bezier: jest.fn(), linear: (value: number) => value },
+	ReduceMotion: { System: 'system' },
+	Easing: {
+		bezier: jest.fn(),
+		linear: (value: number) => value,
+		inOut: (easing: unknown) => easing,
+		cubic: (value: number) => value,
+	},
 }));
-beforeEach(() => {
-	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
-	jest.requireMock('react-native-reanimated').withRepeat.mockClear();
-});
 afterEach(() => jest.restoreAllMocks());
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -77,15 +87,32 @@ jest.mock('@wcpos/components/text', () => ({
 		<span data-testid={testID}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	CollapsibleTrigger: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<button data-testid={testID}>{children}</button>
-	),
-	CollapsibleContent: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
-}));
+// A controlled stand-in: the trigger reports the toggle, so Copy can appear beside Details.
+jest.mock('@wcpos/components/collapsible', () => {
+	const Ctx = React.createContext<{ open?: boolean; onOpenChange?: (open: boolean) => void }>({});
+	return {
+		Collapsible: ({
+			children,
+			open,
+			onOpenChange,
+		}: {
+			children?: React.ReactNode;
+			open?: boolean;
+			onOpenChange?: (open: boolean) => void;
+		}) => <Ctx.Provider value={{ open, onOpenChange }}>{children}</Ctx.Provider>,
+		CollapsibleTrigger: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => {
+			const { open, onOpenChange } = React.useContext(Ctx);
+			return (
+				<button data-testid={testID} onClick={() => onOpenChange?.(!open)}>
+					{children}
+				</button>
+			);
+		},
+		CollapsibleContent: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+			<div data-testid={testID}>{children}</div>
+		),
+	};
+});
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isNative: false } }));
@@ -183,24 +210,24 @@ it.each(cases)('renders the terminal state %j', (changes, status, present) => {
 		if (button) expect((button as HTMLButtonElement).disabled).toBe(changes.phase === 'cancelling');
 	}
 });
-// The wobble is the latest line under the stepper, not a second sentence under the badge.
-it('reads the connection warning as the latest log line', () => {
+// The wobble is a line in the log, not a second sentence under the status (said once).
+it('reads the connection warning as a log line', () => {
 	renderLeg({
 		unstable: true,
 		clientEvents: [{ t: '2026-10-05T13:15:12Z', level: 'warning', message: 'Connection unstable' }],
 	});
-	expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain(
+	expect(screen.getByTestId('checkout-terminal-log').textContent).toContain(
 		'Connection unstable, still trying'
 	);
 	expect(screen.getByTestId('checkout-terminal-leg').textContent).not.toContain('still waiting');
 });
-// The stepper is the mockup's horizontal one: the end of a leg marks the node it stopped on
-// and puts a mark the size of the ring where the ring was (roadmap docs/prototypes/2026-10-05).
+// The end of a leg closes the node it stopped on: red with a cross when the payment failed,
+// grey with a dash when nobody lost money (StepProgress `failed` / `stopped`).
 it.each([
-	['failed', 'failed', 'Declined or cancelled on the terminal'],
-	['voided', 'ended', 'Payment cancelled'],
-	['released', 'ended', 'Payment released'],
-] as const)('marks a %s leg on the node and in the ring slot', (outcome, mark, status) => {
+	['failed', 'bg-destructive', 'Declined or cancelled on the terminal'],
+	['voided', 'bg-muted-foreground', 'Payment cancelled'],
+	['released', 'bg-muted-foreground', 'Payment released'],
+] as const)('marks a %s leg on the node', (outcome, tone, status) => {
 	const flow = renderLeg({
 		row: {
 			...row,
@@ -209,15 +236,13 @@ it.each([
 		},
 	});
 	flow.update({ phase: 'final', outcome });
-	expect(screen.getByTestId(`checkout-terminal-mark-${mark}`)).not.toBeNull();
-	expect(screen.queryByTestId('checkout-terminal-ring')).toBeNull();
 	expect(screen.getByTestId('checkout-terminal-status').textContent).toContain(status);
+	// The step it stopped on stays the selected one; the badge there closes in the end's tone.
 	const node = screen.getByTestId('checkout-terminal-step-1');
-	expect(
-		node.className.includes(mark === 'failed' ? 'bg-destructive' : 'bg-muted-foreground')
-	).toBe(true);
+	expect(node.getAttribute('aria-selected')).toBe('true');
+	expect(node.innerHTML.includes(tone)).toBe(true);
 	if (outcome === 'failed')
-		expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain(
+		expect(screen.getByTestId('checkout-terminal-log').textContent).toContain(
 			'Declined or cancelled on the terminal'
 		);
 });
@@ -250,11 +275,14 @@ it('merges logs oldest first and copies the displayed lines', async () => {
 	});
 	const log = screen.getByTestId('checkout-terminal-log');
 	expect(log.textContent?.indexOf('First')).toBeLessThan(log.textContent!.indexOf('Last'));
-	// The last line is what the cashier reads under the stepper.
-	expect(screen.getByTestId('checkout-terminal-latest').textContent).toContain('Last');
+	// Copy appears beside Details once the log is open and copies the lines as text: the level
+	// word on a warning or error, the reader under the first line.
+	fireEvent.click(screen.getByTestId('checkout-terminal-log-toggle'));
 	fireEvent.click(screen.getByTestId('checkout-terminal-log-copy'));
 	expect(writeText).toHaveBeenCalledWith(
-		expect.stringMatching(/\d{2}:\d{2}:01 · First\n\d{2}:\d{2}:02 · Last\nReader: reader/)
+		expect.stringMatching(
+			/\d{2}:\d{2}:01  warn First\n {10}Reader  reader\n\d{2}:\d{2}:02  error Last$/
+		)
 	);
 	fireEvent.click(screen.getByTestId('checkout-terminal-cancel'));
 	expect(flow.cancelTerminalLeg).toHaveBeenCalledTimes(1);
@@ -296,10 +324,9 @@ it.each([
 	renderLeg(changes);
 	for (let index = 0; index < 4; index++) {
 		const dot = screen.getByTestId(`checkout-terminal-step-${index}`);
+		// Every badge layer stays mounted and the mocked View drops styles, so the selected
+		// node is the one readable signal of which step is live.
 		expect(dot.getAttribute('aria-selected')).toBe(String(index === current));
-		// Passed steps are green discs; the live one is the ringed white disc.
-		expect(dot.className.includes('bg-success')).toBe(index < current);
-		expect(dot.className.includes('border-primary')).toBe(index === current);
 	}
 });
 
@@ -312,7 +339,6 @@ it.each([0, 1, 2])('keeps step %s when the terminal fails', (step) => {
 	expect(screen.getByTestId('checkout-terminal-status').textContent).toBe(
 		'Payment failed: Card declined'
 	);
-	expect(screen.queryByTestId('checkout-terminal-ring')).toBeNull();
 });
 
 it('keeps Approved through cancellation and release', () => {
@@ -321,22 +347,6 @@ it('keeps Approved through cancellation and release', () => {
 	flow.update({ phase: 'polling', cancelRequested: true });
 	flow.update({ phase: 'final', outcome: 'released' });
 	expect(screen.getByTestId('checkout-terminal-step-2').getAttribute('aria-selected')).toBe('true');
-});
-
-it('renders a static ring when reduce motion is enabled', async () => {
-	await act(async () => {
-		renderLeg();
-	});
-	expect(screen.getByTestId('checkout-terminal-ring').style.transform).toBe('rotate(0deg)');
-	expect(jest.requireMock('react-native-reanimated').withRepeat).not.toHaveBeenCalled();
-});
-
-it('starts the ring only after the motion preference resolves false', async () => {
-	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
-	await act(async () => {
-		renderLeg();
-	});
-	expect(jest.requireMock('react-native-reanimated').withRepeat).toHaveBeenCalledWith(360, -1);
 });
 
 const tile = (method: PaymentMethodDescriptor) => ({
