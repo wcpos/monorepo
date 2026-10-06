@@ -23,17 +23,24 @@ import {
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
+import { scopeDatabaseFiles } from '@wcpos/database/scope-database-files';
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reportNetworkResponse } from '@wcpos/hooks';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
-import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
+import {
+	composeObservers,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	scopeDatabaseName,
+	type SyncEvent,
+} from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
 	drainLegacyScopeDatabase,
 	type LegacyScopeDrainOutcome,
 	type LegacyScopeDrainPorts,
+	type LegacyScopeDrainWriteEvent,
 	type RxdbSyncEngine,
 	setSyncEngineLogger,
 	type StoreScopeIdentity,
@@ -51,6 +58,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { hostIsVisible, onHostVisibilityChange } from '@wcpos/utils/host-visibility';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
+import { rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
@@ -154,12 +162,34 @@ type CachedEngine = {
 
 let cachedEngine: CachedEngine | null = null;
 let legacyPurgeStarted = false;
+
 /**
- * Scopes whose previous-generation database this process already tried to drain.
- * Once per scope per process: a drain that could not finish keeps the database,
- * and the next app start tries again.
+ * A drain that kept SENDABLE work (offline, a refused session, a failed push, a
+ * row still backing off) retries within the process — after the live engine's
+ * next successful write-drain tick, which proves the store is reachable with this
+ * session, and no sooner than this backoff. A minute first: long enough for a
+ * reconnect or a session renewal to settle, short enough that a sale made just
+ * before the upgrade reaches the store within the shift.
  */
-const legacyDrainAttempted = new Set<string>();
+const LEGACY_DRAIN_FIRST_RETRY_MS = 60_000;
+/** Doubling stops here: a store that stays unreachable is asked four times an hour, not hammered. */
+const LEGACY_DRAIN_MAX_RETRY_MS = 15 * 60_000;
+
+/**
+ * Per scope, per process: `running`, `waiting` to retry (not before
+ * `notBeforeMs`, and only on a successful live write-drain tick), or `done` —
+ * drained, absent, failed to open, or kept with nothing sendable left (dead
+ * letters, conflicts). A `done` scope is tried again on the next app start.
+ */
+type LegacyDrainState =
+	| { phase: 'running'; retries: number }
+	| { phase: 'waiting'; retries: number; notBeforeMs: number }
+	| { phase: 'done' };
+const legacyDrainStates = new Map<string, LegacyDrainState>();
+
+function legacyDrainBackoffMs(retries: number): number {
+	return Math.min(LEGACY_DRAIN_FIRST_RETRY_MS * 2 ** retries, LEGACY_DRAIN_MAX_RETRY_MS);
+}
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function canonicalSite(site: string): string {
@@ -252,40 +282,95 @@ async function requestScope(
 	void entry.drainLegacyScope(scope);
 }
 
-/** One line per drain outcome; a quiet debug line when there was nothing to drain. */
-function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome): void {
+function remainingCount(remaining: Record<string, number | undefined>): number {
+	return Object.values(remaining).reduce<number>((total, count) => total + (count ?? 0), 0);
+}
+
+/**
+ * One line per drain outcome; a quiet debug line when there was nothing to
+ * drain. A kept database warns on the first attempt of a process and then only
+ * when its un-sendable work is due its daily report — re-arms and restarts are
+ * debug.
+ */
+function logLegacyDrainOutcome(outcome: LegacyScopeDrainOutcome, isRetry: boolean): void {
 	if (outcome.status === 'absent') {
 		engineLogger.debug('No previous-version database to drain', {
 			context: { databaseName: outcome.databaseName },
 		});
 		return;
 	}
+	if (outcome.status === 'failed') {
+		engineLogger.error('Could not open the previous database version to send its unsent changes', {
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+			context: { databaseName: outcome.databaseName, error: outcome.error },
+		});
+		return;
+	}
 	if (outcome.status === 'kept') {
-		// Held carts, dead letters and parked conflicts keep it too: live work is never removed.
-		engineLogger.warn(
+		// Dead letters and parked conflicts keep it too: live work is never removed.
+		const loud = outcome.retryable ? !isRetry : outcome.reportDue;
+		engineLogger[loud ? 'warn' : 'debug'](
 			'Unsent changes from the previous database version are kept until they can be sent',
 			{
 				context: {
 					databaseName: outcome.databaseName,
 					reason: outcome.reason,
-					...(outcome.pushed !== undefined ? { pushed: outcome.pushed } : {}),
-					...(outcome.remaining !== undefined ? { remaining: outcome.remaining } : {}),
+					retryable: outcome.retryable,
+					pushed: outcome.pushed,
+					carried: outcome.carried,
+					remaining: outcome.remaining,
 				},
 			}
 		);
 		return;
 	}
+	const moved = outcome.carried > 0 ? ` and moved ${outcome.carried} open carts` : '';
 	engineLogger.info(
-		`Sent ${outcome.pushed} unsent changes from the previous database version and removed it`,
-		{ context: { databaseName: outcome.databaseName, pushed: outcome.pushed } }
+		outcome.fileRemoved
+			? `Sent ${outcome.pushed} unsent changes${moved} from the previous database version and removed it`
+			: `Sent ${outcome.pushed} unsent changes${moved} from the previous database version and dropped its tables (its file remains)`,
+		{
+			context: {
+				databaseName: outcome.databaseName,
+				pushed: outcome.pushed,
+				carried: outcome.carried,
+				fileRemoved: outcome.fileRemoved,
+			},
+		}
+	);
+}
+
+/** A push from the drain the store refused or conflicted on — with the store's own words. */
+function logLegacyDrainWriteEvent(databaseName: string, event: LegacyScopeDrainWriteEvent): void {
+	engineLogger.warn(
+		event.type === 'write-rejected'
+			? 'The store refused a change from the previous database version'
+			: 'A change from the previous database version conflicts with the store',
+		{
+			context: {
+				databaseName,
+				collection: event.collection,
+				recordId: event.recordId,
+				mutationId: event.mutationId,
+				...(event.type === 'write-rejected'
+					? {
+							...(event.status !== undefined ? { status: event.status } : {}),
+							...(event.reason !== undefined ? { reason: event.reason } : {}),
+							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
+						}
+					: { currentRevision: event.currentRevision }),
+			},
+		}
 	);
 }
 
 /**
  * A scope generation bump opens a fresh database; the previous one may still
- * hold unsent sales. Drain it — once per scope per process, only while it is the
- * engine's active scope (so the session's credentials are that cashier's) and
- * never while the session is refused (a refused push would dead-letter them).
+ * hold unsent sales. Drain it only while it is the engine's active scope (so the
+ * session's credentials are that cashier's), never while the session is refused
+ * (a refused push would dead-letter them) and never offline — those wait for the
+ * live engine's next successful write-drain tick. A drain that kept sendable
+ * work re-arms with a bounded backoff; anything else is once per process.
  */
 async function drainLegacyScopeOnce(
 	engine: RxdbSyncEngine,
@@ -294,17 +379,47 @@ async function drainLegacyScopeOnce(
 	sessionRefused: () => boolean
 ): Promise<void> {
 	const key = scopeCacheKey(scope);
-	if (legacyDrainAttempted.has(key)) return;
+	const state = legacyDrainStates.get(key);
+	if (state?.phase === 'done' || state?.phase === 'running') return;
+	if (state?.phase === 'waiting' && Date.now() < state.notBeforeMs) return;
 	const active = engine.active();
-	if (!active || scopeCacheKey(active.identity) !== key || sessionRefused()) return;
-	legacyDrainAttempted.add(key);
+	if (!active || scopeCacheKey(active.identity) !== key) return;
+	const databaseName = scopeDatabaseName(scope, {
+		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+	});
+	// Until the drain reports, a previous-generation database MAY hold unsent work.
+	if (state === undefined) rememberLegacyUnsentChanges(databaseName, null);
+	const retries = state?.retries ?? 0;
+	if (sessionRefused() || getEngineConnectivity() === 'offline') {
+		// Not an attempt: the next successful live write-drain tick proves both are back.
+		legacyDrainStates.set(key, { phase: 'waiting', retries, notBeforeMs: 0 });
+		return;
+	}
+	legacyDrainStates.set(key, { phase: 'running', retries });
+	let next: LegacyDrainState = { phase: 'done' };
 	try {
-		logLegacyDrainOutcome(await drainLegacyScopeDatabase(ports(), scope));
+		const outcome = await drainLegacyScopeDatabase(ports(), scope);
+		logLegacyDrainOutcome(outcome, retries > 0);
+		if (outcome.status === 'absent' || outcome.status === 'drained') {
+			rememberLegacyUnsentChanges(databaseName, 0);
+		} else if (outcome.status === 'kept') {
+			rememberLegacyUnsentChanges(databaseName, remainingCount(outcome.remaining));
+			if (outcome.retryable) {
+				next = {
+					phase: 'waiting',
+					retries: retries + 1,
+					notBeforeMs: Date.now() + legacyDrainBackoffMs(retries),
+				};
+			}
+		}
 	} catch (error) {
-		engineLogger.error('Failed to drain the previous database version', {
-			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+		// The drain itself never throws; this is the host failing to build its ports.
+		engineLogger.error('Failed to start draining the previous database version', {
+			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: { scopeKey: key, error: error instanceof Error ? error.message : String(error) },
 		});
+	} finally {
+		legacyDrainStates.set(key, next);
 	}
 }
 
@@ -633,20 +748,35 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// The drain's own transport: pinned to the drained scope's store, with the
 	// session as it stands when the drain starts — a later cashier swap mutates
 	// `fetcherOptions` in place and must not re-sign a sale already in flight.
-	const legacyDrainPorts = (scope: StoreScopeIdentity): LegacyScopeDrainPorts => ({
-		site,
-		storage: defaultConfig.storage,
-		fetcher: createEngineFetcher({
-			auth: { ...fetcherOptions },
-			clockSkew: { generation: 0, evaluated: false },
-			scope: { storeId: scope.storeId },
-			emitTransport,
-			wpJsonRoot: site.wpJsonRoot,
-			...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
-		}),
-		connectivity: getEngineConnectivity,
-		multiInstance,
-	});
+	const legacyDrainPorts = (scope: StoreScopeIdentity): LegacyScopeDrainPorts => {
+		const databaseName = scopeDatabaseName(scope, {
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		});
+		return {
+			site,
+			storage: defaultConfig.storage,
+			fetcher: createEngineFetcher({
+				auth: { ...fetcherOptions },
+				clockSkew: { generation: 0, evaluated: false },
+				scope: { storeId: scope.storeId },
+				emitTransport,
+				wpJsonRoot: site.wpJsonRoot,
+				...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
+			}),
+			connectivity: getEngineConnectivity,
+			multiInstance,
+			// Native lists and deletes files; web and Electron cannot (null): open-to-check there.
+			databaseFiles: scopeDatabaseFiles,
+			// An open cart left in the old database is carried into this engine's.
+			liveEngine: engine,
+			// The sync log only: the drain's own queue must not move this engine's status.
+			diagnostics: (event) => {
+				if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
+				syncLogObserver.observe(event);
+			},
+			onWriteEvent: (event) => logLegacyDrainWriteEvent(databaseName, event),
+		};
+	};
 	const drainLegacyScope = (scope: StoreScopeIdentity): Promise<void> =>
 		drainLegacyScopeOnce(
 			engine,
@@ -657,6 +787,14 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				(authExhaustedToken !== null &&
 					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token)
 		);
+	// A drain waiting to retry runs after a successful live write-drain tick: the store
+	// answered this session, so the old database's sales can go too.
+	engine.events((event) => {
+		if (event.type !== 'lane-finish' || event.lane !== 'write-drain' || event.status !== 'ran')
+			return;
+		const active = engine.active();
+		if (active) void drainLegacyScope(active.identity);
+	});
 	// Draining and purging are session maintenance, not part of opening a store.
 	// Failed opens leave legacy data alone; neither ever rejects engine.ready.
 	void engine.ready.then(

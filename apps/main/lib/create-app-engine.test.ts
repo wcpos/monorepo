@@ -1,4 +1,6 @@
 import { scopeDatabaseName } from '@wcpos/sync-core';
+import type { LegacyScopeDrainOutcome, LegacyScopeDrainPorts } from '@wcpos/sync-engine';
+import { classifyUnsentChanges, forgetUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
@@ -35,6 +37,7 @@ function createEngineDouble(
 	switchScope?: (identity: ScopeIdentity) => Promise<void>
 ) {
 	const dbListeners = new Set<(db: unknown) => void>();
+	const eventListeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
 	let active: { identity: ScopeIdentity } | null = null;
 	const activate = (identity: ScopeIdentity | null) => {
 		active = identity ? { identity } : null;
@@ -60,6 +63,14 @@ function createEngineDouble(
 			return () => dbListeners.delete(cb);
 		}),
 		active: jest.fn(() => active),
+		events: jest.fn((cb: (event: { type: string; [key: string]: unknown }) => void) => {
+			eventListeners.add(cb);
+			return () => eventListeners.delete(cb);
+		}),
+		/** An engine event, fanned out to every `events()` subscriber. */
+		emit(event: { type: string; [key: string]: unknown }) {
+			for (const cb of eventListeners) cb(event);
+		},
 		/** The engine landing on `identity`: active() flips and db$ fans out, as the real engine does inside scope.switch. */
 		activate,
 	};
@@ -77,12 +88,13 @@ function loadCreateAppEngine(
 	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
 	const recordServerLoad = jest.fn();
+	const networkDebug = jest.fn();
 	const networkInfo = jest.fn();
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
 	const setSyncEngineLogger = jest.fn();
 	const getLogger = jest.fn(() => ({
-		debug: jest.fn(),
+		debug: networkDebug,
 		info: networkInfo,
 		warn: networkWarn,
 		error: networkError,
@@ -119,21 +131,15 @@ function loadCreateAppEngine(
 	);
 
 	const drainLegacyScopeDatabase = jest.fn(
-		async (_ports: { fetcher: unknown; storage: unknown }, scope: ScopeIdentity) =>
-			({
-				status: 'absent',
-				databaseName: scopeDatabaseName(scope, { generation: 5 }),
-			}) as const as
-				| { status: 'absent'; databaseName: string }
-				| { status: 'drained'; databaseName: string; pushed: number }
-				| {
-						status: 'kept';
-						databaseName: string;
-						reason: string;
-						pushed?: number;
-						remaining?: Record<string, number>;
-				  }
+		async (
+			_ports: LegacyScopeDrainPorts,
+			scope: ScopeIdentity
+		): Promise<LegacyScopeDrainOutcome> => ({
+			status: 'absent',
+			databaseName: scopeDatabaseName(scope, { generation: 5 }),
+		})
 	);
+	jest.doMock('@wcpos/database/scope-database-files', () => ({ scopeDatabaseFiles: null }));
 
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
@@ -172,9 +178,13 @@ function loadCreateAppEngine(
 
 	const { createAppSyncEngine, switchAppEngineScope, createSessionFetcherOptions } =
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
+	const { setAppOnlineStatus } =
+		jest.requireActual<typeof import('./connectivity')>('./connectivity');
 	return {
 		createAppSyncEngine,
 		drainLegacyScopeDatabase,
+		setAppOnlineStatus,
+		networkDebug,
 		purgeLegacyDatabases,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
@@ -1928,9 +1938,38 @@ describe('legacy database purge', () => {
 });
 
 describe('previous-generation database drain', () => {
-	it('drains the ready scope before the purge, with a transport pinned to that scope', async () => {
+	const LEGACY = scopeDatabaseName(BASE_OPTIONS.scope, { generation: 5 });
+	const keptRetryable: LegacyScopeDrainOutcome = {
+		status: 'kept',
+		databaseName: LEGACY,
+		reason: 'write-drain skipped: offline',
+		retryable: true,
+		pushed: 0,
+		carried: 0,
+		remaining: { unsent: 4, held: 1 },
+		reportDue: true,
+	};
+	const keptUnsendable: LegacyScopeDrainOutcome = {
+		status: 'kept',
+		databaseName: LEGACY,
+		reason: 'unsent work is left in the queue',
+		retryable: false,
+		pushed: 4,
+		carried: 1,
+		remaining: { deadLetters: 1, conflicts: 1 },
+		reportDue: true,
+	};
+	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
+
+	afterEach(() => {
+		forgetUnsentChanges();
+		jest.restoreAllMocks();
+	});
+
+	it('drains the ready scope before the purge, with a transport pinned to that scope and the live engine to carry carts into', async () => {
+		const engine = createEngineDouble();
 		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
-			loadCreateAppEngine();
+			loadCreateAppEngine(() => engine);
 		const order: string[] = [];
 		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
 			order.push('drain');
@@ -1947,8 +1986,10 @@ describe('previous-generation database drain', () => {
 		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
 		const [ports, scope] = drainLegacyScopeDatabase.mock.calls[0]!;
 		expect(scope).toEqual(BASE_OPTIONS.scope);
-		expect(ports).toMatchObject({ storage: { name: 'test-storage' } });
+		expect(ports).toMatchObject({ storage: { name: 'test-storage' }, databaseFiles: null });
+		expect(ports.liveEngine).toBe(engine);
 		expect(typeof ports.fetcher).toBe('function');
+		expect(typeof ports.diagnostics).toBe('function');
 	});
 
 	it('drains each scope once per process, the switched-to one too', async () => {
@@ -1968,6 +2009,8 @@ describe('previous-generation database drain', () => {
 		await settle();
 		await switchAppEngineScope(session(BASE_OPTIONS.scope));
 		await settle();
+		first.emit(writeDrainRan);
+		await settle();
 
 		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope)).toEqual([
 			BASE_OPTIONS.scope,
@@ -1975,60 +2018,338 @@ describe('previous-generation database drain', () => {
 		]);
 	});
 
-	it('never drains while the session is refused (a refused push would dead-letter the sales)', async () => {
+	it('never drains while the session is refused, and drains on the first successful tick after', async () => {
+		const engine = createEngineDouble();
 		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
-			loadCreateAppEngine();
+			loadCreateAppEngine(() => engine);
 		const { requestStateManager } = jest.requireActual<
 			typeof import('@wcpos/hooks/use-http-client')
 		>('@wcpos/hooks/use-http-client');
 		const isAuthFailed = jest.spyOn(requestStateManager, 'isAuthFailed').mockReturnValue(true);
-		try {
-			await createAppSyncEngine(BASE_OPTIONS).ready;
-			await settle();
-			expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
-			expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
-		} finally {
-			isAuthFailed.mockRestore();
-		}
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		// Until the drain reports, the old database MAY hold unsent work: a wipe cannot say "none".
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
+
+		isAuthFailed.mockReturnValue(false);
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
 	});
 
-	it('logs one line per outcome: kept warns with what is left, drained informs', async () => {
-		for (const [outcome, level, message, context] of [
-			[
-				{ status: 'kept', databaseName: 'pos_v5_x', reason: 'write-drain skipped: offline' },
-				'warn',
-				'Unsent changes from the previous database version are kept until they can be sent',
-				{ databaseName: 'pos_v5_x', reason: 'write-drain skipped: offline' },
-			],
-			[
-				{
-					status: 'kept',
-					databaseName: 'pos_v5_x',
-					reason: 'unsent work is left in the queue',
-					pushed: 4,
-					remaining: { held: 1, deadLetters: 1, conflicts: 1 },
-				},
-				'warn',
-				'Unsent changes from the previous database version are kept until they can be sent',
-				{ pushed: 4, remaining: { held: 1, deadLetters: 1, conflicts: 1 } },
-			],
-			[
-				{ status: 'drained', databaseName: 'pos_v5_x', pushed: 4 },
-				'info',
-				'Sent 4 unsent changes from the previous database version and removed it',
-				{ databaseName: 'pos_v5_x', pushed: 4 },
-			],
-		] as const) {
-			const { createAppSyncEngine, drainLegacyScopeDatabase, networkInfo, networkWarn } =
-				loadCreateAppEngine();
+	it('offline at boot is not an attempt: the first successful write-drain tick drains', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, setAppOnlineStatus } =
+			loadCreateAppEngine(() => engine);
+		setAppOnlineStatus('offline');
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+
+		setAppOnlineStatus('online-website-available');
+		// A tick that did not run (skipped, error) proves nothing.
+		engine.emit({ type: 'lane-finish', lane: 'write-drain', status: 'skipped' });
+		engine.emit({ type: 'lane-finish', lane: 'pull', status: 'ran' });
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+	});
+
+	it('re-arms a drain that kept sendable work: after the next successful tick, no sooner than a bounded backoff', async () => {
+		let now = 1_000_000;
+		jest.spyOn(Date, 'now').mockImplementation(() => now);
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn, networkDebug } =
+			loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		const tickAt = async (ms: number) => {
+			now = ms;
+			engine.emit(writeDrainRan);
+			await settle();
+		};
+
+		await tickAt(1_000_000 + 59_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+		await tickAt(1_000_000 + 60_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		// Doubled: two minutes after the second attempt.
+		await tickAt(1_060_000 + 119_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(2);
+		await tickAt(1_060_000 + 120_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(3);
+		// Capped at fifteen minutes however long it keeps failing.
+		let at = 1_180_000;
+		for (const backoff of [240_000, 480_000, 900_000, 900_000]) {
+			await tickAt(at + backoff - 1);
+			const calls = drainLegacyScopeDatabase.mock.calls.length;
+			await tickAt(at + backoff);
+			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(calls + 1);
+			at += backoff;
+		}
+		// Warned once; the retries are quiet.
+		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkDebug).toHaveBeenCalledWith(
+			'Unsent changes from the previous database version are kept until they can be sent',
+			expect.anything()
+		);
+
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'drained',
+			databaseName: LEGACY,
+			pushed: 4,
+			carried: 0,
+			fileRemoved: true,
+		});
+		await tickAt(at + 900_000);
+		const total = drainLegacyScopeDatabase.mock.calls.length;
+		await tickAt(at + 10 * 900_000);
+		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(total);
+	});
+
+	it('a kept database with nothing sendable, or one that failed to open, is not retried in this process', async () => {
+		for (const outcome of [
+			keptUnsendable,
+			{ status: 'failed', databaseName: LEGACY, error: 'DB6' } as const,
+		]) {
+			const engine = createEngineDouble();
+			const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
 			drainLegacyScopeDatabase.mockResolvedValue(outcome);
 			await createAppSyncEngine(BASE_OPTIONS).ready;
 			await settle();
-			const logged = level === 'warn' ? networkWarn : networkInfo;
+			jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
+			engine.emit(writeDrainRan);
+			await settle();
+			expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(1);
+			jest.restoreAllMocks();
+		}
+	});
+
+	it('what a kept database holds is counted by the Clear local data warning; a drained one is not', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
+		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
+		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
+
+		jest.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
+		drainLegacyScopeDatabase.mockResolvedValue({
+			status: 'drained',
+			databaseName: LEGACY,
+			pushed: 4,
+			carried: 1,
+			fileRemoved: false,
+		});
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+	});
+
+	it('logs one line per outcome: failed is an error with a code, kept warns when due, drained says whether the file went', async () => {
+		for (const [outcome, level, message, context] of [
+			[
+				{ status: 'failed', databaseName: LEGACY, error: 'DB6: schema mismatch' },
+				'error',
+				'Could not open the previous database version to send its unsent changes',
+				{ databaseName: LEGACY, error: 'DB6: schema mismatch' },
+			],
+			[
+				keptRetryable,
+				'warn',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ reason: 'write-drain skipped: offline', retryable: true },
+			],
+			[
+				keptUnsendable,
+				'warn',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ pushed: 4, carried: 1, remaining: { deadLetters: 1, conflicts: 1 } },
+			],
+			[
+				{ ...keptUnsendable, reportDue: false },
+				'debug',
+				'Unsent changes from the previous database version are kept until they can be sent',
+				{ retryable: false },
+			],
+			[
+				{ status: 'drained', databaseName: LEGACY, pushed: 4, carried: 0, fileRemoved: true },
+				'info',
+				'Sent 4 unsent changes from the previous database version and removed it',
+				{ databaseName: LEGACY, pushed: 4 },
+			],
+			[
+				{ status: 'drained', databaseName: LEGACY, pushed: 2, carried: 1, fileRemoved: false },
+				'info',
+				'Sent 2 unsent changes and moved 1 open carts from the previous database version and dropped its tables (its file remains)',
+				{ fileRemoved: false },
+			],
+		] as const) {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockResolvedValue(outcome as LegacyScopeDrainOutcome);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			const logged = {
+				error: loaded.networkError,
+				warn: loaded.networkWarn,
+				info: loaded.networkInfo,
+				debug: loaded.networkDebug,
+			}[level];
 			expect(logged).toHaveBeenCalledWith(
 				message,
 				expect.objectContaining({ context: expect.objectContaining(context) })
 			);
+			if (level === 'error') {
+				expect(logged).toHaveBeenCalledWith(
+					message,
+					expect.objectContaining({ code: expect.any(String) })
+				);
+			}
+			if (level === 'debug') expect(loaded.networkWarn).not.toHaveBeenCalled();
 		}
+	});
+
+	it('with the REAL drain: the host ports send a closed v5 sale once through its pinned transport, then remove pos_v5', async () => {
+		const { getRxStorageMemory } = jest.requireActual<typeof import('rxdb/plugins/storage-memory')>(
+			'rxdb/plugins/storage-memory'
+		);
+		const { createRxDatabase } = jest.requireActual<typeof import('rxdb')>('rxdb');
+		const actual = jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
+		const { engineCollectionCreators } = jest.requireActual<
+			typeof import('@wcpos/sync-engine/testing')
+		>('@wcpos/sync-engine/testing');
+		const { createFakeWriteServer } = jest.requireActual<typeof import('@wcpos/sync-core/testing')>(
+			'@wcpos/sync-core/testing'
+		);
+		// The engine opens more collections than open-core rxdb allows without the premium flag.
+		jest
+			.requireActual<typeof import('rxdb-premium/plugins/shared')>('rxdb-premium/plugins/shared')
+			.setPremiumFlag();
+		const storage = getRxStorageMemory();
+		const recordId = '17400000-0000-4000-8000-0000000000aa';
+		const mutationId = '17400000-0000-4000-8000-0000000000ab';
+		const payload = {
+			status: 'completed',
+			total: '9.00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+		};
+		// A till that closed a sale under v5 and upgraded before it was sent.
+		const legacy = await createRxDatabase({ name: LEGACY, storage, multiInstance: false });
+		const creators = engineCollectionCreators();
+		await legacy.addCollections({
+			orders: creators.orders as never,
+			recordMutations: creators.recordMutations as never,
+		});
+		await legacy.collections.orders!.insert({
+			posUserId: '',
+			posStoreId: '',
+			uuid: recordId,
+			remoteId: null,
+			remoteKey: '',
+			number: '',
+			dateCreatedGmt: '2026-09-30T08:00:00',
+			status: 'completed',
+			total: '9.00',
+			customerId: 0,
+			payload,
+			sync: { revision: '', partial: false, source: 'skeleton' },
+			local: { dirty: true, pendingMutationIds: [mutationId] },
+		});
+		await legacy.collections.recordMutations!.insert({
+			mutationId,
+			collectionName: 'orders',
+			operation: 'create',
+			recordId,
+			origin: 'existing',
+			payload,
+			baseRevision: null,
+			queuedAt: '2026-09-30T08:00:00.000Z',
+			seq: 1,
+			status: 'pending',
+		});
+		await legacy.close();
+
+		const server = createFakeWriteServer();
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = String(input);
+				if (!url.includes('/push/')) {
+					return Response.json({ changes: [], complete: true, documents: [] });
+				}
+				// The fake answers a bare { status, json }; the host's fetcher reads real headers.
+				const answer = await server.fetch(url.split('?')[0]!, {
+					...init,
+					headers: new Headers(init?.headers),
+				} as never);
+				return Response.json(await answer.json(), { status: answer.status });
+			});
+		const loaded = loadCreateAppEngine();
+		jest.requireMock<{ defaultConfig: { storage: unknown } }>(
+			'@wcpos/database/adapters/default'
+		).defaultConfig.storage = storage;
+		loaded.drainLegacyScopeDatabase.mockImplementation(actual.drainLegacyScopeDatabase as never);
+		try {
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			for (
+				let turn = 0;
+				turn < 200 &&
+				!loaded.networkInfo.mock.calls.some(([message]) => String(message).startsWith('Sent ')) &&
+				loaded.networkWarn.mock.calls.length === 0 &&
+				loaded.networkError.mock.calls.length === 0;
+				turn += 1
+			) {
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			expect([loaded.networkWarn.mock.calls, loaded.networkError.mock.calls]).toEqual([[], []]);
+			expect(server.received.map((envelope) => envelope.mutationId)).toEqual([mutationId]);
+			expect([...server.applied.keys()]).toEqual([recordId]);
+			expect(loaded.networkInfo).toHaveBeenCalledWith(
+				'Sent 1 unsent changes from the previous database version and dropped its tables (its file remains)',
+				expect.anything()
+			);
+			// Pinned to the drained scope's store: the push carries that store's id on the wire.
+			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
+			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
+			expect(wire).toContain('store-1');
+			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
+		} finally {
+			fetch.mockRestore();
+		}
+	}, 30_000);
+
+	it("logs a push the store refused during the drain with the store's reason and message", async () => {
+		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn } = loadCreateAppEngine();
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		const [ports] = drainLegacyScopeDatabase.mock.calls[0]!;
+		ports.onWriteEvent!({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 400,
+			reason: 'rest_invalid_param',
+			serverMessage: 'Invalid parameter(s): billing',
+		});
+		expect(networkWarn).toHaveBeenCalledWith(
+			'The store refused a change from the previous database version',
+			expect.objectContaining({
+				context: expect.objectContaining({
+					databaseName: LEGACY,
+					recordId: 'order-1',
+					status: 400,
+					reason: 'rest_invalid_param',
+					serverMessage: 'Invalid parameter(s): billing',
+				}),
+			})
+		);
 	});
 });
