@@ -145,15 +145,17 @@ export function BrowseStage(props: BrowseStageProps) {
 	// The products answer as state: a level never suspends (a tile swapped for a skeleton
 	// mid-deal would lose its place). Attributed to its query: `binding.result$` is a new
 	// observable per compiled query, and useAnswerOf pairs each emission with the observable it
-	// came from — `undefined` while the projection on stage has no answer of its own. The total
-	// is attributed the same way: `total$` is derived from that same memoised `result$`, so a
-	// new level never snapshots the previous level's count.
-	const total = useAnswerOf(binding.total$) ?? undefined;
+	// came from — `undefined` while the projection on stage has no answer of its own.
+	// A level's total is that same answer's `count`: the local rows matching its query before
+	// the window (the till shows local products). Never `binding.total$` — its coverage verdict
+	// prefers the whole collection's census, which is the catalogue's size at every level.
 	const liveResult = useAnswerOf(binding.result$);
 	const answer = React.useMemo<LevelAnswer | undefined>(
 		() =>
-			liveResult ? { hits: liveResult.hits as unknown as LevelAnswer['hits'], total } : undefined,
-		[liveResult, total]
+			liveResult
+				? { hits: liveResult.hits as unknown as LevelAnswer['hits'], total: liveResult.count }
+				: undefined,
+		[liveResult]
 	);
 	// A table level's DataTable reads the root resource and suspends until it has answered
 	// once; after that the resource keeps its answer across every re-projection. So a level is

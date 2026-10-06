@@ -345,8 +345,10 @@ const HITS = [
 ];
 const makeBinding = () => ({
 	resource: { valueRef$$: new BehaviorSubject({ current: { hits: HITS } }), read: jest.fn() },
-	result$: new BehaviorSubject({ hits: HITS }),
-	total$: new BehaviorSubject<number | null>(80),
+	// `count`: the local rows matching the query before the window. `total$` is the coverage
+	// verdict, which prefers the whole collection's census — the catalogue size, never a level's.
+	result$: new BehaviorSubject({ hits: HITS, count: 80 }),
+	total$: new BehaviorSubject<number | null>(220),
 	active$: of(false),
 	pending$: of(false),
 	sync: jest.fn(),
@@ -405,7 +407,7 @@ it('tapping a root term opens its level; a child term nests; the crumb goes back
 	expect(mockState.filters.categories).toEqual([]);
 });
 
-it('the crumb back steps one level; a live level shows the products with the attributed total', () => {
+it('the crumb back steps one level; a live level shows the products with its own count, never the census total', () => {
 	render(<BrowseStage {...stageProps()} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	fireEvent.click(screen.getByTestId('browse-term-2'));
@@ -579,7 +581,7 @@ it('a new projection shows held slots until ITS query answers, never the last qu
 	const first = makeBinding();
 	const { rerender } = render(<BrowseStage {...stageProps({ binding: first })} />);
 	// The query re-projects: a new result$ (and total$ derived from it) that has not emitted.
-	const result$ = new Subject<{ hits: typeof HITS }>();
+	const result$ = new Subject<{ hits: typeof HITS; count: number }>();
 	const total$ = new Subject<number | null>();
 	const second = { ...first, result$, total$ };
 	rerender(<BrowseStage {...stageProps({ binding: second })} />);
@@ -588,8 +590,8 @@ it('a new projection shows held slots until ITS query answers, never the last qu
 	expect(screen.queryByTestId('variable-product-drill')).toBeNull();
 	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe('');
 	act(() => {
-		result$.next({ hits: [HITS[1]] });
-		total$.next(12);
+		result$.next({ hits: [HITS[1]], count: 12 });
+		total$.next(220);
 	});
 	expect(screen.queryByTestId('product-placeholder')).toBeNull();
 	expect(screen.getByTestId('product-s')).toBeTruthy();
