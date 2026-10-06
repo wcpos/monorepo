@@ -346,6 +346,17 @@ export function DealCell({
 	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile
 	// (Pixel, 2026-10-05, when the second was the crumb's height). The stage arms on the same pair.
 	const waiting = origin === undefined || grid === undefined;
+	// The offset is a shared value written as the commit lands, not a value the worklet closes
+	// over. A closed-over value reaches the view only when the style's mapper restarts: on web
+	// in a passive effect, then the next animation frame. When a heavy commit (a term level's
+	// list) yields to the browser before its passive effects run, the frame that dropped UNSEEN
+	// painted the parent at its own slot, and it snapped onto the tapped tile a frame later (web
+	// film, 2026-10-06). Written in a layout effect, the mapper reruns in that commit's
+	// microtask, before the paint.
+	const offset = useSharedValue({ x: fromX, y: fromY, flies });
+	React.useLayoutEffect(() => {
+		offset.value = { x: fromX, y: fromY, flies };
+	}, [offset, fromX, fromY, flies]);
 
 	const style = useAnimatedStyle(() => {
 		// Clamped for the reason the stage clamps: a first frame stamped before the animation's
@@ -354,9 +365,10 @@ export function DealCell({
 		// (Pixel, 2026-10-05) — `1 - travel` went negative.
 		const t = Math.min(1, Math.max(0, travel.value));
 		const left = 1 - t;
+		const from = offset.value;
 		const translate = [
-			{ translateX: fromX * left },
-			{ translateY: (flies ? fromY + (scroll?.value ?? 0) : 0) * left },
+			{ translateX: from.x * left },
+			{ translateY: (from.flies ? from.y + (scroll?.value ?? 0) : 0) * left },
 		];
 		// The parent's visibility is NOT in here: a worklet's props land on the UI thread a frame after
 		// the commit on Android, and the tapped tile steps aside at the commit, so the slot was empty

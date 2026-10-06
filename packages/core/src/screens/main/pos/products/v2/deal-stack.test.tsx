@@ -87,7 +87,8 @@ jest.mock('react-native-reanimated', () => {
 		useAnimatedStyle: (factory: () => Style) => ({ factory }),
 		useSharedValue: (value: number) => {
 			const shared = ReactActual.useRef({ value }).current;
-			if (!mockShared.includes(shared)) mockShared.push(shared);
+			// The clocks only: a cell's offset (an object) is read through its style, not driven.
+			if (typeof value === 'number' && !mockShared.includes(shared)) mockShared.push(shared);
 			return shared;
 		},
 		withDelay: (delay: number, value: number) => {
@@ -455,6 +456,24 @@ it('a grid measurement that lands after the grace period dealt in place does not
 	// The answer arrives with the tiles in the air; this deal keeps the frame it set off with.
 	act(() => pending.fire!());
 	expect(deal().grid).toBe('null');
+});
+
+it('the worklet laid down before the frames are known already stands the parent on the tapped tile', () => {
+	// On web the mapper keeps running the worklet it started with until a passive effect restarts
+	// it, and a heavy commit lets the browser paint first: a closed-over offset painted the parent
+	// at its own slot on the frame UNSEEN dropped (web film, 2026-10-06). The offset the parent
+	// first shows at must reach the worklet that is already running.
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	const id = screen.getByTestId('cell-0').closest('[data-style]')!.getAttribute('data-style')!;
+	const mounted = mockStyles.get(id)!;
+	layOut();
+	expect(seen('cell-0')).toBe(true);
+	const [, , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(mounted()).toEqual({
+		transform: [{ translateX: 100 - (GRID.x + 4) }, { translateY: 200 - (GRID.y + 4) }],
+	});
 });
 
 it('a cell in the air keeps going when the slot count changes under it', () => {
