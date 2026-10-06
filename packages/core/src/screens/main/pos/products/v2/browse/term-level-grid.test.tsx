@@ -233,6 +233,16 @@ beforeEach(() => {
 	placeGrid.mockClear();
 });
 
+// react-native-web drives `onLayout` from a ResizeObserver jsdom lacks; it leaves the handler on
+// the node, so a layout is delivered the way the observer would.
+type LaidOut = HTMLElement & { __reactLayoutHandler?: (event: unknown) => void };
+const layOut = (height: number) =>
+	act(() =>
+		(screen.getByTestId('browse-level-slots') as LaidOut).__reactLayoutHandler?.({
+			nativeEvent: { layout: { x: 0, y: 0, width: 400, height } },
+		})
+	);
+
 it('deals the parent first, then child terms, then products, on the grid columns', () => {
 	const props = level();
 	render(<TermLevelGrid {...props} />);
@@ -288,10 +298,7 @@ it('reports the node its slots rest in, so the deal lands on the grid', () => {
 	render(<TermLevelGrid {...level()} />);
 	const slots = screen.getByTestId('browse-level-slots');
 	expect(slots.contains(screen.getByTestId('browse-level-scroller'))).toBe(true);
-	// react-native-web drives `onLayout` from a ResizeObserver jsdom lacks; it leaves the handler
-	// on the node, so a layout is delivered the way the observer would.
-	type LaidOut = HTMLElement & { __reactLayoutHandler?: (event: unknown) => void };
-	(slots as LaidOut).__reactLayoutHandler?.({ nativeEvent: { layout: {} } });
+	layOut(600);
 	expect(placeGrid).toHaveBeenCalledWith(slots);
 });
 
@@ -337,6 +344,7 @@ it('holds a row of placeholders for products until the query answers', () => {
 it('extends the query window when the cashier nears the end of the level', () => {
 	const props = level();
 	render(<TermLevelGrid {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	expect(props.actions.extendLimit).toHaveBeenCalled();
 	// Guarded on the level's own loaded rows.
@@ -349,6 +357,7 @@ it('pages once when pending clears after an end-reached it ignored while pending
 	const pending$ = new BehaviorSubject(true);
 	const props = level({ binding: { ...binding, pending$ } });
 	render(<TermLevelGrid {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 	act(() => pending$.next(false));
@@ -363,15 +372,63 @@ it('drops an armed end-reached when the level is covered before pending clears',
 	const pending$ = new BehaviorSubject(true);
 	const props = level({ binding: { ...binding, pending$ } });
 	const { rerender } = render(<TermLevelGrid {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	rerender(<TermLevelGrid {...props} settled={false} />);
 	act(() => pending$.next(false));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 
+// A products screen kept mounted but inactive lays out at zero size, and zero geometry reads as
+// end-reached: the hidden level must not extend the shared query (each new limit would hand the
+// list a new handler and page again), and the end it saw is checked once when it shows again.
+it('ignores an end-reached on a zero-size viewport, and pages once when the viewport is back', () => {
+	const props = level();
+	render(<TermLevelGrid {...props} />);
+	// Not measured yet: no viewport.
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	// Shown again: the held end-reached is fired once, not once per zero-size report.
+	layOut(600);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	layOut(640);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('holds an end-reached armed while pending until the viewport is back too', () => {
+	const pending$ = new BehaviorSubject(true);
+	const props = level({ binding: { ...binding, pending$ } });
+	render(<TermLevelGrid {...props} />);
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	// Pending clears while the screen is still hidden: nothing moves yet.
+	act(() => pending$.next(false));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	layOut(600);
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('pages on an end-reached once the viewport is measured, and stops when it goes to zero', () => {
+	const props = level();
+	render(<TermLevelGrid {...props} />);
+	layOut(600);
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+	(props.actions.extendLimit as jest.Mock).mockClear();
+	layOut(0);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+});
+
 it('does not page the shared products query from a level that shows only subcategories', () => {
 	const props = level({ showProducts: false });
 	render(<TermLevelGrid {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 	expect(guarded).not.toHaveBeenCalled();
@@ -380,6 +437,7 @@ it('does not page the shared products query from a level that shows only subcate
 it('does not page the shared products query from a level a child is over', () => {
 	const props = level({ settled: false });
 	render(<TermLevelGrid {...props} />);
+	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });

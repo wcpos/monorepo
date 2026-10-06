@@ -182,7 +182,7 @@ export function TermLevelTable({
 	// armed and fired once it clears (FlashList will not fire again for the same rows):
 	// use-armed-end-reached. A pane a child is over does not own the query: it may not move it.
 	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
-	const onEndReached = useArmedEndReached(extend, binding.pending$, settled);
+	const { onEndReached } = useArmedEndReached(extend, binding.pending$, settled);
 	// The child terms lead the table's rows, so they scroll with the products under them.
 	const rows = React.useMemo<LevelRow[]>(
 		() => [

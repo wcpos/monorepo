@@ -17,23 +17,40 @@ const NO_EXTEND = () => {};
  * scrolls away and back — impossible on a short page. So an end-reached while pending is armed,
  * and fired once when pending clears. A level that stops owning the query meanwhile fires it at
  * nothing.
+ *
+ * `measuresViewport`: the list reports its viewport through `onViewport(height)` (its layout),
+ * and has none until a positive height is measured. A screen kept mounted but inactive lays out
+ * at zero size, and zero geometry reads as the end: an end-reached then is held the same way —
+ * armed, never extended — and fired once a positive viewport is back. So the hidden screen never
+ * pages the shared query, and a short page does not stall when it shows again.
  */
 export function useArmedEndReached(
 	extend: () => void,
 	pending$: Observable<boolean>,
-	owned: boolean
-): () => void {
+	owned: boolean,
+	{ measuresViewport = false }: { measuresViewport?: boolean } = {}
+): { onEndReached: () => void; onViewport: (height: number) => void } {
 	const pending = useObservableEagerState(pending$);
 	const armed = React.useRef(false);
+	const inViewport = React.useRef(!measuresViewport);
 	const extendOwned = owned ? extend : NO_EXTEND;
 	const onEndReached = React.useCallback(() => {
-		if (pending) armed.current = true;
+		if (pending || !inViewport.current) armed.current = true;
 		else extendOwned();
 	}, [extendOwned, pending]);
 	React.useEffect(() => {
-		if (pending || !armed.current) return;
+		if (pending || !inViewport.current || !armed.current) return;
 		armed.current = false;
 		extendOwned();
 	}, [extendOwned, pending]);
-	return onEndReached;
+	const onViewport = React.useCallback(
+		(height: number) => {
+			inViewport.current = height > 0;
+			if (pending || !inViewport.current || !armed.current) return;
+			armed.current = false;
+			extendOwned();
+		},
+		[extendOwned, pending]
+	);
+	return { onEndReached, onViewport };
 }

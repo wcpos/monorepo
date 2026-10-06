@@ -193,9 +193,13 @@ export function TermLevelGrid({
 	// is over does not own the query: neither may move it.
 	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
 	// An end-reached while the demand is pending is armed and fired once it clears (the list
-	// will not fire again for the same rows): use-armed-end-reached.
+	// will not fire again for the same rows). So is one before the slots measure a positive
+	// height: a products screen kept mounted but inactive lays out at zero size, and zero
+	// geometry reads as end-reached. use-armed-end-reached.
 	const owned = showProducts && settled;
-	const onEndReached = useArmedEndReached(extend, binding.pending$, owned);
+	const { onEndReached, onViewport } = useArmedEndReached(extend, binding.pending$, owned, {
+		measuresViewport: true,
+	});
 
 	// Until the query answers, a row's worth of product slots is held, so the deal never waits.
 	const products: (EngineRecord<'products'> | null)[] = !showProducts
@@ -259,7 +263,10 @@ export function TermLevelGrid({
 					ref={slotsNode}
 					className="min-h-0 flex-1"
 					testID="browse-level-slots"
-					onLayout={() => placeGrid(slotsNode.current as Measurable)}
+					onLayout={(event) => {
+						onViewport(event.nativeEvent.layout.height);
+						placeGrid(slotsNode.current as Measurable);
+					}}
 				>
 					<Animated.FlatList
 						ref={scroller}
