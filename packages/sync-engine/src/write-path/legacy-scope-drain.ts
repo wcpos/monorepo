@@ -64,7 +64,11 @@ import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 } from '../create-rxdb-sync-engine';
-import { applyStashedPrintCounts, stashPrintCounts } from './engine-order-repository';
+import {
+	applyStashedPrintCounts,
+	RESYNC_RECEIPT_PRINT_COUNTS_ID,
+	stashPrintCounts,
+} from './engine-order-repository';
 import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 
 /** A push outcome the drain's engine reports — what the host logs with its reason. */
@@ -477,11 +481,20 @@ async function carryPosLocalState(
 	const legacyOrders = legacy.collections.orders;
 	if (!legacyOrders) return { error: null };
 	const counts = new Map<string, number>();
+	const keep = (uuid: string, count: unknown) => {
+		if (typeof count === 'number' && count > 0)
+			counts.set(uuid, Math.max(counts.get(uuid) ?? 0, count));
+	};
 	for (const doc of await legacyOrders.find().exec()) {
 		const order = doc.toJSON() as { uuid: string; local?: { receiptPrintCount?: unknown } };
-		const count = order.local?.receiptPrintCount;
-		if (typeof count === 'number' && count > 0) counts.set(order.uuid, count);
+		keep(order.uuid, order.local?.receiptPrintCount);
 	}
+	// v5's OWN print-count stash: a v5 resync interrupted after it stashed counts and removed the
+	// orders, before the repull, holds them only there.
+	const legacyStash = (await legacyOrders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID))?.get(
+		'counts'
+	) as Record<string, unknown> | undefined;
+	for (const [uuid, count] of Object.entries(legacyStash ?? {})) keep(uuid, count);
 	if (counts.size === 0) return { error: null };
 	const live = ports.liveEngine;
 	if (!live) return { error: 'no live engine to carry them into' };

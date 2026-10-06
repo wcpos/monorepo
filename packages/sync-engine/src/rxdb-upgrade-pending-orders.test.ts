@@ -1321,6 +1321,50 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			}
 		}, 30_000);
 
+		it("v5's own stash (a v5 resync interrupted before its repull) is carried before v5 goes", async () => {
+			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+			const storage = restore(work);
+			const server = createFakeWriteServer();
+			const order = manifest.orders.find((o) => o.case === 'a')!;
+			// Empty queue, no resident: the count lives only in v5's stash.
+			const legacy = await openLegacy(storage, server);
+			try {
+				await legacy
+					.collection('mutations')
+					.bulkRemove(manifest.queue.map((row) => row.mutationId));
+				await legacy.collection('orders').bulkRemove(manifest.orders.map((o) => o.uuid));
+				await legacy
+					.collection('orders')
+					.upsertLocal('resync-receipt-print-counts', { counts: { [order.uuid]: 3 } });
+			} finally {
+				await legacy.dispose();
+			}
+			const app = await appOn(storage, server);
+			try {
+				// Without a live engine it is kept: the count is not dropped with the database.
+				expect(
+					await drainLegacyScopeDatabase(drainPorts(storage, storeFetch(server)), manifest.identity)
+				).toMatchObject({ status: 'kept', retryable: true });
+				expect(
+					await drainLegacyScopeDatabase(
+						drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+						manifest.identity
+					)
+				).toMatchObject({ status: 'drained' });
+				const stash = await app.collection('orders').getLocal('resync-receipt-print-counts');
+				expect((stash?.get('counts') as Json)[order.uuid]).toBe(3);
+
+				const { database } = await app.engine.whenActive();
+				await new EngineOrderRepository(database.collections as never).upsertMany([
+					{ ...order.stored, local: { dirty: false, pendingMutationIds: [] } } as never,
+				]);
+				const resident = (await stored(app)).orders.get(order.uuid)!;
+				expect((resident.local as Json).receiptPrintCount).toBe(3);
+			} finally {
+				await app.dispose();
+			}
+		}, 30_000);
+
 		it('an order v6 does not hold yet is stashed, and the count lands when a pull materialises it', async () => {
 			work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 			const storage = restore(work);
