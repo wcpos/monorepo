@@ -188,7 +188,8 @@ export function ReaderConnection({
 					))}
 				</HStack>
 			) : null}
-			{status.message ? (
+			{/* The driver both publishes a failure as its status and throws it: say it once, in red. */}
+			{status.message && status.message !== error ? (
 				<Text className="text-muted-foreground text-xs">{status.message}</Text>
 			) : null}
 			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}

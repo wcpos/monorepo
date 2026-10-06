@@ -27,6 +27,10 @@ export type DeviceLegDeps = Omit<ServerLegDeps, 'onFinal'> & {
 	patchAndEnqueue: (row: PaymentRow) => Promise<OrderPaymentSummary | void>;
 	onFinal?: (state: DeviceLegState) => void;
 };
+// How long a device leg waits for a card before the till gives up. A Bluetooth reader waits
+// forever on its own; the cashier can always cancel sooner. Two minutes covers a customer digging
+// for a card and clears a forgotten sale before the next one (Paul, 2026-10-07; was 5 minutes).
+export const DEVICE_LEG_DEADLINE_MS = 120000;
 /** Offline rows must satisfy the ledger wire contract, not silently drop opaque refs. */
 export function offlineProviderRefs(refs: Record<string, unknown>): PaymentRow['provider_refs'] {
 	const result: PaymentRow['provider_refs'] = {};
@@ -65,6 +69,8 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let approvedAt: string | null = null;
 	let inFlight = false;
 	let cancelReason = 'cashier';
+	// The store refused to mint the intent: a void that follows is bookkeeping, not an outcome.
+	let intentRefused = false;
 	const active = () => !stopped && state.phase !== 'final';
 	const set = (changes: Partial<DeviceLegState>) => {
 		state = { ...state, ...changes };
@@ -104,7 +110,12 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		// Publish finality with the mirrored row, not after returning through another await:
 		// checkout can unmount when the paid row lands, before it consumes the outcome.
 		if (status === 'captured' || status === 'failed' || status === 'voided') {
-			finish(status === 'voided' && result?.outcome === 'declined' ? 'failed' : status, changes);
+			finish(
+				status === 'voided' && (result?.outcome === 'declined' || intentRefused)
+					? 'failed'
+					: status,
+				changes
+			);
 		} else set(changes);
 	};
 	const url = (route: string) => `orders/${input.orderId}/payments/${input.row.id}/${route}`;
@@ -245,13 +256,13 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			finish('failed');
 			return;
 		}
-		set({ phase: 'creating', deadlineAt: deps.now() + 300000 });
+		set({ phase: 'creating', deadlineAt: deps.now() + DEVICE_LEG_DEADLINE_MS });
 		timer = deps.setTimeout(() => {
 			if (active()) {
 				set({ deadlineHandled: true });
 				void cancel('deadline');
 			}
-		}, 300000);
+		}, DEVICE_LEG_DEADLINE_MS);
 		let handoff: CollectInput['handoff'] = null;
 		if (!input.offline) {
 			try {
@@ -269,8 +280,18 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				if (body?.data?.payment)
 					await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
-				// No collection has started: void the possibly-created intent before offering a new row.
-				await confirm();
+				// Nothing reached the reader. Void whatever the store may have minted, but the leg
+				// ends failed where it stood and the cashier reads the store's refusal of the intent,
+				// not the void's bookkeeping (a 400 here once showed as "Approved · payment not
+				// found", three steps along — WisePad 3 run, 2026-10-06).
+				intentRefused = true;
+				try {
+					const response = await deps.post(url('void'), { reason: 'intent_refused' });
+					await apply(response.data as ServerLegResponse);
+				} catch {
+					// A row the store never created needs no void.
+				}
+				if (active()) finish('failed');
 				return;
 			}
 		}
@@ -337,10 +358,21 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			try {
 				await deps.driver.cancel?.();
 			} catch (error) {
-				if (active()) {
-					errorState(error);
-					set({ cancelRequested: false });
-				}
+				if (!active() || result) return;
+				// The reader will not answer — the SDK was re-initialised under the leg, or the
+				// session is gone — so no result is coming and the till cannot sit on a leg nothing
+				// will end (a walk-away did exactly that for 10+ minutes, 2026-10-06). Void the
+				// intent, after which a late approval can no longer capture, and finish.
+				errorState(error);
+				result = {
+					outcome: 'cancelled',
+					failure_reason: 'reader_unresponsive',
+					provider_refs: {},
+					receipt: {},
+					amount: null,
+					transport: input.transport,
+				};
+				await confirm();
 			}
 		}
 	}

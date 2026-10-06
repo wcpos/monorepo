@@ -381,8 +381,12 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						disabled={busy}
 						onPress={() => setUnavailableOpen(!unavailableOpen)}
 					>
-						<ButtonText>
-							{t('pos_checkout.not_available_right_now_n', { n: unavailable.length })}
+						<ButtonText decodeHtml>
+							{unavailable.length === 1
+								? t('pos_checkout.not_available_right_now_one', {
+										method: unavailable[0].method.title,
+									})
+								: t('pos_checkout.not_available_right_now_n', { n: unavailable.length })}
 						</ButtonText>
 					</Button>
 					{unavailableOpen
