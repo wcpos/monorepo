@@ -453,6 +453,42 @@ describe('query bindings', () => {
 		expect(engine.requireCalls).toHaveLength(1);
 	});
 
+	it('pulls the new scope’s empty collection again when a same-site switch keeps the engine', async () => {
+		const answers: number[] = [];
+		const { result } = renderHook(
+			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
+			{ wrapper: Provider }
+		);
+		let subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.length)
+		);
+		// The first scope's one-shot: pulled, settled, answered empty.
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+		await waitFor(() => {
+			subscription.unsubscribe();
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			expect(answers.at(-1)).toBe(0);
+		});
+		subscription.unsubscribe();
+
+		// A store or cashier switch on the same site: `scope.switch()` keeps the engine and bumps
+		// every collection's coverage generation. The new scope's collection is empty too.
+		act(() => engine.setCollectionStatus('categories', { coverageGeneration: 1 }));
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(2));
+		expect(engine.requireCalls.at(-1)).toEqual(
+			expect.objectContaining({ kind: 'refresh', collection: 'categories' })
+		);
+		// …and once only: settled, the empty answer is the new scope's own, and nothing more is
+		// declared.
+		answers.length = 0;
+		await waitFor(() => {
+			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
+			subscription.unsubscribe();
+			expect(answers.at(-1)).toBe(0);
+		});
+		expect(engine.requireCalls).toHaveLength(2);
+	});
+
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident product' })

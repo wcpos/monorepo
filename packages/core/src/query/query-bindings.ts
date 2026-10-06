@@ -1172,9 +1172,10 @@ export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
  * released or failed — so a still-loading source reads unanswered, never empty. The refresh,
  * once declared, stands until it settles (releasing it mid-pull would abort it) and is then
  * dropped; an empty answer after that is the collection's own. Residents present: no demand.
- * The one-shot is the ENGINE's and the collection's: a store or scope switch under a mounted
- * screen (a new engine from `QueryProvider`) starts over, so the new store's empty collection
- * is pulled too.
+ * The one-shot is the ENGINE's, the collection's and the SCOPE's: a cross-site change (a new
+ * engine from `QueryProvider`) and a same-site store or cashier switch (the same engine,
+ * `scope.switch()`, which bumps every collection's coverage generation — as a collection reset
+ * does) both start over, so the new scope's empty collection is pulled too.
  */
 export function useAllTermsBinding(
 	collection: 'products/categories' | 'products/tags' | 'products/brands',
@@ -1183,15 +1184,22 @@ export function useAllTermsBinding(
 ) {
 	const bindingId = React.useId();
 	const { engine } = useQueryRuntime();
+	// The scope the engine reads now: a same-site switch keeps the engine and changes its
+	// database in place, and bumps this generation (so does a reset of the collection).
+	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
 	// The empty-collection refresh: 'idle' until an empty answer, 'pull' while declared, then
-	// 'done' — for the engine and collection it was recorded under; any other reads 'idle'.
+	// 'done' — for the engine, collection and generation it was recorded under; any other
+	// reads 'idle'.
 	const [refreshFor, setRefreshFor] = React.useState<{
 		engine: RxdbSyncEngine;
 		collection: string;
+		generation: number;
 		phase: 'idle' | 'pull' | 'done';
-	}>({ engine, collection, phase: 'idle' });
+	}>({ engine, collection, generation, phase: 'idle' });
 	const refresh =
-		refreshFor.engine === engine && refreshFor.collection === collection
+		refreshFor.engine === engine &&
+		refreshFor.collection === collection &&
+		refreshFor.generation === generation
 			? refreshFor.phase
 			: 'idle';
 	const pulling = residentsOnly && refresh === 'pull';
@@ -1222,10 +1230,11 @@ export function useAllTermsBinding(
 	React.useEffect(() => {
 		if (!watchEmpty) return undefined;
 		const subscription = residents$.subscribe((result) => {
-			if (result.hits.length === 0) setRefreshFor({ engine, collection, phase: 'pull' });
+			if (result.hits.length === 0)
+				setRefreshFor({ engine, collection, generation, phase: 'pull' });
 		});
 		return () => subscription.unsubscribe();
-	}, [collection, engine, residents$, watchEmpty]);
+	}, [collection, engine, generation, residents$, watchEmpty]);
 	// Runs after the demand effect (declared earlier, inside `useEngineBinding`), so the barrier
 	// it waits on is the refresh this commit declared.
 	const { whenReady } = binding;
@@ -1233,12 +1242,12 @@ export function useAllTermsBinding(
 		if (!pulling || !enabled) return undefined;
 		let live = true;
 		void whenReady().then(() => {
-			if (live) setRefreshFor({ engine, collection, phase: 'done' });
+			if (live) setRefreshFor({ engine, collection, generation, phase: 'done' });
 		});
 		return () => {
 			live = false;
 		};
-	}, [collection, enabled, engine, pulling, whenReady]);
+	}, [collection, enabled, engine, generation, pulling, whenReady]);
 	// A disabled binding's empty answer is its answer (it is never pending).
 	const withholdEmpty = residentsOnly && enabled && refresh !== 'done';
 	const result$ = React.useMemo(
