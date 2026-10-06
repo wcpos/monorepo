@@ -447,6 +447,8 @@ describe('POSProducts query-state wiring', () => {
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({
 			binding: mockBinding,
+			// The baseline its root measures the query against (term set, or displaced products).
+			initialFilters: { status: 'publish', stock_status: 'instock' },
 			variationsStyle: 'drill',
 			stockStatus: 'instock',
 			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),

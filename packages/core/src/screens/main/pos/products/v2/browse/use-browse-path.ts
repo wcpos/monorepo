@@ -50,6 +50,20 @@ export function isBlankSearch(search: string): boolean {
 	return search.trim() === '';
 }
 
+/**
+ * True when no filter narrows the list beyond the provider's initial filters: every key
+ * either equals its initial value or is empty (unset, an empty string, an empty list).
+ */
+export function filtersAtBaseline(
+	filters: Record<string, unknown>,
+	initialFilters: Record<string, unknown>
+): boolean {
+	return Object.entries(filters).every(([key, value]) => {
+		if (key in initialFilters) return JSON.stringify(value) === JSON.stringify(initialFilters[key]);
+		return value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+	});
+}
+
 export function taxonomyField(source: BrowseBy): 'categories' | 'tags' | 'brands' | null {
 	return source === 'categories' || source === 'tags' || source === 'brands' ? source : null;
 }

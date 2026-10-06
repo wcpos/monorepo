@@ -368,6 +368,7 @@ const stageProps = (overrides: Record<string, unknown> = {}) =>
 		actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 		tableConfig: { getRowCanExpand: () => false },
 		onDrilledChange: jest.fn(),
+		initialFilters: { status: 'publish' },
 		...overrides,
 	}) as unknown as Props;
 
@@ -474,6 +475,28 @@ it('a search typed inside a term shows the catalogue-wide products with no crumb
 	act(() => queryActions.clearSearch());
 	expect(screen.queryByTestId('products')).toBeNull();
 	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
+});
+
+it('a pill narrowing the query at the root shows its products, not the term set; Clear filters brings the terms back', () => {
+	render(<BrowseStage {...stageProps()} />);
+	act(() => queryActions.setFilter('categories', [9]));
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+	expect(screen.queryByTestId('products-breadcrumb')).toBeNull();
+	act(() => queryActions.resetFilters());
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
+});
+
+it('a pill pressed inside a level leaves its products at the root, not the term tiles over a filtered query', () => {
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.queryByTestId('browse-level')).toBeNull();
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+	act(() => queryActions.resetFilters());
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
 });
 
 it('a product drilled from the search-displaced root opens in the stage, through one stable handler', () => {

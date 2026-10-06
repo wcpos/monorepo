@@ -44,7 +44,7 @@ import {
 	useQueryStateStore,
 	useRelationalCollectionBinding,
 } from '../../../../../query';
-import { cellsForRow, filtersAtBaseline } from '../index';
+import { cellsForRow } from '../index';
 import { ProductRow as ProductRowView } from './rows/product-row';
 import { VariableProductRow } from './rows/variable-product-row';
 import { ProductTile } from './grid/product-tile';
@@ -54,6 +54,7 @@ import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
+import { filtersAtBaseline } from './browse/use-browse-path';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
@@ -492,6 +493,7 @@ function POSProductsContent({
 									actions={tableActions}
 									tableConfig={tableConfig}
 									onDrilledChange={setBrowseDrilled}
+									initialFilters={initialFilters}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack

@@ -13,7 +13,7 @@ import { BrowseRootGrid, TermLevelGrid } from './term-grid';
 import { BrowseRootTable, TermLevelTable } from './term-table';
 import { displayTypeOf } from './term-tree';
 import { useAnswerOf } from './use-answer-of';
-import { isBlankSearch, type PathEntry, useBrowsePath } from './use-browse-path';
+import { filtersAtBaseline, isBlankSearch, type PathEntry, useBrowsePath } from './use-browse-path';
 import { useBrowseTerms } from './use-browse-terms';
 
 import type {
@@ -46,9 +46,9 @@ export type BrowseStageProps = {
 	source: Exclude<BrowseBy, 'all'>;
 	viewMode: 'grid' | 'table';
 	/**
-	 * Today's products grid or table, wired to the given drill handler: the catalogue-wide
-	 * products a search shows over an empty path (the screen mounts the stage whatever the
-	 * search, so a search typed in a level gathers it home and shows these at the root).
+	 * Today's products grid or table, wired to the given drill handler: the products a narrowed
+	 * query (a search, a pill) shows over an empty path (the screen mounts the stage whatever the
+	 * query, so a search typed in a level gathers it home and shows these at the root).
 	 */
 	renderProducts: (onDrill: DrillHandler) => React.ReactNode;
 	/** index.tsx's `noDataMessage`, for a level that answered with nothing. */
@@ -62,6 +62,8 @@ export type BrowseStageProps = {
 	tableConfig: TableConfig;
 	/** So the screen can set the filter bar's level while a product is drilled here. */
 	onDrilledChange: (drilled: boolean) => void;
+	/** index.tsx's `initialFilters`: the baseline a query must be at for the term set to show. */
+	initialFilters: Record<string, unknown>;
 };
 
 function useSourceLabel(source: Exclude<BrowseBy, 'all'>): string {
@@ -211,8 +213,13 @@ export function BrowseStage(props: BrowseStageProps) {
 	const goRoot = React.useCallback(() => goBackTo(0), [goBackTo]);
 	// One array per projection, so the root grid's and table's memos hold across query changes.
 	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
-	// A search over an empty path has displaced the term set: the catalogue-wide products show.
-	const searchDisplaced = path.length === 0 && !isBlankSearch(state.search);
+	// A query narrowed past its baseline over an empty path has displaced the term set — a search,
+	// or a pill or chip the cashier pressed (a level they left that way, a stock toggle): the
+	// products of that query show, exactly as the filter bar reads, never the term tiles over a
+	// filtered query. Clear filters (or clearing the search) brings the term set back.
+	const displaced =
+		path.length === 0 &&
+		(!isBlankSearch(state.search) || !filtersAtBaseline(state.filters, props.initialFilters));
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored
 	// objects themselves (identity, see Detail).
@@ -229,7 +236,7 @@ export function BrowseStage(props: BrowseStageProps) {
 		})),
 	];
 	// A product drilled inside a level: the level's own entry is the last crumb parent, and
-	// pressing it closes the drill. At the root (a search-displaced root) it is the default crumb.
+	// pressing it closes the drill. At the root (a displaced root) it is the default crumb.
 	const drillParentsFor = (chain: PathEntry[]) =>
 		chain.length === 0
 			? undefined
@@ -317,7 +324,7 @@ export function BrowseStage(props: BrowseStageProps) {
 		const detail = detailAt(depth);
 		const content =
 			depth === 0
-				? searchDisplaced
+				? displaced
 					? props.renderProducts(drillProduct)
 					: renderRoot()
 				: renderTerm(chain);
