@@ -39,19 +39,26 @@ jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
-// The footer reads `total$` as the real one does (`useObservableState`: a replaced stream keeps
-// its last value until the new one emits), and reports the denominator it would show.
+// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
+// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
+// one commit after the swap). Every render's pair is logged, so a test can see what each
+// commit would have painted, not only where the DOM settled.
+const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		count,
 		collectionName,
 		total$,
+		total: heldTotal,
 	}: {
 		count: number;
 		collectionName: string;
 		total$: import('rxjs').Observable<number | null>;
+		total?: number | null;
 	}) => {
-		const total = jest.requireActual('observable-hooks').useObservableState(total$, null);
+		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
+		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+		mockFooterRenders.push({ count, total });
 		return (
 			<footer
 				data-testid="products-footer"
@@ -183,6 +190,35 @@ it('the root footer holds the root’s numbers while a level covers it and while
 		total$.next(218);
 	});
 	expect(footer()).toMatchObject({ count: '218', total: '218' });
+});
+
+it('the root footer shows a replaced total in the same commit as its new count, never the old denominator for a frame', () => {
+	type Binding = NonNullable<React.ComponentProps<typeof BrowseRootGrid>['binding']>;
+	const query = (total$: unknown, result$: unknown) =>
+		({ total$, result$, active$: of(false), sync: jest.fn() }) as unknown as Binding;
+	const grid = (binding: Binding, settled: boolean) => (
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding} settled={settled} />
+	);
+	const footer = () => screen.getByTestId('products-footer').dataset;
+	const { rerender } = render(
+		grid(query(of(220), new BehaviorSubject({ hits: [{}, {}, {}] })), true)
+	);
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
+	// Back at the root, its query re-asked over a catalogue that shrank under a level.
+	const total$ = new Subject<number | null>();
+	const result$ = new Subject<{ hits: object[] }>();
+	rerender(grid(query(total$, result$), true));
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
+	mockFooterRenders.length = 0;
+	act(() => {
+		result$.next({ hits: [{}, {}] });
+		total$.next(218);
+	});
+	// Both referents of the one act, together: the loaded count and the total.
+	expect(footer()).toMatchObject({ count: '218', total: '218' });
+	// …and no commit of that act painted the new count over the old denominator ("218 of 220").
+	expect(mockFooterRenders.length).toBeGreaterThan(0);
+	expect(mockFooterRenders).toEqual(mockFooterRenders.map(() => ({ count: 218, total: 218 })));
 });
 
 it('the root grid lifts the tile whose copy is out on the stage', () => {

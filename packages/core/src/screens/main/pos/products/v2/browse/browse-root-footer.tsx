@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { of } from 'rxjs';
-
 import { ProductsFooter } from '../footer';
 import { useAnswerOf } from './use-answer-of';
 
@@ -17,8 +15,9 @@ type Shown = { count: number; total: number | null };
  * terms, so the count is the total; with no total to vouch for one (`QueryBinding.total$`), the
  * loaded rows are all there is. Both are attributed to the query now asked (`useAnswerOf`): on a
  * return to the root the level's total is not the catalogue's, and is never shown as it. The
- * footer is handed that attributed total too, as a stream of its own (as the term levels'
- * footers are): it reads `total$` as state, which keeps a replaced stream's last value.
+ * footer is handed that attributed total as a value (`total`), not as a stream of its own: a
+ * stream's value lands one commit after the count, and the footer would paint "218 of 220" for
+ * a frame on a return to a root whose catalogue grew or shrank under a level.
  *
  * Held, as a level holds its snapshot (level-snapshot.ts): new numbers are taken only while the
  * root is `settled` (no path: its query is the root's) and both have answered. While a level
@@ -45,12 +44,14 @@ export function BrowseRootFooter({
 	if (live && (held?.count !== live.count || held.total !== live.total)) setHeld(live);
 	const shown = live ?? held ?? { count: liveResult?.hits.length ?? 0, total: null };
 	const { total, count } = shown;
-	const attributedTotal$ = React.useMemo(() => of(total), [total]);
+	// One footer across every query (its sync button is not remounted): `total$` is the binding's
+	// own, which the footer must still be handed, and `total` is what it shows.
 	return (
 		<ProductsFooter
 			collectionName="products"
 			active$={binding.active$}
-			total$={attributedTotal$}
+			total$={total$}
+			total={total}
 			sync={binding.sync}
 			count={count}
 		/>

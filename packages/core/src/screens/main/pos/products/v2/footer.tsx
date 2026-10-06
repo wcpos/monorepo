@@ -14,6 +14,18 @@ import { useCollectionReset } from '../../../hooks/use-collection-reset';
 
 import type { BindingDataTableFooterProps } from '../../../components/data-table/footer';
 
+type ProductsFooterProps = BindingDataTableFooterProps & {
+	/**
+	 * A total the caller already holds as state (the browse root's, attributed to its query):
+	 * shown in the SAME commit as `count`. A total handed as a stream lands one commit late —
+	 * `useObservableState` keeps its state across the stream's identity change and subscribes to
+	 * the replacement after commit — so a return to the root with a changed catalogue painted the
+	 * new count over the old denominator for a frame. `total$` is still read (hooks run
+	 * unconditionally) and ignored while this is given.
+	 */
+	total?: number | null;
+};
+
 export function ProductsFooter({
 	collectionName,
 	active$,
@@ -21,9 +33,11 @@ export function ProductsFooter({
 	sync,
 	count,
 	children,
-}: BindingDataTableFooterProps) {
+	total: heldTotal,
+}: ProductsFooterProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, null);
+	const streamTotal = useObservableState(total$, null);
+	const total = heldTotal !== undefined ? heldTotal : streamTotal;
 	const { calcTaxes } = useTaxSettings();
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();
