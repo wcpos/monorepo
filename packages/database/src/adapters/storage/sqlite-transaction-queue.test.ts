@@ -13,7 +13,7 @@ function fakeBasics() {
 		run: jest.fn(async (_db: unknown, q: { query: string }) => {
 			statements.push(q.query);
 		}),
-	} as unknown as SQLiteBasics;
+	} as unknown as SQLiteBasics<SQLiteDatabaseClass>;
 	return { basics, statements };
 }
 
