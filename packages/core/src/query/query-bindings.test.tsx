@@ -30,6 +30,7 @@ import {
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useLogsBinding,
+	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';
@@ -216,6 +217,32 @@ describe('query bindings', () => {
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
 		);
+	});
+
+	it('finds the published products carrying a term, catalogue-hidden included, never a draft', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'live', id: 1, status: 'publish', categories: [{ id: 7 }] }),
+			engineProduct({
+				uuid: 'pos-only',
+				id: 2,
+				status: 'publish',
+				catalog_visibility: 'hidden',
+				categories: [{ id: 7 }],
+			}),
+			engineProduct({ uuid: 'draft', id: 3, status: 'draft', categories: [{ id: 7 }] }),
+		]);
+		const { result } = renderHook(() => useProductsCarryingTermsBinding('categories', [7]), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(
+				current(result.current.resource)
+					?.hits.map((hit) => hit.id)
+					.sort()
+			).toEqual(['live', 'pos-only'])
+		);
+		expect(engine.requireCalls).toEqual([]);
 	});
 
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {

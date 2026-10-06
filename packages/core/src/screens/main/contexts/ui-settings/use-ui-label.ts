@@ -34,6 +34,7 @@ export const useUILabel = () => {
 					meta_data: t('common.meta_data'),
 					metaDataKeys: t('common.meta_data_keys'),
 					viewMode: t('common.view_mode'),
+					browseBy: t('pos_products.browse_by'),
 					position: t('common.panel_position'),
 					filterBar: t('common.filter_bar'),
 					stock_status: t('common.stock_status'),

@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import '@testing-library/jest-dom';
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -9,6 +10,7 @@ import { BehaviorSubject } from 'rxjs';
 import type { FormItemProps } from '@wcpos/components/form';
 
 import { UISettingsForm } from './ui-settings-form';
+import { useBrowseCounts } from './v2/browse/use-browse-terms';
 
 import type { ControllerProps, FieldValues } from 'react-hook-form';
 
@@ -210,7 +212,12 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
 jest.mock('./meta-data-keys-field', () => ({ MetaDataKeysField: () => null }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string, vars?: { count?: number }) =>
+		vars?.count !== undefined ? `${vars.count} ${key}` : key,
+}));
+// The counts come from the term bindings; the row's states are what is tested here.
+jest.mock('./v2/browse/use-browse-terms', () => ({ useBrowseCounts: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('../../../../../../query/src/records/use-record-field')
 		.useDocField,
@@ -236,9 +243,12 @@ jest.mock('../../contexts/ui-settings', () => ({
 	}),
 }));
 
+const mockUseBrowseCounts = useBrowseCounts as jest.MockedFunction<typeof useBrowseCounts>;
+
 beforeEach(() => {
 	jest.useFakeTimers();
 	patchSpy.mockClear();
+	mockUseBrowseCounts.mockReturnValue({ categories: 5, tags: 3, brands: 2, shortcuts: 1 });
 	settings$.next(initialSettings);
 });
 
@@ -279,6 +289,54 @@ it('persists the inline Variations selection', async () => {
 	act(() => jest.advanceTimersByTime(1000));
 	expect(patchSpy).toHaveBeenCalledWith({ variationsStyle: 'inline' });
 	await settle();
+});
+
+it('offers Browse by with All products first and dims a source with nothing to show', async () => {
+	mockUseBrowseCounts.mockReturnValue({ categories: 5, tags: undefined, brands: 0, shortcuts: 2 });
+	render(<UISettingsForm />);
+
+	// The segmented controls are radios too; this field's are the browse-by ones, in order.
+	const options = screen
+		.getAllByRole('radio')
+		.map((node) => node.getAttribute('data-testid'))
+		.filter((id) => id?.startsWith('ui-settings-browse-by-'));
+	expect(options).toEqual([
+		'ui-settings-browse-by-all',
+		'ui-settings-browse-by-categories',
+		'ui-settings-browse-by-tags',
+		'ui-settings-browse-by-brands',
+		'ui-settings-browse-by-shortcuts',
+	]);
+	// No stored value reads as All products.
+	expect(screen.getByTestId('ui-settings-browse-by-all')).toHaveAttribute('aria-checked', 'true');
+
+	// Answered with terms: enabled, with its count.
+	const categories = screen.getByTestId('ui-settings-browse-by-categories');
+	expect(categories).not.toHaveAttribute('aria-disabled', 'true');
+	expect(categories).toHaveTextContent('5 pos_products.n_categories');
+
+	// Still loading: a choice, with no count and no empty reason.
+	const tags = screen.getByTestId('ui-settings-browse-by-tags');
+	expect(tags).not.toHaveAttribute('aria-disabled', 'true');
+	expect(tags).not.toHaveTextContent('pos_products.n_tags');
+	expect(tags).not.toHaveTextContent('pos_products.no_tags_yet');
+
+	// Answered empty: dimmed, disabled, saying why.
+	const brands = screen.getByTestId('ui-settings-browse-by-brands');
+	expect(brands).toHaveAttribute('aria-disabled', 'true');
+	expect(brands).toHaveTextContent('pos_products.no_brands_yet');
+	fireEvent.click(brands);
+	act(() => jest.advanceTimersByTime(1000));
+	expect(patchSpy).not.toHaveBeenCalled();
+
+	fireEvent.click(categories);
+	act(() => jest.advanceTimersByTime(1000));
+	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'categories' });
+	await settle();
+	expect(screen.getByTestId('ui-settings-browse-by-categories')).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
 });
 
 it('persists a Sort By selection', async () => {

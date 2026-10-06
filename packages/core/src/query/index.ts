@@ -17,7 +17,9 @@ export {
 	useCollectionBinding,
 	useLogsBinding,
 	useAllCategoriesBinding,
+	useAllTermsBinding,
 	useAppliedCouponReferenceDemand,
+	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';

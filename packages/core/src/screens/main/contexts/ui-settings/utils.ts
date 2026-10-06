@@ -6,6 +6,7 @@ import {
 	DEFAULT_FILTER_BAR,
 	migrateLegacyQuickFilters,
 } from '../../pos/products/filter-bar/filter-bar-layout';
+import { BROWSE_BY } from '../../pos/products/v2/browse/browse-source';
 
 // Define a type for the keys of initialSettings
 type InitialSettingsKey = keyof typeof initialSettings;
@@ -26,7 +27,7 @@ export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISet
  * authored default. Add an entry when a new enum setting lands.
  */
 const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly string[]>>> = {
-	'pos-products': { position: ['left', 'right'] },
+	'pos-products': { position: ['left', 'right'], browseBy: BROWSE_BY },
 	'pos-cart': { openOrdersPosition: ['top', 'bottom'] },
 };
 

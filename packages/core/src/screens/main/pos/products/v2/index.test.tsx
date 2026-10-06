@@ -27,11 +27,13 @@ const mockUseBarcode = jest.fn(
 let mockDataTableProps: Record<string, unknown> = {};
 let mockGridProps: Record<string, unknown> = {};
 let mockFilterBarProps: Record<string, unknown> = {};
+let mockBrowseStageProps: Record<string, unknown> | null = null;
 let mockShowOutOfStock = false;
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
 let mockViewMode = 'table';
 let mockGridColumns = 4;
+let mockBrowseBy: string | undefined;
 let mockSession: { status: string } | null = null;
 let mockSessionsOn = false;
 
@@ -150,6 +152,7 @@ jest.mock('../../../contexts/ui-settings', () => ({
 			showOutOfStock$: mockShowOutOfStock,
 			viewMode$: mockViewMode,
 			gridColumns$: mockGridColumns,
+			browseBy$: mockBrowseBy,
 		},
 	}),
 }));
@@ -213,6 +216,8 @@ describe('POSProducts query-state wiring', () => {
 		mockDataTableProps = {};
 		mockGridProps = {};
 		mockFilterBarProps = {};
+		mockBrowseStageProps = null;
+		mockBrowseBy = undefined;
 		mockShowOutOfStock = false;
 		mockSortBy = 'name';
 		mockSortDirection = 'asc';
@@ -424,6 +429,52 @@ describe('POSProducts query-state wiring', () => {
 		act(() => actions.extendLimit());
 		expect(latestState().limit).toBe(20);
 	});
+
+	it('puts the browse stage in place of the products in a browse mode, until a search', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories', viewMode: 'table' });
+		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
+		// The filter bar is the same in every mode.
+		expect(mockFilterBarProps).toEqual({
+			level: 'products',
+			initialFilters: { status: 'publish', stock_status: 'instock' },
+		});
+
+		// A search is served by today's stack, whose variable products drill.
+		mockBrowseStageProps = null;
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('lat'));
+		expect(screen.getByTestId('products-pane-stack')).toBeTruthy();
+		expect(mockBrowseStageProps).toBeNull();
+	});
+
+	// The query compiler trims the term, so blanks search for nothing.
+	it('keeps the browse stage for a whitespace-only search', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		act(() => mockUseBarcode.mock.calls[0]?.[0]?.('  '));
+		expect(latestState().search).toBe('  ');
+		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
+		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
+	});
+
+	it('drops a product drill when a browse source takes over, and does not bring it back', () => {
+		mockViewMode = 'grid';
+		const { rerender } = render(<POSProducts />);
+		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
+			onDrill: (record: unknown) => void;
+		}>;
+		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+
+		mockBrowseBy = 'categories';
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+
+		mockBrowseBy = undefined;
+		rerender(<POSProducts />);
+		expect(mockFilterBarProps.level).toBe('products');
+	});
 });
 
 // The new rows and tiles are tested in their own suites.
@@ -432,20 +483,30 @@ jest.mock('./rows/variable-product-row', () => ({ VariableProductRow: () => null
 jest.mock('./grid/product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }));
+// Browse by is off unless a test stores it (no value reads as All products); the stage has its
+// own suite, so here it only reports what it was handed.
+jest.mock('./browse/browse-stage', () => ({
+	BrowseStage: (props: Record<string, unknown>) => {
+		mockBrowseStageProps = props;
+		return null;
+	},
+}));
 // The stage's own behaviour is tested beside it; here it only has to hold both panes.
 jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: <T,>({
 		children,
 		detail,
 		renderDetail,
+		testID,
 	}: React.PropsWithChildren<{
 		detail: T | null;
 		renderDetail: (detail: T) => React.ReactNode;
+		testID?: string;
 	}>) => (
-		<>
+		<div data-testid={testID}>
 			{children}
 			{detail !== null && renderDetail(detail)}
-		</>
+		</div>
 	),
 }));
 jest.mock('./deal-stack', () => ({
