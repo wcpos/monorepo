@@ -17,7 +17,7 @@ export const productSchema = {
 		remoteKey: { type: 'string', maxLength: 64 },
 		sortName: { type: 'string', maxLength: 256 },
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged). price is
-		// numeric for range filters; categoryIds/brandIds are membership arrays for multi-select.
+		// numeric for range filters; categoryIds/tagIds/brandIds are membership arrays for multi-select.
 		// Indexed number fields need bounds + multipleOf; prices are cents (rounded in promotedProductColumns).
 		// Negative bound is deliberate (ruled 2026-08-19): negative-priced products (deposit
 		// returns etc.) store their real price — the column must not lie relative to
@@ -26,6 +26,7 @@ export const productSchema = {
 		stockStatus: { type: 'string', maxLength: 24 },
 		type: { type: 'string', maxLength: 24 },
 		categoryIds: { type: 'array', items: { type: 'number' } },
+		tagIds: { type: 'array', items: { type: 'number' } },
 		brandIds: { type: 'array', items: { type: 'number' } },
 		onSale: { type: 'boolean' },
 		featured: { type: 'boolean' },
@@ -47,6 +48,7 @@ export const productSchema = {
 		'stockStatus',
 		'type',
 		'categoryIds',
+		'tagIds',
 		'brandIds',
 		'onSale',
 		'featured',
@@ -55,7 +57,7 @@ export const productSchema = {
 		'sync',
 		'local',
 	],
-	// POS product list filter axes. category/brand arrays are membership-filtered (not index-backed);
+	// POS product list filter axes. category/tag/brand arrays are membership-filtered (not index-backed);
 	// stock + type are the index-worthy filter axes; price backs the default product panel sort.
 	indexes: ['sortName', 'remoteKey', 'stockStatus', 'price', ['type', 'stockStatus']],
 } as const;

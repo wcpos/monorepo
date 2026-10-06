@@ -30,7 +30,10 @@ type Translate = (key: string, options?: { count: number }) => string;
  * value the crash screen falls back on — lives in `@wcpos/utils/unsent-changes`,
  * where the essay explains why the two halves are split.
  *
- * The count is the WHOLE mutation queue, with no status selector. A row leaves
+ * The count is the WHOLE mutation queue, with no status selector — plus every
+ * row a kept previous-generation scope database still holds (the drain records
+ * those through `rememberLegacyUnsentChanges`; "Clear all local data" deletes
+ * that database with the rest). A row leaves
  * the queue only when the server acknowledges it, so every row still there is a
  * change the server has never seen: pending, claimed, conflicted,
  * needs-revision, and the dead letters alike. Selecting on `status` would also
@@ -105,8 +108,11 @@ export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<Unsent
 		]);
 		if (count === null) return readUnsentChanges();
 		rememberUnsentChanges(count === 0 ? null : count);
-		if (count === 0) return readUnsentChanges();
-		return classifyUnsentChanges(count);
+		// The classified total includes what a KEPT previous-generation database still
+		// holds (the drain records it): a wipe deletes that database too.
+		const unsent = classifyUnsentChanges(count);
+		if (unsent.status === 'none') return readUnsentChanges();
+		return unsent;
 	} catch (error) {
 		healthLogger.warn('Unsent-changes count probe failed; showing the cached value', {
 			context: { error: getErrorMessage(error) },

@@ -40,8 +40,11 @@ export {
 } from './scanSearchSelector';
 export {
 	canonicalSiteKey,
+	containsDrainableScopeDatabaseName,
 	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isScopeDatabaseName,
 	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,

@@ -117,6 +117,7 @@ function storedDocument(input: {
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
+			tagIds: [],
 			brandIds: [],
 			onSale: false,
 			featured: false,
@@ -1322,12 +1323,18 @@ describe('write facets beyond orders', () => {
 			revision: 'sha256:old',
 		});
 		(bornLocal.payload as Record<string, unknown>).parent_id = undefined;
-		await insert(subject, spec, bornLocal);
+		// The create is queued while the resident is still born-local (a create is refused for a
+		// record that already carries a server id); the server id arrives before the drain.
+		await insert(subject, spec, { ...bornLocal, [spec.remoteIdField]: null, remoteKey: '' });
 		await subject.write({
 			collection: 'variations',
 			operation: 'create',
 			recordId: UUID_A,
 			payload: { sku: 'missing-parent', meta_data: uuidMeta(UUID_A) },
+		});
+		await replaceResident(subject, spec, UUID_A, {
+			[spec.remoteIdField]: bornLocal[spec.remoteIdField],
+			remoteKey: bornLocal.remoteKey,
 		});
 
 		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1, pushed: 0 });

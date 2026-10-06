@@ -39,10 +39,12 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	hasPosRefundStamp,
 	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
@@ -68,6 +70,11 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from './collections/engine-collections';
+import {
+	DRAINABLE_SCHEMAS_GENERATION,
+	drainableGenerationCollectionCreators,
+	drainableGenerationWriteFacetFor,
+} from './collections/drainable-generation';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
@@ -250,6 +257,13 @@ export type RxdbSyncEnginePorts = {
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
 	databaseOpenBarrier?: Promise<void>;
+	/**
+	 * Which scope-database generation to open. Default: the current one — hosts
+	 * never set this. `drainLegacyScopeDatabase` sets the DRAINABLE generation to
+	 * open the previous generation's database with the schemas it shipped
+	 * (`collections/drainable-generation.ts`); any other value throws.
+	 */
+	scopeDatabaseGeneration?: number;
 	/** One of the two required adapter ports. A factory receives the full scope
 	 * identity so per-scope storage decisions stay possible. */
 	storage:
@@ -601,8 +615,19 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5). */
-	write(intent: WriteIntent): Promise<{
+	 * write facet (orders today) — anything else throws (invariant 5).
+	 *
+	 * `options.inScope` binds the write to that scope: it is refused (nothing
+	 * enqueued) unless that scope is the active one when the enqueue takes the
+	 * scope guard. For work that belongs to one scope and must never follow a
+	 * switch into another (the previous-generation drain's carried carts).
+	 * `options.payloadFromResident` makes a create carry the resident as read
+	 * inside the enqueue, not the intent's snapshot (same-record edits that land
+	 * first are kept). */
+	write(
+		intent: WriteIntent,
+		options?: { inScope?: StoreScopeIdentity; payloadFromResident?: boolean }
+	): Promise<{
 		mutationId: string;
 		recordId: string;
 		annihilated?: boolean;
@@ -750,6 +775,27 @@ export function createRxdbSyncEngine(
 ): RxdbSyncEngine {
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
+	const scopeDatabaseGeneration = ports.scopeDatabaseGeneration ?? SCOPE_DATABASE_GENERATION;
+	if (
+		scopeDatabaseGeneration !== SCOPE_DATABASE_GENERATION &&
+		scopeDatabaseGeneration !== DRAINABLE_SCOPE_DATABASE_GENERATION
+	) {
+		throw new Error(
+			`Scope database generation ${scopeDatabaseGeneration} cannot be opened: this build opens v${SCOPE_DATABASE_GENERATION} and drains v${DRAINABLE_SCOPE_DATABASE_GENERATION}`
+		);
+	}
+	if (
+		scopeDatabaseGeneration === DRAINABLE_SCOPE_DATABASE_GENERATION &&
+		DRAINABLE_SCHEMAS_GENERATION !== DRAINABLE_SCOPE_DATABASE_GENERATION
+	) {
+		throw new Error(
+			`Scope database generation ${scopeDatabaseGeneration} cannot be drained: drainable-generation.ts reproduces v${DRAINABLE_SCHEMAS_GENERATION}'s schemas`
+		);
+	}
+	const collectionCreators =
+		scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
+			? engineCollectionCreators
+			: drainableGenerationCollectionCreators;
 	// A ledger rebuild replaces the derivable collections, and live coverage
 	// subscriptions hold handles to the dropped ones (coverage-changes.ts opens
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
@@ -1121,7 +1167,7 @@ export function createRxdbSyncEngine(
 		setLifecyclePhase('create-database');
 		const storage = typeof ports.storage === 'function' ? ports.storage(identity) : ports.storage;
 		const db = await createRxDatabase({
-			name: scopeDatabaseName(identity),
+			name: scopeDatabaseName(identity, { generation: scopeDatabaseGeneration }),
 			storage,
 			// Adapter counts run payload selectors (for example meta_data $elemMatch) with no index.
 			// Storage executes them worker-side in production, matching the legacy 1.9 configuration.
@@ -1133,7 +1179,7 @@ export function createRxdbSyncEngine(
 		});
 		try {
 			setLifecyclePhase('add-collections');
-			await db.addCollections(engineCollectionCreators() as never);
+			await db.addCollections(collectionCreators() as never);
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
@@ -1752,6 +1798,10 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writePlane = createWritePlane({
+		// A drainable-generation engine acknowledges through projections that fit its schemas.
+		...(scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
+			? {}
+			: { writeFacetFor: drainableGenerationWriteFacetFor }),
 		assertUsable: assertNotDisposed,
 		settled: async (kind) => {
 			await readySettledForSync;
@@ -2334,8 +2384,11 @@ export function createRxdbSyncEngine(
 				});
 			},
 		},
-		write: async (intent) => {
-			const receipt = await writePlane.write(intent);
+		write: async (intent, options) => {
+			const receipt = await writePlane.write(intent, {
+				...(options?.inScope ? { scopeId: scopeKeyFor(options.inScope) } : {}),
+				...(options?.payloadFromResident ? { payloadFromResident: true } : {}),
+			});
 			// An annihilated delete never enqueued anything — nothing to drain.
 			if (!receipt.annihilated) {
 				writeDrainNudge.nudge();

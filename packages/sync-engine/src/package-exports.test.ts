@@ -21,6 +21,10 @@ describe('package exports', () => {
 				// The Store health panel must decide "does discard delete this record?"
 				// from the SAME rule the engine enforces (#832 follow-up, R7b).
 				'rejectionSuggestsServerRecord',
+				// A scope generation bump opens a fresh database; the host drains the previous
+				// generation's unsent sales through the engine's own write path before that
+				// database is removed (SCOPE_DATABASE_GENERATION 5 -> 6).
+				'drainLegacyScopeDatabase',
 				// The app's engine fetcher hydrates census/query-total responses
 				// through the same body-envelope seam the engine uses internally
 				// (B9, hostile-headers program) — one unwrap rule, two seams.

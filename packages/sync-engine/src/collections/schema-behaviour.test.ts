@@ -30,9 +30,11 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 
 import {
 	customerDocumentId,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	promotedOrderColumns,
 	promotedProductColumns,
 	referenceDocumentId,
+	SCOPE_DATABASE_GENERATION,
 	taxRateDocumentId,
 } from '@wcpos/sync-core';
 import {
@@ -44,6 +46,14 @@ import {
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
+import {
+	DRAINABLE_SCHEMAS_GENERATION,
+	drainableGenerationCollectionCreators,
+	drainableGenerationProductDocument,
+	drainableGenerationProductSchema,
+	drainableGenerationWriteFacetFor,
+} from './drainable-generation';
+import { productDocument, writeFacetFor } from './collection-descriptors';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -122,6 +132,7 @@ const PRODUCT_PAYLOAD = {
 	stock_status: 'instock',
 	type: 'simple',
 	categories: [{ id: 3 }, { id: 5 }],
+	tags: [{ id: 4 }],
 	brands: [{ id: 11 }],
 	on_sale: true,
 	featured: false,
@@ -483,7 +494,9 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	 * fresh-database test, so the schemas are pinned here on purpose.
 	 *
 	 * To change a schema: bump its `version`, add the migration strategy, and update the
-	 * digest below in the same commit. The friction IS the guard.
+	 * digest below in the same commit. The friction IS the guard. Pre-GA the version stays at
+	 * 0 and the scope database GENERATION moves instead (see `productSchema`): update the
+	 * digest AND `PINNED_SCOPE_GENERATION` together.
 	 */
 	function canonicalJson(value: unknown): string {
 		if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -504,7 +517,8 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 
 	const PINNED_DIGESTS: Record<string, string> = {
 		orders: 'bc0b35ca7829dad7',
-		products: '533f385dbba3bd58',
+		// tagIds promoted at scope generation 6.
+		products: 'dc0ab793f15f4e7a',
 		variations: 'df92c9203ba108c1',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
@@ -531,12 +545,134 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
 
+	/** The scope database generation the pinned digests above ship under. */
+	const PINNED_SCOPE_GENERATION = 6;
+
 	it('every engine collection schema matches its pinned digest', () => {
 		const creators = engineCollectionCreators();
 		const actual = Object.fromEntries(
 			Object.entries(creators).map(([name, creator]) => [name, digest(creator.schema)])
 		);
 		expect(actual).toEqual(PINNED_DIGESTS);
+	});
+
+	it('a moved digest moved the scope database generation with it (no in-place edit reaches a resident database)', () => {
+		expect(SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION);
+		expect(productSchema.version).toBe(0);
+		expect(productSchema.properties.tagIds).toEqual({ type: 'array', items: { type: 'number' } });
+		expect(productSchema.required).toContain('tagIds');
+	});
+
+	/**
+	 * The DRAINABLE generation's schemas (`drainable-generation.ts`) are what that generation
+	 * shipped: every digest it pinned, written out IN FULL — a map derived from
+	 * `PINNED_DIGESTS` would move with the current schemas, so a bump that forgot
+	 * `drainable-generation.ts` would still pass. A wrong digest throws DB6 on the very
+	 * database the drain exists to send, so the drain could never send it.
+	 */
+	const PINNED_DRAINABLE_DIGESTS: Record<string, string> = {
+		orders: 'bc0b35ca7829dad7',
+		// v5's products, before tagIds was promoted.
+		products: '533f385dbba3bd58',
+		variations: 'df92c9203ba108c1',
+		customers: 'ac922ffdb0538886',
+		taxRates: '7573745a31add62b',
+		refunds: 'd78bcc1758dcf4ab',
+		categories: 'ac922ffdb0538886',
+		brands: 'ac922ffdb0538886',
+		tags: 'ac922ffdb0538886',
+		coupons: 'ac922ffdb0538886',
+		schedulerTaskStates: '3fbf7c70726dec3c',
+		coverageRecords: '3022569cc18cc7df',
+		coverageLanes: '12a1f38d36ffc0d0',
+		coverageCompactionLeases: '6b31b2aca59dab39',
+		coverageCompactionFailures: '7bd215537ecdb03d',
+		queryTotalCacheEntries: '00db9dffbd396f3c',
+		queryTotalRequestStates: '184b47e2c3aae0bf',
+		existenceManifest: '107bac24876b267a',
+		existenceManifestCustomers: '107bac24876b267a',
+		existenceManifestOrders: '107bac24876b267a',
+		syncCheckpoints: '13a461c616ee12b9',
+		recordMutations: '94c4fd4e440dbdd7',
+		engineKv: 'a8d94dc8495e36cc',
+		changeSignalStates: 'f53de19b6c426c6a',
+	};
+
+	/**
+	 * One digest per scope-database GENERATION: the digest of that generation's whole
+	 * digest map. A bump adds a row here; the current recipe must hash to the current
+	 * generation's row and `drainable-generation.ts` to the previous one's, so moving the
+	 * generation without rewriting the drainable recipe fails here, by generation.
+	 */
+	const PINNED_GENERATION_DIGESTS: Record<number, string> = {
+		5: '24cd32cfac8830f7',
+		6: '7965df73f69d67e7',
+	};
+
+	const digestOfDigests = (digests: Record<string, string>) =>
+		createHash('sha256').update(canonicalJson(digests)).digest('hex').slice(0, 16);
+
+	const drainableDigests = () =>
+		Object.fromEntries(
+			Object.entries(drainableGenerationCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+
+	it('the drainable generation opens with the schemas it shipped', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
+		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
+	});
+
+	it('the drainable generation also PROJECTS what it shipped: an ack fits its schema, and only products moved', () => {
+		const projected = drainableGenerationProductDocument(
+			{
+				...PRODUCT_PAYLOAD,
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
+				],
+			} as never,
+			undefined
+		);
+		const current = productDocument(
+			{
+				...PRODUCT_PAYLOAD,
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
+				],
+			} as never,
+			undefined
+		);
+		const allowed = Object.keys(drainableGenerationProductSchema.properties);
+		expect(Object.keys(projected).filter((key) => !allowed.includes(key))).toEqual([]);
+		expect(projected).not.toHaveProperty('tagIds');
+		// The one difference from today's projection is the column v6 promoted.
+		expect(Object.keys(current).sort()).toEqual([...Object.keys(projected), 'tagIds'].sort());
+		expect(drainableGenerationWriteFacetFor('products')).not.toBe(writeFacetFor('products'));
+		for (const collection of ['orders', 'variations', 'customers', 'coupons']) {
+			expect(drainableGenerationWriteFacetFor(collection)).toBe(writeFacetFor(collection));
+		}
+	});
+
+	it('drainable-generation.ts reproduces exactly the generation before the current one', () => {
+		expect(DRAINABLE_SCHEMAS_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(digestOfDigests(PINNED_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION]
+		);
+		expect(digestOfDigests(PINNED_DRAINABLE_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION - 1]
+		);
+		const current = Object.fromEntries(
+			Object.entries(engineCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+		expect(digestOfDigests(current)).toBe(PINNED_GENERATION_DIGESTS[SCOPE_DATABASE_GENERATION]);
+		expect(digestOfDigests(drainableDigests())).toBe(
+			PINNED_GENERATION_DIGESTS[DRAINABLE_SCHEMAS_GENERATION]
+		);
 	});
 
 	it('every versioned schema ships the migration strategies its version needs', () => {

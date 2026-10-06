@@ -245,6 +245,31 @@ describe('query bindings', () => {
 		expect(engine.requireCalls).toEqual([]);
 	});
 
+	it('compiles the tag existence read to promoted tag membership, never a payload scan', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'tagged', id: 1, status: 'publish', tags: [{ id: 5 }] }),
+			engineProduct({ uuid: 'untagged', id: 2, status: 'publish', tags: [{ id: 6 }] }),
+		]);
+		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
+		const { result } = renderHook(() => useProductsCarryingTermsBinding('tags', [9, 5]), {
+			wrapper: Provider,
+		});
+
+		const prefilter = (
+			compileQuery.mock.results.at(-1)?.value as ReturnType<
+				typeof queryStateTranslator.compileQuery
+			>
+		).read.prefilter;
+		expect(prefilter).toEqual({
+			$and: [{ tagIds: { $in: [5, 9] } }, { 'payload.status': 'publish' }],
+		});
+		expect(JSON.stringify(prefilter)).not.toContain('payload.tags');
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['tagged'])
+		);
+		compileQuery.mockRestore();
+	});
+
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident product' })

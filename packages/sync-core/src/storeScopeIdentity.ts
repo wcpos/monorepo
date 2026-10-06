@@ -49,10 +49,21 @@ const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
 
 /**
  * The scope-database generation this build opens. Every lower generation is
- * legacy: the purge that runs after a store is sale-ready removes it (#2242).
- * History is on `scopeDatabaseName`.
+ * legacy: the purge that runs after a store is sale-ready removes it (#2242) —
+ * EXCEPT the drainable one (`DRAINABLE_SCOPE_DATABASE_GENERATION`), which only
+ * the drain removes, once its unsent work is sent. History is on
+ * `scopeDatabaseName`.
+ *
+ * A bump also means rewriting `sync-engine/src/collections/drainable-generation.ts`
+ * to the schemas the generation being left behind shipped (its stamp and the
+ * pinned digests in `schema-behaviour.test.ts` fail until it is). And any
+ * database of the generation BEFORE that one that a drain still keeps — unsent
+ * work it could not send — becomes unreachable: it is neither drainable nor
+ * opened again. So a bump should follow a quiet period in which kept databases
+ * have drained.
  */
-export const SCOPE_DATABASE_GENERATION = 5;
+// 6: products promoted `tagIds` (promoted membership, not index-backed) — every resident re-ingests.
+export const SCOPE_DATABASE_GENERATION = 6;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,
@@ -134,6 +145,7 @@ export function scopeKeyFor(identity: StoreScopeIdentity): string {
  * generation-3 database is abandoned wholesale rather than migrated (house
  * ruling: no migrations for unreleased schema; 1.10 ships a fresh database).
  * v5 = the 2.0 storage engine: promoted scope/sort columns and indexes (#2242).
+ * v6 = products promote `tagIds`, so a tag filter is numeric membership, not a payload scan.
  */
 export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
@@ -166,4 +178,22 @@ export function containsScopeDatabaseName(name: string): boolean {
 export function containsLegacyScopeDatabaseName(name: string): boolean {
 	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
 	return match !== null && Number(match[1]) < SCOPE_DATABASE_GENERATION;
+}
+
+/**
+ * The one legacy generation a till DRAINS: its scope database is opened with
+ * that generation's schemas, its unsent writes are pushed through the current
+ * write path, and only then is it removed (`drainLegacyScopeDatabase`). Older
+ * generations cannot be opened by this build's schemas.
+ */
+export const DRAINABLE_SCOPE_DATABASE_GENERATION = SCOPE_DATABASE_GENERATION - 1;
+
+/**
+ * True when a storage entry embeds a scope database name of the DRAINABLE
+ * generation. The legacy purge must never reach one: it may still hold unsent
+ * sales that only the drain can send (and only the drain removes it).
+ */
+export function containsDrainableScopeDatabaseName(name: string): boolean {
+	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
+	return match !== null && Number(match[1]) === DRAINABLE_SCOPE_DATABASE_GENERATION;
 }

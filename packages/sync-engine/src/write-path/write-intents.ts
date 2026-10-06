@@ -65,6 +65,7 @@ import {
 	buildDeleteMutation,
 	buildUpdateMutation,
 	RecordMutationQueue,
+	remoteIdOrNull,
 	RxRecordMutationStorage,
 } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection, SyncObserver } from '@wcpos/sync-core';
@@ -203,6 +204,16 @@ export async function enqueueWriteIntent(input: {
 	/** False for a web follower whose cross-tab `_rev` cache cannot safely CAS an
 	 * existing queue row. It may only append a fresh mutation. Default true. */
 	canCoalesce?: boolean;
+	/**
+	 * A CREATE takes its payload from the resident as read INSIDE this enqueue's
+	 * CAS turn (the read every placement decision is made from), not from the
+	 * intent's snapshot. For a create whose caller cannot hold the record still
+	 * between its own read and this call (the previous-generation drain carrying a
+	 * cart the cashier can already edit): a same-record edit landing first is then
+	 * in the resident this create carries — never overwritten by a stale snapshot
+	 * layered last on a coalesce.
+	 */
+	payloadFromResident?: boolean;
 }): Promise<{
 	mutationId: string;
 	recordId: string;
@@ -210,7 +221,7 @@ export async function enqueueWriteIntent(input: {
 	/** The pending row this enqueue coalesced INTO and replaced — its id is now orphaned. */
 	supersededMutationId?: string;
 }> {
-	const intent =
+	const requested: WriteIntent =
 		input.intent.operation !== 'delete'
 			? {
 					...input.intent,
@@ -219,7 +230,7 @@ export async function enqueueWriteIntent(input: {
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
 	const canCoalesce = input.canCoalesce ?? true;
-	const collection = collectionOf(input.db, intent.collection);
+	const collection = collectionOf(input.db, requested.collection);
 	const queue = queueFor(input.db);
 
 	// Chain links a partial annihilation consumed before a CAS refusal forced a
@@ -237,14 +248,41 @@ export async function enqueueWriteIntent(input: {
 	for (let attempt = 0; attempt < 10; attempt += 1) {
 		const rows = await queue.pending();
 		const isRecordRow = (item: QueuedMutation) =>
-			item.collectionName === intent.collection && item.recordId === intent.recordId;
+			item.collectionName === requested.collection && item.recordId === requested.recordId;
 		const recordRows = rows.filter(isRecordRow);
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
-		const doc = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+		const doc = (await collection.findOne(requested.recordId).exec()) as MutationDoc | null;
 		const stored = doc
-			? (doc.toJSON() as { sync?: { revision?: string }; payload?: Record<string, unknown> })
+			? (doc.toJSON() as {
+					sync?: { revision?: string };
+					payload?: Record<string, unknown>;
+					remoteId?: unknown;
+				})
 			: undefined;
+		// CREATE OR UPDATE IS SETTLED HERE, by the one read every placement decision uses: a create
+		// for a record whose resident already carries a server id (an earlier create was
+		// acknowledged — e.g. a caller that chose 'create' from a read taken just before that ack
+		// landed) is enqueued as an UPDATE of that record. Belt and braces, not the only defence:
+		// the server's born-twice contract already matches a create under the same uuid
+		// (`_woocommerce_pos_uuid`) and answers with the existing record. The receipt is the
+		// enqueued mutation's, so a caller waiting on its outcome is still answered.
+		const intent: WriteIntent =
+			requested.operation === 'create' && remoteIdOrNull(stored?.remoteId) !== null
+				? {
+						collection: requested.collection,
+						operation: 'update',
+						recordId: requested.recordId,
+						// With `payloadFromResident` the caller's snapshot is not the truth — the
+						// resident read in THIS turn is (it holds every edit since, e.g. a checkout
+						// that sent the create this one was racing); otherwise the caller's payload.
+						payload:
+							input.payloadFromResident && stored?.payload !== undefined
+								? storablePayload(requested.collection, stored.payload)
+								: requested.payload,
+						...(requested.explicit ? { explicit: true } : {}),
+					}
+				: requested;
 		const storedRevision = stored?.sync?.revision ?? '';
 		const placement = decideWritePlacement({
 			rows: recordRows,
@@ -359,7 +397,9 @@ export async function enqueueWriteIntent(input: {
 			const built = buildCreateMutation(
 				{
 					collectionName: intent.collection,
-					payload: intent.payload as never,
+					payload: (input.payloadFromResident && stored?.payload !== undefined
+						? storablePayload(intent.collection, stored.payload)
+						: intent.payload) as never,
 					currentId: intent.recordId,
 				},
 				deps
@@ -588,7 +628,7 @@ export async function enqueueWriteIntent(input: {
 		};
 	}
 	throw new Error(
-		`write(${intent.operation}): the mutation queue kept changing under "${intent.recordId}" — retry the intent`
+		`write(${requested.operation}): the mutation queue kept changing under "${requested.recordId}" — retry the intent`
 	);
 }
 

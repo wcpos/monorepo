@@ -68,6 +68,35 @@ describe('purgeLegacyDatabases web', () => {
 		}
 	});
 
+	it('never reaches a kept drainable scope database, by name or by the pool', async () => {
+		const { SQLITE_POOL_DIRECTORY } = await import('./adapters/storage/sqlite-pool');
+		const drainable = 'pos_v5_0123456789ab_s1_c2';
+		const older = 'pos_v4_0123456789ab_s1_c2';
+		opfsNames.push(
+			SQLITE_POOL_DIRECTORY,
+			`rxdb-${drainable}--0--orders`,
+			`rxdb-${older}--0--orders`
+		);
+		indexedDbNames.push(drainable, older);
+		try {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db.web');
+			await purgeLegacyDatabases();
+			expect(mockRemoveEntry).toHaveBeenCalledWith(`rxdb-${older}--0--orders`, {
+				recursive: true,
+			});
+			expect(mockDeleteDatabase).toHaveBeenCalledWith(older);
+			expect(mockRemoveEntry).not.toHaveBeenCalledWith(SQLITE_POOL_DIRECTORY, expect.anything());
+			expect(mockRemoveEntry).not.toHaveBeenCalledWith(
+				`rxdb-${drainable}--0--orders`,
+				expect.anything()
+			);
+			expect(mockDeleteDatabase).not.toHaveBeenCalledWith(drainable);
+		} finally {
+			opfsNames.splice(-3);
+			indexedDbNames.splice(-2);
+		}
+	});
+
 	it('deletes only legacy IndexedDB and OPFS entries', async () => {
 		const { purgeLegacyDatabases } = await import('./purge-legacy-db.web');
 

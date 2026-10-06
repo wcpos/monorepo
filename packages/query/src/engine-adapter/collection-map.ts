@@ -404,7 +404,14 @@ export const collectionMap = {
 				notes: 'Selectors use numeric membership; reads preserve Woo category objects.',
 				wireFace: 'dimension',
 			},
-			tags: queryPayloadField('tags', 'dimension'),
+			tags: {
+				legacy: 'tags',
+				kind: 'promoted',
+				enginePath: 'tagIds',
+				readEnginePath: 'payload.tags',
+				notes: 'Selectors use numeric membership; reads preserve Woo tag objects.',
+				wireFace: 'dimension',
+			},
 			brands: {
 				legacy: 'brands',
 				kind: 'promoted',

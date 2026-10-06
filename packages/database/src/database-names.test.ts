@@ -61,8 +61,12 @@ describe('database name helpers', () => {
 		'wcposusers_v7-sites-0',
 		'store_v7_abc123',
 		'fast_store_v7_abc123',
+		'pos_v6_0123456789ab_s1_c2',
+		'rxdb-pos_v6_0123456789ab_s1_c2--0--orders',
+		// The DRAINABLE generation: it may hold unsent sales, and only the drain removes it.
 		'pos_v5_0123456789ab_s1_c2',
 		'rxdb-pos_v5_0123456789ab_s1_c2--0--orders',
+		'pos_v5_0123456789ab_s1_c2-wal',
 		'temporary',
 	])('does not classify %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(false);
