@@ -6,6 +6,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import * as unsentChanges from '@wcpos/utils/unsent-changes';
 import {
@@ -212,7 +213,13 @@ it('finishes on the second start when the normal pull has made the unpaid reside
 });
 
 describe('a previous-generation database the drain keeps', () => {
-	const LEGACY = 'pos_v5_0123456789ab_s1_c2';
+	const IDENTITY = { site: 'https://store.example.test', storeId: 1, cashierId: 2 };
+	const LEGACY = scopeDatabaseName(IDENTITY, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION });
+	/** A fresh runtime (a new session start) whose engine is active on IDENTITY. */
+	const onScope = () => ({ engine: { active: () => ({ identity: IDENTITY }) } });
+	beforeEach(() => {
+		mockManager = onScope();
+	});
 	afterEach(() => forgetUnsentChanges());
 
 	it('waits for the drain to report before deciding, then counts the start when nothing is kept', async () => {
@@ -251,7 +258,7 @@ describe('a previous-generation database the drain keeps', () => {
 				})
 			);
 			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
-			mockManager = {};
+			mockManager = onScope();
 			view.rerender(<SaleCompletionBridge />);
 		}
 		expect(mockWarn).not.toHaveBeenCalled();
@@ -276,7 +283,7 @@ describe('a previous-generation database the drain keeps', () => {
 		mockFind.mockResolvedValue(null);
 		markLegacyDrainPending(LEGACY);
 		const wait = jest
-			.spyOn(unsentChanges, 'awaitLegacyUnsentReports')
+			.spyOn(unsentChanges, 'awaitLegacyUnsentReport')
 			.mockResolvedValue('timed-out');
 		render(<SaleCompletionBridge />);
 		await waitFor(async () => {
@@ -285,12 +292,58 @@ describe('a previous-generation database the drain keeps', () => {
 			expect(pending['second-order']).toMatchObject({ attempts: 1, missingStarts: 1 });
 		});
 		expect(wait).toHaveBeenCalledTimes(1);
-		expect(wait).toHaveBeenCalledWith(30_000);
+		expect(wait).toHaveBeenCalledWith(LEGACY, 30_000);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockWarn).toHaveBeenCalledWith(
 			'Replaying sale completions without the previous database version report',
 			expect.anything()
 		);
+	});
+
+	it("does not wait on another scope's mark", async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		markLegacyDrainPending('pos_v5_ffffffffffff_s9_c9');
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				missingStarts: 1,
+			})
+		);
+		expect(mockWarn).not.toHaveBeenCalled();
+	});
+
+	it('an uncountable report (the drain failed to open it) does not count the start; a later countable one does', async () => {
+		await record();
+		mockFind.mockResolvedValue(null);
+		rememberLegacyUnsentChanges(LEGACY, null);
+		const view = render(<SaleCompletionBridge />);
+		for (const attempts of [1, 2, 3]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					attempts,
+					lastError: 'order_not_resident',
+				})
+			);
+			expect((await pendingCompletions(mockContext.storeDB)).order?.missingStarts).toBeUndefined();
+			mockManager = onScope();
+			view.rerender(<SaleCompletionBridge />);
+		}
+		// A later start whose drain reports nothing kept: that start counts.
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 4 })
+		);
+		rememberLegacyUnsentChanges(LEGACY, 0);
+		mockManager = onScope();
+		view.rerender(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 5,
+				missingStarts: 1,
+			})
+		);
+		expect(mockWarn).not.toHaveBeenCalled();
 	});
 });
 

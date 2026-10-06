@@ -58,7 +58,11 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { hostIsVisible, onHostVisibilityChange } from '@wcpos/utils/host-visibility';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
-import { markLegacyDrainPending, rememberLegacyUnsentChanges } from '@wcpos/utils/unsent-changes';
+import {
+	legacyDrainMarked,
+	markLegacyDrainPending,
+	rememberLegacyUnsentChanges,
+} from '@wcpos/utils/unsent-changes';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
@@ -374,6 +378,11 @@ function logLegacyDrainWriteEvent(databaseName: string, event: LegacyScopeDrainW
  * kept sendable work after a real attempt re-arms with a bounded backoff;
  * anything else is once per process.
  */
+/** Report a marked-but-not-drained database as uncountable, so nothing waits on it. */
+function releaseLegacyDrainMark(databaseName: string): void {
+	if (legacyDrainMarked(databaseName)) rememberLegacyUnsentChanges(databaseName, null);
+}
+
 async function drainLegacyScopeOnce(
 	engine: RxdbSyncEngine,
 	scope: StoreScopeIdentity,
@@ -384,11 +393,16 @@ async function drainLegacyScopeOnce(
 	const state = legacyDrainStates.get(key);
 	if (state?.phase === 'done' || state?.phase === 'running') return;
 	if (state?.phase === 'waiting' && Date.now() < state.notBeforeMs) return;
-	const active = engine.active();
-	if (!active || scopeCacheKey(active.identity) !== key) return;
 	const databaseName = scopeDatabaseName(scope, {
 		generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
 	});
+	const active = engine.active();
+	if (!active || scopeCacheKey(active.identity) !== key) {
+		// Not draining it now (switched away first): a mark must not outlive a drain that will not
+		// run — release its waiters as "uncountable". Returning to the scope drains and re-marks.
+		if (state === undefined) releaseLegacyDrainMark(databaseName);
+		return;
+	}
 	// Until the drain reports, a previous-generation database MAY hold unsent work (usually
 	// already marked at engine construction; a switched-to scope is marked here).
 	if (state === undefined) markLegacyDrainPending(databaseName);
@@ -839,7 +853,14 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			}
 		},
-		() => undefined
+		() => {
+			// The scope never opened, so its drain never runs: release the construction-time mark.
+			if (!legacyDrainStates.has(cacheKey)) {
+				releaseLegacyDrainMark(
+					scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+				);
+			}
+		}
 	);
 	// The store header follows the ENGINE's active scope, never the app's
 	// intent. The engine flips scopes after it has aborted the outgoing scope's

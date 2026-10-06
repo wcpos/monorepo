@@ -1001,6 +1001,43 @@ describe('drainLegacyScopeDatabase — failures and file access', () => {
 		expect(existsSync(join(work, `${legacyName}.sqlite`))).toBe(false);
 	});
 
+	it('reports un-sendable work once a day even when the database holds no orders collection', async () => {
+		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
+		const storage = sqliteIn(work);
+		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
+		await db.addCollections({
+			recordMutations: engineCollectionCreators().recordMutations as never,
+		});
+		await db.collections.recordMutations!.insert({
+			mutationId: 'dead-letter-1',
+			collectionName: 'customers',
+			operation: 'create',
+			recordId: 'customer-1',
+			origin: 'existing',
+			payload: { email: 'not-an-email' },
+			baseRevision: null,
+			queuedAt: '2026-09-30T08:00:00.000Z',
+			seq: 1,
+			status: 'rejected',
+		});
+		await db.close();
+
+		const at = (nowMs: number) => ports(storage, { now: () => nowMs });
+		const t0 = Date.parse('2026-10-01T08:00:00.000Z');
+		expect(await drainLegacyScopeDatabase(at(t0), identity)).toMatchObject({
+			status: 'kept',
+			retryable: false,
+			remaining: { deadLetters: 1 },
+			reportDue: true,
+		});
+		expect(await drainLegacyScopeDatabase(at(t0 + 60_000), identity)).toMatchObject({
+			reportDue: false,
+		});
+		expect(
+			await drainLegacyScopeDatabase(at(t0 + LEGACY_UNSENDABLE_REPORT_INTERVAL_MS), identity)
+		).toMatchObject({ reportDue: true });
+	});
+
 	it('a database the drainable schemas cannot open is failed, not kept', async () => {
 		work = mkdtempSync(join(tmpdir(), 'legacy-drain-'));
 		const storage = sqliteIn(work);

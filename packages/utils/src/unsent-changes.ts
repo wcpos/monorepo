@@ -80,10 +80,15 @@ function notifyLegacyListeners(): void {
 /**
  * The previous-generation drain is about to look at one database: until it
  * reports, that database MAY hold unsent work (a wipe cannot say "none", and a
- * reader that needs the report can wait for it — `awaitLegacyUnsentReports`).
+ * reader that needs the report can wait for it — `awaitLegacyUnsentReport`).
  */
 export function markLegacyDrainPending(databaseName: string): void {
 	legacyReports().set(databaseName, { pending: true, count: null, orderUuids: [] });
+}
+
+/** True while one database is marked pending and its drain has not reported. */
+export function legacyDrainMarked(databaseName: string): boolean {
+	return legacyReports().get(databaseName)?.pending === true;
 }
 
 /**
@@ -122,19 +127,28 @@ export function legacyUnsentOrderUuids(): ReadonlySet<string> {
 	return uuids;
 }
 
-function legacyReportPending(): boolean {
-	for (const report of legacyReports().values()) if (report.pending) return true;
-	return false;
+/**
+ * True when one database's report is in and could not be counted (the drain
+ * failed to open it, or the host never ran it): whether it holds work for any
+ * given order is UNKNOWN, which a reader must not mistake for "nothing kept".
+ */
+export function legacyUnsentReportUncountable(databaseName: string): boolean {
+	const report = legacyReports().get(databaseName);
+	return report !== undefined && !report.pending && report.count === null;
 }
 
 /**
- * Wait until no previous-generation drain is still to report — at most
- * `timeoutMs`. Resolves `'reported'` at once when nothing is pending, and
- * `'timed-out'` when the bound elapses first (an offline till's drain waits for
- * the store; its report may be a long way off).
+ * Wait until one database's drain has reported — at most `timeoutMs`. Resolves
+ * `'reported'` at once when that database is not pending (never marked, or
+ * already reported), and `'timed-out'` when the bound elapses first (an offline
+ * till's drain may be a long way off). Other databases' marks never hold it up.
  */
-export function awaitLegacyUnsentReports(timeoutMs: number): Promise<'reported' | 'timed-out'> {
-	if (!legacyReportPending()) return Promise.resolve('reported');
+export function awaitLegacyUnsentReport(
+	databaseName: string,
+	timeoutMs: number
+): Promise<'reported' | 'timed-out'> {
+	const pending = () => legacyReports().get(databaseName)?.pending === true;
+	if (!pending()) return Promise.resolve('reported');
 	return new Promise((resolve) => {
 		const listeners = slot().legacyListeners!;
 		const settle = (result: 'reported' | 'timed-out') => {
@@ -143,7 +157,7 @@ export function awaitLegacyUnsentReports(timeoutMs: number): Promise<'reported' 
 			resolve(result);
 		};
 		const check = () => {
-			if (!legacyReportPending()) settle('reported');
+			if (!pending()) settle('reported');
 		};
 		const timer = setTimeout(() => settle('timed-out'), timeoutMs);
 		listeners.add(check);

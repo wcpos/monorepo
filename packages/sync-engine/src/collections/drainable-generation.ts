@@ -23,7 +23,11 @@ import {
 	type RecordProjection,
 	writeFacetFor,
 } from './collection-descriptors';
-import { type CollectionCreator, engineCollectionCreators } from './engine-collections';
+import {
+	type CollectionCreator,
+	engineCollectionCreators,
+	MUTATION_QUEUE_RXDB_COLLECTION,
+} from './engine-collections';
 import { productSchema } from './product-schema';
 
 /**
@@ -50,6 +54,13 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 	return {
 		...creators,
 		products: { ...creators.products, schema: drainableGenerationProductSchema },
+		// The drain keeps its once-a-day report stamp in the queue's local documents: the queue is
+		// the one collection every drain opens (a v5 database need not hold orders). Local
+		// documents live beside the collection, not in its schema, so no digest moves.
+		[MUTATION_QUEUE_RXDB_COLLECTION]: {
+			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
+			localDocuments: true,
+		},
 	};
 }
 

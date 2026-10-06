@@ -1,8 +1,9 @@
 import {
-	awaitLegacyUnsentReports,
+	awaitLegacyUnsentReport,
 	classifyUnsentChanges,
 	forgetUnsentChanges,
 	legacyUnsentOrderUuids,
+	legacyUnsentReportUncountable,
 	markLegacyDrainPending,
 	readUnsentChanges,
 	rememberLegacyUnsentChanges,
@@ -112,16 +113,16 @@ describe('a kept previous-generation database', () => {
 	});
 
 	it('a reader can wait for the drain to report, bounded', async () => {
-		await expect(awaitLegacyUnsentReports(1_000)).resolves.toBe('reported');
+		await expect(awaitLegacyUnsentReport('pos_v5_a', 1_000)).resolves.toBe('reported');
 		markLegacyDrainPending('pos_v5_a');
-		const reported = awaitLegacyUnsentReports(60_000);
+		const reported = awaitLegacyUnsentReport('pos_v5_a', 60_000);
 		rememberLegacyUnsentChanges('pos_v5_a', 1, ['order-1']);
 		await expect(reported).resolves.toBe('reported');
 
 		jest.useFakeTimers();
 		try {
 			markLegacyDrainPending('pos_v5_b');
-			const waited = awaitLegacyUnsentReports(5_000);
+			const waited = awaitLegacyUnsentReport('pos_v5_b', 5_000);
 			await jest.advanceTimersByTimeAsync(4_999);
 			let settled: string | null = null;
 			void waited.then((result) => {
@@ -134,5 +135,26 @@ describe('a kept previous-generation database', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it("a wait keyed to one scope's database never blocks on another's mark", async () => {
+		markLegacyDrainPending('pos_v5_b');
+		await expect(awaitLegacyUnsentReport('pos_v5_a', 60_000)).resolves.toBe('reported');
+		markLegacyDrainPending('pos_v5_a');
+		const waited = awaitLegacyUnsentReport('pos_v5_a', 60_000);
+		rememberLegacyUnsentChanges('pos_v5_a', 0);
+		// pos_v5_b is still pending; pos_v5_a's own report released the wait.
+		await expect(waited).resolves.toBe('reported');
+	});
+
+	it('an uncountable report is unknown for that database only, and ends with a countable one', () => {
+		markLegacyDrainPending('pos_v5_a');
+		// Pending is not yet a report.
+		expect(legacyUnsentReportUncountable('pos_v5_a')).toBe(false);
+		rememberLegacyUnsentChanges('pos_v5_a', null);
+		expect(legacyUnsentReportUncountable('pos_v5_a')).toBe(true);
+		expect(legacyUnsentReportUncountable('pos_v5_b')).toBe(false);
+		rememberLegacyUnsentChanges('pos_v5_a', 0);
+		expect(legacyUnsentReportUncountable('pos_v5_a')).toBe(false);
 	});
 });

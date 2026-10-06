@@ -168,7 +168,7 @@ const SESSION_REFUSED_STATUS = 401;
  */
 export const LEGACY_UNSENDABLE_REPORT_INTERVAL_MS = 24 * 60 * 60_000;
 
-/** The kept database's own local document recording when its un-sendable work was last reported. */
+/** The kept database's queue-local document recording when its un-sendable work was last reported. */
 const UNSENDABLE_REPORT_LOCAL_ID = 'legacy-drain-unsendable-report';
 
 type QueueRow = QueuedMutation & { claimedBy?: string };
@@ -398,12 +398,12 @@ async function carryOverOpenCarts(
 
 /** True when the kept database's un-sendable work has not been reported within the interval; stamps it. */
 async function unsendableReportDue(database: RxDatabase, nowMs: number): Promise<boolean> {
-	const orders = database.collections.orders;
-	if (!orders) return true;
-	const stamp = await orders.getLocal(UNSENDABLE_REPORT_LOCAL_ID);
+	// The queue: the one collection every drain opens, with local documents in the drainable recipe.
+	const queue = queueOf(database);
+	const stamp = await queue.getLocal(UNSENDABLE_REPORT_LOCAL_ID);
 	const last = Number(stamp?.get('at'));
 	if (Number.isFinite(last) && nowMs - last < LEGACY_UNSENDABLE_REPORT_INTERVAL_MS) return false;
-	await orders.upsertLocal(UNSENDABLE_REPORT_LOCAL_ID, { at: nowMs });
+	await queue.upsertLocal(UNSENDABLE_REPORT_LOCAL_ID, { at: nowMs });
 	return true;
 }
 

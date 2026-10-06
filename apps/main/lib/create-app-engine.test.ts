@@ -1,10 +1,11 @@
 import { scopeDatabaseName } from '@wcpos/sync-core';
 import type { LegacyScopeDrainOutcome, LegacyScopeDrainPorts } from '@wcpos/sync-engine';
 import {
-	awaitLegacyUnsentReports,
+	awaitLegacyUnsentReport,
 	classifyUnsentChanges,
 	forgetUnsentChanges,
 	legacyUnsentOrderUuids,
+	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
@@ -2068,7 +2069,7 @@ describe('previous-generation database drain', () => {
 		expect(drainLegacyScopeDatabase.mock.calls[0]![0].pushBlockedReason).toBe(
 			'write-drain skipped: offline'
 		);
-		await expect(awaitLegacyUnsentReports(1)).resolves.toBe('reported');
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
 		expect([...legacyUnsentOrderUuids()]).toEqual(['order-held-cart', 'order-unsent']);
 		// A blocked drain is not the attempt the warn is for.
 		expect(networkWarn).not.toHaveBeenCalled();
@@ -2256,7 +2257,7 @@ describe('previous-generation database drain', () => {
 		const engine = createAppSyncEngine(BASE_OPTIONS);
 		// Before readiness has run anything: a reader that waits is already told to wait.
 		let settled: string | null = null;
-		void awaitLegacyUnsentReports(60_000).then((result) => {
+		void awaitLegacyUnsentReport(LEGACY, 60_000).then((result) => {
 			settled = result;
 		});
 		await engine.ready;
@@ -2265,6 +2266,18 @@ describe('previous-generation database drain', () => {
 		report({ status: 'absent', databaseName: LEGACY });
 		await settle();
 		expect(settled).toBe('reported');
+	});
+
+	it('a scope whose engine never became ready releases its mark as uncountable instead of leaving waiters hanging', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
+		engine.ready = Promise.reject(new Error('open failed'));
+		createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).rejects.toThrow('open failed');
+		await settle();
+		expect(drainLegacyScopeDatabase).not.toHaveBeenCalled();
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
+		expect(legacyUnsentReportUncountable(LEGACY)).toBe(true);
 	});
 
 	it('a drain that failed to open is reported (nothing waits on it) but stays uncountable', async () => {
@@ -2276,7 +2289,7 @@ describe('previous-generation database drain', () => {
 		});
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
-		await expect(awaitLegacyUnsentReports(1)).resolves.toBe('reported');
+		await expect(awaitLegacyUnsentReport(LEGACY, 1)).resolves.toBe('reported');
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 	});
 

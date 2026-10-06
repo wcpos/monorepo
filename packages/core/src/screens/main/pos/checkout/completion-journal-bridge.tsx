@@ -3,7 +3,12 @@ import * as React from 'react';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { awaitLegacyUnsentReports, legacyUnsentOrderUuids } from '@wcpos/utils/unsent-changes';
+import { DRAINABLE_SCOPE_DATABASE_GENERATION, scopeDatabaseName } from '@wcpos/sync-core';
+import {
+	awaitLegacyUnsentReport,
+	legacyUnsentOrderUuids,
+	legacyUnsentReportUncountable,
+} from '@wcpos/utils/unsent-changes';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import {
@@ -69,10 +74,19 @@ export function SaleCompletionBridge(): null {
 		}
 		const current = { storeDB, manager, ctx, startVersion, stopped: false };
 		session.current = current;
+		// The ACTIVE scope's previous-generation database: the only report this replay waits on.
+		const activeIdentity = manager.engine?.active()?.identity;
+		const legacyDatabase = activeIdentity
+			? scopeDatabaseName(activeIdentity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+			: null;
 		// Awaited once per replay, and only when an order is missing: a resident order never waits.
 		let legacyReport: Promise<void> | null = null;
 		const legacyDrainReported = () =>
-			(legacyReport ??= awaitLegacyUnsentReports(LEGACY_DRAIN_REPORT_WAIT_MS).then((result) => {
+			(legacyReport ??= (
+				legacyDatabase === null
+					? Promise.resolve('reported' as const)
+					: awaitLegacyUnsentReport(legacyDatabase, LEGACY_DRAIN_REPORT_WAIT_MS)
+			).then((result) => {
 				if (result === 'timed-out') {
 					logger.warn('Replaying sale completions without the previous database version report', {
 						context: { waitedMs: LEGACY_DRAIN_REPORT_WAIT_MS },
@@ -101,10 +115,13 @@ export function SaleCompletionBridge(): null {
 						if (current.stopped) return;
 					}
 					if (!resident) {
-						// A kept previous-generation database still holds work for THIS order: it is not
-						// resident YET, which is not a missed start — abandoning it would drop a captured
-						// payment's completion. Any other missing order counts as before.
-						const keptInLegacyDatabase = legacyUnsentOrderUuids().has(uuid);
+						// A kept previous-generation database still holds work for THIS order — or the active
+						// scope's one could not be counted at all (it failed to open), so it MAY: either way
+						// the order is not resident YET, which is not a missed start, and abandoning it would
+						// drop a captured payment's completion. A later start with a countable report counts.
+						const keptInLegacyDatabase =
+							legacyUnsentOrderUuids().has(uuid) ||
+							(legacyDatabase !== null && legacyUnsentReportUncountable(legacyDatabase));
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
 							expectAt: attempt.at,
 							missingStart: !keptInLegacyDatabase,
