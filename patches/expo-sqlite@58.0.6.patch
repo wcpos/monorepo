@@ -8,8 +8,8 @@ index 3a17543594e198b9448295207011c639c418c349..6345814ee6a2fcfa34a13253bc22a717
    std::string result("Error code ");
 -  result += code;
 +  // wcpos: `result += code` appended the int as ONE CHAR — code 0 became a NUL that cut the
-+  // string to the bare "Error code ", hiding the message RxDB premium keys its UNIQUE-constraint
-+  // retry on (Pixel run, 2026-10-06). Format the number.
++  // string to the bare "Error code " (Pixel run, 2026-10-06), and any other code printed as a
++  // control character. Format the number so the next failure names itself.
 +  result += std::to_string(code);
    result += ": ";
    result += message;

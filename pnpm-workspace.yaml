@@ -211,9 +211,11 @@ patchedDependencies:
   expo-blob@58.0.2: patches/expo-blob@58.0.2.patch
   expo-device@58.0.5: patches/expo-device@58.0.5.patch
   # Android: convertSqlLiteErrorToSTLString appended the int error code as ONE CHAR, so code 0
-  # produced the bare "Error code " and hid the SQLite message RxDB premium keys its
-  # UNIQUE-constraint retry on (Pixel run, 2026-10-06). std::to_string instead. Native: needs a
-  # rebuild of the Android app to take effect. Drop when expo-sqlite formats the code.
+  # produced the bare "Error code " and other codes printed as control characters (Pixel run,
+  # 2026-10-06). std::to_string instead, so the next failure names its code. (Code 0 itself means
+  # SQLite's message was already "not an error" — the real code was lost upstream of this line;
+  # the patch is diagnostics, not the cure.) Native: needs an Android rebuild. Drop when expo-sqlite
+  # formats the code.
   expo-sqlite@58.0.6: patches/expo-sqlite@58.0.6.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
