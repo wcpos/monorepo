@@ -149,16 +149,18 @@ function chainStands(stored: PathEntry[], terms: Pick<BrowseTerms, 'all' | 'pend
 }
 
 /**
- * What the stored path has put into the query. Written by handlers, effects and cleanups (which
- * run after the render that moved the source or unmounted the stage), and read by the render
- * through `useSyncExternalStore` — a ref's value may not be read while rendering.
+ * A value written by handlers, effects and cleanups and read by the render through
+ * `useSyncExternalStore` — a ref's value may not be read while rendering. Two of them: what the
+ * stored path has put into the query (the projection), and the stored path itself. Both render
+ * at the query's own (sync) priority, so a move of the path, its projection and the query lands
+ * in ONE render whoever calls it (see the batching invariant at `enter`).
  */
-function createProjectionStore() {
-	let value: Projection | null = null;
+function createStore<T>(initial: T) {
+	let value = initial;
 	const listeners = new Set<() => void>();
 	return {
 		get: () => value,
-		set: (next: Projection | null) => {
+		set: (next: T) => {
 			if (next === value) return;
 			value = next;
 			listeners.forEach((listener) => listener());
@@ -189,21 +191,27 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	const field = taxonomyField(source);
 	// The path is the SOURCE's: a path stored under Categories is nothing under Tags from the very
 	// render the source changes (the cleanup below then takes its projection out).
-	const [storedFor, setStoredFor] = React.useState<{ source: BrowseBy; entries: PathEntry[] }>({
-		source,
-		entries: NO_PATH,
-	});
+	// An external store, not state: `backTo` from Android's back (a device event, outside React's
+	// event system) wrote the query at sync priority and a `useState` path at default priority, so
+	// for one commit the child level stood on the path over the parent's products (review of the
+	// Android follow-on, 2026-10-07). Read like the query, the path moves with it.
+	const [pathStore] = React.useState(() =>
+		createStore<{ source: BrowseBy; entries: PathEntry[] }>({ source, entries: NO_PATH })
+	);
+	const storedFor = React.useSyncExternalStore(pathStore.subscribe, pathStore.get, pathStore.get);
 	const stored = storedFor.source === source ? storedFor.entries : NO_PATH;
 	const setStored = React.useCallback(
-		(update: PathEntry[] | ((current: PathEntry[]) => PathEntry[])) =>
-			setStoredFor((current) => ({
+		(update: PathEntry[] | ((current: PathEntry[]) => PathEntry[])) => {
+			const current = pathStore.get();
+			pathStore.set({
 				source,
 				entries:
 					typeof update === 'function'
 						? update(current.source === source ? current.entries : NO_PATH)
 						: update,
-			})),
-		[source]
+			});
+		},
+		[source, pathStore]
 	);
 	const resetState = React.useMemo(
 		() => ({
@@ -219,7 +227,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		[showOutOfStock, settingsSort]
 	);
 
-	const [projected] = React.useState(createProjectionStore);
+	const [projected] = React.useState(() => createStore<Projection | null>(null));
 	const projection = React.useSyncExternalStore(projected.subscribe, projected.get, projected.get);
 	// The result window each covered level had when a child was opened over it, by entry identity
 	// (as the stage keeps a gathering level's children): a parent paged past its first window must
@@ -397,11 +405,14 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	}
 	const path = live ? stored : NO_PATH;
 
-	// A path the query no longer carries is forgotten in this same render (React's "previous
-	// render" pattern: the render is redone before it commits), so a stale path is never there
-	// for `enter` to extend. What it put into the query and is still there is taken back out
-	// by the layout effect below.
-	if (stored.length > 0 && !live) setStoredFor({ source, entries: NO_PATH });
+	// A path the query no longer carries is shown as no path in this same render (`path`), and
+	// forgotten before the commit paints (a layout effect: a store is not written while
+	// rendering), so a stale path is never there for `enter` to extend — no handler runs between
+	// a commit and its layout effects. What it put into the query and is still there is taken back
+	// out by the layout effect below, on the render that follows.
+	React.useLayoutEffect(() => {
+		if (stored.length > 0 && !live) setStored(NO_PATH);
+	});
 
 	// …a search typed over a term or a shortcut must span the whole catalogue (the search itself
 	// stays). A projection with no path under it is a dropped path's: entering always records
@@ -444,15 +455,15 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		if (typeof limit === 'number') actions.setLimit(limit);
 	}, [live, derivedKey, field, actions, projected]);
 
-	// BATCHING INVARIANT (`enter` and `backTo`): both must run from a discrete event handler
-	// (a `Pressable` press, Escape) or inside `inOneBatch` (../one-batch: the edge swipe). Their
-	// writes to the query and the projection store (both read through `useSyncExternalStore`, so
-	// they render at sync priority) and `setStored` have to land in the SAME render — which only
-	// a discrete event, or `flushSync`, gives `setStored`. Rendered apart, `enter`'s query moves
-	// with no path stored over it, `live` reads false, and the drop above throws the tap away;
-	// `backTo` commits the parent's query under the child's path for a render, so the child
-	// level reads as settled over the parent's products. Never call either from a gesture-handler
-	// or animation callback, a timer or a promise, or inside `startTransition`, without it.
+	// BATCHING INVARIANT (`enter` and `backTo`): their writes to the query, the projection store
+	// and the path store must land in the SAME render. Rendered apart, `enter`'s query moves with
+	// no path stored over it, `live` reads false, and the drop above throws the tap away; `backTo`
+	// commits the parent's query under the child's path for a render, so the child level reads as
+	// settled over the parent's products. All three are read through `useSyncExternalStore`, so
+	// they render at sync priority together whoever calls — a press, Escape, the edge swipe's
+	// gesture callback, Android's back (a device event), a timer. `inOneBatch` (../one-batch)
+	// still wraps the non-discrete callers: on the web it forces the render now, not a microtask
+	// later.
 	const enter = React.useCallback(
 		(term: BrowseTerm, target?: Measurable, depth?: number) => {
 			const entry: PathEntry = { kind: 'term', term, target };

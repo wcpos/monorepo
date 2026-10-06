@@ -15,6 +15,8 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { BEATS, EASE, EASE_BEAT, EASE_EXIT, PANE } from '@wcpos/components/lib/motion';
 
+import { fromFirstFrame } from './first-frame';
+
 type Rect = { x: number; y: number; width: number; height: number };
 
 /** Anything that can report its frame in the window: a tile's `Pressable`, the stage's `View`. */
@@ -99,17 +101,6 @@ const DEAL_SPAN = Math.max(
 	(BEATS.newTiles.cap - 1) * BEATS.newTiles.step + BEATS.newTiles.duration
 );
 const REDUCE = { reduceMotion: ReduceMotion.System };
-
-/**
- * A clock that starts on the first frame the UI thread runs it, not when it was asked for. A
- * clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted
- * before the next frame then stamped that frame well into the curve (Pixel, 2026-10-06: a
- * cross-fade's first changed frame 61–71% through, a walk's 41–59%). `withDelay` starts what it
- * wraps inside its own first frame, with that frame's time, so the first frame shows the start.
- */
-function fromFirstFrame<T>(clock: T): T {
-	return withDelay(0, clock as never) as T;
-}
 
 // Web only: covered products leave the tab order and the accessibility tree but keep their
 // layout, so the grid is still scrolled to the same row when it comes back.
@@ -583,13 +574,20 @@ export function DealCell({
 	React.useLayoutEffect(() => {
 		if (parent) placeCopy(generation, false);
 	}, [parent, placeCopy, generation]);
+	// The web has no such frame: the style's mapper reruns in this commit's microtask, before the
+	// paint (above), so the copy reports in the commit that knows its frames — waiting a frame
+	// there only made every deal start later.
+	const web = Platform.OS === 'web';
+	React.useLayoutEffect(() => {
+		if (parent && web && ready) placeCopy(generation, true);
+	}, [parent, web, ready, placeCopy, generation]);
 	useAnimatedReaction(
-		() => parent && offset.value.ready,
+		() => parent && !web && offset.value.ready,
 		(placed, was) => {
 			if (!placed || was) return;
 			requestAnimationFrame(() => scheduleOnRN(placeCopy, generation, true));
 		},
-		[parent, placeCopy, generation]
+		[parent, web, placeCopy, generation]
 	);
 	const holdPicture = React.useCallback(() => {
 		let held = true;
@@ -658,7 +656,10 @@ const CopyPictureContext = React.createContext<(() => () => void) | null>(null);
  * `PICTURE_GRACE`.
  */
 export function useCopyPicture(): (() => void) | undefined {
-	const hold = React.useContext(CopyPictureContext);
+	// Native only: the web paints a cached picture as it mounts (the web film showed no blank
+	// square), and its `onDisplay` fires a frame after the load — a hold there was only latency.
+	const held = React.useContext(CopyPictureContext);
+	const hold = Platform.OS === 'web' ? null : held;
 	const release = React.useRef<(() => void) | null>(null);
 	React.useLayoutEffect(() => {
 		if (!hold) return;

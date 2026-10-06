@@ -56,6 +56,7 @@ import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
 import { filtersAtBaseline } from './browse/use-browse-path';
+import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
@@ -230,6 +231,14 @@ function POSProductsContent({
 		setDrillStage(stageKey);
 		setDrill(null);
 	}
+	// Android's back closes this screen's own drill (All products mode); with none open the press
+	// goes on — to the browse stage's handler when a source is on, else the system's. One state
+	// update, so it needs no batching.
+	useSystemBack(() => {
+		if (!drilled) return false;
+		setDrill(null);
+		return true;
+	});
 	// A product drilled inside the browse stage: the stage owns that drill; the filter bar reads it.
 	const [browseDrilled, setBrowseDrilled] = React.useState(false);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);

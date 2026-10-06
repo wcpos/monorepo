@@ -141,6 +141,7 @@ jest.mock('react-native-reanimated', () => {
 /* eslint-disable import/first */
 import { BEATS, EASE, EASE_EXIT, PANE } from '@wcpos/components/lib/motion';
 
+import { FIRST_FRAME_DELAY } from './first-frame';
 import {
 	DealCell,
 	DealFade,
@@ -459,12 +460,12 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	rerender(<Stage detail={null} count={12} />);
 	const back = BEATS.oldTiles;
 	// Last out, first home — after the parent's walk, and before the stage's two clocks, each of
-	// which starts on its own first frame (a zero delay, see the first-frame test below).
+	// which starts on its own first frame (first-frame.ts, whose test pins what that means).
 	expect(mockDelays).toEqual([
-		0,
+		FIRST_FRAME_DELAY,
 		...Array.from({ length: 11 }, (_, index) => Math.min(10 - index, back.cap - 1) * back.step),
-		0,
-		0,
+		FIRST_FRAME_DELAY,
+		FIRST_FRAME_DELAY,
 	]);
 	// The products, the breadcrumb and the parent come back on one clock.
 	expect(mockTimings.filter((call) => call.toValue === 0).at(-1)!.duration).toBe(PANE);
@@ -690,7 +691,7 @@ it('a collapsing stack cross-fades its detail out and the root in; nothing trave
 	// The tiles are not turned for home: no stagger, no walk, the deal stays dealt. The only
 	// delays are the fade's two clocks starting on their first frame.
 	expect(deal().dealt).toBe(true);
-	expect(mockDelays.slice(delays)).toEqual([0, 0]);
+	expect(mockDelays.slice(delays)).toEqual([FIRST_FRAME_DELAY, FIRST_FRAME_DELAY]);
 	// One clock: the detail out where it stands, the products in over it.
 	expect(mockTimings.slice(timings)).toEqual([
 		expect.objectContaining({
@@ -851,7 +852,7 @@ it('a stack inside a detail that cross-fades away holds what it shows', () => {
 	expect(screen.getByTestId('inner-detail').textContent).toBe('Tees');
 	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
 	// Only the outer stack's fade clocks (each from its first frame); nothing of the inner stack's.
-	expect(mockDelays.slice(delays)).toEqual([0, 0]);
+	expect(mockDelays.slice(delays)).toEqual([FIRST_FRAME_DELAY, FIRST_FRAME_DELAY]);
 });
 
 // Android: a React commit carries the props the UI thread has ALREADY applied. A copy shown on
@@ -859,6 +860,7 @@ it('a stack inside a detail that cross-fades away holds what it shows', () => {
 // 2026-10-06: Tops cold f004, Hoodie f004). It is shown, and the tapped tile steps aside, only
 // once a UI frame has run its style with the offset.
 it('shows the copy and lifts the tile only after a UI frame has applied the copy’s offset', () => {
+	mockOS = 'android';
 	const frames: FrameRequestCallback[] = [];
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
 		frames.push(callback);
@@ -888,6 +890,7 @@ it('shows the copy and lifts the tile only after a UI frame has applied the copy
 });
 
 it('a copy placed for a detail that has since been replaced does not show the new one', () => {
+	mockOS = 'android';
 	const frames: FrameRequestCallback[] = [];
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
 		frames.push(callback);
@@ -912,6 +915,7 @@ it('a copy placed for a detail that has since been replaced does not show the ne
 });
 
 it('holds the copy until its picture has painted, and only so long', () => {
+	mockOS = 'android';
 	const { rerender } = render(<Stage detail={null} picture />);
 	rerender(<Stage detail="Hoodie" picture />);
 	expect(screen.getByTestId('paint').dataset.onCopy).toBe('true');
@@ -932,6 +936,23 @@ it('holds the copy until its picture has painted, and only so long', () => {
 	expect(seen('cell-0')).toBe(false);
 	act(() => jest.advanceTimersByTime(150));
 	expect(seen('cell-0')).toBe(true);
+});
+
+// The web's mapper reruns in the commit's microtask, before the paint: waiting a frame for a
+// report, or for `onDisplay` (a frame after the load on web), only made every deal start later.
+it('on the web the copy is shown, and the tile lifted, in the commit that knows its frames', () => {
+	const frames: FrameRequestCallback[] = [];
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+		frames.push(callback);
+		return frames.length;
+	});
+	const { rerender } = render(<Stage detail={null} picture />);
+	rerender(<Stage detail="Hoodie" picture />);
+	expect(screen.getByTestId('paint').dataset.onCopy).toBe('false');
+	layOut();
+	// No frame has run, and the picture has not reported.
+	expect(seen('cell-0')).toBe(true);
+	expect(screen.getByTestId('lifted').textContent).toBe('Hoodie');
 });
 
 it('a picture off any copy holds nothing', () => {
@@ -1004,7 +1025,8 @@ it('the web keeps its scroller: overflow visible would end the scrolling', () =>
 // A clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted
 // before the next frame stamped that frame well into the curve (Pixel, 2026-10-06: a cross-fade's
 // first changed frame 61–71% through, the drill-back's walk 41%). Every clock of the stage, and
-// the parent's walk, is wrapped so it starts inside its own first frame (`withDelay(0, …)`).
+// the parent's walk, goes through `fromFirstFrame`; first-frame.test.ts pins, against
+// Reanimated's own valueSetter and withDelay, that such a clock paints its start on that frame.
 it('starts every clock of the deal on its own first frame, out, home and in a cross-fade', () => {
 	const { rerender } = render(<Stage detail={null} count={1} />);
 	rerender(<Stage detail="Hoodie" count={1} />);
@@ -1013,13 +1035,21 @@ it('starts every clock of the deal on its own first frame, out, home and in a cr
 	layOut();
 	// Out: the furniture and the products, then the parent's walk — three clocks, three wraps.
 	expect(mockTimings.length - timings).toBe(3);
-	expect(mockDelays.slice(delays)).toEqual([0, 0, 0]);
+	expect(mockDelays.slice(delays)).toEqual([
+		FIRST_FRAME_DELAY,
+		FIRST_FRAME_DELAY,
+		FIRST_FRAME_DELAY,
+	]);
 	delays = mockDelays.length;
 	timings = mockTimings.length;
 	rerender(<Stage detail={null} count={1} />);
 	// Home: the parent's walk, then the furniture and the products.
 	expect(mockTimings.length - timings).toBe(3);
-	expect(mockDelays.slice(delays)).toEqual([0, 0, 0]);
+	expect(mockDelays.slice(delays)).toEqual([
+		FIRST_FRAME_DELAY,
+		FIRST_FRAME_DELAY,
+		FIRST_FRAME_DELAY,
+	]);
 	finish(0);
 	rerender(<Stage detail="Tee" count={1} />);
 	layOut();
@@ -1028,5 +1058,5 @@ it('starts every clock of the deal on its own first frame, out, home and in a cr
 	timings = mockTimings.length;
 	rerender(<Stage detail={null} count={1} collapse />);
 	expect(mockTimings.length - timings).toBe(2);
-	expect(mockDelays.slice(delays)).toEqual([0, 0]);
+	expect(mockDelays.slice(delays)).toEqual([FIRST_FRAME_DELAY, FIRST_FRAME_DELAY]);
 });

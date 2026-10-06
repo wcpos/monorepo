@@ -673,6 +673,42 @@ it('a backTo from a non-discrete callback, in one batch, moves the query and the
 	).toEqual([]);
 });
 
+// Native: `inOneBatch` is a plain call, and Android's back arrives from the device event emitter,
+// outside React's event system. The query writes render at sync priority; a path kept in
+// `useState` rendered at a lower one, a commit later — the child level over the parent's
+// products (review of the Android follow-on, 2026-10-07). The path is read like the query, so
+// whatever lane the caller's own updates take, the two move in one render. A transition is the
+// caller here because it reliably separates a `useState` write from a sync one in jsdom.
+it('a backTo from outside React’s event system, with no batching at all, moves the query and the path in one render', async () => {
+	const { inOneBatch: nativeBatch } =
+		jest.requireActual<typeof import('../one-batch')>('../one-batch');
+	const seen: { depth: number; categories: unknown }[] = [];
+	const { result } = renderHook(() => {
+		const browse = useBrowsePath('categories', terms as never);
+		seen.push({ depth: browse.path.length, categories: mockState.filters.categories });
+		return browse;
+	});
+	act(() => {
+		result.current.enter(drinks);
+		result.current.enter(hot);
+	});
+	seen.length = 0;
+	await act(
+		() =>
+			new Promise<void>((resolve) =>
+				setTimeout(() => {
+					startTransition(() => nativeBatch(() => result.current.backTo(1)));
+					resolve();
+				}, 0)
+			)
+	);
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	expect(mockState.filters.categories).toEqual([1, 2]);
+	expect(
+		seen.filter(({ depth, categories }) => depth === 2 && isEqualIds(categories, [1, 2]))
+	).toEqual([]);
+});
+
 describe('filtersAtBaseline', () => {
 	const initial = { status: 'publish', stock_status: 'instock' };
 	it('reads the initial filters, with the taxonomies cleared, as the baseline', () => {

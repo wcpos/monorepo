@@ -518,6 +518,24 @@ describe('POSProducts query-state wiring', () => {
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories' });
 	});
 
+	it('Android back closes the All products drill, and is left alone without one', () => {
+		mockViewMode = 'grid';
+		render(<POSProducts />);
+		expect(mockSystemBack!()).toBe(false);
+		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
+			onDrill: (record: unknown) => void;
+		}>;
+		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		expect(mockFilterBarProps.level).toBe('variations');
+		let handled: boolean | undefined;
+		act(() => {
+			handled = mockSystemBack!();
+		});
+		expect(handled).toBe(true);
+		expect(mockFilterBarProps.level).toBe('products');
+		expect(mockSystemBack!()).toBe(false);
+	});
+
 	it('drops a product drill when the scope changes', () => {
 		mockViewMode = 'grid';
 		const { rerender } = render(<POSProducts />);
@@ -539,6 +557,13 @@ jest.mock('./rows/variable-product-row', () => ({ VariableProductRow: () => null
 jest.mock('./grid/product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('./drill-in', () => ({ DrillIn: () => <div data-testid="drill-in" /> }));
+// Android's back: the screen's handler, as its last render registered it.
+let mockSystemBack: (() => boolean) | undefined;
+jest.mock('./browse/use-system-back', () => ({
+	useSystemBack: (handle: () => boolean) => {
+		mockSystemBack = handle;
+	},
+}));
 // Browse by is off unless a test stores it (no value reads as All products); the stage has its
 // own suite, so here it only reports what it was handed.
 jest.mock('./browse/browse-stage', () => ({
