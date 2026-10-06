@@ -42,11 +42,14 @@ export function BrowseRootGrid({
 	terms,
 	onOpen,
 	binding,
+	settled,
 }: {
 	terms: BrowseTerm[];
 	onOpen: (term: BrowseTerm, target?: Measurable) => void;
 	/** The root products binding: the till's footer under the term set. */
 	binding?: Binding;
+	/** No level is over the root: the shared query is the root's (its footer's numbers). */
+	settled?: boolean;
 }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
@@ -93,7 +96,7 @@ export function BrowseRootGrid({
 					estimatedItemSize={200}
 				/>
 			</VirtualizedList.Root>
-			{binding && <BrowseRootFooter binding={binding} />}
+			{binding && <BrowseRootFooter binding={binding} settled={settled} />}
 		</View>
 	);
 }

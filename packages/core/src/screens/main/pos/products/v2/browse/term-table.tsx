@@ -36,11 +36,14 @@ export function BrowseRootTable({
 	terms,
 	onOpen,
 	binding,
+	settled,
 }: {
 	terms: BrowseTerm[];
 	onOpen: (term: BrowseTerm) => void;
 	/** The root products binding: the till's footer under the term set. */
 	binding?: Binding;
+	/** No level is over the root: the shared query is the root's (its footer's numbers). */
+	settled?: boolean;
 }) {
 	const rows = React.useMemo(() => [ALL, ...terms], [terms]);
 	return (
@@ -61,7 +64,7 @@ export function BrowseRootTable({
 					/>
 				</VirtualizedList.Root>
 			</TableSurface>
-			{binding && <BrowseRootFooter binding={binding} />}
+			{binding && <BrowseRootFooter binding={binding} settled={settled} />}
 		</View>
 	);
 }

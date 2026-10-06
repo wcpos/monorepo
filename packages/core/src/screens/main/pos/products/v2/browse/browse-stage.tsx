@@ -243,9 +243,19 @@ export function BrowseStage(props: BrowseStageProps) {
 
 	const renderRoot = () =>
 		viewMode === 'grid' ? (
-			<BrowseRootGrid terms={roots} onOpen={openRootTerm} binding={binding} />
+			<BrowseRootGrid
+				terms={roots}
+				onOpen={openRootTerm}
+				binding={binding}
+				settled={path.length === 0}
+			/>
 		) : (
-			<BrowseRootTable terms={roots} onOpen={openRootTerm} binding={binding} />
+			<BrowseRootTable
+				terms={roots}
+				onOpen={openRootTerm}
+				binding={binding}
+				settled={path.length === 0}
+			/>
 		);
 
 	const renderTerm = (chain: PathEntry[]) => {

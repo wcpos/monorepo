@@ -149,33 +149,40 @@ it('the root grid carries the till’s footer: the catalogue total, not the load
 	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });
 
-it('the root footer counts only the query now asked: a return never shows the level’s total', () => {
+it('the root footer holds the root’s numbers while a level covers it and while the root is re-asked', () => {
 	type Binding = NonNullable<React.ComponentProps<typeof BrowseRootGrid>['binding']>;
-	const level = {
-		total$: of(12),
-		result$: new BehaviorSubject({ hits: [{}] }),
-		active$: of(false),
-		sync: jest.fn(),
-	};
-	const { rerender } = render(
-		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={level as unknown as Binding} />
+	const query = (total$: unknown, result$: unknown) =>
+		({ total$, result$, active$: of(false), sync: jest.fn() }) as unknown as Binding;
+	const grid = (binding: Binding, settled: boolean) => (
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding} settled={settled} />
 	);
-	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '12', total: '12' });
-	// Back at the root: the catalogue's query has not answered yet.
+	const footer = () => screen.getByTestId('products-footer').dataset;
+	const { rerender } = render(
+		grid(query(of(220), new BehaviorSubject({ hits: [{}, {}, {}] })), true)
+	);
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
+
+	// A level covers the root: the shared query is the level's, re-asked, then answered.
+	const levelTotal$ = new Subject<number | null>();
+	const levelResult$ = new Subject<{ hits: object[] }>();
+	rerender(grid(query(levelTotal$, levelResult$), false));
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
+	act(() => {
+		levelResult$.next({ hits: [{}] });
+		levelTotal$.next(12);
+	});
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
+
+	// Back at the root, its query not answered yet: still the root's numbers, never "Showing 0".
 	const total$ = new Subject<number | null>();
 	const result$ = new Subject<{ hits: object[] }>();
-	const root = { ...level, total$, result$ };
-	rerender(
-		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={root as unknown as Binding} />
-	);
-	// Neither the count nor the denominator is the level's.
-	expect(screen.getByTestId('products-footer').dataset.count).not.toBe('12');
-	expect(screen.getByTestId('products-footer').dataset.total).not.toBe('12');
+	rerender(grid(query(total$, result$), true));
+	expect(footer()).toMatchObject({ count: '220', total: '220' });
 	act(() => {
 		result$.next({ hits: [{}, {}] });
-		total$.next(80);
+		total$.next(218);
 	});
-	expect(screen.getByTestId('products-footer').dataset).toMatchObject({ count: '80', total: '80' });
+	expect(footer()).toMatchObject({ count: '218', total: '218' });
 });
 
 it('the root grid lifts the tile whose copy is out on the stage', () => {
