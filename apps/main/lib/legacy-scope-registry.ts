@@ -23,18 +23,30 @@ export type ScopeRegistryDatabase = {
 	stores: Pick<Finder<{ id?: number | string }>, 'findByIds'>;
 };
 
+/**
+ * The registry's scopes, and every reference it could NOT resolve: a site's
+ * cashier id or a cashier's store id with no document behind it (a
+ * reconciliation that removed a store while a credential kept pointing at it).
+ * `findByIds` silently omits a missing document, so a scope behind one would
+ * just vanish from the inventory; it is reported instead, and the inventory is
+ * then incomplete.
+ */
 export async function registryScopeIdentities(
 	userDB: ScopeRegistryDatabase
-): Promise<StoreScopeIdentity[]> {
+): Promise<{ scopes: StoreScopeIdentity[]; unresolved: string[] }> {
 	const scopes: StoreScopeIdentity[] = [];
+	const unresolved: string[] = [];
 	for (const site of await userDB.sites.find().exec()) {
 		const { wp_api_url: wpApiUrl, wp_credentials: credentialIds = [] } = site.toJSON();
 		if (!wpApiUrl) continue;
 		const credentials = await userDB.wp_credentials.findByIds([...credentialIds]).exec();
+		for (const id of credentialIds)
+			if (!credentials.has(id)) unresolved.push(`wp_credentials:${id}`);
 		for (const credential of credentials.values()) {
 			const { id: cashierId, stores: storeIds = [] } = credential.toJSON();
 			if (cashierId === undefined) continue;
 			const stores = await userDB.stores.findByIds([...storeIds]).exec();
+			for (const id of storeIds) if (!stores.has(id)) unresolved.push(`stores:${id}`);
 			for (const store of stores.values()) {
 				const { id: storeId } = store.toJSON();
 				if (storeId === undefined) continue;
@@ -42,5 +54,5 @@ export async function registryScopeIdentities(
 			}
 		}
 	}
-	return scopes;
+	return { scopes, unresolved };
 }

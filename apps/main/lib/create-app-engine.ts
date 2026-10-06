@@ -34,7 +34,6 @@ import {
 	containsDrainableScopeDatabaseName,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	isScopeDatabaseName,
-	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	type SyncEvent,
 } from '@wcpos/sync-core';
@@ -82,6 +81,8 @@ import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 import { clearUpdateRequired, reportUpdateRequired } from './update-required-gate';
+
+import type { LegacyScopeHistory } from './legacy-scope-history';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 // The engine is published without @wcpos/utils, so it no longer imports the app
@@ -202,45 +203,50 @@ const legacyDrainStates = new Map<string, LegacyDrainState>();
  *  - NATIVE lists `Documents/wcpos-sqlite` (`scopeDatabaseFiles.list()`): every drainable
  *    `pos_v5_…` file there is marked pending at boot, and only a visit (its drain) reports it.
  *  - WEB and ELECTRON cannot list their files (the sahpool worker / the main process own them).
- *    They keep `SCOPE_GENERATION_SEEN_KEY`: the oldest scope generation this till may still hold a
- *    database of. Absent means unknown history, read as "may have run the drainable generation"
- *    (a build before this one never wrote it). While it is at or below the drainable generation,
- *    every scope in the app's store registry is marked pending at boot; once every one has reported
- *    nothing kept, it moves to the current generation and later boots count exactly.
+ *    They read the till's SCOPE HISTORY (`legacy-scope-history.ts`, in the user database's local
+ *    documents): every scope database name opened from this build on, plus the store registry.
+ *    Removing a site keeps its scope databases (and its history entry), so the registry alone
+ *    would miss them. Every name is marked pending at boot; the history is SETTLED (later boots
+ *    count exactly) only once every one has reported nothing kept AND the history is complete.
+ *    A history is complete only when it began with the app database — an install whose app
+ *    database already existed at this build's first boot started its history late, may hold a
+ *    pos_v5 nothing names, and so is never settled: its reset count reads unknown for the life
+ *    of that install (`LEGACY_HISTORY_INCOMPLETE`).
  */
-const SCOPE_GENERATION_SEEN_KEY = 'wcpos.scopeGenerationSeen';
-/** Names the boot inventory marked; the web marker moves once none of them is outstanding. */
+const LEGACY_HISTORY_INCOMPLETE = 'previous-version databases from before this build';
+/**
+ * The store registry holds a reference with no document behind it (a credential still naming a
+ * store reconciliation removed): a scope the inventory cannot name, so — like an incomplete
+ * history — the count is unknown and nothing settles while one exists.
+ */
+const LEGACY_REGISTRY_UNRESOLVED = 'previous-version databases behind unresolved store references';
+let legacyRegistryUnresolvedWarned = false;
+/** Set while the latest inventory saw an unresolved registry reference: nothing settles. */
+let legacyRegistryIncomplete = false;
+/** Names the boot inventory marked; a web/Electron history settles once none is outstanding. */
 const legacyInventory = new Set<string>();
 /** Names this process has a drain report for: a later inventory must not re-mark them pending. */
 const legacyReported = new Set<string>();
+/** The web/Electron scope history the inventory read, when it read one. */
+let legacyHistory: LegacyScopeHistory | null = null;
 
-function storageSlot(): Pick<Storage, 'getItem' | 'setItem'> | null {
-	try {
-		const storage = (globalThis as { localStorage?: Storage }).localStorage;
-		return storage ?? null;
-	} catch {
-		return null;
+/** Web/Electron: once every inventoried database reported nothing kept, a complete history settles. */
+function settleLegacyHistory(): void {
+	const history = legacyHistory;
+	if (
+		history === null ||
+		!history.complete ||
+		history.settled ||
+		legacyRegistryIncomplete ||
+		legacyInventory.size === 0
+	) {
+		return;
 	}
-}
-
-function readScopeGenerationSeen(): number | null {
-	try {
-		const value = Number(storageSlot()?.getItem(SCOPE_GENERATION_SEEN_KEY));
-		return Number.isInteger(value) && value > 0 ? value : null;
-	} catch {
-		return null;
-	}
-}
-
-/** Web/Electron: once every inventoried database reported nothing kept, the till holds none. */
-function settleScopeGenerationSeen(): void {
-	if (scopeDatabaseFiles !== null || legacyInventory.size === 0) return;
 	for (const name of legacyInventory) if (legacyUnsentReportOutstanding(name)) return;
-	try {
-		storageSlot()?.setItem(SCOPE_GENERATION_SEEN_KEY, String(SCOPE_DATABASE_GENERATION));
-	} catch {
-		// Best effort: an unwritable marker only means the next boot inventories again.
-	}
+	legacyHistory = null;
+	void history.markSettled().catch(() => {
+		// Best effort: an unwritten settle only means the next boot inventories again.
+	});
 }
 
 function reportLegacyDrain(
@@ -250,36 +256,61 @@ function reportLegacyDrain(
 ): void {
 	legacyReported.add(databaseName);
 	rememberLegacyUnsentChanges(databaseName, count, orderUuids);
-	settleScopeGenerationSeen();
+	settleLegacyHistory();
 }
 
 /**
- * The boot inventory of previous-generation databases (see `SCOPE_GENERATION_SEEN_KEY`): mark
+ * The boot inventory of previous-generation databases (see `LEGACY_HISTORY_INCOMPLETE`): mark
  * every one this till may hold pending, so the reset count reads unknown until each reports.
- * `registry` is every scope the app's user database knows (the web/Electron source).
+ * `registry` is every scope the app's user database knows; `history` is the web/Electron scope
+ * history (ignored where the platform lists its files).
  */
-export async function inventoryLegacyScopeDatabases(
-	registry: readonly StoreScopeIdentity[]
-): Promise<void> {
+export async function inventoryLegacyScopeDatabases(input: {
+	registry: readonly StoreScopeIdentity[];
+	/** Registry references with no document behind them (see `LEGACY_REGISTRY_UNRESOLVED`). */
+	unresolvedReferences?: readonly string[];
+	history?: LegacyScopeHistory;
+}): Promise<void> {
+	const unresolved = input.unresolvedReferences ?? [];
+	legacyRegistryIncomplete = unresolved.length > 0;
+	// Re-read every inventory: a reference resolved since the last one no longer blocks.
+	rememberLegacyUnsentChanges(LEGACY_REGISTRY_UNRESOLVED, legacyRegistryIncomplete ? null : 0);
+	if (legacyRegistryIncomplete) {
+		if (!legacyRegistryUnresolvedWarned) {
+			legacyRegistryUnresolvedWarned = true;
+			engineLogger.warn(
+				'The store registry names records that are missing; unsent changes from the previous database version cannot be ruled out',
+				{ context: { unresolved: [...unresolved] } }
+			);
+		}
+	}
 	let names: string[];
 	if (scopeDatabaseFiles !== null) {
 		names = (await scopeDatabaseFiles.list()).filter(
 			(name) => isScopeDatabaseName(name) && containsDrainableScopeDatabaseName(name)
 		);
+	} else if (input.history?.settled) {
+		names = [];
 	} else {
-		const seen = readScopeGenerationSeen();
-		names =
-			seen !== null && seen > DRAINABLE_SCOPE_DATABASE_GENERATION
-				? []
-				: registry.map((scope) =>
-						scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
-					);
+		names = [
+			...new Set([
+				...(input.history?.names ?? []),
+				...input.registry.map((scope) =>
+					scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+				),
+			]),
+		];
+		legacyHistory = input.history ?? null;
+		if (!input.history?.complete) {
+			// A pos_v5 nothing names may exist: the count is unknown for the life of this install.
+			rememberLegacyUnsentChanges(LEGACY_HISTORY_INCOMPLETE, null);
+		}
 	}
 	for (const name of names) {
 		legacyInventory.add(name);
 		if (!legacyReported.has(name) && !legacyDrainMarked(name)) markLegacyDrainPending(name);
 	}
-	settleScopeGenerationSeen();
+	settleLegacyHistory();
 }
 
 function legacyDrainBackoffMs(retries: number): number {

@@ -5,6 +5,7 @@ import {
 	classifyUnsentChanges,
 	forgetUnsentChanges,
 	legacyUnsentOrderUuids,
+	legacyUnsentReportOutstanding,
 	legacyUnsentReportUncountable,
 } from '@wcpos/utils/unsent-changes';
 
@@ -2289,27 +2290,12 @@ describe('previous-generation database drain', () => {
 				databaseName: scopeDatabaseName(scope, { generation: 5 }),
 			}) as LegacyScopeDrainOutcome;
 
-		/** A browser-storage fake for the web/Electron marker; restored after each test. */
-		let restoreStorage: (() => void) | null = null;
-		const fakeLocalStorage = (initial: Record<string, string>) => {
-			const values = new Map(Object.entries(initial));
-			const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-			Object.defineProperty(globalThis, 'localStorage', {
-				configurable: true,
-				value: {
-					getItem: (key: string) => values.get(key) ?? null,
-					setItem: (key: string, value: string) => void values.set(key, value),
-				},
-			});
-			restoreStorage = () => {
-				if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
-				else delete (globalThis as { localStorage?: unknown }).localStorage;
-			};
-			return values;
-		};
-		afterEach(() => {
-			restoreStorage?.();
-			restoreStorage = null;
+		/** A web/Electron scope history; `markSettled` is what a settled history writes. */
+		const history = (names: string[], complete: boolean, settled = false) => ({
+			names,
+			complete,
+			settled,
+			markSettled: jest.fn(async () => undefined),
 		});
 
 		it('native: two pos_v5 files, one visited → unknown; both visited (one drained, one absent) → exact', async () => {
@@ -2334,7 +2320,7 @@ describe('previous-generation database drain', () => {
 			);
 			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
 			await settle();
-			await loaded.inventoryLegacyScopeDatabases([]);
+			await loaded.inventoryLegacyScopeDatabases({ registry: [] });
 			// The visited scope drained; the other store's pos_v5 is still there, unread.
 			expect(classifyUnsentChanges(0)).toEqual({ status: 'unknown' });
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
@@ -2345,32 +2331,102 @@ describe('previous-generation database drain', () => {
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
 		});
 
-		it('web: a till that never ran the drainable generation counts exactly', async () => {
-			fakeLocalStorage({ 'wcpos.scopeGenerationSeen': '6' });
+		it('web: a fresh install (complete history) counts exactly once its scopes report, and settles', async () => {
 			const loaded = loadCreateAppEngine();
 			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const fresh = history([LEGACY, TARGET_LEGACY], true);
 			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
 			await settle();
-			await loaded.inventoryLegacyScopeDatabases([BASE_OPTIONS.scope, TARGET]);
-			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
-		});
-
-		it('web: a till that may have run it is unknown while a registry scope is unvisited; exact (and remembered) once every one reported', async () => {
-			const values = fakeLocalStorage({});
-			const engine = createEngineDouble();
-			const loaded = loadCreateAppEngine(() => engine);
-			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
-			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
-			await settle();
-			await loaded.inventoryLegacyScopeDatabases([BASE_OPTIONS.scope, TARGET]);
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: fresh,
+			});
+			// The second store has not been visited yet.
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
-			expect(values.has('wcpos.scopeGenerationSeen')).toBe(false);
+			expect(fresh.markSettled).not.toHaveBeenCalled();
 
 			await loaded.switchAppEngineScope(session(TARGET));
 			await settle();
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
-			// Every registry scope reported nothing kept: later boots skip the inventory.
-			expect(values.get('wcpos.scopeGenerationSeen')).toBe('6');
+			expect(fresh.markSettled).toHaveBeenCalledTimes(1);
+		});
+
+		it('web: a settled history counts exactly at once, marking nothing', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: history([LEGACY, TARGET_LEGACY], true, true),
+			});
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('web: an upgraded install (history began late) stays unknown even when every registry scope reported', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const late = history([LEGACY, TARGET_LEGACY], false);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope, TARGET],
+				history: late,
+			});
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(legacyUnsentReportUncountable(LEGACY)).toBe(false);
+			expect(legacyUnsentReportUncountable(TARGET_LEGACY)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(late.markSettled).not.toHaveBeenCalled();
+		});
+
+		it('web: a registry reference with no document (a removed store) keeps the count unknown and the history unsettled, warning once', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const fresh = history([LEGACY], true);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			for (let start = 0; start < 2; start += 1) {
+				await loaded.inventoryLegacyScopeDatabases({
+					registry: [BASE_OPTIONS.scope],
+					unresolvedReferences: ['stores:store-gone'],
+					history: fresh,
+				});
+			}
+			// Every named scope reported nothing kept; the unresolved reference still blocks.
+			expect(legacyUnsentReportOutstanding(LEGACY)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(fresh.markSettled).not.toHaveBeenCalled();
+			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
+				String(message).startsWith('The store registry names records that are missing')
+			);
+			expect(warned).toEqual([
+				[
+					expect.any(String),
+					expect.objectContaining({ context: { unresolved: ['stores:store-gone'] } }),
+				],
+			]);
+		});
+
+		it('web: a scope opened and then its site removed stays in the history, and pending', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			const removedSite = scopeDatabaseName(
+				{ site: 'https://removed.example.test', storeId: 1, cashierId: 1 },
+				{ generation: 5 }
+			);
+			const opened = history([LEGACY, removedSite], true);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			// The removed site is gone from the registry; the history still names its pos_v5.
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope],
+				history: opened,
+			});
+			expect(legacyUnsentReportOutstanding(removedSite)).toBe(true);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			expect(opened.markSettled).not.toHaveBeenCalled();
 		});
 	});
 

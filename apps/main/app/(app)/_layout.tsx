@@ -44,6 +44,7 @@ import {
 	inventoryLegacyScopeDatabases,
 	switchAppEngineScope,
 } from '../../lib/create-app-engine';
+import { recordScopeOpened, type ScopeHistoryDatabase } from '../../lib/legacy-scope-history';
 import {
 	registryScopeIdentities,
 	type ScopeRegistryDatabase,
@@ -78,20 +79,6 @@ function AppStack() {
 	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
-
-	React.useEffect(() => {
-		// Every previous-generation scope database the till may hold — not only the ones it
-		// visits — keeps "Clear all local data" from stating an exact count until it reports.
-		let cancelled = false;
-		void registryScopeIdentities(userDB as unknown as ScopeRegistryDatabase)
-			.then((registry) => (cancelled ? undefined : inventoryLegacyScopeDatabases(registry)))
-			.catch(() => {
-				// Best effort: without an inventory only the visited scopes are counted, as before.
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [userDB]);
 
 	React.useEffect(() => {
 		// The diagnostic timers belong to the app lifecycle and must stop on unmount. Every
@@ -195,6 +182,32 @@ function AppStack() {
 			t,
 		]
 	);
+
+	React.useEffect(() => {
+		// Every previous-generation scope database the till may hold — not only the ones it
+		// visits — keeps "Clear all local data" from stating an exact count until it reports.
+		// This scope joins the till's history first (web/Electron read it; native lists its files).
+		let cancelled = false;
+		const scope = { site: wpApiUrl, storeId: storeID, cashierId: cashierID };
+		void (async () => {
+			const history = await recordScopeOpened(userDB as unknown as ScopeHistoryDatabase, scope);
+			const { scopes, unresolved } = await registryScopeIdentities(
+				userDB as unknown as ScopeRegistryDatabase
+			);
+			if (!cancelled) {
+				await inventoryLegacyScopeDatabases({
+					registry: scopes,
+					unresolvedReferences: unresolved,
+					history,
+				});
+			}
+		})().catch(() => {
+			// Best effort: without an inventory only the visited scopes are counted.
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [userDB, wpApiUrl, storeID, cashierID]);
 
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
