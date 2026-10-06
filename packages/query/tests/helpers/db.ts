@@ -15,13 +15,11 @@ import { parseRestResponsePlugin } from './parse-rest-response';
 import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
 import { variationsLiteral } from './schemas/variations';
-import { searchPlugin } from '../../src/search';
 
 import type { RxCollection, RxCollectionCreator, RxDocument } from 'rxdb';
 
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(parseRestResponsePlugin);
-addRxPlugin(searchPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 
 /**

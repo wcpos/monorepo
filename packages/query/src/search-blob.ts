@@ -23,8 +23,7 @@ import type { Observable } from 'rxjs';
  * product row, 143 MiB and ~8 s at 20k; 1.5–29 KiB per row on the other collections (#2073).
  * A storage-side `$regex` scan is the other wrong shape — linear in document BYTES.
  *
- * Results are an id SET; ranking (exact sku/barcode/number first, then id) is the consumer's
- * sort. The row text comes from the ONE fold in `search-fields.ts`, fed by the projection read
+ * Results are an id SET; ordering is the consumer's query sort. The row text comes from the ONE fold in `search-fields.ts`, fed by the projection read
  * on load and by the legacy snapshot of each change event afterwards, so the two paths cannot
  * index differently. Per tab: every tab or window builds its own from the local collection and
  * keeps it fresh from the collection's change stream.

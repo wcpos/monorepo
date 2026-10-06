@@ -76,10 +76,6 @@ describe('a binding consumed by the component that built it', () => {
 		localDB = await createStoreDatabase();
 		engineDB = await createEngineDatabase(['products']);
 		const products = engineDB.collections.products as RxCollection;
-		(products as unknown as { initSearch: () => Promise<unknown> }).initSearch = async () => ({
-			collection: products,
-			find: async () => [],
-		});
 		engine = createFakeEngine(engineDB);
 		await products.bulkInsert([engineProduct({ uuid: 'coffee', id: 1, name: 'Coffee' })]);
 	});

@@ -31,7 +31,6 @@ describe('observeEngineQuery', () => {
 		]);
 		const find = jest.spyOn(collection, 'find');
 		const findByIds = jest.spyOn(collection, 'findByIds');
-		const init = jest.spyOn(collection, 'initSearch');
 		try {
 			for (const search of ['c', 'co', 'cof']) {
 				const result = await firstValueFrom(
@@ -45,7 +44,6 @@ describe('observeEngineQuery', () => {
 			}
 			expect(find).not.toHaveBeenCalled();
 			expect(findByIds.mock.calls).toEqual([[['coffee']], [['coffee']], [['coffee']]]);
-			expect(init).not.toHaveBeenCalled();
 		} finally {
 			await database.close();
 		}
@@ -61,10 +59,6 @@ describe('observeEngineQuery', () => {
 		]);
 		const documents = await collection.find().exec();
 		const hits = documents.filter((document) => document.primary !== 'other');
-		jest.spyOn(collection, 'initSearch').mockResolvedValue({
-			collection: { $: of(null) },
-			find: async () => hits,
-		} as never);
 		const find = jest.spyOn(collection, 'find');
 		const count = jest.spyOn(collection, 'count');
 		const findByIds = jest.spyOn(collection, 'findByIds');
@@ -100,10 +94,6 @@ describe('observeEngineQuery', () => {
 				engineProduct({ uuid: 'other', name: 'Hammer', price: '15' }),
 			]);
 			const documents = (await collection.find().exec()).filter((doc) => doc.primary !== 'other');
-			jest.spyOn(collection, 'initSearch').mockResolvedValue({
-				collection: { $: of(null) },
-				find: async () => documents,
-			} as never);
 			try {
 				const selector = {
 					$and: [
@@ -161,10 +151,6 @@ describe('observeEngineQuery', () => {
 			engineProduct({ uuid: 'other', name: 'Hammer', type: 'b-100' }),
 		]);
 		const documents = (await collection.find().exec()).filter((doc) => doc.primary !== 'other');
-		jest.spyOn(collection, 'initSearch').mockResolvedValue({
-			collection: { $: of(null) },
-			find: async () => documents,
-		} as never);
 		try {
 			const selector = { uuid: { $in: documents.map((doc) => doc.primary) } };
 			const oldHits = await collection.find({ selector, sort: [{ type: 'asc' }] }).exec();
@@ -190,10 +176,6 @@ describe('observeEngineQuery', () => {
 		const database = await createEngineDatabase(['products']);
 		const collection = database.collections.products;
 		await collection.insert(engineProduct({ uuid: 'other', name: 'Hammer' }));
-		jest.spyOn(collection, 'initSearch').mockResolvedValue({
-			collection: { $: of(null) },
-			find: async () => [],
-		} as never);
 		const find = jest.spyOn(collection, 'find');
 		const count = jest.spyOn(collection, 'count');
 		const findByIds = jest.spyOn(collection, 'findByIds');
@@ -219,10 +201,6 @@ describe('observeEngineQuery', () => {
 		const collection = database.collections.products;
 		const hit = await collection.insert(engineProduct({ uuid: 'hit', name: 'Shirt' }));
 		// A single index answer isolates point-read reactivity from search-lane reruns.
-		jest.spyOn(collection, 'initSearch').mockResolvedValue({
-			collection: { $: of(null) },
-			find: async () => [hit],
-		} as never);
 		const results: { ids: string[]; count: number }[] = [];
 		const subscription = observeEngineQuery(createFakeEngine(database), {
 			collection: 'products',
@@ -242,16 +220,9 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
-	it.each([
-		['products', 'index'],
-		['products', 'unavailable'],
-		['products', 'stalled'],
-		['variations', 'index'],
-		['variations', 'unavailable'],
-		['variations', 'stalled'],
-	] as const)(
-		'matches every Georgian search term in %s before counting/paging via %s',
-		async (collection, lane) => {
+	it.each([['products'], ['variations']] as const)(
+		'matches every Georgian search term in %s before counting/paging',
+		async (collection) => {
 			const database = await createEngineDatabase([collection]);
 			const engine = createFakeEngine(database);
 			const record = collection === 'products' ? engineProduct : engineVariation;
@@ -262,17 +233,6 @@ describe('observeEngineQuery', () => {
 				record({ uuid: 'gap', id: 4, name: 'MY xxxx საბარგული' }),
 				record({ uuid: 'split', id: 5, name: 'საბარგული', sku: 'MY' }),
 			]);
-			const documents = await database.collections[collection].find().exec();
-			const find = jest.fn().mockResolvedValue(documents);
-			const init = jest.spyOn(database.collections[collection], 'initSearch');
-			if (lane === 'unavailable') init.mockResolvedValue(null);
-			else
-				init.mockResolvedValue({
-					collection: { $: of(null) },
-					find: lane === 'stalled' ? () => new Promise(() => {}) : find,
-				} as never);
-			const recreateSearch = jest.fn();
-			Object.assign(database.collections[collection], { recreateSearch });
 			try {
 				const result = await firstValueFrom(
 					observeEngineQuery(engine, {
@@ -292,9 +252,6 @@ describe('observeEngineQuery', () => {
 					})
 				);
 				expect(all.hits.map((hit) => hit.id).sort()).toEqual(['gap', 'phrase', 'reverse', 'split']);
-				expect(recreateSearch).not.toHaveBeenCalled();
-				expect(init).not.toHaveBeenCalled();
-				expect(find).not.toHaveBeenCalled();
 			} finally {
 				await database.close();
 			}
@@ -336,7 +293,6 @@ describe('observeEngineQuery', () => {
 		['0,4', 'Coil 0,4 ohm'],
 	])('matches all short terms in %s and reacts to writes', async (search, name) => {
 		const database = await createEngineDatabase(['products']);
-		const init = jest.spyOn(database.collections.products, 'initSearch');
 		await database.collections.products.insert(
 			engineProduct({ uuid: 'empty', id: 1, name: 'zzz' })
 		);
@@ -352,7 +308,6 @@ describe('observeEngineQuery', () => {
 			await waitFor(() => expect(latest).toEqual([]));
 			await database.collections.products.insert(engineProduct({ uuid: 'embedded', id: 2, name }));
 			await waitFor(() => expect(latest).toEqual(['embedded']));
-			expect(init).not.toHaveBeenCalled();
 		} finally {
 			sub.unsubscribe();
 			await database.close();
@@ -468,7 +423,7 @@ describe('observeEngineQuery', () => {
 		await database.collections.products.insert(
 			engineProduct({ uuid: 'fallback-hit', id: 1, name: 'Plain', sku: '42' })
 		);
-		// Mirror initSearch's fallback source: collection.options.searchFields.
+		// The blob falls back to collection.options.searchFields when the descriptor omits them.
 		(database.collections.products as { options?: { searchFields?: string[] } }).options = {
 			searchFields: ['name', 'sku'],
 		};
@@ -490,7 +445,6 @@ describe('observeEngineQuery', () => {
 			collections: {
 				products: {
 					$: of(null),
-					initSearch: async () => ({ collection: { $: of(null) }, find: async () => [] }),
 					schema: {
 						jsonSchema: fillWithDefaultSettings(engineSyncCollectionCreators().products.schema),
 					},
@@ -535,9 +489,6 @@ describe('observeEngineQuery', () => {
 		const document = await database.collections.products.findOne('flex-hit').exec();
 		if (!document) throw new Error('missing flex fixture');
 		const search = jest.fn(async () => [document]);
-		const initSearch = jest
-			.spyOn(database.collections.products, 'initSearch')
-			.mockResolvedValue({ collection: { $: of(null) }, find: search } as never);
 
 		try {
 			const result = await firstValueFrom(
@@ -547,7 +498,6 @@ describe('observeEngineQuery', () => {
 					searchFields: ['name'],
 				})
 			);
-			expect(initSearch).not.toHaveBeenCalled();
 			expect(search).not.toHaveBeenCalled();
 			expect(result.hits.map((hit) => hit.id)).toEqual(['flex-hit']);
 		} finally {
@@ -566,11 +516,6 @@ describe('observeEngineQuery', () => {
 			await database.collections.products.insert(
 				engineProduct({ uuid: 'answered-hit', id: 1, name: 'Abc product' })
 			);
-			const document = await database.collections.products.findOne('answered-hit').exec();
-			if (!document) throw new Error('missing answered fixture');
-			jest
-				.spyOn(database.collections.products, 'initSearch')
-				.mockResolvedValue({ collection: { $: of(null) }, find: async () => [document] } as never);
 			const pending = createPendingFakeEngine(database);
 			const listeners = new Set<(current: RxDatabase | null) => void>();
 			pending.engine.db$ = (listener) => {
@@ -613,12 +558,6 @@ describe('observeEngineQuery', () => {
 			const cooltech = await database.collections.products.findOne('cooltech').exec();
 			const edition = await database.collections.products.findOne('edition').exec();
 			if (!cooltech || !edition) throw new Error('missing legitimate-match fixtures');
-			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
-				collection: { $: of(null) },
-				find: async (term: string) => (term === 'cooltech' ? [cooltech] : [edition]),
-			} as never);
-			const recreateSearch = jest.fn();
-			Object.assign(database.collections.products, { recreateSearch });
 
 			try {
 				for (const [search, expected] of [
@@ -635,7 +574,6 @@ describe('observeEngineQuery', () => {
 					expect(result.hits.map((hit) => hit.id)).toEqual([expected]);
 				}
 				expect(searchError).not.toHaveBeenCalled();
-				expect(recreateSearch).not.toHaveBeenCalled();
 			} finally {
 				await database.close();
 			}
@@ -649,12 +587,6 @@ describe('observeEngineQuery', () => {
 			);
 			const document = await database.collections.products.findOne('sweatshirt').exec();
 			if (!document) throw new Error('missing mid-word fixture');
-			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
-				collection: { $: of(null) },
-				find: async () => [document],
-			} as never);
-			const recreateSearch = jest.fn();
-			Object.assign(database.collections.products, { recreateSearch });
 
 			try {
 				const result = await firstValueFrom(
@@ -666,7 +598,6 @@ describe('observeEngineQuery', () => {
 				);
 				expect(result.hits.map((hit) => hit.id)).toEqual(['sweatshirt']);
 				expect(searchError).not.toHaveBeenCalled();
-				expect(recreateSearch).not.toHaveBeenCalled();
 			} finally {
 				await database.close();
 			}
@@ -680,12 +611,6 @@ describe('observeEngineQuery', () => {
 			);
 			const document = await database.collections.products.findOne('red-shirt').exec();
 			if (!document) throw new Error('missing punctuation fixture');
-			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
-				collection: { $: of(null) },
-				find: async () => [document],
-			} as never);
-			const recreateSearch = jest.fn();
-			Object.assign(database.collections.products, { recreateSearch });
 
 			try {
 				const result = await firstValueFrom(
@@ -697,7 +622,6 @@ describe('observeEngineQuery', () => {
 				);
 				expect(result.hits.map((hit) => hit.id)).toEqual(['red-shirt']);
 				expect(searchError).not.toHaveBeenCalled();
-				expect(recreateSearch).not.toHaveBeenCalled();
 			} finally {
 				await database.close();
 			}

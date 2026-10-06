@@ -25,7 +25,10 @@ const WRAPPING_PUNCTUATION = /^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu;
 
 /** Lowercase, NFD, combining marks removed: "Crème" and "creme" fold to the same text. */
 export function foldSearchText(value: unknown): string {
-	return String(value).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+	return String(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
 }
 
 /** The typed query as folded terms, each of which must be a substring of a matching row. */

@@ -772,7 +772,7 @@ function useEngineBinding(
 						recheckMs
 					)
 		).pipe(shareReplay({ bufferSize: 1, refCount: true }));
-	}, [descriptor, enabled, recheckMs, runtime.engine, runtime.locale]);
+	}, [descriptor, enabled, recheckMs, runtime.engine]);
 	const census$ = React.useMemo(
 		() =>
 			compiled.censusScoped
@@ -859,7 +859,6 @@ function releaseHandles(handles: RequirementHandle[]): void {
 
 function observeParentLookup(
 	engine: RxdbSyncEngine,
-	locale: string,
 	id: string,
 	parentIds: number[],
 	searchFields: string[] | undefined
@@ -963,7 +962,6 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 					direct.searchState === 'answered' && children.searchState === 'answered';
 				return observeParentLookup(
 					runtime.engine,
-					runtime.locale,
 					`${bindingId}:lookup`,
 					parentIds,
 					descriptor.searchFields
@@ -993,7 +991,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
+	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine]);
 	const resource = useObservableResource(result$);
 	const census$ = React.useMemo(
 		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),

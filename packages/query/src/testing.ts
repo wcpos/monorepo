@@ -33,13 +33,10 @@ import {
 	wooMetaCarrier,
 } from '@wcpos/sync-core';
 
-import { searchPlugin } from './search';
-
 import type { RxDatabase } from 'rxdb';
 
 addRxPlugin(RxDBMigrationSchemaPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
-addRxPlugin(searchPlugin);
 
 let sequence = 0;
 
