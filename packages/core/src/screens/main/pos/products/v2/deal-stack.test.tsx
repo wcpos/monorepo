@@ -458,10 +458,14 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	mockDelays.length = 0;
 	rerender(<Stage detail={null} count={12} />);
 	const back = BEATS.oldTiles;
-	// Last out, first home.
-	expect(mockDelays).toEqual(
-		Array.from({ length: 11 }, (_, index) => Math.min(10 - index, back.cap - 1) * back.step)
-	);
+	// Last out, first home — after the parent's walk, and before the stage's two clocks, each of
+	// which starts on its own first frame (a zero delay, see the first-frame test below).
+	expect(mockDelays).toEqual([
+		0,
+		...Array.from({ length: 11 }, (_, index) => Math.min(10 - index, back.cap - 1) * back.step),
+		0,
+		0,
+	]);
 	// The products, the breadcrumb and the parent come back on one clock.
 	expect(mockTimings.filter((call) => call.toValue === 0).at(-1)!.duration).toBe(PANE);
 });
@@ -683,9 +687,10 @@ it('a collapsing stack cross-fades its detail out and the root in; nothing trave
 	const timings = mockTimings.length;
 	const delays = mockDelays.length;
 	rerender(<Stage detail={null} collapse />);
-	// The tiles are not turned for home: no stagger, no walk, the deal stays dealt.
+	// The tiles are not turned for home: no stagger, no walk, the deal stays dealt. The only
+	// delays are the fade's two clocks starting on their first frame.
 	expect(deal().dealt).toBe(true);
-	expect(mockDelays.length).toBe(delays);
+	expect(mockDelays.slice(delays)).toEqual([0, 0]);
 	// One clock: the detail out where it stands, the products in over it.
 	expect(mockTimings.slice(timings)).toEqual([
 		expect.objectContaining({
@@ -845,7 +850,8 @@ it('a stack inside a detail that cross-fades away holds what it shows', () => {
 	// leaves with the surface that holds it.
 	expect(screen.getByTestId('inner-detail').textContent).toBe('Tees');
 	expect(innerRoot().getAttribute('aria-hidden')).toBe('true');
-	expect(mockDelays.length).toBe(delays);
+	// Only the outer stack's fade clocks (each from its first frame); nothing of the inner stack's.
+	expect(mockDelays.slice(delays)).toEqual([0, 0]);
 });
 
 // Android: a React commit carries the props the UI thread has ALREADY applied. A copy shown on
@@ -993,4 +999,34 @@ it('the web keeps its scroller: overflow visible would end the scrolling', () =>
 	rerender(<Stage detail="Hoodie" scroll={scroll} />);
 	layOut();
 	expect(JSON.parse(screen.getByTestId('air').textContent!)).toEqual({});
+});
+
+// A clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted
+// before the next frame stamped that frame well into the curve (Pixel, 2026-10-06: a cross-fade's
+// first changed frame 61–71% through, the drill-back's walk 41%). Every clock of the stage, and
+// the parent's walk, is wrapped so it starts inside its own first frame (`withDelay(0, …)`).
+it('starts every clock of the deal on its own first frame, out, home and in a cross-fade', () => {
+	const { rerender } = render(<Stage detail={null} count={1} />);
+	rerender(<Stage detail="Hoodie" count={1} />);
+	let delays = mockDelays.length;
+	let timings = mockTimings.length;
+	layOut();
+	// Out: the furniture and the products, then the parent's walk — three clocks, three wraps.
+	expect(mockTimings.length - timings).toBe(3);
+	expect(mockDelays.slice(delays)).toEqual([0, 0, 0]);
+	delays = mockDelays.length;
+	timings = mockTimings.length;
+	rerender(<Stage detail={null} count={1} />);
+	// Home: the parent's walk, then the furniture and the products.
+	expect(mockTimings.length - timings).toBe(3);
+	expect(mockDelays.slice(delays)).toEqual([0, 0, 0]);
+	finish(0);
+	rerender(<Stage detail="Tee" count={1} />);
+	layOut();
+	finish(1);
+	delays = mockDelays.length;
+	timings = mockTimings.length;
+	rerender(<Stage detail={null} count={1} collapse />);
+	expect(mockTimings.length - timings).toBe(2);
+	expect(mockDelays.slice(delays)).toEqual([0, 0]);
 });

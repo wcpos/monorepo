@@ -100,6 +100,17 @@ const DEAL_SPAN = Math.max(
 );
 const REDUCE = { reduceMotion: ReduceMotion.System };
 
+/**
+ * A clock that starts on the first frame the UI thread runs it, not when it was asked for. A
+ * clock set from JS takes its start time when the UI thread receives it; a heavy commit mounted
+ * before the next frame then stamped that frame well into the curve (Pixel, 2026-10-06: a
+ * cross-fade's first changed frame 61–71% through, a walk's 41–59%). `withDelay` starts what it
+ * wraps inside its own first frame, with that frame's time, so the first frame shows the start.
+ */
+function fromFirstFrame<T>(clock: T): T {
+	return withDelay(0, clock as never) as T;
+}
+
 // Web only: covered products leave the tab order and the accessibility tree but keep their
 // layout, so the grid is still scrolled to the same row when it comes back.
 const COVERED = Platform.OS === 'web' ? ({ visibility: 'hidden' } as object) : null;
@@ -310,22 +321,26 @@ export function DealStack<T>({
 			// under it had spent half the fade before its first frame painted (web film, 2026-10-06).
 			fadePending.current = true;
 			const frame = requestAnimationFrame(() => {
-				veil.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
-					'worklet';
-					if (finished) scheduleOnRN(clearedBy, asked, true);
-				});
-				under.value = withTiming(1, { duration: PANE, easing: EASE, ...REDUCE });
+				veil.value = fromFirstFrame(
+					withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
+						'worklet';
+						if (finished) scheduleOnRN(clearedBy, asked, true);
+					})
+				);
+				under.value = fromFirstFrame(withTiming(1, { duration: PANE, easing: EASE, ...REDUCE }));
 			});
 			return () => cancelAnimationFrame(frame);
 		}
 		if (!open) {
 			// The products and the parent share one clock: the detail leaves the stage on the frame
 			// the parent tile reaches home, and the breadcrumb is gone before it passes underneath.
-			furniture.value = withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
-				'worklet';
-				if (finished) scheduleOnRN(clearedBy, asked, false);
-			});
-			under.value = withTiming(1, { duration: PANE, easing: EASE_EXIT, ...REDUCE });
+			furniture.value = fromFirstFrame(
+				withTiming(0, { duration: PANE, easing: EASE, ...REDUCE }, (finished) => {
+					'worklet';
+					if (finished) scheduleOnRN(clearedBy, asked, false);
+				})
+			);
+			under.value = fromFirstFrame(withTiming(1, { duration: PANE, easing: EASE_EXIT, ...REDUCE }));
 			return;
 		}
 		// A tap during the return keeps the stage: the return's clock would otherwise clear the
@@ -341,15 +356,19 @@ export function DealStack<T>({
 		const frame = requestAnimationFrame(() => {
 			setDealt(true);
 			landing = setTimeout(() => setLanded(true), DEAL_SPAN);
-			furniture.value = withTiming(
-				1,
-				{ duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE },
-				(finished) => {
-					'worklet';
-					if (finished) scheduleOnRN(setSettled, true);
-				}
+			furniture.value = fromFirstFrame(
+				withTiming(
+					1,
+					{ duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE },
+					(finished) => {
+						'worklet';
+						if (finished) scheduleOnRN(setSettled, true);
+					}
+				)
 			);
-			under.value = withTiming(0, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE });
+			under.value = fromFirstFrame(
+				withTiming(0, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE })
+			);
 		});
 		return () => {
 			cancelAnimationFrame(frame);
@@ -502,7 +521,9 @@ export function DealCell({
 		if (aimed.current === dealt) return;
 		aimed.current = dealt;
 		if (parent) {
-			travel.value = withTiming(dealt ? 1 : 0, { duration: PANE, easing: EASE, ...REDUCE });
+			travel.value = fromFirstFrame(
+				withTiming(dealt ? 1 : 0, { duration: PANE, easing: EASE, ...REDUCE })
+			);
 			return;
 		}
 		// Out: in order, each landing on the beat. Back: last out is first home, speeding up
