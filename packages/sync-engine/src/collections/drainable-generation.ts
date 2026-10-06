@@ -11,11 +11,22 @@
  *
  * v5 → v6 moved one schema: products promoted `tagIds`. When the generation
  * moves again, this file becomes the schemas the NEW previous generation
- * shipped; `schema-behaviour.test.ts` pins its digests beside the current ones.
+ * shipped — and `DRAINABLE_SCHEMAS_GENERATION` below moves with it.
+ * `schema-behaviour.test.ts` pins its digests as a literal map beside the
+ * current ones, keyed by generation, and fails a bump that forgot this file.
  */
 
 import { type CollectionCreator, engineCollectionCreators } from './engine-collections';
 import { productSchema } from './product-schema';
+
+/**
+ * The scope-database generation whose schemas this file reproduces. The engine
+ * refuses to open the drainable generation with them unless this equals
+ * `DRAINABLE_SCOPE_DATABASE_GENERATION` — a bump that left this file behind
+ * fails closed (the drain reports `failed`) instead of opening a database with
+ * the wrong schemas.
+ */
+export const DRAINABLE_SCHEMAS_GENERATION = 5;
 
 const { tagIds: _promotedAtV6, ...drainableProductProperties } = productSchema.properties;
 

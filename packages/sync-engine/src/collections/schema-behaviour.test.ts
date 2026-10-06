@@ -46,7 +46,10 @@ import {
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
-import { drainableGenerationCollectionCreators } from './drainable-generation';
+import {
+	DRAINABLE_SCHEMAS_GENERATION,
+	drainableGenerationCollectionCreators,
+} from './drainable-generation';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -558,24 +561,84 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 
 	/**
 	 * The DRAINABLE generation's schemas (`drainable-generation.ts`) are what that generation
-	 * shipped: every digest it pinned. A wrong one throws DB6 on the very database the drain
-	 * exists to send, so the drain would keep it forever.
+	 * shipped: every digest it pinned, written out IN FULL — a map derived from
+	 * `PINNED_DIGESTS` would move with the current schemas, so a bump that forgot
+	 * `drainable-generation.ts` would still pass. A wrong digest throws DB6 on the very
+	 * database the drain exists to send, so the drain could never send it.
 	 */
 	const PINNED_DRAINABLE_DIGESTS: Record<string, string> = {
-		...PINNED_DIGESTS,
+		orders: 'bc0b35ca7829dad7',
 		// v5's products, before tagIds was promoted.
 		products: '533f385dbba3bd58',
+		variations: 'df92c9203ba108c1',
+		customers: 'ac922ffdb0538886',
+		taxRates: '7573745a31add62b',
+		refunds: 'd78bcc1758dcf4ab',
+		categories: 'ac922ffdb0538886',
+		brands: 'ac922ffdb0538886',
+		tags: 'ac922ffdb0538886',
+		coupons: 'ac922ffdb0538886',
+		schedulerTaskStates: '3fbf7c70726dec3c',
+		coverageRecords: '3022569cc18cc7df',
+		coverageLanes: '12a1f38d36ffc0d0',
+		coverageCompactionLeases: '6b31b2aca59dab39',
+		coverageCompactionFailures: '7bd215537ecdb03d',
+		queryTotalCacheEntries: '00db9dffbd396f3c',
+		queryTotalRequestStates: '184b47e2c3aae0bf',
+		existenceManifest: '107bac24876b267a',
+		existenceManifestCustomers: '107bac24876b267a',
+		existenceManifestOrders: '107bac24876b267a',
+		syncCheckpoints: '13a461c616ee12b9',
+		recordMutations: '94c4fd4e440dbdd7',
+		engineKv: 'a8d94dc8495e36cc',
+		changeSignalStates: 'f53de19b6c426c6a',
 	};
 
-	it('the drainable generation opens with the schemas it shipped', () => {
-		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
-		const actual = Object.fromEntries(
+	/**
+	 * One digest per scope-database GENERATION: the digest of that generation's whole
+	 * digest map. A bump adds a row here; the current recipe must hash to the current
+	 * generation's row and `drainable-generation.ts` to the previous one's, so moving the
+	 * generation without rewriting the drainable recipe fails here, by generation.
+	 */
+	const PINNED_GENERATION_DIGESTS: Record<number, string> = {
+		5: '24cd32cfac8830f7',
+		6: '7965df73f69d67e7',
+	};
+
+	const digestOfDigests = (digests: Record<string, string>) =>
+		createHash('sha256').update(canonicalJson(digests)).digest('hex').slice(0, 16);
+
+	const drainableDigests = () =>
+		Object.fromEntries(
 			Object.entries(drainableGenerationCollectionCreators()).map(([name, creator]) => [
 				name,
 				digest(creator.schema),
 			])
 		);
-		expect(actual).toEqual(PINNED_DRAINABLE_DIGESTS);
+
+	it('the drainable generation opens with the schemas it shipped', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
+		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
+	});
+
+	it('drainable-generation.ts reproduces exactly the generation before the current one', () => {
+		expect(DRAINABLE_SCHEMAS_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(digestOfDigests(PINNED_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION]
+		);
+		expect(digestOfDigests(PINNED_DRAINABLE_DIGESTS)).toBe(
+			PINNED_GENERATION_DIGESTS[PINNED_SCOPE_GENERATION - 1]
+		);
+		const current = Object.fromEntries(
+			Object.entries(engineCollectionCreators()).map(([name, creator]) => [
+				name,
+				digest(creator.schema),
+			])
+		);
+		expect(digestOfDigests(current)).toBe(PINNED_GENERATION_DIGESTS[SCOPE_DATABASE_GENERATION]);
+		expect(digestOfDigests(drainableDigests())).toBe(
+			PINNED_GENERATION_DIGESTS[DRAINABLE_SCHEMAS_GENERATION]
+		);
 	});
 
 	it('every versioned schema ships the migration strategies its version needs', () => {

@@ -70,7 +70,10 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from './collections/engine-collections';
-import { drainableGenerationCollectionCreators } from './collections/drainable-generation';
+import {
+	DRAINABLE_SCHEMAS_GENERATION,
+	drainableGenerationCollectionCreators,
+} from './collections/drainable-generation';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
@@ -752,6 +755,14 @@ export function createRxdbSyncEngine(
 	) {
 		throw new Error(
 			`Scope database generation ${scopeDatabaseGeneration} cannot be opened: this build opens v${SCOPE_DATABASE_GENERATION} and drains v${DRAINABLE_SCOPE_DATABASE_GENERATION}`
+		);
+	}
+	if (
+		scopeDatabaseGeneration === DRAINABLE_SCOPE_DATABASE_GENERATION &&
+		DRAINABLE_SCHEMAS_GENERATION !== DRAINABLE_SCOPE_DATABASE_GENERATION
+	) {
+		throw new Error(
+			`Scope database generation ${scopeDatabaseGeneration} cannot be drained: drainable-generation.ts reproduces v${DRAINABLE_SCHEMAS_GENERATION}'s schemas`
 		);
 	}
 	const collectionCreators =
