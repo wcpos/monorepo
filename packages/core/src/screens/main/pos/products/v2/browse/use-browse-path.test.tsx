@@ -426,6 +426,30 @@ it('a term that leaves the source drops the path to the root', () => {
 	expect(actions.clearFilter).toHaveBeenLastCalledWith('categories');
 });
 
+// The open term's count drops to zero: the source holds its list while it looks for a product
+// carrying it, and the term may be missing from that list meanwhile — unknown, not deleted.
+it('an open term whose count just dropped to zero keeps its path while its existence read is pending', () => {
+	let source: { all: unknown[]; pending: boolean } = { all: [drinks, hot], pending: false };
+	const { result, rerender } = renderHook(() =>
+		useBrowsePath('categories', { ...terms, ...source } as never)
+	);
+	act(() => result.current.enter(drinks));
+	source = { all: [hot], pending: true };
+	rerender();
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	// Answered with a product carrying it: still there.
+	source = { all: [drinks, hot], pending: false };
+	rerender();
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	// Answered without one: gone, and the path with it.
+	source = { all: [hot], pending: true };
+	rerender();
+	expect(result.current.path.length).toBe(1);
+	source = { all: [hot], pending: false };
+	rerender();
+	expect(result.current.path).toEqual([]);
+});
+
 it('a parent reparented or deleted under an open child drops the path', () => {
 	let all: unknown[] = [drinks, hot];
 	const { result, rerender } = renderHook(() =>

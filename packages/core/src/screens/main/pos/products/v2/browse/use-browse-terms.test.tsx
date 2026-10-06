@@ -267,8 +267,8 @@ describe('useBrowseCounts', () => {
 		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
 		expect(counts.current.categories).toBe(2);
 
-		// A changed id set is a new read, pending until it answers: the last answer is for other
-		// ids, and says nothing about Kiosk.
+		// A changed id set is a new read, pending until it answers: the stage holds its list, but
+		// a held list is not a count — the row shows none (and is not dimmed).
 		terms['products/categories'].emit('products/categories', [
 			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
 			{ id: 5, name: 'Counter', parent: 0, count: 0 },
@@ -325,9 +325,9 @@ describe('useBrowseTerms', () => {
 		expect(asked(useAllTermsBinding)).toEqual(['["products/categories",false]']);
 	});
 	// The open term's count drops to zero beside another zero-count term: the existence read for
-	// the new id set has not answered, and the last one never asked about this term — served as
-	// known, the term would vanish, and an open path on it would read as deleted.
-	it('is unanswered while a term that has just dropped to zero count is looked for, then keeps it if carried', () => {
+	// the new id set has not answered, and the last one never asked about this term. The list is
+	// held as it was (no blink), the newly-zero term in it, and marked pending.
+	it('holds the visible list, pending, while a term that has just dropped to zero count is looked for', () => {
 		const carrying = fakeCarrying();
 		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
 		terms.emit('products/categories:true', [
@@ -336,18 +336,18 @@ describe('useBrowseTerms', () => {
 		]);
 		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
 		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(false);
 
 		terms.emit('products/categories:true', [
 			{ id: 1, name: 'Drinks', parent: 0, count: 0 },
 			{ id: 5, name: 'Counter', parent: 0, count: 0 },
 		]);
-		expect(browse.current.all).toBeUndefined();
-		carrying.emit('categories', [1, 5], [{ categories: [{ id: 1 }] }, { categories: [{ id: 5 }] }]);
-		expect(
-			browse.current.all
-				?.map((term) => term.kind === 'term' && term.id)
-				.sort((a, b) => Number(a) - Number(b))
-		).toEqual([1, 5]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(true);
+		// Answered without a product carrying Drinks: it goes, and the list is no longer held.
+		carrying.emit('categories', [1, 5], [{ categories: [{ id: 5 }] }]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5]);
+		expect(browse.current.pending).toBe(false);
 	});
 
 	it("has no terms after a source switch until the new source's own query answers", () => {

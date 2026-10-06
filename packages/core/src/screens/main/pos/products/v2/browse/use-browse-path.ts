@@ -114,10 +114,13 @@ function movedBesidesSearch(
 
 /**
  * Every stored term is still in the source, the first is still a root (its parent absent or
- * not in the source), and each later one is still the child of the one before.
+ * not in the source), and each later one is still the child of the one before. Unknown — the
+ * source unanswered, or its list held while an existence read is pending (a term that has just
+ * dropped to zero count is not in it yet) — is not gone: the chain stands.
  */
-function chainStands(stored: PathEntry[], all: BrowseTerm[] | undefined): boolean {
-	if (all === undefined) return true;
+function chainStands(stored: PathEntry[], terms: Pick<BrowseTerms, 'all' | 'pending'>): boolean {
+	const { all } = terms;
+	if (all === undefined || terms.pending) return true;
 	const ids = new Set(all.map((candidate) => (candidate.kind === 'term' ? candidate.id : -1)));
 	let previous: number | undefined;
 	for (const { term } of stored) {
@@ -334,7 +337,8 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			// …and the whole chain must still stand in the source: every stored term present, each
 			// still the child of the one before (a parent deleted or reparented on the server
 			// leaves the child a root, or someone else's). While the source has not answered
-			// (`all === undefined`) it is unknown, not gone.
+			// (`all === undefined`), or its list is held over a pending existence read
+			// (`pending`), it is unknown, not gone.
 			// The filter must still be what the PATH put there (`projection`), not the term's
 			// current derived set: a child added or removed under the open term changes `idsFor`
 			// without the cashier touching anything — that is re-projected below, not treated as a
@@ -350,7 +354,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 				projection?.kind === 'taxonomy' &&
 				sameSet(state.filters[field], projection.ids) &&
 				isEqual(filtersBesides(state.filters, field), projection.rest) &&
-				chainStands(stored, terms.all);
+				chainStands(stored, terms);
 		else {
 			// Once entered, a shortcut level holds while its filters and search do: the sort is the
 			// cashier's to change inside the level (a table header), never a way out of it. The
