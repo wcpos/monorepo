@@ -129,10 +129,22 @@ const NONE: BrowseTerms = {
 type Hit<T> = { record: T };
 type ProductRecord = { payload: Partial<Record<TaxonomySource, { id?: number }[]>> };
 
+type TaxonomyTermsOptions = {
+	/** Read the till's resident terms and pull nothing — the settings dialog's counts. */
+	residentsOnly?: boolean;
+	/** The products baseline: without it, only an in-stock product lifts a zero-count term. */
+	showOutOfStock?: boolean;
+};
+
 /** One taxonomy's terms; no taxonomy (a shortcuts stage) binds nothing, in the same hook order. */
-function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
+function useTaxonomyTerms(
+	source: TaxonomySource | undefined,
+	{ residentsOnly = false, showOutOfStock = false }: TaxonomyTermsOptions = {}
+): BrowseTerms {
 	const taxonomy = source ?? 'categories';
-	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined);
+	const binding = useAllTermsBinding(collectionFor(taxonomy), source !== undefined, {
+		residentsOnly,
+	});
 	// Read as state, never suspend: the tiles are on a stage that must not swap for a skeleton.
 	// THIS collection's answer: a source switch is unanswered until its own query emits, never
 	// the previous taxonomy's records projected as the new source.
@@ -153,7 +165,7 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
 				.map((hit) => hit.record.payload.id),
 		[hits]
 	);
-	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds);
+	const carrying = useProductsCarryingTermsBinding(taxonomy, zeroCountIds, { showOutOfStock });
 	// THIS id set's answer (a disabled read emits its empty answer on subscribe).
 	const products = useAnswerOf(carrying.result$)?.hits as Hit<ProductRecord>[] | undefined;
 	// Keyed on the sorted ids, so a product write that leaves the set as it was keeps the same
@@ -203,12 +215,16 @@ function useTaxonomyTerms(source: TaxonomySource | undefined): BrowseTerms {
  * How many terms each source would show — for the settings row's count and its dimming.
  * `undefined` until the source's collection has answered: a source that is still loading is
  * not an empty one, and the dialog can open before the browse bindings have (All products).
+ * Resident terms only: opening the dialog pulls nothing (the reference seed lane keeps the
+ * terms current, and the stage's own binding refreshes the source it shows).
  */
 export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | undefined> {
-	const categories = useTaxonomyTerms('categories');
-	const tags = useTaxonomyTerms('tags');
-	const brands = useTaxonomyTerms('brands');
 	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	const options = { residentsOnly: true, showOutOfStock };
+	const categories = useTaxonomyTerms('categories', options);
+	const tags = useTaxonomyTerms('tags', options);
+	const brands = useTaxonomyTerms('brands', options);
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const answered = (terms: BrowseTerms) =>
 		terms.all === undefined ? undefined : terms.rootsOf().length;
@@ -221,9 +237,10 @@ export function useBrowseCounts(): Record<Exclude<BrowseBy, 'all'>, number | und
 }
 
 export function useBrowseTerms(source: BrowseBy): BrowseTerms {
-	// Only the active source is read (the settings dialog's counts read all three).
-	const taxonomy = useTaxonomyTerms(isTaxonomy(source) ? source : undefined);
 	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	// Only the active source is read (the settings dialog's counts read all three).
+	const taxonomy = useTaxonomyTerms(isTaxonomy(source) ? source : undefined, { showOutOfStock });
 	const filterBar = useDocField(uiSettings, (value) => value.filterBar);
 	const t = useT();
 	const { format } = useCurrencyFormat();

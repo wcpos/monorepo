@@ -26,7 +26,9 @@ import {
 import type { FakeEngine } from '@wcpos/query/testing';
 
 import {
+	EXISTENCE_RECHECK_MS,
 	useAllCategoriesBinding,
+	useAllTermsBinding,
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useLogsBinding,
@@ -243,6 +245,122 @@ describe('query bindings', () => {
 			).toEqual(['live', 'pos-only'])
 		);
 		expect(engine.requireCalls).toEqual([]);
+	});
+
+	it('compiles the existence read to promoted tag membership inside the selling baseline', () => {
+		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
+		const { rerender } = renderHook(
+			({ showOutOfStock }) => useProductsCarryingTermsBinding('tags', [9, 5], { showOutOfStock }),
+			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
+		);
+		const prefilter = () =>
+			(
+				compileQuery.mock.results.at(-1)?.value as ReturnType<
+					typeof queryStateTranslator.compileQuery
+				>
+			).read.prefilter;
+
+		// A numeric membership on the promoted column, never an `$elemMatch` over the payload.
+		expect(prefilter()).toEqual({
+			$and: [
+				{ tagIds: { $in: [5, 9] } },
+				{ 'payload.status': 'publish' },
+				{ stockStatus: 'instock' },
+			],
+		});
+		expect(JSON.stringify(prefilter())).not.toContain('payload.tags');
+
+		rerender({ showOutOfStock: true });
+		expect(prefilter()).toEqual({
+			$and: [{ tagIds: { $in: [5, 9] } }, { 'payload.status': 'publish' }],
+		});
+		compileQuery.mockRestore();
+	});
+
+	it('lifts a term only for a published product the stage would show (in stock unless shown)', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'stocked', id: 1, status: 'publish', tags: [{ id: 5 }] }),
+			engineProduct({
+				uuid: 'sold-out',
+				id: 2,
+				status: 'publish',
+				stock_status: 'outofstock',
+				tags: [{ id: 6 }],
+			}),
+			engineProduct({ uuid: 'draft', id: 3, status: 'draft', tags: [{ id: 7 }] }),
+		]);
+		const ids = (resource: Resource) =>
+			current(resource)
+				?.hits.map((hit) => hit.id)
+				.sort();
+		const { result, rerender } = renderHook(
+			({ showOutOfStock }) =>
+				useProductsCarryingTermsBinding('tags', [5, 6, 7], { showOutOfStock }),
+			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
+		);
+
+		await waitFor(() => expect(ids(result.current.resource)).toEqual(['stocked']));
+		rerender({ showOutOfStock: true });
+		await waitFor(() => expect(ids(result.current.resource)).toEqual(['sold-out', 'stocked']));
+	});
+
+	it('answers the existence read once, and re-checks a product write only after the window', async () => {
+		jest.useFakeTimers();
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'first', id: 1, status: 'publish', tags: [{ id: 5 }] })
+		);
+		const answers: string[][] = [];
+		const { result, rerender } = renderHook(
+			({ ids }) => useProductsCarryingTermsBinding('tags', ids),
+			{ wrapper: Provider, initialProps: { ids: [5] } }
+		);
+		const subscription = result.current.result$.subscribe((answer) =>
+			answers.push(answer.hits.map((hit) => hit.id).sort())
+		);
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		expect(answers.at(-1)).toEqual(['first']);
+		const settled = answers.length;
+
+		// A sale-like write inside the window: no re-read, so no new answer.
+		await act(async () => {
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'second', id: 2, status: 'publish', tags: [{ id: 5 }] })
+			);
+		});
+		await act(async () => jest.advanceTimersByTimeAsync(EXISTENCE_RECHECK_MS - 1_000));
+		expect(answers).toHaveLength(settled);
+
+		// The window closes: one re-check, which sees the write.
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		expect(answers).toHaveLength(settled + 1);
+		expect(answers.at(-1)).toEqual(['first', 'second']);
+
+		// Quiet: nothing written, nothing re-read (not a poll).
+		await act(async () => jest.advanceTimersByTimeAsync(EXISTENCE_RECHECK_MS * 3));
+		expect(answers).toHaveLength(settled + 1);
+		subscription.unsubscribe();
+
+		// A changed id set is a new read, answered at once — not at the window's end.
+		rerender({ ids: [5, 6] });
+		const next: string[][] = [];
+		const nextSubscription = result.current.result$.subscribe((answer) =>
+			next.push(answer.hits.map((hit) => hit.id).sort())
+		);
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		expect(next.at(-1)).toEqual(['first', 'second']);
+		nextSubscription.unsubscribe();
+	});
+
+	it('reads resident terms without declaring a refresh when asked for residents only', async () => {
+		renderHook(() => useAllTermsBinding('products/categories', true, { residentsOnly: true }), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+		expect(engine.requireCalls).toEqual([]);
+
+		// The stage's binding still fetches.
+		renderHook(() => useAllTermsBinding('products/categories'), { wrapper: Provider });
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
 	});
 
 	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {

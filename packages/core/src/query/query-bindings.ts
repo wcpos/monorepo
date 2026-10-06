@@ -4,20 +4,25 @@ import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
+	defer,
 	firstValueFrom,
 	from,
+	merge,
 	Observable,
 	of,
 	race,
 	timer,
 } from 'rxjs';
 import {
+	auditTime,
 	distinctUntilChanged,
+	exhaustMap,
 	filter,
 	map,
 	shareReplay,
 	startWith,
 	switchMap,
+	take,
 } from 'rxjs/operators';
 
 import {
@@ -27,6 +32,7 @@ import {
 	LEGACY_SEARCH_FIELDS,
 	observeCollectionActive,
 	observeCoverage,
+	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryResult,
 	useLocalQuery,
@@ -655,11 +661,41 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 	};
 }
 
+/**
+ * A read answered once, then asked again at most once per `windowMs` after its collection is
+ * written — never a live query, whose every write re-runs it. A write starts the window; more
+ * writes inside it are the same re-check, and the answer converges at the window's end. A new
+ * database (scope move, reset) is asked at once.
+ */
+function recheckedRead$<T>(
+	read$: Observable<T>,
+	collection$: Observable<{ eventBulks$: Observable<unknown> } | null>,
+	windowMs: number
+): Observable<T> {
+	const once$ = defer(() => read$.pipe(take(1)));
+	return collection$.pipe(
+		distinctUntilChanged(),
+		switchMap((collection) =>
+			collection
+				? merge(
+						once$,
+						collection.eventBulks$.pipe(
+							auditTime(windowMs),
+							exhaustMap(() => once$)
+						)
+					)
+				: once$
+		)
+	);
+}
+
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
 	compiled: CompiledQuery,
 	enabled = true,
-	compiledId?: string
+	compiledId?: string,
+	/** Not live: re-check at most this often after a write (see `recheckedRead$`). */
+	recheckMs?: number
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
 	whenReady(): Promise<DemandReadiness>;
@@ -692,14 +728,25 @@ function useEngineBinding(
 	);
 	const result$ = React.useMemo(() => {
 		if (!enabled) return of(emptyResult());
-		return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+		const read$ = observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
 			map((result) => ({
 				...result,
 				searchActive: Boolean((descriptor.read?.search ?? descriptor.search)?.trim()),
-			})),
-			shareReplay({ bufferSize: 1, refCount: true })
+			}))
 		);
-	}, [descriptor, enabled, runtime.engine, runtime.locale]);
+		const collectionName = engineCollectionNameFor(descriptor.collection);
+		return (
+			recheckMs === undefined
+				? read$
+				: recheckedRead$(
+						read$,
+						observeEngineDatabases(runtime.engine).pipe(
+							map((database) => database?.collections[collectionName] ?? null)
+						),
+						recheckMs
+					)
+		).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+	}, [descriptor, enabled, recheckMs, runtime.engine, runtime.locale]);
 	const census$ = React.useMemo(
 		() =>
 			compiled.censusScoped
@@ -1113,25 +1160,30 @@ export function useSearchSelect(
 
 export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
-/** Full reference-lane residents of one product taxonomy: the category tree, the browse tiles. */
+/**
+ * Full reference-lane residents of one product taxonomy: the category tree, the browse tiles.
+ * `residentsOnly` reads what the till holds and declares no refresh — for a surface that only
+ * summarises (the settings dialog's counts), so opening it pulls nothing; the reference seed
+ * lane and the stage's own binding keep the residents current.
+ */
 export function useAllTermsBinding(
 	collection: 'products/categories' | 'products/tags' | 'products/brands',
-	enabled = true
+	enabled = true,
+	{ residentsOnly = false }: { residentsOnly?: boolean } = {}
 ) {
 	const bindingId = React.useId();
-	const compiled = React.useMemo(
-		() =>
-			compileQuery(
-				collection,
-				{
-					search: '',
-					filters: {},
-					sort: { field: 'name', direction: 'asc' },
-				},
-				{ id: bindingId }
-			),
-		[bindingId, collection]
-	);
+	const compiled = React.useMemo(() => {
+		const query = compileQuery(
+			collection,
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'name', direction: 'asc' },
+			},
+			{ id: bindingId }
+		);
+		return residentsOnly ? { ...query, demand: [] } : query;
+	}, [bindingId, collection, residentsOnly]);
 	return useEngineBinding(
 		{
 			collection,
@@ -1149,15 +1201,28 @@ export function useAllCategoriesBinding() {
 }
 
 /**
+ * How often the existence read may re-check after a product write. Which zero-count terms a
+ * POS-only product keeps on the stage changes when the catalogue does, not per sale — and
+ * every sale writes stock, so a live read would re-run per sale. Half a minute keeps a newly
+ * synced product's term appearing promptly without paying for the read on every write.
+ */
+export const EXISTENCE_RECHECK_MS = 30_000;
+
+/**
  * The local products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
- * category/tag/brand pill applies. Local only, no remote pull: whether a zero-count term has
- * products is decided by what the till has synced, since the catalogue recount is the
+ * category/tag/brand pill applies (each taxonomy is a promoted id column, so the filter is
+ * numeric membership, never a payload scan). Local only, no remote pull: whether a zero-count
+ * term has products is decided by what the till has synced, since the catalogue recount is the
  * storefront's. An empty id list would compile to no filter (every product), so the binding
  * is disabled then: no read at all.
+ *
+ * Not live: answered once, then re-checked at most every `EXISTENCE_RECHECK_MS` after a write.
+ * The engine has no field projection, so the answer is still the matching records.
  */
 export function useProductsCarryingTermsBinding(
 	taxonomy: 'categories' | 'tags' | 'brands',
-	termIds: readonly number[]
+	termIds: readonly number[],
+	{ showOutOfStock = false }: { showOutOfStock?: boolean } = {}
 ) {
 	const bindingId = React.useId();
 	const idsKey = [...new Set(termIds)].sort((a, b) => a - b).join(',');
@@ -1167,21 +1232,30 @@ export function useProductsCarryingTermsBinding(
 			'products',
 			{
 				search: '',
-				// Published only, as the selling surface reads: a cached draft must not keep its
-				// zero-count term on the stage. Catalogue visibility is not filtered — a published
-				// product hidden from the catalogue is exactly what this read is for.
-				filters: { categories: [], tags: [], brands: [], status: 'publish', [taxonomy]: ids },
+				// The selling surface's baseline, so a lifted term opens onto something: published
+				// only (a cached draft must not keep its zero-count term on the stage), and in stock
+				// unless the merchant shows out-of-stock products. Catalogue visibility is not
+				// filtered — a published product hidden from the catalogue is what this read is for.
+				filters: {
+					categories: [],
+					tags: [],
+					brands: [],
+					status: 'publish',
+					...(showOutOfStock ? {} : { stock_status: 'instock' }),
+					[taxonomy]: ids,
+				},
 				sort: { field: 'name', direction: 'asc' },
 			},
 			{ id: bindingId }
 		);
 		return { ...query, demand: [] };
-	}, [bindingId, idsKey, taxonomy]);
+	}, [bindingId, idsKey, showOutOfStock, taxonomy]);
 	return useEngineBinding(
 		{ collection: compiled.collection, read: compiled.read },
 		compiled,
 		idsKey !== '',
-		bindingId
+		bindingId,
+		EXISTENCE_RECHECK_MS
 	);
 }
 

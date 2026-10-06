@@ -29,6 +29,11 @@ jest.mock('../../../../contexts/ui-settings', () => ({ useUISettings: jest.fn() 
 jest.mock('../../../../hooks/use-currency-format', () => ({ useCurrencyFormat: jest.fn() }));
 
 const rec = (payload: Record<string, unknown>) => ({ payload });
+/** The products UI settings each `useDocField` selector reads. */
+const settings = (value: Record<string, unknown>) =>
+	(useDocField as jest.Mock).mockImplementation(
+		(_doc: unknown, select: (settings: Record<string, unknown>) => unknown) => select(value)
+	);
 // The existence read's answer when nothing is lifted.
 const NONE_CARRIED = new Set<number>();
 
@@ -179,19 +184,21 @@ describe('useBrowseCounts', () => {
 			terms[collection].read(collection)
 		);
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
-		(useDocField as jest.Mock).mockReturnValue([]);
+		settings({ filterBar: [] });
 	});
 	it("counts each source's root terms, and nothing for a source that has not answered", () => {
 		fakeCarrying();
-		(useDocField as jest.Mock).mockReturnValue([
-			{ type: 'pill', id: 'stock_status', show: true },
-			{
-				type: 'quick',
-				id: 'qf-1',
-				label: 'Under 3',
-				conditions: [{ field: 'price', value: { max: 3 } }],
-			},
-		]);
+		settings({
+			filterBar: [
+				{ type: 'pill', id: 'stock_status', show: true },
+				{
+					type: 'quick',
+					id: 'qf-1',
+					label: 'Under 3',
+					conditions: [{ field: 'price', value: { max: 3 } }],
+				},
+			],
+		});
 		const { result: counts } = renderHook(() => useBrowseCounts());
 		terms['products/categories'].emit('products/categories', [
 			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
@@ -200,6 +207,28 @@ describe('useBrowseCounts', () => {
 		]);
 		terms['products/brands'].emit('products/brands', []);
 		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+	});
+	// Opening the dialog pulls nothing: thousands of tags, or a brands route that 404s before
+	// WooCommerce 9.4, must not be fetched on a settings tap.
+	it('reads every source from resident terms only, and asks the stage baseline of the products', () => {
+		(useAllTermsBinding as jest.Mock).mockClear();
+		fakeCarrying();
+		(useProductsCarryingTermsBinding as jest.Mock).mockClear();
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseCounts());
+		const termCalls = (useAllTermsBinding as jest.Mock).mock.calls;
+		expect(new Set(termCalls.map((call) => JSON.stringify(call)))).toEqual(
+			new Set(
+				['products/categories', 'products/tags', 'products/brands'].map((collection) =>
+					JSON.stringify([collection, true, { residentsOnly: true }])
+				)
+			)
+		);
+		expect(
+			(useProductsCarryingTermsBinding as jest.Mock).mock.calls.every(
+				(call) => call[2]?.showOutOfStock === true
+			)
+		).toBe(true);
 	});
 	// A cold collection's local read answers empty at once; its refresh has not landed yet.
 	it('counts nothing for a cold source while its refresh is pending, then its answer', () => {
@@ -265,7 +294,7 @@ describe('useBrowseTerms', () => {
 		);
 		fakeCarrying();
 		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
-		(useDocField as jest.Mock).mockReturnValue([]);
+		settings({ filterBar: [] });
 		(useT as jest.Mock).mockReturnValue((key: string) => key);
 		(useCurrencyFormat as jest.Mock).mockReturnValue({ format: String });
 	});
@@ -273,6 +302,21 @@ describe('useBrowseTerms', () => {
 		renderHook(() => useBrowseTerms('tags'));
 		expect(asked(useAllTermsBinding)).toEqual(['["products/tags",true]']);
 		expect(asked(useProductsCarryingTermsBinding)).toEqual(['["tags",[]]']);
+	});
+	it("fetches the stage's terms, and lifts a zero-count term only inside the stock baseline", () => {
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useAllTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			residentsOnly: false,
+		});
+		expect((useProductsCarryingTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: false,
+		});
+
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useProductsCarryingTermsBinding as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: true,
+		});
 	});
 	it('reads no taxonomy for the shortcuts', () => {
 		renderHook(() => useBrowseTerms('shortcuts'));
