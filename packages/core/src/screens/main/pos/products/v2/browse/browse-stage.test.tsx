@@ -66,12 +66,14 @@ jest.mock('../../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => m
 jest.mock('./use-browse-terms', () => {
 	const drinks = { kind: 'term', id: 1, name: 'Drinks', count: 12 };
 	const hot = { kind: 'term', id: 2, name: 'Hot', count: 6, parent: 1 };
+	const food = { kind: 'term', id: 3, name: 'Food', count: 4 };
 	// One object, as the hook's memo hands out per projection.
 	const terms = {
-		all: [drinks, hot],
-		rootsOf: () => [drinks],
+		all: [drinks, hot, food],
+		rootsOf: () => [drinks, food],
 		childrenOf: (term: { id?: number }) => (term.id === 1 ? [hot] : []),
-		idsFor: (term: { id?: number }) => (term.id === 1 ? [1, 2] : term.id === 2 ? [2] : []),
+		idsFor: (term: { id?: number }) =>
+			term.id === 1 ? [1, 2] : term.id === 2 ? [2] : term.id === 3 ? [3] : [],
 		quickFilterFor: () => undefined,
 	};
 	return { useBrowseTerms: () => terms };
@@ -537,4 +539,51 @@ it('a table level is not pushed before the root products have answered once', ()
 	rerender(<BrowseStage {...props} />);
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('table')).toBeTruthy();
+});
+
+it('a second tap while the first level is held opens the term tapped, never one nested under it', () => {
+	mockAnswered = false;
+	const props = stageProps({ viewMode: 'table' });
+	const { rerender } = render(<BrowseStage {...props} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	mockAnswered = true;
+	rerender(<BrowseStage {...props} />);
+	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
+	expect(mockState.filters.categories).toEqual([1, 2]);
+});
+
+it('tapping another root term while one is held opens that term alone', () => {
+	mockAnswered = false;
+	const props = stageProps({ viewMode: 'table' });
+	const { rerender } = render(<BrowseStage {...props} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-3'));
+	mockAnswered = true;
+	rerender(<BrowseStage {...props} />);
+	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Food');
+	expect(mockState.filters.categories).toEqual([3]);
+});
+
+it('a child tapped twice on its parent’s level opens one level', () => {
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-2'));
+	fireEvent.click(screen.getAllByTestId('browse-term-2')[0]);
+	expect(screen.getAllByTestId('browse-level').length).toBe(2);
+	expect(mockState.filters.categories).toEqual([2]);
+});
+
+it('a whitespace-only search is no search: the root term set stays, and a level and its drill stay', () => {
+	mockState = { ...mockState, search: '  ' };
+	render(<BrowseStage {...stageProps()} />);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	expect(screen.queryByTestId('products')).toBeNull();
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('variable-product-drill'));
+	act(() => queryActions.setSearch(' '));
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
 });

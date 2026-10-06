@@ -13,7 +13,7 @@ import { BrowseRootGrid, TermLevelGrid } from './term-grid';
 import { BrowseRootTable, TermLevelTable } from './term-table';
 import { displayTypeOf } from './term-tree';
 import { useAnswerOf } from './use-answer-of';
-import { type PathEntry, useBrowsePath } from './use-browse-path';
+import { isBlankSearch, type PathEntry, useBrowsePath } from './use-browse-path';
 import { useBrowseTerms } from './use-browse-terms';
 
 import type {
@@ -36,6 +36,8 @@ type ProductDrill = {
 	source: BrowseBy;
 	target?: Measurable;
 };
+/** A drill as the press made it: stamped with where the stage is on the render that follows. */
+type PressedDrill = { kind: 'product'; record: EngineRecord<'products'>; target?: Measurable };
 // By identity: DealStack re-arms whenever `detail !== staged`, so a level's detail is the stored
 // path entry or the drill object itself, never a fresh literal.
 type Detail = PathEntry | ProductDrill;
@@ -89,14 +91,29 @@ export function BrowseStage(props: BrowseStageProps) {
 	const state = useQueryState<'products'>();
 	// The product drill remembers its depth, the entry it opened under and the search it opened
 	// under (the existing rule).
-	const [drill, setDrill] = React.useState<ProductDrill | null>(null);
+	const [drill, setDrill] = React.useState<ProductDrill | PressedDrill | null>(null);
+	// A press records only the product (so the handler needs nothing from the render and stays
+	// stable); the render that follows stamps where the stage is — React redoes that render
+	// before it commits, so no unstamped drill reaches a stack.
+	if (drill && !('depth' in drill))
+		setDrill({
+			...drill,
+			depth: path.length,
+			under: path[path.length - 1],
+			search: state.search,
+			source,
+		});
+	// Searches compare as the query compiler reads them (trimmed): a space typed after the drill
+	// is the same query.
+	const sameSearch = (left: string, right: string) => left.trim() === right.trim();
 	// Shown only for the source, depth, search and very path entry it opened under (`under`, by
 	// identity) — judged in the same render, so a path dropped by a pill or Clear filters and a
 	// new one opened at the same depth never brings the old drill back for a frame.
 	const drilled =
 		drill &&
+		'depth' in drill &&
 		drill.source === source &&
-		drill.search === state.search &&
+		sameSearch(drill.search, state.search) &&
 		drill.depth === path.length &&
 		path[drill.depth - 1] === drill.under
 			? drill
@@ -111,31 +128,16 @@ export function BrowseStage(props: BrowseStageProps) {
 	// rendering (React's "previous render" pattern, as index.tsx drops its own drill).
 	if (
 		drill &&
-		(drill.search !== state.search ||
+		'depth' in drill &&
+		(!sameSearch(drill.search, state.search) ||
 			drill.source !== source ||
 			path[drill.depth - 1] !== drill.under)
 	)
 		setDrill(null);
 	// Stable: it is baked into the tiles' component identity through renderProducts, and a new
-	// handler per keystroke would remount every tile under the search. It reads where the stage
-	// is from the last commit.
-	const where = React.useRef({
-		depth: path.length,
-		under: path[path.length - 1],
-		search: state.search,
-		source,
-	});
-	React.useLayoutEffect(() => {
-		where.current = {
-			depth: path.length,
-			under: path[path.length - 1],
-			search: state.search,
-			source,
-		};
-	});
+	// handler per keystroke would remount every tile under the search.
 	const drillProduct = React.useCallback<DrillHandler>(
-		(record, target) =>
-			setDrill(record ? { kind: 'product', record, ...where.current, target } : null),
+		(record, target) => setDrill(record ? { kind: 'product', record, target } : null),
 		[]
 	);
 	const closeDrill = React.useCallback(() => drillProduct(null), [drillProduct]);
@@ -183,12 +185,19 @@ export function BrowseStage(props: BrowseStageProps) {
 
 	// Every move of the path closes the product drill: a stale drill at a depth the path returns
 	// to would otherwise reappear.
+	// …and opens the term at the depth of the level it was tapped on, so a second tap while the
+	// first level is not yet on stage (a cold table, a deal in flight) opens the term tapped —
+	// never one nested under the other.
 	const openTerm = React.useCallback(
-		(term: BrowseTerm, target?: Measurable) => {
+		(term: BrowseTerm, target: Measurable | undefined, depth: number) => {
 			setDrill(null);
-			enter(term, target);
+			enter(term, target, depth);
 		},
 		[enter]
+	);
+	const openRootTerm = React.useCallback(
+		(term: BrowseTerm, target?: Measurable) => openTerm(term, target, 0),
+		[openTerm]
 	);
 	const goBackTo = React.useCallback(
 		(depth: number) => {
@@ -201,7 +210,7 @@ export function BrowseStage(props: BrowseStageProps) {
 	// One array per projection, so the root grid's and table's memos hold across query changes.
 	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
 	// A search over an empty path has displaced the term set: the catalogue-wide products show.
-	const searchDisplaced = path.length === 0 && state.search !== '';
+	const searchDisplaced = path.length === 0 && !isBlankSearch(state.search);
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored
 	// objects themselves (identity, see Detail).
@@ -232,9 +241,9 @@ export function BrowseStage(props: BrowseStageProps) {
 
 	const renderRoot = () =>
 		viewMode === 'grid' ? (
-			<BrowseRootGrid terms={roots} onOpen={openTerm} binding={binding} />
+			<BrowseRootGrid terms={roots} onOpen={openRootTerm} binding={binding} />
 		) : (
-			<BrowseRootTable terms={roots} onOpen={openTerm} binding={binding} />
+			<BrowseRootTable terms={roots} onOpen={openRootTerm} binding={binding} />
 		);
 
 	const renderTerm = (chain: PathEntry[]) => {
@@ -265,7 +274,7 @@ export function BrowseStage(props: BrowseStageProps) {
 			showProducts,
 			crumb,
 			back: () => goBackTo(depth - 1),
-			onOpenTerm: openTerm,
+			onOpenTerm: (child: BrowseTerm, target?: Measurable) => openTerm(child, target, depth),
 			onDrillProduct: drillProduct,
 			variationsStyle: props.variationsStyle,
 			binding,
@@ -334,6 +343,5 @@ export function BrowseStage(props: BrowseStageProps) {
 		);
 	};
 
-	// eslint-disable-next-line react-hooks/refs -- `drillProduct` reads `where` only when a tile or row is pressed; the render merely hands it to `renderProducts` and the levels (dated 2026-10-06).
 	return <>{renderLevel([])}</>;
 }

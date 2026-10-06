@@ -287,3 +287,42 @@ it('unmounting clears the projection (Browse by → All products)', () => {
 	unmount();
 	expect(mockState.filters.categories).toEqual([]);
 });
+
+it('a whitespace-only search is no search: the path stays live and its filter stays', () => {
+	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
+	act(() => result.current.enter(drinks));
+	act(() => actions.setSearch('  '));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	expect(mockState.filters.categories).toEqual([1, 2]);
+	act(() => result.current.enter({ kind: 'all' }, undefined, 0));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
+});
+
+it('enter at a depth replaces the path below it with one projection, never nesting a second tap', () => {
+	const food = { kind: 'term' as const, id: 5, name: 'Food', count: 3 };
+	const { result } = renderHook(() =>
+		useBrowsePath('categories', {
+			...terms,
+			all: [drinks, hot, food],
+			idsFor: (term: { id?: number }) => (term.id === 5 ? [5] : terms.idsFor(term as never)),
+		} as never)
+	);
+	// Two taps on the root before the first level is on stage.
+	act(() => {
+		result.current.enter(drinks, undefined, 0);
+		result.current.enter(drinks, undefined, 0);
+	});
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	act(() => result.current.enter(food, undefined, 0));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([food]);
+	expect(mockState.filters.categories).toEqual([5]);
+	// A child tapped twice on its parent's level is one level.
+	act(() => result.current.enter(drinks, undefined, 0));
+	act(() => {
+		result.current.enter(hot, undefined, 1);
+		result.current.enter(hot, undefined, 1);
+	});
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks, hot]);
+	expect(mockState.filters.categories).toEqual([2]);
+	expect(actions.setFilter).toHaveBeenLastCalledWith('categories', [2]);
+});

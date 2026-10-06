@@ -20,8 +20,12 @@ export type PathEntry = { kind: 'term'; term: BrowseTerm; target?: Measurable };
 export type BrowsePath = {
 	/** The live path: entries whose projection the root query still carries. [] at the root. */
 	path: PathEntry[];
-	/** Push (and project). */
-	enter: (term: BrowseTerm, target?: Measurable) => void;
+	/**
+	 * Open `term` at `depth` (the depth of the level it was tapped on: 0 at the root) and project
+	 * it — the path below that depth is replaced, so a second tap before the first level is on
+	 * stage opens the term tapped, never one nested under the other. Omitted: push.
+	 */
+	enter: (term: BrowseTerm, target?: Measurable, depth?: number) => void;
 	/** Keep path[0..depth), re-project. */
 	backTo: (depth: number) => void;
 	/** backTo(0). */
@@ -33,6 +37,14 @@ type TaxonomyField = 'categories' | 'tags' | 'brands';
 type Projection =
 	| { kind: 'taxonomy'; field: TaxonomyField; ids: number[] }
 	| { kind: 'shortcut'; quickFilter: QuickFilter };
+
+/**
+ * No search, as the query compiler reads it: it trims the term, so a whitespace-only search
+ * searches for nothing and must not displace the term set or drop the path.
+ */
+export function isBlankSearch(search: string): boolean {
+	return search.trim() === '';
+}
 
 export function taxonomyField(source: BrowseBy): 'categories' | 'tags' | 'brands' | null {
 	return source === 'categories' || source === 'tags' || source === 'brands' ? source : null;
@@ -232,7 +244,8 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		const { term } = deepest;
 		if (term.kind === 'all')
 			live =
-				state.search === '' && (!field || !(state.filters[field] as number[] | undefined)?.length);
+				isBlankSearch(state.search) &&
+				(!field || !(state.filters[field] as number[] | undefined)?.length);
 		else if (term.kind === 'term')
 			// …and the whole chain must still stand in the source: every stored term present, each
 			// still the child of the one before (a parent deleted or reparented on the server
@@ -243,7 +256,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			// without the cashier touching anything — that is re-projected below, not treated as a
 			// pill press.
 			live =
-				state.search === '' &&
+				isBlankSearch(state.search) &&
 				!!field &&
 				projection?.kind === 'taxonomy' &&
 				sameSet(state.filters[field], projection.ids) &&
@@ -285,12 +298,13 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	}, [live, derivedKey, field, actions, projected]);
 
 	const enter = React.useCallback(
-		(term: BrowseTerm, target?: Measurable) => {
+		(term: BrowseTerm, target?: Measurable, depth?: number) => {
 			const entry: PathEntry = { kind: 'term', term, target };
+			// One projection per tap: what the replaced entries put in comes out in `project`.
 			project(entry);
 			// A stale path never survives its render (above), so whatever is stored is the live
-			// path, or one entered earlier in this same batch (a deep link): extend it.
-			setStored((current) => [...current, entry]);
+			// path, or one entered earlier in this same batch (a deep link): extend it at `depth`.
+			setStored((current) => [...current.slice(0, depth ?? current.length), entry]);
 		},
 		[project, setStored]
 	);
