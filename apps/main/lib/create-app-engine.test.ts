@@ -1982,7 +1982,13 @@ describe('previous-generation database drain', () => {
 	const discoveryFindsNothingElse = (loaded: ReturnType<typeof loadCreateAppEngine>) =>
 		loaded.inventoryLegacyScopeDatabases({
 			registry: [],
-			history: { names: [], complete: true, settled: true, markSettled: async () => undefined },
+			history: {
+				names: [],
+				complete: true,
+				cleared: [],
+				settled: true,
+				markCleared: async () => undefined,
+			},
 		});
 
 	beforeEach(() => forgetUnsentChanges());
@@ -2301,13 +2307,16 @@ describe('previous-generation database drain', () => {
 				databaseName: scopeDatabaseName(scope, { generation: 5 }),
 			}) as LegacyScopeDrainOutcome;
 
-		/** A web/Electron scope history; `markSettled` is what a settled history writes. */
-		const history = (names: string[], complete: boolean, settled = false) => ({
+		/** A web/Electron scope history; `markCleared` records names that reported nothing kept. */
+		const history = (names: string[], complete: boolean, cleared: string[] = []) => ({
 			names,
 			complete,
-			settled,
-			markSettled: jest.fn(async () => undefined),
+			cleared,
+			settled: complete && names.every((name) => cleared.includes(name)),
+			markCleared: jest.fn(async (_names: readonly string[]) => undefined),
 		});
+		const clearedBy = (h: ReturnType<typeof history>) =>
+			h.markCleared.mock.calls.flatMap(([names]) => [...names]);
 
 		it('native: two pos_v5 files, one visited → unknown; both visited (one drained, one absent) → exact', async () => {
 			const engine = createEngineDouble();
@@ -2354,12 +2363,13 @@ describe('previous-generation database drain', () => {
 			});
 			// The second store has not been visited yet.
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
-			expect(fresh.markSettled).not.toHaveBeenCalled();
+			expect(clearedBy(fresh)).toEqual([LEGACY]);
 
 			await loaded.switchAppEngineScope(session(TARGET));
 			await settle();
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
-			expect(fresh.markSettled).toHaveBeenCalledTimes(1);
+			// Every name is now recorded cleared: the history is settled for later boots.
+			expect(clearedBy(fresh)).toEqual([LEGACY, TARGET_LEGACY]);
 		});
 
 		it('web: a settled history counts exactly at once, marking nothing', async () => {
@@ -2369,7 +2379,7 @@ describe('previous-generation database drain', () => {
 			await settle();
 			await loaded.inventoryLegacyScopeDatabases({
 				registry: [BASE_OPTIONS.scope, TARGET],
-				history: history([LEGACY, TARGET_LEGACY], true, true),
+				history: history([LEGACY, TARGET_LEGACY], true, [LEGACY, TARGET_LEGACY]),
 			});
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
 		});
@@ -2389,7 +2399,6 @@ describe('previous-generation database drain', () => {
 			expect(legacyUnsentReportUncountable(LEGACY)).toBe(false);
 			expect(legacyUnsentReportUncountable(TARGET_LEGACY)).toBe(false);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
-			expect(late.markSettled).not.toHaveBeenCalled();
 		});
 
 		it('web: a registry reference with no document (a removed store) keeps the count unknown and the history unsettled, warning once', async () => {
@@ -2408,7 +2417,6 @@ describe('previous-generation database drain', () => {
 			// Every named scope reported nothing kept; the unresolved reference still blocks.
 			expect(legacyUnsentReportOutstanding(LEGACY)).toBe(false);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
-			expect(fresh.markSettled).not.toHaveBeenCalled();
 			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
 				String(message).startsWith('The store registry names records that are missing')
 			);
@@ -2437,7 +2445,35 @@ describe('previous-generation database drain', () => {
 			});
 			expect(legacyUnsentReportOutstanding(removedSite)).toBe(true);
 			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
-			expect(opened.markSettled).not.toHaveBeenCalled();
+			expect(clearedBy(opened)).not.toContain(removedSite);
+		});
+
+		it('web: a settled history that gains a newly opened scope is unsettled until that scope reports, and only it is pending', async () => {
+			const loaded = loadCreateAppEngine();
+			loaded.drainLegacyScopeDatabase.mockImplementation(drainsAbsent as never);
+			// Settled on an earlier boot (an older scope cleared, not visited this run); TARGET was just
+			// opened for the first time.
+			const older = scopeDatabaseName(
+				{ ...BASE_OPTIONS.scope, storeId: 'store-old' },
+				{ generation: 5 }
+			);
+			const reopened = history([LEGACY, older, TARGET_LEGACY], true, [LEGACY, older]);
+			expect(reopened.settled).toBe(false);
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.inventoryLegacyScopeDatabases({
+				registry: [BASE_OPTIONS.scope],
+				history: reopened,
+			});
+			expect(legacyUnsentReportOutstanding(TARGET_LEGACY)).toBe(true);
+			// A cleared name is gone for good: never pending again.
+			expect(legacyUnsentReportOutstanding(older)).toBe(false);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+
+			await loaded.switchAppEngineScope(session(TARGET));
+			await settle();
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+			expect(clearedBy(reopened)).toEqual([TARGET_LEGACY]);
 		});
 	});
 
@@ -2458,8 +2494,9 @@ describe('previous-generation database drain', () => {
 								history: {
 									names: [],
 									complete: true,
+									cleared: [],
 									settled: true,
-									markSettled: async () => undefined,
+									markCleared: async () => undefined,
 								},
 							});
 					})

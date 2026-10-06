@@ -19,8 +19,11 @@
  * — rxdb writes it once, when the database is created — against the time this
  * process started.
  *
- * `settled`: every name reported nothing kept on a complete history; later
- * boots skip the inventory.
+ * `cleared`: the names that reported nothing kept (drained or absent) — a
+ * pos_v5 cannot come back once gone, so a cleared name is never inventoried
+ * again. `settled` is DERIVED, never stored: a complete history whose every name
+ * is cleared. Opening a new scope adds an uncleared name, which un-settles the
+ * history until that one name reports (the others stay cleared).
  */
 import { STORAGE_TOKEN_DOCUMENT_ID } from 'rxdb';
 
@@ -43,11 +46,13 @@ const PROCESS_STARTED_AT_MS = (() => {
 	return typeof origin === 'number' && origin > PLAUSIBLE_EPOCH_MS ? origin : Date.now();
 })();
 
-type HistoryData = { names: string[]; complete: boolean; settled: boolean };
+type HistoryData = { names: string[]; complete: boolean; cleared: string[] };
 
 export type LegacyScopeHistory = Readonly<HistoryData> & {
-	/** Record that every name reported nothing kept: later boots count exactly. */
-	markSettled(): Promise<void>;
+	/** Complete, and every name cleared: later boots count exactly without an inventory. */
+	readonly settled: boolean;
+	/** Record that these names reported nothing kept. */
+	markCleared(names: readonly string[]): Promise<void>;
 };
 
 /** Structural: the user database's local documents and internal store. */
@@ -68,13 +73,12 @@ async function appDatabasePredatesThisRun(db: ScopeHistoryDatabase): Promise<boo
 async function readHistory(db: ScopeHistoryDatabase): Promise<HistoryData | null> {
 	const doc = await db.getLocal(HISTORY_LOCAL_ID);
 	if (!doc) return null;
-	const names = doc.get('names');
+	const strings = (value: unknown): string[] =>
+		Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
 	return {
-		names: Array.isArray(names)
-			? names.filter((name): name is string => typeof name === 'string')
-			: [],
+		names: strings(doc.get('names')),
 		complete: doc.get('complete') === true,
-		settled: doc.get('settled') === true,
+		cleared: strings(doc.get('cleared')),
 	};
 }
 
@@ -91,18 +95,22 @@ export async function recordScopeOpened(
 	let data = (await readHistory(db)) ?? {
 		names: [],
 		complete: !(await appDatabasePredatesThisRun(db)),
-		settled: false,
+		cleared: [],
 	};
 	// A missing history has no names, so its first scope always writes it (completeness included).
+	// A new name is uncleared: the history is no longer settled until it reports.
 	if (!data.names.includes(name)) {
 		data = { ...data, names: [...data.names, name] };
 		await db.upsertLocal(HISTORY_LOCAL_ID, data);
 	}
 	return {
 		...data,
-		markSettled: async () => {
+		settled: data.complete && data.names.every((known) => data.cleared.includes(known)),
+		markCleared: async (names) => {
 			const latest = (await readHistory(db)) ?? data;
-			await db.upsertLocal(HISTORY_LOCAL_ID, { ...latest, settled: true });
+			const cleared = [...new Set([...latest.cleared, ...names])];
+			if (cleared.length === latest.cleared.length) return;
+			await db.upsertLocal(HISTORY_LOCAL_ID, { ...latest, cleared });
 		},
 	};
 }

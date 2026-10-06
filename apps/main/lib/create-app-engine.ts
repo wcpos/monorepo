@@ -62,7 +62,6 @@ import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 import {
 	legacyDrainMarked,
-	legacyUnsentReportOutstanding,
 	markLegacyDrainPending,
 	rememberLegacyUnsentChanges,
 } from '@wcpos/utils/unsent-changes';
@@ -206,8 +205,9 @@ const legacyDrainStates = new Map<string, LegacyDrainState>();
  *    They read the till's SCOPE HISTORY (`legacy-scope-history.ts`, in the user database's local
  *    documents): every scope database name opened from this build on, plus the store registry.
  *    Removing a site keeps its scope databases (and its history entry), so the registry alone
- *    would miss them. Every name is marked pending at boot; the history is SETTLED (later boots
- *    count exactly) only once every one has reported nothing kept AND the history is complete.
+ *    would miss them. Every name not yet CLEARED (reported nothing kept on an earlier boot) is
+ *    marked pending at boot; the history is SETTLED (later boots count exactly) while it is
+ *    complete and every name is cleared — opening a new scope un-settles it until that name reports.
  *    A history is complete only when it began with the app database — an install whose app
  *    database already existed at this build's first boot started its history late, may hold a
  *    pos_v5 nothing names, and so is never settled: its reset count reads unknown for the life
@@ -217,7 +217,7 @@ const LEGACY_HISTORY_INCOMPLETE = 'previous-version databases from before this b
 /**
  * The store registry holds a reference with no document behind it (a credential still naming a
  * store reconciliation removed): a scope the inventory cannot name, so — like an incomplete
- * history — the count is unknown and nothing settles while one exists.
+ * history — the count is unknown while one exists.
  */
 const LEGACY_REGISTRY_UNRESOLVED = 'previous-version databases behind unresolved store references';
 let legacyRegistryUnresolvedWarned = false;
@@ -231,31 +231,38 @@ const LEGACY_INVENTORY_FAILED = 'previous-version database inventory (failed)';
 let legacyInventoryCompleted = false;
 let legacyInventoryFailed = false;
 let legacyInventoryFailureWarned = false;
-/** Set while the latest inventory saw an unresolved registry reference: nothing settles. */
+/** Set while the latest inventory saw an unresolved registry reference. */
 let legacyRegistryIncomplete = false;
-/** Names the boot inventory marked; a web/Electron history settles once none is outstanding. */
+/** Names the boot inventory marked; a web/Electron history records each one that clears. */
 const legacyInventory = new Set<string>();
 /** Names this process has a drain report for: a later inventory must not re-mark them pending. */
 const legacyReported = new Set<string>();
 /** The web/Electron scope history the inventory read, when it read one. */
 let legacyHistory: LegacyScopeHistory | null = null;
 
-/** Web/Electron: once every inventoried database reported nothing kept, a complete history settles. */
-function settleLegacyHistory(): void {
+/** Names this process saw report nothing kept (drained or absent). */
+const legacyReportedEmpty = new Set<string>();
+/** Names this process already recorded as cleared in the history. */
+const legacyClearedRecorded = new Set<string>();
+
+/**
+ * Web/Electron: record in the history every inventoried name that reported nothing kept. The
+ * history is settled (later boots count exactly) once it is complete and every name is cleared;
+ * a scope opened later adds an uncleared name and un-settles it until that one reports.
+ */
+function clearLegacyHistory(): void {
 	const history = legacyHistory;
-	if (
-		history === null ||
-		!history.complete ||
-		history.settled ||
-		legacyRegistryIncomplete ||
-		legacyInventory.size === 0
-	) {
-		return;
-	}
-	for (const name of legacyInventory) if (legacyUnsentReportOutstanding(name)) return;
-	legacyHistory = null;
-	void history.markSettled().catch(() => {
-		// Best effort: an unwritten settle only means the next boot inventories again.
+	if (history === null) return;
+	const names = [...legacyReportedEmpty].filter(
+		(name) =>
+			legacyInventory.has(name) &&
+			!history.cleared.includes(name) &&
+			!legacyClearedRecorded.has(name)
+	);
+	if (names.length === 0) return;
+	for (const name of names) legacyClearedRecorded.add(name);
+	void history.markCleared(names).catch(() => {
+		// Best effort: an unrecorded clear only means the next boot inventories that name again.
 	});
 }
 
@@ -265,8 +272,10 @@ function reportLegacyDrain(
 	orderUuids?: readonly string[]
 ): void {
 	legacyReported.add(databaseName);
+	if (count === 0) legacyReportedEmpty.add(databaseName);
+	else legacyReportedEmpty.delete(databaseName);
 	rememberLegacyUnsentChanges(databaseName, count, orderUuids);
-	settleLegacyHistory();
+	clearLegacyHistory();
 }
 
 /**
@@ -302,6 +311,8 @@ export async function inventoryLegacyScopeDatabases(input: {
 	} else if (input.history?.settled) {
 		names = [];
 	} else {
+		// A cleared name reported nothing kept on an earlier boot: its pos_v5 is gone for good.
+		const cleared = new Set(input.history?.cleared ?? []);
 		names = [
 			...new Set([
 				...(input.history?.names ?? []),
@@ -309,7 +320,7 @@ export async function inventoryLegacyScopeDatabases(input: {
 					scopeDatabaseName(scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
 				),
 			]),
-		];
+		].filter((name) => !cleared.has(name));
 		legacyHistory = input.history ?? null;
 		if (!input.history?.complete) {
 			// A pos_v5 nothing names may exist: the count is unknown for the life of this install.
@@ -323,7 +334,7 @@ export async function inventoryLegacyScopeDatabases(input: {
 	// Discovery is complete: every database it found is marked (or reported) by name.
 	legacyInventoryCompleted = true;
 	if (!legacyInventoryFailed) rememberLegacyUnsentChanges(LEGACY_INVENTORY_PENDING, 0);
-	settleLegacyHistory();
+	clearLegacyHistory();
 }
 
 /**

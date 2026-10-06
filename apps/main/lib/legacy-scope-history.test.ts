@@ -44,17 +44,37 @@ describe('the scope history', () => {
 		expect(await recordScopeOpened(db, A)).toMatchObject({ complete: false });
 	});
 
-	it('keeps every scope it ever opened, and remembers being settled', async () => {
+	it('keeps every scope it ever opened, and is settled once every name is cleared', async () => {
 		const { db, locals } = userDatabase(Date.now() + 1_000);
 		await recordScopeOpened(db, A);
 		const history = await recordScopeOpened(db, B);
+		expect(history.settled).toBe(false);
 		await recordScopeOpened(db, A);
-		await history.markSettled();
+		await history.markCleared([v5(A), v5(B)]);
 		expect(locals.get('legacy-scope-history')).toEqual({
 			names: [v5(A), v5(B)],
 			complete: true,
-			settled: true,
+			cleared: [v5(A), v5(B)],
 		});
 		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
+	});
+
+	it('a settled history that opens a new scope is unsettled until that name is cleared', async () => {
+		const C = { site: 'https://c.example.test', storeId: 5, cashierId: 6 };
+		const { db } = userDatabase(Date.now() + 1_000);
+		const first = await recordScopeOpened(db, A);
+		await first.markCleared([v5(A)]);
+		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: true });
+		const reopened = await recordScopeOpened(db, C);
+		expect(reopened).toMatchObject({ settled: false, cleared: [v5(A)] });
+		await reopened.markCleared([v5(C)]);
+		expect(await recordScopeOpened(db, C)).toMatchObject({ settled: true });
+	});
+
+	it('an incomplete history is never settled, however much is cleared', async () => {
+		const { db } = userDatabase(Date.UTC(2026, 0, 1));
+		const history = await recordScopeOpened(db, A);
+		await history.markCleared([v5(A)]);
+		expect(await recordScopeOpened(db, A)).toMatchObject({ settled: false });
 	});
 });
