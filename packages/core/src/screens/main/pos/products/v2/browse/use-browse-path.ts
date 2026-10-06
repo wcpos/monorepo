@@ -221,6 +221,12 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 
 	const [projected] = React.useState(createProjectionStore);
 	const projection = React.useSyncExternalStore(projected.subscribe, projected.get, projected.get);
+	// The result window each covered level had when a child was opened over it, by entry identity
+	// (as the stage keeps a gathering level's children): a parent paged past its first window must
+	// get that window back on the way back, not the base page — every result change (`setFilter`)
+	// resets the window, and a held snapshot replaced by the first page would shrink the mounted
+	// list at its old scroll offset. Never read while rendering.
+	const [windows] = React.useState(() => new WeakMap<PathEntry, number>());
 	// The last committed query, for the handlers and cleanups below. Kept in a layout effect
 	// declared before every other one, so the drop effect reads this commit's query.
 	const latest = React.useRef({ state, actions, resetState });
@@ -276,7 +282,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		[projected]
 	);
 
-	const project = React.useCallback(
+	const projectEntry = React.useCallback(
 		(entry: PathEntry | undefined) => {
 			unproject();
 			if (!entry) return;
@@ -315,6 +321,16 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			projected.set({ kind: 'shortcut', quickFilter });
 		},
 		[actions, field, terms, settingsSort, unproject, projected]
+	);
+	// …and, for a level the path returns to, the window it had when it was covered — in the SAME
+	// batch as its filter, which reset it. A level entered fresh (a new entry) keeps the base page.
+	const project = React.useCallback(
+		(entry: PathEntry | undefined) => {
+			projectEntry(entry);
+			const window = entry && windows.get(entry);
+			if (window !== undefined) actions.setLimit(window);
+		},
+		[projectEntry, windows, actions]
 	);
 
 	// The projection belongs to the source that made it: a source change or an unmount (Browse
@@ -434,13 +450,19 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	const enter = React.useCallback(
 		(term: BrowseTerm, target?: Measurable, depth?: number) => {
 			const entry: PathEntry = { kind: 'term', term, target };
+			// The level this one covers keeps the window it has now (the last committed query's), for
+			// the way back. A parent entered in this same batch (a deep link) is not committed yet and
+			// was never paged: the base page is its window.
+			const covered = stored[(depth ?? stored.length) - 1];
+			const { limit } = latest.current.state;
+			if (covered && typeof limit === 'number') windows.set(covered, limit);
 			// One projection per tap: what the replaced entries put in comes out in `project`.
 			project(entry);
 			// A stale path never survives its render (above), so whatever is stored is the live
 			// path, or one entered earlier in this same batch (a deep link): extend it at `depth`.
 			setStored((current) => [...current.slice(0, depth ?? current.length), entry]);
 		},
-		[project, setStored]
+		[stored, windows, project, setStored]
 	);
 	const backTo = React.useCallback(
 		(depth: number) => {

@@ -80,6 +80,27 @@ describe('QueryStateProvider', () => {
 		expect(probe.getRenders()).toBe(renders);
 	});
 
+	// A browse level paged past its first window records that window when a child covers it, and
+	// restores it on the way back — in the same batch as the filter that reset it.
+	it('restores a recorded result window after a result change, never below the page size', () => {
+		const probe = renderProbe();
+		act(() => {
+			probe.actions.extendLimit();
+			probe.actions.extendLimit();
+		});
+		expect(probe.getState()?.limit).toBe(60);
+
+		act(() => {
+			probe.actions.setFilter('categories', [1]);
+			probe.actions.setLimit(60);
+		});
+		expect(probe.getState()).toMatchObject({ filters: { categories: [1] }, limit: 60 });
+
+		act(() => probe.actions.setLimit(5));
+		expect(probe.getState()?.limit).toBe(20);
+		expect(() => probe.actions.setLimit(0)).toThrow('limit must be a positive integer');
+	});
+
 	it('rejects page sizes that are not positive integers', () => {
 		const { actions } = renderProbe();
 

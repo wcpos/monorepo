@@ -19,16 +19,23 @@ const baseline = (): Record<string, unknown> => ({
 	status: 'publish',
 	...(mockShowOutOfStock ? {} : { stock_status: 'instock' }),
 });
+// The paging step: every result change resets the window to it (the real store's resultChange).
+const PAGE = 10;
 let mockState = {
 	search: '',
 	filters: {} as Record<string, unknown>,
 	sort: { field: 'name', direction: 'asc' },
+	limit: PAGE,
 };
 const mockListeners = new Set<() => void>();
 const emit = () => mockListeners.forEach((listener) => listener());
 const mockActions = {
 	setFilter: jest.fn((field: string, value: unknown) => {
-		mockState = { ...mockState, filters: { ...mockState.filters, [field]: value } };
+		mockState = {
+			...mockState,
+			filters: { ...mockState.filters, [field]: value },
+			limit: PAGE,
+		};
 		emit();
 	}),
 	clearFilter: jest.fn((field: string) => {
@@ -36,23 +43,32 @@ const mockActions = {
 		mockState = {
 			...mockState,
 			filters: field in CLEARED ? { ...rest, [field]: [] } : rest,
+			limit: PAGE,
 		};
 		emit();
 	}),
 	resetFilters: jest.fn(() => {
-		mockState = { ...mockState, filters: baseline() };
+		mockState = { ...mockState, filters: baseline(), limit: PAGE };
 		emit();
 	}),
 	clearSearch: jest.fn(() => {
-		mockState = { ...mockState, search: '' };
+		mockState = { ...mockState, search: '', limit: PAGE };
 		emit();
 	}),
 	setSearch: jest.fn((search: string) => {
-		mockState = { ...mockState, search };
+		mockState = { ...mockState, search, limit: PAGE };
 		emit();
 	}),
 	setSort: jest.fn((field: string, direction: 'asc' | 'desc') => {
-		mockState = { ...mockState, sort: { field, direction } };
+		mockState = { ...mockState, sort: { field, direction }, limit: PAGE };
+		emit();
+	}),
+	extendLimit: jest.fn(() => {
+		mockState = { ...mockState, limit: mockState.limit + PAGE };
+		emit();
+	}),
+	setLimit: jest.fn((limit: number) => {
+		mockState = { ...mockState, limit: Math.max(limit, PAGE) };
 		emit();
 	}),
 };
@@ -102,8 +118,56 @@ const terms = {
 beforeEach(() => {
 	mockShowOutOfStock = true;
 	mockSettingsSort = { sortBy: 'name', sortDirection: 'asc' };
-	mockState = { search: '', filters: baseline(), sort: { field: 'name', direction: 'asc' } };
+	mockState = {
+		search: '',
+		filters: baseline(),
+		sort: { field: 'name', direction: 'asc' },
+		limit: PAGE,
+	};
 	jest.clearAllMocks();
+});
+
+// A parent paged past its first window, a child opened over it, back: `setFilter` resets the
+// window to the base page, and the parent's held snapshot (large) would be replaced by the first
+// page — the mounted list shrinking at its old scroll offset, the rows the cashier loaded gone.
+it('back to a paged parent restores its window with its projection in one state; a fresh entry keeps the base page', () => {
+	const food = { kind: 'term' as const, id: 5, name: 'Food', count: 3 };
+	const seen: { depth: number; categories: unknown; limit: number }[] = [];
+	const { result } = renderHook(() => {
+		const browse = useBrowsePath('categories', {
+			...terms,
+			all: [drinks, hot, food],
+			idsFor: (term: { id?: number }) => (term.id === 5 ? [5] : terms.idsFor(term as never)),
+		} as never);
+		seen.push({
+			depth: browse.path.length,
+			categories: mockState.filters.categories,
+			limit: mockState.limit,
+		});
+		return browse;
+	});
+	act(() => result.current.enter(drinks));
+	act(() => {
+		actions.extendLimit();
+		actions.extendLimit();
+	});
+	expect(mockState.limit).toBe(PAGE * 3);
+	act(() => result.current.enter(hot));
+	expect(mockState).toMatchObject({ filters: { categories: [2] }, limit: PAGE });
+	seen.length = 0;
+	act(() => result.current.backTo(1));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	expect(mockState).toMatchObject({ filters: { categories: [1, 2] }, limit: PAGE * 3 });
+	// Never Drinks' projection under the base page: the filter and the window land together.
+	expect(
+		seen.filter(({ categories, limit }) => isEqualIds(categories, [1, 2]) && limit === PAGE)
+	).toEqual([]);
+	// A level entered fresh is on its base page.
+	act(() => result.current.enter(food, undefined, 0));
+	expect(mockState).toMatchObject({ filters: { categories: [5] }, limit: PAGE });
+	// …and so is the same term entered again (a new entry, never paged).
+	act(() => result.current.enter(drinks, undefined, 0));
+	expect(mockState).toMatchObject({ filters: { categories: [1, 2] }, limit: PAGE });
 });
 
 it('entering a term projects its id set and the path shows it; entering a child narrows', () => {
