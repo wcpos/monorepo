@@ -33,6 +33,7 @@ function product(
 		stockStatus: 'instock',
 		type: 'simple',
 		categoryIds: [7],
+		tagIds,
 		brandIds: [4],
 		onSale: false,
 		featured: false,

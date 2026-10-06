@@ -298,6 +298,7 @@ describe('createProductsSchedulerFetcher', () => {
 				stockStatus: '',
 				type: '',
 				categoryIds: [],
+				tagIds: [],
 				brandIds: [],
 				onSale: false,
 				featured: false,

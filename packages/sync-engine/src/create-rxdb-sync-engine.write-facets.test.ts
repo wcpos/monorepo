@@ -117,6 +117,7 @@ function storedDocument(input: {
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
+			tagIds: [],
 			brandIds: [],
 			onSale: false,
 			featured: false,

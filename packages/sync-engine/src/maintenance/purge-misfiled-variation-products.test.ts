@@ -60,6 +60,7 @@ function productDocument(input: {
 		stockStatus: 'instock',
 		type: input.type,
 		categoryIds: [],
+		tagIds: [],
 		brandIds: [],
 		onSale: false,
 		featured: false,

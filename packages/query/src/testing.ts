@@ -230,6 +230,7 @@ export function engineProduct(input: {
 		stockStatus: stock_status ?? 'instock',
 		type: type ?? 'simple',
 		categoryIds: (categories ?? []).map((c) => c.id),
+		tagIds: (tags ?? []).map((t) => t.id),
 		brandIds: (brands ?? []).map((b) => b.id),
 		onSale: input.on_sale ?? false,
 		featured: input.featured ?? false,
