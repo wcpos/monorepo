@@ -350,6 +350,60 @@ describe('useBrowseTerms', () => {
 		expect(browse.current.pending).toBe(false);
 	});
 
+	// A term new to the source at zero count (a fresh record from taxonomy sync) was never shown:
+	// while its existence read is pending it is unknown, and unknown is hidden — never a live
+	// tile that blinks out when the read answers. The terms shown before are held meanwhile.
+	it('hides a newly synced zero-count term until its existence read answers, holding the terms shown before', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// Visible {Drinks}; Counter (zero count) was asked about and is not carried: hidden.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		carrying.emit('categories', [5], []);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		// Kiosk syncs in at zero count: the read for {Counter, Kiosk} is pending — Drinks stays,
+		// Kiosk is not shown as live.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		// A product carries Kiosk: shown.
+		carrying.emit('categories', [5, 6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+		// Answered again with nothing carrying it: hidden.
+		carrying.emit('categories', [5, 6], []);
+		expect(ids()).toEqual([1]);
+	});
+
+	it('holds the terms shown before while the FIRST zero-count term is looked for, the new one hidden', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// No zero-count terms: nothing to look for, the list is settled.
+		terms.emit('products/categories:true', [{ id: 1, name: 'Drinks', parent: 0, count: 12 }]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		carrying.emit('categories', [6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+	});
+
 	it("has no terms after a source switch until the new source's own query answers", () => {
 		const names = (all: BrowseTerm[] | undefined) =>
 			all?.map((term) => term.kind === 'term' && term.name);

@@ -218,13 +218,47 @@ function useTaxonomyTerms(
 		if (held?.ids !== carried || held.taxonomy !== taxonomy || held.key !== zeroCountKey)
 			setHeld({ taxonomy, key: zeroCountKey, ids: carried });
 	const looking = hits !== undefined && existence === undefined;
+	// What the last SETTLED projection showed: every term with a count, and every zero-count term
+	// its read found carried. Keyed on the sorted ids (state set while rendering — the "previous
+	// render" pattern), and recorded only while nothing is being looked for, so through a pending
+	// read it is the set from BEFORE the recount: what that read may preserve, and no more.
+	const settledKey = React.useMemo(() => {
+		if (hits === undefined || existence === undefined) return undefined;
+		const ids = new Set<number>(existence);
+		for (const hit of hits) if ((hit.record.payload.count ?? 0) > 0) ids.add(hit.record.payload.id);
+		return [...ids].sort((a, b) => a - b).join(',');
+	}, [hits, existence]);
+	const [shownBefore, setShownBefore] = React.useState<{ taxonomy: TaxonomySource; key: string }>();
+	if (
+		settledKey !== undefined &&
+		(shownBefore?.taxonomy !== taxonomy || shownBefore.key !== settledKey)
+	)
+		setShownBefore({ taxonomy, key: settledKey });
+	// A term new to the zero-count set is kept through the read only if it was KNOWN VISIBLE
+	// before the recount (a term that has just dropped to zero count). One the previous answer
+	// never showed — a fresh zero-count record from taxonomy sync — is neither known visible nor
+	// known empty: a pending existence read is unknown, and unknown is hidden, never a live tile
+	// that blinks out when the read answers.
 	const heldKnown = React.useMemo(() => {
-		if (held === undefined || held.taxonomy !== taxonomy) return undefined;
-		if (held.key === zeroCountKey) return held.ids;
-		const asked = new Set(held.key === '' ? [] : held.key.split(',').map(Number));
-		const newlyZero = zeroCountKey === '' ? [] : zeroCountKey.split(',').map(Number);
-		return new Set([...held.ids, ...newlyZero.filter((id) => !asked.has(id))]);
-	}, [held, taxonomy, zeroCountKey]);
+		const before =
+			shownBefore?.taxonomy === taxonomy
+				? new Set(shownBefore.key === '' ? [] : shownBefore.key.split(',').map(Number))
+				: undefined;
+		const zero = zeroCountKey === '' ? [] : zeroCountKey.split(',').map(Number);
+		if (held !== undefined && held.taxonomy === taxonomy) {
+			if (held.key === zeroCountKey) return held.ids;
+			const asked = new Set(held.key === '' ? [] : held.key.split(',').map(Number));
+			return new Set([
+				...held.ids,
+				...zero.filter((id) => !asked.has(id) && before !== undefined && before.has(id)),
+			]);
+		}
+		// No products read has answered yet (there were no zero-count terms to ask about): the
+		// settled list is held the same way. Nothing to hold before the first settled answer — a
+		// POS-only store's first load reads unanswered until its read answers, never as empty.
+		if (before === undefined || before.size === 0) return undefined;
+		return new Set(zero.filter((id) => before.has(id)));
+	}, [held, taxonomy, zeroCountKey, shownBefore]);
 	const knownNonEmpty = existence ?? heldKnown;
 	return React.useMemo(
 		() =>
