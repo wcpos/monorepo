@@ -132,6 +132,13 @@ export function TerminalLegView({
 	};
 	const idFields = (pairs: (string | null | undefined)[][]) =>
 		pairs.filter((pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1] !== '');
+	// Before the first event answers, the ids are still worth reading and copying.
+	const trailer = events.length ? [] : idFields([...refs.first, ...refs.last]);
+	const levelLabels = {
+		ok: t('health.logs.level_ok'),
+		warn: t('health.logs.level_warn'),
+		error: t('health.logs.level_error'),
+	};
 	const lines: LogLine[] = events.map((event, index) => {
 		const line = describeEvent(event, t, { readerLabel, failureReason, formatAmount });
 		return {
@@ -225,7 +232,7 @@ export function TerminalLegView({
 						</CollapsibleTrigger>
 						{open ? (
 							<LogCopyButton
-								text={logToText(lines)}
+								text={logToText(lines, { trailer, levelLabels })}
 								label={t('health.logs.copy_entry')}
 								shareLabel={t('pos_checkout.share_log')}
 								onCopied={copied}
@@ -234,7 +241,13 @@ export function TerminalLegView({
 						) : null}
 					</HStack>
 					<CollapsibleContent testID="checkout-terminal-log">
-						<LogView frame="none" lines={lines} className="pb-3" />
+						<LogView
+							frame="none"
+							lines={lines}
+							trailer={trailer}
+							levelLabels={levelLabels}
+							className="pb-3"
+						/>
 					</CollapsibleContent>
 				</Collapsible>
 				<View className="bg-border h-px w-full" />

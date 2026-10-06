@@ -24,8 +24,13 @@ export interface LogLine {
 	/** Label/value pairs printed under the line: `[['reader', 'rdr_…'], ['payment', '…']]`. */
 	fields?: [string, string][];
 }
+/** The words a level prints as; the caller translates them (`health.logs.level_*`). */
+export type LogLevelLabels = Partial<Record<LogLevel, string>>;
 export interface LogViewProps extends ViewProps {
 	lines: LogLine[];
+	/** Label/value pairs printed after the last line: ids that belong to no event yet. */
+	trailer?: [string, string][];
+	levelLabels?: LogLevelLabels;
 	/** Left of the Copy button, above the lines; nothing means no header row. */
 	title?: React.ReactNode;
 	/** The box scrolls inside itself past this; unset means it grows. */
@@ -40,25 +45,35 @@ export interface LogViewProps extends ViewProps {
 	copyTestID?: string;
 }
 
-const TIME_COL = 'w-16';
 const LEVEL_WORD: Record<LogLevel, string> = { info: '', ok: 'ok', warn: 'warn', error: 'error' };
+// "18:00:05" and two spaces: the column every field line indents to.
+const INDENT = ' '.repeat(10);
+const levelWord = (level: LogLevel, labels?: LogLevelLabels) =>
+	level === 'info' ? '' : (labels?.[level] ?? LEVEL_WORD[level]);
+const fieldLines = (fields: [string, string][]) => {
+	const width = Math.max(0, ...fields.map(([label]) => label.length));
+	return fields.map(([label, value]) => `${INDENT}${label.padEnd(width)}  ${value}`);
+};
 
 /** The plain text of a log: what Copy copies and what a bug report pastes. */
-export function logToText(lines: LogLine[]): string {
+export function logToText(
+	lines: LogLine[],
+	{ trailer = [], levelLabels }: { trailer?: [string, string][]; levelLabels?: LogLevelLabels } = {}
+): string {
 	const out: string[] = [];
 	for (const line of lines) {
-		const level = LEVEL_WORD[line.level ?? 'info'];
-		out.push(`${line.time}  ${level ? `${level} ` : ''}${line.message}`);
-		const width = Math.max(0, ...(line.fields ?? []).map(([label]) => label.length));
-		for (const [label, value] of line.fields ?? []) {
-			out.push(`${' '.repeat(10)}${label.padEnd(width)}  ${value}`);
-		}
+		const word = levelWord(line.level ?? 'info', levelLabels);
+		out.push(`${line.time}  ${word ? `${word} ` : ''}${line.message}`);
+		out.push(...fieldLines(line.fields ?? []));
 	}
+	out.push(...fieldLines(trailer));
 	return out.join('\n');
 }
 
 export function LogView({
 	lines,
+	trailer = [],
+	levelLabels,
 	title,
 	maxHeight,
 	frame = 'box',
@@ -69,7 +84,10 @@ export function LogView({
 	className,
 	...props
 }: LogViewProps) {
-	const text = React.useMemo(() => logToText(lines), [lines]);
+	const text = React.useMemo(
+		() => logToText(lines, { trailer, levelLabels }),
+		[lines, trailer, levelLabels]
+	);
 	const copy = copyLabel ? (
 		<LogCopyButton
 			text={text}
@@ -109,16 +127,17 @@ export function LogView({
 				nestedScrollEnabled
 			>
 				{lines.map((line, index) => (
-					<Line key={`${line.time}-${index}`} line={line} />
+					<Line key={`${line.time}-${index}`} line={line} levelLabels={levelLabels} />
 				))}
+				{trailer.length ? <Fields fields={trailer} /> : null}
 			</ScrollView>
 		</View>
 	);
 }
 
-function Line({ line }: { line: LogLine }) {
+function Line({ line, levelLabels }: { line: LogLine; levelLabels?: LogLevelLabels }) {
 	const level = line.level ?? 'info';
-	const word = LEVEL_WORD[level];
+	const word = levelWord(level, levelLabels);
 	const tint =
 		level === 'error'
 			? 'bg-destructive/10 border-destructive'
@@ -127,15 +146,13 @@ function Line({ line }: { line: LogLine }) {
 				: 'border-transparent';
 	const tone =
 		level === 'error' ? 'text-destructive' : level === 'warn' ? 'text-warning' : 'text-success';
-	const width = Math.max(0, ...(line.fields ?? []).map(([label]) => label.length));
 	return (
 		<View className={cn('border-l-2 pr-2 pl-1', tint)}>
+			{/* Every column is text, separators included: a drag-select on web reads like `logToText`. */}
 			<View className="flex-row items-start">
-				<Text
-					selectable
-					className={cn('text-muted-foreground shrink-0 font-mono text-xs tabular-nums', TIME_COL)}
-				>
+				<Text selectable className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
 					{line.time}
+					{'  '}
 				</Text>
 				<Text
 					selectable
@@ -148,20 +165,25 @@ function Line({ line }: { line: LogLine }) {
 					{line.message}
 				</Text>
 			</View>
-			{(line.fields ?? []).map(([label, value]) => (
-				<View key={label} className="flex-row items-start">
-					<View className={cn('shrink-0', TIME_COL)} />
-					<Text selectable className="text-muted-foreground shrink-0 font-mono text-xs">
-						{label.padEnd(width)}
-						{'  '}
-					</Text>
-					<Text selectable className="text-foreground shrink font-mono text-xs">
-						{value}
-					</Text>
-				</View>
-			))}
+			{line.fields?.length ? <Fields fields={line.fields} /> : null}
 		</View>
 	);
+}
+
+function Fields({ fields }: { fields: [string, string][] }) {
+	const width = Math.max(0, ...fields.map(([label]) => label.length));
+	return fields.map(([label, value], index) => (
+		<View key={`${label}-${index}`} className="flex-row items-start">
+			<Text selectable className="text-muted-foreground shrink-0 font-mono text-xs">
+				{INDENT}
+				{label.padEnd(width)}
+				{'  '}
+			</Text>
+			<Text selectable className="text-foreground shrink font-mono text-xs">
+				{value}
+			</Text>
+		</View>
+	));
 }
 
 /**
@@ -185,15 +207,19 @@ export function LogCopyButton({
 	if (!Platform.isNative && !canCopy) return null;
 	const press = async () => {
 		try {
-			if (Platform.isNative) await Share.share({ message: text });
-			else await navigator.clipboard.writeText(text);
+			if (Platform.isNative) {
+				// A share sheet put away without sharing is neither a copy nor a refusal.
+				const result = await Share.share({ message: text });
+				if (result.action === Share.dismissedAction) return;
+			} else await navigator.clipboard.writeText(text);
 			onCopied?.(true);
 		} catch {
 			onCopied?.(false);
 		}
 	};
+	// The default control height: 44 pt, a touch target on a till.
 	return (
-		<Button size="sm" variant="ghost" testID={testID} onPress={() => void press()}>
+		<Button variant="ghost" testID={testID} onPress={() => void press()}>
 			<ButtonText>{Platform.isNative ? (shareLabel ?? label) : label}</ButtonText>
 		</Button>
 	);

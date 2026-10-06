@@ -71,6 +71,11 @@ const FILL_START = 300;
 const FILL = 400;
 const ARRIVE = 600;
 const CORE_FULL = 2.6;
+// The face snaps solid in a few frames; a badge going back out fades in BADGE_OUT; a spring
+// that must start from a set scale gets there in one frame (AT_ONCE).
+const FACE_SNAP = 60;
+const BADGE_OUT = 150;
+const AT_ONCE = 1;
 const SYSTEM = { reduceMotion: ReduceMotion.System };
 const CLOSE_TIMING = { duration: CLOSE, easing: Easing.inOut(Easing.cubic), ...SYSTEM };
 const FILL_TIMING = { duration: FILL, easing: EASE, ...SYSTEM };
@@ -78,15 +83,30 @@ const FILL_TIMING = { duration: FILL, easing: EASE, ...SYSTEM };
 const BOINK = { stiffness: 320, damping: 10, mass: 0.7, ...SYSTEM };
 // The tick: draws past its size and squashes back (the juicy bit, owner 2026-10-06).
 const POP = 1.4;
-const POP_TIMING = { duration: 160, easing: EASE, ...SYSTEM };
+const POP_UP = 160;
+const POP_TIMING = { duration: POP_UP, easing: EASE, ...SYSTEM };
 const POP_SETTLE = { stiffness: 380, damping: 11, mass: 0.6, ...SYSTEM };
 // While we wait on a step its ring beats softly every BEAT_EVERY: a smaller boink.
 const BEAT_EVERY = 2400;
 const BEAT = 1.14;
-const BEAT_TIMING = { duration: 240, easing: EASE, ...SYSTEM };
+const BEAT_SWELL = 240;
+const BEAT_TIMING = { duration: BEAT_SWELL, easing: EASE, ...SYSTEM };
 // A failed step shakes its head once.
 const SHAKE = [-4, 4, -2, 1, 0];
-const SHAKE_STEP = { duration: 70, easing: Easing.linear, ...SYSTEM };
+const SHAKE_TICK = 70;
+const SHAKE_STEP = { duration: SHAKE_TICK, easing: Easing.linear, ...SYSTEM };
+
+// Literal class names, so Tailwind emits every one (a border built from a bg string at
+// runtime is never scanned).
+const TONES = {
+	primary: { bg: 'bg-primary', border: 'border-primary' },
+	success: { bg: 'bg-success', border: 'border-success' },
+	// The path behind a failed or stopped step: present, but not the thing to look at.
+	quiet: { bg: 'bg-muted-foreground/50', border: 'border-muted-foreground/50' },
+	destructive: { bg: 'bg-destructive', border: 'border-destructive' },
+	muted: { bg: 'bg-muted-foreground', border: 'border-muted-foreground' },
+} as const;
+type DoneTone = 'primary' | 'success' | 'quiet';
 
 function nodeState(index: number, current: number, status: StepProgressStatus): NodeState {
 	if (status === 'complete') return 'done';
@@ -127,12 +147,12 @@ export function StepProgress({
 	const fillStyle = useAnimatedStyle(() => ({
 		transform: [{ translateX: `${(progress.value - 1) * 100}%` }],
 	}));
-	const toneBg =
+	const doneTone: DoneTone =
 		status === 'complete'
-			? 'bg-success'
+			? 'success'
 			: status === 'failed' || status === 'stopped'
-				? 'bg-muted-foreground/50'
-				: 'bg-primary';
+				? 'quiet'
+				: 'primary';
 	// Compact rows run the rail between the outer beads; the default row centres each node in
 	// an equal column, so the rail starts and ends half a column in.
 	const inset = size === 'compact' ? geometry.node / 2 : `${50 / n}%`;
@@ -149,7 +169,7 @@ export function StepProgress({
 				}}
 			>
 				<Animated.View
-					className={cn('web:transition-colors h-full w-full rounded-full', toneBg)}
+					className={cn('h-full w-full rounded-full', TONES[doneTone].bg)}
 					style={fillStyle}
 				/>
 			</View>
@@ -163,7 +183,7 @@ export function StepProgress({
 						label={step.label}
 						caption={step.caption ?? null}
 						state={nodeState(index, current, status)}
-						doneTone={toneBg}
+						doneTone={doneTone}
 						size={size}
 						surfaceClassName={surfaceClassName}
 						testID={stepTestID?.(index)}
@@ -186,7 +206,7 @@ function StepNode({
 	label: string;
 	caption: string | null;
 	state: NodeState;
-	doneTone: string;
+	doneTone: DoneTone;
 	size: StepProgressSize;
 	surfaceClassName: string;
 	testID?: string;
@@ -208,9 +228,11 @@ function StepNode({
 		cancelAnimation(core);
 		cancelAnimation(face);
 		cancelAnimation(mark);
+		cancelAnimation(shake);
+		shake.value = 0;
 		if (state === 'todo') {
 			// Going back (a retry re-sends): nothing to celebrate, the badge just goes.
-			badge.value = withTiming(0, { duration: 150, easing: EASE, ...SYSTEM });
+			badge.value = withTiming(0, { duration: BADGE_OUT, easing: EASE, ...SYSTEM });
 			core.value = 1;
 			face.value = 0;
 			mark.value = 0;
@@ -220,12 +242,14 @@ function StepNode({
 			core.value = 1;
 			face.value = 0;
 			mark.value = 0;
-			// Arriving from ahead waits for the fill; a retry from a closed badge opens at once.
+			// Arriving from ahead waits, hidden, for the fill to reach it; a retry from a closed
+			// badge opens at once. Either way the spring starts from a little under size.
 			const wait = from === 'todo' ? ARRIVE : 0;
-			badge.value = 0.55;
+			if (wait === 0) badge.value = 0.55;
 			badge.value = withDelay(
 				wait,
 				withSequence(
+					withTiming(0.55, { duration: AT_ONCE }),
 					withSpring(1, BOINK),
 					withRepeat(
 						withSequence(
@@ -244,7 +268,10 @@ function StepNode({
 		// was open and mid-beat settles to size as it closes.
 		badge.value = withSpring(1, BOINK);
 		core.value = withTiming(CORE_FULL, CLOSE_TIMING);
-		face.value = withDelay(FACE, withTiming(1, { duration: 60, easing: Easing.linear, ...SYSTEM }));
+		face.value = withDelay(
+			FACE,
+			withTiming(1, { duration: FACE_SNAP, easing: Easing.linear, ...SYSTEM })
+		);
 		mark.value = withDelay(
 			MARK,
 			withSequence(withTiming(POP, POP_TIMING), withSpring(1, POP_SETTLE))
@@ -267,22 +294,16 @@ function StepNode({
 	}));
 	const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 
-	const tone =
-		state === 'failed'
-			? 'bg-destructive'
-			: state === 'stopped'
-				? 'bg-muted-foreground'
-				: state === 'done'
-					? doneTone
-					: 'bg-primary';
-	const border =
-		state === 'failed'
-			? 'border-destructive'
-			: state === 'stopped'
-				? 'border-muted-foreground'
-				: state === 'done'
-					? doneTone.replace(/^bg-/, 'border-')
-					: 'border-primary';
+	const { bg: tone, border } =
+		TONES[
+			state === 'failed'
+				? 'destructive'
+				: state === 'stopped'
+					? 'muted'
+					: state === 'done'
+						? doneTone
+						: 'primary'
+		];
 	const labelTone =
 		state === 'failed'
 			? 'text-destructive'
@@ -319,14 +340,14 @@ function StepNode({
 				<Animated.View
 					aria-hidden
 					className={cn(
-						'web:transition-colors absolute inset-0 overflow-hidden rounded-full border-2',
+						'absolute inset-0 overflow-hidden rounded-full border-2',
 						surfaceClassName,
 						border
 					)}
 					style={badgeStyle}
 				>
 					<Animated.View
-						className={cn('web:transition-colors absolute rounded-full', tone)}
+						className={cn('absolute rounded-full', tone)}
 						style={[
 							{
 								width: geometry.core,
@@ -337,10 +358,7 @@ function StepNode({
 							coreStyle,
 						]}
 					/>
-					<Animated.View
-						className={cn('web:transition-colors absolute inset-0 rounded-full', tone)}
-						style={faceStyle}
-					/>
+					<Animated.View className={cn('absolute inset-0 rounded-full', tone)} style={faceStyle} />
 					<Animated.View className="absolute inset-0 items-center justify-center" style={markStyle}>
 						<Icon name={icon} className={cn('text-primary-foreground', geometry.mark)} />
 					</Animated.View>
@@ -348,13 +366,7 @@ function StepNode({
 			</Animated.View>
 			{size === 'compact' ? null : (
 				<>
-					<Text
-						className={cn(
-							'web:transition-colors mt-2 text-center font-medium',
-							geometry.label,
-							labelTone
-						)}
-					>
+					<Text className={cn('mt-2 text-center font-medium', geometry.label, labelTone)}>
 						{label}
 					</Text>
 					{caption ? (
