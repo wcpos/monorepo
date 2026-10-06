@@ -448,6 +448,30 @@ describe('POSProducts query-state wiring', () => {
 		expect(mockBrowseStageProps).toBeNull();
 	});
 
+	it('hands the browse stage the screen’s plumbing, and its drill sets the filter bar’s level', () => {
+		mockBrowseBy = 'categories';
+		render(<POSProducts />);
+		expect(mockBrowseStageProps).toMatchObject({
+			binding: mockBinding,
+			variationsStyle: 'drill',
+			stockStatus: 'instock',
+			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),
+			actions: expect.objectContaining({ extendLimit: expect.any(Function) }),
+			tableConfig: expect.objectContaining({
+				meta: expect.objectContaining({ variationStockStatus: 'instock' }),
+			}),
+		});
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+		render(mockBrowseStageProps?.empty as React.ReactElement);
+		expect(screen.getByTestId('no-data-message')).toBeTruthy();
+
+		const onDrilledChange = mockBrowseStageProps?.onDrilledChange as (drilled: boolean) => void;
+		act(() => onDrilledChange(true));
+		expect(mockFilterBarProps.level).toBe('variations');
+		act(() => onDrilledChange(false));
+		expect(mockFilterBarProps.level).toBe('products');
+	});
+
 	// The query compiler trims the term, so blanks search for nothing.
 	it('keeps the browse stage for a whitespace-only search', () => {
 		mockBrowseBy = 'categories';

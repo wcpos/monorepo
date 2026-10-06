@@ -222,6 +222,8 @@ function POSProductsContent({
 		setDrillStage(browseBy);
 		setDrill(null);
 	}
+	// A product drilled inside the browse stage: the stage owns that drill; the filter bar reads it.
+	const [browseDrilled, setBrowseDrilled] = React.useState(false);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
@@ -429,7 +431,7 @@ function POSProductsContent({
 							</ErrorBoundary>
 							<ErrorBoundary>
 								<POSFilterBar
-									level={drilled ? 'variations' : 'products'}
+									level={drilled || browseDrilled ? 'variations' : 'products'}
 									initialFilters={initialFilters}
 								/>
 							</ErrorBoundary>
@@ -472,16 +474,24 @@ function POSProductsContent({
 					>
 						<ErrorBoundary>
 							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. A
-							    search is served by today's stack in every mode for now, so its
-							    variable products drill (the browse stage takes it over in Slice 2). Blank
-							    is no search, trimmed as the query compiler trims it. Keyed by source: a
-							    switch starts the stage afresh. */}
+							    search is served by today's stack in every mode, so its variable products
+							    drill there (the stage then unmounts, handing the filter bar's level
+							    back). Blank is no search, trimmed as the query compiler trims it. Keyed
+							    by source: a switch starts the stage afresh. */}
 							{browseBy !== 'all' && state.search.trim() === '' ? (
 								<BrowseStage
 									key={browseBy}
 									source={browseBy}
 									viewMode={viewMode}
 									renderProducts={renderProducts}
+									empty={noDataMessage}
+									variationsStyle={variationsStyle}
+									stockStatus={stockStatusFilter}
+									binding={binding}
+									state={state}
+									actions={tableActions}
+									tableConfig={tableConfig}
+									onDrilledChange={setBrowseDrilled}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack
