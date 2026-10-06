@@ -15,7 +15,14 @@ import { BrowseRootGrid, TermLevelGrid } from './term-grid';
 import { BrowseRootTable, TermLevelTable } from './term-table';
 import { displayTypeOf } from './term-tree';
 import { useAnswerOf } from './use-answer-of';
-import { filtersAtBaseline, isBlankSearch, type PathEntry, useBrowsePath } from './use-browse-path';
+import {
+	filtersAtBaseline,
+	isBlankSearch,
+	type PathEntry,
+	sameSort,
+	useBrowsePath,
+	useSettingsSort,
+} from './use-browse-path';
 import { useBrowseTerms } from './use-browse-terms';
 
 import type {
@@ -251,9 +258,17 @@ export function BrowseStage(props: BrowseStageProps) {
 	// or a pill or chip the cashier pressed (a level they left that way, a stock toggle): the
 	// products of that query show, exactly as the filter bar reads, never the term tiles over a
 	// filtered query. Clear filters (or clearing the search) brings the term set back.
+	// A sort away from the baseline displaces it too, exactly as a pill does: a sort-only chip
+	// (`conditions: []` with a `sort`) moves nothing but the sort, and its press must show the
+	// products it sorted, not light up over the tiles. The baseline is the persisted settings
+	// sort (use-browse-path's `useSettingsSort`): a header sort writes that too, so the baseline
+	// moves with it. Inside a level the sort is the cashier's (a level's liveness ignores it).
+	const settingsSort = useSettingsSort();
 	const displaced =
 		path.length === 0 &&
-		(!isBlankSearch(state.search) || !filtersAtBaseline(state.filters, props.initialFilters));
+		(!isBlankSearch(state.search) ||
+			!filtersAtBaseline(state.filters, props.initialFilters) ||
+			!sameSort(state.sort, settingsSort));
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored
 	// objects themselves (identity, see Detail).

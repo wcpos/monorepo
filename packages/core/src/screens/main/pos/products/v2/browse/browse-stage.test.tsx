@@ -114,16 +114,17 @@ jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number }) =>
 		vars?.count !== undefined ? `${vars.count} ${key}` : key,
 }));
+// The device's persisted pos-products settings; a header sort writes sortBy/sortDirection here.
+const settingsAtRest = () => ({
+	gridColumns: 2,
+	gridFields: { name: true },
+	sortBy: 'name',
+	sortDirection: 'asc',
+	showOutOfStock: true,
+});
+let mockUISettings = settingsAtRest();
 jest.mock('../../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({
-		uiSettings: {
-			gridColumns: 2,
-			gridFields: { name: true },
-			sortBy: 'name',
-			sortDirection: 'asc',
-			showOutOfStock: true,
-		},
-	}),
+	useUISettings: () => ({ uiSettings: mockUISettings }),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: Record<string, unknown>, read: (value: Record<string, unknown>) => unknown) =>
@@ -388,6 +389,7 @@ beforeEach(() => {
 	mockHoldGathers = false;
 	mockAnswered = true;
 	mockAddedUnderDrinks = [];
+	mockUISettings = settingsAtRest();
 	jest.clearAllMocks();
 });
 
@@ -534,6 +536,40 @@ it('a pill pressed inside a level leaves its products at the root, not the term 
 	expect(screen.queryByTestId('browse-root')).toBeNull();
 	act(() => queryActions.resetFilters());
 	expect(screen.getByTestId('browse-root')).toBeTruthy();
+});
+
+// A quick filter may carry `conditions: []` and only a `sort` (quick-filter-editor allows it).
+// Its chip's press (filter-bar.tsx QuickChip) resets filters and search to the baseline and
+// sets only the sort — nothing else moves, so the sort alone must displace the term set.
+it('a sort-only quick filter pressed at the root shows its sorted products, not the term set; pressed off, the terms are back', () => {
+	render(<BrowseStage {...stageProps()} />);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	act(() => {
+		queryActions.resetFilters();
+		queryActions.clearSearch();
+		queryActions.setSort('sortable_price', 'desc');
+	});
+	expect(mockState.filters).toEqual(baseline());
+	expect(mockState.search).toBe('');
+	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.queryByTestId('browse-root')).toBeNull();
+	expect(screen.queryByTestId('browse-term-1')).toBeNull();
+	// Pressed off: the chip puts the settings sort back.
+	act(() => queryActions.setSort('name', 'asc'));
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
+});
+
+it('a persisted settings sort change moves the baseline with it: the root is not displaced', () => {
+	const props = stageProps();
+	const { rerender } = render(<BrowseStage {...props} />);
+	// A header sort writes uiSettings, and the screen's effect sets the query sort from it.
+	mockUISettings = { ...mockUISettings, sortBy: 'sku', sortDirection: 'desc' };
+	act(() => queryActions.setSort('sku', 'desc'));
+	rerender(<BrowseStage {...props} />);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	expect(screen.queryByTestId('products')).toBeNull();
 });
 
 it('a product drilled from the search-displaced root opens in the stage, through one stable handler', () => {

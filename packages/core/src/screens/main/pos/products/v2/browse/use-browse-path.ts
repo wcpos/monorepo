@@ -11,6 +11,7 @@ import { getPOSProductSort } from '../../pos-product-sort';
 import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 
 import type { Measurable } from '../deal-stack';
+import type { QueryStateOf } from '../../../../../../query';
 import type { FiltersOf } from '../../../../../../query/query-state-types';
 import type { QuickFilter } from '../../filter-bar/filter-bar-layout';
 import type { BrowseTerms } from './use-browse-terms';
@@ -82,10 +83,21 @@ const NO_PATH: PathEntry[] = [];
 
 const sameSet = (left: unknown, right: number[]) =>
 	Array.isArray(left) && left.length === right.length && right.every((id) => left.includes(id));
-const sameSort = (
+export const sameSort = (
 	left: { field: string; direction: string },
 	right: { field: string; direction: string }
 ) => left.field === right.field && left.direction === right.direction;
+
+/**
+ * The baseline sort: the one the device's `pos-products` settings persist — exactly what the
+ * chip reads (filter-bar.tsx QuickChip), and what a table header writes (index.tsx), so a
+ * header sort moves the baseline with it. The ONE derivation for the path (a shortcut's level
+ * and its reset) and the stage (a sort-only chip displaces the root from this, as a pill does).
+ */
+export function useSettingsSort(): QueryStateOf<'products'>['sort'] {
+	const { uiSettings } = useUISettings('pos-products');
+	return useDocField(uiSettings, (value) => getPOSProductSort(value.sortBy, value.sortDirection));
+}
 
 /**
  * The filters other than `field`: what a taxonomy level (or All products) must find unchanged
@@ -172,9 +184,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	const { uiSettings } = useUISettings('pos-products');
 	// Exactly what the chip reads (filter-bar.tsx QuickChip), so a shortcut is active for the
 	// path when its chip's filters and search hold (its sort aside, once entered — see below).
-	const settingsSort = useDocField(uiSettings, (value) =>
-		getPOSProductSort(value.sortBy, value.sortDirection)
-	);
+	const settingsSort = useSettingsSort();
 	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
 	const field = taxonomyField(source);
 	// The path is the SOURCE's: a path stored under Categories is nothing under Tags from the very
