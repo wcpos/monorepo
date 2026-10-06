@@ -190,12 +190,14 @@ function loadCreateAppEngine(
 		switchAppEngineScope,
 		createSessionFetcherOptions,
 		inventoryLegacyScopeDatabases,
+		runLegacyInventory,
 	} = jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	const { setAppOnlineStatus } =
 		jest.requireActual<typeof import('./connectivity')>('./connectivity');
 	return {
 		createAppSyncEngine,
 		inventoryLegacyScopeDatabases,
+		runLegacyInventory,
 		drainLegacyScopeDatabase,
 		setAppOnlineStatus,
 		networkDebug,
@@ -1976,6 +1978,12 @@ describe('previous-generation database drain', () => {
 		reportDue: true,
 	};
 	const writeDrainRan = { type: 'lane-finish', lane: 'write-drain', status: 'ran' };
+	/** Discovery completes and names nothing beyond the visited scope (a settled history). */
+	const discoveryFindsNothingElse = (loaded: ReturnType<typeof loadCreateAppEngine>) =>
+		loaded.inventoryLegacyScopeDatabases({
+			registry: [],
+			history: { names: [], complete: true, settled: true, markSettled: async () => undefined },
+		});
 
 	beforeEach(() => forgetUnsentChanges());
 	afterEach(() => {
@@ -2037,8 +2045,8 @@ describe('previous-generation database drain', () => {
 
 	it('never PUSHES while the session is refused, but still probes and reports; the first tick after pushes', async () => {
 		const engine = createEngineDouble();
-		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } =
-			loadCreateAppEngine(() => engine);
+		const loaded = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase, purgeLegacyDatabases } = loaded;
 		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
 		const { requestStateManager } = jest.requireActual<
 			typeof import('@wcpos/hooks/use-http-client')
@@ -2051,6 +2059,7 @@ describe('previous-generation database drain', () => {
 			'the store refused the session'
 		);
 		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		await discoveryFindsNothingElse(loaded);
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
 
 		// Not an attempt: no backoff — the next tick that ran pushes, unblocked.
@@ -2231,10 +2240,12 @@ describe('previous-generation database drain', () => {
 
 	it('what a kept database holds is counted by the Clear local data warning; a drained one is not', async () => {
 		const engine = createEngineDouble();
-		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
+		const loaded = loadCreateAppEngine(() => engine);
+		const { createAppSyncEngine, drainLegacyScopeDatabase } = loaded;
 		drainLegacyScopeDatabase.mockResolvedValue(keptRetryable);
 		await createAppSyncEngine(BASE_OPTIONS).ready;
 		await settle();
+		await discoveryFindsNothingElse(loaded);
 		expect(classifyUnsentChanges(0)).toEqual({ status: 'some', count: 5 });
 		expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 7 });
 		expect([...legacyUnsentOrderUuids(LEGACY)]).toEqual(['order-held', 'order-unsent']);
@@ -2430,6 +2441,67 @@ describe('previous-generation database drain', () => {
 		});
 	});
 
+	describe('the overall inventory', () => {
+		it('a reset opened before discovery resolves reads unknown; discovery that finds nothing kept makes it exact', async () => {
+			const loaded = loadCreateAppEngine();
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			// The active scope reported absent; the other scopes are not yet discovered.
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			let resolve!: () => void;
+			const discovery = loaded.runLegacyInventory(
+				() =>
+					new Promise((done) => {
+						resolve = () =>
+							done({
+								registry: [],
+								history: {
+									names: [],
+									complete: true,
+									settled: true,
+									markSettled: async () => undefined,
+								},
+							});
+					})
+			);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			resolve();
+			await discovery;
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+
+		it('a discovery that cannot read leaves the count unknown for the process, warning once', async () => {
+			const loaded = loadCreateAppEngine();
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			for (let start = 0; start < 2; start += 1) {
+				await loaded.runLegacyInventory(async () => {
+					throw new Error('user database unavailable');
+				});
+			}
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+			const warned = loaded.networkWarn.mock.calls.filter(([message]) =>
+				String(message).startsWith("Could not list the previous database version's scope databases")
+			);
+			expect(warned).toHaveLength(1);
+			// A later engine construction does not re-mark it as merely pending.
+			loaded.createAppSyncEngine(OTHER_SITE_OPTIONS);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'unknown' });
+		});
+
+		it('native: a registry read that fails still lists the files', async () => {
+			const list = jest.fn(async () => [] as string[]);
+			const loaded = loadCreateAppEngine(createEngineDouble, false, true, { list });
+			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await settle();
+			await loaded.runLegacyInventory(async () => {
+				throw new Error('user database unavailable');
+			});
+			expect(list).toHaveBeenCalledTimes(1);
+			expect(classifyUnsentChanges(2)).toEqual({ status: 'some', count: 2 });
+		});
+	});
+
 	it('a scope whose engine never became ready releases its mark as uncountable instead of leaving waiters hanging', async () => {
 		const engine = createEngineDouble();
 		const { createAppSyncEngine, drainLegacyScopeDatabase } = loadCreateAppEngine(() => engine);
@@ -2621,6 +2693,7 @@ describe('previous-generation database drain', () => {
 			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
 			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
 			expect(wire).toContain('store-1');
+			await discoveryFindsNothingElse(loaded);
 			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 		} finally {
 			fetch.mockRestore();

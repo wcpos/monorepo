@@ -221,6 +221,16 @@ const LEGACY_HISTORY_INCOMPLETE = 'previous-version databases from before this b
  */
 const LEGACY_REGISTRY_UNRESOLVED = 'previous-version databases behind unresolved store references';
 let legacyRegistryUnresolvedWarned = false;
+/**
+ * The OVERALL inventory: pending from engine construction until discovery completes (the reset
+ * count is unknown meanwhile — a confirm opened before discovery would otherwise state an exact
+ * count from the active scope alone), and failed for the process when discovery cannot read.
+ */
+const LEGACY_INVENTORY_PENDING = 'previous-version database inventory (not yet run)';
+const LEGACY_INVENTORY_FAILED = 'previous-version database inventory (failed)';
+let legacyInventoryCompleted = false;
+let legacyInventoryFailed = false;
+let legacyInventoryFailureWarned = false;
 /** Set while the latest inventory saw an unresolved registry reference: nothing settles. */
 let legacyRegistryIncomplete = false;
 /** Names the boot inventory marked; a web/Electron history settles once none is outstanding. */
@@ -310,7 +320,49 @@ export async function inventoryLegacyScopeDatabases(input: {
 		legacyInventory.add(name);
 		if (!legacyReported.has(name) && !legacyDrainMarked(name)) markLegacyDrainPending(name);
 	}
+	// Discovery is complete: every database it found is marked (or reported) by name.
+	legacyInventoryCompleted = true;
+	if (!legacyInventoryFailed) rememberLegacyUnsentChanges(LEGACY_INVENTORY_PENDING, 0);
 	settleLegacyHistory();
+}
+
+/**
+ * Discovery itself, as the layout runs it after boot: `read` loads the registry and the history
+ * from the user database. Until it completes, `LEGACY_INVENTORY_PENDING` (marked at engine
+ * construction) keeps the reset count unknown. A read that fails leaves the count unknown for
+ * the process (`LEGACY_INVENTORY_FAILED`, warned once) — except on native, whose inventory is
+ * its file listing and needs no registry, so it still runs.
+ */
+export async function runLegacyInventory(
+	read: () => Promise<Parameters<typeof inventoryLegacyScopeDatabases>[0]>
+): Promise<void> {
+	let input: Parameters<typeof inventoryLegacyScopeDatabases>[0];
+	try {
+		input = await read();
+	} catch (error) {
+		if (scopeDatabaseFiles === null) {
+			failLegacyInventory(error);
+			return;
+		}
+		input = { registry: [] };
+	}
+	try {
+		await inventoryLegacyScopeDatabases(input);
+	} catch (error) {
+		failLegacyInventory(error);
+	}
+}
+
+function failLegacyInventory(error: unknown): void {
+	legacyInventoryFailed = true;
+	rememberLegacyUnsentChanges(LEGACY_INVENTORY_PENDING, 0);
+	rememberLegacyUnsentChanges(LEGACY_INVENTORY_FAILED, null);
+	if (legacyInventoryFailureWarned) return;
+	legacyInventoryFailureWarned = true;
+	engineLogger.warn(
+		"Could not list the previous database version's scope databases; unsent changes from it cannot be ruled out",
+		{ context: { error: error instanceof Error ? error.message : String(error) } }
+	);
 }
 
 function legacyDrainBackoffMs(retries: number): number {
@@ -856,6 +908,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		markLegacyDrainPending(
 			scopeDatabaseName(options.scope, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
 		);
+	}
+	// …and the inventory of every other one, until its discovery completes.
+	if (!legacyInventoryCompleted && !legacyInventoryFailed) {
+		markLegacyDrainPending(LEGACY_INVENTORY_PENDING);
 	}
 	const engine = createRxdbSyncEngine(
 		{
