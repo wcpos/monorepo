@@ -229,6 +229,9 @@ function StepNode({
 	const mark = useSharedValue(closed(state) ? 1 : 0);
 	const shake = useSharedValue(0);
 	const seen = React.useRef(state);
+	// When a delayed arrival will have landed. A badge that closes before then (the terminal
+	// answered and failed inside the 600 ms) keeps waiting for the fill like the ring would have.
+	const arrivesAt = React.useRef(0);
 	React.useLayoutEffect(() => {
 		const from = seen.current;
 		if (from === state) return;
@@ -254,6 +257,7 @@ function StepNode({
 			// Arriving from ahead waits, hidden, for the fill to reach it; a retry from a closed
 			// badge opens at once. Either way the spring starts from a little under size.
 			const wait = from === 'todo' ? ARRIVE : 0;
+			arrivesAt.current = Date.now() + wait;
 			// A badge caught mid-fade-out must not wait half-visible.
 			badge.value = wait === 0 ? 0.55 : 0;
 			badge.value = withDelay(
@@ -277,8 +281,8 @@ function StepNode({
 		// it closes. One that was not open yet (a jump of two steps, or a failure before the first
 		// poll answered) waits for the fill to reach it, then opens and closes in one motion, so
 		// nothing on the rail is ever ahead of the fill.
-		const wait = from === 'todo' ? ARRIVE : 0;
-		if (wait) badge.value = 0;
+		const wait = from === 'todo' ? ARRIVE : Math.max(0, arrivesAt.current - Date.now());
+		if (from === 'todo') badge.value = 0;
 		badge.value = withDelay(wait, withSpring(1, BOINK));
 		core.value = withDelay(wait, withTiming(CORE_FULL, CLOSE_TIMING));
 		face.value = withDelay(
