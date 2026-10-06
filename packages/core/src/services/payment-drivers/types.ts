@@ -53,7 +53,12 @@ export interface PaymentDriver {
 				available: false;
 				reason: 'web' | 'permission' | 'bluetooth_off' | 'not_logged_in' | 'unsupported';
 		  };
-	discoverReaders?(transport: PaymentTransport): Promise<ReaderInfo[]>;
+	/**
+	 * Scan for readers. `until` names the reader id the caller is waiting for: a driver that
+	 * can stop its scan early does so the moment that reader appears, instead of running the
+	 * whole discovery window (a remembered reader otherwise costs the cashier ~10 s per tile pick).
+	 */
+	discoverReaders?(transport: PaymentTransport, options?: { until?: string }): Promise<ReaderInfo[]>;
 	connect?(reader: ReaderInfo, handoff: Record<string, unknown> | null): Promise<void>;
 	disconnect?(): Promise<void>;
 	openReaderSettings?(): Promise<void>;
