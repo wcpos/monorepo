@@ -41,7 +41,11 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
-import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
+import {
+	type CollectionWriteFacet,
+	type WriteAck,
+	writeFacetFor,
+} from '../collections/collection-descriptors';
 import {
 	classifyMoneyDivergence,
 	compareOrderMoney,
@@ -89,9 +93,10 @@ export { fetchOrderServerRevision } from './order-server-revision';
  */
 async function withGraftedLineIdentity<T extends QueuedMutation>(
 	database: RxDatabase,
-	mutation: T
+	mutation: T,
+	facetFor: (collection: string) => CollectionWriteFacet | null
 ): Promise<T> {
-	const facet = writeFacetFor(mutation.collectionName);
+	const facet = facetFor(mutation.collectionName);
 	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
 	if (mutation.operation === 'create') {
 		// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
@@ -309,6 +314,12 @@ export type WriteDrainLaneDeps = {
 	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
 	 * the carrier field, and an ack re-materialization derives it again. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
+	/**
+	 * The write facets this lane acknowledges through. Default: the current
+	 * generation's. A drainable-generation engine passes the facets whose
+	 * projections fit that generation's schemas.
+	 */
+	writeFacetFor?: (collection: string) => CollectionWriteFacet | null;
 };
 
 export type WriteDrainLane = {
@@ -321,6 +332,7 @@ export type WriteDrainLane = {
  * see `open-cart-hold.ts`). Leader-only, so a follower window never drains.
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
+	const facetFor = deps.writeFacetFor ?? writeFacetFor;
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
 		if (signal?.aborted) {
@@ -452,7 +464,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// `doc.remove()`, no server round-trip) — the same net local effect as
 							// enqueue-time annihilation's `resident.remove()`.
 							removeResident: async (mutation, signal) => {
-								const facet = writeFacetFor(mutation.collectionName);
+								const facet = facetFor(mutation.collectionName);
 								if (!facet) return; // enqueue guards this; nothing to remove otherwise
 								await facet.onDeleteAck(
 									database,
@@ -470,7 +482,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// collection keeps parking on the first conflict.
 							autoRecoverConflict: (mutation) => mutation.collectionName === 'orders',
 							reconcileConflict: async (mutation, current) => {
-								const facet = writeFacetFor(mutation.collectionName);
+								const facet = facetFor(mutation.collectionName);
 								if (!facet?.graftAckIdentity || mutation.operation === 'delete') return;
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
@@ -485,7 +497,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 							},
 							refreshRevision: async (mutation) => {
-								const facet = writeFacetFor(mutation.collectionName);
+								const facet = facetFor(mutation.collectionName);
 								if (!facet) {
 									throw new Error(`No refresh seam for collection "${mutation.collectionName}"`);
 								}
@@ -519,7 +531,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							},
 							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
-								const outbound = await withGraftedLineIdentity(database, mutation);
+								const outbound = await withGraftedLineIdentity(database, mutation, facetFor);
 								if (outbound.collectionName === 'orders' && outbound.operation !== 'delete') {
 									const resident = await database.collections.orders
 										?.findOne(outbound.recordId)
@@ -556,7 +568,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							},
 							applyAck: async (mutation, pushResult, signal) => {
-								const facet = writeFacetFor(mutation.collectionName);
+								const facet = facetFor(mutation.collectionName);
 								if (!facet) {
 									// Enqueue guards against this; a foreign row (older build) must
 									// not silently ack — leave it queued and surface loudly.
@@ -747,7 +759,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// Use the same server-existence evidence as conflict resolution: a
 							// CREATE is born-local only when neither the resident nor queued payload
 							// has a remote id and the rejection does not indicate a server match.
-							const rejectedFacet = writeFacetFor(dead.collectionName);
+							const rejectedFacet = facetFor(dead.collectionName);
 							const rejectedRemoteId =
 								doc !== null && rejectedFacet !== null
 									? doc.toJSON()[rejectedFacet.remoteIdField]

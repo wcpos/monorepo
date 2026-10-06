@@ -278,13 +278,30 @@ async function classify(database: RxDatabase): Promise<Classified> {
 	return { total: rows.length, remaining, carriable, orderUuids };
 }
 
+/** A create still ahead in a queue for this record (pending or in flight). */
+function hasLiveCreate(rows: readonly QueueRow[]): boolean {
+	return rows.some(
+		(row) =>
+			row.operation === 'create' &&
+			(row.status === undefined || row.status === 'pending' || row.status === 'claimed')
+	);
+}
+
 /**
  * Carry each never-sent open cart into the live engine's database: copy the
  * order, enqueue its create through the live write path (so it is `pos-open`
  * there, held exactly as before), then remove it from the drained database.
- * Copy first, remove second: a crash in between leaves the cart in both, and
- * the next drain finds the live copy (with its queued create) and only removes
- * the old one. Returns how many carts moved.
+ *
+ * The old copy is retired ONLY when the live database provably carries the
+ * sale: a queued create for it (pending or in flight), or a remote id. A live
+ * copy with neither — the till stopped after the copy but before its create was
+ * enqueued, and a later cart edit queued an `update` — is REPAIRED: the missing
+ * create goes through the live write path with the live resident's payload,
+ * where it folds into that never-pushed update exactly as a local create∘update
+ * does (`write-intents.ts`, coalescing into the last pending row). If the live
+ * copy has an edit already claimed or attempted with no create ahead of it, no
+ * create can be put in front of it safely: the cart stays in the old database
+ * and the outcome says why. Returns how many carts moved, and why any did not.
  */
 async function carryOverOpenCarts(
 	ports: LegacyScopeDrainPorts,
@@ -295,16 +312,26 @@ async function carryOverOpenCarts(
 	const live = ports.liveEngine;
 	if (!live || carts.length === 0) return { carried: 0, error: null };
 	let carried = 0;
+	const errors: string[] = [];
+	let active: Awaited<ReturnType<typeof live.whenActive>>;
 	try {
-		const active = await live.whenActive();
-		// Only into the drained scope's own database: another cashier or store never receives this cart.
-		if (scopeKeyFor(active.identity) !== scopeKeyFor(identity)) {
-			return { carried: 0, error: 'the live engine is on another scope' };
-		}
-		const liveOrders = active.database.collections.orders;
-		const liveQueue = queueOf(active.database);
-		if (!liveOrders || !liveQueue) return { carried: 0, error: 'the live database has no orders' };
-		for (const cart of carts) {
+		active = await live.whenActive();
+	} catch (error) {
+		return { carried: 0, error: errorMessage(error) };
+	}
+	// Only into the drained scope's own database: another cashier or store never receives this cart.
+	if (scopeKeyFor(active.identity) !== scopeKeyFor(identity)) {
+		return { carried: 0, error: 'the live engine is on another scope' };
+	}
+	const liveOrders = active.database.collections.orders;
+	const liveQueue = active.database.collections[MUTATION_QUEUE_RXDB_COLLECTION];
+	if (!liveOrders || !liveQueue) return { carried: 0, error: 'the live database has no orders' };
+	const liveRowsFor = async (recordId: string): Promise<QueueRow[]> =>
+		(await liveQueue.find({ selector: { recordId } }).exec()).map(
+			(doc) => doc.toJSON() as QueueRow
+		);
+	for (const cart of carts) {
+		try {
 			let resident = await liveOrders.findOne(cart.recordId).exec();
 			let inserted = false;
 			if (!resident) {
@@ -316,17 +343,32 @@ async function carryOverOpenCarts(
 				});
 				inserted = true;
 			}
-			const liveRows = await liveQueue.find({ selector: { recordId: cart.recordId } }).exec();
-			const residentRemoteId = remoteIdOrNull(
-				(resident.toJSON() as { remoteId?: unknown }).remoteId
-			);
-			if (liveRows.length === 0 && residentRemoteId === null) {
-				// The held chain coalesced as it would have in the old queue: the create's payload with
-				// each later edit layered on, in seq order.
-				const payload = Object.assign(
-					{},
-					...cart.rows.map((row) => plainCopy((row.payload ?? {}) as Record<string, unknown>))
-				) as Record<string, unknown>;
+			const residentJson = resident.toJSON() as { remoteId?: unknown; payload?: unknown };
+			const carriesSale = async () =>
+				remoteIdOrNull(residentJson.remoteId) !== null ||
+				hasLiveCreate(await liveRowsFor(cart.recordId));
+			if (!(await carriesSale())) {
+				const open = (await liveRowsFor(cart.recordId)).filter((row) => row.status !== 'rejected');
+				const neverPushed = open.every(
+					(row) =>
+						(row.status === undefined || row.status === 'pending') &&
+						(row.attempts ?? 0) === 0 &&
+						row.claimedBy === undefined
+				);
+				if (!neverPushed) {
+					throw new Error(
+						`the live copy of ${cart.recordId} has an edit in flight with no create ahead of it`
+					);
+				}
+				// A fresh copy carries the held chain coalesced as the old queue held it (the create's
+				// payload with each later edit layered on, in seq order); a copy already live carries
+				// its own resident payload, which already holds every later edit.
+				const payload = inserted
+					? (Object.assign(
+							{},
+							...cart.rows.map((row) => plainCopy((row.payload ?? {}) as Record<string, unknown>))
+						) as Record<string, unknown>)
+					: plainCopy((residentJson.payload ?? {}) as Record<string, unknown>);
 				try {
 					await live.write({
 						collection: 'orders',
@@ -339,16 +381,19 @@ async function carryOverOpenCarts(
 					if (inserted) await resident.remove().catch(() => undefined);
 					throw error;
 				}
+				if (!(await carriesSale())) {
+					throw new Error(`the live queue holds no create for ${cart.recordId}`);
+				}
 			}
 			await queueOf(legacy).bulkRemove(cart.rows.map((row) => row.mutationId));
 			const legacyOrder = await legacy.collections.orders?.findOne(cart.recordId).exec();
 			await legacyOrder?.remove();
 			carried += 1;
+		} catch (error) {
+			errors.push(errorMessage(error));
 		}
-		return { carried, error: null };
-	} catch (error) {
-		return { carried, error: errorMessage(error) };
 	}
+	return { carried, error: errors.length > 0 ? errors.join('; ') : null };
 }
 
 /** True when the kept database's un-sendable work has not been reported within the interval; stamps it. */
@@ -393,10 +438,15 @@ async function settle(input: {
 		const fileRemoved = await removeFiles(ports, databaseName);
 		return { status: 'drained', databaseName, pushed, carried: carry.carried, fileRemoved };
 	}
-	const retryable = input.tickProblem !== null || (after.remaining.unsent ?? 0) > 0;
+	// A cart that could not be carried (the live engine moved to another scope mid-drain, a
+	// write failed) is retried: it is live work, and the next attempt on this scope can move it.
+	const retryable =
+		input.tickProblem !== null || (after.remaining.unsent ?? 0) > 0 || carry.error !== null;
 	const reasons = [
 		input.tickProblem ??
-			(retryable ? 'sendable work is left in the queue' : 'unsent work is left in the queue'),
+			((after.remaining.unsent ?? 0) > 0
+				? 'sendable work is left in the queue'
+				: 'unsent work is left in the queue'),
 		...(carry.error !== null ? [`open carts not carried over: ${carry.error}`] : []),
 	];
 	const reportDue = retryable || (await unsendableReportDue(database, (ports.now ?? Date.now)()));

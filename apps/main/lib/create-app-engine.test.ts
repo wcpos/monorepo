@@ -2139,6 +2139,69 @@ describe('previous-generation database drain', () => {
 		expect(drainLegacyScopeDatabase).toHaveBeenCalledTimes(total);
 	});
 
+	it('a cart transfer cut short by a store switch is retried once the scope is back', async () => {
+		let now = 1_000_000;
+		jest.spyOn(Date, 'now').mockImplementation(() => now);
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, drainLegacyScopeDatabase, switchAppEngineScope } =
+			loadCreateAppEngine(() => engine);
+		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		const session = (identity: ScopeIdentity) => ({
+			site: { wp_api_url: identity.site },
+			wpCredentials: { id: identity.cashierId },
+			store: { id: identity.storeId },
+		});
+		let finishFirst!: (outcome: LegacyScopeDrainOutcome) => void;
+		drainLegacyScopeDatabase.mockImplementation(async (_ports, scope) => {
+			if (scope.storeId === target.storeId) {
+				return { status: 'absent', databaseName: scopeDatabaseName(scope, { generation: 5 }) };
+			}
+			if (drainLegacyScopeDatabase.mock.calls.length === 1) {
+				return new Promise<LegacyScopeDrainOutcome>((resolve) => {
+					finishFirst = resolve;
+				});
+			}
+			return {
+				status: 'drained',
+				databaseName: LEGACY,
+				pushed: 0,
+				carried: 1,
+				fileRemoved: true,
+			};
+		});
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		// The cashier switches store while the drain is moving the cart: the live engine left.
+		await switchAppEngineScope(session(target));
+		await settle();
+		finishFirst({
+			status: 'kept',
+			databaseName: LEGACY,
+			reason:
+				'unsent work is left in the queue; open carts not carried over: the live engine is on another scope',
+			retryable: true,
+			pushed: 0,
+			carried: 0,
+			remaining: { held: 1 },
+			keptOrderUuids: ['order-held-cart'],
+			reportDue: true,
+		});
+		await settle();
+
+		// Back on the scope; the next write-drain tick that ran, past the backoff, carries it.
+		await switchAppEngineScope(session(BASE_OPTIONS.scope));
+		await settle();
+		now += 60_000;
+		engine.emit(writeDrainRan);
+		await settle();
+		expect(drainLegacyScopeDatabase.mock.calls.map(([, scope]) => scope.storeId)).toEqual([
+			BASE_OPTIONS.scope.storeId,
+			target.storeId,
+			BASE_OPTIONS.scope.storeId,
+		]);
+		expect(legacyUnsentOrderUuids().size).toBe(0);
+	});
+
 	it('a kept database with nothing sendable, or one that failed to open, is not retried in this process', async () => {
 		for (const outcome of [
 			keptUnsendable,

@@ -44,7 +44,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from './collections/engine-collections';
-import { createEngineHarness, type EngineHarness } from './testing';
+import { createEngineHarness, type EngineHarness, memoryEngineStorage } from './testing';
 import {
 	drainLegacyScopeDatabase,
 	LEGACY_UNSENDABLE_REPORT_INTERVAL_MS,
@@ -655,6 +655,134 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 		}
 	}, 30_000);
 
+	it('a live copy left with only an UPDATE queued is not proof of transfer: the create is repaired before v5 lets go', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+		const heldRow = manifest.queue.find((row) => row.case === 'e')!;
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			// The till stopped after the copy but before its create was enqueued; the cashier then
+			// edited the cart, which queued an update and nothing else.
+			const edited = { ...(cart.stored.payload as Json), customer_note: 'edited after the copy' };
+			const copy = await app
+				.collection('orders')
+				.insert({ ...cart.stored, local: { dirty: false, pendingMutationIds: [] } });
+			await copy.incrementalModify((data: Json) => ({ ...data, payload: edited }));
+			await app.engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: cart.uuid,
+				payload: { customer_note: 'edited after the copy' },
+			});
+			expect([...(await stored(app)).rows.values()].map((row) => row.operation)).toEqual([
+				'update',
+			]);
+
+			const drain = drainPorts(storage, storeFetch(server), { liveEngine: app.engine });
+			expect(await drainLegacyScopeDatabase(drain, manifest.identity)).toMatchObject({
+				status: 'kept',
+				carried: 1,
+				remaining: { deadLetters: 1, conflicts: 1 },
+			});
+			// One row, now the create — carrying both the cart and the later edit.
+			const [row] = [...(await stored(app)).rows.values()];
+			expect((await stored(app)).rows.size).toBe(1);
+			expect(row).toMatchObject({
+				operation: 'create',
+				recordId: cart.uuid,
+				status: 'pending',
+				payload: expect.objectContaining({ customer_note: 'edited after the copy' }),
+			});
+
+			// The cart is checked out: the push CREATES the order on the store.
+			const resident = await app.collection('orders').findOne(cart.uuid).exec();
+			await resident!.incrementalModify((data: Json) => ({
+				...data,
+				status: 'completed',
+				payload: { ...(data.payload as Json), status: 'completed' },
+			}));
+			expect(await app.engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const sent = server.received.filter((envelope) => envelope.recordId === cart.uuid);
+			expect(sent.map((envelope) => envelope.operation)).toEqual(['create']);
+			expect(server.applied.has(cart.uuid)).toBe(true);
+		} finally {
+			await app.dispose();
+		}
+
+		const legacy = await openLegacy(storage, server);
+		try {
+			const kept = await stored(legacy);
+			expect(kept.orders.has(cart.uuid)).toBe(false);
+			expect(kept.rows.has(heldRow.mutationId)).toBe(false);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
+
+	it('a cart the live engine could not take (it moved to another scope) is kept as retryable, and moves on the next try', async () => {
+		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
+		const storage = restore(work);
+		const server = createFakeWriteServer();
+		for (const [uuid, seed] of Object.entries(manifest.serverSeed)) server.seed(uuid, seed);
+		const cart = manifest.orders.find((order) => order.case === 'e')!;
+
+		const app = await createEngineHarness({
+			site: manifest.identity.site,
+			identity: manifest.identity,
+			storage,
+			startAtMs: manifest.drainAtMs,
+			fetch: storeFetch(server),
+		});
+		try {
+			const elsewhere: LegacyScopeDrainPorts['liveEngine'] = {
+				whenActive: async () => ({
+					...(await app.engine.whenActive()),
+					identity: { ...manifest.identity, storeId: 99 },
+				}),
+				write: (intent) => app.engine.write(intent),
+			};
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: elsewhere }),
+					manifest.identity
+				)
+			).toMatchObject({
+				status: 'kept',
+				retryable: true,
+				carried: 0,
+				reason: expect.stringContaining('the live engine is on another scope'),
+				remaining: UNSENDABLE,
+			});
+			expect((await stored(app)).orders.has(cart.uuid)).toBe(false);
+
+			// Back on the scope: the next attempt carries it.
+			expect(
+				await drainLegacyScopeDatabase(
+					drainPorts(storage, storeFetch(server), { liveEngine: app.engine }),
+					manifest.identity
+				)
+			).toMatchObject({
+				status: 'kept',
+				retryable: false,
+				carried: 1,
+				remaining: { deadLetters: 1, conflicts: 1 },
+			});
+			expect((await stored(app)).orders.has(cart.uuid)).toBe(true);
+		} finally {
+			await app.dispose();
+		}
+	}, 30_000);
+
 	it('a push the store applied but whose answer was lost is re-sent under the same mutationId, never applied twice', async () => {
 		work = mkdtempSync(join(tmpdir(), 'rxdb-upgrade-pending-orders-'));
 		const storage = restore(work);
@@ -911,4 +1039,64 @@ describe('drainLegacyScopeDatabase — failures and file access', () => {
 			error: 'disk unavailable',
 		});
 	});
+});
+
+describe('a drainable-generation product acknowledgment', () => {
+	it('is written in the shape the v5 schema allows (no tagIds), with schema validation on', async () => {
+		const server = createFakeWriteServer({ firstId: 601 });
+		const recordId = '17400000-0000-4000-8000-0000000006aa';
+		const payload = {
+			name: 'Legacy product',
+			type: 'simple',
+			price: '12.50',
+			stock_status: 'instock',
+			stock_quantity: null,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+		};
+		const legacy = await createEngineHarness({
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			fetch: async (url: string, init?: RequestInit) =>
+				url.includes('/push/') ? server.fetch(url, init as never) : Response.json([]),
+			ports: { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION },
+		});
+		try {
+			// A born-local v5 product: the v5 columns, and no tagIds (v6 promoted it).
+			await legacy.collection('products').insert({
+				uuid: recordId,
+				remoteId: null,
+				remoteKey: '',
+				payload,
+				sync: { revision: '', partial: false, source: 'local' },
+				local: { dirty: false, pendingMutationIds: [] },
+				price: 12.5,
+				sortName: '',
+				stockStatus: 'instock',
+				type: 'simple',
+				categoryIds: [],
+				brandIds: [],
+				onSale: false,
+				featured: false,
+				stockQuantity: null,
+			});
+			await legacy.engine.write({ collection: 'products', operation: 'create', recordId, payload });
+
+			expect(await legacy.engine.sync('write-drain')).toMatchObject({
+				status: 'ran',
+				pushed: 1,
+				failed: 0,
+				rejected: 0,
+			});
+			const acked = (await legacy
+				.collection('products')
+				.findOne(recordId)
+				.exec())!.toJSON() as Json;
+			expect(acked.remoteId).not.toBeNull();
+			expect(acked).not.toHaveProperty('tagIds');
+			expect(acked.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+			expect((await legacy.collection('mutations').find().exec()).length).toBe(0);
+		} finally {
+			await legacy.dispose();
+		}
+	}, 30_000);
 });

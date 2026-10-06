@@ -73,6 +73,7 @@ import {
 import {
 	DRAINABLE_SCHEMAS_GENERATION,
 	drainableGenerationCollectionCreators,
+	drainableGenerationWriteFacetFor,
 } from './collections/drainable-generation';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
@@ -1771,6 +1772,10 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writePlane = createWritePlane({
+		// A drainable-generation engine acknowledges through projections that fit its schemas.
+		...(scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION
+			? {}
+			: { writeFacetFor: drainableGenerationWriteFacetFor }),
 		assertUsable: assertNotDisposed,
 		settled: async (kind) => {
 			await readySettledForSync;

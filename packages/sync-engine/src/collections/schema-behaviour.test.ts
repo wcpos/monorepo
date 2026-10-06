@@ -49,7 +49,11 @@ import { engineCollectionCreators } from './engine-collections';
 import {
 	DRAINABLE_SCHEMAS_GENERATION,
 	drainableGenerationCollectionCreators,
+	drainableGenerationProductDocument,
+	drainableGenerationProductSchema,
+	drainableGenerationWriteFacetFor,
 } from './drainable-generation';
+import { productDocument, writeFacetFor } from './collection-descriptors';
 import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
@@ -619,6 +623,36 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	it('the drainable generation opens with the schemas it shipped', () => {
 		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(PINNED_SCOPE_GENERATION - 1);
 		expect(drainableDigests()).toEqual(PINNED_DRAINABLE_DIGESTS);
+	});
+
+	it('the drainable generation also PROJECTS what it shipped: an ack fits its schema, and only products moved', () => {
+		const projected = drainableGenerationProductDocument(
+			{
+				...PRODUCT_PAYLOAD,
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
+				],
+			} as never,
+			undefined
+		);
+		const current = productDocument(
+			{
+				...PRODUCT_PAYLOAD,
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: '17400000-0000-4000-8000-0000000006bb' },
+				],
+			} as never,
+			undefined
+		);
+		const allowed = Object.keys(drainableGenerationProductSchema.properties);
+		expect(Object.keys(projected).filter((key) => !allowed.includes(key))).toEqual([]);
+		expect(projected).not.toHaveProperty('tagIds');
+		// The one difference from today's projection is the column v6 promoted.
+		expect(Object.keys(current).sort()).toEqual([...Object.keys(projected), 'tagIds'].sort());
+		expect(drainableGenerationWriteFacetFor('products')).not.toBe(writeFacetFor('products'));
+		for (const collection of ['orders', 'variations', 'customers', 'coupons']) {
+			expect(drainableGenerationWriteFacetFor(collection)).toBe(writeFacetFor(collection));
+		}
 	});
 
 	it('drainable-generation.ts reproduces exactly the generation before the current one', () => {

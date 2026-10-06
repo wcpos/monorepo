@@ -16,6 +16,13 @@
  * current ones, keyed by generation, and fails a bump that forgot this file.
  */
 
+import {
+	type CollectionWriteFacet,
+	productDocument,
+	productsWriteFacetProjectedBy,
+	type RecordProjection,
+	writeFacetFor,
+} from './collection-descriptors';
 import { type CollectionCreator, engineCollectionCreators } from './engine-collections';
 import { productSchema } from './product-schema';
 
@@ -44,4 +51,25 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 		...creators,
 		products: { ...creators.products, schema: drainableGenerationProductSchema },
 	};
+}
+
+/**
+ * The stored product document v5 wrote: today's projection without the
+ * `tagIds` column v6 promoted. An acknowledgment the drain writes into a v5
+ * database goes through this, so it fits `drainableGenerationProductSchema`
+ * (today's projection would add `tagIds`, which that schema forbids).
+ * `schema-behaviour.test.ts` pins it against the drainable schema.
+ */
+export const drainableGenerationProductDocument: RecordProjection = (payload, barcodeSelectors) => {
+	const { tagIds: _promotedAtV6, ...document } = productDocument(payload, barcodeSelectors);
+	return document;
+};
+
+const drainableProductsWriteFacet = productsWriteFacetProjectedBy(
+	drainableGenerationProductDocument
+);
+
+/** The write facets a drainable-generation engine uses: today's, with each moved projection put back. */
+export function drainableGenerationWriteFacetFor(collection: string): CollectionWriteFacet | null {
+	return collection === 'products' ? drainableProductsWriteFacet : writeFacetFor(collection);
 }

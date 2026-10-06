@@ -11,6 +11,7 @@ import { type ConflictResolutionChoice, createConflictResolution } from './confl
 import {
 	createWriteDrainLane,
 	type WriteAnnihilatedEvent,
+	type WriteDrainLaneDeps,
 	type WriteDrainReport,
 	type WriteOutcomeEvent,
 	type WriteSupersededEvent,
@@ -58,6 +59,8 @@ type WritePlaneDeps = {
 	}) => Promise<void>;
 	repullOrdersNow: (input: { remoteIds: RemoteId[]; reason: string }) => Promise<void>;
 	queueFor?: (database: RxDatabase) => RecordMutationQueue;
+	/** The facets the drain lane acknowledges through (see `WriteDrainLaneDeps.writeFacetFor`). */
+	writeFacetFor?: WriteDrainLaneDeps['writeFacetFor'];
 };
 export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	const queueFor = deps.queueFor ?? defaultQueueFor;
@@ -106,6 +109,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		setLastError: (error) => void (lastError = error),
 		...(deps.onActivityChange ? { onActivityChange: deps.onActivityChange } : {}),
 		...(deps.barcodeSelectorsFor ? { barcodeSelectorsFor: deps.barcodeSelectorsFor } : {}),
+		...(deps.writeFacetFor ? { writeFacetFor: deps.writeFacetFor } : {}),
 		now: deps.now,
 	});
 	const conflictResolution = createConflictResolution({
