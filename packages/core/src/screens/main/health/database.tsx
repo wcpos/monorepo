@@ -722,17 +722,10 @@ export function DatabaseScreen() {
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket
-					    is real bytes from the platform's storage layer, split so search
-					    indexes never masquerade as store data. Aggregates only: other
-					    stores show a count and a size, never names. */}
+					    is real bytes from the platform's storage layer. Aggregates only:
+					    other stores show a count and a size, never names. */}
 					{footprint ? (
 						<>
-							<FootprintRow
-								testID="db-row-search-indexes"
-								label={t('health.database.storage_search_indexes')}
-								sub={t('health.database.storage_search_indexes_sub')}
-								bytes={footprint.breakdown.searchIndexBytes}
-							/>
 							<FootprintRow
 								testID="db-row-cached-images"
 								label={t('health.database.storage_cached_images')}

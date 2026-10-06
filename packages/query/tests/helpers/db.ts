@@ -1,10 +1,10 @@
 import {
 	addRxPlugin,
 	createRxDatabase,
-	RxDatabase,
-	toTypedRxJsonSchema,
 	ExtractDocumentTypeFromTypedRxJsonSchema,
+	RxDatabase,
 	RxJsonSchema,
+	toTypedRxJsonSchema,
 } from 'rxdb';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
@@ -17,7 +17,7 @@ import { productsLiteral } from './schemas/products';
 import { variationsLiteral } from './schemas/variations';
 import { searchPlugin } from '../../src/search';
 
-import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
+import type { RxCollection, RxCollectionCreator, RxDocument } from 'rxdb';
 
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(parseRestResponsePlugin);
@@ -64,7 +64,16 @@ const logSchema: RxJsonSchema<LogDocumentType> = logsLiteral;
 type LogDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsTyped>;
 export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
-const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
+// The production options (packages/database `storeCollections.logs`): the Logs screen
+// searches by a storage-side scan over the folded field, falling back to the raw fields.
+const logs: RxCollectionCreator<LogDocumentType> = {
+	schema: logSchema,
+	options: {
+		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
+		searchIndex: false,
+		searchFoldedField: 'context.fold',
+	},
+};
 
 /**
  * Generate a unique database name

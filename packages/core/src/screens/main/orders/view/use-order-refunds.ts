@@ -19,7 +19,7 @@ export function useOrderRefunds(orderId: number) {
 	const { engine, locale } = useQueryRuntime();
 	const local$ = React.useMemo(
 		() =>
-			observeEngineQuery(engine, locale, {
+			observeEngineQuery(engine, {
 				collection: 'refunds',
 				selector: { parent_id: orderId },
 				limit: Number.MAX_SAFE_INTEGER,

@@ -14,7 +14,7 @@ export function useLocalProducts(ids: number[]) {
 	const key = [...new Set(ids)].sort((a, b) => a - b).join(',');
 	const source = React.useMemo(
 		() =>
-			observeEngineQuery(engine, locale, {
+			observeEngineQuery(engine, {
 				collection: 'products',
 				selector: { id: { $in: key ? key.split(',').map(Number) : [] } },
 				limit: Number.MAX_SAFE_INTEGER,

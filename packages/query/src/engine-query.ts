@@ -1,30 +1,8 @@
-import {
-	asyncScheduler,
-	defer,
-	EMPTY,
-	from,
-	merge,
-	Observable,
-	of,
-	ReplaySubject,
-	throwError,
-	timer,
-} from 'rxjs';
-import {
-	catchError,
-	distinctUntilChanged,
-	map,
-	startWith,
-	switchMap,
-	takeUntil,
-	tap,
-	throttleTime,
-} from 'rxjs/operators';
-import get from 'lodash/get';
+import { EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
-import { FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
+import { foldSearchText, searchTerms } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	engineCollectionNameFor,
@@ -37,41 +15,15 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
-import { catalogueSearchBlobFor } from './catalogue-search-blob';
-import { legacySearchSnapshot, searchProjection } from './engine-adapter/search-snapshot';
+import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
-import {
-	fieldsMatchShortPrefix,
-	fieldsMatchTokens,
-	fieldsMissAnyOfTokens,
-	searchTerms,
-	searchTokens,
-} from './search-match';
-import {
-	rebuiltSearchIndexes,
-	SEARCH_SCAN_RETHROTTLE_MS,
-	type SearchableCollection,
-	searchLogger,
-	sharedSearchInstances,
-} from './search-shared';
+import { searchBlobFor } from './search-blob';
+import { searchFieldsFor } from './search-fields';
 
+import type { SearchableCollection } from './search-shared';
 import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
 import type { QueryResult } from './query-result';
 import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
-
-/**
- * How long one search waits for the FlexSearch index before answering from a
- * direct document scan. A healthy, built index answers in single-digit
- * milliseconds; this deadline only passes while the index is still building or
- * its pipeline cannot run at all (a follower tab, a backgrounded leader —
- * #1733). 250ms keeps the worst-case first answer under half a second
- * including the input debounce, without paying a scan on healthy keystrokes.
- */
-const SEARCH_INDEX_ANSWER_DEADLINE_MS = 250;
-/** Log the scan takeover once per collection:locale per session, not per keystroke. */
-const stalledSearchIndexes = new Set<string>();
-// Owned by the side that builds the index; re-exported for existing consumers.
-export { FLEXSEARCH_MIN_TERM_LENGTH };
 
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;
@@ -137,30 +89,14 @@ export function observeCoverage(
 }
 
 /**
- * The fallback answer when the index cannot answer: match the query directly
- * against the documents: non-catalogue collections retain the index's per-token AND semantics.
- * Folding goes through the SAME `foldSearchText` the index's encoder uses
- * (#1732), so a scan answer and the indexed answer that replaces it agree.
- *
- * The scan reads the documents themselves, so its answer is ground truth for
- * local data; the indexed answer replaces it only because the index also
- * carries the query cheaply on every later keystroke.
+ * The ids a search term selects, or `null` when there is no term. One path for every
+ * collection (#2411): the folded blob answers from local rows and re-answers on the
+ * collection's change stream. A collection without search fields answers nothing — never
+ * everything — so a stray term on an unsearchable panel cannot select the whole table.
  */
-async function scanDocumentsForSearch(
-	collection: SearchableCollection,
-	search: string,
-	searchFields: string[],
-	collectionName: EngineQueryDescriptor['collection']
-): Promise<string[]> {
-	const tokens = searchTokens(search);
-	if (searchFields.length === 0 || tokens.length === 0) return [];
-	const rows = await searchProjection(collection, collectionName, searchFields);
-	return rows.filter((row) => fieldsMatchTokens(row.fields, tokens)).map((row) => row.id);
-}
 function matchingSelectors$(
 	database: AdapterDatabase,
-	descriptor: EngineQueryDescriptor,
-	locale: string
+	descriptor: EngineQueryDescriptor
 ): Observable<{ selector: LegacyMangoSelector; hitIds: string[] | null }> {
 	const selector = descriptor.selector ?? {};
 	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
@@ -169,198 +105,26 @@ function matchingSelectors$(
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
-	if (!collection?.initSearch) return of({ selector, hitIds: [] });
+	if (!collection) return of({ selector, hitIds: [] });
+
+	// A query that folds away entirely (only combining marks) matches everything, like
+	// WooCommerce's ai_ci LIKE would (#1732).
+	if (!foldSearchText(search)) return of({ selector, hitIds: null });
+	const terms = searchTerms(search);
+	if (terms.length === 0) return of({ selector, hitIds: [] });
+
+	const searchFields =
+		descriptor.read?.searchFields ??
+		descriptor.searchFields ??
+		collection.options?.searchFields ??
+		searchFieldsFor(descriptor.collection) ??
+		[];
+	if (searchFields.length === 0) return of({ selector, hitIds: [] });
+
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
-
-	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
-	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
-	// scan path with the typed NFC "Cè" (#1732). A query that folds away entirely
-	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
-	const foldedSearch = foldSearchText(search);
-	if (!foldedSearch) return of({ selector, hitIds: null });
-	const phraseSearch =
-		descriptor.collection === 'products' || descriptor.collection === 'variations';
-	if (phraseSearch) {
-		const terms = searchTerms(search);
-		if (terms.length === 0) return of({ selector, hitIds: [] });
-		const searchFields =
-			descriptor.read?.searchFields ??
-			descriptor.searchFields ??
-			collection.options?.searchFields ??
-			[];
-		const blob = catalogueSearchBlobFor(
-			collection,
-			searchFields,
-			documentSnapshot,
-			descriptor.collection
-		);
-		return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
-	}
-	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
-		const prefix = foldedSearch;
-		// Mirror initSearch's fallback so short and indexed terms search the same fields.
-		const searchFields =
-			descriptor.read?.searchFields ??
-			descriptor.searchFields ??
-			collection.options?.searchFields ??
-			[];
-		// No error handling here on purpose: this path has no search index, so a failure
-		// is a genuine collection read error and must stay eligible for storage recovery.
-		return collection.$.pipe(
-			startWith(null),
-			switchMap(() => from(searchProjection(collection, descriptor.collection, searchFields))),
-			map((documents) => ({
-				selector,
-				hitIds: documents
-					.filter((row) => fieldsMatchShortPrefix(row.fields, prefix))
-					.map((row) => row.id),
-			}))
-		);
-	}
-	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
-	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
-	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = searchTokens(search);
-		if (searchFields.length === 0 || tokens.length === 0) return [];
-		return documents.flatMap((document) => {
-			const snapshot = documentSnapshot(document);
-			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return fieldsMissAnyOfTokens(fields, tokens)
-				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
-				: [];
-		});
-	};
-
-	const sharedKey = `${descriptor.collection}:${locale}`;
-	const logIndexNotAnswering = (error?: unknown) => {
-		if (stalledSearchIndexes.has(sharedKey)) return;
-		stalledSearchIndexes.add(sharedKey);
-		searchLogger.warn('Search index is not answering; searching by document scan', {
-			code: ERROR_CODES.SEARCH_INDEX_STALLED,
-			showToast: false,
-			context: {
-				collection: descriptor.collection,
-				locale,
-				search,
-				...(error instanceof Error ? { error: error.message } : {}),
-			},
-		});
-	};
-
-	// The scan answers directly from the documents, reacting to source writes;
-	// callers decide when it runs (deadline lane, or takeover after an index
-	// failure). No error handling on purpose: a scan failure is a genuine
-	// collection read error and must stay eligible for storage recovery
-	// (mirrors the short-term path above).
-	const scanAnswers$ = () =>
-		collection.$.pipe(
-			startWith(null),
-			throttleTime(SEARCH_SCAN_RETHROTTLE_MS, asyncScheduler, {
-				leading: true,
-				trailing: true,
-			}),
-			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, descriptor.collection))
-			)
-		);
-
-	return defer(() => {
-		const boundInstances$ = from(
-			collection.initSearch(locale, {
-				searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
-				documentSnapshot,
-			})
-		).pipe(
-			switchMap((searchInstance) => {
-				if (!searchInstance) return of(null);
-				const searchInstances = sharedSearchInstances(sharedKey, searchInstance);
-				return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
-			}),
-			// A failed initSearch must never take search down with it: log once and
-			// answer from the scan. The next subscription (next keystroke) retries.
-			catchError((error) => {
-				logIndexNotAnswering(error);
-				return of(null);
-			})
-		);
-		// One race per BOUND INSTANCE, not per subscription: a rebuild rebind
-		// (divergence, false-miss audit) re-enters here with a fresh latch, so the
-		// scan lane revives if the rebuilt index stalls mid-build instead of
-		// leaving the term frozen on stale results.
-		return boundInstances$.pipe(
-			switchMap((bound) => {
-				if (!bound) return scanAnswers$();
-				const { activeSearch, searchInstances } = bound;
-				// Latched by the FIRST indexed answer for this binding; the scan lane
-				// stands down once the index has proven it can answer this term.
-				const indexAnswered$ = new ReplaySubject<void>(1);
-				const indexedLane$ = activeSearch.collection.$.pipe(
-					startWith(null),
-					switchMap(() => from(activeSearch.find(search)).pipe(tap(() => indexAnswered$.next()))),
-					switchMap(async (documents) => {
-						const falseHits = findFalseHits(documents);
-						if (falseHits.length === 0) return documents;
-						const alreadyRebuilt = rebuiltSearchIndexes.has(sharedKey);
-						searchLogger.error('Search index divergence detected', {
-							code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
-							showToast: false,
-							context: {
-								collection: descriptor.collection,
-								locale,
-								search,
-								falseHits: falseHits.slice(0, 5).map(({ uuid, fields }) => ({ uuid, fields })),
-								totalHits: documents.length,
-								falseHitCount: falseHits.length,
-								...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
-							},
-						});
-						const filtered = documents.filter((document) =>
-							falseHits.every((falseHit) => falseHit.document !== document)
-						);
-						if (alreadyRebuilt) return filtered;
-						rebuiltSearchIndexes.add(sharedKey);
-						try {
-							await collection.recreateSearch?.(locale);
-							const rebuilt = await collection.initSearch(locale, {
-								searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
-								documentSnapshot,
-							});
-							if (rebuilt) searchInstances.next(rebuilt);
-							return filtered;
-						} catch (error) {
-							searchLogger.warn('Search index rebuild failed', {
-								code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
-								context: { collection: descriptor.collection, locale, search, error },
-							});
-							return filtered;
-						}
-					}),
-					map((documents) => documents.map((document) => document.primary)),
-					// A poisoned pipeline surfacing through find() must never take search
-					// down with it — even after earlier answers: log once, stand the
-					// deadline lane down, and hand this binding to the scan for good. A
-					// rebind or the next keystroke retries the index.
-					catchError((error) => {
-						logIndexNotAnswering(error);
-						indexAnswered$.next();
-						return scanAnswers$();
-					})
-				);
-				const deadlineScanLane$ = timer(SEARCH_INDEX_ANSWER_DEADLINE_MS).pipe(
-					tap(() => logIndexNotAnswering()),
-					switchMap(() => scanAnswers$()),
-					takeUntil(indexAnswered$)
-				);
-				return merge(indexedLane$, deadlineScanLane$);
-			})
-		);
-	}).pipe(
-		map((documents) => ({
-			selector,
-			hitIds: documents,
-		}))
-	);
+	const blob = searchBlobFor(collection, searchFields, documentSnapshot, descriptor.collection);
+	return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
 }
 
 function emptyResult(): QueryResult<RxCollection> {
@@ -380,7 +144,6 @@ function pendingSearchResult(): QueryResult<RxCollection> {
 /** Direct reactive read against the current engine database through the adapter execute path. */
 export function observeEngineQuery(
 	engine: RxdbSyncEngine,
-	locale: string,
 	descriptor: EngineQueryDescriptor
 ): Observable<QueryResult<RxCollection>> {
 	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
@@ -400,7 +163,7 @@ export function observeEngineQuery(
 			if (!database || !collection) {
 				return of(search ? pendingSearchResult() : emptyResult());
 			}
-			return matchingSelectors$(database, descriptor, locale).pipe(
+			return matchingSelectors$(database, descriptor).pipe(
 				switchMap(({ selector, hitIds }) =>
 					executeAdapterQuery({
 						database,
@@ -419,8 +182,8 @@ export function observeEngineQuery(
 						id: document.primary,
 						record: document,
 					})),
-					// Every selector the search path emits derives from an actual answer
-					// (indexed or scanned), so reaching here with a term settles the state.
+					// Every selector the search path emits derives from an actual blob answer,
+					// so reaching here with a term settles the state.
 					...(search ? { searchState: 'answered' as const } : {}),
 				})),
 				catchError((error) =>

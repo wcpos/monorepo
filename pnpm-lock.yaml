@@ -876,9 +876,6 @@ importers:
       '@types/lodash':
         specifier: ^4.17.25
         version: 4.17.25
-      flexsearch:
-        specifier: 0.7.43
-        version: 0.7.43
       jest:
         specifier: ^30.5.2
         version: 30.5.2(@types/node@25.9.3)

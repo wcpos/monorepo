@@ -368,7 +368,7 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 		.join(',');
 	const source = React.useMemo(
 		() =>
-			observeEngineQuery(engine, locale, {
+			observeEngineQuery(engine, {
 				collection: 'orders',
 				selector: { id: { $in: parentIds ? parentIds.split(',').map(Number) : [] } },
 				limit: Number.MAX_SAFE_INTEGER,

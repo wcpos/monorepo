@@ -25,11 +25,6 @@ type LocalDocumentData = Record<string, unknown>;
 type LocalDocument = RxDocument<LocalDocumentData>;
 type LocalCollection = RxCollection<LocalDocumentData>;
 
-type LocalSearch = {
-	collection: LocalCollection;
-	find(term: string): Promise<LocalDocument[]>;
-};
-
 interface LocalQueryOptions {
 	collectionName: 'logs';
 	selector?: MangoQuerySelector<LocalDocumentData>;
@@ -60,22 +55,10 @@ function withSelector(
 		: ({ $and: [selector, extra] } as MangoQuerySelector<LocalDocumentData>);
 }
 
-function selectorForSearch(
-	collection: LocalCollection,
-	selector: MangoQuerySelector<LocalDocumentData>,
-	documents: LocalDocument[]
-): MangoQuerySelector<LocalDocumentData> {
-	const primaryPath = collection.schema.primaryPath;
-	const ids = documents.map((document) => document.primary);
-	return withSelector(selector, {
-		[primaryPath]: { $in: ids },
-	} as MangoQuerySelector<LocalDocumentData>);
-}
-
 /**
- * The scan-based search for a collection that refuses a FlexSearch index
- * (`options.searchIndex === false` — logs, see the collection creator for the
- * measurement). `buildScanSearchSelector` in @wcpos/sync-core owns the shape:
+ * The scan-based search of the local collections (`options.searchIndex === false` —
+ * logs, see the collection creator for the measurement; the synced collections search
+ * through the blob in `engine-query.ts`). `buildScanSearchSelector` in @wcpos/sync-core owns the shape:
  * every encoder term must appear in the collection's FOLDED field (written by
  * the logger with the same fold the encoder applies to the term, so the match
  * is exact in fold space for any script or normal form) or, for rows that
@@ -108,40 +91,10 @@ function nothingSelector(collection: LocalCollection): MangoQuerySelector<LocalD
 	return { [collection.schema.primaryPath]: { $in: [] } } as MangoQuerySelector<LocalDocumentData>;
 }
 
-function localQueryResult$(
-	collection: LocalCollection,
-	locale: string,
-	options: LocalQueryOptions
-) {
+function localQueryResult$(collection: LocalCollection, options: LocalQueryOptions) {
 	const selector = options.selector ?? {};
 	const search = options.search?.trim() ?? '';
-	const refusesIndex =
-		(collection.options as { searchIndex?: unknown } | undefined)?.searchIndex === false;
-	const selectors$ = !search
-		? of(selector)
-		: refusesIndex
-			? scanSelector$(collection, selector, search)
-			: defer(() =>
-					from(
-						(
-							collection as unknown as {
-								initSearch(locale: string): Promise<LocalSearch | null>;
-							}
-						).initSearch(locale)
-					)
-				).pipe(
-					switchMap((searchInstance) =>
-						// The plugin returns null when it will not index this collection;
-						// the scan is the contract then, not an empty result.
-						searchInstance
-							? searchInstance.collection.$.pipe(
-									startWith(null),
-									switchMap(() => from(searchInstance.find(search))),
-									map((documents) => selectorForSearch(collection, selector, documents))
-								)
-							: scanSelector$(collection, selector, search)
-					)
-				);
+	const selectors$ = !search ? of(selector) : scanSelector$(collection, selector, search);
 
 	return selectors$.pipe(
 		map((selector) => normalizeSelectorSemantics(selector)),
@@ -187,12 +140,12 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 			collection$.pipe(
 				switchMap((collection) =>
 					collection
-						? localQueryResult$(collection, runtime.locale, stableOptions)
+						? localQueryResult$(collection, stableOptions)
 						: of<QueryResult<LocalCollection>>({ searchActive: false, count: 0, hits: [] })
 				),
 				shareReplay({ bufferSize: 1, refCount: true })
 			),
-		[collection$, runtime.locale, stableOptions]
+		[collection$, stableOptions]
 	);
 	// One resource for the hook's lifetime (mirrors useObservableResource in
 	// @wcpos/core query-bindings): reloading retains the current value while the

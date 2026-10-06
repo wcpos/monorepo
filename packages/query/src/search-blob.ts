@@ -1,8 +1,6 @@
-import get from 'lodash/get';
 import { asyncScheduler, ReplaySubject, throttleTime } from 'rxjs';
 
-import { foldSearchText } from '@wcpos/sync-core';
-
+import { searchRowText } from './search-fields';
 import { SEARCH_SCAN_RETHROTTLE_MS, type SearchableCollection } from './search-shared';
 import { searchProjection } from './engine-adapter/search-snapshot';
 
@@ -12,26 +10,26 @@ import type { RxChangeEvent } from 'rxdb';
 import type { Observable } from 'rxjs';
 
 /**
- * The catalogue's local search structure: one flat folded-text blob per collection,
- * searched with `indexOf` per term and set intersection for AND (#2073).
+ * The local search structure of every searchable collection: one flat folded-text blob per
+ * collection, searched with `indexOf` per term and set intersection for AND (#2073, #2411).
  *
- * The enshrined contract (`searchFixtureCatalogue.ts` in sync-core) is "every
- * whitespace-split term of ANY length is a literal substring of folded name/sku/barcode,
- * any order, across fields" — a grep, not a fulltext problem. The searchable text of a
- * catalogue is tiny (~52 folded chars per product), so a structure sized by the TEXT is
- * cheap: measured 2026-09-16, 20k products = 1 MiB of text, +2 MB heap, <1 ms to build,
- * <1 ms per query; 200k products answer in single-digit ms. The FlexSearch index this
- * replaced was sized by the number of SUBSTRINGS (`tokenize:'full'`): 7.3 KiB per row,
- * 143 MiB and ~8 s at 20k. A storage-side `$regex` scan is the other wrong shape — linear
- * in catalogue BYTES, 265 ms at 20k on filesystem-node, over the debounce.
+ * The enshrined contract (`searchFixtureCatalogue.ts` in sync-core) is "every whitespace-split
+ * term of ANY length is a literal substring of the folded search row, any order, across
+ * fields" — a grep, not a fulltext problem. A structure sized by the TEXT is cheap: measured
+ * 2026-09-16, 20k products = 1 MiB of text, +2 MB heap, <1 ms to build, <1 ms per query;
+ * measured 2026-10-07 on dev-pro/dev-next, an order row with its line items is ~50 folded
+ * chars and a customer row ~120, so 12k orders or 20k customers are 2–3 MB. The FlexSearch
+ * index this replaced was sized by the number of SUBSTRINGS (`tokenize:'full'`): 7.3 KiB per
+ * product row, 143 MiB and ~8 s at 20k; 1.5–29 KiB per row on the other collections (#2073).
+ * A storage-side `$regex` scan is the other wrong shape — linear in document BYTES.
  *
- * Results are an id SET; ranking (exact sku/barcode first, then id) is the consumer's sort,
- * as it was for the index. Terms come from `searchTerms` (the fixture's term rule) so the
- * blob never re-implements it. Only folded rows survive a load or a change event — never
- * documents. Per tab: every tab or window builds its own from the local collection and
+ * Results are an id SET; ranking (exact sku/barcode/number first, then id) is the consumer's
+ * sort. The row text comes from the ONE fold in `search-fields.ts`, fed by the projection read
+ * on load and by the legacy snapshot of each change event afterwards, so the two paths cannot
+ * index differently. Per tab: every tab or window builds its own from the local collection and
  * keeps it fresh from the collection's change stream.
  */
-export type CatalogueSearchBlob = {
+export type SearchBlob = {
 	/** Resolves after the initial collection read; rejects with that read's error. */
 	ready: Promise<void>;
 	/** Emits once ready, then after every applied change (trailing-throttled). */
@@ -45,7 +43,7 @@ type Blob = { text: string; offsets: Uint32Array; ids: string[] };
 type BlobCollection = SearchableCollection;
 
 /** One blob per collection instance AND field list; a panel with other fields gets its own. */
-const blobs = new WeakMap<object, Map<string, CatalogueSearchBlob>>();
+const blobs = new WeakMap<object, Map<string, SearchBlob>>();
 
 /** Rows joined by '\n'; a term can never contain it (the encoder splits on \p{C}). */
 const ROW_SEPARATOR = '\n';
@@ -90,7 +88,15 @@ function termRows(blob: Blob, term: string): Set<number> {
 	return rows;
 }
 
-function blobSearch(blob: Blob, terms: string[]): string[] {
+/**
+ * The pure core, for tests and for any caller holding folded rows: ids of every row that
+ * contains EVERY term. Rows are `id → folded row text` (see `searchRowText`).
+ */
+export function searchRows(rows: Map<string, string>, terms: readonly string[]): string[] {
+	return blobSearch(buildBlob(rows), terms);
+}
+
+function blobSearch(blob: Blob, terms: readonly string[]): string[] {
 	// Longest term first: the rarest set seeds the intersection.
 	const sorted = [...terms].sort((a, b) => b.length - a.length);
 	if (sorted.length === 0) return [];
@@ -103,14 +109,14 @@ function blobSearch(blob: Blob, terms: string[]): string[] {
 	return [...rows].map((row) => blob.ids[row]);
 }
 
-export function catalogueSearchBlobFor(
+export function searchBlobFor(
 	collection: BlobCollection,
-	searchFields: string[],
+	searchFields: readonly string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>,
 	collectionName: LegacyCollectionName
-): CatalogueSearchBlob {
+): SearchBlob {
 	const fieldsKey = searchFields.join('|');
-	const byFields = blobs.get(collection) ?? new Map<string, CatalogueSearchBlob>();
+	const byFields = blobs.get(collection) ?? new Map<string, SearchBlob>();
 	blobs.set(collection, byFields);
 	const existing = byFields.get(fieldsKey);
 	if (existing) return existing;
@@ -121,12 +127,8 @@ export function catalogueSearchBlobFor(
 	let disposed = false;
 	const buffered: RxChangeEvent<EngineDocument>[] = [];
 	const changes = new ReplaySubject<void>(1);
-	const rowText = (document: EngineRxDocument) => {
-		const snapshot = documentSnapshot(document);
-		return foldSearchText(
-			searchFields.map((field) => String(get(snapshot, field) ?? '')).join(' ')
-		);
-	};
+	const rowText = (document: EngineRxDocument) =>
+		searchRowText(searchFields, documentSnapshot(document));
 	const apply = (event: RxChangeEvent<EngineDocument>) => {
 		if (event.operation === 'DELETE') rows.delete(event.documentId);
 		else {
@@ -161,7 +163,7 @@ export function catalogueSearchBlobFor(
 	const ready = (async () => {
 		const projected = await searchProjection(collection, collectionName, searchFields);
 		if (disposed) return;
-		for (const row of projected) rows.set(row.id, foldSearchText(row.fields.join(' ')));
+		for (const row of projected) rows.set(row.id, searchRowText(searchFields, row.snapshot));
 		for (const event of buffered) apply(event);
 		buffered.length = 0;
 		loading = false;
@@ -174,7 +176,7 @@ export function catalogueSearchBlobFor(
 		changes.error(error);
 		dispose();
 	});
-	const result: CatalogueSearchBlob = {
+	const result: SearchBlob = {
 		ready,
 		changes$: changes.pipe(
 			throttleTime(SEARCH_SCAN_RETHROTTLE_MS, asyncScheduler, {

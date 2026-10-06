@@ -1,3 +1,5 @@
+import set from 'lodash/set';
+
 import {
 	type EngineDocument,
 	type LegacyCollectionName,
@@ -8,35 +10,58 @@ import { type ProjectionCollection, projectionReaderFor } from '../projection-re
 
 import type { RxDocument } from 'rxdb';
 
-export type SearchProjectionRow = { id: string; fields: string[] };
+export type SearchProjectionRow = { id: string; snapshot: Record<string, unknown> };
 
 /**
  * The search fields of every live record, read as a projection rather than as documents
- * (#2242): the blob, the document scan and the short-prefix path only ever fold these strings.
- * Legacy search fields resolve to plain engine paths (`LEGACY_SEARCH_FIELDS` are all payload or
- * promoted columns); a computed mapping cannot be projected and is refused rather than read wrong.
+ * (#2242) and returned in the SAME legacy shape `legacySearchSnapshot` gives a change event,
+ * so one fold (`searchRowText`) serves both. A field with its own map entry (`number`, a
+ * promoted column) is projected at its engine path; a plain payload field is projected at
+ * its top-level segment, so `line_items.name` reads `payload.line_items` once and the fold
+ * walks the array. A computed mapping cannot be projected and is refused rather than read wrong.
  */
 export async function searchProjection(
 	collection: ProjectionCollection,
 	name: LegacyCollectionName,
 	fields: readonly string[]
 ): Promise<SearchProjectionRow[]> {
-	const mappings = fields.map((field) => resolveLegacyField(name, field));
-	const computed = mappings.find((mapping) => mapping.compute);
-	if (computed) {
-		throw new Error(
-			`Search field "${computed.legacy}" on ${name} is computed and cannot be read as a projection`
-		);
+	const reads = new Map<
+		string,
+		{ path: string; place: string; read?: (value: unknown) => unknown }
+	>();
+	for (const field of fields) {
+		const mapping = resolveLegacyField(name, field);
+		if (mapping.compute) {
+			throw new Error(
+				`Search field "${mapping.legacy}" on ${name} is computed and cannot be read as a projection`
+			);
+		}
+		const isDefaultPayload =
+			mapping.kind === 'payload' &&
+			mapping.enginePath === `payload.${field}` &&
+			!mapping.read &&
+			!mapping.readEnginePath;
+		const place = isDefaultPayload ? field.split('.')[0] : field;
+		if (reads.has(place)) continue;
+		reads.set(place, {
+			path: isDefaultPayload ? `payload.${place}` : (mapping.readEnginePath ?? mapping.enginePath),
+			place,
+			read: mapping.read,
+		});
 	}
-	const paths = mappings.map((mapping) => mapping.readEnginePath ?? mapping.enginePath);
-	const rows = await projectionReaderFor(collection.database).readLiveProjection(collection, paths);
-	return rows.map((row) => ({
-		id: row.id,
-		fields: row.values.map((value, index) => {
-			const read = mappings[index].read;
-			return String((read ? read(value) : value) ?? '');
-		}),
-	}));
+	const entries = [...reads.values()];
+	const rows = await projectionReaderFor(collection.database).readLiveProjection(
+		collection,
+		entries.map((entry) => entry.path)
+	);
+	return rows.map((row) => {
+		const snapshot: Record<string, unknown> = {};
+		row.values.forEach((value, index) => {
+			const entry = entries[index];
+			set(snapshot, entry.place, entry.read ? entry.read(value) : value);
+		});
+		return { id: row.id, snapshot };
+	});
 }
 
 /**
@@ -45,12 +70,10 @@ export async function searchProjection(
  * adding fields absent from the payload.
  *
  * This is the ONE implementation of that flattening. Its sole consumer is the search plane
- * (`engine-query.ts`'s `documentSnapshot`): `LEGACY_SEARCH_FIELDS` are
- *    legacy flattened spellings (`name`, `billing.first_name`) resolved by `lodash/get`
- *    against this shape, in both the FlexSearch `docToString` and the short-term prefix
- *    filter. The FlexSearch index is checkpoint-persisted and never re-tokenized, so any
- *    change to this output must be paired with a `SEARCH_INDEX_VERSION` bump in
- *    `@wcpos/database`'s search plugin.
+ * (`engine-query.ts`'s `documentSnapshot`): `SEARCH_FIELDS` are legacy flattened spellings
+ * (`name`, `billing.first_name`, `line_items.name`) walked against this shape by
+ * `searchRowText`. The blob is rebuilt from storage on every open, so a change here needs no
+ * version bump — it is simply what the next open indexes.
  */
 export function legacySearchSnapshot(
 	collection: LegacyCollectionName,

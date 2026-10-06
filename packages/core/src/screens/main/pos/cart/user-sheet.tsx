@@ -37,7 +37,7 @@ export function useSalesToday() {
 		const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 		const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 		// Local read only: opening the user sheet must not declare a new server fetch.
-		return observeEngineQuery(engine, locale, {
+		return observeEngineQuery(engine, {
 			collection: 'orders',
 			limit: Number.MAX_SAFE_INTEGER,
 			selector: {

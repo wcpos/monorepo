@@ -43,16 +43,6 @@ describe('useLocalQuery', () => {
 	beforeEach(async () => {
 		localDB = await createStoreDatabase();
 		engineDB = await createEngineDatabase();
-		const logs = localDB.collections.logs as RxCollection;
-		(logs as unknown as { initSearch: () => Promise<unknown> }).initSearch = async () => ({
-			collection: logs,
-			find: async (term: string) => {
-				const documents = await logs.find().exec();
-				return documents.filter((document) =>
-					JSON.stringify(document.toJSON()).toLowerCase().includes(term.toLowerCase())
-				);
-			},
-		});
 	});
 
 	afterEach(async () => {
@@ -111,57 +101,6 @@ describe('useLocalQuery', () => {
 			count: 0,
 			hits: [],
 		});
-	});
-
-	it('rebinds locale-sensitive search and releases the previous search subscription', async () => {
-		await localDB.collections.logs.bulkInsert([
-			{ logId: 'en', timestamp: 1, code: 'EN', level: 'info', message: 'English' },
-			{ logId: 'fr', timestamp: 2, code: 'FR', level: 'info', message: 'French' },
-		]);
-		const logs = localDB.collections.logs as RxCollection;
-		const released: string[] = [];
-		const initSearch = jest.spyOn(logs, 'initSearch').mockImplementation(
-			async (locale: string) =>
-				({
-					collection: {
-						$: new Observable<void>((subscriber) => {
-							subscriber.next();
-							return () => released.push(locale);
-						}),
-					},
-					find: async () => {
-						const document = await logs.findOne(locale).exec();
-						return document ? [document] : [];
-					},
-				}) as never
-		);
-		const engine = createFakeEngine(engineDB);
-		let query: ReturnType<typeof useLocalQuery> | undefined;
-		function Probe() {
-			const currentQuery = useLocalQuery({ collectionName: 'logs', search: 'localized' });
-			React.useEffect(() => {
-				// The test probe exposes the hook result after React commits it.
-				query = currentQuery;
-			}, [currentQuery]);
-			return null;
-		}
-		const view = render(
-			<QueryProvider localDB={localDB} engine={engine} locale="en">
-				<Probe />
-			</QueryProvider>
-		);
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('en'));
-
-		view.rerender(
-			<QueryProvider localDB={localDB} engine={engine} locale="fr">
-				<Probe />
-			</QueryProvider>
-		);
-
-		await waitFor(() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('fr'));
-		expect(initSearch.mock.calls.map(([locale]) => locale)).toEqual(['en', 'fr']);
-		expect(released).toContain('en');
-		expect(released).not.toContain('fr');
 	});
 
 	it('releases old subscriptions and reads results from a swapped localDB', async () => {
@@ -469,7 +408,7 @@ describe('buildScanSearchSelector', () => {
 	});
 
 	it('drops terms under the index minimum, as the index did', () => {
-		// "pull x" meant "pull" to FlexSearch (minlength 3); "x" alone found nothing.
+		// "pull x" means "pull" to the scan (SCAN_MIN_TERM_LENGTH 3); "x" alone finds nothing.
 		expect(clauses('pull x')).toHaveLength(1);
 		expect(buildScanSearchSelector({ rawFields: ['message'], search: 'x' })).toBeNull();
 	});

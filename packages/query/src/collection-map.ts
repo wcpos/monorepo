@@ -2,7 +2,6 @@ export {
 	collectionMap,
 	COLLECTION_VOCABULARY,
 	engineCollectionNameFor,
-	LEGACY_SEARCH_FIELDS,
 	readEnginePath,
 	resolveLegacyField,
 	sanitizeVariationAttributesRead,

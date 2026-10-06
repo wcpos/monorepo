@@ -1,5 +1,5 @@
 import { identityColumns, type MetaDataEntry, wooMetaCarrier } from './pos-carrier/carrier';
-import { foldSearchText } from './searchIndexConfig';
+import { foldSearchText } from './searchText';
 import { type RemoteId } from './woo/remoteIdCodec';
 import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 

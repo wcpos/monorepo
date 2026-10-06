@@ -83,7 +83,7 @@ export const isKnownAppDatabaseName = (value: string) =>
 /**
  * Re-exported from sync-core, which owns the scope-database name grammar
  * (`pos_v<generation>_<siteHash12>_s<store>_c<cashier>`, ADR 0013). Storage
- * cleanup matches by containment because rxdb internal stores and paired
- * FlexSearch index stores derive their names from the database name.
+ * cleanup matches by containment because rxdb internal stores derive their
+ * names from the database name.
  */
 export { containsScopeDatabaseName };

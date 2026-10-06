@@ -33,7 +33,7 @@
 		"expo:install": "pnpm --filter main exec expo install",
 		"extract:translations": "node scripts/extract-js-strings.js",
 		"translations:check": "node scripts/extract-js-strings.js --check",
-		"postinstall": "node scripts/patch-rxdb-premium-flexsearch-churn.mjs && node scripts/patch-rxdb-premium-sqlite-query-translation.mjs",
+		"postinstall": "node scripts/patch-rxdb-premium-sqlite-query-translation.mjs",
 		"prepare": "git config core.hooksPath .githooks",
 		"virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
 		"virtual-printer:secure": "pnpm --filter @wcpos/virtual-printer start -- --scenario secure-printing",

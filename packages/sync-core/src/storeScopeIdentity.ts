@@ -163,8 +163,9 @@ export function isScopeDatabaseName(name: string): boolean {
 
 /**
  * True when a storage entry EMBEDS a scope database name — rxdb internal
- * stores and paired FlexSearch index stores derive their names from the
- * database name, so full-reset cleanup must match by containment.
+ * stores (and the pre-2.0 `_flexsearch` index stores a reset may still find)
+ * derive their names from the database name, so full-reset cleanup must match
+ * by containment.
  */
 export function containsScopeDatabaseName(name: string): boolean {
 	return SCOPE_DATABASE_NAME_ANYWHERE.test(name);
