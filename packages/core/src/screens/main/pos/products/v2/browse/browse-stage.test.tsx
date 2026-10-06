@@ -656,6 +656,23 @@ it('a crumb jump of two levels cross-fades the stack it lands on; one step back 
 	expect(collapse('products-pane-stack')).toBe('false');
 });
 
+it('the jump’s cross-fade is one-shot: a product drilled where it landed gathers home on close', () => {
+	mockHoldGathers = true;
+	const collapse = (testID: string) => screen.getByTestId(testID).dataset.collapse;
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-2'));
+	// A search typed two levels in drops the path to the root at once: the root's stack fades.
+	act(() => queryActions.setSearch('lat'));
+	expect(collapse('products-pane-stack')).toBe('true');
+	// A result drilled there is a new detail on that stack: it opens, and closes, by the tile.
+	fireEvent.click(screen.getByTestId('products'));
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
+	expect(collapse('products-pane-stack')).toBe('false');
+	fireEvent.click(screen.getByTestId('drill-in-last-parent'));
+	expect(collapse('products-pane-stack')).toBe('false');
+});
+
 it('a level stays rendered from its staged entry while its stack gathers after the path was truncated', () => {
 	mockHoldGathers = true;
 	render(<BrowseStage {...stageProps()} />);

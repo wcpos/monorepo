@@ -239,6 +239,12 @@ export function BrowseStage(props: BrowseStageProps) {
 		setDepthSeen(path.length);
 		setCollapseAt(depthSeen - path.length >= 2 ? path.length : null);
 	}
+	// One-shot: the jump's cross-fade is for the detail it cut. A new detail opened at that depth
+	// (a term, or a product drilled from the results a search left there) is not that detail, and
+	// its own close gathers into what was tapped.
+	const openedAt = (depth: number) =>
+		path[depth] !== undefined || (drilled !== null && drilled.depth === depth);
+	if (collapseAt !== null && openedAt(collapseAt)) setCollapseAt(null);
 	// One array per projection, so the root grid's and table's memos hold across query changes.
 	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
 	// A query narrowed past its baseline over an empty path has displaced the term set — a search,
