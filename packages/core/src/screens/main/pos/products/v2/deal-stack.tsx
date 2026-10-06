@@ -556,6 +556,11 @@ export function DealCell({
 	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile
 	// (Pixel, 2026-10-05, when the second was the crumb's height). The stage arms on the same pair.
 	const waiting = origin === undefined || grid === undefined;
+	// Pictures on the copy that have not painted yet (`useCopyPicture`).
+	const [pictures, setPictures] = React.useState(0);
+	// `ready`: the offset is the one the copy is first shown at (the frames are known), and the
+	// copy's pictures have painted.
+	const ready = !waiting && pictures === 0;
 	// The offset is a shared value written as the commit lands, not a value the worklet closes
 	// over. A closed-over value reaches the view only when the style's mapper restarts: on web
 	// in a passive effect, then the next animation frame. When a heavy commit (a term level's
@@ -563,11 +568,6 @@ export function DealCell({
 	// painted the parent at its own slot, and it snapped onto the tapped tile a frame later (web
 	// film, 2026-10-06). Written in a layout effect, the mapper reruns in that commit's
 	// microtask, before the paint.
-	// Pictures on the copy that have not painted yet (`useCopyPicture`).
-	const [pictures, setPictures] = React.useState(0);
-	// `ready`: the offset is the one the copy is first shown at (the frames are known), and the
-	// copy's pictures have painted.
-	const ready = !waiting && pictures === 0;
 	const offset = useSharedValue({ x: fromX, y: fromY, flies, ready });
 	React.useLayoutEffect(() => {
 		offset.value = { x: fromX, y: fromY, flies, ready };
@@ -585,20 +585,20 @@ export function DealCell({
 	}, [parent, placeCopy, generation]);
 	useAnimatedReaction(
 		() => parent && offset.value.ready,
-		(ready, was) => {
-			if (!ready || was) return;
+		(placed, was) => {
+			if (!placed || was) return;
 			requestAnimationFrame(() => scheduleOnRN(placeCopy, generation, true));
 		},
 		[parent, placeCopy, generation]
 	);
 	const holdPicture = React.useCallback(() => {
 		let held = true;
-		setPictures((count) => count + 1);
+		setPictures((pending) => pending + 1);
 		const release = () => {
 			if (!held) return;
 			held = false;
 			clearTimeout(grace);
-			setPictures((count) => count - 1);
+			setPictures((pending) => pending - 1);
 		};
 		const grace = setTimeout(release, PICTURE_GRACE);
 		return release;
