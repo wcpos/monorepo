@@ -179,7 +179,8 @@ test.describe('Browse by categories', () => {
 			await deleteProbeCategory({ request, storeUrl, authorization, id: category.id }).catch(
 				() => undefined
 			);
-			await setBrowseBy(page, 'all').catch(() => undefined);
+			// Back to the till's default.
+			await setBrowseBy(page, 'categories').catch(() => undefined);
 		}
 	});
 });

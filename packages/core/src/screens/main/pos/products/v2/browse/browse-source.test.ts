@@ -1,16 +1,23 @@
 import {
 	BROWSE_BY,
 	collectionFor,
+	DEFAULT_BROWSE_BY,
 	isHierarchical,
 	isTaxonomy,
 	readBrowseBy,
 	termKey,
 } from './browse-source';
+import initialSettings from '../../../../contexts/ui-settings/initial-settings.json';
 
-it('reads an unknown or missing value as all', () => {
-	expect(readBrowseBy(undefined)).toBe('all');
-	expect(readBrowseBy('favourites')).toBe('all');
+it('reads an unknown or missing value as the default, categories', () => {
+	expect(DEFAULT_BROWSE_BY).toBe('categories');
+	expect(readBrowseBy(undefined)).toBe('categories');
+	expect(readBrowseBy('favourites')).toBe('categories');
 	for (const value of BROWSE_BY) expect(readBrowseBy(value)).toBe(value);
+});
+
+it('seeds a new till with the same default', () => {
+	expect(initialSettings['pos-products'].browseBy).toBe(DEFAULT_BROWSE_BY);
 });
 
 it('knows which sources are taxonomies and which nest', () => {
