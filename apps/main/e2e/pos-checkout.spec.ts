@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import {
 	becomesVisible,
@@ -156,45 +156,6 @@ async function omitPaymentLinkFromPushAcks(page: Page) {
 	});
 }
 
-async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
-	return toggle.evaluate((node) => {
-		const element = node as HTMLElement & { checked?: boolean };
-		const ariaChecked = element.getAttribute('aria-checked');
-		if (ariaChecked !== null) {
-			return ariaChecked === 'true';
-		}
-
-		const dataState = element.getAttribute('data-state');
-		if (dataState !== null) {
-			return dataState === 'checked';
-		}
-
-		return element.checked === true;
-	});
-}
-
-async function ensureSwitchEnabled(toggle: Locator) {
-	await expect(toggle).toBeVisible({ timeout: 15_000 });
-	if (!(await isSwitchEnabled(toggle))) {
-		await toggle.click();
-	}
-	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(true);
-}
-
-/**
- * Configure POS cart UI settings from the UI itself rather than mutating
- * storage internals. This is resilient across storage backend migrations.
- */
-async function enableAutoReceiptSettings(page: Page) {
-	await page.getByTestId('cart-settings-button').click();
-
-	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-show-receipt').first());
-	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-print-receipt').first());
-
-	// Close settings dialog and continue with updated persisted UI settings.
-	await page.keyboard.press('Escape');
-}
-
 test.describe('POS Cart - Order Actions', () => {
 	test('should save order to server', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
@@ -313,24 +274,10 @@ test.describe('POS Checkout', () => {
 		await expectPaymentBlocked(page, surface, gatewaysLoaded, 15_000);
 	});
 
-	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {
-		await enableAutoReceiptSettings(page);
-		await page.reload();
-		await expect(page.getByTestId('search-products')).toBeVisible({
-			timeout: 30_000,
-		});
-
-		await addTestProductToCart(page);
-
-		await openCheckout(page);
-		const orderIdMatch = page.url().match(/\/cart\/([^/]+)\/checkout$/);
-		expect(orderIdMatch?.[1]).toBeTruthy();
-
-		await page.goto(`/cart/receipt/${orderIdMatch![1]}`);
-		const printButton = page.getByTestId('receipt-print-button');
-		await expect(printButton).toBeVisible({ timeout: 30_000 });
-		await expect(printButton).toBeDisabled({ timeout: 10_000 });
-	});
+	// Auto-print is covered in checkout-tender.spec.ts, on the checkout's receipt stage: that
+	// is the one surface that auto-prints on `next` (f61fdc7f6); the `/cart/receipt/<id>` modal
+	// never does, so a test asserting the print button disabled there was only ever reading the
+	// new order's sync-in-progress `loading` state.
 });
 
 /**
