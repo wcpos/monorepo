@@ -973,6 +973,7 @@ function terminalState(
 ): TerminalLegState {
 	return {
 		phase: 'polling',
+		intentId: changes.row?.id ?? 'payment-1',
 		row: payment({ method_id: 'terminal', capture_mode: 'server', status: 'pending' }),
 		outcome: null,
 		cancelRequested: false,

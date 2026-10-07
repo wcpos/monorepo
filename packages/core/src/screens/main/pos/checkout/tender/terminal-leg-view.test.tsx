@@ -125,6 +125,7 @@ const row = {
 } as unknown as PaymentRow;
 const base: TerminalLegState = {
 	row,
+	intentId: 'intent-1',
 	phase: 'polling',
 	outcome: null,
 	cancelRequested: false,

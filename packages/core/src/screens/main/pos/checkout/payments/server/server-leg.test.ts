@@ -208,6 +208,52 @@ it('a different wcpos 409 on intent remains a refusal, not a rejoin', async () =
 	expect(c.count('status')).toBe(0);
 });
 
+it('a rejoined cancelled authorization keeps polling without capture until voided', async () => {
+	const c = setupRejoin();
+	c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+	c.post.mockResolvedValue({ data: response({ id: 'live-1', status: 'captured' }) });
+	c.get.mockResolvedValueOnce({
+		data: response({
+			id: 'live-1',
+			status: 'authorized',
+			created_at_gmt: '2025-12-31T23:59:00',
+			void_requested_at: '2026-10-08T00:00:00Z',
+		}),
+	});
+	c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'voided' }) });
+	await c.leg.start();
+	await tick();
+	expect(c.post).toHaveBeenCalledTimes(1);
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'polling',
+		outcome: null,
+		cancelRequested: true,
+		releaseAvailable: true,
+		deadlineAt: epoch + 240_000,
+	});
+	await tick(2000);
+	expect(c.get).toHaveBeenCalledTimes(2);
+	expect(c.get).toHaveBeenLastCalledWith('orders/42/payments/live-1/status');
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	expect(c.post).toHaveBeenCalledTimes(1);
+});
+
+it('a first-status not-found after rejoin fails without mirroring the adopted id', async () => {
+	const c = setupRejoin();
+	c.post.mockRejectedValueOnce(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+	c.get.mockRejectedValueOnce(refusal(404, 'wcpos_payment_not_found'));
+	await c.leg.start();
+	await tick();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'final',
+		outcome: 'failed',
+		error: { code: 'wcpos_payment_not_found', message: 'Refused' },
+	});
+	expect(c.get).toHaveBeenCalledWith('orders/42/payments/live-1/status');
+	expect(c.mirror).not.toHaveBeenCalled();
+	expect(jest.getTimerCount()).toBe(0);
+});
+
 it('starts once, mirrors intent before polling and reads immediately on a timer', async () => {
 	const c = setup();
 	const pending = deferred<{ data: unknown }>();

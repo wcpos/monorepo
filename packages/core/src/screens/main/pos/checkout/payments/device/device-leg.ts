@@ -48,6 +48,7 @@ export function offlineProviderRefs(refs: Record<string, unknown>): PaymentRow['
 export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let state: DeviceLegState = {
 		phase: 'idle',
+		intentId: input.row.id,
 		row: input.row,
 		outcome: null,
 		cancelRequested: false,

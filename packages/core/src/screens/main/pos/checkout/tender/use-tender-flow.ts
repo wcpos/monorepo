@@ -850,7 +850,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (!leg) return;
 			// The take that is still in the cashier's hands, as opposed to an outcome that
 			// lands while they are watching the terminal timeline.
-			const ownTake = intentRow.current === leg.row.id;
+			const ownTake = intentRow.current === leg.intentId;
 			if (ownTake && (!['idle', 'creating', 'final'].includes(leg.phase) || leg.settlement)) {
 				intentRow.current = null;
 			}
