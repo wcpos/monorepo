@@ -229,7 +229,8 @@ describe('usePushDocument', () => {
 
 		expect(mockAwaitWriteOutcome).toHaveBeenCalledWith(
 			expect.objectContaining({ write: mockWrite }),
-			'mutation-1'
+			'mutation-1',
+			{ timeoutMs: 45_000 }
 		);
 		expect((saved as unknown as { payload: { id: number } }).payload.id).toBe(987);
 		expect(mockFindOneExec).toHaveBeenCalledTimes(2);
