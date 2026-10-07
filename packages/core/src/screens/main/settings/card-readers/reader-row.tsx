@@ -187,6 +187,12 @@ export function ReaderRow({
 		);
 
 	const busy = working || status.connection === 'connecting' || status.connection === 'updating';
+	// The gateway names its Terminal location in the descriptor (Stripe: `location_name`); a
+	// Bluetooth reader registers to that location when it connects, so it is the reader's too.
+	const locationName =
+		typeof method.provider_data.location_name === 'string' && method.provider_data.location_name
+			? method.provider_data.location_name
+			: null;
 	return (
 		<View testID={`reader-row-${method.id}`} className="gap-1 rounded-lg px-2 py-2.5">
 			<HStack className="flex-wrap items-center gap-x-3 gap-y-2">
@@ -210,6 +216,15 @@ export function ReaderRow({
 						>
 							{method.title}
 						</Text>
+						{locationName ? (
+							<Text
+								testID={`reader-row-${method.id}-location`}
+								className="text-muted-foreground text-xs"
+								numberOfLines={1}
+							>
+								· {locationName}
+							</Text>
+						) : null}
 					</HStack>
 				</VStack>
 				<HStack className="ml-auto flex-wrap items-center gap-2">

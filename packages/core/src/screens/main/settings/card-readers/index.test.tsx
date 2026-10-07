@@ -285,6 +285,26 @@ it('shows a failed connect as one line with Try again, and the update progress a
 	expect(screen.queryByTestId(`${row}-retry`)).toBeNull();
 });
 
+it('names the Terminal location when the gateway sends one', async () => {
+	remembered$.next({
+		[deviceMethod.id]: { id: 'sim-approve', label: 'Simulated approve', transport: 'bluetooth' },
+	});
+	mockMethods = [
+		{ ...deviceMethod, provider_data: { location_id: 'tml_test', location_name: 'London Shop' } },
+	];
+	const named = render(<CardReadersSettings />);
+	await flush();
+	expect(screen.getByTestId(`reader-row-${deviceMethod.id}-location`).textContent).toContain(
+		'London Shop'
+	);
+	named.unmount();
+	// An id alone is not cashier copy: no name, no line.
+	mockMethods = [{ ...deviceMethod, provider_data: { location_id: 'tml_test' } }];
+	render(<CardReadersSettings />);
+	await flush();
+	expect(screen.queryByTestId(`reader-row-${deviceMethod.id}-location`)).toBeNull();
+});
+
 it('Cancel during a scan frees the row and drops the late result', async () => {
 	let finish!: () => void;
 	const pending = new Promise<void>((resolve) => {
