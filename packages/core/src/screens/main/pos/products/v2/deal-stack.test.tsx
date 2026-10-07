@@ -466,9 +466,10 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	mockTimings.length = 0;
 	layOut();
 	const { step, cap, duration } = BEATS.newTiles;
-	// Eleven variations: the first leaves at once, the rest a step apart until the cap.
+	// Eleven variations: the first leaves on the first painted frame (never on receipt, which a
+	// delay of 0 would mean), the rest a step apart until the cap.
 	expect(mockDelays.slice(-11)).toEqual(
-		Array.from({ length: 11 }, (_, turn) => Math.min(turn, cap - 1) * step)
+		Array.from({ length: 11 }, (_, turn) => FIRST_FRAME_DELAY + Math.min(turn, cap - 1) * step)
 	);
 	// The products leave on the furniture's clock; then the parent walks and the tiles deal.
 	const out = mockTimings.filter((call) => !call.done).map((call) => call.duration);
@@ -487,7 +488,10 @@ it('deals in order on the beat, capped, and gathers last-out-first', () => {
 	// which starts on its own first frame (first-frame.ts, whose test pins what that means).
 	expect(mockDelays).toEqual([
 		FIRST_FRAME_DELAY,
-		...Array.from({ length: 11 }, (_, index) => Math.min(10 - index, back.cap - 1) * back.step),
+		...Array.from(
+			{ length: 11 },
+			(_, index) => FIRST_FRAME_DELAY + Math.min(10 - index, back.cap - 1) * back.step
+		),
 		FIRST_FRAME_DELAY,
 		FIRST_FRAME_DELAY,
 	]);
@@ -616,7 +620,8 @@ it('a cell that mounts mid-deal joins it from under the parent; one after the de
 	// turn in the stagger long gone.
 	rerender(<Stage detail="Hoodie" count={5} />);
 	expect(mockInitial.at(-1)).toBe(0);
-	expect(mockDelays.at(-1)).toBe(0);
+	// Its turn has come: no beat to wait for, only the first painted frame.
+	expect(mockDelays.at(-1)).toBe(FIRST_FRAME_DELAY);
 	expect(mockTimings.slice(timings)).toEqual([
 		expect.objectContaining({ toValue: 1, duration: BEATS.newTiles.duration }),
 	]);

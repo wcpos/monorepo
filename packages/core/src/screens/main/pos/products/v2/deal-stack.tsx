@@ -16,7 +16,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { BEATS, EASE, EASE_BEAT, EASE_EXIT, PANE } from '@wcpos/components/lib/motion';
 
-import { fromFirstFrame } from './first-frame';
+import { FIRST_FRAME_DELAY, fromFirstFrame } from './first-frame';
 
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -554,12 +554,15 @@ export function DealCell({
 			return;
 		}
 		// Out: in order, each landing on the beat. Back: last out is first home, speeding up
-		// into the parent rather than creeping onto it.
+		// into the parent rather than creeping onto it. The beat counts from the first painted
+		// frame, as the parent's walk does: a delay of 0 would start the first tile's clock on
+		// receipt, so on a heavy commit it painted mid-flight beside a parent still at its origin
+		// (Codex on #2420).
 		const turn = dealt ? (late.current ? 0 : index - 1) : count - 1 - index;
 		late.current = false;
 		const beat = dealt ? BEATS.newTiles : BEATS.oldTiles;
 		travel.value = withDelay(
-			Math.min(turn, beat.cap - 1) * beat.step,
+			FIRST_FRAME_DELAY + Math.min(turn, beat.cap - 1) * beat.step,
 			withTiming(dealt ? 1 : 0, {
 				duration: beat.duration,
 				easing: dealt ? EASE_BEAT : EASE_EXIT,
