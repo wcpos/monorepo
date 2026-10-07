@@ -17,16 +17,17 @@ import { BrowseRootTable, TermLevelTable } from './term-table';
 import { displayTypeOf } from './term-tree';
 import { useAnswerOf } from './use-answer-of';
 import {
-	filtersAtBaseline,
 	isBlankSearch,
 	type PathEntry,
 	sameSort,
+	taxonomyField,
 	useBrowsePath,
 	useSettingsSort,
 } from './use-browse-path';
 import { useBrowseTerms } from './use-browse-terms';
 import { useSystemBack } from './use-system-back';
 
+import type { LevelPlace } from './level-place';
 import type {
 	QueryStateActions,
 	QueryStateOf,
@@ -77,20 +78,23 @@ export type BrowseStageProps = {
 	tableConfig: TableConfig;
 	/** So the screen can set the filter bar's level while a product is drilled here. */
 	onDrilledChange: (drilled: boolean) => void;
-	/** index.tsx's `initialFilters`: the baseline a query must be at for the term set to show. */
-	initialFilters: Record<string, unknown>;
+	/**
+	 * So the screen's filter bar and empty state know the place while a level is open: the
+	 * source's own pill folds (the crumb is that condition) and Clear filters leaves the place.
+	 * Called with the deepest live entry's place, null at the root (a gathering level is none).
+	 */
+	onLevelChange?: (place: LevelPlace | null) => void;
 };
 
 /**
  * Whether the query is being rebased onto a baseline that has just moved: a device setting moved
- * it (a header sort writes the settings sort; the stock toggle moves the initial filters) and the
- * screen's passive effect (v2/index.tsx) has not yet moved the query to follow. For that commit
- * the query still reads as the OLD baseline, and must not count as displaced — the tiles would
- * swap for the products view and back, and the root grid would unmount, its scroll and held
- * state lost. React's "previous render" pattern: the last baseline seen, and the one it left
- * while the query still carries it. Once the query moves — catches up, or elsewhere — the
- * ordinary comparison resumes, so a chip or pill setting that old value again later is a
- * displacement. One mechanism for every baseline the root is compared against.
+ * it (a header sort writes the settings sort) and the screen's passive effect (v2/index.tsx)
+ * has not yet moved the query to follow. For that commit the query still reads as the OLD
+ * baseline, and must not count as displaced — the tiles would swap for the products view and
+ * back, and the root grid would unmount, its scroll and held state lost. React's "previous
+ * render" pattern: the last baseline seen, and the one it left while the query still carries
+ * it. Once the query moves — catches up, or elsewhere — the ordinary comparison resumes, so a
+ * chip setting that old value again later is a displacement.
  */
 function useRebasing<B, L>(
 	baseline: B,
@@ -130,10 +134,23 @@ function useSourceLabel(source: Exclude<BrowseBy, 'all'>): string {
  * away when the query moves (search, a pill, Clear filters) — see use-browse-path.
  */
 export function BrowseStage(props: BrowseStageProps) {
-	const { source, viewMode, binding, onDrilledChange } = props;
+	const { source, viewMode, binding, onDrilledChange, onLevelChange } = props;
 	const terms = useBrowseTerms(source);
 	const { path, enter, backTo } = useBrowsePath(source, terms);
 	const state = useQueryState<'products'>();
+	const field = taxonomyField(source);
+	// The deepest live entry's place; one object per entry and source answer, so the screen's
+	// state moves only when the place does. A layout effect, as the drill's: the folded pill and
+	// the crumb commit in the same frame.
+	const deepestEntry = path[path.length - 1];
+	const place = React.useMemo<LevelPlace | null>(() => {
+		if (!deepestEntry) return null;
+		const quickFilter =
+			deepestEntry.term.kind === 'shortcut' ? terms.quickFilterFor(deepestEntry.term) : undefined;
+		return quickFilter ? { field, quickFilter } : { field };
+	}, [deepestEntry, field, terms]);
+	React.useLayoutEffect(() => onLevelChange?.(place), [place, onLevelChange]);
+	React.useLayoutEffect(() => () => onLevelChange?.(null), [onLevelChange]);
 	// The product drill remembers its depth, the entry it opened under and the search it opened
 	// under (the existing rule).
 	const [drill, setDrill] = React.useState<ProductDrill | PressedDrill | null>(null);
@@ -297,30 +314,25 @@ export function BrowseStage(props: BrowseStageProps) {
 	if (collapseAt !== null && openedAt(collapseAt)) setCollapseAt(null);
 	// One array per projection, so the root grid's and table's memos hold across query changes.
 	const roots = React.useMemo(() => terms.rootsOf(), [terms]);
-	// A query narrowed past its baseline over an empty path has displaced the term set — a search,
-	// or a pill or chip the cashier pressed (a level they left that way, a stock toggle): the
-	// products of that query show, exactly as the filter bar reads, never the term tiles over a
-	// filtered query. Clear filters (or clearing the search) brings the term set back.
-	// A sort away from the baseline displaces it too, exactly as a pill does: a sort-only chip
-	// (`conditions: []` with a `sort`) moves nothing but the sort, and its press must show the
-	// products it sorted, not light up over the tiles. The baseline is the persisted settings
-	// sort (use-browse-path's `useSettingsSort`): a header sort writes that too, so the baseline
-	// moves with it. Inside a level the sort is the cashier's (a level's liveness ignores it).
+	// Over an empty path the term set is displaced by a search, by a pill on the SOURCE's own
+	// taxonomy (a category picked from the Category chip is a place asked for by another route,
+	// and the products of that query show exactly as the filter bar reads), or by a sort away
+	// from the baseline: a sort-only chip (`conditions: []` with a `sort`) moves nothing but the
+	// sort, and its press must show the products it sorted, not light up over the tiles. Every
+	// other pill (stock, Featured, On sale, another taxonomy) is a condition the tiles stand
+	// under: the tiles are places, their counts the storefront's (which never followed the
+	// default In-stock pill either), and the conditions follow the cashier into a level. Clear
+	// filters (or clearing the search) brings the term set back.
+	// The sort baseline is the persisted settings sort (use-browse-path's `useSettingsSort`): a
+	// header sort writes that too, so the baseline moves with it, one commit BEFORE the query
+	// follows (useRebasing). Inside a level the sort is the cashier's (a level's liveness
+	// ignores it).
 	const settingsSort = useSettingsSort();
-	// Either baseline moves one commit BEFORE the query follows it (useRebasing): a settings sort
-	// written by a header, or the stock toggle moving `initialFilters` (compared by content: the
-	// screen builds that object per render).
 	const sortRebasing = useRebasing(settingsSort, state.sort, sameSort, sameSort);
-	const filtersRebasing = useRebasing(
-		props.initialFilters,
-		state.filters,
-		isEqual,
-		filtersAtBaseline
-	);
 	const displaced =
 		path.length === 0 &&
 		(!isBlankSearch(state.search) ||
-			(!filtersRebasing && !filtersAtBaseline(state.filters, props.initialFilters)) ||
+			(!!field && !!(state.filters[field] as number[] | undefined)?.length) ||
 			(!sortRebasing && !sameSort(state.sort, settingsSort)));
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored

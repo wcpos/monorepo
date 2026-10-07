@@ -192,4 +192,62 @@ it('does not count the hidden in-stock baseline as a group', () => {
 	expect(screen.getByTestId('filter-bar-clear-all')).toBeTruthy();
 });
 
+// Inside a browse level the crumb is the source's own condition: that pill folds, it is not a
+// group for Clear all, and Clear all leaves it (the level stays, its conditions go).
+it('folds the place’s pill, and Clear all keeps the place', () => {
+	render(
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish', categories: [1, 2], tags: [], brands: [] }}
+		>
+			<POSFilterBar place={{ field: 'categories' }} />
+			<State />
+		</QueryStateProvider>
+	);
+	expect(screen.queryByTestId('filter-pill-categories')).toBeNull();
+	press('filter-pill-featured');
+	expect(screen.queryByTestId('filter-bar-clear-all')).toBeNull();
+	press('filter-pill-on_sale');
+	fireEvent.click(screen.getByTestId('filter-bar-clear-all'));
+	const state = JSON.parse(screen.getByTestId('state').textContent!);
+	expect(state.filters.featured).toBeUndefined();
+	expect(state.filters.on_sale).toBeUndefined();
+	expect(state.filters.categories).toEqual([1, 2]);
+});
+
+// A shortcut level's place is the shortcut's own conditions: not groups for Clear all, and
+// written back by it.
+it('inside a shortcut level, Clear all keeps the shortcut’s own conditions', () => {
+	const breakfast = {
+		type: 'quick',
+		id: 'qf-breakfast',
+		label: 'Breakfast',
+		conditions: [{ field: 'categories', value: [3] }],
+	} as unknown as NonNullable<React.ComponentProps<typeof POSFilterBar>['place']>['quickFilter'];
+	render(
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish', categories: [3], tags: [], brands: [] }}
+		>
+			<POSFilterBar place={{ field: null, quickFilter: breakfast }} />
+			<State />
+		</QueryStateProvider>
+	);
+	// The Category pill is not the place's field under Shortcuts: it shows, but its value is the
+	// shortcut's and does not count.
+	expect(screen.getByTestId('filter-pill-categories')).toBeTruthy();
+	press('filter-pill-featured');
+	expect(screen.queryByTestId('filter-bar-clear-all')).toBeNull();
+	press('filter-pill-on_sale');
+	fireEvent.click(screen.getByTestId('filter-bar-clear-all'));
+	const state = JSON.parse(screen.getByTestId('state').textContent!);
+	expect(state.filters.featured).toBeUndefined();
+	expect(state.filters.on_sale).toBeUndefined();
+	expect(state.filters.categories).toEqual([3]);
+});
+
 jest.mock('uuid', () => ({ v4: () => 'test-id' }));

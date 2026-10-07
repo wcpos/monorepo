@@ -19,6 +19,33 @@ function equalNumberSets(left: number[] | undefined, right: number[]): boolean {
 }
 
 /**
+ * Whether the quick filter's OWN conditions still stand in the query — its search and each
+ * filter it writes — whatever else the cashier has added beside them. A browse level opened
+ * on a shortcut holds while this does: a pill pressed inside it narrows the level, and only
+ * moving one of the shortcut's own conditions (or typing another search) leaves it. The chip's
+ * lit state is the stricter `isQuickFilterActive`.
+ */
+export function quickFilterHolds(
+	quickFilter: QuickFilter,
+	state: { search: string; filters: FiltersOf<'products'> }
+): boolean {
+	const patch = quickFilterToQueryPatch(quickFilter);
+	if (state.search.trim() !== patch.search.trim()) return false;
+	return Object.keys(patch.filters).every((field) => {
+		const key = field as keyof FiltersOf<'products'>;
+		const expected = patch.filters[key];
+		const actual = state.filters[key];
+		if (Array.isArray(expected)) return equalNumberSets(actual as number[] | undefined, expected);
+		if (key === 'price')
+			return (
+				state.filters.price?.min === patch.filters.price?.min &&
+				state.filters.price?.max === patch.filters.price?.max
+			);
+		return actual === expected;
+	});
+}
+
+/**
  * A quick filter is active only while the complete state it would produce after reset is present.
  */
 export function isQuickFilterActive(

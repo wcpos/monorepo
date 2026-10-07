@@ -408,7 +408,6 @@ const stageProps = (overrides: Record<string, unknown> = {}) =>
 		actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 		tableConfig: { getRowCanExpand: () => false },
 		onDrilledChange: jest.fn(),
-		initialFilters: { status: 'publish' },
 		...overrides,
 	}) as unknown as Props;
 
@@ -480,14 +479,34 @@ it('All products is a dealt level with the All products tile in slot 0', () => {
 	expect(screen.queryByTestId('products')).toBeNull();
 });
 
-it('a Brand pill pressed under All products drops its crumb and shows the narrowed products', () => {
-	render(<BrowseStage {...stageProps()} />);
+// The crumb is the place, the pills are the conditions (owner, 2026-10-07): a pill pressed
+// inside a level narrows the level and the crumb stays.
+it('a Brand pill pressed under All products keeps its crumb: the level is All products, narrowed', () => {
+	const onLevelChange = jest.fn();
+	render(<BrowseStage {...stageProps({ onLevelChange })} />);
 	fireEvent.click(screen.getByTestId('browse-all-products'));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(onLevelChange).toHaveBeenLastCalledWith({ field: 'categories' });
 	act(() => queryActions.setFilter('brands', [8]));
-	expect(screen.queryByTestId('browse-level')).toBeNull();
-	expect(screen.queryByTestId('products-breadcrumb')).toBeNull();
-	expect(screen.getByTestId('products')).toBeTruthy();
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb')).toBeTruthy();
+	expect(screen.queryByTestId('products')).toBeNull();
+	expect(mockState.filters.brands).toEqual([8]);
+	// Back to the root: the pill stays on, the term set shows under it.
+	fireEvent.click(screen.getByTestId('products-breadcrumb-back'));
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	expect(mockState.filters.brands).toEqual([8]);
+	expect(onLevelChange).toHaveBeenLastCalledWith(null);
+});
+
+it('hands the screen a shortcut level’s place with the shortcut itself, so Clear filters can keep it', () => {
+	const onLevelChange = jest.fn();
+	render(<BrowseStage {...stageProps({ source: 'shortcuts', onLevelChange })} />);
+	fireEvent.click(screen.getByTestId('browse-shortcut-qf-breakfast'));
+	expect(onLevelChange).toHaveBeenLastCalledWith({
+		field: null,
+		quickFilter: expect.objectContaining({ id: 'qf-breakfast' }),
+	});
 });
 
 it('a product drilled inside a term gets the term crumb as its ancestors, and the term crumb closes the drill', () => {
@@ -540,31 +559,37 @@ it('a pill narrowing the query at the root shows its products, not the term set;
 	expect(screen.getByTestId('browse-term-1')).toBeTruthy();
 });
 
-// showOutOfStock off: the baseline carries stock_status 'instock', and clearing the default
-// In-stock pill DELETES it — a broader query, which is not the baseline either.
-it('the default In-stock pill cleared at the root shows the broadened products, not the term set', () => {
+// The tiles are places and stand under any condition but the source's own: the default
+// In-stock pill cleared (a broader query), a Brand pill, Featured — never displaced.
+it('a stock or Brand pill at the root keeps the term set; only the source taxonomy’s pill displaces it', () => {
 	mockState = { ...mockState, filters: { ...baseline(), stock_status: 'instock' } };
-	render(
-		<BrowseStage
-			{...stageProps({ initialFilters: { status: 'publish', stock_status: 'instock' } })}
-		/>
-	);
-	expect(screen.getByTestId('browse-root')).toBeTruthy();
+	render(<BrowseStage {...stageProps()} />);
+	const root = screen.getByTestId('browse-root');
 	act(() => queryActions.clearFilter('stock_status'));
 	expect(mockState.filters.stock_status).toBeUndefined();
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.getByTestId('browse-root')).toBe(root);
+	expect(screen.queryByTestId('products')).toBeNull();
+	act(() => queryActions.setFilter('categories', [9]));
 	expect(screen.getByTestId('products')).toBeTruthy();
 	expect(screen.queryByTestId('browse-root')).toBeNull();
 });
 
-it('a pill pressed inside a level leaves its products at the root, not the term tiles over a filtered query', () => {
+it('a pill pressed inside a level narrows the level in place; the conditions follow the cashier into a child', () => {
 	render(<BrowseStage {...stageProps()} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	act(() => queryActions.setFilter('brands', [8]));
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
+	expect(mockState.filters).toMatchObject({ categories: [1, 2], brands: [8] });
+	// Into Hot: the brand condition stands, the place moves.
+	fireEvent.click(screen.getByTestId('browse-term-2'));
+	expect(mockState.filters).toMatchObject({ categories: [2], brands: [8] });
+	// A Category pill set to another value is another place asked for by another route.
+	act(() => queryActions.setFilter('categories', [9]));
 	expect(screen.queryByTestId('browse-level')).toBeNull();
 	expect(screen.getByTestId('products')).toBeTruthy();
-	expect(screen.queryByTestId('browse-root')).toBeNull();
-	act(() => queryActions.resetFilters());
-	expect(screen.getByTestId('browse-root')).toBeTruthy();
 });
 
 // A quick filter may carry `conditions: []` and only a `sort` (quick-filter-editor allows it).
@@ -612,33 +637,17 @@ it('a persisted settings sort change moves the baseline with it: the root is not
 	expect(screen.queryByTestId('browse-root')).toBeNull();
 });
 
-// The stock toggle moves `initialFilters` at once; `state.filters` follows through the screen's
-// effect (index.tsx rebaseFilter) one commit later. Same mechanism as the sort: a rebase, never
-// a displacement, in either direction.
-it('a showOutOfStock change moves the filter baseline with it: the root is not displaced, not even for the commit before the query follows', () => {
-	const props = stageProps();
-	const { rerender } = render(<BrowseStage {...props} />);
+// The stock toggle moves the query through the screen's effect (index.tsx rebaseFilter): a
+// stock condition is never a displacement, so the root grid is never unmounted by it.
+it('a showOutOfStock change never displaces the root', () => {
+	render(<BrowseStage {...stageProps()} />);
 	const root = screen.getByTestId('browse-root');
-	// Out-of-stock hidden: the baseline gains stock_status; the query has not yet.
-	rerender(
-		<BrowseStage {...props} initialFilters={{ status: 'publish', stock_status: 'instock' }} />
-	);
-	expect(screen.queryByTestId('products')).toBeNull();
-	expect(screen.getByTestId('browse-root')).toBe(root); // the same node: never unmounted
 	act(() => queryActions.setFilter('stock_status', 'instock'));
 	expect(screen.queryByTestId('products')).toBeNull();
-	expect(screen.getByTestId('browse-root')).toBe(root);
-	// Shown again: the baseline drops stock_status before the query does.
-	rerender(<BrowseStage {...props} initialFilters={{ status: 'publish' }} />);
-	expect(screen.queryByTestId('products')).toBeNull();
-	expect(screen.getByTestId('browse-root')).toBe(root);
+	expect(screen.getByTestId('browse-root')).toBe(root); // the same node: never unmounted
 	act(() => queryActions.clearFilter('stock_status'));
 	expect(screen.queryByTestId('products')).toBeNull();
 	expect(screen.getByTestId('browse-root')).toBe(root);
-	// A pill then moving a filter is a displacement.
-	act(() => queryActions.setFilter('brands', [8]));
-	expect(screen.getByTestId('products')).toBeTruthy();
-	expect(screen.queryByTestId('browse-root')).toBeNull();
 });
 
 it('a settings sort and the query sort moved in one event is not a displacement either', () => {
@@ -672,7 +681,7 @@ it('a product drilled from the search-displaced root opens in the stage, through
 it('a product drilled from a pill-displaced root is forgotten when Clear filters brings the term set back', () => {
 	const onDrilledChange = jest.fn();
 	render(<BrowseStage {...stageProps({ onDrilledChange })} />);
-	act(() => queryActions.setFilter('brands', [8]));
+	act(() => queryActions.setFilter('categories', [9]));
 	fireEvent.click(screen.getByTestId('products'));
 	expect(screen.getByTestId('drill-in')).toBeTruthy();
 	expect(onDrilledChange).toHaveBeenLastCalledWith(true);
@@ -682,7 +691,7 @@ it('a product drilled from a pill-displaced root is forgotten when Clear filters
 	// The filter bar is back at the products level.
 	expect(onDrilledChange).toHaveBeenLastCalledWith(false);
 	// Forgotten, not hidden: the same pill again shows its products, not the old drill.
-	act(() => queryActions.setFilter('brands', [8]));
+	act(() => queryActions.setFilter('categories', [9]));
 	expect(screen.queryByTestId('drill-in')).toBeNull();
 	expect(screen.getByTestId('products')).toBeTruthy();
 });

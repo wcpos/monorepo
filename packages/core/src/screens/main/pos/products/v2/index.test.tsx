@@ -286,6 +286,7 @@ describe('POSProducts query-state wiring', () => {
 		expect(mockFilterBarProps).toEqual({
 			level: 'products',
 			initialFilters: { status: 'publish', stock_status: 'instock' },
+			place: null,
 		});
 
 		const setSearch = mockUseBarcode.mock.calls[0]?.[0];
@@ -441,10 +442,11 @@ describe('POSProducts query-state wiring', () => {
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({ source: 'categories', viewMode: 'table' });
 		expect(screen.queryByTestId('products-pane-stack')).toBeNull();
-		// The filter bar is the same in every mode.
+		// The filter bar is the same in every mode until a level opens.
 		expect(mockFilterBarProps).toEqual({
 			level: 'products',
 			initialFilters: { status: 'publish', stock_status: 'instock' },
+			place: null,
 		});
 	});
 
@@ -453,8 +455,6 @@ describe('POSProducts query-state wiring', () => {
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({
 			binding: mockBinding,
-			// The baseline its root measures the query against (term set, or displaced products).
-			initialFilters: { status: 'publish', stock_status: 'instock' },
 			variationsStyle: 'drill',
 			stockStatus: 'instock',
 			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),
@@ -472,6 +472,12 @@ describe('POSProducts query-state wiring', () => {
 		expect(mockFilterBarProps.level).toBe('variations');
 		act(() => onDrilledChange(false));
 		expect(mockFilterBarProps.level).toBe('products');
+		// A level open hands the filter bar its place: the crumb is the source's own condition.
+		const onLevelChange = mockBrowseStageProps?.onLevelChange as (place: unknown) => void;
+		act(() => onLevelChange({ field: 'categories' }));
+		expect(mockFilterBarProps.place).toEqual({ field: 'categories' });
+		act(() => onLevelChange(null));
+		expect(mockFilterBarProps.place).toBeNull();
 	});
 
 	// The stage owns search: it drops its path and shows the catalogue-wide products itself, so
