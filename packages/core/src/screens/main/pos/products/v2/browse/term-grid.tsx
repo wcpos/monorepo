@@ -331,6 +331,9 @@ export function TermLevelGrid({
 												columns={columns}
 												scroll={scroll}
 												restY={rowTops[rowIndex]}
+												// The parent and the child terms keep their own height (term tiles are all
+												// one height); a product tile beside them is what it is.
+												natural={index <= children.length}
 											>
 												{renderSlot(index)}
 											</DealCell>

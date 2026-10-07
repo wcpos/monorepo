@@ -478,6 +478,7 @@ export function DealCell({
 	columns,
 	scroll,
 	restY,
+	natural = false,
 	children,
 }: {
 	index: number;
@@ -492,6 +493,12 @@ export function DealCell({
 	 * cell below a taller row starts under the parent rather than a row's difference away.
 	 */
 	restY?: number;
+	/**
+	 * The slot keeps its own height in a taller row rather than stretching to it: a term tile
+	 * beside taller product tiles (owner, 2026-10-07). The parent's copy is pinned at the tapped
+	 * tile's height, so its sibling terms must not stretch either, or the row reads ragged at rest.
+	 */
+	natural?: boolean;
 	children: React.ReactNode;
 }) {
 	const { origin, dealt, landed, stageWidth, grid, generation, placeCopy, copyPlaced } = useDeal();
@@ -634,7 +641,13 @@ export function DealCell({
 	return (
 		<Animated.View
 			className="flex-1"
-			style={[style, parent && FRONT, size, parent && (waiting || !copyPlaced) && UNSEEN]}
+			style={[
+				style,
+				parent && FRONT,
+				natural && NATURAL,
+				size,
+				parent && (waiting || !copyPlaced) && UNSEEN,
+			]}
 		>
 			{parent ? (
 				<CopyPictureContext.Provider value={holdPicture}>{children}</CopyPictureContext.Provider>
@@ -676,6 +689,8 @@ export function useCopyPicture(): (() => void) | undefined {
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */
 export const FRONT = { zIndex: 1 };
+// A slot at its own height, top-aligned in its row (`natural`).
+const NATURAL = { alignSelf: 'flex-start' } as const;
 // The parent before it can stand on the tapped tile. A plain style, not a worklet prop: it
 // has to commit on the same frame as the tapped tile stepping aside.
 const UNSEEN = { opacity: 0 };

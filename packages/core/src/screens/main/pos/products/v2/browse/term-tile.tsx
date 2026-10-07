@@ -31,8 +31,9 @@ function hasImage(term: BrowseTerm): term is Extract<BrowseTerm, { kind: 'term' 
 	return term.kind === 'term' && !!term.imageSrc;
 }
 
-// In a dealt cell the tile grows to its row's height; `flex-1` would give it no height of
-// its own inside the cell.
+// In a dealt cell the tile grows to fill its cell, which keeps the tile's own height (the row
+// does not stretch a term slot: `DealCell`'s `natural`); `flex-1` would give it no height of its
+// own inside the cell.
 function tileClass(term: BrowseTerm, size: 'flex-1' | 'grow') {
 	return `${hasImage(term) ? CARD : MUTED} ${FRAME} ${size}`;
 }
@@ -140,7 +141,7 @@ export function TermTile({
 	term: BrowseTerm;
 	onPress: (term: BrowseTerm, target?: Measurable) => void;
 	lifted?: boolean;
-	/** In a dealt cell (a level's child term) the tile grows to its row. */
+	/** In a dealt cell (a level's child term) the tile fills its cell, at its own height. */
 	grow?: boolean;
 }) {
 	const t = useT();

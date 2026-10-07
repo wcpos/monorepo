@@ -106,17 +106,20 @@ jest.mock('../deal-stack', () => ({
 		count,
 		columns,
 		restY,
+		natural,
 	}: React.PropsWithChildren<{
 		index: number;
 		count: number;
 		columns: number;
 		restY?: number;
+		natural?: boolean;
 	}>) => (
 		<div
 			data-testid={`cell-${index}`}
 			data-count={count}
 			data-columns={columns}
 			data-rest-y={String(restY)}
+			data-natural={String(!!natural)}
 		>
 			{children}
 		</div>
@@ -295,6 +298,17 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	expect(props.onOpenTerm).toHaveBeenCalledWith(hot, expect.anything());
 	fireEvent.click(screen.getByTestId('variable-l'));
 	expect(props.onDrillProduct).toHaveBeenCalledWith(latte);
+});
+
+// The parent's copy keeps the tapped tile's height; its sibling terms stretched to the product
+// tiles beside them read as a ragged row at rest (Clothing › Men, ≈252 vs ≈431 px; owner,
+// 2026-10-07). Term slots keep their own height; product slots are what they are.
+it('keeps the parent and child term slots at their own height, product slots stretched', () => {
+	render(<TermLevelGrid {...level()} />);
+	expect(screen.getByTestId('cell-0').dataset.natural).toBe('true');
+	expect(screen.getByTestId('cell-1').dataset.natural).toBe('true');
+	expect(screen.getByTestId('cell-2').dataset.natural).toBe('false');
+	expect(screen.getByTestId('cell-3').dataset.natural).toBe('false');
 });
 
 it('puts the crumb in a row of its own above the grid, its detail the query total', () => {

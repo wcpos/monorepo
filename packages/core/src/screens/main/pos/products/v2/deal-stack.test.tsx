@@ -81,6 +81,7 @@ jest.mock('react-native-reanimated', () => {
 						data-front={flat.zIndex === 1}
 						data-opacity={flat.opacity as number}
 						data-height={flat.height as number}
+						data-align={flat.alignSelf as string}
 						aria-hidden={rest['aria-hidden']}
 					>
 						{children}
@@ -1059,4 +1060,21 @@ it('starts every clock of the deal on its own first frame, out, home and in a cr
 	rerender(<Stage detail={null} count={1} collapse />);
 	expect(mockTimings.length - timings).toBe(2);
 	expect(mockDelays.slice(delays)).toEqual([FIRST_FRAME_DELAY, FIRST_FRAME_DELAY]);
+});
+
+it('a natural slot keeps its own height in a taller row; others stretch to it', () => {
+	render(
+		<>
+			<DealCell index={1} count={3} columns={3} natural>
+				<span data-testid="term" />
+			</DealCell>
+			<DealCell index={2} count={3} columns={3}>
+				<span data-testid="product" />
+			</DealCell>
+		</>
+	);
+	const align = (testID: string) =>
+		screen.getByTestId(testID).closest('[data-style]')!.getAttribute('data-align');
+	expect(align('term')).toBe('flex-start');
+	expect(align('product')).toBeNull();
 });
