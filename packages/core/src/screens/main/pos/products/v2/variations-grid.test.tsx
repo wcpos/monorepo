@@ -45,6 +45,8 @@ const placeGrid = jest.fn();
 jest.mock('./deal-stack', () => ({
 	FRONT: { zIndex: 1 },
 	useDeal: () => ({ placeGrid }),
+	useAirspace: () => ({}),
+	useCopyPicture: () => undefined,
 	DealFade: ({ children }: React.PropsWithChildren) => children,
 	DealCell: ({
 		children,

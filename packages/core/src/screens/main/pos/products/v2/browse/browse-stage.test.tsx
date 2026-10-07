@@ -163,6 +163,8 @@ jest.mock('../deal-stack', () => ({
 	DealFade: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	FRONT: {},
 	useDeal: () => ({ grid: null, placeGrid: () => {}, dealt: true }),
+	useAirspace: () => ({}),
+	useCopyPicture: () => undefined,
 }));
 jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: (props: Parameters<typeof MockStack>[0]) => <MockStack {...props} />,
@@ -313,6 +315,18 @@ jest.mock('react-native-reanimated', () => ({
 	},
 	useAnimatedRef: () => ({ current: null }),
 	useScrollViewOffset: () => ({ value: 0 }),
+}));
+// Android's back (use-system-back.android.ts subscribes it to BackHandler): the stage's handler,
+// as the last render registered it, and every batch it asks for.
+let mockSystemBack: (() => boolean) | undefined;
+jest.mock('./use-system-back', () => ({
+	useSystemBack: (handle: () => boolean) => {
+		mockSystemBack = handle;
+	},
+}));
+const mockInOneBatch = jest.fn((update: () => void) => update());
+jest.mock('../one-batch', () => ({
+	inOneBatch: (update: () => void) => mockInOneBatch(update),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => 'fine',
@@ -882,4 +896,50 @@ it('a whitespace-only search is no search: the root term set stays, and a level 
 	act(() => queryActions.setSearch(' '));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('drill-in')).toBeTruthy();
+});
+
+it('Android back closes a drill and keeps its level', () => {
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('variable-product-drill'));
+	expect(screen.getByTestId('drill-in')).toBeTruthy();
+	let handled: boolean | undefined;
+	act(() => {
+		handled = mockSystemBack!();
+	});
+	expect(handled).toBe(true);
+	// Not a discrete event: the close lands in one batch, as the edge swipe's does.
+	expect(mockInOneBatch).toHaveBeenCalledTimes(1);
+	expect(screen.queryByTestId('drill-in')).toBeNull();
+	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	expect(mockState.filters.categories).toEqual([1, 2]);
+});
+
+it('Android back goes one level back per press, and leaves the root press to the system', () => {
+	render(<BrowseStage {...stageProps()} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	fireEvent.click(screen.getByTestId('browse-term-2')); // Hot, depth 2
+	expect(screen.getAllByTestId('browse-level').length).toBe(2);
+	let handled: boolean | undefined;
+	act(() => {
+		handled = mockSystemBack!();
+	});
+	expect(handled).toBe(true);
+	expect(mockInOneBatch).toHaveBeenCalledTimes(1);
+	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
+	expect(mockState.filters.categories).toEqual([1, 2]);
+	act(() => {
+		handled = mockSystemBack!();
+	});
+	expect(handled).toBe(true);
+	expect(screen.queryByTestId('browse-level')).toBeNull();
+	expect(mockState.filters.categories).toEqual([]);
+	// Nothing on stage: not handled, so the system's own back (the navigator, then the app) acts.
+	act(() => {
+		handled = mockSystemBack!();
+	});
+	expect(handled).toBe(false);
+	expect(mockInOneBatch).toHaveBeenCalledTimes(2);
+	expect(screen.getByTestId('browse-root')).toBeTruthy();
 });

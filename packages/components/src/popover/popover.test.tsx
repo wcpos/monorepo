@@ -43,6 +43,23 @@ it('lets the sheet geometry win over an anchored caller width', () => {
 	expect(screen.getByTestId('panel')).not.toHaveClass('w-80');
 });
 
+it('drops an anchored caller’s width cap on the phone sheet', () => {
+	// The variations popover's own classes (grid/variable-product-tile.tsx): on a tablet the
+	// anchored panel keeps its cap; on a phone the sheet is the phone's width.
+	render(
+		<DeviceScope phone>
+			<C.PopoverContent inline testID="panel" className="w-auto max-w-80 p-2" />
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('panel')).toHaveClass('w-full max-w-full');
+	expect(screen.getByTestId('panel')).not.toHaveClass('max-w-80');
+	expect(screen.getByTestId('panel')).not.toHaveClass('w-auto');
+});
+it('keeps an anchored caller’s width cap above the phone boundary', () => {
+	render(<C.PopoverContent inline testID="panel" className="w-auto max-w-80 p-2" />);
+	expect(screen.getByTestId('panel')).toHaveClass('max-w-80');
+});
+
 it('unmounts an inline sheet when the popover closes (no portal presence to do it)', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	expect(source).toMatch(/return inline \?[\s(]*open \?[\s(]*shell[\s)]*: null/);

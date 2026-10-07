@@ -10,6 +10,7 @@ import { useQueryState } from '../../../../../../query';
 import { useFirstAnswer } from '../../../../hooks/use-first-answer';
 import { DealStack, type Measurable } from '../deal-stack';
 import { DrillIn } from '../drill-in';
+import { inOneBatch } from '../one-batch';
 import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 import { BrowseRootGrid, TermLevelGrid } from './term-grid';
 import { BrowseRootTable, TermLevelTable } from './term-table';
@@ -24,6 +25,7 @@ import {
 	useSettingsSort,
 } from './use-browse-path';
 import { useBrowseTerms } from './use-browse-terms';
+import { useSystemBack } from './use-system-back';
 
 import type {
 	QueryStateActions,
@@ -263,6 +265,19 @@ export function BrowseStage(props: BrowseStageProps) {
 		[backTo]
 	);
 	const goRoot = React.useCallback(() => goBackTo(0), [goBackTo]);
+	// Android's back, one step per press as the crumb's last parent goes: a drill closes and its
+	// level stays; otherwise one level back. At the root nothing is on stage, and the press is
+	// the system's. Not a discrete event, so it batches as the edge swipe does (`backTo`'s
+	// batching invariant, use-browse-path.ts).
+	useSystemBack(() => {
+		if (drilled) {
+			inOneBatch(closeDrill);
+			return true;
+		}
+		if (path.length === 0) return false;
+		inOneBatch(() => goBackTo(path.length - 1));
+		return true;
+	});
 	// A path cut by more than one level at once (a crumb jump, a search typed deep in) cross-fades
 	// the stack it lands on; one step still gathers (owner's default, 2026-10-06). A gather there
 	// walks each level's parent home to a slot of ITS level, which sits over another tile of the

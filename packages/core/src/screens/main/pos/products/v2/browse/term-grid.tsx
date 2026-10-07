@@ -16,6 +16,7 @@ import {
 	DealStagedContext,
 	FRONT,
 	type Measurable,
+	useAirspace,
 	useDeal,
 } from '../deal-stack';
 import { ProductsFooter } from '../footer';
@@ -169,6 +170,8 @@ export function TermLevelGrid({
 	// on the stage it is inset from.
 	const { placeGrid } = useDeal();
 	const slotsNode = React.useRef<React.ComponentRef<typeof View>>(null);
+	// Tiles in flight may paint above the scroller, over the crumb row (see useAirspace).
+	const air = useAirspace(scroll);
 	const { uiSettings } = useUISettings('pos-products');
 	const columns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -254,7 +257,9 @@ export function TermLevelGrid({
 		if (index === 0) return <ParentTermTile term={term} onPress={back} />;
 		if (index <= children.length) {
 			const child = children[index - 1];
-			return <TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} grow />;
+			return (
+				<TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} dealt />
+			);
 		}
 		const record = products[index - 1 - children.length];
 		if (!record) return <ProductPlaceholder />;
@@ -286,60 +291,63 @@ export function TermLevelGrid({
 				/>
 			</DealFade>
 			<View className="min-h-0 flex-1 px-1" testID="browse-level-surface">
-				<View
-					ref={slotsNode}
-					className="min-h-0 flex-1"
-					testID="browse-level-slots"
-					onLayout={(event) => {
-						onViewport(event.nativeEvent.layout.height);
-						placeGrid(slotsNode.current as Measurable);
-					}}
-				>
-					<Animated.FlatList
-						ref={scroller}
-						className="flex-1"
-						testID="browse-level-scroller"
-						data={rows}
-						keyExtractor={(_, rowIndex) => String(rowIndex)}
-						CellRendererComponentStyle={frontRow}
-						onEndReachedThreshold={END_REACHED_THRESHOLD}
-						// Android detaches rows outside the viewport by default, so a tile bound below the
-						// fold flew unseen; rows outside the render window still unmount.
-						removeClippedSubviews={false}
-						onEndReached={owned ? onEndReached : undefined}
-						// A row's measured top reaches cells the list would otherwise not re-render.
-						extraData={rowTops}
-						renderItem={({ item: row, index: rowIndex }) => (
-							<View
-								className="flex-row"
-								style={rowIndex === 0 ? FRONT : undefined}
-								onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
-							>
-								{row.map((index) =>
-									index >= count ? (
-										<View key={index} className="flex-1" />
-									) : (
-										<DealCell
-											key={index}
-											index={index}
-											count={count}
-											columns={columns}
-											scroll={scroll}
-											restY={rowTops[rowIndex]}
-										>
-											{renderSlot(index)}
-										</DealCell>
-									)
-								)}
-							</View>
-						)}
-						ListFooterComponent={
-							// Furniture, as the crumb and the footer are: it fades with the deal.
-							isEmpty ? (
-								<DealFade className="items-center justify-center p-4">{empty}</DealFade>
-							) : undefined
-						}
-					/>
+				<View className="min-h-0 flex-1" style={air.frame}>
+					<View
+						ref={slotsNode}
+						className="min-h-0 flex-1"
+						testID="browse-level-slots"
+						onLayout={(event) => {
+							onViewport(event.nativeEvent.layout.height);
+							placeGrid(slotsNode.current as Measurable);
+						}}
+					>
+						<Animated.FlatList
+							ref={scroller}
+							className="flex-1"
+							style={air.scroller}
+							testID="browse-level-scroller"
+							data={rows}
+							keyExtractor={(_, rowIndex) => String(rowIndex)}
+							CellRendererComponentStyle={frontRow}
+							onEndReachedThreshold={END_REACHED_THRESHOLD}
+							// Android detaches rows outside the viewport by default, so a tile bound below the
+							// fold flew unseen; rows outside the render window still unmount.
+							removeClippedSubviews={false}
+							onEndReached={owned ? onEndReached : undefined}
+							// A row's measured top reaches cells the list would otherwise not re-render.
+							extraData={rowTops}
+							renderItem={({ item: row, index: rowIndex }) => (
+								<View
+									className="flex-row"
+									style={rowIndex === 0 ? FRONT : undefined}
+									onLayout={(event) => measureRow(rowIndex, event.nativeEvent.layout.height)}
+								>
+									{row.map((index) =>
+										index >= count ? (
+											<View key={index} className="flex-1" />
+										) : (
+											<DealCell
+												key={index}
+												index={index}
+												count={count}
+												columns={columns}
+												scroll={scroll}
+												restY={rowTops[rowIndex]}
+											>
+												{renderSlot(index)}
+											</DealCell>
+										)
+									)}
+								</View>
+							)}
+							ListFooterComponent={
+								// Furniture, as the crumb and the footer are: it fades with the deal.
+								isEmpty ? (
+									<DealFade className="items-center justify-center p-4">{empty}</DealFade>
+								) : undefined
+							}
+						/>
+					</View>
 				</View>
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (

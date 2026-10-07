@@ -426,6 +426,27 @@ describe('Variations popover query state', () => {
 		}
 	});
 
+	it('scrolls the options inside the panel and keeps Add to cart pinned under them', () => {
+		// The phone sheet's content ran past the panel's bottom, under the tab bar (Pixel,
+		// 2026-10-06, shot 4c): the options are one scrolling region, the outcome sits outside it.
+		render(
+			<VariationsPopover
+				parent={
+					{
+						payload: {
+							variations: [11, 12],
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
+					} as never
+				}
+				addToCart={jest.fn()}
+			/>
+		);
+		const options = screen.getByTestId('variation-popover-options');
+		expect(options.contains(screen.getByText('select-blue'))).toBe(true);
+		expect(options.contains(screen.getByTestId('variation-popover-add-to-cart'))).toBe(false);
+	});
+
 	it('holds Add to cart while an add is pending, so a second press cannot add twice', async () => {
 		// The popover closes only after the add settles (variable-actions.tsx);
 		// until then the button stayed pressable, and a press during a slow write

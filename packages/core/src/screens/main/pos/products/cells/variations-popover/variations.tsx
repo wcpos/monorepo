@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ScrollView } from 'react-native';
 
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
@@ -120,42 +121,51 @@ export function Variations({
 		}
 	}, [addToCart, adding, attributeOptions, selectedVariation]);
 
-	/**
-	 *
-	 */
+	// The options scroll inside the panel and the outcome (add to cart, or why not) stays pinned
+	// under them: on the phone sheet a product with several attributes ran past the panel's bottom,
+	// and its last row of options sat under the tab bar (Pixel, 2026-10-06, shot 4c). `min-h-0` lets
+	// the panel's height bound the list; anchored on a tablet it is simply the options' height.
 	return (
-		<VStack className="min-w-52">
-			{attributeOptions.map(({ attribute, optionCounts, selected }) => {
-				const disabledOptions = getDisabledVariationOptions(
-					attribute,
-					selectedAttributes,
-					allVariationHits,
-					stockStatus
-				);
-				return (
-					<VStack key={attribute.name} space="xs">
-						{/* Attribute names and options are catalogue strings — the same pair the
+		<VStack className="min-h-0 min-w-52 shrink">
+			<ScrollView
+				className="shrink grow-0"
+				testID="variation-popover-options"
+				keyboardShouldPersistTaps="handled"
+			>
+				<VStack>
+					{attributeOptions.map(({ attribute, optionCounts, selected }) => {
+						const disabledOptions = getDisabledVariationOptions(
+							attribute,
+							selectedAttributes,
+							allVariationHits,
+							stockStatus
+						);
+						return (
+							<VStack key={attribute.name} space="xs">
+								{/* Attribute names and options are catalogue strings — the same pair the
 					    cart's meta lines decode once the variation is added. */}
-						<Text decodeHtml>{attribute.name}</Text>
-						{attribute.characterCount < 15 ? (
-							<VariationButtons
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-								optionCounts={optionCounts}
-								disabledOptions={disabledOptions}
-							/>
-						) : (
-							<VariationSelect
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-								disabledOptions={disabledOptions}
-							/>
-						)}
-					</VStack>
-				);
-			})}
+								<Text decodeHtml>{attribute.name}</Text>
+								{attribute.characterCount < 15 ? (
+									<VariationButtons
+										attribute={attribute}
+										onSelect={handleSelect}
+										selected={selected?.option}
+										optionCounts={optionCounts}
+										disabledOptions={disabledOptions}
+									/>
+								) : (
+									<VariationSelect
+										attribute={attribute}
+										onSelect={handleSelect}
+										selected={selected?.option}
+										disabledOptions={disabledOptions}
+									/>
+								)}
+							</VStack>
+						);
+					})}
+				</VStack>
+			</ScrollView>
 			{selectedVariation ? (
 				<VariationAddToCart
 					variation={selectedVariation}

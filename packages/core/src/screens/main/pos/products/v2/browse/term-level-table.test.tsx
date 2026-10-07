@@ -207,6 +207,9 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+// The table's rows reuse the term tile's picture, which on a dealt copy waits to paint
+// (deal-stack.tsx); a table has no copy, so it holds nothing.
+jest.mock('../deal-stack', () => ({ useCopyPicture: () => undefined }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	List: ({

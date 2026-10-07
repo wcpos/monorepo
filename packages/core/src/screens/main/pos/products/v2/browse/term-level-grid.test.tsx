@@ -70,8 +70,8 @@ jest.mock('./term-tile', () => {
 	const actual = jest.requireActual('./term-tile');
 	return {
 		...actual,
-		TermTile: (props: { grow?: boolean }) => (
-			<div data-grow={String(!!props.grow)}>
+		TermTile: (props: { dealt?: boolean }) => (
+			<div data-dealt={String(!!props.dealt)}>
 				<actual.TermTile {...props} />
 			</div>
 		),
@@ -125,6 +125,8 @@ jest.mock('../deal-stack', () => ({
 	FRONT: { zIndex: 1 },
 	DealStagedContext: jest.requireActual('react').createContext(null),
 	useDeal: () => ({ placeGrid }),
+	useAirspace: () => ({}),
+	useCopyPicture: () => undefined,
 }));
 // The list renders every row it is handed, wrapped as its cells are (with the cell style the
 // grid asks for), and an end-reached is a scroll on it.
@@ -279,8 +281,8 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	// A dealt product tile grows to its row (the cell gives it no height of its own).
 	expect(screen.getByTestId('product-f').dataset.grow).toBe('true');
 	expect(screen.getByTestId('variable-l').dataset).toMatchObject({ grow: 'true', style: 'drill' });
-	// So does a child term: a subcategories level has rows made only of them.
-	expect(screen.getByTestId('browse-term-2').parentElement!.dataset.grow).toBe('true');
+	// A child term is dealt too, and keeps its own height there (term-tile.tsx, TileSize).
+	expect(screen.getByTestId('browse-term-2').parentElement!.dataset.dealt).toBe('true');
 	// Rows below the fold but inside the render window stay attached, so their tiles are seen
 	// for the whole of their flight (Android detaches clipped subviews by default).
 	expect(screen.getByTestId('browse-level-scroller').dataset.removeClipped).toBe('false');

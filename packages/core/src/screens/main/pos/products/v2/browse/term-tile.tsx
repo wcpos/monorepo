@@ -8,9 +8,8 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../../components/product/product-image-placeholder';
+import { type Measurable, useCopyPicture } from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
-
-import type { Measurable } from '../deal-stack';
 
 // A tile the deal has lifted off the grid: its copy is out on the stage.
 const LIFTED = { opacity: 0 };
@@ -32,11 +31,54 @@ function hasImage(term: BrowseTerm): term is Extract<BrowseTerm, { kind: 'term' 
 	return term.kind === 'term' && !!term.imageSrc;
 }
 
-// In a dealt cell the tile grows to its row's height; `flex-1` would give it no height of
-// its own inside the cell.
-function tileClass(term: BrowseTerm, size: 'flex-1' | 'grow') {
-	return `${hasImage(term) ? CARD : MUTED} ${FRAME} ${size}`;
+/**
+ * How the tile is sized. `flex-1`: a root row's share of the row. `own`: a level's child term in
+ * a dealt cell keeps its own height — no flex at all. Yoga lays a cell out at most as tall as its
+ * row, and a growing child (`grow`, `flex-1`) grows to that limit, so a growing term tile took the
+ * row's height beside a taller tile whatever the cell's own alignment said (Pixel, 2026-10-07:
+ * Jackets and Tanks at 476 px beside a two-line Hoodies & Sweatshirts; the owner's call is that
+ * term tiles keep their own height). `grow`: the parent fills its cell, which is pinned to the
+ * tapped tile's height while it is the copy.
+ */
+type TileSize = 'flex-1' | 'own' | 'grow';
+function tileClass(term: BrowseTerm, size: TileSize) {
+	return `${hasImage(term) ? CARD : MUTED} ${FRAME}${size === 'own' ? '' : ` ${size}`}`;
 }
+
+// The square a picture-less body keeps at least (see WordsBody): laid under its words.
+const UNDER = { marginLeft: '-100%' } as const;
+
+/**
+ * A body without a picture: at least as tall as the tile is wide, taller when its words need it
+ * (a dealt term tile keeps its own height now, and a fixed square cut a long name off), its words
+ * clear of the parent copy's back badge. The badge (`top-2`, `size-6`) sits in the words' top
+ * gutter (`py-8`, symmetric) on the tile and on its copy alike, so the copy lays its words out exactly as
+ * the tile it came from — overlaid, the badge covered the end of the first line (Pixel,
+ * 2026-10-07: "Uncategor‹").
+ */
+function WordsBody({ gap, children }: { gap: 'gap-1' | 'gap-2'; children: React.ReactNode }) {
+	return (
+		<View className="flex-row" testID="term-words-body">
+			<View className="aspect-square w-full" />
+			<View
+				className={`w-full items-center justify-center ${gap} ${WORDS_PADDING}`}
+				style={UNDER}
+				testID="term-words"
+			>
+				{children}
+			</View>
+		</View>
+	);
+}
+/**
+ * The words' padding: the badge's corner (`top-2` + `size-6`) is the top gutter, and the bottom
+ * one matches it so the words stay centred on a tile that never shows a badge (the root's All
+ * products, a text-only term, a shortcut). A long name grows the body instead.
+ */
+export const WORDS_PADDING = 'px-3 py-8';
+/** The parent's back badge. */
+export const BADGE =
+	'bg-card absolute top-2 right-2 size-6 items-center justify-center rounded-full';
 
 function TermImage({
 	src,
@@ -49,12 +91,18 @@ function TermImage({
 }) {
 	// A term image the store has since deleted shows the product placeholder, not an empty square.
 	const [failed, setFailed] = React.useState(false);
+	// On a dealt parent's copy, the copy waits for this picture to paint (deal-stack.tsx).
+	const painted = useCopyPicture();
 	return (
 		<Image
 			source={{ uri: failed ? PRODUCT_IMAGE_PLACEHOLDER : src }}
 			recyclingKey={recyclingKey}
 			className="h-full w-full"
-			onError={() => setFailed(true)}
+			onDisplay={painted}
+			onError={() => {
+				setFailed(true);
+				painted?.();
+			}}
 			{...(still ? STILL : {})}
 		/>
 	);
@@ -64,17 +112,17 @@ function TermBody({ term, still }: { term: BrowseTerm; still?: boolean }) {
 	const t = useT();
 	if (term.kind === 'all') {
 		return (
-			<View className="aspect-square items-center justify-center gap-2 p-3">
+			<WordsBody gap="gap-2">
 				<Icon name="grid" size="lg" className="text-muted-foreground" />
 				<Text className="text-center font-bold" numberOfLines={2}>
 					{t('pos_products.browse_all_products')}
 				</Text>
-			</View>
+			</WordsBody>
 		);
 	}
 	if (term.kind === 'shortcut') {
 		return (
-			<View className="aspect-square items-center justify-center gap-1 p-3">
+			<WordsBody gap="gap-1">
 				<Icon name="sliders" size="lg" className="text-muted-foreground" />
 				<Text className="text-center text-lg font-bold" numberOfLines={2} decodeHtml>
 					{term.name}
@@ -82,12 +130,12 @@ function TermBody({ term, still }: { term: BrowseTerm; still?: boolean }) {
 				<Text className="text-muted-foreground text-center" numberOfLines={2}>
 					{term.description}
 				</Text>
-			</View>
+			</WordsBody>
 		);
 	}
 	if (!term.imageSrc) {
 		return (
-			<View className="aspect-square items-center justify-center gap-1 p-3">
+			<WordsBody gap="gap-1">
 				<Text className="text-center text-lg font-bold" numberOfLines={3} decodeHtml>
 					{term.name}
 				</Text>
@@ -97,7 +145,7 @@ function TermBody({ term, still }: { term: BrowseTerm; still?: boolean }) {
 						{t('pos_products.n_products', { count: term.count })}
 					</Text>
 				)}
-			</View>
+			</WordsBody>
 		);
 	}
 	return (
@@ -130,13 +178,13 @@ export function TermTile({
 	term,
 	onPress,
 	lifted,
-	grow,
+	dealt,
 }: {
 	term: BrowseTerm;
 	onPress: (term: BrowseTerm, target?: Measurable) => void;
 	lifted?: boolean;
-	/** In a dealt cell (a level's child term) the tile grows to its row. */
-	grow?: boolean;
+	/** In a dealt cell (a level's child term) the tile keeps its own height (see TileSize). */
+	dealt?: boolean;
 }) {
 	const t = useT();
 	const tile = React.useRef<ViewInstance>(null);
@@ -148,7 +196,7 @@ export function TermTile({
 			style={lifted ? LIFTED : undefined}
 			accessibilityRole="button"
 			accessibilityLabel={label}
-			className={tileClass(term, grow ? 'grow' : 'flex-1')}
+			className={tileClass(term, dealt ? 'own' : 'flex-1')}
 			testID={termTestId(term)}
 		>
 			<TermBody term={term} />
@@ -170,7 +218,7 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 			<View className="relative">
 				{/* The same picture the tapped tile was showing: it moves, it does not arrive. */}
 				<TermBody term={term} still />
-				<View className="bg-card absolute top-2 right-2 size-6 items-center justify-center rounded-full">
+				<View className={BADGE} testID="browse-parent-badge">
 					<Icon name="chevronLeft" size="sm" className="text-muted-foreground" />
 				</View>
 			</View>
