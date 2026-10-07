@@ -9,6 +9,7 @@ import { useDocField } from '@wcpos/query';
 
 import { HeaderLeft as Left } from './left';
 import { HeaderRight as Right } from './right';
+import { SessionHoldBanner } from './session-hold-banner';
 import { HeaderTitle } from './title';
 import { UpgradeNotice } from './upgrade-notice';
 import { useAppState } from '../../../../contexts/app-state';
@@ -147,6 +148,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						</View>
 					</HStack>
 				</View>
+				<SessionHoldBanner />
 				{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			</View>
 		</ErrorBoundary>

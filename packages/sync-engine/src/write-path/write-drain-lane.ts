@@ -58,6 +58,7 @@ import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { fetchOrderServerRevision } from './order-server-revision';
+import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
@@ -65,6 +66,11 @@ import type { RxDatabase } from 'rxdb';
 
 // Transitional re-export: callers should migrate to order-server-revision.
 export { fetchOrderServerRevision } from './order-server-revision';
+
+// The plugin's 401 means no user is logged in; probe per interval, not per row per tick.
+const SESSION_PROBE_BASE_MS = 30_000;
+// Cap the interval between probes for the plugin's no-user-logged-in 401 at five minutes.
+const SESSION_PROBE_MAX_MS = 300_000;
 
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known
@@ -301,6 +307,7 @@ export type WriteDrainReport = {
 	deferred?: number;
 	failed?: number;
 	rejected?: number;
+	sessionExpired?: boolean;
 };
 
 export type WriteDrainLaneDeps = {
@@ -318,6 +325,8 @@ export type WriteDrainLaneDeps = {
 	drainInstanceIdFor: () => string;
 	setQueueDepth: (depth: number) => void;
 	setLastError: (error: string | null) => void;
+	/** The store scope whose session the lane is holding, or null when none. */
+	setSessionHeld?: (scopeId: string | null) => void;
 	now?: () => number;
 	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
 	 * the carrier field, and an ack re-materialization derives it again. */
@@ -341,6 +350,8 @@ export type WriteDrainLane = {
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	const facetFor = deps.writeFacetFor ?? writeFacetFor;
+	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
+
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
 		if (signal?.aborted) {
@@ -408,7 +419,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						tickAbort.signal.removeEventListener('abort', abort);
 					}
 				};
-				const rawBoundFetch = bound.bindFetch(tickFetcher);
+				// A request that never answers would hold the lane and every checkout queued behind it.
+				const rawBoundFetch = bound.bindFetch(
+					withRequestTimeout(tickFetcher, WRITE_DRAIN_REQUEST_TIMEOUT_MS)
+				);
 				// Pull helpers thread the tick signal for between-request cancellation,
 				// but a scope-bound fetcher must not receive it: scopedFetch would use
 				// AbortSignal.any, which RN/Expo does not provide. tickFetcher already
@@ -442,9 +456,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				};
 				const wrote = await bound
 					.guardWrite(async () => {
+						const now = deps.now !== undefined ? deps.now() : Date.now();
 						const result = await drainMutationQueue({
 							queue,
 							signal: tickAbort.signal,
+							...(sessionHold?.scopeId === bound.scopeId && now < sessionHold.probeAt
+								? { sessionExpired: true }
+								: {}),
 							/**
 							 * THE OPEN-CART HOLD: hold an eligible row only while its
 							 * resident order is still open. The predicate is shared with the
@@ -704,6 +722,27 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
+						if (result.sessionExpired) {
+							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
+							const delayMs = previous
+								? Math.min(SESSION_PROBE_MAX_MS, previous.delayMs * 2)
+								: SESSION_PROBE_BASE_MS;
+							const time = deps.now !== undefined ? deps.now() : Date.now();
+							sessionHold = { scopeId: bound.scopeId, delayMs, probeAt: time + delayMs };
+							if (!previous) {
+								deps.setSessionHeld?.(bound.scopeId);
+								deps.diagnostics({
+									type: 'queue.write.session-refused',
+									level: 'error',
+									message:
+										'store refused the session (HTTP 401); queued changes wait until it is accepted again',
+									fields: { status: 401 },
+								});
+							}
+						} else if (result.pushed > 0) {
+							if (sessionHold !== null) deps.setSessionHeld?.(null);
+							sessionHold = null;
+						}
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
 						function emitAcknowledged(ack: WriteOutcomeEvent): void {
 							if (emittedAcks.has(ack)) return;
@@ -823,6 +862,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							deferred: result.deferred,
 							failed: result.failed,
 							rejected: result.rejected.length,
+							...(result.sessionExpired ? { sessionExpired: true } : {}),
 						};
 					})
 					.finally(() => {

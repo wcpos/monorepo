@@ -109,6 +109,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.write.requeue-rebuilt',
 	'queue.write.reschedule-failed',
 	'queue.write.resolve',
+	'queue.write.session-refused',
 	'queue.write.tick.error',
 	'reader.battery-low',
 	'reader.connected',
@@ -988,6 +989,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.queue_write_resolve',
 		label: 'Settled a clashing change',
 		introducedIn: '1.10.0',
+	},
+	'queue.write.session-refused': {
+		type: 'queue.write.session-refused',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_session_refused',
+		label: 'Your store asked you to sign in again',
+		descriptionKey: 'health.logs.event_description.queue_write_session_refused',
+		description:
+			"Your store refused this till's sign-in, so queued changes wait until you sign in again.",
+		introducedIn: '1.10.26',
 	},
 	'queue.write.tick.error': {
 		type: 'queue.write.tick.error',

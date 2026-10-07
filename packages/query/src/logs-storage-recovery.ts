@@ -2,6 +2,8 @@ import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 const RECOVERY_SESSION_KEY = 'wcpos_logs_storage_recovery_attempted';
 const ENGINE_RECOVERY_SESSION_KEY_PREFIX = 'wcpos_engine_storage_recovery_attempted_';
+// Once-only guard where sessionStorage is unavailable (native).
+let logsRecoveryAttemptedInMemory = false;
 
 type RemovableCollection = {
 	name?: string;
@@ -53,6 +55,18 @@ export function isRecoverableLogsStorageError(error: unknown): boolean {
 }
 
 /**
+ * The targeted storage recovery appends "targeted recovery failed|refused" to the error it
+ * rethrows. Hermes words a parse failure "JSON Parse error" with no requestRemote marker, so the
+ * shared check above misses it. Logs only: a logs row is disposable, an engine collection is not.
+ */
+function isTargetedRecoveryJsonError(error: unknown): boolean {
+	const text = stringifyError(error);
+	return (
+		text.includes('targeted recovery') && text.includes('SyntaxError') && text.includes('JSON')
+	);
+}
+
+/**
  * Resets only the local logs collection and reloads the app once. This is used
  * for corrupted local diagnostic logs; it intentionally avoids touching business
  * data collections.
@@ -66,17 +80,25 @@ export async function recoverLogsCollectionStorage(
 		return false;
 	}
 
-	if (!isRecoverableLogsStorageError(error)) {
+	if (!isRecoverableLogsStorageError(error) && !isTargetedRecoveryJsonError(error)) {
 		return false;
 	}
 
 	const sessionStorage = getSessionStorage();
-	if (sessionStorage?.getItem(RECOVERY_SESSION_KEY) === '1') {
+	if (
+		sessionStorage
+			? sessionStorage.getItem(RECOVERY_SESSION_KEY) === '1'
+			: logsRecoveryAttemptedInMemory
+	) {
 		return false;
 	}
 
 	await collection.remove();
-	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
+	if (sessionStorage) {
+		sessionStorage.setItem(RECOVERY_SESSION_KEY, '1');
+	} else {
+		logsRecoveryAttemptedInMemory = true;
+	}
 	(options.reload ?? reloadPage)();
 	return true;
 }

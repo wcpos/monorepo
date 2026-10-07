@@ -16,6 +16,10 @@ import { documentRecordId, findEngineResident } from '../hooks/mutations/use-loc
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
+// Slow stores answer order pushes after 15 s (Sentry CHECKOUT101); 45 s covers the
+// write drain's 30 s request timeout plus its first retry. Pay spins and stays disabled.
+const ORDER_WRITE_OUTCOME_TIMEOUT_MS = 45_000;
+
 type AnyRxDocument = {
 	id?: unknown;
 	uuid?: string;
@@ -86,7 +90,9 @@ export const usePushDocument = () => {
 
 				let currentResident = resident;
 				if (collectionName === 'orders') {
-					await awaitWriteOutcome(runtime.engine, receipt.mutationId);
+					await awaitWriteOutcome(runtime.engine, receipt.mutationId, {
+						timeoutMs: ORDER_WRITE_OUTCOME_TIMEOUT_MS,
+					});
 					const refreshed = await findEngineResident(runtime, collectionName, recordId);
 					if (!refreshed) {
 						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);

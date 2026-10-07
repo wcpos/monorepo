@@ -61,6 +61,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('./left', () => ({ HeaderLeft: () => null }));
 jest.mock('./right', () => ({ HeaderRight: () => null }));
 jest.mock('./upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('./session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Dev Store', name$: null } }),
 }));

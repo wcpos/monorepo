@@ -92,6 +92,8 @@ export type DrainResult = {
 	conflicts: PushResult[];
 	/** Mutations whose push threw a RETRYABLE error (5xx, network, in-progress) — left queued to retry. */
 	failed: number;
+	/** True when a push in this drain failed with 401; later rows were not pushed. */
+	sessionExpired: boolean;
 	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
 	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
@@ -296,6 +298,12 @@ export async function drainMutationQueue(input: {
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
 	/**
+	 * The host already knows the store refused this session (401). Records without a fresh
+	 * explicit row are deferred without a push. A record with a fresh explicit row still
+	 * gets its attempt, so a cashier's new action probes the session.
+	 */
+	sessionExpired?: boolean;
+	/**
 	 * Called the moment a push fails retryably — before the drain moves on to the
 	 * next row — and again for every later row of the same record this drain then
 	 * skips behind it (FIFO), carrying the head's status. A waiter on a 401 must
@@ -417,6 +425,7 @@ export async function drainMutationQueue(input: {
 	let failed = 0;
 	let deferred = 0;
 	let attempted = 0;
+	let sessionWall: { status?: number; reason?: string } | undefined;
 
 	// LEASE FENCE (task 43): a settlement write is safe only while THIS drain still
 	// holds the row's lease. If another window stole it — our push outlived the
@@ -434,6 +443,7 @@ export async function drainMutationQueue(input: {
 
 	// Bump the attempt count + set the backoff gate after a failed push OR a failed ack, so the next
 	// drain waits before re-pushing (ADR 0012) — the same policy for both failure kinds.
+	let attemptStartedAt: number | undefined;
 	const applyBackoff = async (mutation: QueuedMutation): Promise<void> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const attempts = (mutation.attempts ?? 0) + 1;
@@ -442,7 +452,8 @@ export async function drainMutationQueue(input: {
 			await input.queue.reschedule({
 				...mutation,
 				attempts,
-				nextAttemptAt: new Date(now() + delayMs).toISOString(),
+				// The release compares attempt start with the cashier's press; an in-flight press is not already tried.
+				nextAttemptAt: new Date((attemptStartedAt ?? now()) + delayMs).toISOString(),
 			});
 		} catch {
 			// Couldn't persist the backoff — surface the rare double-fault (the push/ack failed AND the
@@ -584,11 +595,12 @@ export async function drainMutationQueue(input: {
 		if (!(queuedAt <= now())) continue;
 		freshExplicitQueuedAt.set(key, Math.max(queuedAt, freshExplicitQueuedAt.get(key) ?? -Infinity));
 	}
-	// When a backing-off row last failed: its gate minus the (deterministic) delay that set it.
+	// When a backing-off row's last attempt started: its gate minus the deterministic delay that set it.
 	const lastAttemptAt = (mutation: QueuedMutation): number =>
 		Date.parse(mutation.nextAttemptAt!) -
 		computeRetryBackoffMs(mutation.attempts ?? 0, backoff, retryJitterSeed(mutation.mutationId));
 	for (const mutation of batch) {
+		attemptStartedAt = undefined;
 		if (input.signal?.aborted) {
 			break;
 		}
@@ -599,6 +611,17 @@ export async function drainMutationQueue(input: {
 		}
 		if (!releaseRecords.has(recordKey(mutation)) && (await input.shouldHold?.(mutation))) {
 			held += 1;
+			blockedRecords.add(recordKey(mutation));
+			continue;
+		}
+		// The plugin's 401 means no user is logged in, so every push in this session would get one.
+		if (sessionWall) {
+			reportFailure({ mutation, ...sessionWall });
+			continue;
+		}
+		// The plugin's 401 means no user is logged in, so every push in this session would get one.
+		if (input.sessionExpired === true && !freshExplicitQueuedAt.has(recordKey(mutation))) {
+			deferred += 1;
 			blockedRecords.add(recordKey(mutation));
 			continue;
 		}
@@ -670,6 +693,7 @@ export async function drainMutationQueue(input: {
 			}
 			continue;
 		}
+		attemptStartedAt = now();
 		attempted += 1;
 		let result: PushResult;
 		try {
@@ -754,6 +778,9 @@ export async function drainMutationQueue(input: {
 				});
 				blockedRecords.add(recordKey(mutation));
 				await applyBackoff({ ...draining, status: 'pending' });
+				if (detail?.status === SESSION_EXPIRED_STATUS) {
+					sessionWall = { status: detail.status, reason: detail?.reason };
+				}
 				continue;
 			}
 		}
@@ -981,6 +1008,7 @@ export async function drainMutationQueue(input: {
 		held,
 		conflicts,
 		failed,
+		sessionExpired: sessionWall !== undefined,
 		failures,
 		deferred,
 		rejected,
