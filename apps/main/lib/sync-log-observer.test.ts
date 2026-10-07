@@ -122,6 +122,26 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].code).toBe('CLIENT111');
 	});
 
+	it('stamps a refused write session as AUTH101 at error', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.session-refused',
+				level: 'warn',
+				message: 'store refused the session',
+			})
+		);
+
+		expect(rows[0].level).toBe('error');
+		expect(rows[0].code).toBe('AUTH101');
+	});
+
+	it('keeps a 401 push row at warn with AUTH101', () => {
+		observer.observe(event({ type: 'push.error', level: 'warn', fields: { status: 401 } }));
+
+		expect(rows[0].level).toBe('warn');
+		expect(rows[0].code).toBe('AUTH101');
+	});
+
 	it('demotes engine.guard warnings to info', () => {
 		observer.observe(event({ type: 'engine.guard', level: 'warn' }));
 

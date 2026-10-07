@@ -308,6 +308,27 @@ describe('pushRecordMutation', () => {
 		});
 	});
 
+	it('logs a 401 at warn, so the lane reports the refused session once', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'update' }),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(401, { code: 'woocommerce_pos_rest_unauthorized' }),
+				observe: (e) => events.push(e),
+			})
+		).rejects.toMatchObject({
+			name: 'RecordPushError',
+			status: 401,
+			reason: 'woocommerce_pos_rest_unauthorized',
+		});
+		expect(events.map((e) => e.type)).toEqual(['push.error']);
+		expect(events[0]).toMatchObject({
+			level: 'warn',
+			fields: { status: 401, reason: 'woocommerce_pos_rest_unauthorized' },
+		});
+	});
+
 	it('keeps the transient 409s non-permanent so only identity_ambiguous is dead-lettered', async () => {
 		await expect(
 			pushRecordMutation({

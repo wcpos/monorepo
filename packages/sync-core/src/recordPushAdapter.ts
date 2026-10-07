@@ -314,7 +314,9 @@ export async function pushRecordMutation(input: {
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
 		emit({
 			type: 'push.error',
-			level: 'error',
+			// The plugin's 401 means no user is logged in; the write drain reports
+			// queue.write.session-refused once instead of once per push.
+			level: response.status === 401 ? 'warn' : 'error',
 			collection: mutation.collectionName,
 			fields: {
 				...baseFields,
