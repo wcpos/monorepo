@@ -14,7 +14,7 @@ import {
 	COLD_START_STATE_NAME,
 	installThinCatalogueRoutes,
 } from './cold-start';
-import { authenticateWithStore, setBrowseBy, stubStoreVersionForE2E } from './fixtures';
+import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
 import { restoreLocalStorage } from './indexeddb-helpers';
 import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
@@ -391,27 +391,21 @@ async function setupVariant(
 		});
 		discoveredStoreIds = storeIds;
 
-		// A till that never chose browses by categories, so a fresh snapshot would open on the
-		// category root and every spec that reads the product grid at the root (tiles, headers,
-		// scroll) would time out or skip. The snapshot is a till whose cashier chose All
-		// products, set through the UI so it lives in the store database like any other choice;
-		// pos-browse-by.spec.ts parks the setting itself and exercises the browse modes. A cold
-		// snapshot never reaches the POS screen, so there is no settings button to press.
+		// `authenticateWithStore` set All products (a till that never chose browses by
+		// categories; the specs read the product grid at the root), but it returns when the
+		// dialog has closed, and the form's string values are debounced with the RxState write
+		// un-awaited, so closing the page here could terminate the OPFS worker before `all` is
+		// committed and export a snapshot that still browses by categories (Codex, #2415). Read
+		// it back from a fresh boot before exporting: no browse root is the persisted setting.
+		// The warm snapshot also needs the catalogue count ready; the cold one has no rows.
+		await authPage.reload({ waitUntil: 'commit' });
+		await authPage.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
 		if (!options.coldStart) {
-			await setBrowseBy(authPage, 'all');
-			// `setBrowseBy` returns when the dialog has closed, but the form's string values are
-			// debounced and the dialog's cleanup fires `patchUI` without awaiting the RxState
-			// write, so closing the page here could terminate the OPFS worker before `all` is
-			// committed and export a snapshot that still browses by categories (Codex, #2415).
-			// Read it back from a fresh boot: the product root, with the catalogue count ready,
-			// is the persisted setting; the browse root would be the default coming back.
-			await authPage.reload({ waitUntil: 'commit' });
-			await authPage.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
 			await expect(authPage.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
 				timeout: CATALOGUE_READY_TIMEOUT_MS,
 			});
-			await expect(authPage.getByTestId('browse-root')).toHaveCount(0);
 		}
+		await expect(authPage.getByTestId('browse-root')).toHaveCount(0);
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 

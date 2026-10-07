@@ -80,19 +80,29 @@ async function scrollRootUntilMounted(page: Page, root: Locator, term: Locator):
 	const deadline = Date.now() + TERM_PULL_TIMEOUT_MS;
 	// Sweeps, not a one-way scroll: the pull can still be in flight, and a term it inserts near
 	// the top after the sweep has reached the bottom is only found by going back up. Each pass
-	// walks down a screen at a time and then returns to the top before the next.
-	let step = 0;
+	// walks down a screen at a time to the ACTUAL end (the mounted set stops changing), then
+	// returns to the top before the next.
+	const mounted = () =>
+		root
+			.locator('[data-testid^="browse-term-"]')
+			.evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.testid).join())
+			.catch(() => '');
+	let before = await mounted();
 	while (!(await term.isVisible().catch(() => false))) {
 		if (Date.now() > deadline) break;
 		const box = await root.boundingBox();
 		if (box) {
 			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-			const page_ = Math.max(200, box.height * 0.8);
-			// Four screens down, then one jump back to the top (a wheel delta no root exceeds).
-			await page.mouse.wheel(0, step % 5 === 4 ? -page_ * 50 : page_);
+			await page.mouse.wheel(0, Math.max(200, box.height * 0.8));
 		}
-		step++;
 		await page.waitForTimeout(250);
+		const after = await mounted();
+		if (after === before && box) {
+			// The end: one jump back to the top (a wheel delta no root exceeds).
+			await page.mouse.wheel(0, -box.height * 1000);
+			await page.waitForTimeout(250);
+		}
+		before = await mounted();
 	}
 	await expect(term).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
 }

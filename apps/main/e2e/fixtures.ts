@@ -980,9 +980,14 @@ export async function authenticateWithStore(
 	} else {
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
 	}
-	// Persist the inline alternative in the auth snapshot, after catalogue readiness.
+	// Persist the inline alternative in the auth snapshot, after catalogue readiness. And the
+	// product grid: a till that never chose browses by categories, and every spec that reads
+	// the grid at the root (tiles, headers, scroll, the cold profile's `no-data-message`) wants
+	// All products. Set here, in the one path every authenticated page takes — a snapshot's
+	// export, a lazy per-test login, a snapshot that would not restore — not only on export.
 	if (await becomesVisible(page.getByTestId('products-settings-button'), 5_000)) {
 		await setVariationsStyle(page, 'inline');
+		await setBrowseBy(page, 'all');
 	}
 	await waitForOPFSPersistence(page);
 
