@@ -104,6 +104,12 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 						wcpos_pro_version: data?.wcpos_pro_version ?? '',
 					};
 					if (data.license !== undefined) patch.license = data.license || {};
+					// The store's filter-added search meta keys (#2411): a filter added after this
+					// till connected reaches it here, at launch, not only at the next connect. A
+					// plugin that predates the key leaves the saved value alone.
+					if (data.search_meta_keys !== undefined) {
+						patch.search_meta_keys = data.search_meta_keys || {};
+					}
 					await site.incrementalPatch(patch);
 				}
 			} catch (err) {
