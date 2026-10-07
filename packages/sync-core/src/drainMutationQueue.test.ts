@@ -83,6 +83,7 @@ describe('drainMutationQueue', () => {
 			held: 0,
 			conflicts: [],
 			failed: 0,
+			sessionExpired: false,
 			failures: [],
 			deferred: 0,
 			rejected: [],
@@ -112,7 +113,7 @@ describe('drainMutationQueue', () => {
 		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
 	});
 
-	it('keeps a 401 pending with backoff, reports it the moment it happens, and reports the rows FIFO-blocked behind it', async () => {
+	it('keeps a 401 pending with backoff, reports it the moment it happens, and walls every later row of the pass', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'm1', recordId: 'rec-A' }),
 			mut({ mutationId: 'm2', recordId: 'rec-A' }),
@@ -135,8 +136,8 @@ describe('drainMutationQueue', () => {
 			onRetryableFailure: ({ mutation }) => trace.push(`deferred:${mutation.mutationId}`),
 		});
 
-		expect(trace).toEqual(['push:m1', 'deferred:m1', 'deferred:m2', 'push:m3']);
-		expect(result).toMatchObject({ pushed: 1, failed: 1, rejected: [] });
+		expect(trace).toEqual(['push:m1', 'deferred:m1', 'deferred:m2', 'deferred:m3']);
+		expect(result).toMatchObject({ pushed: 0, failed: 1, rejected: [], sessionExpired: true });
 		expect(result.failures).toEqual([
 			{
 				mutation: expect.objectContaining({ mutationId: 'm1' }),
@@ -149,19 +150,63 @@ describe('drainMutationQueue', () => {
 				status: 401,
 				reason: 'woocommerce_pos_rest_unauthorized',
 			},
+			// m3 is walled because the 401 means the session is refused.
+			{
+				mutation: expect.objectContaining({ mutationId: 'm3' }),
+				status: 401,
+				reason: 'woocommerce_pos_rest_unauthorized',
+			},
 		]);
 		const pending = await q.pending();
-		expect(pending.map((m) => m.mutationId)).toEqual(['m1', 'm2']);
+		expect(pending.map((m) => m.mutationId)).toEqual(['m1', 'm2', 'm3']);
 		expect(pending[0]).toMatchObject({ status: 'pending', attempts: 1 });
 		expect(Date.parse(pending[0]!.nextAttemptAt!)).toBeGreaterThan(now);
 		// The blocked successor was never attempted, so it carries no backoff of its own.
 		expect(pending[1]!.attempts ?? 0).toBe(0);
+		expect(pending[2]!.attempts ?? 0).toBe(0);
 	});
 
-	it('blocks and reports per COLLECTION+record, so a 401 on one collection does not stop the same id in another', async () => {
+	it('sessionExpired defers records without a fresh explicit row and still pushes the cashier’s new action', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'old', recordId: 'rec-A' }),
+			mut({ mutationId: 'press', recordId: 'rec-B' })
+		);
+		const press = (await q.pending())[1]!;
+		await q.replace({ ...press, explicit: true });
+		const pushed: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			sessionExpired: true,
+			push: async (mutation) => {
+				pushed.push(mutation.mutationId);
+				return ok(mutation);
+			},
+		});
+
+		expect(pushed).toEqual(['press']);
+		expect(result).toMatchObject({ pushed: 1, deferred: 1, sessionExpired: false });
+		const pending = await q.pending();
+		expect(pending.map((m) => m.mutationId)).toEqual(['old']);
+		expect(pending[0]!.attempts ?? 0).toBe(0);
+	});
+
+	it('reports sessionExpired false when no push was refused', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async () => {
+				throw new Error('network');
+			},
+		});
+
+		expect(result.sessionExpired).toBe(false);
+		expect(result.failed).toBe(1);
+	});
+
+	it('blocks and reports per COLLECTION+record, so a retryable failure on one collection does not stop the same id in another', async () => {
 		// A recordId is unique within its collection, not across them. Keying the
 		// drain's per-record sets on the id alone let an order's refusal block — and
-		// report its 401 against — an unrelated product carrying the same id.
+		// report its retryable failure against — an unrelated product carrying the same id.
 		const q = await queueWith(
 			mut({ mutationId: 'm1', collectionName: 'orders', recordId: 'shared-id' }),
 			mut({ mutationId: 'm2', collectionName: 'products', recordId: 'shared-id' })
@@ -172,7 +217,7 @@ describe('drainMutationQueue', () => {
 			push: async (mutation) => {
 				pushed.push(`${mutation.collectionName}:${mutation.mutationId}`);
 				if (mutation.collectionName === 'orders') {
-					throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+					throw new RecordPushError(mutation, 503, 'server_unavailable');
 				}
 				return ok(mutation);
 			},

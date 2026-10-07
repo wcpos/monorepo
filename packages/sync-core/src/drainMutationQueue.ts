@@ -92,6 +92,8 @@ export type DrainResult = {
 	conflicts: PushResult[];
 	/** Mutations whose push threw a RETRYABLE error (5xx, network, in-progress) — left queued to retry. */
 	failed: number;
+	/** True when a push in this drain failed with 401; later rows were not pushed. */
+	sessionExpired: boolean;
 	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
 	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
@@ -296,6 +298,12 @@ export async function drainMutationQueue(input: {
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
 	/**
+	 * The host already knows the store refused this session (401). Records without a fresh
+	 * explicit row are deferred without a push. A record with a fresh explicit row still
+	 * gets its attempt, so a cashier's new action probes the session.
+	 */
+	sessionExpired?: boolean;
+	/**
 	 * Called the moment a push fails retryably — before the drain moves on to the
 	 * next row — and again for every later row of the same record this drain then
 	 * skips behind it (FIFO), carrying the head's status. A waiter on a 401 must
@@ -417,6 +425,7 @@ export async function drainMutationQueue(input: {
 	let failed = 0;
 	let deferred = 0;
 	let attempted = 0;
+	let sessionWall: { status?: number; reason?: string } | undefined;
 
 	// LEASE FENCE (task 43): a settlement write is safe only while THIS drain still
 	// holds the row's lease. If another window stole it — our push outlived the
@@ -602,6 +611,17 @@ export async function drainMutationQueue(input: {
 			blockedRecords.add(recordKey(mutation));
 			continue;
 		}
+		// The plugin's 401 means no user is logged in, so every push in this session would get one.
+		if (sessionWall) {
+			reportFailure({ mutation, ...sessionWall });
+			continue;
+		}
+		// The plugin's 401 means no user is logged in, so every push in this session would get one.
+		if (input.sessionExpired === true && !freshExplicitQueuedAt.has(recordKey(mutation))) {
+			deferred += 1;
+			blockedRecords.add(recordKey(mutation));
+			continue;
+		}
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
 		// its window elapses. Skip it AND hold later edits to the same record (FIFO ordering).
 		if (
@@ -754,6 +774,9 @@ export async function drainMutationQueue(input: {
 				});
 				blockedRecords.add(recordKey(mutation));
 				await applyBackoff({ ...draining, status: 'pending' });
+				if (detail?.status === SESSION_EXPIRED_STATUS) {
+					sessionWall = { status: detail.status, reason: detail?.reason };
+				}
 				continue;
 			}
 		}
@@ -981,6 +1004,7 @@ export async function drainMutationQueue(input: {
 		held,
 		conflicts,
 		failed,
+		sessionExpired: sessionWall !== undefined,
 		failures,
 		deferred,
 		rejected,
