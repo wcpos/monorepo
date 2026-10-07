@@ -250,6 +250,19 @@ async function reuseValidAuthState(
 		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
 			timeout: CATALOGUE_READY_TIMEOUT_MS,
 		});
+		// The category root passes the count check too (its footer carries the catalogue total),
+		// so a snapshot whose till browses by categories — one exported before setup chose All
+		// products — would be reused and every product-root spec would open on term tiles.
+		// The product grid is what the specs need; a browse root is a stale snapshot.
+		if (
+			await page
+				.getByTestId('browse-root')
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
+			throw new Error('restored state browses by a taxonomy, not All products');
+		}
 		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot + catalogue)`);
 		return state.storeIds as string[];
 	} catch (error) {
