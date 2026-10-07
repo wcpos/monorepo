@@ -1,5 +1,5 @@
 import { quickFilterToQueryPatch } from '../../filter-bar/apply-quick-filter';
-import { filtersAtBaseline, type TaxonomyField } from './use-browse-path';
+import { filtersAtBaseline, sameFilterValue, type TaxonomyField } from './use-browse-path';
 
 import type { FiltersOf, QueryStateActions } from '../../../../../../query';
 import type { QuickFilter } from '../../filter-bar/filter-bar-layout';
@@ -40,7 +40,7 @@ export function isPlaceCondition(place: LevelPlace | null, key: string, value: u
 	if (key === place.field) return true;
 	if (!place.quickFilter) return false;
 	const patch = quickFilterToQueryPatch(place.quickFilter).filters as Record<string, unknown>;
-	return key in patch && JSON.stringify(patch[key]) === JSON.stringify(value);
+	return key in patch && sameFilterValue(value, patch[key]);
 }
 
 /**

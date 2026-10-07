@@ -72,8 +72,18 @@ export function filtersAtBaseline(
 		const value = filters[key];
 		const initial = initialFilters[key];
 		if (isEmptyFilter(value) && isEmptyFilter(initial)) return true;
-		return key in initialFilters && JSON.stringify(value) === JSON.stringify(initial);
+		return key in initialFilters && sameFilterValue(value, initial);
 	});
+}
+
+/**
+ * One filter value against another: an id list is a set (the query reads it as one, and a
+ * shortcut's liveness compares it as one), anything else by value.
+ */
+export function sameFilterValue(left: unknown, right: unknown): boolean {
+	if (Array.isArray(left) && Array.isArray(right))
+		return left.length === right.length && right.every((id) => left.includes(id));
+	return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export function taxonomyField(source: BrowseBy): 'categories' | 'tags' | 'brands' | null {
@@ -383,6 +393,8 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			// (Customise, open beside the level) is another shortcut, and a condition the edit
 			// removed must not go on filtering as if the cashier had pressed it — the level drops,
 			// and the drop takes the patch that was entered back out (nothing in the query moved).
+			// Its configured sort is part of the definition too (the ACTIVE sort is the cashier's and
+			// is never compared).
 			const quickFilter = terms.quickFilterFor(term);
 			live =
 				!!quickFilter &&
@@ -391,6 +403,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 					quickFilterToQueryPatch(quickFilter),
 					quickFilterToQueryPatch(projection.quickFilter)
 				) &&
+				isEqual(quickFilter.sort, projection.quickFilter.sort) &&
 				quickFilterHolds(quickFilter, state);
 		}
 	}

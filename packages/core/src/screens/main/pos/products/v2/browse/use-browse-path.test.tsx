@@ -369,6 +369,19 @@ it('a shortcut whose definition changes while its level is open drops the level 
 	expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish' });
 });
 
+it('a shortcut whose configured sort changes while its level is open drops the level too', () => {
+	let definition: typeof onSaleDrinks & { sort?: { field: string; direction: string } } =
+		onSaleDrinks;
+	const mutable = { ...terms, quickFilterFor: () => definition };
+	const { result, rerender } = renderHook(() => useBrowsePath('shortcuts', mutable as never));
+	act(() => result.current.enter(shortcutA));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcutA]);
+	definition = { ...onSaleDrinks, sort: { field: 'sortable_price', direction: 'desc' } };
+	rerender();
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish' });
+});
+
 it('a space typed after a shortcut’s own search keeps the level, and leaving still takes the search out', () => {
 	const lattes = {
 		type: 'quick',
@@ -767,6 +780,10 @@ describe('filtersAtBaseline', () => {
 	});
 	it('reads a narrowing filter as not at baseline', () => {
 		expect(filtersAtBaseline({ ...CLEARED, ...initial, categories: [9] }, initial)).toBe(false);
+	});
+	it('reads an id list as a set: the same ids in another order are the baseline', () => {
+		const place = { ...initial, categories: [1, 2] };
+		expect(filtersAtBaseline({ ...CLEARED, ...initial, categories: [2, 1] }, place)).toBe(true);
 	});
 	// The default In-stock pill cleared deletes stock_status: the query is BROADER than the
 	// baseline, which is not the baseline either.
