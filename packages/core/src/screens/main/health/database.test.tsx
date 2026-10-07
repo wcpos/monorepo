@@ -30,7 +30,6 @@ const mockCheckCollection = jest.fn();
 const defaultStorageFootprint = {
 	breakdown: {
 		activeDataBytes: 1_000_000,
-		searchIndexBytes: 2 * 1024 * 1024,
 		bookkeepingBytes: 3 * 1024 * 1024,
 		otherCashiersBytes: 5 * 1024 * 1024,
 		otherStoresBytes: 40 * 1024 * 1024,
@@ -390,8 +389,6 @@ describe('DatabaseScreen coverage', () => {
 	it('itemizes measured storage as aggregate buckets, hiding empty ones', () => {
 		const { getByTestId, getByText, queryByText } = render(<DatabaseScreen />);
 
-		expect(getByText('Search indexes')).toBeTruthy();
-		expect(getByText('≈ 2.0 MB')).toBeTruthy();
 		expect(getByText('Other stores on this device (2)')).toBeTruthy();
 		expect(getByText('≈ 40 MB')).toBeTruthy();
 		expect(getByTestId('db-row-cached-images').textContent).toContain('≈ 4.0 MB');

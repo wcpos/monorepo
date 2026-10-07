@@ -3,9 +3,10 @@ import { createRxDatabase } from 'rxdb';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
-import { catalogueSearchBlobFor } from '../src/catalogue-search-blob';
+import { searchBlobFor } from '../src/search-blob';
 import { legacySearchSnapshot } from '../src/engine-adapter/search-snapshot';
-import { LEGACY_SEARCH_FIELDS, resolveLegacyField } from '../src/engine-adapter/collection-map';
+import { resolveLegacyField } from '../src/engine-adapter/collection-map';
+import { SEARCH_FIELDS } from '../src/search-fields';
 import {
 	projectionReaderFor,
 	registerProjectionReader,
@@ -47,7 +48,7 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 	});
 	it('builds the catalogue index without collection.find', async () => {
 		const find = jest.spyOn(database.products, 'find');
-		const blob = catalogueSearchBlobFor(
+		const blob = searchBlobFor(
 			database.products,
 			['name', 'sku'],
 			(doc) => legacySearchSnapshot('products', doc),
@@ -63,7 +64,7 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 		const reader = { readLiveProjection: async () => [{ id: 'custom', values: ['Custom'] }] };
 		registerProjectionReader(database, reader);
 		expect(projectionReaderFor(database)).toBe(reader);
-		const blob = catalogueSearchBlobFor(
+		const blob = searchBlobFor(
 			database.products,
 			['name'],
 			(doc) => legacySearchSnapshot('products', doc),
@@ -76,9 +77,9 @@ describe.each(storages)('%s projection reads', (_name, storage) => {
 });
 
 it('all configured search fields are plain engine paths', () => {
-	for (const [collection, fields] of Object.entries(LEGACY_SEARCH_FIELDS)) {
+	for (const [collection, fields] of Object.entries(SEARCH_FIELDS)) {
 		for (const field of fields) {
-			const mapping = resolveLegacyField(collection as keyof typeof LEGACY_SEARCH_FIELDS, field);
+			const mapping = resolveLegacyField(collection as keyof typeof SEARCH_FIELDS, field);
 			expect(mapping.compute).toBeUndefined();
 			expect(mapping.read).toBeUndefined();
 			expect(mapping.readEnginePath).toBeUndefined();

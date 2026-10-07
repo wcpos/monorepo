@@ -6,8 +6,8 @@ import type { EngineDocument, LegacyCollectionName } from '../../src/engine-adap
 import type { RxDocument } from 'rxdb';
 
 /**
- * These tests pin the SHAPE the search plane depends on (LEGACY_SEARCH_FIELDS spellings
- * resolved by lodash/get, FlexSearch docToString). Golden fixtures below pin the exact object
+ * These tests pin the SHAPE the search plane depends on (SEARCH_FIELDS spellings
+ * walked by `searchRowText`). Golden fixtures below pin the exact object
  * independently of the deleted document proxy. If the snapshot output ever changes,
  * SEARCH_INDEX_VERSION in
  * @wcpos/database's search plugin must be bumped (the index is checkpoint-persisted and
@@ -174,7 +174,7 @@ describe('legacySearchSnapshot', () => {
 		expect(snapshot(fixture.collection, fixture.document)).toEqual(fixture.expected);
 	});
 
-	it('flattens payload fields to the top level (the LEGACY_SEARCH_FIELDS shape)', () => {
+	it('flattens payload fields to the top level (the SEARCH_FIELDS shape)', () => {
 		const result = snapshot('orders', {
 			uuid: 'o-1',
 			remoteId: '77',

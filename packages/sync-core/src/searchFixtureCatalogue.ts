@@ -1,14 +1,14 @@
 /**
  * The search fixture catalogue: one product table and one trap table that EVERY search test
- * layer asserts — the FlexSearch index, the scan fallback, the fetch walk, the plugin's SQL
- * (ported by hand to PHPUnit) and the live seam. A semantic change fails here first, by name.
+ * layer asserts — the search blob, the fetch walk, the plugin's SQL (ported by hand to
+ * PHPUnit) and the live seam. A semantic change fails here first, by name.
  *
  * Contract: every whitespace-separated term matches a substring of name, sku or barcode,
  * in any order and across fields; shared fold and wrapping-punctuation stripping, no minimum
  * length. Exact SKU / barcode rank first; descriptions never match.
  */
 import { fakeUuid } from './fakePullServer';
-import { foldSearchText } from './searchIndexConfig';
+import { foldSearchText } from './searchText';
 
 export type SearchFixtureProduct = {
 	id: number;

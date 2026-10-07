@@ -37,11 +37,7 @@ let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
 let mockParentOrders: BehaviorSubject<Hit[]> | undefined;
 const mockQueryCalls = jest.fn();
-function mockObserve(
-	_engine: unknown,
-	_locale: string,
-	query: { collection: string; selector: Row }
-) {
+function mockObserve(_engine: unknown, query: { collection: string; selector: Row }) {
 	mockQueryCalls(query);
 	const source =
 		query.collection === 'refunds'

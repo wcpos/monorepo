@@ -55,27 +55,6 @@ function current(resource: Resource): QueryResult<RxCollection> | undefined {
 	return resource.valueRef$$.value?.current as QueryResult<RxCollection> | undefined;
 }
 
-function installResidentSearch(collection: RxCollection): void {
-	type SearchOptions = {
-		documentSnapshot?: (document: unknown) => Record<string, unknown>;
-	};
-	(
-		collection as unknown as {
-			initSearch: (locale: string, options?: SearchOptions) => Promise<unknown>;
-		}
-	).initSearch = async (_locale, options) => ({
-		collection,
-		find: async (term: string) => {
-			const documents = await collection.find().exec();
-			const needle = term.toLowerCase();
-			return documents.filter((document) => {
-				const snapshot = options?.documentSnapshot?.(document) ?? document.toJSON();
-				return JSON.stringify(snapshot).toLowerCase().includes(needle);
-			});
-		},
-	});
-}
-
 describe('query bindings', () => {
 	let localDB: RxDatabase;
 	let engineDB: RxDatabase;
@@ -101,14 +80,6 @@ describe('query bindings', () => {
 			'coupons',
 		]);
 		engine = createFakeEngine(engineDB);
-		installResidentSearch(localDB.collections.logs);
-		installResidentSearch(engineDB.collections.products);
-		installResidentSearch(engineDB.collections.variations);
-		installResidentSearch(engineDB.collections.customers);
-		installResidentSearch(engineDB.collections.orders);
-		installResidentSearch(engineDB.collections.taxRates);
-		installResidentSearch(engineDB.collections.categories);
-		installResidentSearch(engineDB.collections.coupons);
 	});
 
 	afterEach(async () => {
@@ -687,7 +658,6 @@ describe('query bindings', () => {
 		} finally {
 			// The stub must not outlive a failed assertion — the collection instance
 			// is shared with later tests in this file.
-			installResidentSearch(products);
 		}
 	});
 
@@ -2212,7 +2182,6 @@ describe('query bindings', () => {
 
 	it('rebinds residents when engine db$ moves to another scope', async () => {
 		const secondDB = await createEngineDatabase(['products']);
-		installResidentSearch(secondDB.collections.products);
 		await engineDB.collections.products.insert(engineProduct({ uuid: 'old', id: 1, name: 'Old' }));
 		await secondDB.collections.products.insert(engineProduct({ uuid: 'new', id: 2, name: 'New' }));
 		let activeDB = engineDB;

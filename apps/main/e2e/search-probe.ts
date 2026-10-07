@@ -111,7 +111,7 @@ class WriterAuthenticationFailure extends Error {
 	}
 }
 
-/** A single alphanumeric FlexSearch token, unique across workers, retries and parallel runs. */
+/** A single alphanumeric search term, unique across workers, retries and parallel runs. */
 export function mintSearchProbeToken(workerIndex: number): string {
 	return `zx${workerIndex.toString(36)}${Date.now().toString(36)}${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 }

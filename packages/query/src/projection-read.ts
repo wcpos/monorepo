@@ -18,7 +18,13 @@ export type ProjectionCollection = Pick<RxCollection, 'schema' | 'storageInstanc
  * `SELECT id, json_extract(data, ...)` so opening a store never parses every product document.
  */
 export type ProjectionReader = {
-	/** `paths` are engine-document paths; every non-deleted document, any order. */
+	/**
+	 * `paths` are engine-document paths; every non-deleted document, any order. A value is the
+	 * PARSED JSON at its path — an object or array where the document holds one (the search
+	 * fold walks `payload.line_items`), never JSON text. A SQLite reader must `json_extract`
+	 * and parse, or hand such paths to the storage read; `search-fields.test.ts` pins that a
+	 * cold projection row folds identically to a live snapshot.
+	 */
 	readLiveProjection(
 		collection: ProjectionCollection,
 		paths: readonly string[]

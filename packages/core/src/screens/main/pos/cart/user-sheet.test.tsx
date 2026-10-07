@@ -144,7 +144,7 @@ it.each([
 		mockObserve.mockClear();
 		const { result } = renderHook(() => useSalesToday());
 		await waitFor(() => expect(result.current).toBe(20));
-		const descriptor = mockObserve.mock.calls[0][2] as { selector: { date_created_gmt: unknown } };
+		const descriptor = mockObserve.mock.calls[0][1] as { selector: { date_created_gmt: unknown } };
 		expect(descriptor).toMatchObject({
 			collection: 'orders',
 			selector: {

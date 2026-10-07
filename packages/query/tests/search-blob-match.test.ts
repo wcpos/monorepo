@@ -1,17 +1,24 @@
+import { searchTerms } from '@wcpos/sync-core';
 import { SEARCH_FIXTURE_PRODUCTS, SEARCH_FIXTURE_TRAPS } from '@wcpos/sync-core/testing';
 
-import {
-	fieldsMatchAllTerms,
-	fieldsMatchSearch,
-	fieldsMatchShortPrefix,
-	searchTerms,
-} from '../src/search-match';
+import { searchRowText } from '../src/search-fields';
+import { searchRows } from '../src/search-blob';
 
-describe('product all-term matcher', () => {
+/** One folded row per field list, searched through the blob's real core. */
+function matches(fields: readonly string[], query: string): boolean {
+	const rows = new Map([['row', searchRowText(['text'], { text: fields.join(' ') })]]);
+	return searchRows(rows, searchTerms(query)).length === 1 && searchTerms(query).length > 0;
+}
+
+describe('search blob all-term matcher', () => {
 	it.each(SEARCH_FIXTURE_TRAPS.map((t) => [t.name, t] as const))('%s', (_name, trap) => {
-		const ids = SEARCH_FIXTURE_PRODUCTS.filter((p) =>
-			fieldsMatchAllTerms([p.name, p.sku, p.barcode], searchTerms(trap.query))
-		).map((p) => p.id);
+		const rows = new Map(
+			SEARCH_FIXTURE_PRODUCTS.map((p) => [
+				String(p.id),
+				searchRowText(['name', 'sku', 'barcode'], p),
+			])
+		);
+		const ids = searchRows(rows, searchTerms(trap.query)).map(Number);
 		expect(ids.sort((a, b) => a - b)).toEqual([...trap.expectedIds].sort((a, b) => a - b));
 	});
 	it.each([
@@ -38,15 +45,7 @@ describe('product all-term matcher', () => {
 		['MY+საბარგული', ['MY საბარგული'], false],
 		['%30', ['%30'], true],
 		['東京 コー', ['東京 コーヒー'], true],
-	] as const)('matches every term of %s in %j', (query, fields, matches) => {
-		expect(fieldsMatchAllTerms([...fields], searchTerms(query))).toBe(matches);
-	});
-	it('keeps short terms and strips wrapping punctuation without splitting decimal commas', () => {
-		expect(searchTerms('MY A (საბარგული) 0,4')).toEqual(['my', 'a', 'საბარგული', '0,4']);
-		expect(searchTerms('--- ...')).toEqual([]);
-	});
-	it('retains token AND and short-prefix helpers for non-product collections', () => {
-		expect(fieldsMatchSearch(['Berry', 'Banana'], 'banana berry')).toBe(true);
-		expect(fieldsMatchShortPrefix(['CAB'], 'a')).toBe(false);
+	] as const)('matches every term of %s in %j', (query, fields, expected) => {
+		expect(matches(fields, query)).toBe(expected);
 	});
 });

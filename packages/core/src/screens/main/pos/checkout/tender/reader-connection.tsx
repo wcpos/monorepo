@@ -90,7 +90,7 @@ export function ReaderConnection({
 		setWorking(true);
 		void (async () => {
 			for (const item of deviceTransports(method)) {
-				const reader = (await driver.discoverReaders!(item.transport)).find(
+				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
 					(r) => r.id === remembered
 				);
 				if (!active) return;
@@ -188,7 +188,8 @@ export function ReaderConnection({
 					))}
 				</HStack>
 			) : null}
-			{status.message ? (
+			{/* The driver both publishes a failure as its status and throws it: say it once, in red. */}
+			{status.message && status.message !== error ? (
 				<Text className="text-muted-foreground text-xs">{status.message}</Text>
 			) : null}
 			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}

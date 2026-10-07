@@ -1,6 +1,7 @@
 import { fillWithDefaultSettings } from 'rxdb';
 import { firstValueFrom, skip, Subject } from 'rxjs';
 
+import { searchTerms } from '@wcpos/sync-core';
 import {
 	SEARCH_FIXTURE_PRODUCTS,
 	SEARCH_FIXTURE_TRAPS,
@@ -8,8 +9,7 @@ import {
 } from '@wcpos/sync-core/testing';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
-import { catalogueSearchBlobFor } from '../src/catalogue-search-blob';
-import { searchTerms } from '../src/search-match';
+import { searchBlobFor } from '../src/search-blob';
 
 import type { EngineRxDocument } from '../src/engine-adapter/execute-query';
 import type { RxChangeEvent } from 'rxdb';
@@ -47,7 +47,7 @@ function change(operation: 'INSERT' | 'UPDATE' | 'DELETE', documentId: string, n
 	>;
 }
 
-describe('catalogue search blob', () => {
+describe('search blob', () => {
 	const queries = [
 		...SEARCH_FIXTURE_TRAPS.map(({ name, query }) => [name, query]),
 		...['RED-1,', '(banana berry)', 'skoda.', '"k2"'].map((query) => [query, query]),
@@ -56,7 +56,7 @@ describe('catalogue search blob', () => {
 		const collection = fakeCollection(
 			SEARCH_FIXTURE_PRODUCTS.map((p) => document(String(p.id), p.name, p.sku, p.barcode))
 		);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const blob = searchBlobFor(collection, fields, snapshot, 'products');
 		try {
 			await blob.ready;
 			expect(blob.search(searchTerms(query)).sort()).toEqual(
@@ -70,7 +70,7 @@ describe('catalogue search blob', () => {
 
 	it('applies insert, update and delete events before notifying searches', async () => {
 		const collection = fakeCollection();
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const blob = searchBlobFor(collection, fields, snapshot, 'products');
 		const results: string[][] = [];
 		const subscription = blob.changes$.subscribe(() => results.push(blob.search(['coffee'])));
 		await blob.ready;
@@ -98,7 +98,7 @@ describe('catalogue search blob', () => {
 				finish = (documents) => resolve({ documents });
 			})
 		);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const blob = searchBlobFor(collection, fields, snapshot, 'products');
 		collection.$.next(change('UPDATE', 'old', 'Tea'));
 		collection.$.next(change('DELETE', 'deleted', 'Coffee'));
 		collection.$.next(change('INSERT', 'new', 'Coffee'));
@@ -111,14 +111,14 @@ describe('catalogue search blob', () => {
 
 	it('shares the blob until close, then unsubscribes and creates a fresh one', async () => {
 		const collection = fakeCollection([document('one', 'Coffee')]);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const blob = searchBlobFor(collection, fields, snapshot, 'products');
 		await blob.ready;
-		expect(catalogueSearchBlobFor(collection, fields, snapshot, 'products')).toBe(blob);
+		expect(searchBlobFor(collection, fields, snapshot, 'products')).toBe(blob);
 		expect(collection.query).toHaveBeenCalledTimes(1);
 		collection.onClose.forEach((close) => close());
 		expect(collection.$.observed).toBe(false);
 		expect(blob.search(['coffee'])).toEqual([]);
-		const fresh = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const fresh = searchBlobFor(collection, fields, snapshot, 'products');
 		expect(fresh).not.toBe(blob);
 		await fresh.ready;
 		fresh.dispose();
@@ -129,7 +129,7 @@ describe('catalogue search blob', () => {
 		const collection = fakeCollection();
 		const error = new Error('storage read failed');
 		collection.query.mockRejectedValue(error);
-		const blob = catalogueSearchBlobFor(collection, fields, snapshot, 'products');
+		const blob = searchBlobFor(collection, fields, snapshot, 'products');
 		await Promise.all([
 			expect(blob.ready).rejects.toBe(error),
 			expect(firstValueFrom(blob.changes$)).rejects.toBe(error),

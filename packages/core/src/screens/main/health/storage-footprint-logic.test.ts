@@ -30,11 +30,8 @@ describe('collectionFromEntryName', () => {
 		).toBe('products/categories');
 		// Hyphenated collections keep their full name.
 		expect(
-			collectionFromEntryName(
-				`rxdb-${ACTIVE_SCOPE}-products-search-v2-en_flexsearch-0`,
-				ACTIVE_SCOPE
-			)
-		).toBe('products-search-v2-en_flexsearch');
+			collectionFromEntryName(`rxdb-${ACTIVE_SCOPE}-receipt-email-queue-0`, ACTIVE_SCOPE)
+		).toBe('receipt-email-queue');
 	});
 
 	it('rejects other databases, including prefix-sharing ones', () => {
@@ -44,7 +41,7 @@ describe('collectionFromEntryName', () => {
 });
 
 describe('classifyStorageEntries', () => {
-	it('splits the active sign-in into data, search indexes and bookkeeping', () => {
+	it('splits the active sign-in into data and bookkeeping', () => {
 		const breakdown = classifyStorageEntries(
 			[
 				entry(`rxdb-${ACTIVE_SCOPE}-orders-0`, 100),
@@ -53,9 +50,6 @@ describe('classifyStorageEntries', () => {
 				entry(`rxdb-${ACTIVE_SCOPE}-syncCheckpoints-0`, 7),
 				entry(`rxdb-${ACTIVE_SCOPE}-recordMutations-0`, 3),
 				entry(`rxdb-${ACTIVE_SCOPE}-_rxdb_internal-0`, 1),
-				// Search indexes, wherever they live:
-				entry(`rxdb-${ACTIVE_SCOPE}-products-search-v2-en_flexsearch-0`, 20),
-				entry('rxdb-store_v7_local1-logs-search-v2-en_flexsearch-0', 5),
 				// The store and user databases hold local bookkeeping:
 				entry('rxdb-store_v7_local1-logs-0', 30),
 				entry('rxdb-wcposusers_v7-sites-0', 2),
@@ -63,12 +57,11 @@ describe('classifyStorageEntries', () => {
 			CONTEXT
 		);
 		expect(breakdown.activeDataBytes).toBe(150);
-		expect(breakdown.searchIndexBytes).toBe(25);
 		expect(breakdown.bookkeepingBytes).toBe(43);
 		expect(breakdown.otherStoresBytes).toBe(0);
 		expect(breakdown.orphanedBytes).toBe(0);
 		expect(breakdown.unknownBytes).toBe(0);
-		expect(breakdown.measuredTotalBytes).toBe(218);
+		expect(breakdown.measuredTotalBytes).toBe(193);
 	});
 
 	it('buckets other cashiers, other stores and signed-out sites', () => {
