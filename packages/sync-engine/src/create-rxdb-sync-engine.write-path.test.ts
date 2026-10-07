@@ -1597,10 +1597,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				});
 			}
 
+			expect(engine.status().writeSessionHeld).toBe(false);
 			await expect(engine.sync('write-drain')).resolves.toMatchObject({
 				status: 'ran',
 				sessionExpired: true,
 			});
+			expect(engine.status().writeSessionHeld).toBe(true);
 			expect(posts).toBe(1);
 			expect(refusals()).toHaveLength(1);
 			expect(refusals()[0]).toMatchObject({ level: 'error', fields: { status: 401 } });
@@ -1617,6 +1619,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			await engine.sync('write-drain');
 			expect(posts).toBe(3);
 			expect(refusals()).toHaveLength(1);
+			expect(engine.status().writeSessionHeld).toBe(true);
 		} finally {
 			await engine.dispose();
 		}
@@ -1662,10 +1665,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			}
 
 			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(engine.status().writeSessionHeld).toBe(true);
 			expect(posts).toBe(1);
 			refused = false;
 			nowMs += 31_000;
 			await expect(engine.sync('write-drain')).resolves.toMatchObject({ status: 'ran', pushed: 2 });
+			expect(engine.status().writeSessionHeld).toBe(false);
 			expect(engine.status().queueDepth).toBe(0);
 			await insertBornLocalOrder(engine, UUID_C);
 			await engine.write({
@@ -1693,6 +1698,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			nowMs += 1_000;
 			await engine.sync('write-drain');
 			expect(refusals()).toHaveLength(2);
+			expect(engine.status().writeSessionHeld).toBe(true);
 		} finally {
 			await engine.dispose();
 		}

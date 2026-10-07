@@ -171,6 +171,7 @@ describe('engine monitor hooks', () => {
 		}
 		expect(result.current).toEqual({
 			syncBacklog: 3,
+			syncBacklogSales: 0,
 			needsDecision: 0,
 			needsDecisionRejected: 0,
 			needsDecisionUnresolved: 0,
@@ -178,6 +179,7 @@ describe('engine monitor hooks', () => {
 		act(() => mutations.syncBacklog$.next([queueRow()]));
 		expect(result.current).toEqual({
 			syncBacklog: 1,
+			syncBacklogSales: 0,
 			needsDecision: 0,
 			needsDecisionRejected: 0,
 			needsDecisionUnresolved: 0,
@@ -205,6 +207,26 @@ describe('engine monitor hooks', () => {
 
 		act(() => orders.orders$.next([]));
 		expect(result.current.syncBacklog).toBe(1);
+
+		unmount();
+	});
+
+	it('counts waiting sales as distinct order records, excluding open carts and other collections', () => {
+		const mutations = mutationDatabase(0, 0);
+		const orders = openCartOrders(['C']);
+		mutations.database.collections.orders = orders.collection;
+		mutations.syncBacklog$.next([
+			queueRow({ mutationId: 'mutation-1', collectionName: 'orders', recordId: 'A' }),
+			queueRow({ mutationId: 'mutation-2', collectionName: 'orders', recordId: 'A' }),
+			queueRow({ mutationId: 'mutation-3', collectionName: 'orders', recordId: 'B' }),
+			queueRow({ mutationId: 'mutation-4', collectionName: 'orders', recordId: 'C' }),
+			queueRow({ mutationId: 'mutation-5' }),
+		]);
+		mockDatabase$.next(mutations.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(result.current.syncBacklogSales).toBe(2);
+		expect(result.current.syncBacklog).toBe(4);
 
 		unmount();
 	});
@@ -264,6 +286,7 @@ describe('engine monitor hooks', () => {
 		expect(mutations.find).toHaveBeenCalledWith({ selector: { status: { $in: ['rejected'] } } });
 		expect(result.current).toEqual({
 			syncBacklog: 0,
+			syncBacklogSales: 0,
 			needsDecision: 3,
 			needsDecisionRejected: 2,
 			needsDecisionUnresolved: 1,
@@ -271,6 +294,7 @@ describe('engine monitor hooks', () => {
 		act(() => mutations.needsDecisionRejected$.next([]));
 		expect(result.current).toEqual({
 			syncBacklog: 0,
+			syncBacklogSales: 0,
 			needsDecision: 3,
 			needsDecisionRejected: 0,
 			needsDecisionUnresolved: 1,
