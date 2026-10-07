@@ -192,4 +192,29 @@ it('does not count the hidden in-stock baseline as a group', () => {
 	expect(screen.getByTestId('filter-bar-clear-all')).toBeTruthy();
 });
 
+// Inside a browse level the crumb is the source's own condition: that pill folds, it is not a
+// group for Clear all, and Clear all leaves it (the level stays, its conditions go).
+it('folds the place’s pill, and Clear all keeps the place', () => {
+	render(
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish', categories: [1, 2], tags: [], brands: [] }}
+		>
+			<POSFilterBar placeField="categories" />
+			<State />
+		</QueryStateProvider>
+	);
+	expect(screen.queryByTestId('filter-pill-categories')).toBeNull();
+	press('filter-pill-featured');
+	expect(screen.queryByTestId('filter-bar-clear-all')).toBeNull();
+	press('filter-pill-on_sale');
+	fireEvent.click(screen.getByTestId('filter-bar-clear-all'));
+	const state = JSON.parse(screen.getByTestId('state').textContent!);
+	expect(state.filters.featured).toBeUndefined();
+	expect(state.filters.on_sale).toBeUndefined();
+	expect(state.filters.categories).toEqual([1, 2]);
+});
+
 jest.mock('uuid', () => ({ v4: () => 'test-id' }));

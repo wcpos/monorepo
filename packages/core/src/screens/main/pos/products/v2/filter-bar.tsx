@@ -38,6 +38,7 @@ import {
 	type QuickFilter,
 } from '../filter-bar/filter-bar-layout';
 import { isQuickFilterActive, quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
+import { clearConditions, type TaxonomyField } from '../filter-bar/clear-conditions';
 import { getPOSProductSort } from '../pos-product-sort';
 
 import type { FiltersOf } from '../../../../../query/query-state-types';
@@ -250,6 +251,7 @@ function DimmedChip({ item }: { item: FilterBarItem }) {
 export function POSFilterBar({
 	level = 'products',
 	initialFilters = { status: 'publish' },
+	placeField = null,
 }: {
 	level?: 'products' | 'variations';
 	/**
@@ -258,6 +260,13 @@ export function POSFilterBar({
 	 * hidden in-stock default never makes Clear all appear after a single chip.
 	 */
 	initialFilters?: Record<string, unknown>;
+	/**
+	 * The field a browse level's crumb owns while one is open (Categories inside a Categories
+	 * level, …). The crumb is the place and the pills are the conditions, so that pill folds
+	 * away rather than saying the place a second time, it is not a group for Clear all, and
+	 * Clear all leaves it — the level stays, its conditions go.
+	 */
+	placeField?: TaxonomyField | null;
 }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
@@ -268,6 +277,7 @@ export function POSFilterBar({
 	const scroll = React.useRef<ScrollViewInstance>(null);
 	const positions = React.useRef(new Map<string, number>());
 	const active = Object.entries(state.filters).filter(([key, value]) => {
+		if (key === placeField) return false;
 		const set = Array.isArray(value) ? value.length > 0 : !!value;
 		return set && JSON.stringify(value) !== JSON.stringify(initialFilters[key]);
 	}).length;
@@ -279,7 +289,7 @@ export function POSFilterBar({
 			contentContainerClassName="items-center gap-2"
 		>
 			{items.map((item) => {
-				if (item.type === 'pill' && !item.show) return null;
+				if (item.type === 'pill' && (!item.show || item.id === placeField)) return null;
 				const touched = () =>
 					scroll.current?.scrollTo({ x: positions.current.get(item.id) ?? 0, animated: false });
 				const dimmed = level === 'variations' && item.id !== 'stock_status';
@@ -339,10 +349,7 @@ export function POSFilterBar({
 					variant="ghost"
 					size="sm"
 					testID="filter-bar-clear-all"
-					onPress={() => {
-						actions.resetFilters();
-						actions.clearSearch();
-					}}
+					onPress={() => clearConditions(actions, state.filters, placeField)}
 				>
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>

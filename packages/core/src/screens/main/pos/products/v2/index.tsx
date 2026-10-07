@@ -53,9 +53,10 @@ import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
 import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
+import { clearConditions } from '../filter-bar/clear-conditions';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
-import { filtersAtBaseline } from './browse/use-browse-path';
+import { filtersAtBaseline, taxonomyField } from './browse/use-browse-path';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
@@ -241,6 +242,10 @@ function POSProductsContent({
 	});
 	// A product drilled inside the browse stage: the stage owns that drill; the filter bar reads it.
 	const [browseDrilled, setBrowseDrilled] = React.useState(false);
+	// A browse level open: its crumb is the source's own condition, so that pill folds and Clear
+	// filters leaves the place (the filter bar's `placeField`; clearConditions).
+	const [browseLevelOpen, setBrowseLevelOpen] = React.useState(false);
+	const placeField = browseLevelOpen ? taxonomyField(browseBy) : null;
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
@@ -267,10 +272,8 @@ function POSProductsContent({
 					? undefined
 					: {
 							label: t('pos_products.clear_filters'),
-							onPress: () => {
-								actions.resetFilters();
-								actions.clearSearch();
-							},
+							// Inside a browse level the place stays: only the conditions go.
+							onPress: () => clearConditions(actions, state.filters, placeField),
 						}
 			}
 		/>
@@ -450,6 +453,7 @@ function POSProductsContent({
 								<POSFilterBar
 									level={drilled || browseDrilled ? 'variations' : 'products'}
 									initialFilters={initialFilters}
+									placeField={placeField}
 								/>
 							</ErrorBoundary>
 							{scannerOpen ? (
@@ -509,7 +513,7 @@ function POSProductsContent({
 									actions={tableActions}
 									tableConfig={tableConfig}
 									onDrilledChange={setBrowseDrilled}
-									initialFilters={initialFilters}
+									onLevelChange={setBrowseLevelOpen}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack

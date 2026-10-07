@@ -221,12 +221,16 @@ it('All products clears a pill on the source taxonomy so it opens, and is shown 
 	expect(result.current.path).toEqual([]);
 });
 
-it('a Brand pill pressed under All products drops the level and leaves the pill; a sort keeps it', () => {
+it('a Brand pill or a sort under All products keeps the level: it is All products, narrowed', () => {
 	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
 	act(() => result.current.enter({ kind: 'all' }));
 	act(() => actions.setSort('sortable_price', 'desc'));
 	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
 	act(() => actions.setFilter('brands', [8]));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
+	expect(mockState.filters.brands).toEqual([8]);
+	// Leaving takes out only what the path put in (nothing): the pill is the cashier's.
+	act(() => result.current.root());
 	expect(result.current.path).toEqual([]);
 	expect(mockState.filters.brands).toEqual([8]);
 });
@@ -239,12 +243,13 @@ it('All products tapped over a held shortcut records the filters its own entry l
 	act(() => result.current.enter({ kind: 'all' }, undefined, 0));
 	expect(mockState.filters.categories).toEqual([]);
 	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
+	// A pill under All products (no source field under Shortcuts) narrows it, as anywhere.
 	act(() => actions.setFilter('on_sale', true));
-	expect(result.current.path).toEqual([]);
+	expect(result.current.path.map((entry) => entry.term)).toEqual([{ kind: 'all' }]);
 	expect(mockState.filters.on_sale).toBe(true);
 });
 
-it('a shortcut applies the quick filter exactly as its chip does and is shown while active', () => {
+it('a shortcut applies the quick filter exactly as its chip does; a pill beside its conditions narrows it, moving one of its own leaves it', () => {
 	const { result } = renderHook(() => useBrowsePath('shortcuts', terms as never));
 	act(() => result.current.enter(breakfast));
 	expect(actions.resetFilters).toHaveBeenCalled();
@@ -253,22 +258,30 @@ it('a shortcut applies the quick filter exactly as its chip does and is shown wh
 	expect(actions.setSort).toHaveBeenLastCalledWith('name', 'asc');
 	expect(result.current.path.map((entry) => entry.term)).toEqual([breakfast]);
 	act(() => actions.setFilter('on_sale', true));
-	expect(result.current.path).toEqual([]);
-	// The cashier moved the query somewhere the shortcut did not write: it is theirs now, and is
-	// left exactly as they set it (the shortcut's own condition included).
+	expect(result.current.path.map((entry) => entry.term)).toEqual([breakfast]);
 	expect(mockState.filters).toEqual({
 		...CLEARED,
 		categories: [3],
 		status: 'publish',
 		on_sale: true,
 	});
+	// The shortcut's own condition moved: the cashier owns the query now, left as they set it.
+	act(() => actions.setFilter('categories', [9]));
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({
+		...CLEARED,
+		categories: [9],
+		status: 'publish',
+		on_sale: true,
+	});
 });
 
-it('a chip pressed inside a shortcut level keeps the condition it shares with the shortcut', () => {
+it('a chip whose conditions include the shortcut’s narrows the level; a search then takes out only the shortcut’s own', () => {
 	const { result } = renderHook(() => useBrowsePath('shortcuts', terms as never));
 	act(() => result.current.enter(breakfast));
 	expect(mockState.filters.categories).toEqual([3]);
-	// Chip B, as filter-bar.tsx QuickChip applies it: categories [3] and on sale.
+	// Chip B, as filter-bar.tsx QuickChip applies it: categories [3] and on sale. Breakfast's
+	// own condition still holds, so the level does: Breakfast, on sale.
 	act(() => {
 		actions.resetFilters();
 		actions.clearSearch();
@@ -276,16 +289,17 @@ it('a chip pressed inside a shortcut level keeps the condition it shares with th
 		actions.setFilter('on_sale', true);
 		actions.setSort('name', 'asc');
 	});
-	expect(result.current.path).toEqual([]);
+	expect(result.current.path.map((entry) => entry.term)).toEqual([breakfast]);
 	expect(mockState.filters).toEqual({
 		...CLEARED,
 		categories: [3],
 		status: 'publish',
 		on_sale: true,
 	});
-	// Forgotten, not deferred: nothing comes out later either.
+	// A search spans the catalogue: Breakfast's condition goes, the cashier's on-sale pill stays.
 	act(() => actions.setSearch('lat'));
-	expect(mockState.filters.categories).toEqual([3]);
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish', on_sale: true });
 });
 
 // Shortcut A writes two keys; a chip pressed inside its level may write only some of them, or
@@ -383,14 +397,18 @@ it('a search typed inside a term still takes the term out, even after a sort cha
 	expect(mockState.search).toBe('lat');
 });
 
-it('a Brand pill pressed inside a Categories level drops the path and leaves both pills as the cashier sees them', () => {
+it('a Brand pill pressed inside a Categories level narrows the level: the path stays, and leaving keeps the pill', () => {
 	const { result } = renderHook(() => useBrowsePath('categories', terms as never));
 	act(() => result.current.enter(drinks));
 	act(() => actions.setFilter('brands', [8]));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([drinks]);
+	expect(mockState.filters).toMatchObject({ categories: [1, 2], brands: [8] });
+	// A search typed over the narrowed level still spans the catalogue: the term's ids go, the
+	// pill (the cashier's) stays.
+	act(() => actions.setSearch('lat'));
 	expect(result.current.path).toEqual([]);
+	expect(mockState.filters.categories).toEqual([]);
 	expect(mockState.filters.brands).toEqual([8]);
-	// The cashier's pill owns the query now: the term's ids are not taken out from under it.
-	expect(mockState.filters.categories).toEqual([1, 2]);
 });
 
 it('a sort inside a term level, or a child added under it, keeps the level live', () => {
