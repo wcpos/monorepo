@@ -45,6 +45,12 @@ export type EngineMutationCounts = {
 	 */
 	syncBacklog: number;
 	/**
+	 * SYNC BACKLOG, sales only. The number of distinct `orders` records with a
+	 * row in `syncBacklog`. Open carts are excluded exactly as `syncBacklog`
+	 * excludes them, so this counts completed sales waiting for the store.
+	 */
+	syncBacklogSales: number;
+	/**
 	 * NEEDS A DECISION — answers "what must someone act on?". Every terminal row
 	 * awaiting a human: conflicted + needs-revision + rejected.
 	 */
@@ -155,6 +161,7 @@ function subscribeToMutationCounts(
 				if (!database)
 					return of({
 						syncBacklog: 0,
+						syncBacklogSales: 0,
 						needsDecision: 0,
 						needsDecisionRejected: 0,
 						needsDecisionUnresolved: 0,
@@ -181,7 +188,13 @@ function subscribeToMutationCounts(
 				]).pipe(
 					map(([documents, openCartRecordIds]) => {
 						const rows = documents.map((document) => document.toJSON());
-						return rows.length - heldOpenCartMutations(rows, openCartRecordIds).length;
+						const held = new Set(heldOpenCartMutations(rows, openCartRecordIds));
+						const syncBacklogSales = new Set(
+							rows
+								.filter((row) => !held.has(row) && row.collectionName === 'orders')
+								.map((row) => row.recordId)
+						).size;
+						return { syncBacklog: rows.length - held.size, syncBacklogSales };
 					})
 				);
 				const needsDecision$ = mutations.find({
@@ -200,7 +213,7 @@ function subscribeToMutationCounts(
 					needsDecisionUnresolved$,
 				]).pipe(
 					map(([syncBacklog, needsDecision, needsDecisionRejected, needsDecisionUnresolved]) => ({
-						syncBacklog,
+						...syncBacklog,
 						needsDecision: needsDecision.length,
 						needsDecisionRejected: needsDecisionRejected.length,
 						needsDecisionUnresolved: needsDecisionUnresolved.length,
@@ -240,6 +253,7 @@ export function useMutationCounts(): EngineMutationCounts {
 	const { engine } = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineMutationCounts>({
 		syncBacklog: 0,
+		syncBacklogSales: 0,
 		needsDecision: 0,
 		needsDecisionRejected: 0,
 		needsDecisionUnresolved: 0,

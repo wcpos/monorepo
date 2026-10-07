@@ -137,6 +137,48 @@ describe('pushRecordMutation', () => {
 		expect(body.payload).toBeUndefined(); // a delete carries no payload
 	});
 
+	it('deletes: refuses a 2xx whose body is not JSON (a host challenge page) as no-document', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'delete' }),
+				resolveEndpoint,
+				fetcher: async () =>
+					new Response('<html><body>Checking your browser</body></html>', {
+						status: 202,
+						headers: { 'Content-Type': 'text/html' },
+					}),
+				observe: (e) => events.push(e),
+			})
+		).rejects.toMatchObject({ name: 'RecordPushError', status: 202, reason: 'no-document' });
+		expect(events.filter((e) => e.type === 'push.error')).toHaveLength(1);
+		expect(events.find((e) => e.type === 'push.error')).toMatchObject({
+			level: 'error',
+			fields: { status: 202, reason: 'no-document' },
+		});
+		expect(events.some((e) => e.type === 'push.outcome')).toBe(false);
+	});
+
+	it('deletes: refuses a 2xx JSON array as no-document', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'delete' }),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(200, []),
+			})
+		).rejects.toMatchObject({ reason: 'no-document', status: 200 });
+	});
+
+	it('deletes: acknowledges a 204 with no body', async () => {
+		const result = await pushRecordMutation({
+			mutation: mut({ operation: 'delete' }),
+			resolveEndpoint,
+			fetcher: async () => new Response(null, { status: 204 }),
+		});
+		expect(result.outcome).toBe('deleted');
+		expect(result.document).toBeNull();
+	});
+
 	it('parses the { document, currentRevision } envelope into document + currentRevision', async () => {
 		const result = await pushRecordMutation({
 			mutation: mut(),
@@ -263,6 +305,27 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			level: 'error',
 			fields: { status: 409, reason: 'identity-ambiguous' },
+		});
+	});
+
+	it('logs a 401 at warn, so the lane reports the refused session once', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'update' }),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(401, { code: 'woocommerce_pos_rest_unauthorized' }),
+				observe: (e) => events.push(e),
+			})
+		).rejects.toMatchObject({
+			name: 'RecordPushError',
+			status: 401,
+			reason: 'woocommerce_pos_rest_unauthorized',
+		});
+		expect(events.map((e) => e.type)).toEqual(['push.error']);
+		expect(events[0]).toMatchObject({
+			level: 'warn',
+			fields: { status: 401, reason: 'woocommerce_pos_rest_unauthorized' },
 		});
 	});
 

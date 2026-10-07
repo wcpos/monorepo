@@ -664,6 +664,13 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.session-refused",
+		"domain": "SYNC",
+		"label": "Your store asked you to sign in again",
+		"description": "Your store refused this till's sign-in, so queued changes wait until you sign in again.",
+		"introducedIn": "1.10.26"
+	},
+	{
 		"type": "queue.write.tick.error",
 		"domain": "SYNC",
 		"label": "Sending queued changes failed",

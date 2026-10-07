@@ -19,6 +19,7 @@ const mockMutationCounts = {
 	needsDecisionRejected: 0,
 	needsDecisionUnresolved: 0,
 	syncBacklog: 0,
+	syncBacklogSales: 0,
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
 let mockConflictedKeys = new Set<string>();
