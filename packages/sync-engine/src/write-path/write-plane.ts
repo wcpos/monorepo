@@ -29,6 +29,7 @@ export type WritePlane = {
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
 	lastError(): string | null;
 	queueDepth(): number | null;
+	sessionHeld(): boolean;
 };
 type WritePlaneDeps = {
 	assertUsable: () => void;
@@ -57,6 +58,7 @@ type WritePlaneDeps = {
 export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	const queueFor = deps.queueFor ?? defaultQueueFor;
 	let queueDepth: number | null = null;
+	let sessionHeldScope: string | null = null;
 	let lastError: string | null = null;
 	let drainChain: Promise<unknown> = Promise.resolve();
 	// Resolutions run ONE AT A TIME (#832 follow-up, R7b). Two different choices
@@ -98,6 +100,10 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		queueFor,
 		drainInstanceIdFor: () => (drainInstanceIdOnce ??= deps.mintUuid()),
 		setQueueDepth: (depth) => void (queueDepth = depth),
+		setSessionHeld: (scopeId) => {
+			sessionHeldScope = scopeId;
+			deps.onStatusChanged();
+		},
 		setLastError: (error) => void (lastError = error),
 		...(deps.onActivityChange ? { onActivityChange: deps.onActivityChange } : {}),
 		...(deps.barcodeSelectorsFor ? { barcodeSelectorsFor: deps.barcodeSelectorsFor } : {}),
@@ -203,5 +209,6 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		},
 		lastError: () => lastError,
 		queueDepth: () => queueDepth,
+		sessionHeld: () => sessionHeldScope !== null && sessionHeldScope === deps.manager.activeScope,
 	};
 }

@@ -304,6 +304,8 @@ export type WriteDrainLaneDeps = {
 	drainInstanceIdFor: () => string;
 	setQueueDepth: (depth: number) => void;
 	setLastError: (error: string | null) => void;
+	/** The store scope whose session the lane is holding, or null when none. */
+	setSessionHeld?: (scopeId: string | null) => void;
 	now?: () => number;
 	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
 	 * the carrier field, and an ack re-materialization derives it again. */
@@ -701,6 +703,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							const time = deps.now !== undefined ? deps.now() : Date.now();
 							sessionHold = { scopeId: bound.scopeId, delayMs, probeAt: time + delayMs };
 							if (!previous) {
+								deps.setSessionHeld?.(bound.scopeId);
 								deps.diagnostics({
 									type: 'queue.write.session-refused',
 									level: 'error',
@@ -710,6 +713,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							}
 						} else if (result.pushed > 0) {
+							if (sessionHold !== null) deps.setSessionHeld?.(null);
 							sessionHold = null;
 						}
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));

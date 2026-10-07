@@ -515,6 +515,13 @@ export type EngineStatus = {
 	 * in again, so a waiter may settle on it without a drain telling it so.
 	 */
 	authRequired: boolean;
+	/**
+	 * The write drain is holding the active store's queued writes because the store
+	 * refused the session (HTTP 401): it probes once per interval until a push is
+	 * accepted. Independent of `authRequired` (the host's latch): either can be true
+	 * without the other.
+	 */
+	writeSessionHeld: boolean;
 	lanes: Record<
 		Exclude<EngineLane, 'all'>,
 		{
@@ -2216,6 +2223,7 @@ export function createRxdbSyncEngine(
 							? 'bootstrap-failed'
 							: null,
 			authRequired: ports.holdAutomaticTicks?.() === true,
+			writeSessionHeld: writePlane.sessionHeld(),
 			bootstrapFailed: Object.fromEntries(bootstrapFailures),
 			activeScopeId: disposed ? null : manager.activeScope,
 			scopesOpen: stats.scopesOpen,
