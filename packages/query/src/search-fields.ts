@@ -72,15 +72,26 @@ export type SearchMetaKeys = { customers?: readonly string[]; orders?: readonly 
 
 let siteMetaKeys: SearchMetaKeys = {};
 const fieldsByCollection = new Map<LegacyCollectionName, readonly string[]>();
+const listeners = new Set<() => void>();
 
 /**
  * The active site's added meta keys, from its `sites` row. Called by the app when the site
- * binds or its row changes; the computed field lists are rebuilt so a later `searchFieldsFor`
- * (and therefore the blob registry, keyed by field list) picks up the change.
+ * binds or its row changes; the computed field lists are rebuilt and subscribers (the query
+ * bindings, through `useSearchFields`) re-render, so a binding that rendered before the keys
+ * arrived — a direct launch into Customers, or a launch-time refresh of the site row — picks
+ * them up at once rather than on its next incidental render. The blob registry is keyed by
+ * field list, so the re-render yields the keyed blob.
  */
 export function setSearchMetaKeys(keys: SearchMetaKeys | undefined): void {
 	siteMetaKeys = keys ?? {};
 	fieldsByCollection.clear();
+	for (const listener of listeners) listener();
+}
+
+/** Subscribe to field-list changes (for `useSyncExternalStore`); returns the unsubscribe. */
+export function subscribeSearchFields(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
 }
 
 /** The fields a collection is searched by: the pinned table plus the site's added meta keys. */
