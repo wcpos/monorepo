@@ -21,6 +21,11 @@ export function useSettingsNavigationItems(): NavigationAreaItem[] {
 			testID: 'settings-nav-printing',
 		},
 		{
+			href: '/settings/card-readers',
+			label: t('settings.card_readers'),
+			testID: 'settings-nav-card-readers',
+		},
+		{
 			href: '/settings/customer-display',
 			label: t('settings.customer_display.title'),
 			testID: 'settings-nav-customer-display',

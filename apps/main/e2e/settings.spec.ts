@@ -20,6 +20,7 @@ test.describe('Settings Area', () => {
 		});
 		await expect(page.getByTestId('settings-nav-tax')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-printing')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-card-readers')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-barcode-scanning')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-theme')).toBeVisible();
 	});

@@ -63,7 +63,7 @@ import {
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
-import { useRememberedReader } from './remembered-readers';
+import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonKey, failureReasonLabel, providerErrorMessage } from './labels';
 import {
 	activePlan,
@@ -93,7 +93,7 @@ const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
 	rememberedReaderId: string | null;
-	rememberReader: (readerId: string) => Promise<void>;
+	rememberReader: (reader: RememberedReader) => Promise<void>;
 	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	deviceTransport?: PaymentTransport | null;
 	pickTransport?: (transport: PaymentTransport) => void;
@@ -276,8 +276,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
 	useDriverStatus(driver);
+	// The reader connected on the Card readers settings page decides the transport; the cashier
+	// no longer picks one in the pay sheet, so a transport remembered from an earlier reader
+	// must not outrank the one that is connected now (WisePad swapped for Tap to Pay).
 	const deviceTransport = method
-		? (state.transport ?? deviceTransports(method)[0]?.transport ?? null)
+		? (driver?.status$.get().reader?.transport ??
+			state.transport ??
+			deviceTransports(method)[0]?.transport ??
+			null)
 		: null;
 	const deviceReady = driverReady(method, deviceTransport);
 	const pickTransport = React.useCallback(
@@ -692,7 +698,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					row: minted.row,
 					reader: reader.id,
 				});
-				void remember(reader.id);
+				void remember(reader);
 				reducerDispatch({ type: 'tender-started' });
 				return;
 			}
