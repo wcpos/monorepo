@@ -13,6 +13,7 @@ import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
+import { SearchMetaKeysBridge } from '@wcpos/core/screens/main/components/search-meta-keys-bridge';
 import { SearchWarmupBridge } from '@wcpos/core/screens/main/components/search-warmup-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
@@ -228,6 +229,8 @@ function AppStack() {
 				<VariationParentBridge />
 				{/* Search must answer from the moment the till opens: build the product
 				    and variation search blobs now, not on the first keystroke (#1733). */}
+				{/* The store's filter-added meta keys reach the local fold before the blobs warm. */}
+				<SearchMetaKeysBridge />
 				<SearchWarmupBridge />
 				<UISettingsProvider>
 					<CompatGate>

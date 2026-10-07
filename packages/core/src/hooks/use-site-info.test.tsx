@@ -71,6 +71,26 @@ describe('useSiteInfo', () => {
 		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('license');
 	});
 
+	it('patches search_meta_keys when the index carries them, and leaves them alone when it does not', async () => {
+		mockGet.mockResolvedValueOnce({
+			status: 200,
+			data: {
+				wcpos_version: '2.0.0',
+				search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+			},
+		});
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).toMatchObject({
+			search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+		});
+
+		mockIncrementalPatch.mockClear();
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('search_meta_keys');
+	});
+
 	it('does not report an error when the request is blocked by the asleep pre-flight check', async () => {
 		// Regression: mounting in a background tab logged the expected block as a
 		// SYNC999 error row ("Failed to fetch site info | App is in background"),

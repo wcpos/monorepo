@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 5,
+	version: 6,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -91,6 +91,20 @@ export const sitesLiteral = {
 		},
 		use_protocol_headers: {
 			type: 'boolean',
+		},
+		/**
+		 * Meta keys the store ADDED to search through the plugin's `woocommerce_pos_search_fields`
+		 * filter, per collection, as published by `wcpos/v2/site` (monorepo#2411). The till folds
+		 * them into its local search as `meta_data:<key>` fields so a customer found by a loyalty
+		 * number on the server is also found from local rows. Refreshed with the rest of the site
+		 * payload at connect. Absent on a site whose plugin predates the key.
+		 */
+		search_meta_keys: {
+			type: 'object',
+			properties: {
+				customers: { type: 'array', items: { type: 'string' } },
+				orders: { type: 'array', items: { type: 'string' } },
+			},
 		},
 	},
 } as const;

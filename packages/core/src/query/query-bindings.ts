@@ -34,9 +34,9 @@ import {
 	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryResult,
-	searchFieldsFor as searchFieldsOf,
 	useLocalQuery,
 	useQueryRuntime,
+	useSearchFields,
 } from '@wcpos/query';
 import type {
 	CensusTotals,
@@ -652,14 +652,14 @@ function coverageProjection$(
 	);
 }
 
-const searchFieldsCache = new Map<LegacyCollectionName, string[] | undefined>();
-
-function searchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
-	if (searchFieldsCache.has(collection)) return searchFieldsCache.get(collection);
-	const fields = searchFieldsOf(collection);
-	const searchFields = fields ? [...fields] : undefined;
-	searchFieldsCache.set(collection, searchFields);
-	return searchFields;
+/**
+ * The field list is a subscription (`useSearchFields`): the identity is stable until the
+ * site's added meta keys change, and a change re-renders the binding so the effects below
+ * re-bind with the keyed list. Read-only in practice; the cast is for the descriptor's
+ * mutable type.
+ */
+function useSearchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
+	return useSearchFields(collection) as string[] | undefined;
 }
 
 function emptyResult(): QueryResult<RxCollection> {
@@ -731,7 +731,7 @@ function useEngineBinding(
 	const runtime = useQueryRuntime();
 	const generatedId = React.useId();
 	const bindingId = compiledId ?? generatedId;
-	const searchFields = searchFieldsFor(descriptorInput.collection);
+	const searchFields = useSearchFieldsFor(descriptorInput.collection);
 	const read = React.useMemo(
 		() => (descriptorInput.read ? { ...descriptorInput.read, searchFields } : undefined),
 		[descriptorInput.read, searchFields]
@@ -827,7 +827,7 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
 ): QueryBinding {
 	const bindingId = React.useId();
-	const searchFields = searchFieldsFor(
+	const searchFields = useSearchFieldsFor(
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
 	const storeScope = options.storeScope ?? 'pos';
@@ -892,7 +892,7 @@ function observeParentLookup(
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
-	const parentSearchFields = searchFieldsFor('products');
+	const parentSearchFields = useSearchFieldsFor('products');
 	const compiled = React.useMemo(
 		() =>
 			compileQuery('products', state, {
@@ -911,7 +911,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		selector: state.filters.status ? { status: state.filters.status } : {},
 		sort: [{ id: 'asc' }],
 		search: compiled.read.search,
-		searchFields: searchFieldsFor('variations'),
+		searchFields: useSearchFieldsFor('variations'),
 	});
 	const childCompiled = React.useMemo(
 		() =>

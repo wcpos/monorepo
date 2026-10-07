@@ -7,6 +7,7 @@ import {
 	resolveLegacyField,
 } from './collection-map';
 import { type ProjectionCollection, projectionReaderFor } from '../projection-read';
+import { searchFieldTopSegment } from '../search-fields';
 
 import type { RxDocument } from 'rxdb';
 
@@ -41,7 +42,7 @@ export async function searchProjection(
 			mapping.enginePath === `payload.${field}` &&
 			!mapping.read &&
 			!mapping.readEnginePath;
-		const place = isDefaultPayload ? field.split('.')[0] : field;
+		const place = isDefaultPayload ? searchFieldTopSegment(field) : field;
 		if (reads.has(place)) continue;
 		reads.set(place, {
 			path: isDefaultPayload ? `payload.${place}` : (mapping.readEnginePath ?? mapping.enginePath),

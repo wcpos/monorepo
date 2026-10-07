@@ -3,7 +3,14 @@ import { searchTerms } from '@wcpos/sync-core';
 import { engineCollectionNameFor } from '../src/engine-adapter/collection-map';
 import { legacySearchSnapshot, searchProjection } from '../src/engine-adapter/search-snapshot';
 import { searchRows } from '../src/search-blob';
-import { phoneDigits, SEARCH_FIELDS, searchRowText, valuesAtPath } from '../src/search-fields';
+import {
+	phoneDigits,
+	SEARCH_FIELDS,
+	searchFieldsFor,
+	searchRowText,
+	setSearchMetaKeys,
+	valuesAtPath,
+} from '../src/search-fields';
 import { createEngineDatabase, engineOrder } from '../src/testing';
 
 import type { EngineRxDocument } from '../src/engine-adapter/execute-query';
@@ -221,5 +228,70 @@ describe('cold projection row equals live snapshot row', () => {
 		expect(cold.size).toBe(2);
 		expect(cold).toEqual(live);
 		expect(cold.get('c-full')).toContain('51 824 753 556');
+	});
+});
+
+describe('site-added meta keys (woocommerce_pos_search_fields → wcpos/v2/site → sites row)', () => {
+	let database: RxDatabase | undefined;
+	afterEach(async () => {
+		setSearchMetaKeys(undefined);
+		if (database && !database.destroyed) await database.remove();
+		database = undefined;
+	});
+
+	it('appends meta_data:<key> fields for customers and orders only, with a stable identity until the keys change', () => {
+		const before = searchFieldsFor('customers');
+		setSearchMetaKeys({ customers: ['loyalty_number', ''], orders: ['delivery_slot'] });
+		const customers = searchFieldsFor('customers');
+		expect(customers).toEqual([...SEARCH_FIELDS.customers, 'meta_data:loyalty_number']);
+		expect(searchFieldsFor('orders')).toEqual([...SEARCH_FIELDS.orders, 'meta_data:delivery_slot']);
+		expect(searchFieldsFor('products')).toEqual(SEARCH_FIELDS.products);
+		expect(searchFieldsFor('customers')).toBe(customers);
+		expect(customers).not.toBe(before);
+		setSearchMetaKeys(undefined);
+		expect(searchFieldsFor('customers')).toEqual(SEARCH_FIELDS.customers);
+	});
+
+	it('folds a meta_data entry by key and nothing else', () => {
+		const record = {
+			first_name: 'Sam',
+			meta_data: [
+				{ id: 1, key: 'loyalty_number', value: 'LOY-0042' },
+				{ id: 2, key: 'other', value: 'noise' },
+				{ id: 3, key: 'loyalty_number', value: { nested: true } },
+			],
+		};
+		expect(valuesAtPath(record, 'meta_data:loyalty_number')).toEqual(['LOY-0042']);
+		expect(valuesAtPath({ meta_data: 'not-an-array' }, 'meta_data:loyalty_number')).toEqual([]);
+		const row = searchRowText([...SEARCH_FIELDS.customers, 'meta_data:loyalty_number'], record);
+		expect(searchRows(new Map([['c', row]]), searchTerms('loy-0042'))).toEqual(['c']);
+		expect(searchRows(new Map([['c', row]]), searchTerms('noise'))).toEqual([]);
+	});
+
+	it('reads the same meta row cold (projection) and live (snapshot)', async () => {
+		database = await createEngineDatabase(['customers']);
+		await database.collections.customers.bulkInsert([
+			{
+				uuid: 'c-loyal',
+				remoteId: 9,
+				remoteKey: 'woo:9',
+				payload: {
+					id: 9,
+					first_name: 'Sam',
+					meta_data: [{ id: 1, key: 'loyalty_number', value: 'LOY-0042' }],
+				},
+				sync: { revision: '1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			},
+		]);
+		const collection = database.collections[
+			engineCollectionNameFor('customers')
+		] as unknown as SearchableCollection & { find(): { exec(): Promise<EngineRxDocument[]> } };
+		const fields = [...SEARCH_FIELDS.customers, 'meta_data:loyalty_number'];
+		const [cold] = await searchProjection(collection, 'customers', fields);
+		const [live] = await collection.find().exec();
+		const coldRow = searchRowText(fields, cold.snapshot);
+		expect(coldRow).toBe(searchRowText(fields, legacySearchSnapshot('customers', live)));
+		expect(coldRow).toContain('loy-0042');
 	});
 });

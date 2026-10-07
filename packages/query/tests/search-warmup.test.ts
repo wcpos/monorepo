@@ -3,7 +3,7 @@ import { waitFor } from '@testing-library/react';
 import { engineCollectionNameFor } from '../src/engine-adapter/collection-map';
 import { legacySearchSnapshot } from '../src/engine-adapter/search-snapshot';
 import { searchBlobFor } from '../src/search-blob';
-import { SEARCH_FIELDS, searchFieldsFor } from '../src/search-fields';
+import { SEARCH_FIELDS, searchFieldsFor, setSearchMetaKeys } from '../src/search-fields';
 import { warmSearchBlobs } from '../src/search-warmup';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
@@ -18,6 +18,7 @@ import type { RxDatabase } from 'rxdb';
 describe('warmSearchBlobs', () => {
 	let database: RxDatabase;
 	afterEach(async () => {
+		setSearchMetaKeys(undefined);
 		if (!database.destroyed) await database.remove();
 	});
 
@@ -52,6 +53,23 @@ describe('warmSearchBlobs', () => {
 			expect(productReads).toHaveBeenCalledTimes(1);
 			expect(customerReads).toHaveBeenCalledTimes(1);
 			expect(blobFor('products')).toBe(products);
+			expect(blobFor('customers')).toBe(customers);
+		} finally {
+			stop();
+		}
+	});
+
+	it('warms with the site-added meta keys, so the keyed binding reuses the warmed blob', async () => {
+		setSearchMetaKeys({ customers: ['loyalty_number'] });
+		database = await createEngineDatabase(['products', 'variations', 'customers']);
+		const customerReads = readsOf('customers');
+		const stop = warmSearchBlobs(createFakeEngine(database));
+		try {
+			await waitFor(() => expect(customerReads).toHaveBeenCalledTimes(1));
+			expect(searchFieldsFor('customers')).toContain('meta_data:loyalty_number');
+			const customers = blobFor('customers');
+			await customers.ready;
+			expect(customerReads).toHaveBeenCalledTimes(1);
 			expect(blobFor('customers')).toBe(customers);
 		} finally {
 			stop();
