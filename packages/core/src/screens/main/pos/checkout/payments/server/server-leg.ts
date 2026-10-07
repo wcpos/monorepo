@@ -55,7 +55,12 @@ function errorResponse(error: unknown) {
 	if (!error || typeof error !== 'object') return undefined;
 	const response = (error as { response?: unknown }).response;
 	return response && typeof response === 'object'
-		? (response as { status?: number; data?: PaymentRefusalBody })
+		? (response as {
+				status?: number;
+				data?: PaymentRefusalBody & {
+					data: PaymentRefusalBody['data'] & { payment_id?: unknown };
+				};
+			})
 		: undefined;
 }
 // A date the provider or an old row wrote badly must not switch the deadline off:
@@ -187,7 +192,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!active()) return;
 		clearTimer();
 		const seq = ++sequence;
-		const url = `orders/${input.orderId}/payments/${input.row.id}/${route}`;
+		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
@@ -253,6 +258,21 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		)
 			return;
 		if (!current(seq)) return;
+		if (
+			route === 'intent' &&
+			code === 'wcpos_payment_in_flight' &&
+			typeof body?.data?.payment_id === 'string'
+		) {
+			setState({
+				row: { ...state.row, id: body.data.payment_id },
+				phase: 'polling',
+				deadlineAt: deadline(state.row, deps.now()),
+			});
+			event('Joined the payment already in progress', 'info');
+			if (await voidAfterIntent()) return;
+			schedule(0);
+			return;
+		}
 		if (code === 'wcpos_payment_locked') {
 			setState({ capturing: false, phase: 'polling' });
 			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);

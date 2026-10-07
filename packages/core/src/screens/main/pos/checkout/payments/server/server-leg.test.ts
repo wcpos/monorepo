@@ -123,6 +123,91 @@ afterEach(() => {
 });
 const tick = (ms = 0) => jest.advanceTimersByTimeAsync(ms);
 
+function setupRejoin() {
+	const get = jest.fn<Promise<{ data: unknown }>, [string]>();
+	const post = jest.fn<Promise<{ data: unknown }>, [string, unknown]>();
+	const mirror = jest.fn(async () => {});
+	const leg = createServerLeg(
+		{ get, post, mirror, now: Date.now, setTimeout, clearTimeout },
+		{ orderId: 42, row, reader: 'reader', resume: false }
+	);
+	return { leg, get, post, mirror };
+}
+
+it('rejoins an in-flight payment by polling the adopted id and finalizes capture', async () => {
+	const c = setupRejoin();
+	const intent = deferred<{ data: unknown }>();
+	c.post.mockReturnValueOnce(intent.promise);
+	c.get.mockResolvedValueOnce({ data: response({ id: 'live-1' }) });
+	c.get.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'captured' }) });
+	const started = c.leg.start();
+	await tick(5000);
+	intent.reject(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+	await started;
+	expect(c.leg.getState()).toMatchObject({
+		row: { id: 'live-1' },
+		phase: 'polling',
+		outcome: null,
+		deadlineAt: epoch + 305_000,
+		clientEvents: [
+			expect.objectContaining({ message: 'Joined the payment already in progress', level: 'info' }),
+		],
+	});
+	expect(c.mirror).not.toHaveBeenCalled();
+	await tick();
+	expect(c.get).toHaveBeenNthCalledWith(1, 'orders/42/payments/live-1/status');
+	expect(c.mirror).toHaveBeenCalledWith(response({ id: 'live-1' }));
+	expect(c.leg.getState().phase).toBe('polling');
+	await tick(2000);
+	expect(c.leg.getState()).toMatchObject({
+		row: { id: 'live-1', status: 'captured' },
+		phase: 'final',
+		outcome: 'captured',
+	});
+	expect(c.post).toHaveBeenCalledTimes(1);
+	expect(c.post).toHaveBeenCalledWith('orders/42/payments/leg/intent', {
+		payment: row,
+		context: { reader: 'reader' },
+	});
+});
+
+it('a cancel during an in-flight intent voids the adopted id without retrying intent', async () => {
+	const c = setupRejoin();
+	const intent = deferred<{ data: unknown }>();
+	c.post.mockReturnValueOnce(intent.promise);
+	c.post.mockResolvedValueOnce({ data: response({ id: 'live-1', status: 'voided' }) });
+	const started = c.leg.start();
+	await c.leg.cancel();
+	expect(c.post).toHaveBeenCalledTimes(1);
+	intent.reject(refusal(409, 'wcpos_payment_in_flight', { payment_id: 'live-1' }));
+	await started;
+	expect(c.post).toHaveBeenNthCalledWith(2, 'orders/42/payments/live-1/void', {
+		reason: 'cashier',
+	});
+	expect(c.leg.getState()).toMatchObject({
+		row: { id: 'live-1' },
+		cancelRequested: true,
+		outcome: 'voided',
+	});
+	await tick(10000);
+	expect(c.post).toHaveBeenCalledTimes(2);
+	expect(c.get).not.toHaveBeenCalled();
+});
+
+it('a different wcpos 409 on intent remains a refusal, not a rejoin', async () => {
+	const c = setup();
+	c.fail('intent', refusal(409, 'wcpos_amount_mismatch', { payment_id: 'live-1' }));
+	await c.leg.start();
+	await tick(10000);
+	expect(c.leg.getState()).toMatchObject({
+		row: { id: 'leg', status: 'failed' },
+		phase: 'final',
+		outcome: 'failed',
+	});
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('status')).toBe(0);
+});
+
 it('starts once, mirrors intent before polling and reads immediately on a timer', async () => {
 	const c = setup();
 	const pending = deferred<{ data: unknown }>();
