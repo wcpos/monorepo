@@ -7,9 +7,7 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
-import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
-import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { findOneFixPlugin } from './find-one-fix';
@@ -19,7 +17,6 @@ import { parseRestResponsePlugin } from './parse-rest-response';
 import { populatePlugin } from './populate';
 import { resetCollectionPlugin } from './reset-collection';
 import { rxDatabaseRegistryPlugin } from './rx-database-registry';
-import { searchPlugin } from './search';
 
 /**
  * Important: setPremiumFlag must be before addRxPlugin is called
@@ -51,10 +48,6 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
-// FlexSearch internally calls collection.addPipeline(), so RxDBPipelinePlugin
-// must be registered alongside it. Removing either breaks full-text search. (#291)
-addRxPlugin(RxDBFlexSearchPlugin);
-addRxPlugin(RxDBPipelinePlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
@@ -62,7 +55,6 @@ addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
-addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(rxDatabaseRegistryPlugin);
 // The generic audit plugin retired with the logging overhaul (spec §1 silo

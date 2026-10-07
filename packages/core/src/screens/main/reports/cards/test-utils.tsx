@@ -97,7 +97,6 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	observeEngineQuery: (
 		_engine: unknown,
-		_locale: unknown,
 		query: { collection: string; selector: { id: { $in: number[] } } }
 	) =>
 		(

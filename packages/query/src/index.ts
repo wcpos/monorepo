@@ -27,7 +27,6 @@ export {
 	COLLECTION_VOCABULARY,
 	engineCollectionNameFor,
 	isWriteableCollection,
-	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	resolveLegacyField,
 	sortAliasFor,
@@ -44,13 +43,14 @@ export type {
 } from './engine-adapter/execute-query';
 export { variationAllMatch, variationAttributesMatch } from './engine-adapter/translate-selector';
 export {
-	FLEXSEARCH_MIN_TERM_LENGTH,
 	observeCoverage,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
-export { startSearchReadiness } from './search-readiness';
+export { SEARCH_FIELDS, searchFieldsFor, searchRowText } from './search-fields';
+export { searchBlobFor, searchRows, type SearchBlob } from './search-blob';
+export { warmSearchBlobs } from './search-warmup';
 export { declareRequirements, runResetRefill } from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

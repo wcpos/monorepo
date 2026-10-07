@@ -181,7 +181,6 @@ describe('local-first live order refunds', () => {
 		expect((await screen.findByTestId('refunds-section')).textContent).toBe('2,1');
 		expect(mockObserve).toHaveBeenCalledWith(
 			mockEngine,
-			'en',
 			expect.objectContaining({ collection: 'refunds', selector: { parent_id: 23858 } })
 		);
 		expect(mockRequire).toHaveBeenCalledTimes(1);

@@ -29,12 +29,12 @@ import {
 	declareRequirements,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
-	LEGACY_SEARCH_FIELDS,
 	observeCollectionActive,
 	observeCoverage,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryResult,
+	searchFieldsFor as searchFieldsOf,
 	useLocalQuery,
 	useQueryRuntime,
 } from '@wcpos/query';
@@ -656,7 +656,7 @@ const searchFieldsCache = new Map<LegacyCollectionName, string[] | undefined>();
 
 function searchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
 	if (searchFieldsCache.has(collection)) return searchFieldsCache.get(collection);
-	const fields = LEGACY_SEARCH_FIELDS[collection as keyof typeof LEGACY_SEARCH_FIELDS];
+	const fields = searchFieldsOf(collection);
 	const searchFields = fields ? [...fields] : undefined;
 	searchFieldsCache.set(collection, searchFields);
 	return searchFields;
@@ -754,7 +754,7 @@ function useEngineBinding(
 	);
 	const result$ = React.useMemo(() => {
 		if (!enabled) return of(emptyResult());
-		const read$ = observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+		const read$ = observeEngineQuery(runtime.engine, descriptor).pipe(
 			map((result) => ({
 				...result,
 				searchActive: Boolean((descriptor.read?.search ?? descriptor.search)?.trim()),
@@ -772,7 +772,7 @@ function useEngineBinding(
 						recheckMs
 					)
 		).pipe(shareReplay({ bufferSize: 1, refCount: true }));
-	}, [descriptor, enabled, recheckMs, runtime.engine, runtime.locale]);
+	}, [descriptor, enabled, recheckMs, runtime.engine]);
 	const census$ = React.useMemo(
 		() =>
 			compiled.censusScoped
@@ -859,7 +859,6 @@ function releaseHandles(handles: RequirementHandle[]): void {
 
 function observeParentLookup(
 	engine: RxdbSyncEngine,
-	locale: string,
 	id: string,
 	parentIds: number[],
 	searchFields: string[] | undefined
@@ -882,7 +881,7 @@ function observeParentLookup(
 		);
 		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
 		const handles = declareRequirements(engine, requirements);
-		const subscription = observeEngineQuery(engine, locale, descriptor).subscribe(subscriber);
+		const subscription = observeEngineQuery(engine, descriptor).subscribe(subscriber);
 		return () => {
 			subscription.unsubscribe();
 			releaseHandles(handles);
@@ -940,15 +939,15 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	);
 	const result$ = React.useMemo(() => {
 		if (!compiled.read.search) {
-			return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+			return observeEngineQuery(runtime.engine, descriptor).pipe(
 				shareReplay({ bufferSize: 1, refCount: true })
 			);
 		}
-		const direct$ = observeEngineQuery(runtime.engine, runtime.locale, {
+		const direct$ = observeEngineQuery(runtime.engine, {
 			...descriptor,
 			read: { ...compiled.read, limit: undefined },
 		});
-		const children$ = observeEngineQuery(runtime.engine, runtime.locale, childDescriptor);
+		const children$ = observeEngineQuery(runtime.engine, childDescriptor);
 		return combineLatest([direct$, children$]).pipe(
 			switchMap(([direct, children]) => {
 				const counts = new Map<number, number>();
@@ -963,7 +962,6 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 					direct.searchState === 'answered' && children.searchState === 'answered';
 				return observeParentLookup(
 					runtime.engine,
-					runtime.locale,
 					`${bindingId}:lookup`,
 					parentIds,
 					descriptor.searchFields
@@ -971,7 +969,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			switchMap(({ direct, lookup, counts, searchAnswered }) => {
 				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
-				return observeEngineQuery(runtime.engine, runtime.locale, {
+				return observeEngineQuery(runtime.engine, {
 					...descriptor,
 					read: { ...compiled.read, search: '' },
 					selector: { uuid: { $in: uuids } },
@@ -993,7 +991,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
+	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine]);
 	const resource = useObservableResource(result$);
 	const census$ = React.useMemo(
 		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),

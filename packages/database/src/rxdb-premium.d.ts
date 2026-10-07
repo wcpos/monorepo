@@ -1,15 +1,3 @@
-declare module 'rxdb-premium/plugins/flexsearch' {
-	export const RxDBFlexSearchPlugin: import('rxdb').RxPlugin;
-
-	export function addFulltextSearch(options: {
-		identifier: string;
-		collection: import('rxdb').RxCollection;
-		docToString(doc: any): string;
-		initialization?: 'async' | 'lazy' | 'sync';
-		indexOptions?: Record<string, unknown>;
-	}): Promise<unknown>;
-}
-
 declare module 'rxdb-premium/plugins/shared' {
 	export function setPremiumFlag(): void;
 }

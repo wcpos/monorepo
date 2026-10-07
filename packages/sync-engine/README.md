@@ -134,7 +134,6 @@ Abstract-filesystem storages below include OPFS and filesystem storage.
 | [`scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs`](../../scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs) | Batches document moves and index writes in the same cleanup round. | Abstract-filesystem storages |
 | [`scripts/patch-rxdb-premium-changes-file-salvage.mjs`](../../scripts/patch-rxdb-premium-changes-file-salvage.mjs) | Tracks append offsets and salvages complete leading bulks from damaged `changes.json` logs. | Abstract-filesystem storages |
 | [`scripts/patch-rxdb-premium-changelog-identity.mjs`](../../scripts/patch-rxdb-premium-changelog-identity.mjs) | Applies peer changelog operations by index-string identity when positions drift, avoiding deletion of healthy neighbours. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-flexsearch-churn.mjs`](../../scripts/patch-rxdb-premium-flexsearch-churn.mjs) | Skips append writes and re-indexing for text already held in the index. | FlexSearch |
 
 ### Publishing
 

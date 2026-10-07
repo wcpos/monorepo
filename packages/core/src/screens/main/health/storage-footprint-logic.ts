@@ -16,21 +16,18 @@ const RXDB_ENTRY_PREFIX = 'rxdb-';
  * marker even though the raw entry name continues `-<collection>-<version>`.
  */
 const SCOPE_ENTRY = /pos_v\d+_([a-f0-9]{12})_s([a-z0-9-]+?)_c/;
-const SEARCH_COLLECTION_SUFFIX = '_flexsearch';
 const SYNCED_COLLECTIONS: ReadonlySet<string> = new Set(SYNC_COLLECTION_NAMES);
 
 /**
  * Where every measured byte on this device lives, relative to the active
- * store. The buckets are cashier-honest, not storage-honest: "search indexes"
- * and "bookkeeping" describe what the bytes DO, and anything that cannot be
- * attributed stays visibly unattributed instead of silently inflating a
- * bucket.
+ * store. The buckets are cashier-honest, not storage-honest: "bookkeeping"
+ * describes what the bytes DO, and anything that cannot be attributed stays
+ * visibly unattributed instead of silently inflating a bucket. (Search has no
+ * stored index since #2411 — the blob is rebuilt in memory from the data rows.)
  */
 export type StorageBreakdown = {
 	/** The active scope's synced collections — the rows the table itemizes. */
 	activeDataBytes: number;
-	/** Full-text search collections (`*_flexsearch`) of this store's databases. */
-	searchIndexBytes: number;
 	/**
 	 * The rest of this store's working set: logs, sync bookkeeping, settings,
 	 * RxDB internals, and the fast-access mirror of the synced data.
@@ -81,7 +78,6 @@ export function collectionFromEntryName(entryName: string, dbName: string): stri
 function emptyBreakdown(): StorageBreakdown {
 	return {
 		activeDataBytes: 0,
-		searchIndexBytes: 0,
 		bookkeepingBytes: 0,
 		otherCashiersBytes: 0,
 		otherStoresBytes: 0,
@@ -123,9 +119,7 @@ export function classifyStorageEntries(
 		const ownDb = ownDbs.find((db) => collectionFromEntryName(entry.name, db.name) !== null);
 		if (ownDb) {
 			const collection = collectionFromEntryName(entry.name, ownDb.name)!;
-			if (collection.endsWith(SEARCH_COLLECTION_SUFFIX)) {
-				breakdown.searchIndexBytes += entry.bytes;
-			} else if (ownDb.dataCounts && SYNCED_COLLECTIONS.has(collection)) {
+			if (ownDb.dataCounts && SYNCED_COLLECTIONS.has(collection)) {
 				breakdown.activeDataBytes += entry.bytes;
 			} else {
 				breakdown.bookkeepingBytes += entry.bytes;

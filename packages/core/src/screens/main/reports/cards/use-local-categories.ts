@@ -17,7 +17,7 @@ export function useLocalCategories(ids: number[]) {
 			round: number
 		): Observable<CategoryTree> => {
 			if (!wanted.length) return of(held);
-			return observeEngineQuery(engine, locale, {
+			return observeEngineQuery(engine, {
 				collection: 'products/categories',
 				selector: { id: { $in: wanted } },
 				limit: Number.MAX_SAFE_INTEGER,

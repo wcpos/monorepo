@@ -86,7 +86,7 @@ export function useRegisterSession() {
 				if (!current)
 					return of({ orders: { hits: [] as never[] }, refundRecords: [] as RefundDocumentType[] });
 				let previousRefunds: string | undefined;
-				return observeEngineQuery(engine, locale, {
+				return observeEngineQuery(engine, {
 					collection: 'orders',
 					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
 					limit: Number.MAX_SAFE_INTEGER,
@@ -97,7 +97,7 @@ export function useRegisterSession() {
 								.filter((row) => row.session_id === current.id)
 								.flatMap((row) => (row.refunds ?? []).map(({ id }) => id))
 						);
-						return observeEngineQuery(engine, locale, {
+						return observeEngineQuery(engine, {
 							collection: 'refunds',
 							selector: {
 								$or: [{ session_id: current.id }, { id: { $in: ids } }],
@@ -116,7 +116,7 @@ export function useRegisterSession() {
 									)
 									.map((refund) => refund.parent_id);
 								const parents$: ReturnType<typeof observeEngineQuery> = parentIds.length
-									? observeEngineQuery(engine, locale, {
+									? observeEngineQuery(engine, {
 											collection: 'orders',
 											selector: { id: { $in: parentIds } },
 											limit: Number.MAX_SAFE_INTEGER,
