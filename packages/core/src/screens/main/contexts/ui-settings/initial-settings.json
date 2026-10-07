@@ -39,7 +39,7 @@
     ],
     "viewMode": "grid",
     "variationsStyle": "drill",
-    "browseBy": "all",
+    "browseBy": "categories",
     "scannerHeight": 176,
     "gridColumns": 4,
     "gridFields": {

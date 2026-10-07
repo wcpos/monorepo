@@ -250,6 +250,19 @@ async function reuseValidAuthState(
 		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
 			timeout: CATALOGUE_READY_TIMEOUT_MS,
 		});
+		// The category root passes the count check too (its footer carries the catalogue total),
+		// so a snapshot whose till browses by categories — one exported before setup chose All
+		// products — would be reused and every product-root spec would open on term tiles.
+		// The product grid is what the specs need; a browse root is a stale snapshot.
+		if (
+			await page
+				.getByTestId('browse-root')
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
+			throw new Error('restored state browses by a taxonomy, not All products');
+		}
 		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot + catalogue)`);
 		return state.storeIds as string[];
 	} catch (error) {
@@ -377,6 +390,22 @@ async function setupVariant(
 			storeId: options.storeId,
 		});
 		discoveredStoreIds = storeIds;
+
+		// `authenticateWithStore` set All products (a till that never chose browses by
+		// categories; the specs read the product grid at the root), but it returns when the
+		// dialog has closed, and the form's string values are debounced with the RxState write
+		// un-awaited, so closing the page here could terminate the OPFS worker before `all` is
+		// committed and export a snapshot that still browses by categories (Codex, #2415). Read
+		// it back from a fresh boot before exporting: no browse root is the persisted setting.
+		// The warm snapshot also needs the catalogue count ready; the cold one has no rows.
+		await authPage.reload({ waitUntil: 'commit' });
+		await authPage.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+		if (!options.coldStart) {
+			await expect(authPage.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+				timeout: CATALOGUE_READY_TIMEOUT_MS,
+			});
+		}
+		await expect(authPage.getByTestId('browse-root')).toHaveCount(0);
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 

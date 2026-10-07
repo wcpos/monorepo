@@ -39,6 +39,7 @@ const registered = [
 	"'empty-state': emptyState",
 	'notice',
 	'breadcrumb',
+	"'browse-tiles': browseTiles",
 	"'page-bar': pageBar",
 	"'pane-stack': paneStack",
 	"'slide-over': slideOver",

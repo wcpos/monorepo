@@ -253,7 +253,7 @@ describe('mergeWithInitalValues', () => {
 		expect(currentState.position).toBe('right');
 	});
 
-	it('resets a browseBy outside the vocabulary to all', async () => {
+	it('resets a browseBy outside the vocabulary to the default, categories', async () => {
 		const currentState: Record<string, unknown> = {
 			position: 'left',
 			browseBy: 'favourites',
@@ -266,13 +266,13 @@ describe('mergeWithInitalValues', () => {
 			}),
 		};
 		await mergeWithInitalValues('pos-products', state as never);
-		expect(currentState.browseBy).toBe('all');
+		expect(currentState.browseBy).toBe('categories');
 	});
 
-	it('keeps a browseBy the cashier chose, and seeds all on a state written before the setting existed', async () => {
+	it('keeps a browseBy the cashier chose, and seeds categories on a state written before the setting existed', async () => {
 		const chosen: Record<string, unknown> = {
 			position: 'left',
-			browseBy: 'categories',
+			browseBy: 'all',
 			filterBar: [],
 		};
 		const older: Record<string, unknown> = { position: 'left', filterBar: [] };
@@ -285,8 +285,8 @@ describe('mergeWithInitalValues', () => {
 			};
 			await mergeWithInitalValues('pos-products', state as never);
 		}
-		expect(chosen.browseBy).toBe('categories');
-		expect(older.browseBy).toBe('all');
+		expect(chosen.browseBy).toBe('all');
+		expect(older.browseBy).toBe('categories');
 	});
 });
 

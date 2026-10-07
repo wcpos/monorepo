@@ -141,6 +141,27 @@ export async function setVariationsStyle(page: Page, style: 'drill' | 'inline'):
 }
 
 /**
+ * Pick the products stage's Browse by source in the same settings dialog. A source the store
+ * has no terms for is dimmed and refuses the press, so the radio is asserted checked before the
+ * dialog closes: a disabled row would otherwise leave the previous source in place silently.
+ */
+export async function setBrowseBy(
+	page: Page,
+	value: 'all' | 'categories' | 'tags' | 'brands' | 'shortcuts'
+): Promise<void> {
+	await page.getByTestId('products-settings-button').click();
+	const dialog = page
+		.getByRole('dialog')
+		.filter({ has: page.getByTestId(`ui-settings-browse-by-${value}`) });
+	const radio = dialog.getByTestId(`ui-settings-browse-by-${value}`);
+	await radio.click();
+	await expect(radio).toHaveAttribute('aria-checked', 'true');
+	// Forced, as setVariationsStyle: the toast host intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
+	await expect(dialog).toBeHidden();
+}
+
+/**
  * Open a real live-store session when the cart column shows the open-register
  * landing; leave it open so later runs can reuse it.
  *
@@ -959,9 +980,14 @@ export async function authenticateWithStore(
 	} else {
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
 	}
-	// Persist the inline alternative in the auth snapshot, after catalogue readiness.
+	// Persist the inline alternative in the auth snapshot, after catalogue readiness. And the
+	// product grid: a till that never chose browses by categories, and every spec that reads
+	// the grid at the root (tiles, headers, scroll, the cold profile's `no-data-message`) wants
+	// All products. Set here, in the one path every authenticated page takes — a snapshot's
+	// export, a lazy per-test login, a snapshot that would not restore — not only on export.
 	if (await becomesVisible(page.getByTestId('products-settings-button'), 5_000)) {
 		await setVariationsStyle(page, 'inline');
+		await setBrowseBy(page, 'all');
 	}
 	await waitForOPFSPersistence(page);
 

@@ -2,9 +2,17 @@ export const BROWSE_BY = ['all', 'categories', 'tags', 'brands', 'shortcuts'] as
 export type BrowseBy = (typeof BROWSE_BY)[number];
 export type TaxonomySource = 'categories' | 'tags' | 'brands';
 
-/** A persisted value the app does not know (a newer build wrote it) reads as today's screen. */
+/**
+ * What a till browses by until the cashier chooses: categories (owner, 2026-10-07). The seed in
+ * `ui-settings/initial-settings.json` carries the same literal; a test keeps the two together.
+ */
+export const DEFAULT_BROWSE_BY: BrowseBy = 'categories';
+
+/** A persisted value the app does not know (a newer build wrote it) reads as the default. */
 export function readBrowseBy(value: unknown): BrowseBy {
-	return (BROWSE_BY as readonly unknown[]).includes(value) ? (value as BrowseBy) : 'all';
+	return (BROWSE_BY as readonly unknown[]).includes(value)
+		? (value as BrowseBy)
+		: DEFAULT_BROWSE_BY;
 }
 
 export function isTaxonomy(source: BrowseBy): source is TaxonomySource {

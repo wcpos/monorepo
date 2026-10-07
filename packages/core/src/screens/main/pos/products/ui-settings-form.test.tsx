@@ -307,8 +307,12 @@ it('offers Browse by with All products first and dims a source with nothing to s
 		'ui-settings-browse-by-brands',
 		'ui-settings-browse-by-shortcuts',
 	]);
-	// No stored value reads as All products.
-	expect(screen.getByTestId('ui-settings-browse-by-all')).toHaveAttribute('aria-checked', 'true');
+	// No stored value reads as the default, Categories; All products is offered, not chosen.
+	expect(screen.getByTestId('ui-settings-browse-by-categories')).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+	expect(screen.getByTestId('ui-settings-browse-by-all')).toHaveAttribute('aria-checked', 'false');
 
 	// Answered with terms: enabled, with its count.
 	const categories = screen.getByTestId('ui-settings-browse-by-categories');
@@ -329,14 +333,11 @@ it('offers Browse by with All products first and dims a source with nothing to s
 	act(() => jest.advanceTimersByTime(1000));
 	expect(patchSpy).not.toHaveBeenCalled();
 
-	fireEvent.click(categories);
+	fireEvent.click(tags);
 	act(() => jest.advanceTimersByTime(1000));
-	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'categories' });
+	expect(patchSpy).toHaveBeenCalledWith({ browseBy: 'tags' });
 	await settle();
-	expect(screen.getByTestId('ui-settings-browse-by-categories')).toHaveAttribute(
-		'aria-checked',
-		'true'
-	);
+	expect(screen.getByTestId('ui-settings-browse-by-tags')).toHaveAttribute('aria-checked', 'true');
 });
 
 it('persists a Sort By selection', async () => {

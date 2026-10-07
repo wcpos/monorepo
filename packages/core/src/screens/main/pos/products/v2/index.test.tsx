@@ -222,7 +222,8 @@ describe('POSProducts query-state wiring', () => {
 		mockBrowseStageProps = null;
 		mockBrowseStageMounts = 0;
 		mockScopeKey = '0:0';
-		mockBrowseBy = undefined;
+		// Stated, not left to the default: a till that never chose browses by categories.
+		mockBrowseBy = 'all';
 		mockShowOutOfStock = false;
 		mockSortBy = 'name';
 		mockSortDirection = 'asc';
@@ -498,7 +499,7 @@ describe('POSProducts query-state wiring', () => {
 		rerender(<POSProducts />);
 		expect(mockFilterBarProps.level).toBe('products');
 
-		mockBrowseBy = undefined;
+		mockBrowseBy = 'all';
 		rerender(<POSProducts />);
 		expect(mockFilterBarProps.level).toBe('products');
 	});
