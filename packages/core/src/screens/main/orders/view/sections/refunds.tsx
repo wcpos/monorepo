@@ -6,6 +6,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { refundValue } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -123,17 +124,21 @@ export function RefundsFallback({
 	refunds,
 	currencySymbol,
 	onRetry,
+	offline,
 }: {
 	refunds?: LocalRefund[];
 	currencySymbol?: string;
 	onRetry: () => void;
+	offline?: boolean;
 }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol });
 	return (
 		<Section title={t('orders.refunds')}>
 			<View className="gap-3">
-				<Text className="text-destructive text-sm">{t('orders.refunds_load_failed')}</Text>
+				<Text className={offline ? 'text-muted-foreground text-sm' : 'text-destructive text-sm'}>
+					{offline ? t('common.no_internet_connection') : t('orders.refunds_load_failed')}
+				</Text>
 				{refunds?.length ? (
 					<View className="gap-2">
 						<Text className="text-muted-foreground text-xs">
@@ -166,17 +171,33 @@ export function RefundsFallback({
 	);
 }
 
+function RefundsOffline({ order, onRetry }: { order: OrderPayload; onRetry: () => void }) {
+	// Retry a skipped request when the app wakes, and unsubscribe when the card unmounts.
+	React.useEffect(() => requestStateManager.onWake(onRetry), [onRetry]);
+	return (
+		<RefundsFallback
+			refunds={order.refunds}
+			currencySymbol={order.currency_symbol}
+			onRetry={onRetry}
+			offline
+		/>
+	);
+}
+
 function RefundsDetail({
 	order,
 	resource,
+	onRetry,
 }: {
 	order: OrderPayload;
-	resource: ObservableResource<WCRefund[]>;
+	resource: ObservableResource<WCRefund[] | null>;
+	onRetry: () => void;
 }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const refunds = useObservableSuspense(resource);
 
+	if (refunds === null) return <RefundsOffline order={order} onRetry={onRetry} />;
 	if (!refunds.length) return null;
 
 	const total = totalRefunded(refunds);
@@ -206,12 +227,14 @@ function RefundsDetail({
 export function RefundsSection({
 	order,
 	resource,
+	onRetry,
 }: {
 	order: OrderPayload;
-	resource?: ObservableResource<WCRefund[]>;
+	resource?: ObservableResource<WCRefund[] | null>;
+	onRetry: () => void;
 }) {
 	if (!order.id || !resource) {
 		return null;
 	}
-	return <RefundsDetail order={order} resource={resource} />;
+	return <RefundsDetail order={order} resource={resource} onRetry={onRetry} />;
 }

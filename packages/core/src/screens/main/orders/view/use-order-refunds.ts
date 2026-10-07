@@ -1,8 +1,10 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { from, of, throwError } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
@@ -47,17 +49,25 @@ export interface WCRefund {
  * from an HTTP GET with no live subscription behind it, so an entry keyed by order id would
  * serve a snapshot forever and a refund taken on another till would never appear. The resource
  * is per mount on purpose — every open of the modal asks the server again.
+ * `null` means the till could not ask the server (offline or in the background); nothing was
+ * tried, so it is not an error for the boundary.
  */
 export function useOrderRefunds(orderId: number) {
 	const http = useRestHttpClient();
 
 	const observable$ = React.useMemo(
-		() => from(http.get(`orders/${orderId}/refunds`)).pipe(map((res) => res.data as WCRefund[])),
+		() =>
+			from(http.get(`orders/${orderId}/refunds`)).pipe(
+				map((res) => res.data as WCRefund[]),
+				catchError((error) =>
+					isExpectedPreflightBlock(error) ? of(null) : throwError(() => error)
+				)
+			),
 		[http, orderId]
 	);
 
 	return React.useMemo(
-		() => new ObservableResource(observable$) as ObservableResource<WCRefund[]>,
+		() => new ObservableResource(observable$) as ObservableResource<WCRefund[] | null>,
 		[observable$]
 	);
 }
