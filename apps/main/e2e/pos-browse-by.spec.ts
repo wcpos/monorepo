@@ -78,13 +78,20 @@ function probeLocator(page: Page, probe: SearchProbe) {
 async function scrollRootUntilMounted(page: Page, root: Locator, term: Locator): Promise<void> {
 	await expect(root).toBeVisible();
 	const deadline = Date.now() + TERM_PULL_TIMEOUT_MS;
+	// Sweeps, not a one-way scroll: the pull can still be in flight, and a term it inserts near
+	// the top after the sweep has reached the bottom is only found by going back up. Each pass
+	// walks down a screen at a time and then returns to the top before the next.
+	let step = 0;
 	while (!(await term.isVisible().catch(() => false))) {
 		if (Date.now() > deadline) break;
 		const box = await root.boundingBox();
 		if (box) {
 			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-			await page.mouse.wheel(0, Math.max(200, box.height * 0.8));
+			const page_ = Math.max(200, box.height * 0.8);
+			// Four screens down, then one jump back to the top (a wheel delta no root exceeds).
+			await page.mouse.wheel(0, step % 5 === 4 ? -page_ * 50 : page_);
 		}
+		step++;
 		await page.waitForTimeout(250);
 	}
 	await expect(term).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
