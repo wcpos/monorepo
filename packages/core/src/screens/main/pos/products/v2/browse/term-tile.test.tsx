@@ -182,8 +182,10 @@ describe('TermTile', () => {
 			);
 		const badge = screen.getByTestId('browse-parent-badge').dataset.className!;
 		expect(step(badge, 'top-') + step(badge, 'size-')).toBeLessThanOrEqual(
-			step(onTile.className!, 'pt-')
+			step(onTile.className!, 'py-')
 		);
+		// Symmetric, so the words sit centred where no badge ever appears (the root's tiles).
+		expect(onTile.className!.split(' ').filter((name) => /^p[tb]-/.test(name))).toEqual([]);
 		expect(badge.split(' ')).toContain('absolute');
 	});
 	it('lets its picture fade in, and falls back to the placeholder when it fails', () => {

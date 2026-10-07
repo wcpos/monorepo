@@ -52,7 +52,7 @@ const UNDER = { marginLeft: '-100%' } as const;
  * A body without a picture: at least as tall as the tile is wide, taller when its words need it
  * (a dealt term tile keeps its own height now, and a fixed square cut a long name off), its words
  * clear of the parent copy's back badge. The badge (`top-2`, `size-6`) sits in the words' top
- * gutter (`pt-8`) on the tile and on its copy alike, so the copy lays its words out exactly as
+ * gutter (`py-8`, symmetric) on the tile and on its copy alike, so the copy lays its words out exactly as
  * the tile it came from — overlaid, the badge covered the end of the first line (Pixel,
  * 2026-10-07: "Uncategor‹").
  */
@@ -70,8 +70,12 @@ function WordsBody({ gap, children }: { gap: 'gap-1' | 'gap-2'; children: React.
 		</View>
 	);
 }
-/** The words' padding: the badge's corner (`top-2` + `size-6`) is the top gutter. */
-export const WORDS_PADDING = 'px-3 pt-8 pb-3';
+/**
+ * The words' padding: the badge's corner (`top-2` + `size-6`) is the top gutter, and the bottom
+ * one matches it so the words stay centred on a tile that never shows a badge (the root's All
+ * products, a text-only term, a shortcut). A long name grows the body instead.
+ */
+export const WORDS_PADDING = 'px-3 py-8';
 /** The parent's back badge. */
 export const BADGE =
 	'bg-card absolute top-2 right-2 size-6 items-center justify-center rounded-full';

@@ -72,7 +72,7 @@ jest.mock('react-native-reanimated', () => {
 	return {
 		__esModule: true,
 		default: {
-			View: ({ children, style, ...rest }: ViewProps) => {
+			View: ({ children, style, className, ...rest }: ViewProps & { className?: string }) => {
 				const flat = flatten(style);
 				const id = ReactActual.useRef(`style-${ids++}`).current;
 				if (typeof flat.factory === 'function') mockStyles.set(id, flat.factory as () => Style);
@@ -86,6 +86,14 @@ jest.mock('react-native-reanimated', () => {
 						data-height={flat.height as number}
 						data-width={flat.width as number}
 						data-flex={flat.flex as number}
+						data-class-name={className}
+						data-box={JSON.stringify({
+							width: flat.width,
+							height: flat.height,
+							flexGrow: flat.flexGrow,
+							flexShrink: flat.flexShrink,
+							flexBasis: flat.flexBasis,
+						})}
 						aria-hidden={rest['aria-hidden']}
 					>
 						{children}
@@ -989,7 +997,28 @@ it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt 
 	// breaks mid-word broke a letter earlier on the copy (Pixel, 2026-10-07, Uncategorized). A
 	// fixed box: no share of the row.
 	expect(box().getAttribute('data-width')).toBe(String(TILE.width + 8));
-	expect(box().getAttribute('data-flex')).toBe('0');
+	// A fixed box on both engines: no `flex` (neither the class's `flex: 1`, which makes Yoga read
+	// an auto basis as 0, nor `flex: 0`, which is `0 1 0%` in CSS and beats the width on the web).
+	expect(box().getAttribute('data-flex')).toBeNull();
+	expect(box().getAttribute('data-class-name')).toBeNull();
+	const pinned = JSON.parse(box().getAttribute('data-box')!);
+	expect(pinned).toEqual({
+		width: TILE.width + 8,
+		height: TILE.height + 8,
+		flexGrow: 0,
+		flexShrink: 0,
+		flexBasis: 'auto',
+	});
+	// What react-native-web draws for that style: the width, and nothing that overrides it.
+	const { View: WebView } = jest.requireActual<{
+		View: React.ComponentType<{ testID?: string; style?: object }>;
+	}>('react-native-web');
+	const { getByTestId } = render(<WebView testID="web-copy" style={pinned} />);
+	const drawn = getByTestId('web-copy').style;
+	expect(drawn.width).toBe(`${TILE.width + 8}px`);
+	expect(drawn.flexBasis).toBe('auto');
+	expect(drawn.flexGrow).toBe('0');
+	expect(drawn.flexShrink).toBe('0');
 	rerender(<Stage detail={null} />);
 	expect(height()).toBe(String(TILE.height + 8));
 	finish(0);

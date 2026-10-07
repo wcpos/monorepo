@@ -669,17 +669,21 @@ export function DealCell({
 					// The tapped tile's width too: a column of the level is a fraction of a dp off the
 					// root's, and a name that breaks mid-word broke one letter earlier on the copy
 					// ("Uncategor / ized" against "Uncatego / rized", Pixel, 2026-10-07). A fixed
-					// width, not a share of the row: `flex: 0` itself, since the class's `flex: 1`
-					// makes Yoga read an `auto` basis as 0 and collapsed the copy to nothing.
+					// width, not a share of the row — and no `flex` shorthand anywhere on it (the
+					// cell drops its `flex-1` class below): beside `flex: 1` Yoga reads an `auto`
+					// basis as 0 and collapsed the copy on the phone, and a `flex: 0` instead is
+					// `0 1 0%` in CSS, whose 0% basis beats the width and collapsed it on the web.
 					width: origin.width + 2 * margin,
 					height: origin.height + 2 * margin,
-					flex: 0,
+					flexGrow: 0,
+					flexShrink: 0,
+					flexBasis: 'auto' as const,
 				}
 			: null;
 
 	return (
 		<Animated.View
-			className="flex-1"
+			className={size ? undefined : 'flex-1'}
 			style={[style, parent && FRONT, size, parent && (waiting || !copyPlaced) && UNSEEN]}
 		>
 			{parent ? (
