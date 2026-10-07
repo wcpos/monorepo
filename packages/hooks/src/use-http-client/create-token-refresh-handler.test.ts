@@ -2,7 +2,10 @@ import 'whatwg-fetch';
 
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { resetRefreshCooldown } from './refresh-access-token';
-import { requestStateManager } from './request-state-manager';
+import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
+
+let mockWakeCallback: () => void;
+const mockWakeCleanup = jest.fn();
 
 // Mock dependencies
 jest.mock('@wcpos/utils/logger', () => ({
@@ -21,8 +24,17 @@ jest.mock('./request-queue', () => ({
 
 jest.mock('./request-state-manager', () => {
 	const setAuthFailed = jest.fn();
+	const PREFLIGHT_BLOCK = { ASLEEP: 'preflight-asleep' };
 	return {
+		PREFLIGHT_BLOCK,
+		isAsleepBlock: (e: any) =>
+			e?.isPreFlightBlocked === true && e?.blockCode === PREFLIGHT_BLOCK.ASLEEP,
 		requestStateManager: {
+			isAppSleeping: jest.fn(() => false),
+			onWake: jest.fn((callback: () => void) => {
+				mockWakeCallback = callback;
+				return mockWakeCleanup;
+			}),
 			startTokenRefresh: jest.fn(),
 			getRefreshedToken: jest.fn(),
 			setAuthFailed,
@@ -72,6 +84,7 @@ describe('createTokenRefreshHandler', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(false);
 		resetRefreshCooldown();
 		mockPost = jest.fn();
 		getHttpClient = () => ({ post: mockPost });
@@ -211,6 +224,99 @@ describe('createTokenRefreshHandler', () => {
 			});
 			expect(ctx.retryRequest).toHaveBeenCalled();
 			expect(result).toEqual(retryResponse);
+		});
+
+		it('retries once on wake when the retry is refused because the app is asleep', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+			const ctx = makeContext();
+			ctx.retryRequest.mockImplementationOnce(() => {
+				(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(true);
+				return Promise.reject({ isPreFlightBlocked: true, blockCode: PREFLIGHT_BLOCK.ASLEEP });
+			});
+			const settled = jest.fn();
+			const pending = handler.handle(ctx);
+			void pending.then(settled, settled);
+			for (let i = 0; i < 20; i++) await Promise.resolve();
+			expect(ctx.retryRequest).toHaveBeenCalledTimes(1);
+			expect(settled).not.toHaveBeenCalled();
+			(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(false);
+			mockWakeCallback();
+			await expect(pending).resolves.toEqual({ data: 'ok', status: 200 });
+			expect(ctx.retryRequest).toHaveBeenCalledTimes(2);
+			expect(ctx.retryRequest.mock.calls[1][0]).toBe(ctx.retryRequest.mock.calls[0][0]);
+			expect(mockWakeCleanup).toHaveBeenCalledTimes(1);
+		});
+
+		it('waits for wake before refreshing when the 401 arrives asleep', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+			(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(true);
+			const ctx = makeContext();
+			const pending = handler.handle(ctx);
+			for (let i = 0; i < 20; i++) await Promise.resolve();
+			expect(requestStateManager.startTokenRefresh).not.toHaveBeenCalled();
+			expect(mockPost).not.toHaveBeenCalled();
+			expect(ctx.retryRequest).not.toHaveBeenCalled();
+			(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(false);
+			mockWakeCallback();
+			await expect(pending).resolves.toEqual({ data: 'ok', status: 200 });
+			expect(mockPost).toHaveBeenCalledTimes(1);
+			expect(ctx.retryRequest).toHaveBeenCalledTimes(1);
+		});
+
+		it('a 401 after the wake retry still marks auth failed', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+			const ctx = makeContext();
+			ctx.retryRequest
+				.mockImplementationOnce(() => {
+					(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(true);
+					return Promise.reject({ isPreFlightBlocked: true, blockCode: PREFLIGHT_BLOCK.ASLEEP });
+				})
+				.mockRejectedValueOnce(makeError(401));
+			const pending = handler.handle(ctx);
+			const rejected = expect(pending).rejects.toBe(ctx.error);
+			for (let i = 0; i < 20; i++) await Promise.resolve();
+			(requestStateManager.isAppSleeping as jest.Mock).mockReturnValue(false);
+			mockWakeCallback();
+			await rejected;
+			expect(ctx.error.isRefreshTokenInvalid).toBe(true);
+			expect(requestStateManager.setAuthFailed).toHaveBeenCalledWith(true);
+			expect(ctx.retryRequest).toHaveBeenCalledTimes(2);
 		});
 
 		it('passes the refreshed token as metadata without authoring credentials', async () => {
