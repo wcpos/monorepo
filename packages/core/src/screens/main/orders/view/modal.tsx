@@ -139,7 +139,7 @@ function RefundsResourceBoundary({
 	return (
 		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
 			<React.Suspense fallback={<RefundsSkeleton />}>
-				<RefundsSection order={order} resource={resource} />
+				<RefundsSection order={order} resource={resource} onRetry={onRetry} />
 			</React.Suspense>
 		</ErrorBoundary>
 	);

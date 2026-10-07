@@ -76,13 +76,23 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { refreshAccessToken } from './refresh-access-token';
-import { requestStateManager } from './request-state-manager';
+import { isAsleepBlock, requestStateManager } from './request-state-manager';
 
 import type { WcposRequestConfig } from './use-http-client';
 import type { RefreshAccessTokenConfig } from './refresh-access-token';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
 const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
+
+/** Resolves at once when the app is awake, else on the next wake. */
+const untilAwake = (): Promise<void> =>
+	new Promise((resolve) => {
+		if (!requestStateManager.isAppSleeping()) return resolve();
+		const off = requestStateManager.onWake(() => {
+			off();
+			resolve();
+		});
+	});
 
 type TokenRefreshConfig = RefreshAccessTokenConfig;
 
@@ -137,6 +147,7 @@ export const createTokenRefreshHandler = ({
 				},
 			});
 
+			await untilAwake();
 			const freshToken = await refreshAccessToken({
 				site,
 				wpUser,
@@ -165,7 +176,15 @@ export const createTokenRefreshHandler = ({
 			});
 
 			try {
-				return await retryRequest(withRefreshedCredential(originalConfig, freshToken, site));
+				const config = withRefreshedCredential(originalConfig, freshToken, site);
+				try {
+					return await retryRequest(config);
+				} catch (e) {
+					if (!isAsleepBlock(e)) throw e;
+					tokenLogger.debug('Request retry blocked while asleep, waiting for wake');
+					await untilAwake();
+					return await retryRequest(config);
+				}
 			} catch (retryError: unknown) {
 				const retryStatus = getResponseStatus(retryError);
 				if (retryStatus === 401) {
