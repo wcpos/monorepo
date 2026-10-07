@@ -257,7 +257,9 @@ export function TermLevelGrid({
 		if (index === 0) return <ParentTermTile term={term} onPress={back} />;
 		if (index <= children.length) {
 			const child = children[index - 1];
-			return <TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} grow />;
+			return (
+				<TermTile term={child} onPress={onOpenTerm} lifted={lifted === termKey(child)} dealt />
+			);
 		}
 		const record = products[index - 1 - children.length];
 		if (!record) return <ProductPlaceholder />;
@@ -331,9 +333,6 @@ export function TermLevelGrid({
 												columns={columns}
 												scroll={scroll}
 												restY={rowTops[rowIndex]}
-												// The parent and the child terms keep their own height (term tiles are all
-												// one height); a product tile beside them is what it is.
-												natural={index <= children.length}
 											>
 												{renderSlot(index)}
 											</DealCell>

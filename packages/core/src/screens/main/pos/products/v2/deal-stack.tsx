@@ -11,6 +11,7 @@ import Animated, {
 	withDelay,
 	withTiming,
 } from 'react-native-reanimated';
+import { useCSSVariable } from 'uniwind';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { BEATS, EASE, EASE_BEAT, EASE_EXIT, PANE } from '@wcpos/components/lib/motion';
@@ -50,6 +51,8 @@ type Deal = {
 	furniture?: SharedValue<number>;
 	/** The detail on stage: a copy's report names the deal it was made for. */
 	generation: number;
+	/** The tile's `m-1` as the scale step draws it: a cell is the tile plus this on every side. */
+	margin: number;
 	/**
 	 * The parent's copy reports to the stage: `false` as it mounts (it will say when it can be
 	 * shown), then `true` once its first frame on the tapped tile has been applied on the UI
@@ -60,6 +63,11 @@ type Deal = {
 	copyPlaced: boolean;
 };
 
+// The tile's `m-1` at the Regular step. The stage reads the live `--spacing` (`m-1` is one unit
+// of it, and the scale step moves it): at 4 on a phone whose step drew 3.43 dp, every copy sat
+// 1.5 px up and left of its tile and shifted at the handover (Pixel, 2026-10-07).
+const TILE_MARGIN = 4;
+
 // Outside a stage a cell is simply where it belongs.
 const AT_REST: Deal = {
 	origin: null,
@@ -69,6 +77,7 @@ const AT_REST: Deal = {
 	grid: null,
 	placeGrid: () => {},
 	generation: 0,
+	margin: TILE_MARGIN,
 	placeCopy: () => {},
 	copyPlaced: true,
 };
@@ -82,8 +91,6 @@ export const useDeal = () => React.useContext(DealContext);
 // A stack inside a detail that is cross-fading away: it holds what it shows until it goes.
 const DealHeldContext = React.createContext(false);
 
-// The tile's `m-1`: a cell is the tile plus this much on every side.
-const TILE_MARGIN = 4;
 // The parent and the tiles come from one frame; a variation fades in over the first of its travel.
 const FADE_IN_BY = 0.8;
 const SCALE_FROM = 0.92;
@@ -172,6 +179,8 @@ export function DealStack<T>({
 	// The detail's own opacity: 1 but while it cross-fades away.
 	const veil = useSharedValue(1);
 	const [stageWidth, setStageWidth] = React.useState(0);
+	const spacing = Number.parseFloat(String(useCSSVariable('--spacing')));
+	const margin = Number.isFinite(spacing) && spacing > 0 ? spacing : TILE_MARGIN;
 	// The detail on stage outlives `detail` by one return, so its tiles can travel home.
 	const [staged, setStaged] = React.useState<T | null>(null);
 	const [generation, setGeneration] = React.useState(0);
@@ -240,9 +249,19 @@ export function DealStack<T>({
 	if (open && fading) setFading(false);
 	if (!open && settled) setSettled(false);
 	if (!open && landed) setLanded(false);
-	// Closing turns the tiles for home in the same render that hears of it; a cross-fade leaves
-	// them where they stand.
-	if (!open && dealt && !collapse && !fading) setDealt(false);
+	// The gather home waits for the stage's own frame after the commit that closes it. That commit
+	// re-renders the level underneath (its products and footer under the parent's query), and on
+	// Android mounting it blocked the UI thread for the frame the walk's clock started on: the
+	// first painted frame of every walk home to the root was already 59% along (Pixel, 2026-10-07,
+	// 1b f004 / 1d f003). As the copy does going out, the stage reports a UI frame after the commit
+	// (`home`, below) and only then turns the tiles for home. The web's frames follow its commits.
+	const web = Platform.OS === 'web';
+	const [homeFor, setHomeFor] = React.useState(0);
+	if (open && homeFor !== 0) setHomeFor(0);
+	const homeward = web || homeFor === generation;
+	// Closing turns the tiles for home once the stage is clear to; a cross-fade leaves them where
+	// they stand.
+	if (!open && dealt && !collapse && !fading && homeward) setDealt(false);
 	// A leaving detail's clock (a gather's, a cross-fade's) clears the stage when it runs out —
 	// only if the stage still holds the detail it was started for. A clock whose cancel came a
 	// frame late (a tile opened on the first frame of a cross-fade) runs out under a NEWER
@@ -323,6 +342,7 @@ export function DealStack<T>({
 			return () => cancelAnimationFrame(frame);
 		}
 		if (!open) {
+			if (!homeward) return;
 			// The products and the parent share one clock: the detail leaves the stage on the frame
 			// the parent tile reaches home, and the breadcrumb is gone before it passes underneath.
 			furniture.value = fromFirstFrame(
@@ -365,7 +385,20 @@ export function DealStack<T>({
 			cancelAnimationFrame(frame);
 			clearTimeout(landing);
 		};
-	}, [open, armed, fading, clearedBy, furniture, under, veil]);
+	}, [open, armed, fading, homeward, clearedBy, furniture, under, veil]);
+	// The closing commit's own frame: written as the commit lands, run on the UI thread after it
+	// has mounted, and reported a frame later — the frame the walk home then starts on.
+	const home = useSharedValue(0);
+	React.useLayoutEffect(() => {
+		home.value = !open && staged !== null && !web ? generation : 0;
+	}, [home, open, staged, web, generation]);
+	useAnimatedReaction(
+		() => home.value,
+		(asked, was) => {
+			if (asked === 0 || asked === was) return;
+			requestAnimationFrame(() => scheduleOnRN(setHomeFor, asked));
+		}
+	);
 
 	// A detail put on stage after (or during) a cross-fade starts every opacity clock from rest,
 	// before its first paint. A gather runs the furniture home to 0 and leaves the veil up; a
@@ -390,6 +423,7 @@ export function DealStack<T>({
 			placeGrid,
 			furniture,
 			generation,
+			margin,
 			placeCopy,
 			copyPlaced,
 		}),
@@ -402,6 +436,7 @@ export function DealStack<T>({
 			placeGrid,
 			furniture,
 			generation,
+			margin,
 			placeCopy,
 			copyPlaced,
 		]
@@ -478,7 +513,6 @@ export function DealCell({
 	columns,
 	scroll,
 	restY,
-	natural = false,
 	children,
 }: {
 	index: number;
@@ -493,15 +527,10 @@ export function DealCell({
 	 * cell below a taller row starts under the parent rather than a row's difference away.
 	 */
 	restY?: number;
-	/**
-	 * The slot keeps its own height in a taller row rather than stretching to it: a term tile
-	 * beside taller product tiles (owner, 2026-10-07). The parent's copy is pinned at the tapped
-	 * tile's height, so its sibling terms must not stretch either, or the row reads ragged at rest.
-	 */
-	natural?: boolean;
 	children: React.ReactNode;
 }) {
-	const { origin, dealt, landed, stageWidth, grid, generation, placeCopy, copyPlaced } = useDeal();
+	const { origin, dealt, landed, stageWidth, grid, generation, margin, placeCopy, copyPlaced } =
+		useDeal();
 	// A cell that mounts while the deal is still in the air (more slots than the placeholders
 	// held, the list's next batch) starts under the parent, unseen, and is dealt from there, so it
 	// is not painted at rest while the first row still flies. One that mounts after the deal has
@@ -543,12 +572,10 @@ export function DealCell({
 	// An unmeasured grid rests on the stage itself, as it did before it had a card.
 	const frame = grid ?? { x: 0, y: 0, width: stageWidth };
 	const fromX = flies
-		? origin.x - (frame.x + (index % columns) * (frame.width / columns) + TILE_MARGIN)
+		? origin.x - (frame.x + (index % columns) * (frame.width / columns) + margin)
 		: 0;
-	const rowTop = flies
-		? (restY ?? Math.floor(index / columns) * (origin.height + 2 * TILE_MARGIN))
-		: 0;
-	const fromY = flies ? origin.y - (frame.y + rowTop + TILE_MARGIN) : 0;
+	const rowTop = flies ? (restY ?? Math.floor(index / columns) * (origin.height + 2 * margin)) : 0;
+	const fromY = flies ? origin.y - (frame.y + rowTop + margin) : 0;
 	// Hidden until BOTH the tile's frame and the grid's frame are known: the offset needs both,
 	// and on Android the two measurements answer frames apart, so a cell that waited for the
 	// tile's frame alone painted at rest for a few frames and then snapped onto the tapped tile
@@ -636,21 +663,33 @@ export function DealCell({
 	// answer replaced the placeholders with taller tiles while the copy stood on the tapped tile,
 	// so it grew 244 → 431 px in one frame (Pixel, 2026-10-06, Clothing › Men f009) — and walked
 	// home taller than the tile it lands on.
-	const size = parent && flies ? { height: origin.height + 2 * TILE_MARGIN } : null;
+	const size =
+		parent && flies
+			? {
+					// The tapped tile's width too: a column of the level is a fraction of a dp off the
+					// root's, and a name that breaks mid-word broke one letter earlier on the copy
+					// ("Uncategor / ized" against "Uncatego / rized", Pixel, 2026-10-07). A fixed
+					// width, not a share of the row: `flex: 0` itself, since the class's `flex: 1`
+					// makes Yoga read an `auto` basis as 0 and collapsed the copy to nothing.
+					width: origin.width + 2 * margin,
+					height: origin.height + 2 * margin,
+					flex: 0,
+				}
+			: null;
 
 	return (
 		<Animated.View
 			className="flex-1"
-			style={[
-				style,
-				parent && FRONT,
-				natural && NATURAL,
-				size,
-				parent && (waiting || !copyPlaced) && UNSEEN,
-			]}
+			style={[style, parent && FRONT, size, parent && (waiting || !copyPlaced) && UNSEEN]}
 		>
 			{parent ? (
-				<CopyPictureContext.Provider value={holdPicture}>{children}</CopyPictureContext.Provider>
+				<CopyPictureContext.Provider value={holdPicture}>
+					{/* Laid out afresh at the pinned box: the copy mounts (unseen) in the level's column
+					    before the tapped tile is measured, and on Android its words kept the frames of
+					    that first layout when the box was pinned — the name broke a letter early
+					    ("Uncatego / rized" in a box that holds "Uncategor", Pixel, 2026-10-07). */}
+					<React.Fragment key={size ? 'pinned' : 'free'}>{children}</React.Fragment>
+				</CopyPictureContext.Provider>
 			) : (
 				children
 			)}
@@ -689,8 +728,6 @@ export function useCopyPicture(): (() => void) | undefined {
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */
 export const FRONT = { zIndex: 1 };
-// A slot at its own height, top-aligned in its row (`natural`).
-const NATURAL = { alignSelf: 'flex-start' } as const;
 // The parent before it can stand on the tapped tile. A plain style, not a worklet prop: it
 // has to commit on the same frame as the tapped tile stepping aside.
 const UNSEEN = { opacity: 0 };

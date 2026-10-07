@@ -51,7 +51,8 @@ jest.mock('@wcpos/components/image', () => ({
 jest.mock('../../../../components/product/product-image-placeholder', () => ({
 	PRODUCT_IMAGE_PLACEHOLDER: 'placeholder.png',
 }));
-// react-native-web drops `className`; surface it so the pressed-state classes can be read.
+// react-native-web drops `className`; surface it (and a View's style) so the tiles' layout
+// classes can be read.
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const { forwardRef } = jest.requireActual('react');
@@ -62,6 +63,19 @@ jest.mock('react-native', () => {
 			ref: React.Ref<unknown>
 		) {
 			return <actual.Pressable ref={ref} {...props} dataSet={{ className }} />;
+		}),
+		View: forwardRef(function View(
+			{ className, style, ...props }: { className?: string; style?: unknown },
+			ref: React.Ref<unknown>
+		) {
+			return (
+				<actual.View
+					ref={ref}
+					{...props}
+					style={style}
+					dataSet={{ className, style: JSON.stringify(style ?? null) }}
+				/>
+			);
 		}),
 	};
 });
@@ -132,15 +146,45 @@ describe('TermTile', () => {
 		const classes = screen.getByTestId('browse-term-7').getAttribute('data-class-name')!.split(' ');
 		expect(classes).toEqual(expect.arrayContaining(['bg-card', 'active:bg-muted', 'flex-1']));
 	});
-	it('grows to its row in a dealt cell, and shares the row with flex-1 elsewhere', () => {
+	// Yoga lays a dealt cell out at most as tall as its row, and a growing child grows to that
+	// limit: a `grow` tile took the row's height beside a taller tile even with the cell
+	// top-aligned (Pixel, 2026-10-07: Jackets and Tanks at 476 px beside a two-line name). In a
+	// dealt cell a term tile has no flex at all; in a root row it shares the row with flex-1.
+	it('keeps its own height in a dealt cell, and shares the row with flex-1 elsewhere', () => {
 		const { rerender } = render(<TermTile term={snacks} onPress={jest.fn()} />);
 		const size = () =>
 			screen.getByTestId('browse-term-8').getAttribute('data-class-name')!.split(' ');
 		expect(size()).toContain('flex-1');
-		expect(size()).not.toContain('grow');
-		rerender(<TermTile term={snacks} onPress={jest.fn()} grow />);
-		expect(size()).toContain('grow');
-		expect(size()).not.toContain('flex-1');
+		rerender(<TermTile term={snacks} onPress={jest.fn()} dealt />);
+		expect(size().filter((name) => /^(flex-|grow|shrink|basis-|h-|self-)/.test(name))).toEqual([]);
+	});
+	// The copy lays its words out as the tile did: one words box, the same classes on both, and
+	// the back badge in its top gutter (an overlaid badge covered the first line's end, and the copy
+	// wrapped "Uncategorized" a letter earlier; Pixel, 2026-10-07).
+	it('lays out a picture-less tile’s words exactly as its copy does, the badge clear of them', () => {
+		const uncategorized = { kind: 'term' as const, id: 9, name: 'Uncategorized', count: 11 };
+		const words = () => screen.getByTestId('term-words');
+		const { unmount } = render(<TermTile term={uncategorized} onPress={jest.fn()} />);
+		const onTile = { className: words().dataset.className, style: words().dataset.style };
+		unmount();
+		render(<ParentTermTile term={uncategorized} onPress={jest.fn()} />);
+		expect({ className: words().dataset.className, style: words().dataset.style }).toEqual(onTile);
+		// The words span the tile's width (laid over the square, not beside it).
+		expect(onTile.className!.split(' ')).toContain('w-full');
+		expect(JSON.parse(onTile.style!)).toEqual({ marginLeft: '-100%' });
+		// The badge's corner is the words' top gutter: `top-N` + `size-M` within `pt-K`.
+		const step = (classes: string, prefix: string) =>
+			Number(
+				classes
+					.split(' ')
+					.find((name) => name.startsWith(prefix))!
+					.slice(prefix.length)
+			);
+		const badge = screen.getByTestId('browse-parent-badge').dataset.className!;
+		expect(step(badge, 'top-') + step(badge, 'size-')).toBeLessThanOrEqual(
+			step(onTile.className!, 'pt-')
+		);
+		expect(badge.split(' ')).toContain('absolute');
 	});
 	it('lets its picture fade in, and falls back to the placeholder when it fails', () => {
 		render(<TermTile term={drinks} onPress={jest.fn()} />);

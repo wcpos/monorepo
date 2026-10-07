@@ -70,8 +70,8 @@ jest.mock('./term-tile', () => {
 	const actual = jest.requireActual('./term-tile');
 	return {
 		...actual,
-		TermTile: (props: { grow?: boolean }) => (
-			<div data-grow={String(!!props.grow)}>
+		TermTile: (props: { dealt?: boolean }) => (
+			<div data-dealt={String(!!props.dealt)}>
 				<actual.TermTile {...props} />
 			</div>
 		),
@@ -106,20 +106,17 @@ jest.mock('../deal-stack', () => ({
 		count,
 		columns,
 		restY,
-		natural,
 	}: React.PropsWithChildren<{
 		index: number;
 		count: number;
 		columns: number;
 		restY?: number;
-		natural?: boolean;
 	}>) => (
 		<div
 			data-testid={`cell-${index}`}
 			data-count={count}
 			data-columns={columns}
 			data-rest-y={String(restY)}
-			data-natural={String(!!natural)}
 		>
 			{children}
 		</div>
@@ -284,8 +281,8 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	// A dealt product tile grows to its row (the cell gives it no height of its own).
 	expect(screen.getByTestId('product-f').dataset.grow).toBe('true');
 	expect(screen.getByTestId('variable-l').dataset).toMatchObject({ grow: 'true', style: 'drill' });
-	// So does a child term: a subcategories level has rows made only of them.
-	expect(screen.getByTestId('browse-term-2').parentElement!.dataset.grow).toBe('true');
+	// A child term is dealt too, and keeps its own height there (term-tile.tsx, TileSize).
+	expect(screen.getByTestId('browse-term-2').parentElement!.dataset.dealt).toBe('true');
 	// Rows below the fold but inside the render window stay attached, so their tiles are seen
 	// for the whole of their flight (Android detaches clipped subviews by default).
 	expect(screen.getByTestId('browse-level-scroller').dataset.removeClipped).toBe('false');
@@ -298,17 +295,6 @@ it('deals the parent first, then child terms, then products, on the grid columns
 	expect(props.onOpenTerm).toHaveBeenCalledWith(hot, expect.anything());
 	fireEvent.click(screen.getByTestId('variable-l'));
 	expect(props.onDrillProduct).toHaveBeenCalledWith(latte);
-});
-
-// The parent's copy keeps the tapped tile's height; its sibling terms stretched to the product
-// tiles beside them read as a ragged row at rest (Clothing › Men, ≈252 vs ≈431 px; owner,
-// 2026-10-07). Term slots keep their own height; product slots are what they are.
-it('keeps the parent and child term slots at their own height, product slots stretched', () => {
-	render(<TermLevelGrid {...level()} />);
-	expect(screen.getByTestId('cell-0').dataset.natural).toBe('true');
-	expect(screen.getByTestId('cell-1').dataset.natural).toBe('true');
-	expect(screen.getByTestId('cell-2').dataset.natural).toBe('false');
-	expect(screen.getByTestId('cell-3').dataset.natural).toBe('false');
 });
 
 it('puts the crumb in a row of its own above the grid, its detail the query total', () => {

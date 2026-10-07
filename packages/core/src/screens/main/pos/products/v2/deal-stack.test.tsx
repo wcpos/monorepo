@@ -22,6 +22,9 @@ const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
 // Every animated reaction mounted: the UI thread runs them on its frames (`uiFrame`).
 const mockReactions = new Set<() => void>();
 let mockOS = 'web';
+// The live `--spacing` (the tile's `m-1`); unset reads as the Regular step's 4.
+let mockSpacing: number | undefined;
+jest.mock('uniwind', () => ({ useCSSVariable: () => mockSpacing }));
 // The stage's own frame in the window; a tile's frame is given relative to the same window.
 const STAGE = { x: 10, y: 20 };
 
@@ -81,7 +84,8 @@ jest.mock('react-native-reanimated', () => {
 						data-front={flat.zIndex === 1}
 						data-opacity={flat.opacity as number}
 						data-height={flat.height as number}
-						data-align={flat.alignSelf as string}
+						data-width={flat.width as number}
+						data-flex={flat.flex as number}
 						aria-hidden={rest['aria-hidden']}
 					>
 						{children}
@@ -173,6 +177,14 @@ const COLUMNS = 4;
 // One column of the grid's own width, not the stage's.
 const COLUMN = GRID.width / COLUMNS;
 
+// How many times the parent tile's body has mounted (a fresh layout each time).
+let mockBodyMounts = 0;
+function Body() {
+	React.useEffect(() => {
+		mockBodyMounts += 1;
+	}, []);
+	return null;
+}
 // A picture on the parent tile: it paints when the test says so.
 function Picture() {
 	const painted = useCopyPicture();
@@ -235,6 +247,7 @@ function Pane({
 				>
 					<span data-testid={`cell-${index}`} />
 					{index === 0 && picture ? <Picture /> : null}
+					{index === 0 ? <Body /> : null}
 				</DealCell>
 			))}
 			{scroll ? <Air scroll={scroll} /> : null}
@@ -302,6 +315,8 @@ beforeEach(() => {
 	mockLayouts.length = 0;
 	mockReactions.clear();
 	mockOS = 'web';
+	mockSpacing = undefined;
+	mockBodyMounts = 0;
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
 		callback(0);
 		return 1;
@@ -962,14 +977,19 @@ it('a picture off any copy holds nothing', () => {
 });
 
 it('the copy keeps the tapped tile’s height in a taller row, both ways; dealt in place it fills its row', () => {
-	const height = () =>
-		screen.getByTestId('cell-0').closest('[data-style]')!.getAttribute('data-height');
+	const box = () => screen.getByTestId('cell-0').closest('[data-style]')!;
+	const height = () => box().getAttribute('data-height');
 	const { rerender } = render(<Stage detail={null} />);
 	rerender(<Stage detail="Hoodie" />);
 	layOut();
 	// The tile plus its margins, whatever the products beside it in the level's first row make
 	// of that row (Pixel, 2026-10-06: Men's copy grew 244 → 431 px on the tapped tile).
 	expect(height()).toBe(String(TILE.height + 8));
+	// …and its width: a level's column is a fraction of a dp off the root's, and a name that
+	// breaks mid-word broke a letter earlier on the copy (Pixel, 2026-10-07, Uncategorized). A
+	// fixed box: no share of the row.
+	expect(box().getAttribute('data-width')).toBe(String(TILE.width + 8));
+	expect(box().getAttribute('data-flex')).toBe('0');
 	rerender(<Stage detail={null} />);
 	expect(height()).toBe(String(TILE.height + 8));
 	finish(0);
@@ -1062,19 +1082,82 @@ it('starts every clock of the deal on its own first frame, out, home and in a cr
 	expect(mockDelays.slice(delays)).toEqual([FIRST_FRAME_DELAY, FIRST_FRAME_DELAY]);
 });
 
-it('a natural slot keeps its own height in a taller row; others stretch to it', () => {
-	render(
-		<>
-			<DealCell index={1} count={3} columns={3} natural>
-				<span data-testid="term" />
-			</DealCell>
-			<DealCell index={2} count={3} columns={3}>
-				<span data-testid="product" />
-			</DealCell>
-		</>
+// `m-1` is one unit of the live `--spacing`, which the scale step moves: at the Regular 4 on a
+// phone whose step drew 3.43 dp, every copy sat 1.5 px up and left of its tile (Pixel, 2026-10-07).
+it('starts the copy from the tile by the margin the scale step draws, not the Regular one', () => {
+	mockSpacing = 3.5;
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	const [, , , ...cells] = mockShared;
+	cells.forEach((cell) => (cell.value = 0));
+	expect(styleOf('cell-0').transform).toEqual([
+		{ translateX: 100 - (GRID.x + 3.5) },
+		{ translateY: 200 - (GRID.y + 3.5) },
+	]);
+	expect(screen.getByTestId('cell-0').closest('[data-style]')!.getAttribute('data-height')).toBe(
+		String(TILE.height + 7)
 	);
-	const align = (testID: string) =>
-		screen.getByTestId(testID).closest('[data-style]')!.getAttribute('data-align');
-	expect(align('term')).toBe('flex-start');
-	expect(align('product')).toBeNull();
+});
+
+// Android: the commit that closes the detail re-renders the level under it, and mounting it held
+// the UI thread on the frame the walk home's clock started: the first painted frame was 59% along
+// (Pixel, 2026-10-07, 1b/1d). The tiles turn for home, and the clocks start, a UI frame after it.
+it('turns the tiles for home only after a UI frame has followed the closing commit', () => {
+	mockOS = 'android';
+	const frames: FrameRequestCallback[] = [];
+	const run = () => act(() => frames.splice(0).forEach((frame) => frame(0)));
+	const { rerender } = render(<Stage detail={null} />);
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+		frames.push(callback);
+		return frames.length;
+	});
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	run();
+	run();
+	expect(deal().dealt).toBe(true);
+	const timings = mockTimings.length;
+	rerender(<Stage detail={null} />);
+	// Heard, not started: still dealt, no clock assigned.
+	expect(deal().dealt).toBe(true);
+	expect(mockTimings.length).toBe(timings);
+	run();
+	expect(deal().dealt).toBe(false);
+	// Every tile's walk home, then the furniture (which clears the stage) and the products.
+	const started = mockTimings.slice(timings);
+	expect(started.filter((call) => call.toValue === 0)).toHaveLength(6 + 1);
+	expect(started.some((call) => call.toValue === 0 && call.done)).toBe(true);
+	expect(started.at(-1)).toMatchObject({ toValue: 1, duration: PANE });
+});
+
+it('the web turns for home in the commit that closes', () => {
+	const frames: FrameRequestCallback[] = [];
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+		frames.push(callback);
+		return frames.length;
+	});
+	rerender(<Stage detail={null} />);
+	expect(deal().dealt).toBe(false);
+});
+
+// On Android the copy's words kept the frames of their first layout (the level's column, before
+// the tapped tile was measured) when the box was pinned, and the name broke a letter early
+// ("Uncatego / rized", Pixel, 2026-10-07). The body is laid out afresh once, at the pinned box.
+it('lays the copy’s body out afresh once its box is pinned to the tapped tile', () => {
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	expect(mockBodyMounts).toBe(1);
+	layOut();
+	expect(mockBodyMounts).toBe(2);
+	// Dealt in place (no tile to pin to), it keeps its first layout.
+	rerender(<Stage detail={null} />);
+	finish(0);
+	mockBodyMounts = 0;
+	rerender(<Stage detail="Tee" target={null} />);
+	act(() => jest.advanceTimersByTime(120));
+	expect(mockBodyMounts).toBe(1);
 });
