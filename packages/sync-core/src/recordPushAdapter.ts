@@ -378,6 +378,19 @@ export async function pushRecordMutation(input: {
 			isEnvelope && body && typeof body.currentRevision === 'string'
 				? (body.currentRevision as string)
 				: null;
+	} else if (response.status !== 204) {
+		// A delete has no record to return, but an HTML host challenge at 2xx must not
+		// acknowledge a delete the server never ran. The plugin answers with {}.
+		const body = await safeJson(response);
+		if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+			emit({
+				type: 'push.error',
+				level: 'error',
+				collection: mutation.collectionName,
+				fields: { ...baseFields, status: response.status, reason: 'no-document' },
+			});
+			throw new RecordPushError(mutation, response.status, 'no-document');
+		}
 	}
 	emit({
 		type: 'push.outcome',

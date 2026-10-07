@@ -98,6 +98,66 @@ describe('write path integration', () => {
 		]);
 	});
 
+	it('a create whose 201 came back with no document is retried with the same key and lands once', async () => {
+		n = 0;
+		const server = createFakeWriteServer();
+		const keys: (string | null)[] = [];
+		const fetcher = async (url: string, init?: RequestInit) => {
+			keys.push(new Headers(init?.headers).get('Idempotency-Key'));
+			const response = await server.fetch(url, init);
+			if (keys.length === 1) {
+				return {
+					status: 201,
+					ok: true,
+					json: async () => {
+						throw new SyntaxError('Unexpected token <');
+					},
+				} as unknown as Response;
+			}
+			return response;
+		};
+		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		const create = buildCreateMutation(
+			{ collectionName: 'orders', payload: { status: 'pending' } },
+			deps
+		);
+		await queue.enqueue(create);
+		const push = (mutation: typeof create) =>
+			pushRecordMutation({
+				mutation,
+				resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+				fetcher,
+			});
+		const first = await drainMutationQueue({ queue, push });
+		expect(first).toMatchObject({ pushed: 0, failed: 1 });
+		expect(first.failures[0]).toMatchObject({ status: 201, reason: 'no-document' });
+		const pending = await queue.pending();
+		expect(pending).toHaveLength(1);
+		expect(pending[0].mutationId).toBe(create.mutationId);
+		expect(server.applied.get(create.recordId)?.id).toBe(500);
+
+		const acknowledged: PushResult[] = [];
+		const second = await drainMutationQueue({
+			queue,
+			push,
+			now: () => Date.parse(pending[0].nextAttemptAt!),
+			applyAck: async (_mutation, result) => {
+				acknowledged.push(result);
+			},
+		});
+		expect(second.pushed).toBe(1);
+		expect(server.received).toHaveLength(2);
+		expect(server.received).toMatchObject([
+			{ operation: 'create', mutationId: create.mutationId },
+			{ operation: 'create', mutationId: create.mutationId },
+		]);
+		expect(keys).toEqual([create.mutationId, create.mutationId]);
+		expect(await queue.pending()).toEqual([]);
+		expect(acknowledged).toHaveLength(1);
+		expect(acknowledged[0].document?.id).toBe(500);
+		expect(server.applied.size).toBe(1);
+	});
+
 	it('an update uses the prior revision as baseRevision and conflicts are surfaced, not acknowledged', async () => {
 		n = 0;
 		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
