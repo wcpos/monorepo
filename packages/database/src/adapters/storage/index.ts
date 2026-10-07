@@ -51,6 +51,11 @@ async function withStatement<T>(
 		} catch {
 			// the execute error is the one that carries the SQLite message
 		}
+		// Name the statement that failed. The platform's message alone was "Error code " on the
+		// Pixel (2026-10-06) and nothing said which table or verb it was; appending keeps the
+		// substrings premium matches on ("UNIQUE constraint", "Database is closed") intact.
+		if (error instanceof Error && !error.message.includes(' [sql: '))
+			error.message += ` [sql: ${query.replace(/\s+/g, ' ').trim().slice(0, 80)}]`;
 		throw error;
 	}
 	await statement.finalizeAsync();
