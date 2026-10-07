@@ -105,6 +105,7 @@ export function Totals() {
 										removable
 										onRemove={() => removeCoupon(code)}
 										removeAccessibilityLabel={`Remove coupon ${code}`}
+										removeTestID={`remove-coupon-${code}`}
 										className="grow-0"
 									>
 										<ButtonText>{code}</ButtonText>
