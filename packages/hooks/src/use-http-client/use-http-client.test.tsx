@@ -36,10 +36,13 @@ jest.mock('./request-queue', () => ({
 }));
 
 jest.mock('./request-state-manager', () => ({
+	isAsleepBlock: jest.fn(() => false),
 	requestStateManager: {
 		checkCanProceed: jest.fn(() => ({ ok: true })),
 		isTokenRefreshing: jest.fn(() => false),
 		awaitTokenRefresh: jest.fn(),
+		isAppSleeping: jest.fn(() => false),
+		onWake: jest.fn(() => () => {}),
 	},
 }));
 

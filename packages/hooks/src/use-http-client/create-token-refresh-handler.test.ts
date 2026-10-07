@@ -27,8 +27,10 @@ jest.mock('./request-state-manager', () => {
 	const PREFLIGHT_BLOCK = { ASLEEP: 'preflight-asleep' };
 	return {
 		PREFLIGHT_BLOCK,
-		isAsleepBlock: (e: any) =>
-			e?.isPreFlightBlocked === true && e?.blockCode === PREFLIGHT_BLOCK.ASLEEP,
+		isAsleepBlock: (e: unknown) => {
+			const block = e as { isPreFlightBlocked?: unknown; blockCode?: unknown } | null;
+			return block?.isPreFlightBlocked === true && block?.blockCode === PREFLIGHT_BLOCK.ASLEEP;
+		},
 		requestStateManager: {
 			isAppSleeping: jest.fn(() => false),
 			onWake: jest.fn((callback: () => void) => {
