@@ -159,8 +159,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			);
 			changes = {
 				...changes,
-				cancelRequested: Boolean(data.payment.void_requested_at),
-				releaseAvailable: Boolean(data.payment.void_requested_at),
+				cancelRequested: state.cancelRequested || Boolean(data.payment.void_requested_at),
+				releaseAvailable: state.releaseAvailable || Boolean(data.payment.void_requested_at),
 				deadlineAt: deadline(
 					data.payment,
 					Number.isNaN(parsedCreated) ? deps.now() : parsedCreated
