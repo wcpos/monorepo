@@ -37,6 +37,8 @@ const UUID_A = '22222222-2222-4222-8222-222222222222';
 const UUID_MINT = '33333333-3333-4333-8333-333333333333';
 const UUID_CLAIM = '44444444-4444-4444-8444-444444444444';
 const UUID_FOLLOW_UP = '55555555-5555-4555-8555-555555555555';
+const UUID_B = '66666666-6666-4666-8666-666666666666';
+const UUID_C = '77777777-7777-4777-8777-777777777777';
 
 let uniqueScope = 0;
 function freshIdentity(): StoreScopeIdentity {
@@ -1551,6 +1553,146 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(events.some((event) => event.type === 'write-rejected')).toBe(false);
 			expect(engine.status().queueDepth).toBe(1);
 			expect(bridge.publish).not.toHaveBeenCalled();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('after a 401 the write drain holds the session and probes once per interval', async () => {
+		const server = createFakeWriteServer();
+		let posts = 0;
+		let refused = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (init?.method === 'POST') {
+				posts += 1;
+				if (refused) {
+					return new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+						status: 401,
+					});
+				}
+			}
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		const refusals = () =>
+			diagnostics.filter((event) => event.type === 'queue.write.session-refused');
+		try {
+			await engine.ready;
+			for (const recordId of [UUID_A, UUID_B]) {
+				await insertBornLocalOrder(engine, recordId);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId,
+					payload: {
+						status: 'pos-open',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+					},
+				});
+			}
+
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({
+				status: 'ran',
+				sessionExpired: true,
+			});
+			expect(posts).toBe(1);
+			expect(refusals()).toHaveLength(1);
+			expect(refusals()[0]).toMatchObject({ level: 'error', fields: { status: 401 } });
+			nowMs += 10_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(1);
+			nowMs += 21_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(posts).toBe(2);
+			nowMs += 59_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(2);
+			nowMs += 2_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(3);
+			expect(refusals()).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('a successful push clears the session hold', async () => {
+		const server = createFakeWriteServer();
+		let posts = 0;
+		let refused = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (init?.method === 'POST') {
+				posts += 1;
+				if (refused) {
+					return new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+						status: 401,
+					});
+				}
+			}
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		const refusals = () =>
+			diagnostics.filter((event) => event.type === 'queue.write.session-refused');
+		try {
+			await engine.ready;
+			for (const recordId of [UUID_A, UUID_B]) {
+				await insertBornLocalOrder(engine, recordId);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId,
+					payload: {
+						status: 'pos-open',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+					},
+				});
+			}
+
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(posts).toBe(1);
+			refused = false;
+			nowMs += 31_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ status: 'ran', pushed: 2 });
+			expect(engine.status().queueDepth).toBe(0);
+			await insertBornLocalOrder(engine, UUID_C);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_C,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_C }],
+				},
+			});
+			nowMs += 1_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ pushed: 1 });
+			refused = true;
+			await insertBornLocalOrder(engine, UUID_FOLLOW_UP);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_FOLLOW_UP,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_FOLLOW_UP }],
+				},
+			});
+			nowMs += 1_000;
+			await engine.sync('write-drain');
+			expect(refusals()).toHaveLength(2);
 		} finally {
 			await engine.dispose();
 		}
