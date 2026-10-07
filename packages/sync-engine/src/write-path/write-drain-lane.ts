@@ -54,6 +54,7 @@ import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { fetchOrderServerRevision } from './order-server-revision';
+import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
@@ -380,7 +381,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						tickAbort.signal.removeEventListener('abort', abort);
 					}
 				};
-				const rawBoundFetch = bound.bindFetch(tickFetcher);
+				// A request that never answers would hold the lane and every checkout queued behind it.
+				const rawBoundFetch = bound.bindFetch(
+					withRequestTimeout(tickFetcher, WRITE_DRAIN_REQUEST_TIMEOUT_MS)
+				);
 				// Pull helpers thread the tick signal for between-request cancellation,
 				// but a scope-bound fetcher must not receive it: scopedFetch would use
 				// AbortSignal.any, which RN/Expo does not provide. tickFetcher already
