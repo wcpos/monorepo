@@ -294,6 +294,8 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 				phase: 'polling',
 				consecutiveErrors: 0,
 				unstable: false,
+				// The 409 was an answer, not a refusal: the live leg starts with no error.
+				error: null,
 				// Placeholder until the first adopted status supplies its dates.
 				deadlineAt: deadline(state.row, deps.now()),
 			});
