@@ -871,6 +871,18 @@ describe('a persisted path', () => {
 		unmount();
 		expect(mockState.filters.categories).toEqual([]);
 	});
+
+	// A key with no provider above is ordinary component state: nobody else will ever take the
+	// projection out, so leaving must, as it always did.
+	it('with a key but no provider, leaving takes the projection out too', () => {
+		const { result, unmount } = renderHook(() =>
+			useBrowsePath('categories', terms as never, 'pos-browse:scope')
+		);
+		act(() => result.current.enter(drinks));
+		expect(mockState.filters.categories).toEqual([1, 2]);
+		unmount();
+		expect(mockState.filters.categories).toEqual([]);
+	});
 });
 
 describe('filtersAtBaseline', () => {

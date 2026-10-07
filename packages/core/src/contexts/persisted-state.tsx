@@ -20,6 +20,15 @@ export function PersistedStateProvider({ children }: { children: React.ReactNode
 }
 
 /**
+ * Whether a `PersistedStateProvider` is above: whether `usePersistedState` with a key is shared
+ * across mounts here, or ordinary component state. A caller that skips its own teardown
+ * because another mount will pick the value up must know which.
+ */
+export function useIsPersisted(): boolean {
+	return React.useContext(PersistedStateContext) !== null;
+}
+
+/**
  * Component state that survives its component: under a `PersistedStateProvider`, the value for
  * `key` is created once and handed back to every later mount that asks for the same key. No
  * provider above, or no key: ordinary component state (`useState(create)`), so a component

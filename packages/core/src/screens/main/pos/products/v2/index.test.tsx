@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { cellsForRow, POSProducts } from './index';
+import { PersistedStateProvider } from '../../../../../contexts/persisted-state';
 import { ProductImage } from '../../../components/product/image';
 import { VariableProductImage } from '../../../components/product/variable-image';
 
@@ -619,3 +620,63 @@ jest.mock('../../contexts/overlay-side', () => ({ useOverlaySide: () => 'right' 
 jest.mock('../../../components/data-table/v2/skeleton', () => ({
 	DataTableSkeleton: () => <div data-testid="table-skeleton" />,
 }));
+
+// The register's layout switching trees unmounts the screen and mounts it again; under the
+// POS layout's PersistedStateProvider the query store is kept. A setting changed while the
+// screen was unmounted must still reach the kept store, and one that did not must not
+// overwrite what the cashier set.
+describe('a kept query store', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockDataTableProps = {};
+		mockGridProps = {};
+		mockFilterBarProps = {};
+		mockBrowseStageProps = null;
+		mockBrowseStageMounts = 0;
+		mockScopeKey = '0:0';
+		mockBrowseBy = 'all';
+		mockShowOutOfStock = false;
+		mockSortBy = 'name';
+		mockSortDirection = 'asc';
+		mockViewMode = 'table';
+		mockGridColumns = 4;
+		mockSession = null;
+	});
+	const host = (child: React.ReactNode) => <PersistedStateProvider>{child}</PersistedStateProvider>;
+
+	it('keeps the cashier’s stock pill across a remount, and follows a setting that moved meanwhile', () => {
+		const { rerender } = render(host(<POSProducts />));
+		expect(latestState().filters.stock_status).toBe('instock');
+		// The cashier clears the In-stock pill; a remount under the SAME setting keeps that.
+		fireEvent.click(screen.getByTestId('clear-stock-filter'));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		rerender(host(null));
+		rerender(host(<POSProducts />));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		// The setting moved while the screen was unmounted: the kept store follows it.
+		rerender(host(null));
+		mockShowOutOfStock = true;
+		rerender(host(<POSProducts />));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		rerender(host(null));
+		mockShowOutOfStock = false;
+		rerender(host(<POSProducts />));
+		expect(latestState().filters.stock_status).toBe('instock');
+	});
+
+	it('keeps a sort the cashier set across a remount, and follows a settings sort that moved meanwhile', () => {
+		const { rerender } = render(host(<POSProducts />));
+		const actions = mockDataTableProps.actions as {
+			setSort: (field: string, direction: 'asc' | 'desc') => void;
+		};
+		act(() => actions.setSort('sortable_price', 'desc'));
+		rerender(host(null));
+		rerender(host(<POSProducts />));
+		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+		rerender(host(null));
+		mockSortBy = 'sku';
+		mockSortDirection = 'asc';
+		rerender(host(<POSProducts />));
+		expect(latestState().sort).toEqual({ field: 'sku', direction: 'asc' });
+	});
+});

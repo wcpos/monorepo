@@ -4,7 +4,7 @@ import isEqual from 'lodash/isEqual';
 
 import { useDocField } from '@wcpos/query';
 
-import { usePersistedState } from '../../../../../../contexts/persisted-state';
+import { useIsPersisted, usePersistedState } from '../../../../../../contexts/persisted-state';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import { quickFilterHolds, quickFilterToQueryPatch } from '../../filter-bar/apply-quick-filter';
@@ -314,14 +314,12 @@ export function useBrowsePath(
 	const pathStore = usePathStore(persistKey);
 	// A path handed to a new mount came with the tiles of the old one: a dealt level's way back
 	// measures its entry's `target`, and those nodes are gone. Stripped once, as this mount
-	// starts, before anything subscribes (the mount that wrote them has unmounted).
+	// starts, IN PLACE: the entries keep their identity (the stage keys its held children and
+	// windows by it), and nothing is published — the mount that wrote them is still subscribed
+	// until this commit, and a store write here would update it from another component's render.
 	React.useState(() => {
-		const current = pathStore.get();
-		if (current.entries.some((entry) => entry.target !== undefined))
-			pathStore.set({
-				...current,
-				entries: current.entries.map(({ target: _gone, ...entry }) => entry),
-			});
+		for (const entry of pathStore.get().entries)
+			if (entry.target !== undefined) delete entry.target;
 		return null;
 	});
 	const storedFor = React.useSyncExternalStore(pathStore.subscribe, pathStore.get, pathStore.get);
@@ -442,8 +440,10 @@ export function useBrowsePath(
 	// layout at the phone boundary) and the next mount carries on from the same stores. Leaving
 	// a source is then another mount's business: a stage for another source finds a projection
 	// that is not its own and drops it (the drop effect below); All products mode releases it
-	// (`useReleaseBrowsePath`).
-	const persisted = persistKey !== undefined;
+	// (`useReleaseBrowsePath`). Only a path that IS shared: a key with no provider above is
+	// ordinary component state, and nobody else would ever take its projection out.
+	const shared = useIsPersisted();
+	const persisted = persistKey !== undefined && shared;
 	React.useLayoutEffect(
 		() => () => {
 			if (persisted) return;

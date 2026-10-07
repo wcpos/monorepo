@@ -56,6 +56,7 @@ import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
 import { useReleaseBrowsePath } from './browse/use-browse-path';
+import { usePersistedState } from '../../../../../contexts/persisted-state';
 import { clearConditions, conditionsBeyond, type LevelPlace } from './browse/level-place';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
@@ -322,16 +323,27 @@ function POSProductsContent({
 	 * rebaseFilter (not setFilter) so the resetFilters baseline follows the toggle:
 	 * clear-and-refresh must reset to the setting's stock_status, not the mount-time one.
 	 *
-	 * Only when the setting MOVES, never on mount: a new store was seeded from this same setting
-	 * (POSProducts' initialFilters), and a store kept across a remount (the register's layout
-	 * switching trees) carries the cashier's own stock pill, which the mount must not overwrite.
+	 * Only when the setting MOVES against what the STORE last had applied, never on mount for its
+	 * own sake: a new store was seeded from this same setting (POSProducts' initialFilters), and a
+	 * store kept across a remount (the register's layout switching trees) carries the cashier's
+	 * own stock pill, which the mount must not overwrite. The record of what was applied is kept
+	 * with the store, not in this mount: a setting that moved while the screen was unmounted
+	 * (another window of this device) still reaches the kept store on the next mount.
 	 */
-	const appliedShowOutOfStock = React.useRef(showOutOfStock);
+	const applied = usePersistedState(`pos-products:${scopeKey}:applied-settings`, () => {
+		let record = { showOutOfStock, sortBy, sortDirection };
+		return {
+			get: () => record,
+			set: (next: Partial<typeof record>) => {
+				record = { ...record, ...next };
+			},
+		};
+	});
 	React.useEffect(() => {
-		if (appliedShowOutOfStock.current === showOutOfStock) return;
-		appliedShowOutOfStock.current = showOutOfStock;
+		if (applied.get().showOutOfStock === showOutOfStock) return;
+		applied.set({ showOutOfStock });
 		actions.rebaseFilter('stock_status', showOutOfStock ? undefined : 'instock');
-	}, [actions, showOutOfStock]);
+	}, [actions, applied, showOutOfStock]);
 
 	/**
 	 * Apply sort changes to query state. Both the settings control and the
@@ -341,14 +353,13 @@ function POSProductsContent({
 	 * Only when the setting moves (as the stock effect above): a kept store carries the sort a
 	 * shortcut set, which the mount must not overwrite.
 	 */
-	const appliedSort = React.useRef({ sortBy, sortDirection });
 	React.useEffect(() => {
-		const applied = appliedSort.current;
-		if (applied.sortBy === sortBy && applied.sortDirection === sortDirection) return;
-		appliedSort.current = { sortBy, sortDirection };
+		const last = applied.get();
+		if (last.sortBy === sortBy && last.sortDirection === sortDirection) return;
+		applied.set({ sortBy, sortDirection });
 		const sort = getPOSProductSort(sortBy, sortDirection);
 		actions.setSort(sort.field, sort.direction);
-	}, [actions, sortBy, sortDirection]);
+	}, [actions, applied, sortBy, sortDirection]);
 
 	/**
 	 * Helper to set expanded state directly, bypassing TanStack's updater function
