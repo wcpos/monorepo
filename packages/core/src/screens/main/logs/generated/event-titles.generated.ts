@@ -186,6 +186,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_reschedule_failed');
 		case 'queue.write.resolve':
 			return t('health.logs.event.queue_write_resolve');
+		case 'queue.write.session-refused':
+			return t('health.logs.event.queue_write_session_refused');
 		case 'queue.write.tick.error':
 			return t('health.logs.event.queue_write_tick_error');
 		case 'render.error':
@@ -277,6 +279,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.queue_write_drain');
 		case 'queue.write.enqueued':
 			return t('health.logs.event_description.queue_write_enqueued');
+		case 'queue.write.session-refused':
+			return t('health.logs.event_description.queue_write_session_refused');
 		case 'render.error':
 			return t('health.logs.event_description.render_error');
 		case 'signal.cursor':
