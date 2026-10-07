@@ -855,8 +855,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				intentRow.current = null;
 			}
 			const settled = leg.settlement;
-			if (!settled || displayedRow.current === leg.row.id) return;
-			displayedRow.current = leg.row.id;
+			// One settlement is shown once. A rejoined leg can settle under a row id that an
+			// earlier, released leg already displayed, so the key is the settlement's identity —
+			// the leg's own intent, the row it ended on and the outcome — not the row id alone.
+			const settlementKey = `${leg.intentId}:${leg.row.id}:${settled?.outcome ?? ''}`;
+			if (!settled || displayedRow.current === settlementKey) return;
+			displayedRow.current = settlementKey;
 			if (settled.outcome === 'failed' && ownTake) {
 				// Cashier copy only: the provider's own sentence, a known reason's translation,
 				// else the refusal code's translated summary — never a raw wcpos_* identifier.
