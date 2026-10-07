@@ -187,7 +187,7 @@ function takeOutProjection(
 
 /** The projection store, persisted with the path when the stage is (see `useBrowsePath`). */
 function useProjectionStore(persistKey: string | undefined) {
-	return usePersistedState(persistKey && `${persistKey}:projection`, () =>
+	return usePersistedState(persistKey === undefined ? undefined : `${persistKey}:projection`, () =>
 		createStore<Projection | null>(null)
 	);
 }
@@ -249,7 +249,7 @@ function useBrowseResetState(): {
 }
 
 function usePathStore(persistKey: string | undefined) {
-	return usePersistedState(persistKey && `${persistKey}:path`, () =>
+	return usePersistedState(persistKey === undefined ? undefined : `${persistKey}:path`, () =>
 		createStore<{ source: BrowseBy; entries: PathEntry[] }>({ source: 'all', entries: NO_PATH })
 	);
 }
