@@ -124,7 +124,10 @@ test.describe('Browse by categories', () => {
 			await searchAndWaitForServer(page, search, 'products', token, probeLocator(page, probe));
 			await expect(probeLocator(page, probe)).toBeVisible({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
 			await clear.click();
-			await expect(probeLocator(page, probe)).toBeHidden({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
+			// The search is what has to be gone before the browse starts, not the probe: on a small
+			// catalogue, or whenever the probe sorts into the first page, it stays on screen with
+			// the search cleared, and that is correct behaviour.
+			await expect(search).toHaveValue('', { timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
 			// Usually already elapsed; a fast store is the one case this waits for.
 			const sinceBoot = Date.now() - bootedAt;
 			if (sinceBoot < DEMAND_DEDUPE_WINDOW_MS) {

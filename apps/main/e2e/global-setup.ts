@@ -14,7 +14,7 @@ import {
 	COLD_START_STATE_NAME,
 	installThinCatalogueRoutes,
 } from './cold-start';
-import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
+import { authenticateWithStore, setBrowseBy, stubStoreVersionForE2E } from './fixtures';
 import { restoreLocalStorage } from './indexeddb-helpers';
 import { newSetupContext } from './local-network';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
@@ -377,6 +377,16 @@ async function setupVariant(
 			storeId: options.storeId,
 		});
 		discoveredStoreIds = storeIds;
+
+		// A till that never chose browses by categories, so a fresh snapshot would open on the
+		// category root and every spec that reads the product grid at the root (tiles, headers,
+		// scroll) would time out or skip. The snapshot is a till whose cashier chose All
+		// products, set through the UI so it lives in the store database like any other choice;
+		// pos-browse-by.spec.ts parks the setting itself and exercises the browse modes. A cold
+		// snapshot never reaches the POS screen, so there is no settings button to press.
+		if (!options.coldStart) {
+			await setBrowseBy(authPage, 'all');
+		}
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 
