@@ -176,11 +176,21 @@ test.describe('Browse by categories', () => {
 				await setBrowseBy(page, 'categories');
 				await expect(root).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
 				await expect(allProducts).toBeVisible();
-				await scrollRootUntilMounted(page, root, term);
-				// All products is a level of its own: the whole catalogue under its crumb, and back.
+				// All products first, while the root is still at its top (the sweep below can leave
+				// it screens down, with the first row unmounted). It is a level of its own: the
+				// whole catalogue under its crumb — a product row proves the body rendered, not just
+				// the shell; the probe itself sorts wherever its name falls in the catalogue, so the
+				// referent is "a product", not the probe. Then back.
 				await allProducts.click();
 				await expect(crumb).toBeVisible();
 				await expect(root).toBeHidden();
+				await expect(
+					page
+						.getByTestId('product-tile')
+						.or(page.getByTestId('variable-product-tile'))
+						.or(page.getByTestId('add-to-cart-button'))
+						.first()
+				).toBeVisible({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
 				await back.click();
 				await expect(root).toBeVisible();
 				// The category: its products under its crumb, the probe among them.
