@@ -126,6 +126,7 @@ export type SyncEventType =
 	| 'queue.write.requeue-rebuilt'
 	| 'queue.write.reschedule-failed'
 	| 'queue.write.resolve'
+	| 'queue.write.session-refused'
 	| 'queue.write.tick.error'
 	// signal
 	| 'signal.cursor'

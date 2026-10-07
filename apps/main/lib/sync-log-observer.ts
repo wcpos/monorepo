@@ -568,6 +568,14 @@ export const CONFORMANCE_TABLE = {
 		outcome: 'failed',
 		code: ERROR_CODES.SYNC_PARTIAL,
 	},
+	// One row when the write drain starts holding a session the store refused (401);
+	// per-push 401 rows are warn, so Sentry sees one AUTH101 per hold.
+	'queue.write.session-refused': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SESSION_EXPIRED,
+		level: 'error',
+	},
 	'engine.listener-error': {
 		operationType: 'sync.lifecycle',
 		outcome: 'failed',
