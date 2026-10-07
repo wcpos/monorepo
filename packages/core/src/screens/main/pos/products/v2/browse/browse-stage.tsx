@@ -84,6 +84,8 @@ export type BrowseStageProps = {
 	 * Called with the deepest live entry's place, null at the root (a gathering level is none).
 	 */
 	onLevelChange?: (place: LevelPlace | null) => void;
+	/** Keep the path across remounts of the stage (use-browse-path's `persistKey`). */
+	persistKey?: string;
 };
 
 /**
@@ -134,9 +136,9 @@ function useSourceLabel(source: Exclude<BrowseBy, 'all'>): string {
  * away when the query moves (search, a pill, Clear filters) — see use-browse-path.
  */
 export function BrowseStage(props: BrowseStageProps) {
-	const { source, viewMode, binding, onDrilledChange, onLevelChange } = props;
+	const { source, viewMode, binding, onDrilledChange, onLevelChange, persistKey } = props;
 	const terms = useBrowseTerms(source);
-	const { path, enter, backTo } = useBrowsePath(source, terms);
+	const { path, enter, backTo } = useBrowsePath(source, terms, persistKey);
 	const state = useQueryState<'products'>();
 	const field = taxonomyField(source);
 	// The deepest live entry's place; one object per entry and source answer, so the screen's

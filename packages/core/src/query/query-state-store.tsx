@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { usePersistedState } from '../contexts/persisted-state';
+
 import type {
 	CollectionKey,
 	FiltersOf,
@@ -139,18 +141,26 @@ export function QueryStateProvider<C extends CollectionKey>({
 	initialPageSize,
 	initialSort,
 	initialFilters,
+	persistKey,
 	children,
 }: {
 	collection: C;
 	initialPageSize: number;
 	initialSort: QueryStateOf<C>['sort'];
 	initialFilters?: Partial<FiltersOf<C>>;
+	/**
+	 * Keep the store across remounts of this provider under a `PersistedStateProvider`: a
+	 * screen that the host unmounts and mounts again (the register's layout switching trees at
+	 * the phone boundary) comes back with its search, filters, sort and window. The key names
+	 * the screen and its scope; a new key is a new store.
+	 */
+	persistKey?: string;
 	children: React.ReactNode;
 }) {
 	if (!Number.isInteger(initialPageSize) || initialPageSize <= 0) {
 		throw new Error('QueryStateProvider initialPageSize must be a positive integer');
 	}
-	const [store] = React.useState<Store<C>>(() => {
+	const store = usePersistedState<Store<C>>(persistKey, () => {
 		const clearFilters = clone(DEFAULT_FILTERS[collection]);
 		const filters = { ...clearFilters, ...initialFilters } as FiltersOf<C>;
 		return createStore(

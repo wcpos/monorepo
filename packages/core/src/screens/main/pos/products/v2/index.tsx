@@ -55,6 +55,7 @@ import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
+import { useReleaseBrowsePath } from './browse/use-browse-path';
 import { clearConditions, conditionsBeyond, type LevelPlace } from './browse/level-place';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
@@ -226,6 +227,11 @@ function POSProductsContent({
 	// scope switch drops it too (its record is the previous scope's). Dropped while rendering
 	// (React's "previous render" pattern), so no frame shows it.
 	const stageKey = `${browseBy}:${scopeKey}`;
+	// The browse path is kept per SCOPE across remounts (the register's layout swapping trees at
+	// the phone boundary; see POSProducts): a stage for another source finds the last one's
+	// projection and drops it, and All products mode releases it here.
+	const browsePersistKey = `pos-browse:${scopeKey}`;
+	useReleaseBrowsePath(browsePersistKey, browseBy === 'all');
 	const [drillStage, setDrillStage] = React.useState(stageKey);
 	if (drillStage !== stageKey) {
 		setDrillStage(stageKey);
@@ -515,6 +521,7 @@ function POSProductsContent({
 									tableConfig={tableConfig}
 									onDrilledChange={setBrowseDrilled}
 									onLevelChange={setBrowsePlace}
+									persistKey={browsePersistKey}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack
@@ -551,6 +558,11 @@ export function POSProducts() {
 		status: 'publish' as const,
 		...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
 	};
+	// The register's two layouts are two trees, and a window resized across the phone boundary
+	// mounts this screen afresh in the other: the query (and the browse path over it, below) is
+	// kept per scope under the POS layout's PersistedStateProvider, so the cashier is where they
+	// were — same search, pills, sort and crumb.
+	const scopeKey = useScopeKey('products');
 
 	return (
 		<QueryStateProvider
@@ -558,6 +570,7 @@ export function POSProducts() {
 			initialPageSize={POS_PRODUCTS_PAGE_SIZE}
 			initialSort={initialSort}
 			initialFilters={initialFilters}
+			persistKey={`pos-products:${scopeKey}`}
 		>
 			<POSProductsContent showOutOfStock={showOutOfStock} initialFilters={initialFilters} />
 		</QueryStateProvider>

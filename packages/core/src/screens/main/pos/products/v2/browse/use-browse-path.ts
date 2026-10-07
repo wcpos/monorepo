@@ -4,6 +4,7 @@ import isEqual from 'lodash/isEqual';
 
 import { useDocField } from '@wcpos/query';
 
+import { usePersistedState } from '../../../../../../contexts/persisted-state';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import { quickFilterHolds, quickFilterToQueryPatch } from '../../filter-bar/apply-quick-filter';
@@ -11,7 +12,7 @@ import { getPOSProductSort } from '../../pos-product-sort';
 import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 
 import type { Measurable } from '../deal-stack';
-import type { QueryStateOf } from '../../../../../../query';
+import type { QueryStateActions, QueryStateOf } from '../../../../../../query';
 import type { FiltersOf } from '../../../../../../query/query-state-types';
 import type { QuickFilter } from '../../filter-bar/filter-bar-layout';
 import type { BrowseTerms } from './use-browse-terms';
@@ -147,6 +148,87 @@ function chainStands(stored: PathEntry[], terms: Pick<BrowseTerms, 'all' | 'pend
 }
 
 /**
+ * Take back out of the query exactly what a projection put in, and only what is still there: a
+ * pill the cashier pressed inside the level is theirs and stays. A key the baseline owns
+ * (status, stock_status under the device setting) goes back to its baseline value, not away: a
+ * shortcut on in-stock must not leave out-of-stock on.
+ */
+function takeOutProjection(
+	current: Projection,
+	now: {
+		search: string;
+		filters: FiltersOf<'products'>;
+		sort: { field: string; direction: string };
+	},
+	act: Pick<QueryStateActions<'products'>, 'clearFilter' | 'setFilter' | 'clearSearch' | 'setSort'>,
+	baseline: { filters: Partial<FiltersOf<'products'>>; sort: QueryStateOf<'products'>['sort'] }
+): void {
+	// All products put nothing into the query: there is nothing to take back out.
+	if (current.kind === 'all') return;
+	if (current.kind === 'taxonomy') {
+		if (sameSet(now.filters[current.field], current.ids)) act.clearFilter(current.field);
+		return;
+	}
+	const patch = quickFilterToQueryPatch(current.quickFilter);
+	for (const [key, value] of Object.entries(patch.filters)) {
+		const field = key as keyof FiltersOf<'products'>;
+		if (!isEqual(now.filters[field], value)) continue;
+		const base = baseline.filters[field];
+		if (base !== undefined && !(Array.isArray(base) && base.length === 0))
+			act.setFilter(field, base as never);
+		else act.clearFilter(field);
+	}
+	// As the liveness reads it (trimmed): a space typed after the shortcut's search is still its
+	// search, and leaving must take it out.
+	if (patch.search && now.search.trim() === patch.search.trim()) act.clearSearch();
+	if (current.quickFilter.sort && sameSort(now.sort, current.quickFilter.sort))
+		act.setSort(baseline.sort.field, baseline.sort.direction);
+}
+
+/** The projection store, persisted with the path when the stage is (see `useBrowsePath`). */
+function useProjectionStore(persistKey: string | undefined) {
+	return usePersistedState(persistKey && `${persistKey}:projection`, () =>
+		createStore<Projection | null>(null)
+	);
+}
+
+/**
+ * All products mode (no browse stage mounted) releasing a persisted projection: the stage that
+ * made it was unmounted without taking it out (a persisted path never is, see `useBrowsePath`),
+ * so the catalogue would stay narrowed to the last term, with its ids lit on the Category
+ * pill. Takes the projection out, before paint, and forgets the path. `release` false: nothing.
+ */
+export function useReleaseBrowsePath(persistKey: string | undefined, release: boolean): void {
+	const state = useQueryState<'products'>();
+	const actions = useQueryStateActions<'products'>();
+	const settingsSort = useSettingsSort();
+	const pathStore = usePathStore(persistKey);
+	const projected = useProjectionStore(persistKey);
+	const latest = React.useRef({ state, actions, settingsSort });
+	React.useLayoutEffect(() => {
+		latest.current = { state, actions, settingsSort };
+	});
+	React.useLayoutEffect(() => {
+		if (!release) return;
+		const current = projected.get();
+		if (current) {
+			const { state: now, actions: act, settingsSort: sort } = latest.current;
+			// The baseline's filters are what `resetFilters` restores; only `sort` is read here,
+			// and a shortcut's own filter keys go back to the store's reset baseline.
+			takeOutProjection(current, now, act, { filters: {}, sort });
+			projected.set(null);
+		}
+		if (pathStore.get().entries.length > 0) pathStore.set({ source: 'all', entries: NO_PATH });
+	}, [release, projected, pathStore]);
+}
+
+function usePathStore(persistKey: string | undefined) {
+	return usePersistedState(persistKey && `${persistKey}:path`, () =>
+		createStore<{ source: BrowseBy; entries: PathEntry[] }>({ source: 'all', entries: NO_PATH })
+	);
+}
+
+/**
  * A value written by handlers, effects and cleanups and read by the render through
  * `useSyncExternalStore` — a ref's value may not be read while rendering. Two of them: what the
  * stored path has put into the query (the projection), and the stored path itself. Both render
@@ -179,8 +261,17 @@ function createStore<T>(initial: T) {
  * and the path falls away on the same render — the guard the variations drill-in already
  * applies to search. Every OTHER pill (stock, featured, on sale, another taxonomy) narrows the
  * level in place: the crumb is the place, the pills are the conditions (owner, 2026-10-07).
+ *
+ * `persistKey`: keep the path and its projection across remounts of the stage under a
+ * `PersistedStateProvider` (the register's layout switching trees at the phone boundary), as
+ * the products query itself is kept — a path over a query that survived must survive with it,
+ * or the new mount would read the term's ids as a Category pill and show the flat list.
  */
-export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTerms): BrowsePath {
+export function useBrowsePath(
+	source: Exclude<BrowseBy, 'all'>,
+	terms: BrowseTerms,
+	persistKey?: string
+): BrowsePath {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const { uiSettings } = useUISettings('pos-products');
@@ -195,9 +286,19 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	// event system) wrote the query at sync priority and a `useState` path at default priority, so
 	// for one commit the child level stood on the path over the parent's products (review of the
 	// Android follow-on, 2026-10-07). Read like the query, the path moves with it.
-	const [pathStore] = React.useState(() =>
-		createStore<{ source: BrowseBy; entries: PathEntry[] }>({ source, entries: NO_PATH })
-	);
+	const pathStore = usePathStore(persistKey);
+	// A path handed to a new mount came with the tiles of the old one: a dealt level's way back
+	// measures its entry's `target`, and those nodes are gone. Stripped once, as this mount
+	// starts, before anything subscribes (the mount that wrote them has unmounted).
+	React.useState(() => {
+		const current = pathStore.get();
+		if (current.entries.some((entry) => entry.target !== undefined))
+			pathStore.set({
+				...current,
+				entries: current.entries.map(({ target: _gone, ...entry }) => entry),
+			});
+		return null;
+	});
 	const storedFor = React.useSyncExternalStore(pathStore.subscribe, pathStore.get, pathStore.get);
 	const stored = storedFor.source === source ? storedFor.entries : NO_PATH;
 	const setStored = React.useCallback(
@@ -227,7 +328,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 		[showOutOfStock, settingsSort]
 	);
 
-	const [projected] = React.useState(() => createStore<Projection | null>(null));
+	const projected = useProjectionStore(persistKey);
 	const projection = React.useSyncExternalStore(projected.subscribe, projected.get, projected.get);
 	// The result window each covered level had when a child was opened over it, by entry identity
 	// (as the stage keeps a gathering level's children): a parent paged past its first window must
@@ -268,26 +369,7 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			const { state: now, actions: act, resetState: baseline } = latest.current;
 			const before = liveQuery.current;
 			if (dropped && before?.of === current && movedBesidesSearch(now, before)) return;
-			if (current.kind === 'taxonomy') {
-				if (sameSet(now.filters[current.field], current.ids)) act.clearFilter(current.field);
-				return;
-			}
-			const patch = quickFilterToQueryPatch(current.quickFilter);
-			for (const [key, value] of Object.entries(patch.filters)) {
-				const field = key as keyof FiltersOf<'products'>;
-				if (!isEqual(now.filters[field], value)) continue;
-				// A key the baseline owns (status, stock_status under the device setting) goes back to
-				// its baseline value, not away: a shortcut on in-stock must not leave out-of-stock on.
-				const base = baseline.filters[field as keyof typeof baseline.filters];
-				if (base !== undefined && !(Array.isArray(base) && base.length === 0))
-					act.setFilter(field, base as never);
-				else act.clearFilter(field);
-			}
-			// As the liveness reads it (trimmed): a space typed after the shortcut's search is
-			// still its search, and leaving must take it out.
-			if (patch.search && now.search.trim() === patch.search.trim()) act.clearSearch();
-			if (current.quickFilter.sort && sameSort(now.sort, current.quickFilter.sort))
-				act.setSort(baseline.sort.field, baseline.sort.direction);
+			takeOutProjection(current, now, act, baseline);
 		},
 		[projected]
 	);
@@ -345,12 +427,19 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 	// LAYOUT effect: its cleanup runs in the commit, before paint, so the All products screen's
 	// first painted frame already carries the cleared query (the products then refresh exactly as
 	// they do after any pill is cleared today).
+	// A PERSISTED path is not taken out on unmount: the host is swapping trees (the register's
+	// layout at the phone boundary) and the next mount carries on from the same stores. Leaving
+	// a source is then another mount's business: a stage for another source finds a projection
+	// that is not its own and drops it (the drop effect below); All products mode releases it
+	// (`useReleaseBrowsePath`).
+	const persisted = persistKey !== undefined;
 	React.useLayoutEffect(
 		() => () => {
+			if (persisted) return;
 			unproject();
 			setStored(NO_PATH);
 		},
-		[source, unproject, setStored]
+		[source, persisted, unproject, setStored]
 	);
 
 	// Is the deepest entry still what the query carries?

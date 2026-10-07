@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
+import { PersistedStateProvider } from '../contexts/persisted-state';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
 import { compileQuery } from './query-state-translator';
 
@@ -484,5 +485,85 @@ describe('QueryStateProvider', () => {
 		expect(state?.filters).toEqual({
 			level: ['error', 'warn', 'info', 'success'],
 		});
+	});
+});
+
+// A provider the host unmounts and mounts again (the register's layout swapping trees at the
+// phone boundary) keeps its store under a PersistedStateProvider when given a key.
+describe('QueryStateProvider persistKey', () => {
+	function Probe({
+		onState,
+	}: {
+		onState: (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => void;
+	}) {
+		onState(useQueryState<'products'>(), useQueryStateActions<'products'>());
+		return null;
+	}
+	function Host({
+		mounted,
+		onState,
+	}: {
+		mounted: boolean;
+		onState: Parameters<typeof Probe>[0]['onState'];
+	}) {
+		return (
+			<PersistedStateProvider>
+				{mounted && (
+					<QueryStateProvider
+						collection="products"
+						initialPageSize={20}
+						initialSort={{ field: 'name', direction: 'asc' }}
+						persistKey="pos-products:scope"
+					>
+						<Probe onState={onState} />
+					</QueryStateProvider>
+				)}
+			</PersistedStateProvider>
+		);
+	}
+
+	it('keeps search, filters and sort across a remount of the provider', () => {
+		let latest: { state: QueryStateOf<'products'>; actions: QueryStateActions<'products'> } | null =
+			null;
+		const onState = (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => {
+			latest = { state, actions };
+		};
+		const { rerender } = render(<Host mounted onState={onState} />);
+		act(() => {
+			latest!.actions.setSearch('latte');
+			latest!.actions.setFilter('categories', [3]);
+			latest!.actions.setSort('sortable_price', 'desc');
+		});
+		rerender(<Host mounted={false} onState={onState} />);
+		rerender(<Host mounted onState={onState} />);
+		expect(latest!.state.search).toBe('latte');
+		expect(latest!.state.filters.categories).toEqual([3]);
+		expect(latest!.state.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+	});
+
+	it('is ordinary component state without a provider above', () => {
+		let latest: { state: QueryStateOf<'products'>; actions: QueryStateActions<'products'> } | null =
+			null;
+		const onState = (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => {
+			latest = { state, actions };
+		};
+		const tree = (mounted: boolean) =>
+			mounted ? (
+				<QueryStateProvider
+					collection="products"
+					initialPageSize={20}
+					initialSort={{ field: 'name', direction: 'asc' }}
+					persistKey="pos-products:scope"
+				>
+					<Probe onState={onState} />
+				</QueryStateProvider>
+			) : (
+				<div />
+			);
+		const { rerender } = render(tree(true));
+		act(() => latest!.actions.setSearch('latte'));
+		rerender(tree(false));
+		rerender(tree(true));
+		expect(latest!.state.search).toBe('');
 	});
 });
