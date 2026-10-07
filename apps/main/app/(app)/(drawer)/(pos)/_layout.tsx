@@ -14,6 +14,7 @@ import { registerPortalContainer } from '@wcpos/components/lib/portal-container'
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
+import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
@@ -122,9 +123,14 @@ export default function POSLayout() {
 						currentOrderUUID={orderId}
 					>
 						<ErrorBoundary>
-							<Suspense>
-								<POSStack />
-							</Suspense>
+							{/* Spans both register layouts (tabs, columns): the products screen's query and
+							    browse path live here, so a resize across the phone boundary — which
+							    mounts the screen afresh in the other tree — keeps the cashier's place. */}
+							<PersistedStateProvider>
+								<Suspense>
+									<POSStack />
+								</Suspense>
+							</PersistedStateProvider>
 						</ErrorBoundary>
 					</CurrentOrderProvider>
 				</Suspense>

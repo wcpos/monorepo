@@ -1,10 +1,16 @@
 /** @jest-environment jsdom */
-import { startTransition } from 'react';
+import { createElement, startTransition } from 'react';
 
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 
+import { PersistedStateProvider } from '../../../../../../contexts/persisted-state';
 import { inOneBatch } from '../one-batch.web';
-import { filtersAtBaseline, useBrowsePath } from './use-browse-path';
+import {
+	type BrowsePath,
+	filtersAtBaseline,
+	useBrowsePath,
+	useReleaseBrowsePath,
+} from './use-browse-path';
 
 // A tiny in-memory store, so the hook is tested against real state transitions. It keeps the
 // real store's shape (query-state-store.tsx): the taxonomy fields are always present, cleared to
@@ -771,6 +777,112 @@ it('a backTo from outside React’s event system, with no batching at all, moves
 	expect(
 		seen.filter(({ depth, categories }) => depth === 2 && isEqualIds(categories, [1, 2]))
 	).toEqual([]);
+});
+
+// The register's two layouts are two trees: a window resized across the phone boundary mounts
+// the products screen afresh in the other. Under the POS layout's PersistedStateProvider the
+// path (and the query, kept the same way) carries on; the dealt tiles it was entered from are
+// gone, so their `target`s go.
+describe('a persisted path', () => {
+	let latest: BrowsePath | null = null;
+	function Probe({ source }: { source: 'categories' | 'tags' }) {
+		// eslint-disable-next-line react-compiler/react-compiler -- the test reads the hook's result
+		latest = useBrowsePath(source, terms as never, 'pos-browse:scope');
+		return null;
+	}
+	function Releaser() {
+		useReleaseBrowsePath('pos-browse:scope', true);
+		return null;
+	}
+	const host = (child: ReturnType<typeof createElement> | null) =>
+		createElement(PersistedStateProvider, null, child);
+
+	it('survives its stage unmounting and mounting again, without the old tiles', () => {
+		const { rerender } = render(host(createElement(Probe, { source: 'categories' })));
+		act(() => latest!.enter(drinks, { measureInWindow: () => {} } as never));
+		expect(mockState.filters.categories).toEqual([1, 2]);
+		rerender(host(null));
+		// Nothing taken out on the way down: the query is persisted too.
+		expect(mockState.filters.categories).toEqual([1, 2]);
+		rerender(host(createElement(Probe, { source: 'categories' })));
+		expect(latest!.path.map((entry) => entry.term)).toEqual([drinks]);
+		expect(latest!.path[0].target).toBeUndefined();
+		act(() => latest!.root());
+		expect(latest!.path).toEqual([]);
+		expect(mockState.filters.categories).toEqual([]);
+	});
+
+	it('is dropped, and its projection taken out, by a stage for another source', () => {
+		const { rerender } = render(host(createElement(Probe, { source: 'categories' })));
+		act(() => latest!.enter(drinks));
+		rerender(host(null));
+		rerender(host(createElement(Probe, { source: 'tags' })));
+		expect(latest!.path).toEqual([]);
+		expect(mockState.filters.categories).toEqual([]);
+	});
+
+	it('is released by All products mode', () => {
+		const { rerender } = render(host(createElement(Probe, { source: 'categories' })));
+		act(() => latest!.enter(drinks));
+		rerender(host(null));
+		expect(mockState.filters.categories).toEqual([1, 2]);
+		rerender(host(createElement(Releaser)));
+		expect(mockState.filters.categories).toEqual([]);
+		// Back to Categories: nothing to pick up.
+		rerender(host(createElement(Probe, { source: 'categories' })));
+		expect(latest!.path).toEqual([]);
+	});
+
+	it('released by All products, a shortcut on in-stock leaves the device baseline in place', () => {
+		mockShowOutOfStock = false;
+		mockState = { ...mockState, filters: baseline() };
+		const inStock = {
+			type: 'quick',
+			id: 'qf-s',
+			label: 'In stock now',
+			conditions: [
+				{ field: 'categories', value: [3] },
+				{ field: 'stock_status', value: 'instock' },
+			],
+		};
+		const shortcut = {
+			kind: 'shortcut' as const,
+			id: 'qf-s',
+			name: 'In stock now',
+			description: '',
+		};
+		const withInStock = { ...terms, quickFilterFor: () => inStock };
+		function ShortcutProbe() {
+			// eslint-disable-next-line react-compiler/react-compiler -- the test reads the hook's result
+			latest = useBrowsePath('shortcuts', withInStock as never, 'pos-browse:scope');
+			return null;
+		}
+		const { rerender } = render(host(createElement(ShortcutProbe)));
+		act(() => latest!.enter(shortcut));
+		expect(mockState.filters).toMatchObject({ categories: [3], stock_status: 'instock' });
+		rerender(host(null));
+		rerender(host(createElement(Releaser)));
+		expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish', stock_status: 'instock' });
+	});
+
+	it('without a key, leaving takes the projection out as before', () => {
+		const { result, unmount } = renderHook(() => useBrowsePath('categories', terms as never));
+		act(() => result.current.enter(drinks));
+		unmount();
+		expect(mockState.filters.categories).toEqual([]);
+	});
+
+	// A key with no provider above is ordinary component state: nobody else will ever take the
+	// projection out, so leaving must, as it always did.
+	it('with a key but no provider, leaving takes the projection out too', () => {
+		const { result, unmount } = renderHook(() =>
+			useBrowsePath('categories', terms as never, 'pos-browse:scope')
+		);
+		act(() => result.current.enter(drinks));
+		expect(mockState.filters.categories).toEqual([1, 2]);
+		unmount();
+		expect(mockState.filters.categories).toEqual([]);
+	});
 });
 
 describe('filtersAtBaseline', () => {

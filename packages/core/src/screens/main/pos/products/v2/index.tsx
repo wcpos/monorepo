@@ -55,6 +55,8 @@ import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
+import { useReleaseBrowsePath } from './browse/use-browse-path';
+import { usePersistedState } from '../../../../../contexts/persisted-state';
 import { clearConditions, conditionsBeyond, type LevelPlace } from './browse/level-place';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
@@ -226,6 +228,11 @@ function POSProductsContent({
 	// scope switch drops it too (its record is the previous scope's). Dropped while rendering
 	// (React's "previous render" pattern), so no frame shows it.
 	const stageKey = `${browseBy}:${scopeKey}`;
+	// The browse path is kept per SCOPE across remounts (the register's layout swapping trees at
+	// the phone boundary; see POSProducts): a stage for another source finds the last one's
+	// projection and drops it, and All products mode releases it here.
+	const browsePersistKey = `pos-browse:${scopeKey}`;
+	useReleaseBrowsePath(browsePersistKey, browseBy === 'all');
 	const [drillStage, setDrillStage] = React.useState(stageKey);
 	if (drillStage !== stageKey) {
 		setDrillStage(stageKey);
@@ -315,21 +322,44 @@ function POSProductsContent({
 	 * UI settings are an external observable projected into committed query state.
 	 * rebaseFilter (not setFilter) so the resetFilters baseline follows the toggle:
 	 * clear-and-refresh must reset to the setting's stock_status, not the mount-time one.
+	 *
+	 * Only when the setting MOVES against what the STORE last had applied, never on mount for its
+	 * own sake: a new store was seeded from this same setting (POSProducts' initialFilters), and a
+	 * store kept across a remount (the register's layout switching trees) carries the cashier's
+	 * own stock pill, which the mount must not overwrite. The record of what was applied is kept
+	 * with the store, not in this mount: a setting that moved while the screen was unmounted
+	 * (another window of this device) still reaches the kept store on the next mount.
 	 */
+	const applied = usePersistedState(`pos-products:${scopeKey}:applied-settings`, () => {
+		let record = { showOutOfStock, sortBy, sortDirection };
+		return {
+			get: () => record,
+			set: (next: Partial<typeof record>) => {
+				record = { ...record, ...next };
+			},
+		};
+	});
 	React.useEffect(() => {
+		if (applied.get().showOutOfStock === showOutOfStock) return;
+		applied.set({ showOutOfStock });
 		actions.rebaseFilter('stock_status', showOutOfStock ? undefined : 'instock');
-	}, [actions, showOutOfStock]);
+	}, [actions, applied, showOutOfStock]);
 
 	/**
 	 * Apply sort changes to query state. Both the settings control and the
 	 * DataTable column headers write sortBy/sortDirection to uiSettings; reacting
 	 * to those observables here keeps the grid (which has no headers) and the
 	 * table in sync. An effect is required because UI settings are an external store.
+	 * Only when the setting moves (as the stock effect above): a kept store carries the sort a
+	 * shortcut set, which the mount must not overwrite.
 	 */
 	React.useEffect(() => {
+		const last = applied.get();
+		if (last.sortBy === sortBy && last.sortDirection === sortDirection) return;
+		applied.set({ sortBy, sortDirection });
 		const sort = getPOSProductSort(sortBy, sortDirection);
 		actions.setSort(sort.field, sort.direction);
-	}, [actions, sortBy, sortDirection]);
+	}, [actions, applied, sortBy, sortDirection]);
 
 	/**
 	 * Helper to set expanded state directly, bypassing TanStack's updater function
@@ -515,6 +545,7 @@ function POSProductsContent({
 									tableConfig={tableConfig}
 									onDrilledChange={setBrowseDrilled}
 									onLevelChange={setBrowsePlace}
+									persistKey={browsePersistKey}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack
@@ -551,6 +582,11 @@ export function POSProducts() {
 		status: 'publish' as const,
 		...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
 	};
+	// The register's two layouts are two trees, and a window resized across the phone boundary
+	// mounts this screen afresh in the other: the query (and the browse path over it, below) is
+	// kept per scope under the POS layout's PersistedStateProvider, so the cashier is where they
+	// were — same search, pills, sort and crumb.
+	const scopeKey = useScopeKey('products');
 
 	return (
 		<QueryStateProvider
@@ -558,6 +594,7 @@ export function POSProducts() {
 			initialPageSize={POS_PRODUCTS_PAGE_SIZE}
 			initialSort={initialSort}
 			initialFilters={initialFilters}
+			persistKey={`pos-products:${scopeKey}`}
 		>
 			<POSProductsContent showOutOfStock={showOutOfStock} initialFilters={initialFilters} />
 		</QueryStateProvider>
