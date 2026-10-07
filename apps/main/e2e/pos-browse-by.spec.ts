@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import {
 	ensureRegisterOpen,
@@ -66,6 +66,28 @@ const LEVEL_PRODUCTS_TIMEOUT_MS = 30_000;
 function probeLocator(page: Page, probe: SearchProbe) {
 	const tile = page.getByTestId(`product-tile-${probe.id}`);
 	return probe.rowTestId ? tile.or(page.getByTestId(probe.rowTestId)) : tile;
+}
+
+/**
+ * The root term set is virtualized: a term past the first screen is not in the DOM. The probe
+ * category's name sorts first on most stores (`PROBE_CATEGORY_LEAD`), but a store whose root
+ * names begin with punctuation, whitespace or an emoji sorts those before it, so the root is
+ * scrolled until the id-bearing term is mounted rather than trusting the prefix (store-agnostic
+ * policy). The pull itself can still be in flight, so the loop runs on the pull's budget.
+ */
+async function scrollRootUntilMounted(page: Page, root: Locator, term: Locator): Promise<void> {
+	await expect(root).toBeVisible();
+	const deadline = Date.now() + TERM_PULL_TIMEOUT_MS;
+	while (!(await term.isVisible().catch(() => false))) {
+		if (Date.now() > deadline) break;
+		const box = await root.boundingBox();
+		if (box) {
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+			await page.mouse.wheel(0, Math.max(200, box.height * 0.8));
+		}
+		await page.waitForTimeout(250);
+	}
+	await expect(term).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
 }
 
 test.describe('Browse by categories', () => {
@@ -147,7 +169,7 @@ test.describe('Browse by categories', () => {
 				await setBrowseBy(page, 'categories');
 				await expect(root).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
 				await expect(allProducts).toBeVisible();
-				await expect(term).toBeVisible({ timeout: TERM_PULL_TIMEOUT_MS });
+				await scrollRootUntilMounted(page, root, term);
 				// All products is a level of its own: the whole catalogue under its crumb, and back.
 				await allProducts.click();
 				await expect(crumb).toBeVisible();
@@ -155,6 +177,7 @@ test.describe('Browse by categories', () => {
 				await back.click();
 				await expect(root).toBeVisible();
 				// The category: its products under its crumb, the probe among them.
+				await scrollRootUntilMounted(page, root, term);
 				await term.click();
 				await expect(crumb).toBeVisible();
 				await expect(probeLocator(page, probe)).toBeVisible({ timeout: LEVEL_PRODUCTS_TIMEOUT_MS });
