@@ -38,7 +38,7 @@ import {
 	type QuickFilter,
 } from '../filter-bar/filter-bar-layout';
 import { isQuickFilterActive, quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
-import { clearConditions, type TaxonomyField } from '../filter-bar/clear-conditions';
+import { clearConditions, isPlaceCondition, type LevelPlace } from './browse/level-place';
 import { getPOSProductSort } from '../pos-product-sort';
 
 import type { FiltersOf } from '../../../../../query/query-state-types';
@@ -251,7 +251,7 @@ function DimmedChip({ item }: { item: FilterBarItem }) {
 export function POSFilterBar({
 	level = 'products',
 	initialFilters = { status: 'publish' },
-	placeField = null,
+	place = null,
 }: {
 	level?: 'products' | 'variations';
 	/**
@@ -261,12 +261,12 @@ export function POSFilterBar({
 	 */
 	initialFilters?: Record<string, unknown>;
 	/**
-	 * The field a browse level's crumb owns while one is open (Categories inside a Categories
-	 * level, …). The crumb is the place and the pills are the conditions, so that pill folds
-	 * away rather than saying the place a second time, it is not a group for Clear all, and
-	 * Clear all leaves it — the level stays, its conditions go.
+	 * The place a browse level's crumb owns while one is open (a Categories level, a shortcut).
+	 * The crumb is the place and the pills are the conditions, so the source's own pill folds
+	 * away rather than saying the place a second time, the place's own conditions are not groups
+	 * for Clear all, and Clear all leaves them — the level stays, its conditions go.
 	 */
-	placeField?: TaxonomyField | null;
+	place?: LevelPlace | null;
 }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
@@ -277,7 +277,7 @@ export function POSFilterBar({
 	const scroll = React.useRef<ScrollViewInstance>(null);
 	const positions = React.useRef(new Map<string, number>());
 	const active = Object.entries(state.filters).filter(([key, value]) => {
-		if (key === placeField) return false;
+		if (isPlaceCondition(place, key, value)) return false;
 		const set = Array.isArray(value) ? value.length > 0 : !!value;
 		return set && JSON.stringify(value) !== JSON.stringify(initialFilters[key]);
 	}).length;
@@ -289,7 +289,7 @@ export function POSFilterBar({
 			contentContainerClassName="items-center gap-2"
 		>
 			{items.map((item) => {
-				if (item.type === 'pill' && (!item.show || item.id === placeField)) return null;
+				if (item.type === 'pill' && (!item.show || item.id === place?.field)) return null;
 				const touched = () =>
 					scroll.current?.scrollTo({ x: positions.current.get(item.id) ?? 0, animated: false });
 				const dimmed = level === 'variations' && item.id !== 'stock_status';
@@ -349,7 +349,7 @@ export function POSFilterBar({
 					variant="ghost"
 					size="sm"
 					testID="filter-bar-clear-all"
-					onPress={() => clearConditions(actions, state.filters, placeField)}
+					onPress={() => clearConditions(actions, state.filters, place)}
 				>
 					<ButtonText>{t('pos_products.clear_all')}</ButtonText>
 				</Button>

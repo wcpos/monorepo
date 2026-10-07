@@ -486,7 +486,7 @@ it('a Brand pill pressed under All products keeps its crumb: the level is All pr
 	render(<BrowseStage {...stageProps({ onLevelChange })} />);
 	fireEvent.click(screen.getByTestId('browse-all-products'));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
-	expect(onLevelChange).toHaveBeenLastCalledWith(true);
+	expect(onLevelChange).toHaveBeenLastCalledWith({ field: 'categories' });
 	act(() => queryActions.setFilter('brands', [8]));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('products-breadcrumb')).toBeTruthy();
@@ -496,7 +496,17 @@ it('a Brand pill pressed under All products keeps its crumb: the level is All pr
 	fireEvent.click(screen.getByTestId('products-breadcrumb-back'));
 	expect(screen.getByTestId('browse-root')).toBeTruthy();
 	expect(mockState.filters.brands).toEqual([8]);
-	expect(onLevelChange).toHaveBeenLastCalledWith(false);
+	expect(onLevelChange).toHaveBeenLastCalledWith(null);
+});
+
+it('hands the screen a shortcut level’s place with the shortcut itself, so Clear filters can keep it', () => {
+	const onLevelChange = jest.fn();
+	render(<BrowseStage {...stageProps({ source: 'shortcuts', onLevelChange })} />);
+	fireEvent.click(screen.getByTestId('browse-shortcut-qf-breakfast'));
+	expect(onLevelChange).toHaveBeenLastCalledWith({
+		field: null,
+		quickFilter: expect.objectContaining({ id: 'qf-breakfast' }),
+	});
 });
 
 it('a product drilled inside a term gets the term crumb as its ancestors, and the term crumb closes the drill', () => {

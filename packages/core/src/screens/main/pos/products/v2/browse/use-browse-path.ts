@@ -273,7 +273,9 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 					act.setFilter(field, base as never);
 				else act.clearFilter(field);
 			}
-			if (patch.search && now.search === patch.search) act.clearSearch();
+			// As the liveness reads it (trimmed): a space typed after the shortcut's search is
+			// still its search, and leaving must take it out.
+			if (patch.search && now.search.trim() === patch.search.trim()) act.clearSearch();
 			if (current.quickFilter.sort && sameSort(now.sort, current.quickFilter.sort))
 				act.setSort(baseline.sort.field, baseline.sort.direction);
 		},
@@ -377,8 +379,19 @@ export function useBrowsePath(source: Exclude<BrowseBy, 'all'>, terms: BrowseTer
 			// them narrows the level, the sort is the cashier's to change inside it (a table
 			// header), and only one of the shortcut's own conditions moving (or another search)
 			// is a way out. The chip's lit state is stricter — that is the chip's business.
+			// The shortcut must still be the one entered: its definition edited meanwhile
+			// (Customise, open beside the level) is another shortcut, and a condition the edit
+			// removed must not go on filtering as if the cashier had pressed it — the level drops,
+			// and the drop takes the patch that was entered back out (nothing in the query moved).
 			const quickFilter = terms.quickFilterFor(term);
-			live = !!quickFilter && quickFilterHolds(quickFilter, state);
+			live =
+				!!quickFilter &&
+				projection?.kind === 'shortcut' &&
+				isEqual(
+					quickFilterToQueryPatch(quickFilter),
+					quickFilterToQueryPatch(projection.quickFilter)
+				) &&
+				quickFilterHolds(quickFilter, state);
 		}
 	}
 	const path = live ? stored : NO_PATH;

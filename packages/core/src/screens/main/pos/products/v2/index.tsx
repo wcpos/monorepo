@@ -53,10 +53,9 @@ import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
 import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
-import { clearConditions } from '../filter-bar/clear-conditions';
 import { readBrowseBy } from './browse/browse-source';
 import { BrowseStage } from './browse/browse-stage';
-import { filtersAtBaseline, taxonomyField } from './browse/use-browse-path';
+import { clearConditions, conditionsBeyond, type LevelPlace } from './browse/level-place';
 import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
@@ -242,10 +241,9 @@ function POSProductsContent({
 	});
 	// A product drilled inside the browse stage: the stage owns that drill; the filter bar reads it.
 	const [browseDrilled, setBrowseDrilled] = React.useState(false);
-	// A browse level open: its crumb is the source's own condition, so that pill folds and Clear
-	// filters leaves the place (the filter bar's `placeField`; clearConditions).
-	const [browseLevelOpen, setBrowseLevelOpen] = React.useState(false);
-	const placeField = browseLevelOpen ? taxonomyField(browseBy) : null;
+	// A browse level open: its crumb is the place, so the source's own pill folds, the place's
+	// own conditions are not groups to clear, and Clear filters leaves the place (level-place).
+	const [browsePlace, setBrowsePlace] = React.useState<LevelPlace | null>(null);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
@@ -256,8 +254,12 @@ function POSProductsContent({
 	const [body, setBody] = React.useState({ width: 0, height: 0 });
 	// "No products yet" only when nothing narrows the baseline: no search and no filter beyond the
 	// initial ones (published, and in stock unless the setting shows out-of-stock). Any other zero
-	// is "nothing matches", with the way out (#308 rule 4).
-	const emptyStore = !state.search && filtersAtBaseline(state.filters, initialFilters);
+	// is "nothing matches", with the way out (#308 rule 4) — when there is one: inside a browse
+	// level the place stays and only the conditions go, so a level empty with no condition beyond
+	// its place offers no Clear filters (the press would change nothing); its way back is the
+	// crumb and the parent tile.
+	const conditionsOn = conditionsBeyond(browsePlace, state, initialFilters);
+	const emptyStore = !browsePlace && !conditionsOn;
 	const noDataMessage = (
 		<EmptyState
 			testID="no-data-message"
@@ -268,13 +270,12 @@ function POSProductsContent({
 			)}
 			description={emptyStore ? t('pos_products.no_products_yet_description') : undefined}
 			action={
-				emptyStore
-					? undefined
-					: {
+				conditionsOn
+					? {
 							label: t('pos_products.clear_filters'),
-							// Inside a browse level the place stays: only the conditions go.
-							onPress: () => clearConditions(actions, state.filters, placeField),
+							onPress: () => clearConditions(actions, state.filters, browsePlace),
 						}
+					: undefined
 			}
 		/>
 	);
@@ -453,7 +454,7 @@ function POSProductsContent({
 								<POSFilterBar
 									level={drilled || browseDrilled ? 'variations' : 'products'}
 									initialFilters={initialFilters}
-									placeField={placeField}
+									place={browsePlace}
 								/>
 							</ErrorBoundary>
 							{scannerOpen ? (
@@ -513,7 +514,7 @@ function POSProductsContent({
 									actions={tableActions}
 									tableConfig={tableConfig}
 									onDrilledChange={setBrowseDrilled}
-									onLevelChange={setBrowseLevelOpen}
+									onLevelChange={setBrowsePlace}
 								/>
 							) : viewMode === 'grid' ? (
 								<DealStack

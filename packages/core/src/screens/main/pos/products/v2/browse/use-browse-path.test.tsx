@@ -355,6 +355,39 @@ it('a chip with the shortcut’s filters under another sort is left exactly as i
 	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcutA]);
 });
 
+// Customise stays open beside a shortcut level: a condition the edit removed must not go on
+// filtering as though the cashier had pressed it.
+it('a shortcut whose definition changes while its level is open drops the level and takes the entered patch out', () => {
+	let definition = onSaleDrinks;
+	const mutable = { ...terms, quickFilterFor: () => definition };
+	const { result, rerender } = renderHook(() => useBrowsePath('shortcuts', mutable as never));
+	act(() => result.current.enter(shortcutA));
+	expect(mockState.filters).toMatchObject({ categories: [3], on_sale: true });
+	definition = { ...onSaleDrinks, conditions: [{ field: 'categories', value: [3] }] };
+	rerender();
+	expect(result.current.path).toEqual([]);
+	expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish' });
+});
+
+it('a space typed after a shortcut’s own search keeps the level, and leaving still takes the search out', () => {
+	const lattes = {
+		type: 'quick',
+		id: 'qf-l',
+		label: 'Lattes',
+		conditions: [{ field: 'search', value: 'latte' }],
+	};
+	const shortcut = { kind: 'shortcut' as const, id: 'qf-l', name: 'Lattes', description: '' };
+	const withLattes = { ...terms, quickFilterFor: () => lattes };
+	const { result } = renderHook(() => useBrowsePath('shortcuts', withLattes as never));
+	act(() => result.current.enter(shortcut));
+	expect(mockState.search).toBe('latte');
+	act(() => actions.setSearch('latte '));
+	expect(result.current.path.map((entry) => entry.term)).toEqual([shortcut]);
+	act(() => result.current.root());
+	expect(result.current.path).toEqual([]);
+	expect(mockState.search).toBe('');
+});
+
 it('a sort picked inside a shortcut level keeps the level and its filters', () => {
 	const { result } = renderHook(() => useBrowsePath('shortcuts', withA as never));
 	act(() => result.current.enter(shortcutA));

@@ -27,6 +27,7 @@ import {
 import { useBrowseTerms } from './use-browse-terms';
 import { useSystemBack } from './use-system-back';
 
+import type { LevelPlace } from './level-place';
 import type {
 	QueryStateActions,
 	QueryStateOf,
@@ -78,10 +79,11 @@ export type BrowseStageProps = {
 	/** So the screen can set the filter bar's level while a product is drilled here. */
 	onDrilledChange: (drilled: boolean) => void;
 	/**
-	 * So the screen can fold the source's own pill while a level is open: the crumb is that
-	 * condition. Called with whether the live path has an entry (a gathering level does not).
+	 * So the screen's filter bar and empty state know the place while a level is open: the
+	 * source's own pill folds (the crumb is that condition) and Clear filters leaves the place.
+	 * Called with the deepest live entry's place, null at the root (a gathering level is none).
 	 */
-	onLevelChange?: (open: boolean) => void;
+	onLevelChange?: (place: LevelPlace | null) => void;
 };
 
 /**
@@ -137,10 +139,18 @@ export function BrowseStage(props: BrowseStageProps) {
 	const { path, enter, backTo } = useBrowsePath(source, terms);
 	const state = useQueryState<'products'>();
 	const field = taxonomyField(source);
-	// A layout effect, as the drill's: the folded pill and the crumb commit in the same frame.
-	const levelOpen = path.length > 0;
-	React.useLayoutEffect(() => onLevelChange?.(levelOpen), [levelOpen, onLevelChange]);
-	React.useLayoutEffect(() => () => onLevelChange?.(false), [onLevelChange]);
+	// The deepest live entry's place; one object per entry and source answer, so the screen's
+	// state moves only when the place does. A layout effect, as the drill's: the folded pill and
+	// the crumb commit in the same frame.
+	const deepestEntry = path[path.length - 1];
+	const place = React.useMemo<LevelPlace | null>(() => {
+		if (!deepestEntry) return null;
+		const quickFilter =
+			deepestEntry.term.kind === 'shortcut' ? terms.quickFilterFor(deepestEntry.term) : undefined;
+		return quickFilter ? { field, quickFilter } : { field };
+	}, [deepestEntry, field, terms]);
+	React.useLayoutEffect(() => onLevelChange?.(place), [place, onLevelChange]);
+	React.useLayoutEffect(() => () => onLevelChange?.(null), [onLevelChange]);
 	// The product drill remembers its depth, the entry it opened under and the search it opened
 	// under (the existing rule).
 	const [drill, setDrill] = React.useState<ProductDrill | PressedDrill | null>(null);
