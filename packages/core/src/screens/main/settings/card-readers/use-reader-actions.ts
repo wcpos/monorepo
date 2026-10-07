@@ -34,8 +34,9 @@ export function useReaderActions() {
 	const [working, setWorking] = React.useState<string | null>(null);
 	const [errors, setErrors] = React.useState<Readonly<Record<string, ReaderError | undefined>>>({});
 	const live = React.useRef(true);
-	// Two taps in one frame see the same React state; the ref closes that gap.
-	const busy = React.useRef<string | null>(null);
+	// Two taps in one frame see the same React state; the ref closes that gap. It holds a token
+	// per run, not the method id, so a cancelled scan settling late cannot release a newer run.
+	const busy = React.useRef<object | null>(null);
 	// A cancelled scan's late result must not pop the list back under the row.
 	const scanToken = React.useRef(0);
 	React.useEffect(() => {
@@ -52,7 +53,8 @@ export function useReaderActions() {
 			transport?: PaymentTransport
 		) => {
 			if (busy.current) return;
-			busy.current = method.id;
+			const token = {};
+			busy.current = token;
 			setWorking(method.id);
 			setErrors((prev) => ({ ...prev, [method.id]: undefined }));
 			try {
@@ -68,8 +70,10 @@ export function useReaderActions() {
 						},
 					}));
 			} finally {
-				if (busy.current === method.id) busy.current = null;
-				if (live.current) setWorking((current) => (current === method.id ? null : current));
+				if (busy.current === token) {
+					busy.current = null;
+					if (live.current) setWorking(null);
+				}
 			}
 		},
 		[]
@@ -157,8 +161,14 @@ export function useReaderActions() {
 		if (!method) return;
 		void run(method, 'forget', async () => {
 			const driver = getDriver(method.capture.provider);
-			// A held SDK session must go with the memory, or the next scan is refused.
-			await driver?.disconnect?.().catch(() => undefined);
+			// A held SDK session must go with the memory, or the next scan is refused. An SDK that
+			// refuses to let go while it still reports a connection keeps the memory too, so the
+			// row (and its Disconnect) stays as the way back; "nothing to release" is not an error.
+			try {
+				await driver?.disconnect?.();
+			} catch (error) {
+				if (driver?.status$.get().connection !== 'disconnected') throw error;
+			}
 			await rememberedReaders(storeDB).remove(method.id);
 		});
 	}, [pendingForget, run, storeDB]);

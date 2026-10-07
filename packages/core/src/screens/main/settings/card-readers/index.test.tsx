@@ -285,6 +285,36 @@ it('shows a failed connect as one line with Try again, and the update progress a
 	expect(screen.queryByTestId(`${row}-retry`)).toBeNull();
 });
 
+it('Forget keeps the reader when the SDK still holds it and will not let go', async () => {
+	remembered$.next({
+		[deviceMethod.id]: { id: 'sim-approve', label: 'Simulated approve', transport: 'bluetooth' },
+	});
+	const driver = createSimulatedDriver();
+	const held: DriverStatus = {
+		connection: 'connected',
+		reader: { id: 'sim-approve', label: 'Simulated approve', transport: 'bluetooth' },
+	};
+	registerDriver({
+		...driver,
+		disconnect: async () => {
+			throw new Error('SDK busy');
+		},
+		status$: { get: () => held, subscribe: () => () => {} },
+	});
+	render(<CardReadersSettings />);
+	await flush();
+	const row = `reader-row-${deviceMethod.id}`;
+	fireEvent.click(screen.getByTestId(`${row}-forget`));
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-forget-confirm'));
+	});
+	expect(screen.getByTestId(`${row}-line`).textContent).toBe(
+		'Could not forget the reader: SDK busy'
+	);
+	expect(remembered$.value[deviceMethod.id]?.id).toBe('sim-approve');
+	expect(screen.getByTestId(`${row}-disconnect`)).toBeTruthy();
+});
+
 it('names the Terminal location when the gateway sends one', async () => {
 	remembered$.next({
 		[deviceMethod.id]: { id: 'sim-approve', label: 'Simulated approve', transport: 'bluetooth' },
