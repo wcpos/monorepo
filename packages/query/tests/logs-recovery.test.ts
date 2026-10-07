@@ -90,6 +90,34 @@ describe('logs storage recovery', () => {
 		expect(reload).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps the native guard open when the logs remove fails', async () => {
+		Object.defineProperty(globalThis, 'sessionStorage', {
+			configurable: true,
+			value: undefined,
+		});
+		const remove = jest
+			.fn()
+			.mockRejectedValueOnce(new Error('remove failed'))
+			.mockResolvedValue(undefined);
+		const logsCollection = { name: 'logs', remove };
+		const reload = jest.fn();
+		const error = new Error(
+			'SyntaxError: JSON Parse error: Unexpected character: d; targeted recovery failed for log-1: missing-primary-row'
+		);
+
+		await jest.isolateModulesAsync(async () => {
+			const { recoverLogsCollectionStorage: recoverNativeLogs } =
+				await import('../src/logs-storage-recovery');
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).rejects.toThrow(
+				'remove failed'
+			);
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).resolves.toBe(true);
+		});
+
+		expect(remove).toHaveBeenCalledTimes(2);
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
 	it('recovers a targeted JSON failure with sessionStorage', async () => {
 		const remove = jest.fn(async () => undefined);
 		const reload = jest.fn();
