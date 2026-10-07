@@ -399,6 +399,18 @@ async function setupVariant(
 		// snapshot never reaches the POS screen, so there is no settings button to press.
 		if (!options.coldStart) {
 			await setBrowseBy(authPage, 'all');
+			// `setBrowseBy` returns when the dialog has closed, but the form's string values are
+			// debounced and the dialog's cleanup fires `patchUI` without awaiting the RxState
+			// write, so closing the page here could terminate the OPFS worker before `all` is
+			// committed and export a snapshot that still browses by categories (Codex, #2415).
+			// Read it back from a fresh boot: the product root, with the catalogue count ready,
+			// is the persisted setting; the browse root would be the default coming back.
+			await authPage.reload({ waitUntil: 'commit' });
+			await authPage.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+			await expect(authPage.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+				timeout: CATALOGUE_READY_TIMEOUT_MS,
+			});
+			await expect(authPage.getByTestId('browse-root')).toHaveCount(0);
 		}
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
