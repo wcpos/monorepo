@@ -201,25 +201,51 @@ function useProjectionStore(persistKey: string | undefined) {
 export function useReleaseBrowsePath(persistKey: string | undefined, release: boolean): void {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	const settingsSort = useSettingsSort();
+	const resetState = useBrowseResetState();
 	const pathStore = usePathStore(persistKey);
 	const projected = useProjectionStore(persistKey);
-	const latest = React.useRef({ state, actions, settingsSort });
+	const latest = React.useRef({ state, actions, resetState });
 	React.useLayoutEffect(() => {
-		latest.current = { state, actions, settingsSort };
+		latest.current = { state, actions, resetState };
 	});
 	React.useLayoutEffect(() => {
 		if (!release) return;
 		const current = projected.get();
 		if (current) {
-			const { state: now, actions: act, settingsSort: sort } = latest.current;
-			// The baseline's filters are what `resetFilters` restores; only `sort` is read here,
-			// and a shortcut's own filter keys go back to the store's reset baseline.
-			takeOutProjection(current, now, act, { filters: {}, sort });
+			const { state: now, actions: act, resetState: baseline } = latest.current;
+			takeOutProjection(current, now, act, baseline);
 			projected.set(null);
 		}
 		if (pathStore.get().entries.length > 0) pathStore.set({ source: 'all', entries: NO_PATH });
 	}, [release, projected, pathStore]);
+}
+
+/**
+ * The device baseline a projection is taken out against: the filters `resetFilters` restores
+ * (published; in stock unless the setting shows out-of-stock) and the persisted settings sort.
+ * The ONE derivation, for the path and for All products mode releasing a leftover (a shortcut
+ * on in-stock must leave the baseline's in-stock in place, never delete it).
+ */
+function useBrowseResetState(): {
+	filters: Partial<FiltersOf<'products'>>;
+	sort: QueryStateOf<'products'>['sort'];
+} {
+	const { uiSettings } = useUISettings('pos-products');
+	const settingsSort = useSettingsSort();
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	return React.useMemo(
+		() => ({
+			filters: {
+				categories: [],
+				tags: [],
+				brands: [],
+				status: 'publish' as const,
+				...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
+			},
+			sort: settingsSort,
+		}),
+		[showOutOfStock, settingsSort]
+	);
 }
 
 function usePathStore(persistKey: string | undefined) {
@@ -274,11 +300,10 @@ export function useBrowsePath(
 ): BrowsePath {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	const { uiSettings } = useUISettings('pos-products');
 	// Exactly what the chip reads (filter-bar.tsx QuickChip), so a shortcut is active for the
 	// path when its chip's filters and search hold (its sort aside, once entered — see below).
 	const settingsSort = useSettingsSort();
-	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	const resetState = useBrowseResetState();
 	const field = taxonomyField(source);
 	// The path is the SOURCE's: a path stored under Categories is nothing under Tags from the very
 	// render the source changes (the cleanup below then takes its projection out).
@@ -314,20 +339,6 @@ export function useBrowsePath(
 		},
 		[source, pathStore]
 	);
-	const resetState = React.useMemo(
-		() => ({
-			filters: {
-				categories: [],
-				tags: [],
-				brands: [],
-				status: 'publish' as const,
-				...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
-			},
-			sort: settingsSort,
-		}),
-		[showOutOfStock, settingsSort]
-	);
-
 	const projected = useProjectionStore(persistKey);
 	const projection = React.useSyncExternalStore(projected.subscribe, projected.get, projected.get);
 	// The result window each covered level had when a child was opened over it, by entry identity

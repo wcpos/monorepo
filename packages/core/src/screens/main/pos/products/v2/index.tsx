@@ -321,8 +321,15 @@ function POSProductsContent({
 	 * UI settings are an external observable projected into committed query state.
 	 * rebaseFilter (not setFilter) so the resetFilters baseline follows the toggle:
 	 * clear-and-refresh must reset to the setting's stock_status, not the mount-time one.
+	 *
+	 * Only when the setting MOVES, never on mount: a new store was seeded from this same setting
+	 * (POSProducts' initialFilters), and a store kept across a remount (the register's layout
+	 * switching trees) carries the cashier's own stock pill, which the mount must not overwrite.
 	 */
+	const appliedShowOutOfStock = React.useRef(showOutOfStock);
 	React.useEffect(() => {
+		if (appliedShowOutOfStock.current === showOutOfStock) return;
+		appliedShowOutOfStock.current = showOutOfStock;
 		actions.rebaseFilter('stock_status', showOutOfStock ? undefined : 'instock');
 	}, [actions, showOutOfStock]);
 
@@ -331,8 +338,14 @@ function POSProductsContent({
 	 * DataTable column headers write sortBy/sortDirection to uiSettings; reacting
 	 * to those observables here keeps the grid (which has no headers) and the
 	 * table in sync. An effect is required because UI settings are an external store.
+	 * Only when the setting moves (as the stock effect above): a kept store carries the sort a
+	 * shortcut set, which the mount must not overwrite.
 	 */
+	const appliedSort = React.useRef({ sortBy, sortDirection });
 	React.useEffect(() => {
+		const applied = appliedSort.current;
+		if (applied.sortBy === sortBy && applied.sortDirection === sortDirection) return;
+		appliedSort.current = { sortBy, sortDirection };
 		const sort = getPOSProductSort(sortBy, sortDirection);
 		actions.setSort(sort.field, sort.direction);
 	}, [actions, sortBy, sortDirection]);

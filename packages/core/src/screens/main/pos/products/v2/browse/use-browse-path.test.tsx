@@ -833,6 +833,38 @@ describe('a persisted path', () => {
 		expect(latest!.path).toEqual([]);
 	});
 
+	it('released by All products, a shortcut on in-stock leaves the device baseline in place', () => {
+		mockShowOutOfStock = false;
+		mockState = { ...mockState, filters: baseline() };
+		const inStock = {
+			type: 'quick',
+			id: 'qf-s',
+			label: 'In stock now',
+			conditions: [
+				{ field: 'categories', value: [3] },
+				{ field: 'stock_status', value: 'instock' },
+			],
+		};
+		const shortcut = {
+			kind: 'shortcut' as const,
+			id: 'qf-s',
+			name: 'In stock now',
+			description: '',
+		};
+		const withInStock = { ...terms, quickFilterFor: () => inStock };
+		function ShortcutProbe() {
+			// eslint-disable-next-line react-compiler/react-compiler -- the test reads the hook's result
+			latest = useBrowsePath('shortcuts', withInStock as never, 'pos-browse:scope');
+			return null;
+		}
+		const { rerender } = render(host(createElement(ShortcutProbe)));
+		act(() => latest!.enter(shortcut));
+		expect(mockState.filters).toMatchObject({ categories: [3], stock_status: 'instock' });
+		rerender(host(null));
+		rerender(host(createElement(Releaser)));
+		expect(mockState.filters).toEqual({ ...CLEARED, status: 'publish', stock_status: 'instock' });
+	});
+
 	it('without a key, leaving takes the projection out as before', () => {
 		const { result, unmount } = renderHook(() => useBrowsePath('categories', terms as never));
 		act(() => result.current.enter(drinks));
