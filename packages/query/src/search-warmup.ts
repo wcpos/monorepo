@@ -7,7 +7,7 @@ import {
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { observeEngineDatabases } from './engine-query';
 import { searchBlobFor } from './search-blob';
-import { SEARCH_FIELDS, type SearchFieldCollection } from './search-fields';
+import { type SearchFieldCollection, searchFieldsFor } from './search-fields';
 
 import type { AdapterDatabase, EngineRxDocument } from './engine-adapter/execute-query';
 import type { SearchableCollection } from './search-shared';
@@ -49,7 +49,7 @@ function warm(database: AdapterDatabase, name: SearchFieldCollection) {
 	if (!collection) return null;
 	return searchBlobFor(
 		collection,
-		SEARCH_FIELDS[name],
+		searchFieldsFor(name) ?? [],
 		(document: EngineRxDocument) => legacySearchSnapshot(name as LegacyCollectionName, document),
 		name
 	);

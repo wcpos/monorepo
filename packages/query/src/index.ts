@@ -48,7 +48,14 @@ export {
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
-export { SEARCH_FIELDS, searchFieldsFor, searchRowText } from './search-fields';
+export {
+	META_FIELD_PREFIX,
+	SEARCH_FIELDS,
+	searchFieldsFor,
+	searchRowText,
+	setSearchMetaKeys,
+	type SearchMetaKeys,
+} from './search-fields';
 export { searchBlobFor, searchRows, type SearchBlob } from './search-blob';
 export { warmSearchBlobs } from './search-warmup';
 export { declareRequirements, runResetRefill } from './requirement-bridge';

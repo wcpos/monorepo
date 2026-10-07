@@ -84,6 +84,11 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// query transport, so existing documents need no change.
 			return oldDoc;
 		},
+		6(oldDoc) {
+			// v6 adds the optional `search_meta_keys` object; a site without it searches the
+			// declared fields only, so existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

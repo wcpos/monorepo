@@ -652,14 +652,14 @@ function coverageProjection$(
 	);
 }
 
-const searchFieldsCache = new Map<LegacyCollectionName, string[] | undefined>();
-
+/**
+ * The query package memoises the list per collection and rebuilds it only when the site's
+ * added meta keys change, so the identity is stable across renders and the effect deps
+ * below re-bind exactly when the fields do. Read-only in practice; the cast is for the
+ * descriptor's mutable type.
+ */
 function searchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
-	if (searchFieldsCache.has(collection)) return searchFieldsCache.get(collection);
-	const fields = searchFieldsOf(collection);
-	const searchFields = fields ? [...fields] : undefined;
-	searchFieldsCache.set(collection, searchFields);
-	return searchFields;
+	return searchFieldsOf(collection) as string[] | undefined;
 }
 
 function emptyResult(): QueryResult<RxCollection> {
