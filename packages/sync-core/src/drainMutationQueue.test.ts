@@ -743,6 +743,62 @@ describe('drainMutationQueue — retry backoff (ADR 0012)', () => {
 		expect(pushed).toEqual([]);
 	});
 
+	it('releases the chain for an explicit row queued while the failing push was in flight', async () => {
+		const q = await queueWith(mut({ mutationId: 'head' }));
+		const [head] = await q.pending();
+		await q.reschedule({ ...head, attempts: 6, nextAttemptAt: at(50_000) });
+		let clock = 100_000;
+		const now = () => clock;
+		const backoff = NO_JITTER_BACKOFF;
+		await drainMutationQueue({
+			queue: q,
+			now,
+			backoff,
+			push: async () => {
+				const checkout = await q.enqueue(mut({ mutationId: 'checkout', queuedAt: at(110_000) }));
+				await q.replace({ ...checkout, explicit: true });
+				clock = 130_000;
+				throw new Error('network');
+			},
+		});
+		expect((await q.pending())[0]).toMatchObject({
+			mutationId: 'head',
+			attempts: 7,
+			nextAttemptAt: at(160_000),
+		});
+
+		clock = 131_000;
+		const pushed: string[] = [];
+		await drainMutationQueue({
+			queue: q,
+			now,
+			backoff,
+			push: async (mutation: RecordMutation) => {
+				pushed.push(mutation.mutationId);
+				return ok(mutation);
+			},
+		});
+		expect(pushed).toEqual(['head', 'checkout']);
+		expect(await q.pending()).toEqual([]);
+	});
+
+	it('sets the backoff gate from the attempt start, not the failure time', async () => {
+		const q = await queueWith(mut());
+		let clock = 1_000;
+		await drainMutationQueue({
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			push: async () => {
+				clock = 9_000;
+				throw new Error('network');
+			},
+		});
+		const [queued] = await q.pending();
+		expect(queued.attempts).toBe(1);
+		expect(queued.nextAttemptAt).toBe(at(2_000));
+	});
+
 	it('bumps attempts and sets the backoff gate on a retryable failure', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1' }));
 		const result = await drainMutationQueue({

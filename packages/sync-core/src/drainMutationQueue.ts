@@ -434,6 +434,7 @@ export async function drainMutationQueue(input: {
 
 	// Bump the attempt count + set the backoff gate after a failed push OR a failed ack, so the next
 	// drain waits before re-pushing (ADR 0012) — the same policy for both failure kinds.
+	let attemptStartedAt: number | undefined;
 	const applyBackoff = async (mutation: QueuedMutation): Promise<void> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const attempts = (mutation.attempts ?? 0) + 1;
@@ -442,7 +443,8 @@ export async function drainMutationQueue(input: {
 			await input.queue.reschedule({
 				...mutation,
 				attempts,
-				nextAttemptAt: new Date(now() + delayMs).toISOString(),
+				// The release compares attempt start with the cashier's press; an in-flight press is not already tried.
+				nextAttemptAt: new Date((attemptStartedAt ?? now()) + delayMs).toISOString(),
 			});
 		} catch {
 			// Couldn't persist the backoff — surface the rare double-fault (the push/ack failed AND the
@@ -584,11 +586,12 @@ export async function drainMutationQueue(input: {
 		if (!(queuedAt <= now())) continue;
 		freshExplicitQueuedAt.set(key, Math.max(queuedAt, freshExplicitQueuedAt.get(key) ?? -Infinity));
 	}
-	// When a backing-off row last failed: its gate minus the (deterministic) delay that set it.
+	// When a backing-off row's last attempt started: its gate minus the deterministic delay that set it.
 	const lastAttemptAt = (mutation: QueuedMutation): number =>
 		Date.parse(mutation.nextAttemptAt!) -
 		computeRetryBackoffMs(mutation.attempts ?? 0, backoff, retryJitterSeed(mutation.mutationId));
 	for (const mutation of batch) {
+		attemptStartedAt = undefined;
 		if (input.signal?.aborted) {
 			break;
 		}
@@ -670,6 +673,7 @@ export async function drainMutationQueue(input: {
 			}
 			continue;
 		}
+		attemptStartedAt = now();
 		attempted += 1;
 		let result: PushResult;
 		try {
