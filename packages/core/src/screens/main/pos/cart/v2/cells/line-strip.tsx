@@ -154,21 +154,25 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			back();
 			return;
 		}
-		rowRef.pulseRemove(() =>
-			removeLineItem(uuid, type)
-				.catch((error: unknown) => {
-					// `localPatch` logs and toasts every failure it handles, and re-raises
-					// only ActiveScopeChangedTwiceError, so a rejection getting this far
-					// is unexpected. Log it — without a second toast, which would double
-					// up on the cashier.
-					cartLogger.error('Cart line removal failed', {
-						code: ERROR_CODES.CART_UPDATE_FAILED,
-						context: { uuid, itemType: type, error: getErrorMessage(error) },
-					});
-				})
-				// On success the row unmounts and none of this lands; on failure the line is
-				// still in the cart and comes back on stage.
-				.finally(back)
+		rowRef.pulseRemove(
+			() =>
+				removeLineItem(uuid, type)
+					.catch((error: unknown) => {
+						// `localPatch` logs and toasts every failure it handles, and re-raises
+						// only ActiveScopeChangedTwiceError, so a rejection getting this far
+						// is unexpected. Log it — without a second toast, which would double
+						// up on the cashier.
+						cartLogger.error('Cart line removal failed', {
+							code: ERROR_CODES.CART_UPDATE_FAILED,
+							context: { uuid, itemType: type, error: getErrorMessage(error) },
+						});
+					})
+					// On success the row unmounts and none of this lands; on failure the line is
+					// still in the cart and comes back on stage.
+					.finally(back),
+			// An add pulse (a quantity change landing mid-removal) cancels the removal before it
+			// commits; the row is still here and must come back on stage (Codex, #2447).
+			{ onCancel: back }
 		);
 	};
 	const flown = (finished: boolean) => {
@@ -221,13 +225,20 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			offset.set(x);
 			arm(-x >= removePoint(rowWidth, stripWidth));
 		})
-		.onFinalize((event) => {
+		.onFinalize((event, success) => {
 			setDragging(false);
 			// The latch suppresses the press that ends THIS gesture; a pan that began on the
 			// name or the quantity never presses the total, so clear it once that press has had
 			// its turn, or the next deliberate tap on the total is swallowed.
 			setTimeout(() => swiped.set(false), 0);
 			if (leaving.get()) return;
+			if (!success) {
+				// Interrupted (another gesture took it, the touch was cancelled): not a release,
+				// never a removal. Back to the rest it started from (Codex, #2447).
+				arm(false);
+				settle(open ? -stripWidth : 0);
+				return;
+			}
 			const revealed = -Math.max(
 				-rowWidth,
 				Math.min(0, (open ? -stripWidth : 0) + event.translationX)

@@ -11,7 +11,7 @@ const mockOffsetSet = jest.fn();
 const mockHaptic = jest.fn();
 let mockStart: () => void;
 let mockUpdate: (event: { translationX: number }) => void;
-let mockFinalize: (event: { translationX: number; velocityX: number }) => void;
+let mockFinalize: (event: { translationX: number; velocityX: number }, success: boolean) => void;
 let mockTotalProps: { onHoverIn?: () => void; onHoverOut?: () => void; className?: string };
 const mockLayouts: Record<string, (event: { nativeEvent: { layout: { width: number } } }) => void> =
 	{};
@@ -181,7 +181,7 @@ function renderStrip() {
 function pull(x: number, velocityX = 0) {
 	act(() => mockStart());
 	act(() => mockUpdate({ translationX: x }));
-	act(() => mockFinalize({ translationX: x, velocityX }));
+	act(() => mockFinalize({ translationX: x, velocityX }, true));
 }
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -305,7 +305,7 @@ it('crossing the line arms the row with one tick, and coming back disarms it wit
 	act(() => mockUpdate({ translationX: -LINE + 1 }));
 	expect(armRemove).toHaveBeenLastCalledWith(false);
 	expect(mockHaptic).toHaveBeenCalledTimes(2);
-	act(() => mockFinalize({ translationX: -LINE + 1, velocityX: 0 }));
+	act(() => mockFinalize({ translationX: -LINE + 1, velocityX: 0 }, true));
 	expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP);
 });
 it('letting go past the line removes the line through pulseRemove', () => {
@@ -322,4 +322,26 @@ it('a fast flick past the open strip removes without reaching the line', () => {
 	pull(-STRIP - 20, -900);
 	expect(armRemove).toHaveBeenCalledWith(true);
 	expect(pulseRemove).toHaveBeenCalledTimes(1);
+});
+it('an interrupted gesture past the line is not a release: it disarms and goes back to its rest', () => {
+	const { pulseRemove, armRemove } = renderStrip();
+	act(() => mockStart());
+	act(() => mockUpdate({ translationX: -LINE }));
+	expect(armRemove).toHaveBeenLastCalledWith(true);
+	act(() => mockFinalize({ translationX: -LINE, velocityX: 0 }, false));
+	expect(armRemove).toHaveBeenLastCalledWith(false);
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
+	expect(pulseRemove).not.toHaveBeenCalled();
+});
+it('a removal cancelled before it commits brings the row back and leaves it removable', () => {
+	const { pulseRemove, armRemove } = renderStrip();
+	fireEvent.click(screen.getByTestId('cart-line-remove'));
+	expect(pulseRemove).toHaveBeenCalledTimes(1);
+	// An add pulse took over mid-removal: the row never unmounted.
+	const options = pulseRemove.mock.calls[0][1] as { onCancel: () => void };
+	act(() => options.onCancel());
+	expect(armRemove).toHaveBeenLastCalledWith(false);
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
+	fireEvent.click(screen.getByTestId('cart-line-remove'));
+	expect(pulseRemove).toHaveBeenCalledTimes(2);
 });

@@ -270,4 +270,53 @@ describe('PulseTableRow', () => {
 			expect(removeReduced).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe('cancellation while the row is on its way out (Codex, #2447)', () => {
+		it('an armed row skips the tint and starts closing at once', () => {
+			const { ref } = renderRow();
+			layRowOut(44);
+			act(() => ref.current!.armRemove(true));
+			finishPendingAnimations();
+			reanimated.__started.length = 0;
+			const removeLine = jest.fn();
+			act(() => ref.current!.pulseRemove(removeLine));
+			expect(removePulses()).toHaveLength(0);
+			expect(closes()).toHaveLength(1);
+			finishPendingAnimations();
+			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
+
+		it('an add pulse during the close cancels the removal and tells the caller', () => {
+			const { ref } = renderRow();
+			layRowOut(44);
+			const removeLine = jest.fn();
+			const onCancel = jest.fn();
+			act(() => ref.current!.pulseRemove(removeLine, { onCancel }));
+			// The tint lands and the gap starts closing.
+			act(() => reanimated.__pending.splice(0).forEach((callback) => callback(true)));
+			expect(closes()).toHaveLength(1);
+			// A quantity change arrives: the add takes over, the close is cancelled.
+			act(() => ref.current!.pulseAdd());
+			expect(removeLine).not.toHaveBeenCalled();
+			expect(onCancel).toHaveBeenCalledTimes(1);
+			// And the row is removable again.
+			act(() => ref.current!.pulseRemove(removeLine));
+			expect(removePulses()).toHaveLength(2);
+		});
+
+		it('an add pulse during the tint tells the caller too', () => {
+			const { ref } = renderRow();
+			const onCancel = jest.fn();
+			act(() => ref.current!.pulseRemove(jest.fn(), { onCancel }));
+			act(() => ref.current!.pulseAdd());
+			expect(onCancel).toHaveBeenCalledTimes(1);
+		});
+
+		it('keeps the row floor on the inner wrapper so the outer height can reach 0', () => {
+			const { container } = renderRow();
+			const row = container.firstElementChild as HTMLElement;
+			expect(row.className).toMatch(/\bmin-h-0\b/);
+			expect(row.className).not.toMatch(/\bmin-h-row\b/);
+		});
+	});
 });
