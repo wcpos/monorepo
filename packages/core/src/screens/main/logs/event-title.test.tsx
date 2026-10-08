@@ -102,6 +102,54 @@ describe('useEventTitle', () => {
 		expect(titleFor(row({}))).toBe('');
 		expect(titleFor(row({ context: { type: 42 } }))).toBe('');
 	});
+
+	// #2439: a Dutch till showed "Checkout failed" (CHECKOUT101) and "Failed to
+	// send document to server" (SYNC999) in English between translated rows. A
+	// code-carrying row with no event type titles from the code's catalogue
+	// summary — translated at render time, like a registered event type.
+	it("titles a code-carrying row from the code's summary, not the developer message", () => {
+		const title = titleFor(row({ message: 'Checkout failed', code: 'CHECKOUT101' }));
+
+		expect(title).toBe('[es] health.logs.error_summary.CHECKOUT101');
+	});
+
+	it('keeps the registered event translation ahead of the code summary', () => {
+		const title = titleFor(
+			row({
+				message: 'orders 1 — push failed (HTTP 500)',
+				code: 'SYNC131',
+				context: { type: 'push.error' },
+			})
+		);
+
+		expect(title).toBe('[es] health.logs.event.push_error');
+	});
+
+	it('falls back to the message for a code this build does not know', () => {
+		expect(titleFor(row({ message: 'Checkout failed', code: 'CHECKOUT999999' }))).toBe(
+			'Checkout failed'
+		);
+	});
+
+	it('does not mistake an inherited object property for a catalogue code', () => {
+		expect(titleFor(row({ message: 'Odd row', code: 'toString' }))).toBe('Odd row');
+		expect(titleFor(row({ message: 'Odd row', code: 'constructor' }))).toBe('Odd row');
+	});
+
+	// A newer engine under an older UI: its unregistered event type keeps the
+	// version-skew fallback (its own message) even when it also carries a code
+	// this build knows — the engine's narration beats a generic summary.
+	it('keeps an unregistered event type on its own message even with a known code', () => {
+		expect(
+			titleFor(
+				row({
+					message: 'checkout settled with a split tender',
+					code: 'SYNC131',
+					context: { type: 'checkout.settled' },
+				})
+			)
+		).toBe('checkout settled with a split tender');
+	});
 });
 
 describe('translateEventDescription', () => {
