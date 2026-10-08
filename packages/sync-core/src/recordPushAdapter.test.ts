@@ -627,6 +627,20 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
 	});
 
+	it('keeps comparison operators as text — only tag syntax opens a tag', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'x',
+						message: 'Expected x < 5 and y > 2 in <b>wpdb</b> <!-- note -->',
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Expected x < 5 and y > 2 in wpdb' });
+	});
+
 	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
 		await expect(
 			pushRecordMutation({

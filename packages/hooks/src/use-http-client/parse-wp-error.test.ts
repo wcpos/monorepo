@@ -328,6 +328,15 @@ describe('parse-wp-error', () => {
 			).toBe(`Stock fell below 3 ${run}`);
 		});
 
+		it('keeps comparison operators as text — only tag syntax opens a tag', () => {
+			expect(
+				parseWpError(
+					{ code: 'x', message: 'Expected x < 5 and y > 2 in <b>wpdb</b> <!-- note -->' },
+					'fallback'
+				).message
+			).toBe('Expected x < 5 and y > 2 in wpdb');
+		});
+
 		it('leaves entities for the renderer and falls back when the message is only markup', () => {
 			expect(
 				parseWpError({ code: 'x', message: 'D&eacute;sol&eacute;.' }, 'fallback').message
