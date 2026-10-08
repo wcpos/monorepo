@@ -977,6 +977,7 @@
 	"pos_checkout.printed_to": "Printed to {printer}",
 	"pos_checkout.no_receipt": "No receipt",
 	"pos_checkout.new_sale": "New sale",
+	"pos_checkout.reopen_payment": "Reopen the payment from the register to continue",
 	"pos_checkout.checkout": "Checkout",
 	"pos_checkout.insufficient_stock_message": "Stock changed while checking out — these items exceed what's available:",
 	"pos_checkout.checkout_order": "Checkout Order #{orderNumber}",

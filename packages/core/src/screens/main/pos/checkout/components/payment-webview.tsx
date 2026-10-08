@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { filter, take } from 'rxjs';
 
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
@@ -25,6 +26,7 @@ import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { useAccessTokenRefresher } from '../../../../../hooks/use-access-token-refresher';
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
@@ -162,6 +164,7 @@ export function PaymentWebview({
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
+	const refreshAccessToken = useAccessTokenRefresher();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
@@ -169,6 +172,9 @@ export function PaymentWebview({
 	const http = useRestHttpClient();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+	// Set on unmount so a poll or a session refresh that is still awaiting a
+	// response cannot settle the sale, or arm another poll, after checkout closed.
+	const unmountedRef = React.useRef(false);
 	const loadCountRef = React.useRef(0);
 	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
 	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
@@ -180,7 +186,20 @@ export function PaymentWebview({
 	const [autoReloads, setAutoReloads] = React.useState(0);
 	const [navigationStarts, setNavigationStarts] = React.useState(0);
 	const frameSettledRef = React.useRef(false);
-	const frameKey = `${retryToken}:${autoReloads}`;
+	const [sessionReloads, setSessionReloads] = React.useState(0);
+	// Ref-backed so a message arriving before the next render still sees the real count.
+	const sessionReloadsRef = React.useRef(0);
+	const sessionRefreshInFlight = React.useRef(false);
+	// Two separate facts. `frameExpired`: the frame holds an expired token (any failed refresh,
+	// or the reload cap), so it stays failed — no load event may report it ready and the
+	// watchdog must not remount the same expired URL — until the URL itself changes (a new
+	// token, from this component or a background refresh). `sessionRefreshRefused`: no further
+	// refresh may be attempted (the refresh token itself was rejected, or the cap was reached);
+	// a transient failure (network, 5xx, cooldown) leaves it clear so a later message may retry.
+	const frameExpired = React.useRef(false);
+	const sessionRefreshRefused = React.useRef(false);
+
+	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -191,6 +210,14 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
+
+	// The "reopen the payment" warning is shown once per mount, whatever follows.
+	const reopenWarned = React.useRef(false);
+	const warnReopen = React.useCallback(() => {
+		if (reopenWarned.current) return;
+		reopenWarned.current = true;
+		orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+	}, [orderLogger, t]);
 
 	// Latest collaborators for the preparation effect, refreshed after every render so
 	// the effect can key on order identity rather than on revisions our own write emits.
@@ -308,6 +335,23 @@ export function PaymentWebview({
 		return url.toString();
 	}, [paymentURL, jwt]);
 
+	React.useEffect(() => {
+		// A new token (this refresh or a background one) makes the frame live again.
+		frameExpired.current = false;
+		sessionRefreshRefused.current = false;
+	}, [paymentURLWithToken]);
+
+	// Pin the frame's message origin to the store: on web the shared WebView then drops
+	// `message` events from any other window or origin (Pro posts with '*', which is the
+	// sender's target; the receiver still sees the store's origin).
+	const frameOrigin = React.useMemo(() => {
+		try {
+			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
+		} catch {
+			return undefined;
+		}
+	}, [paymentURLWithToken]);
+
 	/**
 	 * Best-effort local catch-up after a payment: pull the paid order so the
 	 * cart/receipt reflect the server's status. Bounded, because a require's
@@ -369,7 +413,7 @@ export function PaymentWebview({
 	 */
 	const pollServerTruth = React.useCallback(
 		async (pollUntilMs?: number): Promise<void> => {
-			if (paymentReceivedRef.current) return;
+			if (paymentReceivedRef.current || unmountedRef.current) return;
 			const localStatus = order.getLatest().payload.status;
 			if (!localStatus || localStatus !== 'pos-open') return;
 			let settled = false;
@@ -387,7 +431,7 @@ export function PaymentWebview({
 					params: { include: orderId, per_page: 1 },
 				});
 				const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-				if (!serverOrder || paymentReceivedRef.current) return;
+				if (!serverOrder || paymentReceivedRef.current || unmountedRef.current) return;
 				const serverStatus = serverOrder.status as string;
 				if (serverStatus === localStatus) return;
 				// A status change is not a payment: an unpaid transition leaves everything in
@@ -462,6 +506,7 @@ export function PaymentWebview({
 				if (
 					!settled &&
 					!paymentReceivedRef.current &&
+					!unmountedRef.current &&
 					pollUntilMs !== undefined &&
 					Date.now() < pollUntilMs
 				) {
@@ -491,6 +536,43 @@ export function PaymentWebview({
 			t,
 		]
 	);
+	const handleSessionExpired = async (data: Record<string, unknown>) => {
+		if (Number(data.orderId) !== orderId) {
+			orderLogger.debug('Ignoring session expiry for another order');
+			return;
+		}
+		if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
+		if (sessionReloadsRef.current >= 2) {
+			// The reloaded frame expired again: close the gate so nothing submits to it.
+			sessionRefreshRefused.current = true;
+			frameExpired.current = true;
+			setFrameStatus('failed');
+			warnReopen();
+			return;
+		}
+		sessionRefreshInFlight.current = true;
+		setFrameStatus('loading');
+		try {
+			const token = await refreshAccessToken();
+			if (unmountedRef.current) return;
+			if (token) {
+				sessionReloadsRef.current += 1;
+				setSessionReloads(sessionReloadsRef.current);
+				// The remount resets the load count, so its first load never arms the poll.
+				// Still detect a payment that settled during the refresh.
+				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
+			} else {
+				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
+				frameExpired.current = true;
+				setFrameStatus('failed');
+				warnReopen();
+			}
+		} finally {
+			sessionRefreshInFlight.current = false;
+			setLoading(false);
+		}
+	};
+
 	/**
 	 *
 	 */
@@ -626,6 +708,7 @@ export function PaymentWebview({
 			// strictly after that listener exists. It is the strongest readiness
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
+			if (sessionRefreshInFlight.current || frameExpired.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
 
@@ -657,6 +740,8 @@ export function PaymentWebview({
 	 * the real fix rather than this gate.
 	 */
 	const onWebViewLoadStart = React.useCallback(() => {
+		// An expired frame stays failed: its navigation must not reopen the gate.
+		if (frameExpired.current) return;
 		setFrameStatus('loading');
 		// Only the first document is watched. Later navigations are the gateway's
 		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
@@ -725,7 +810,7 @@ export function PaymentWebview({
 		// No link, no frame, no navigation to watch: the banner already says so.
 		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
-			if (frameSettledRef.current) return;
+			if (frameSettledRef.current || sessionRefreshInFlight.current || frameExpired.current) return;
 			if (autoReloads === 0 && retryToken === 0) {
 				orderLogger.warn('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
@@ -749,8 +834,12 @@ export function PaymentWebview({
 		setFrameStatus,
 	]);
 
-	React.useEffect(() => {
+	// A layout effect: its cleanup runs in the commit that removes the frame, so a
+	// poll response arriving before the passive cleanups flush already sees the flag.
+	React.useLayoutEffect(() => {
+		unmountedRef.current = false;
 		return () => {
+			unmountedRef.current = true;
 			if (fallbackTimerRef.current) {
 				clearTimeout(fallbackTimerRef.current);
 			}
@@ -766,11 +855,16 @@ export function PaymentWebview({
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
+					targetOrigin={frameOrigin}
 					onLoad={onWebViewLoaded}
 					onLoadStart={onWebViewLoadStart}
 					onError={onWebViewError}
 					onMessage={(event) => {
 						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
+						if (data?.action === 'wcpos-session-expired') {
+							void handleSessionExpired(data);
+							return;
+						}
 						const payload = data?.payload as Record<string, unknown> | undefined;
 						if (data?.action !== 'wcpos-payment-received' && payload?.data) {
 							if (onStockRejection(payload)) {

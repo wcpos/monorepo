@@ -28,7 +28,20 @@ const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockAdoptOrderSnapshot = jest.fn();
 const mockUserDB = {};
-const mockSite = { uuid: 'site' };
+const mockSite = { uuid: 'site', wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' };
+const mockRefreshFetch = jest.fn();
+const mockCredentials$ = new BehaviorSubject({
+	access_token: 'jwt-token',
+	refresh_token: 'refresh',
+});
+const mockCredentials = {
+	collection: {},
+	$: mockCredentials$.pipe(map((data) => ({ toJSON: () => data }))),
+	getLatest: () => mockCredentials$.value,
+	incrementalPatch: jest.fn(async (patch) => {
+		mockCredentials$.next({ ...mockCredentials$.value, ...patch });
+	}),
+};
 let mockOnlineStatus = 'offline';
 const mockPushDocument = jest.fn();
 const mockLocalPatch = jest.fn();
@@ -52,6 +65,7 @@ jest.mock('@wcpos/components/webview', () => {
 			webViewProps = props;
 			R.useEffect(() => {
 				webViewMounts += 1;
+				webViewProps = props;
 				return () => {
 					webViewProps = {};
 				};
@@ -95,6 +109,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
 	// Return the synchronous default; the component only needs the resolved value.
 	useObservableState: (_observable: unknown, defaultValue: unknown) => defaultValue,
 }));
@@ -102,7 +117,8 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),
 }));
 jest.mock('@wcpos/query', () => ({
-	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+	useDocField: jest.requireActual('../../../../../../../query/src/records/use-record-field')
+		.useDocField,
 	useQueryRuntime: () => ({
 		engine: { require: mockEngineRequire, adoptOrderSnapshot: mockAdoptOrderSnapshot },
 	}),
@@ -120,9 +136,15 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 	}),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite, store: { id: 1 } }),
+	useStoreSession: () => ({
+		userDB: mockUserDB,
+		site: mockSite,
+		wpCredentials: mockCredentials,
+		store: { id: 1 },
+	}),
 	useAppState: () => ({
-		wpCredentials: { access_token: 'jwt-token', access_token$: {} },
+		site: mockSite,
+		wpCredentials: mockCredentials,
 	}),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -1898,4 +1920,259 @@ describe('pay-page session gate', () => {
 			);
 		}
 	);
+});
+
+describe('PaymentWebview session expiry', () => {
+	const originalFetch = globalThis.fetch;
+	const response = (access_token = 'fresh-token') => ({
+		ok: true,
+		status: 200,
+		statusText: 'OK',
+		json: async () => ({ access_token, expires_at: 12345 }),
+	});
+	const sendExpiry = (orderId: number | string = 42) =>
+		webViewProps.onMessage({ nativeEvent: { data: { action: 'wcpos-session-expired', orderId } } });
+	const renderFrame = () => {
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		act(() => webViewProps.onLoad({}));
+		return { setFrameStatus };
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.useFakeTimers();
+		jest
+			.requireActual('@wcpos/hooks/use-http-client/request-state-manager')
+			.requestStateManager.reset();
+		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
+		mockCredentials$.next({ access_token: 'jwt-token', refresh_token: 'refresh' });
+		mockOnlineStatus = 'offline';
+		mockSessionsOn = false;
+		webViewMounts = 0;
+		globalThis.fetch = mockRefreshFetch;
+		mockRefreshFetch.mockResolvedValue(response());
+		mockGet.mockResolvedValue({ data: [] });
+	});
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+		jest.useRealTimers();
+	});
+
+	it('refreshes the matching order and remounts with the reactive new token, never the old token', async () => {
+		let finish!: (response: unknown) => void;
+		mockRefreshFetch.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+		const { setFrameStatus } = renderFrame();
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('jwt-token');
+		await act(async () => {
+			sendExpiry('42');
+			sendExpiry('42');
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+		expect(webViewMounts).toBe(1);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+		await act(async () => {
+			finish(response());
+		});
+		expect(webViewMounts).toBe(2);
+		expect(new URL(webViewProps.src).searchParams.getAll('token')).toEqual(['fresh-token']);
+		expect(webViewProps.src).not.toContain('jwt-token');
+		expect(mockCredentials.incrementalPatch).toHaveBeenCalledWith({
+			access_token: 'fresh-token',
+			expires_at: 12345,
+		});
+	});
+
+	it('a payment that settles during the refresh is seen by the poll after the remount', async () => {
+		const serverOrder = {
+			id: 42,
+			status: 'completed',
+			number: '42',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockAdoptOrderSnapshot.mockResolvedValue('protected');
+		autoShowReceipt = false;
+		renderFrame();
+		await act(async () => {
+			sendExpiry(42);
+		});
+		expect(webViewMounts).toBe(2);
+		await act(async () => {
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+	});
+
+	it('a refresh that resolves after checkout closed neither remounts nor polls', async () => {
+		let resolveRefresh: (value: unknown) => void = () => {};
+		mockRefreshFetch.mockReturnValue(new Promise((resolve) => (resolveRefresh = resolve)));
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'completed', number: '42', line_items: [] }],
+		});
+		const setFrameStatus = jest.fn();
+		const view = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		act(() => webViewProps.onLoad({}));
+		act(() => {
+			sendExpiry(42);
+		});
+		view.unmount();
+		await act(async () => {
+			resolveRefresh(response());
+			// Past two poll intervals (3 s each): a chain armed after unmount would have fetched by now.
+			await jest.advanceTimersByTimeAsync(6_000);
+		});
+		expect(webViewMounts).toBe(1);
+		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('a failed refresh does not arm the server-status poll', async () => {
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
+		renderFrame();
+		await act(async () => {
+			sendExpiry();
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	it('pins the frame message origin to the store', () => {
+		renderFrame();
+		expect(webViewProps.targetOrigin).toBe(new URL(webViewProps.src).origin);
+	});
+
+	it('ignores expiry for another order', async () => {
+		renderFrame();
+		await act(async () => {
+			sendExpiry(99);
+		});
+		expect(mockRefreshFetch).not.toHaveBeenCalled();
+		expect(webViewMounts).toBe(1);
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).debug).toHaveBeenCalledWith(
+			'Ignoring session expiry for another order'
+		);
+	});
+
+	it('allows only two session reloads per mount and warns on the third message', async () => {
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		mockRefreshFetch.mockResolvedValue(response('fresh-token-2'));
+		await act(async () => {
+			sendExpiry();
+		});
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(2);
+		expect(webViewMounts).toBe(3);
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn).toHaveBeenCalledWith(
+			'pos_checkout.reopen_payment',
+			{ showToast: true }
+		);
+		// The gate closes: the third expiry marks the frame failed and a load cannot reopen it.
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+	});
+
+	it('does not remount on a refused refresh and shows only one warning', async () => {
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(webViewMounts).toBe(1);
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('jwt-token');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn).toHaveBeenCalledTimes(1);
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn).toHaveBeenCalledWith(
+			'pos_checkout.reopen_payment',
+			{ showToast: true }
+		);
+		// The frame holds an expired token: a later navigation must not reopen the gate.
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+	});
+
+	it('a new token clears a terminal refusal: the frame reports again', async () => {
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// A background refresh elsewhere in the app patches the credentials.
+		await act(async () => {
+			mockCredentials$.next({ ...mockCredentials$.value, access_token: 'reauth-token' });
+		});
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('reauth-token');
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+	});
+
+	it('does not latch a transient refresh failure: a later message may retry', async () => {
+		mockRefreshFetch.mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Unavailable' });
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(webViewMounts).toBe(1);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// The frame still holds the expired token: a navigation must not reopen the gate.
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// The refresher backs off after a transient failure; a real retry comes after that cooldown.
+		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
+		mockRefreshFetch.mockResolvedValueOnce(response('fresh-token'));
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(webViewMounts).toBe(2);
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('fresh-token');
+		// One reopen warning per mount, however many messages follow (the shared logger mock also
+		// records the refresher's own transient-failure warning, so count by message).
+		const reopenWarnings = (
+			getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn as jest.Mock
+		).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
+		expect(reopenWarnings).toHaveLength(1);
+	});
 });
