@@ -243,7 +243,7 @@ Blocks checkout mistake)
 A static host-component tree carried in a server descriptor and rendered by the app with no
 extension code — the config-class case of composing host components, defined as the static
 case of the sandboxed-code tier so both share one schema. First consumer: the fields of a
-tender-method descriptor (the email invoice gateway).
+payment-method descriptor (the email invoice gateway).
 
 **Delivery class**:
 How an extension reaches the app. Three classes under one umbrella, each with its own
