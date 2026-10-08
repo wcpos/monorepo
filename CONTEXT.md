@@ -225,6 +225,25 @@ _Avoid_: plugin (for anything app-side), add-on (product-domain term — product
 **Plugin**:
 A WordPress plugin, only — the free/Pro plugins and Woo extensions. Never an app-side unit.
 
+**Who writes what** (ruled 2026-10-08, wcpos/roadmap#121 amendment):
+Merchants customise with templates and settings; they never write React. Extension
+developers write code, JS or React, against host components, and never ship their own
+renderer or markup into the POS. The app owns the pixels in every delivery class.
+
+**Host component**:
+One of the closed, versioned set of app components an extension may compose — field,
+checkbox, button, banner, list and so on — rendered by the app with its theme, spacing and
+touch targets. The only UI an extension can produce, whether it arrives as declared UI or
+from sandboxed extension code (Shopify's POS UI Extensions shape).
+_Avoid_: accepting markup, styles or a render function from an extension (the WooCommerce
+Blocks checkout mistake)
+
+**Declared UI**:
+A static host-component tree carried in a server descriptor and rendered by the app with no
+extension code — the config-class case of composing host components, defined as the static
+case of the sandboxed-code tier so both share one schema. First consumer: the fields of a
+tender-method descriptor (the email invoice gateway).
+
 **Delivery class**:
 How an extension reaches the app. Three classes under one umbrella, each with its own
 integration surface: **config** (declarative arrangement — layout, settings), **web**
@@ -247,6 +266,8 @@ Shares the envelope with the bridge, not the contract.
 A named UI insertion point in the app, identified by a closed dotted id with the entry kind
 last (`pos.columns.panel`, `pos.products.filter-bar.item`). First-party code registers
 entries into slots in order via a static, typed registry (`@wcpos/core/extensions/slots`);
+an extension's entry arrives as declared UI or a sandboxed host-component tree, never as a
+component (ruled 2026-10-08);
 an entry receives a readonly subscribable value and an enumerated set of async methods the
 host may reject, and never a database object. The name knowingly overlaps Expo Router's
 `<Slot />` and Radix / `@rn-primitives/slot`; ours is disambiguated by module path. Ruled
