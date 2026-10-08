@@ -613,6 +613,20 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		expect(events[0]).toMatchObject({ fields: { serverMessage: plain } });
 	});
 
+	it('keeps a lone `<` as text and stays linear on a run of them', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'x',
+						message: `Stock <b>fell</b> below 3 ${'<'.repeat(5_000)}`,
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
+	});
+
 	it('treats a message that is only markup as no sentence', async () => {
 		await expect(
 			pushRecordMutation({

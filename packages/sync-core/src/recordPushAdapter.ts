@@ -455,10 +455,26 @@ function readWpFatalDetail(data: unknown): string | undefined {
  * alone: the renderer decodes them.
  */
 function stripTags(html: string): string {
-	return html
-		.replace(/<[^>]*>/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
+	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
+	// regex is polynomial on a run of `<` (CodeQL js/polynomial-redos), and the
+	// scan keeps a lone `<` with no closing `>` as the literal it is.
+	let text = '';
+	let cursor = 0;
+	while (cursor < html.length) {
+		const open = html.indexOf('<', cursor);
+		if (open === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		const close = html.indexOf('>', open + 1);
+		if (close === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		text += `${html.slice(cursor, open)} `;
+		cursor = close + 1;
+	}
+	return text.replace(/\s+/g, ' ').trim();
 }
 
 /**

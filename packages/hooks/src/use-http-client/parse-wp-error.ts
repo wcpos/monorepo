@@ -179,11 +179,28 @@ export const readWpFatalDetail = (data: unknown): string | undefined => {
  * and ledger rows, where tags would render literally. Entities are left alone:
  * the renderer decodes them.
  */
-const stripTags = (html: string): string =>
-	html
-		.replace(/<[^>]*>/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
+const stripTags = (html: string): string => {
+	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
+	// regex is polynomial on a run of `<` (CodeQL js/polynomial-redos), and the
+	// scan keeps a lone `<` with no closing `>` as the literal it is.
+	let text = '';
+	let cursor = 0;
+	while (cursor < html.length) {
+		const open = html.indexOf('<', cursor);
+		if (open === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		const close = html.indexOf('>', open + 1);
+		if (close === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		text += `${html.slice(cursor, open)} `;
+		cursor = close + 1;
+	}
+	return text.replace(/\s+/g, ' ').trim();
+};
 
 /**
  * Check if the response data looks like a WordPress/WooCommerce error

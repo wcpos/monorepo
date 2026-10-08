@@ -321,6 +321,13 @@ describe('parse-wp-error', () => {
 			);
 		});
 
+		it('keeps a lone `<` as text and stays linear on a run of them', () => {
+			const run = '<'.repeat(5_000);
+			expect(
+				parseWpError({ code: 'x', message: `Stock <b>fell</b> below 3 ${run}` }, 'fallback').message
+			).toBe(`Stock fell below 3 ${run}`);
+		});
+
 		it('leaves entities for the renderer and falls back when the message is only markup', () => {
 			expect(
 				parseWpError({ code: 'x', message: 'D&eacute;sol&eacute;.' }, 'fallback').message
