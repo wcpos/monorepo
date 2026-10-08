@@ -317,6 +317,7 @@ for (const targetStoreId of storeTargets) {
 					couponTest.slow();
 					const label = newRunLabel();
 					const product = probeCoupon!.product;
+					await ensureRegisterOpen(page);
 					await searchAndWaitForServer(
 						page,
 						page.getByTestId('search-products'),
@@ -358,7 +359,9 @@ for (const targetStoreId of storeTargets) {
 					// 1. Save: the coupon line comes back from the store WITH an id. That id is the
 					// precondition — a coupon removed before the first save is deleted outright and
 					// never carried the marker.
-					const saved = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+						timeout: 90_000,
+					});
 					saved.catch(() => {});
 					await page.getByTestId('save-to-server-button').click();
 					const saveResponse = await saved;
@@ -404,7 +407,9 @@ for (const targetStoreId of storeTargets) {
 						.toBe(0);
 
 					// 3. Checkout pushes the full document with the removal; the store must take it.
-					const pushed = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+					const pushed = page.waitForResponse(createPushOrdersResponseMatcher(), {
+						timeout: 90_000,
+					});
 					pushed.catch(() => {});
 					await page.getByTestId('checkout-button').click();
 					const response = await pushed;
@@ -447,7 +452,7 @@ for (const targetStoreId of storeTargets) {
 					await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
 						timeout: 60_000,
 					});
-					await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
+					await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 					await processPayment(page);
 					if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
 						await page.getByTestId('receipt-close-button').click();
