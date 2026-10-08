@@ -98,12 +98,25 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	 * stopped before it reaches the body's listeners; the body's own loss at release still does.
 	 */
 	const [bodyEl, setBodyEl] = React.useState<HTMLElement | null>(null);
+	// A stable callback ref: an inline one changes identity every render, and React then detaches
+	// (null) and re-attaches (node) it on each commit (Codex review, #2450).
+	const bodyRef = React.useCallback((node: unknown) => setBodyEl(node as HTMLElement | null), []);
 	const pointerId = useSharedValue(-1);
+	/** The body holds the capture of `pointerId` right now: only that loss is ours to hide. */
+	const holding = useSharedValue(false);
 	React.useEffect(() => {
 		if (Platform.OS !== 'web' || !bodyEl?.addEventListener) return;
 		const down = (event: PointerEvent) => pointerId.set(event.pointerId);
 		const lost = (event: Event) => {
-			if (event.target !== bodyEl) event.stopPropagation();
+			const { target, pointerId: id } = event as PointerEvent;
+			if (target === bodyEl) {
+				// The release: the body's own loss, which Gesture Handler must see.
+				holding.set(false);
+				return;
+			}
+			// The cell's loss as the body takes over. Any other loss (the browser or the OS
+			// taking a pointer mid-press) is still the library's cancellation signal.
+			if (holding.get() && id === pointerId.get()) event.stopPropagation();
 		};
 		bodyEl.addEventListener('pointerdown', down, true);
 		bodyEl.addEventListener('lostpointercapture', lost, true);
@@ -111,13 +124,16 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			bodyEl.removeEventListener('pointerdown', down, true);
 			bodyEl.removeEventListener('lostpointercapture', lost, true);
 		};
-	}, [bodyEl, pointerId]);
+	}, [bodyEl, pointerId, holding]);
 	const takePointer = () => {
 		if (Platform.OS !== 'web' || !bodyEl || pointerId.get() < 0) return;
 		try {
+			// Set before the call: the cell loses the capture synchronously inside it.
+			holding.set(true);
 			bodyEl.setPointerCapture(pointerId.get());
 		} catch {
 			// The pointer is no longer down: nothing to take.
+			holding.set(false);
 		}
 		// The mouse-down focused the cell the pull began on, and a focused cell keeps its focus
 		// background after the release, with the pointer long gone (filmed 2026-10-08). Native
@@ -419,7 +435,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}
 			<GestureDetector gesture={pan}>
 				<Animated.View
-					ref={(node: unknown) => setBodyEl(node as HTMLElement | null)}
+					ref={bodyRef}
 					className={
 						dragging ? 'web:select-none bg-card min-h-row flex-row' : 'bg-card min-h-row flex-row'
 					}
