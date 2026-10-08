@@ -328,6 +328,15 @@ describe('parse-wp-error', () => {
 			).toBe(`Stock fell below 3 ${run}`);
 		});
 
+		it('stays linear on a long run of unclosed tag openers', () => {
+			const run = '<a'.repeat(100_000);
+			const started = Date.now();
+			expect(parseWpError({ code: 'x', message: `${run}>` }, 'fallback').message).toEqual(
+				expect.stringContaining('<a<a<a')
+			);
+			expect(Date.now() - started).toBeLessThan(2_000);
+		});
+
 		it('keeps comparison operators as text — only tag syntax opens a tag', () => {
 			expect(
 				parseWpError(
