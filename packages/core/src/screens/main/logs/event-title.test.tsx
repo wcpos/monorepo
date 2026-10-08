@@ -131,6 +131,11 @@ describe('useEventTitle', () => {
 		);
 	});
 
+	it('does not mistake an inherited object property for a catalogue code', () => {
+		expect(titleFor(row({ message: 'Odd row', code: 'toString' }))).toBe('Odd row');
+		expect(titleFor(row({ message: 'Odd row', code: 'constructor' }))).toBe('Odd row');
+	});
+
 	// A newer engine under an older UI: its unregistered event type keeps the
 	// version-skew fallback (its own message) even when it also carries a code
 	// this build knows — the engine's narration beats a generic summary.

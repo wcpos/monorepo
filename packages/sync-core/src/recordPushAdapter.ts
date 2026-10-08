@@ -448,13 +448,17 @@ export function readServerMessage(
 }
 
 /**
- * The ledger observer caps a quoted sentence at 200 characters, cutting from the
- * END — exactly where the location is appended. A PHP fatal's first line is a
- * sentence, but an uncaught exception's `message` goes on into a stack trace,
- * so the sentence is cut to its first line and this budget, leaving room for
- * ` in wp-content/plugins/…/file.php:123` under the cap.
+ * The ledger observer (`sanitizeReason`) caps a quoted sentence at 200
+ * characters, cutting from the END — exactly where the location is appended.
+ * The whole sentence is therefore built to fit under it: the location is sized
+ * first (shortened to its file name when even the WordPress-relative path is
+ * long), and the PHP message takes whatever is left. A fatal's first line is a
+ * sentence, but an uncaught exception's `message` runs on into a stack trace,
+ * so only the first line is quoted.
  */
-const FATAL_MESSAGE_BUDGET = 120;
+const QUOTE_CAP = 200;
+/** The location may not squeeze the message below this; past it the path drops to its file name. */
+const MIN_MESSAGE_CHARS = 80;
 
 function readWpFatalDetail(data: unknown): string | undefined {
 	if (data === null || typeof data !== 'object') return undefined;
@@ -464,28 +468,33 @@ function readWpFatalDetail(data: unknown): string | undefined {
 	if (typeof raw !== 'string') return undefined;
 	const firstLine = stripTags(raw.split('\n')[0] ?? '');
 	if (firstLine === '') return undefined;
-	const message =
-		firstLine.length > FATAL_MESSAGE_BUDGET
-			? `${firstLine.slice(0, FATAL_MESSAGE_BUDGET - 1)}…`
-			: firstLine;
-	if (typeof file !== 'string' || file === '') return message;
-	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
-	return `${message} in ${shortenWpPath(file)}${hasLine ? `:${line}` : ''}`;
+	const location = typeof file === 'string' && file !== '' ? fatalLocation(file, line) : '';
+	const budget = Math.max(QUOTE_CAP - location.length, MIN_MESSAGE_CHARS);
+	const message = firstLine.length > budget ? `${firstLine.slice(0, budget - 1)}…` : firstLine;
+	return `${message}${location}`;
 }
 
 /**
- * `/home/u123/domains/shop.example/public_html/wp-includes/class-wpdb.php` →
- * `wp-includes/class-wpdb.php`: everything before the WordPress root is the
- * host's directory layout, which says nothing about the fault and eats the
- * quote budget. A path outside those roots keeps its file name.
+ * ` in wp-includes/class-wpdb.php:2324`. Everything before the WordPress root
+ * (`/home/u123/domains/shop.example/public_html/`) is the host's directory
+ * layout, which says nothing about the fault and eats the quote budget, so the
+ * path starts at `wp-content/`, `wp-includes/` or `wp-admin/`; a path outside
+ * those roots, or one still too long to leave the message its minimum, keeps
+ * only its file name — the line number always survives.
  */
-function shortenWpPath(file: string): string {
+function fatalLocation(file: string, line: unknown): string {
+	const suffix =
+		typeof line === 'number' || (typeof line === 'string' && line !== '') ? `:${line}` : '';
+	const slash = file.lastIndexOf('/');
+	const fileName = slash === -1 ? file : file.slice(slash + 1);
 	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
 		const at = file.indexOf(root);
-		if (at !== -1) return file.slice(at + 1);
+		if (at === -1) continue;
+		const location = ` in ${file.slice(at + 1)}${suffix}`;
+		if (location.length <= QUOTE_CAP - MIN_MESSAGE_CHARS) return location;
+		break;
 	}
-	const slash = file.lastIndexOf('/');
-	return slash === -1 ? file : file.slice(slash + 1);
+	return ` in ${fileName}${suffix}`;
 }
 
 /**

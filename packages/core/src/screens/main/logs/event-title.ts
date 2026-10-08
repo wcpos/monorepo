@@ -37,7 +37,12 @@ export function useEventTitle(): (row: LogRow) => string {
 			if (type !== undefined && isSyncEventType(type)) {
 				return translateEventTitle((key) => t(key), type);
 			}
-			if (type === undefined && typeof row.code === 'string' && row.code in ERROR_CATALOGUE) {
+			// Own-property check: `in` would accept `toString` or `constructor` as a code.
+			if (
+				type === undefined &&
+				typeof row.code === 'string' &&
+				Object.prototype.hasOwnProperty.call(ERROR_CATALOGUE, row.code)
+			) {
 				return translateErrorSummary((key) => t(key), row.code as ErrorCode);
 			}
 			if (typeof row.message === 'string' && row.message.trim() !== '') return row.message;

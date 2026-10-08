@@ -377,6 +377,19 @@ describe('parse-wp-error', () => {
 			).toBe('Boom in boot.php:3');
 		});
 
+		it('drops a long plugin path to its file name so the line number still fits under the cap', () => {
+			const detail = readWpFatalDetail({
+				error: {
+					message: `Uncaught Exception: ${'x'.repeat(300)}`,
+					file: `/home/u1/public_html/wp-content/plugins/${'very-long-vendor-segment/'.repeat(8)}class-acme-sync.php`,
+					line: 412,
+				},
+			});
+
+			expect(detail).toMatch(/^Uncaught Exception: x+… in class-acme-sync\.php:412$/);
+			expect(detail!.length).toBeLessThanOrEqual(200);
+		});
+
 		it('reads the detail without a file as the bare message, and ignores an empty one', () => {
 			expect(readWpFatalDetail({ error: { message: 'Out of memory' } })).toBe('Out of memory');
 			expect(

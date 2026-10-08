@@ -688,6 +688,25 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		expect((error as RecordPushError).serverMessage).not.toContain('Stack trace');
 	});
 
+	it('drops a long plugin path to its file name so the line number still fits under the cap', async () => {
+		const deepPath = `/home/u1/public_html/wp-content/plugins/${'very-long-vendor-segment/'.repeat(8)}class-acme-sync.php`;
+		const error = await pushRecordMutation({
+			mutation: mut(),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(500, {
+					...WP_FATAL_BODY,
+					data: {
+						status: 500,
+						error: { message: `Uncaught Exception: ${'x'.repeat(300)}`, file: deepPath, line: 412 },
+					},
+				}),
+		}).catch((e: RecordPushError) => e);
+		const sentence = (error as RecordPushError).serverMessage!;
+		expect(sentence).toMatch(/^Uncaught Exception: x+… in class-acme-sync\.php:412$/);
+		expect(sentence.length).toBeLessThanOrEqual(200);
+	});
+
 	it('treats a message that is only markup as no sentence', async () => {
 		await expect(
 			pushRecordMutation({
