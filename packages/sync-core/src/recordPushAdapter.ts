@@ -261,7 +261,13 @@ export async function pushRecordMutation(input: {
 				collection: mutation.collectionName,
 				fields: { ...baseFields, status: 409, reason: 'identity-ambiguous' },
 			});
-			throw new RecordPushError(mutation, 409, 'identity-ambiguous', true, readServerMessage(body));
+			throw new RecordPushError(
+				mutation,
+				409,
+				'identity-ambiguous',
+				true,
+				readServerMessage(body, 409)
+			);
 		}
 		emit({
 			type: 'push.conflict',
@@ -299,14 +305,14 @@ export async function pushRecordMutation(input: {
 			428,
 			typeof body?.code === 'string' ? body.code : 'precondition-required',
 			false,
-			readServerMessage(body)
+			readServerMessage(body, 428)
 		);
 	}
 
 	if (!response.ok) {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
-		const serverMessage = readServerMessage(body);
+		const serverMessage = readServerMessage(body, response.status);
 		emit({
 			type: 'push.error',
 			// The plugin's 401 means no user is logged in; the write drain reports
@@ -426,14 +432,29 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
  * the same shape for the axios lanes; sync-core stays dependency-free, so the
  * two are kept in step by hand.
  */
-export function readServerMessage(body: Record<string, unknown> | null): string | undefined {
+export function readServerMessage(
+	body: Record<string, unknown> | null,
+	status: number
+): string | undefined {
 	if (body === null) return undefined;
-	const fatal = readWpFatalDetail(body.data);
+	// Only a 5xx is a fatal. A 4xx may carry a caller-defined `data.error` object
+	// of its own (a gateway diagnostic under a validation message), and there the
+	// top-level message is the one written for the cashier.
+	const fatal = status >= 500 ? readWpFatalDetail(body.data) : undefined;
 	if (fatal !== undefined) return fatal;
 	if (typeof body.message !== 'string') return undefined;
 	const message = stripTags(body.message);
 	return message.length > 0 ? message : undefined;
 }
+
+/**
+ * The ledger observer caps a quoted sentence at 200 characters, cutting from the
+ * END — exactly where the location is appended. A PHP fatal's first line is a
+ * sentence, but an uncaught exception's `message` goes on into a stack trace,
+ * so the sentence is cut to its first line and this budget, leaving room for
+ * ` in wp-content/plugins/…/file.php:123` under the cap.
+ */
+const FATAL_MESSAGE_BUDGET = 120;
 
 function readWpFatalDetail(data: unknown): string | undefined {
 	if (data === null || typeof data !== 'object') return undefined;
@@ -441,11 +462,30 @@ function readWpFatalDetail(data: unknown): string | undefined {
 	if (error === null || typeof error !== 'object') return undefined;
 	const { message: raw, file, line } = error as Record<string, unknown>;
 	if (typeof raw !== 'string') return undefined;
-	const message = stripTags(raw);
-	if (message === '') return undefined;
+	const firstLine = stripTags(raw.split('\n')[0] ?? '');
+	if (firstLine === '') return undefined;
+	const message =
+		firstLine.length > FATAL_MESSAGE_BUDGET
+			? `${firstLine.slice(0, FATAL_MESSAGE_BUDGET - 1)}…`
+			: firstLine;
 	if (typeof file !== 'string' || file === '') return message;
 	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
-	return `${message} in ${file}${hasLine ? `:${line}` : ''}`;
+	return `${message} in ${shortenWpPath(file)}${hasLine ? `:${line}` : ''}`;
+}
+
+/**
+ * `/home/u123/domains/shop.example/public_html/wp-includes/class-wpdb.php` →
+ * `wp-includes/class-wpdb.php`: everything before the WordPress root is the
+ * host's directory layout, which says nothing about the fault and eats the
+ * quote budget. A path outside those roots keeps its file name.
+ */
+function shortenWpPath(file: string): string {
+	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
+		const at = file.indexOf(root);
+		if (at !== -1) return file.slice(at + 1);
+	}
+	const slash = file.lastIndexOf('/');
+	return slash === -1 ? file : file.slice(slash + 1);
 }
 
 /**

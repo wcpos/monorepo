@@ -569,7 +569,7 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 	it("carries a WordPress fatal's PHP error, not the critical-error boilerplate, on the error AND the event", async () => {
 		const events: SyncEvent[] = [];
 		const expected =
-			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in /srv/www/wp-includes/class-wpdb.php:2324';
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
 		await expect(
 			pushRecordMutation({
 				mutation: mut(),
@@ -625,6 +625,67 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 					}),
 			})
 		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
+	});
+
+	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): billing',
+						data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Invalid parameter(s): billing' });
+	});
+
+	it('keeps the location under the observer’s 200-character cap: first line only, budgeted, host path dropped', async () => {
+		const longFirstLine = `Uncaught Exception: ${'x'.repeat(300)}`;
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						...WP_FATAL_BODY,
+						data: {
+							status: 500,
+							error: {
+								type: 1,
+								message: `${longFirstLine}\nStack trace:\n#0 /home/u1/public_html/wp-content/plugins/acme/acme.php(12): boom()`,
+								file: '/home/u1/domains/shop.example/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+								line: 412,
+							},
+						},
+					}),
+			})
+		).rejects.toMatchObject({
+			serverMessage: expect.stringMatching(
+				/^Uncaught Exception: x+… in wp-content\/plugins\/acme\/includes\/class-acme-sync\.php:412$/
+			),
+		});
+		// The whole sentence fits the cap, so the location survives `sanitizeReason`.
+		const error = await pushRecordMutation({
+			mutation: mut(),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(500, {
+					...WP_FATAL_BODY,
+					data: {
+						status: 500,
+						error: {
+							message: `${longFirstLine}\nStack trace`,
+							file: '/home/u1/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+							line: 412,
+						},
+					},
+				}),
+		}).catch((e: RecordPushError) => e);
+		expect((error as RecordPushError).serverMessage!.length).toBeLessThanOrEqual(200);
+		expect((error as RecordPushError).serverMessage).not.toContain('Stack trace');
 	});
 
 	it('treats a message that is only markup as no sentence', async () => {

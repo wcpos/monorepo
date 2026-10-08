@@ -130,6 +130,21 @@ describe('useEventTitle', () => {
 			'Checkout failed'
 		);
 	});
+
+	// A newer engine under an older UI: its unregistered event type keeps the
+	// version-skew fallback (its own message) even when it also carries a code
+	// this build knows — the engine's narration beats a generic summary.
+	it('keeps an unregistered event type on its own message even with a known code', () => {
+		expect(
+			titleFor(
+				row({
+					message: 'checkout settled with a split tender',
+					code: 'SYNC131',
+					context: { type: 'checkout.settled' },
+				})
+			)
+		).toBe('checkout settled with a split tender');
+	});
 });
 
 describe('translateEventDescription', () => {

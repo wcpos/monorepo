@@ -166,11 +166,39 @@ export const readWpFatalDetail = (data: unknown): string | undefined => {
 	if (error === null || typeof error !== 'object') return undefined;
 	const { message: raw, file, line } = error as Record<string, unknown>;
 	if (typeof raw !== 'string') return undefined;
-	const message = stripTags(raw);
-	if (message === '') return undefined;
+	const firstLine = stripTags(raw.split('\n')[0] ?? '');
+	if (firstLine === '') return undefined;
+	const message =
+		firstLine.length > FATAL_MESSAGE_BUDGET
+			? `${firstLine.slice(0, FATAL_MESSAGE_BUDGET - 1)}…`
+			: firstLine;
 	if (typeof file !== 'string' || file === '') return message;
 	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
-	return `${message} in ${file}${hasLine ? `:${line}` : ''}`;
+	return `${message} in ${shortenWpPath(file)}${hasLine ? `:${line}` : ''}`;
+};
+
+/**
+ * The ledger observer caps a quoted sentence at 200 characters, cutting from the
+ * END — exactly where the location is appended. A PHP fatal's first line is a
+ * sentence, but an uncaught exception's `message` goes on into a stack trace,
+ * so the sentence is cut to its first line and this budget, leaving room for
+ * ` in wp-content/plugins/…/file.php:123` under the cap.
+ */
+const FATAL_MESSAGE_BUDGET = 120;
+
+/**
+ * `/home/u123/domains/shop.example/public_html/wp-includes/class-wpdb.php` →
+ * `wp-includes/class-wpdb.php`: everything before the WordPress root is the
+ * host's directory layout, which says nothing about the fault and eats the
+ * quote budget. A path outside those roots keeps its file name.
+ */
+const shortenWpPath = (file: string): string => {
+	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
+		const at = file.indexOf(root);
+		if (at !== -1) return file.slice(at + 1);
+	}
+	const slash = file.lastIndexOf('/');
+	return slash === -1 ? file : file.slice(slash + 1);
 };
 
 /**
@@ -260,13 +288,6 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 		if (plain !== '') message = plain;
 	}
 
-	// A WordPress fatal names its cause in `data.error`, not in `message` — see
-	// `readWpFatalDetail`. The PHP error wins over the critical-error boilerplate.
-	const fatal = readWpFatalDetail(data.data);
-	if (fatal !== undefined) {
-		message = fatal;
-	}
-
 	// Extract server code and status
 	const rawServerCode = typeof data.code === 'string' ? data.code : null;
 	const serverCode =
@@ -274,6 +295,17 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 			? rawServerCode
 			: 'invalid_server_code';
 	const status = data.data?.status ?? null;
+
+	// A WordPress fatal names its cause in `data.error`, not in `message` — see
+	// `readWpFatalDetail`. The PHP error wins over the critical-error boilerplate,
+	// but only on a 5xx: a 4xx may carry a caller-defined `data.error` object of
+	// its own (a gateway diagnostic under a validation message), and there the
+	// top-level message is the one written for the cashier.
+	const fatal =
+		typeof status === 'number' && status >= 500 ? readWpFatalDetail(data.data) : undefined;
+	if (fatal !== undefined) {
+		message = fatal;
+	}
 
 	// Map to internal code for user-facing display
 	const code = mapToInternalCode(serverCode, status);

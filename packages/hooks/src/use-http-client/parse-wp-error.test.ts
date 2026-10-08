@@ -294,7 +294,7 @@ describe('parse-wp-error', () => {
 			},
 		};
 		const fatalSentence =
-			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in /srv/www/wp-includes/class-wpdb.php:2324';
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
 
 		it('prefers the PHP error over the critical-error boilerplate, keeping code and status', () => {
 			const parsed = parseWpError(fatalBody, 'fallback');
@@ -343,6 +343,38 @@ describe('parse-wp-error', () => {
 			expect(
 				extractErrorMessage({ error: { type: 1, message: 'Out of memory' } }, 'fallback')
 			).toBe('Out of memory');
+		});
+
+		it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', () => {
+			const parsed = parseWpError(
+				{
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): billing',
+					data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+				},
+				'fallback'
+			);
+
+			expect(parsed.message).toBe('Invalid parameter(s): billing');
+		});
+
+		it('keeps the location within the ledger’s 200-character cap: first line only, budgeted, host path dropped', () => {
+			const detail = readWpFatalDetail({
+				error: {
+					message: `Uncaught Exception: ${'x'.repeat(300)}\nStack trace:\n#0 boom()`,
+					file: '/home/u1/domains/shop.example/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+					line: 412,
+				},
+			});
+
+			expect(detail).toMatch(
+				/^Uncaught Exception: x+… in wp-content\/plugins\/acme\/includes\/class-acme-sync\.php:412$/
+			);
+			expect(detail!.length).toBeLessThanOrEqual(200);
+			expect(detail).not.toContain('Stack trace');
+			expect(
+				readWpFatalDetail({ error: { message: 'Boom', file: '/opt/app/boot.php', line: 3 } })
+			).toBe('Boom in boot.php:3');
 		});
 
 		it('reads the detail without a file as the bare message, and ignores an empty one', () => {

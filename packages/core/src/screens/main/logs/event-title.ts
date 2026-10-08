@@ -21,7 +21,9 @@ import { eventTypeOf, type LogRow } from './logs-logic';
  * (#2439: a Dutch till showed "Checkout failed" between translated rows).
  * Anything else — a non-engine row, or an event type or code from a newer build
  * than this UI — falls back to the persisted message, then to the raw code, so
- * nothing renders blank.
+ * nothing renders blank. An UNREGISTERED event type takes that fallback even
+ * when the row also carries a known code: the newer engine's own narration
+ * beats a generic summary.
  *
  * The message fallback tests for text, not for presence: the sync observer
  * preserves `message: ''` rather than substituting, so `??` would hand the
@@ -35,7 +37,7 @@ export function useEventTitle(): (row: LogRow) => string {
 			if (type !== undefined && isSyncEventType(type)) {
 				return translateEventTitle((key) => t(key), type);
 			}
-			if (typeof row.code === 'string' && row.code in ERROR_CATALOGUE) {
+			if (type === undefined && typeof row.code === 'string' && row.code in ERROR_CATALOGUE) {
 				return translateErrorSummary((key) => t(key), row.code as ErrorCode);
 			}
 			if (typeof row.message === 'string' && row.message.trim() !== '') return row.message;
