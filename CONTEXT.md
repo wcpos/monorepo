@@ -228,7 +228,8 @@ A WordPress plugin, only — the free/Pro plugins and Woo extensions. Never an a
 **Who writes what** (ruled 2026-10-08, wcpos/roadmap#121 amendment):
 Merchants customise with templates and settings; they never write React. Extension
 developers write code, JS or React, against host components, and never ship their own
-renderer or markup into the POS. The app owns the pixels in every delivery class.
+renderer or markup into the POS. The app owns the pixels of anything an extension adds to
+the app's own screens; a mini-app or display page draws its own, inside its frame.
 
 **Host component**:
 One of the closed, versioned set of app components an extension may compose — field,
@@ -267,7 +268,7 @@ A named UI insertion point in the app, identified by a closed dotted id with the
 last (`pos.columns.panel`, `pos.products.filter-bar.item`). First-party code registers
 entries into slots in order via a static, typed registry (`@wcpos/core/extensions/slots`);
 an extension's entry arrives as declared UI or a sandboxed host-component tree, never as a
-component (ruled 2026-10-08);
+component (ruled 2026-10-08; first-party registration stands for 2.0);
 an entry receives a readonly subscribable value and an enumerated set of async methods the
 host may reject, and never a database object. The name knowingly overlaps Expo Router's
 `<Slot />` and Radix / `@rn-primitives/slot`; ours is disambiguated by module path. Ruled
