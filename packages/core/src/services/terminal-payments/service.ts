@@ -91,7 +91,7 @@ export type TerminalLegState = (ServerLegState | DeviceLegState) & {
 export class TerminalPaymentsService {
 	private legs = new Map<
 		string,
-		{ leg: TerminalLeg; orderNumber: string; reader: string | null }
+		{ leg: TerminalLeg; orderNumber: string; reader: string | null; lastRowId: string }
 	>();
 	private listeners = new Set<() => void>();
 	private snapshot: ReadonlyMap<string, TerminalLegState> = new Map();
@@ -502,9 +502,22 @@ export class TerminalPaymentsService {
 					reader: input.reader,
 					resume,
 				});
-		this.legs.set(input.orderUuid, { leg, orderNumber: input.orderNumber, reader: input.reader });
+		const entry = {
+			leg,
+			orderNumber: input.orderNumber,
+			reader: input.reader,
+			lastRowId: input.row.id,
+		};
+		this.legs.set(input.orderUuid, entry);
 		leg.subscribe(() => {
-			if (leg.getState().phase !== 'final') this.publish();
+			const state = leg.getState();
+			if (state.row.id !== entry.lastRowId) {
+				entry.lastRowId = state.row.id;
+				const settlement = this.settlements.get(state.row.id);
+				if (state.row.id !== state.intentId && settlement && settlement.outcome !== 'captured')
+					this.settlements.delete(state.row.id);
+			}
+			if (state.phase !== 'final') this.publish();
 		});
 		this.publish();
 		if (!resume || device) void leg.start();

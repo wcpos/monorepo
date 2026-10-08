@@ -21,6 +21,7 @@ export interface ServerLegResponse {
 }
 export interface ServerLegState {
 	phase: 'idle' | 'creating' | 'polling' | 'cancelling' | 'final';
+	intentId: string;
 	row: PaymentRow;
 	order?: OrderPaymentSummary;
 	outcome: null | 'captured' | 'failed' | 'voided' | 'released';
@@ -55,7 +56,12 @@ function errorResponse(error: unknown) {
 	if (!error || typeof error !== 'object') return undefined;
 	const response = (error as { response?: unknown }).response;
 	return response && typeof response === 'object'
-		? (response as { status?: number; data?: PaymentRefusalBody })
+		? (response as {
+				status?: number;
+				data?: PaymentRefusalBody & {
+					data: PaymentRefusalBody['data'] & { payment_id?: unknown };
+				};
+			})
 		: undefined;
 }
 // A date the provider or an old row wrote badly must not switch the deadline off:
@@ -70,6 +76,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	const createdAt = Number.isNaN(parsedCreated) ? deps.now() : parsedCreated;
 	let state: ServerLegState = {
 		phase: input.resume ? 'polling' : 'idle',
+		intentId: input.row.id,
 		row: input.row,
 		outcome: null,
 		cancelRequested: Boolean(input.row.void_requested_at),
@@ -89,6 +96,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	let stopped = false;
 	let captureAttempted = false;
 	let deadlineRead = false;
+	let awaitingRejoinedStatus = false;
 	const active = () => !stopped && state.phase !== 'final';
 	const current = (seq: number) => active() && seq === sequence;
 	const setState = (changes: Partial<ServerLegState>) => {
@@ -138,11 +146,28 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 	const applyResponse = async (
 		data: ServerLegResponse,
 		seq: number,
-		changes: Partial<ServerLegState> = {}
+		changes: Partial<ServerLegState> = {},
+		route?: Route
 	) => {
 		if (!current(seq)) return false;
 		await mirror(data, seq);
 		if (!current(seq)) return false;
+		if (awaitingRejoinedStatus && route === 'status') {
+			const created = data.payment.created_at_gmt ?? '';
+			const parsedCreated = Date.parse(
+				/(?:Z|[+-]\d\d:\d\d)$/i.test(created) ? created : `${created}Z`
+			);
+			changes = {
+				...changes,
+				cancelRequested: state.cancelRequested || Boolean(data.payment.void_requested_at),
+				releaseAvailable: state.releaseAvailable || Boolean(data.payment.void_requested_at),
+				deadlineAt: deadline(
+					data.payment,
+					Number.isNaN(parsedCreated) ? deps.now() : parsedCreated
+				),
+			};
+			awaitingRejoinedStatus = false;
+		}
 		setState({ ...changes, row: data.payment, ...(data.order ? { order: data.order } : {}) });
 		const status = data.payment.status;
 		if (status === 'captured' || status === 'failed' || status === 'voided') finish(status);
@@ -187,7 +212,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!active()) return;
 		clearTimer();
 		const seq = ++sequence;
-		const url = `orders/${input.orderId}/payments/${input.row.id}/${route}`;
+		const url = `orders/${input.orderId}/payments/${state.row.id}/${route}`;
 		let data: ServerLegResponse;
 		if (route === 'intent') intentInFlight = true;
 		try {
@@ -221,7 +246,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		intentInFlight = false;
 		if (!current(seq)) return;
-		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }))) return;
+		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }, route))) return;
 		setState({
 			phase: 'polling',
 			capturing: false,
@@ -249,10 +274,36 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 
 		if (
 			body?.data?.payment &&
-			!(await applyResponse({ payment: body.data.payment, order: body.data.order }, seq, changes))
+			!(await applyResponse(
+				{ payment: body.data.payment, order: body.data.order },
+				seq,
+				changes,
+				route
+			))
 		)
 			return;
 		if (!current(seq)) return;
+		if (
+			route === 'intent' &&
+			code === 'wcpos_payment_in_flight' &&
+			typeof body?.data?.payment_id === 'string'
+		) {
+			awaitingRejoinedStatus = true;
+			setState({
+				row: { ...state.row, id: body.data.payment_id },
+				phase: 'polling',
+				consecutiveErrors: 0,
+				unstable: false,
+				// The 409 was an answer, not a refusal: the live leg starts with no error.
+				error: null,
+				// Placeholder until the first adopted status supplies its dates.
+				deadlineAt: deadline(state.row, deps.now()),
+			});
+			event('Joined the payment already in progress', 'info');
+			if (await voidAfterIntent()) return;
+			schedule(0);
+			return;
+		}
 		if (code === 'wcpos_payment_locked') {
 			setState({ capturing: false, phase: 'polling' });
 			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
@@ -293,6 +344,10 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			// logged here: it is what the cashier reads under the stepper and what Copy carries.
 			if (!localVoid)
 				event(changes.error?.message ?? body?.message ?? `HTTP ${response.status}`, 'error');
+			if (awaitingRejoinedStatus) {
+				finish(localVoid ? 'voided' : 'failed');
+				return;
+			}
 			const row = localVoid
 				? { ...state.row, status: 'voided' as const, failure_reason: null }
 				: {

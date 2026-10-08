@@ -973,6 +973,7 @@ function terminalState(
 ): TerminalLegState {
 	return {
 		phase: 'polling',
+		intentId: changes.row?.id ?? 'payment-1',
 		row: payment({ method_id: 'terminal', capture_mode: 'server', status: 'pending' }),
 		outcome: null,
 		cancelRequested: false,
@@ -1275,6 +1276,24 @@ describe('server tender', () => {
 			if (!polling) expect(Toast.show).toHaveBeenCalledWith({ type: 'error', title: expected });
 		}
 	);
+	it("recognizes an adopted row as the cashier's own Take by its intent id", async () => {
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		const row = { ...mockLeg!.row, id: 'adopted-leg', status: 'failed' as const };
+		mockLeg = {
+			...mockLeg!,
+			row,
+			phase: 'final',
+			outcome: 'failed',
+			error: { code: 'provider_declined', message: 'Bank says no' },
+			settlement: { payment: row, outcome: 'failed', saleComplete: false },
+		};
+		expect(mockLeg.intentId).not.toBe(mockLeg.row.id);
+		rerender();
+		expect(Toast.show).toHaveBeenCalledTimes(1);
+		expect(Toast.show).toHaveBeenCalledWith({ type: 'error', title: 'Bank says no' });
+	});
 	it('does not narrate or toast a retained failure on remount', async () => {
 		mockLeg = terminalState({ phase: 'final', outcome: 'failed', error: null });
 		mockLeg.settlement = { payment: mockLeg.row, outcome: 'failed', saleComplete: false };

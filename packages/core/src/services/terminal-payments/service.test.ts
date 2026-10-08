@@ -231,6 +231,102 @@ it('retires a completed capture after owner completion without forgetting its na
 		c.service.stop();
 	}
 });
+it('drops a released settlement on adoption and records the live capture', async () => {
+	const c = setup();
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	const first = c.service.begin(input);
+	await jest.advanceTimersByTimeAsync(0);
+	await first.cancel();
+	await first.release();
+	expect(c.service.get('order')?.settlement).toMatchObject({
+		outcome: 'released',
+		payment: { id: 'leg' },
+	});
+	c.http.post.mockRejectedValueOnce({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_payment_in_flight', data: { payment_id: 'leg' } },
+		},
+	});
+	let respond!: (response: Awaited<ReturnType<typeof c.http.get>>) => void;
+	c.http.get.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				respond = resolve;
+			})
+	);
+	const published = jest.fn();
+	c.service.subscribe(() => published(c.service.get('order')?.settlement));
+	c.service.begin({ ...input, row: { ...row, id: 'new-leg' } });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(c.service.get('order')).toMatchObject({
+		intentId: 'new-leg',
+		row: { id: 'leg' },
+		phase: 'polling',
+	});
+	expect(c.service.get('order')?.settlement).toBeUndefined();
+	respond({ data: { payment: { ...row, status: 'captured' }, order: c.summary } });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(published).toHaveBeenCalledWith(
+		expect.objectContaining({
+			outcome: 'captured',
+			payment: expect.objectContaining({ id: 'leg' }),
+		})
+	);
+	expect(published.mock.calls.some(([settlement]) => settlement?.outcome === 'released')).toBe(
+		false
+	);
+	expect(info).toHaveBeenCalledWith(
+		'Card payment taken',
+		expect.objectContaining({ context: expect.objectContaining({ paymentId: 'leg' }) })
+	);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(c.service.get('order')).toBeNull();
+	c.service.stop();
+});
+it('keeps an adopted captured settlement without narrating or completing twice', async () => {
+	const c = setup();
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	let finish!: () => void;
+	c.completeOrder.mockImplementation(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	c.http.get.mockResolvedValue({
+		data: { payment: { ...row, status: 'captured' }, order: c.summary },
+	});
+	c.service.begin(input);
+	await jest.advanceTimersByTimeAsync(0);
+	const captured = c.service.get('order')?.settlement;
+	expect(captured?.outcome).toBe('captured');
+	c.service.dismiss('order');
+	c.http.post.mockRejectedValueOnce({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_payment_in_flight', data: { payment_id: 'leg' } },
+		},
+	});
+	c.service.begin({ ...input, row: { ...row, id: 'new-leg' } });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(c.service.get('order')).toMatchObject({
+		intentId: 'new-leg',
+		row: { id: 'leg' },
+		phase: 'final',
+		outcome: 'captured',
+	});
+	expect(c.service.get('order')?.settlement).toBe(captured);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(
+		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+	).toHaveLength(1);
+	finish();
+	await jest.advanceTimersByTimeAsync(0);
+	c.service.stop();
+});
 it('stop clears every timer but does not void or alter live rows', async () => {
 	const c = setup();
 	c.service.resume(input);
