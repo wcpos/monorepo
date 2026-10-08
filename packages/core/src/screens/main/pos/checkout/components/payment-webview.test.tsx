@@ -2061,6 +2061,25 @@ describe('PaymentWebview session expiry', () => {
 		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 
+	it('a new token clears a terminal refusal: the frame reports again', async () => {
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// A background refresh elsewhere in the app patches the credentials.
+		await act(async () => {
+			mockCredentials$.next({ ...mockCredentials$.value, access_token: 'reauth-token' });
+		});
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('reauth-token');
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+	});
+
 	it('does not latch a transient refresh failure: a later message may retry', async () => {
 		mockRefreshFetch.mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Unavailable' });
 		const { setFrameStatus } = renderFrame();

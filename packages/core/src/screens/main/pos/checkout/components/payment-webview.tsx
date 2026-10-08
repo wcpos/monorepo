@@ -330,14 +330,14 @@ export function PaymentWebview({
 		return url.toString();
 	}, [paymentURL, jwt]);
 
-	// Pin the frame's message origin to the store: on web the shared WebView then drops
-	// `message` events from any other window or origin (Pro posts with '*', which is the
-	// sender's target; the receiver still sees the store's origin).
 	React.useEffect(() => {
 		// A new token (this refresh or a background one) makes the frame live again.
 		sessionRefreshRefused.current = false;
 	}, [paymentURLWithToken]);
 
+	// Pin the frame's message origin to the store: on web the shared WebView then drops
+	// `message` events from any other window or origin (Pro posts with '*', which is the
+	// sender's target; the receiver still sees the store's origin).
 	const frameOrigin = React.useMemo(() => {
 		try {
 			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
