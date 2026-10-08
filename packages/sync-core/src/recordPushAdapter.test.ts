@@ -547,6 +547,102 @@ describe('pushRecordMutation', () => {
 	});
 });
 
+// A WordPress fatal answers 500 with the localized "critical error" boilerplate
+// as `message` and the PHP error itself in `data.error` — only when the site
+// exposes error details. The error names the cause; the boilerplate does not.
+// This is the body a Dutch till received on 2026-10-08 (#2439, plugin #2157).
+const WP_FATAL_BODY = {
+	code: 'internal_server_error',
+	message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+	data: {
+		status: 500,
+		error: {
+			type: 1,
+			message: 'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+			file: '/srv/www/wp-includes/class-wpdb.php',
+			line: 2324,
+		},
+	},
+};
+
+describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
+	it("carries a WordPress fatal's PHP error, not the critical-error boilerplate, on the error AND the event", async () => {
+		const events: SyncEvent[] = [];
+		const expected =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in /srv/www/wp-includes/class-wpdb.php:2324';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, WP_FATAL_BODY),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({
+			status: 500,
+			reason: 'internal_server_error',
+			permanent: false,
+			serverMessage: expected,
+		});
+		// The ledger row is written from the EVENT (a 500 is retried, never
+		// dead-lettered), so the sentence has to ride the event to be seen at all.
+		expect(events[0]).toMatchObject({
+			type: 'push.error',
+			level: 'error',
+			fields: { status: 500, reason: 'internal_server_error', serverMessage: expected },
+		});
+	});
+
+	it('keeps the top-level message as the sentence when the site hides error details', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'internal_server_error',
+						message: '<p>There has been a critical error on this website.</p>',
+						data: { status: 500 },
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({
+			serverMessage: '<p>There has been a critical error on this website.</p>',
+		});
+		expect(events[0]).toMatchObject({
+			fields: { serverMessage: '<p>There has been a critical error on this website.</p>' },
+		});
+	});
+
+	it('omits serverMessage entirely when the body has no sentence (an HTML host page, an empty body)', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(502, {}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ status: 502 });
+		expect(events[0]?.fields).not.toHaveProperty('serverMessage');
+		expect((events[0]?.fields as Record<string, unknown>).reason).toBeUndefined();
+	});
+
+	it('reads the fatal detail without a file as the bare PHP message', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						...WP_FATAL_BODY,
+						data: { status: 500, error: { type: 1, message: 'Out of memory' } },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Out of memory' });
+	});
+});
+
 describe('pushEndpointResolver', () => {
 	it('routes each mutation to {syncBase}/push/{collection} via POST', () => {
 		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/');

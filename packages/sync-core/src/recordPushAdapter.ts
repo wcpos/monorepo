@@ -261,13 +261,7 @@ export async function pushRecordMutation(input: {
 				collection: mutation.collectionName,
 				fields: { ...baseFields, status: 409, reason: 'identity-ambiguous' },
 			});
-			throw new RecordPushError(
-				mutation,
-				409,
-				'identity-ambiguous',
-				true,
-				typeof body?.message === 'string' ? body.message : undefined
-			);
+			throw new RecordPushError(mutation, 409, 'identity-ambiguous', true, readServerMessage(body));
 		}
 		emit({
 			type: 'push.conflict',
@@ -305,13 +299,14 @@ export async function pushRecordMutation(input: {
 			428,
 			typeof body?.code === 'string' ? body.code : 'precondition-required',
 			false,
-			typeof body?.message === 'string' ? body.message : undefined
+			readServerMessage(body)
 		);
 	}
 
 	if (!response.ok) {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
+		const serverMessage = readServerMessage(body);
 		emit({
 			type: 'push.error',
 			// The plugin's 401 means no user is logged in; the write drain reports
@@ -322,6 +317,10 @@ export async function pushRecordMutation(input: {
 				...baseFields,
 				status: response.status,
 				...(reason !== undefined ? { reason } : {}),
+				// The server's own sentence rides the event so the ledger row can quote
+				// it: a 500 is retried, never dead-lettered, so this event is the ONLY
+				// place the row's "why" can come from (#2439).
+				...(serverMessage !== undefined ? { serverMessage } : {}),
 			},
 		});
 		throw new RecordPushError(
@@ -329,7 +328,7 @@ export async function pushRecordMutation(input: {
 			response.status,
 			reason,
 			reason === WOO_REST_CANNOT_DELETE,
-			typeof body?.message === 'string' ? body.message : undefined
+			serverMessage
 		);
 	}
 
@@ -409,6 +408,40 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The server's own sentence for a refused push, read from a WP REST error body.
+ *
+ * A WordPress fatal (memory exhausted, a plugin's uncaught exception) answers
+ * 500 as `{ code: 'internal_server_error', message: '<p>There has been a
+ * critical error on this website.</p>…' }` — the top-level `message` is the
+ * localized boilerplate and names nothing. When the site exposes error details,
+ * the PHP error itself rides in `data.error` in the `error_get_last()` shape
+ * `{ type, message, file, line }`, and THAT sentence ("Allowed memory size of
+ * 134217728 bytes exhausted") is the answer support needs, so it wins over the
+ * boilerplate with `file:line` appended the way PHP reports a fatal. Sites that
+ * hide error details send no `data.error`, so the top-level message stays the
+ * fallback (#2439). `readWpFatalDetail` in `@wcpos/hooks` parse-wp-error reads
+ * the same shape for the axios lanes; sync-core stays dependency-free, so the
+ * two are kept in step by hand.
+ */
+export function readServerMessage(body: Record<string, unknown> | null): string | undefined {
+	if (body === null) return undefined;
+	const fatal = readWpFatalDetail(body.data);
+	if (fatal !== undefined) return fatal;
+	return typeof body.message === 'string' && body.message.length > 0 ? body.message : undefined;
+}
+
+function readWpFatalDetail(data: unknown): string | undefined {
+	if (data === null || typeof data !== 'object') return undefined;
+	const error = (data as Record<string, unknown>).error;
+	if (error === null || typeof error !== 'object') return undefined;
+	const { message, file, line } = error as Record<string, unknown>;
+	if (typeof message !== 'string' || message.trim() === '') return undefined;
+	if (typeof file !== 'string' || file === '') return message;
+	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
+	return `${message} in ${file}${hasLine ? `:${line}` : ''}`;
 }
 
 /**

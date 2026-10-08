@@ -4,6 +4,7 @@ import {
 	isWpErrorResponse,
 	mapToInternalCode,
 	parseWpError,
+	readWpFatalDetail,
 	WpErrorResponse,
 } from './parse-wp-error';
 
@@ -270,6 +271,63 @@ describe('parse-wp-error', () => {
 		it('should return fallback for objects without known error fields', () => {
 			expect(extractErrorMessage({ foo: 'bar' }, fallback)).toBe(fallback);
 			expect(extractErrorMessage({ data: { nested: 'value' } }, fallback)).toBe(fallback);
+		});
+	});
+
+	// WordPress wraps a PHP fatal in `internal_server_error` whose `message` is the
+	// localized "critical error" boilerplate; the error itself — the sentence that
+	// names the cause — is `data.error` ({ type, message, file, line }), present
+	// only when the site exposes error details (#2439, plugin #2157).
+	describe('WordPress fatal detail', () => {
+		const fatalBody = {
+			code: 'internal_server_error',
+			message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+			data: {
+				status: 500,
+				error: {
+					type: 1,
+					message:
+						'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+					file: '/srv/www/wp-includes/class-wpdb.php',
+					line: 2324,
+				},
+			},
+		};
+		const fatalSentence =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in /srv/www/wp-includes/class-wpdb.php:2324';
+
+		it('prefers the PHP error over the critical-error boilerplate, keeping code and status', () => {
+			const parsed = parseWpError(fatalBody, 'fallback');
+
+			expect(parsed.message).toBe(fatalSentence);
+			expect(parsed.serverCode).toBe('internal_server_error');
+			expect(parsed.status).toBe(500);
+			expect(parsed.code).toBe('SYNC131');
+		});
+
+		it('keeps the boilerplate when the site hides error details', () => {
+			const parsed = parseWpError({ ...fatalBody, data: { status: 500 } }, 'fallback');
+
+			expect(parsed.message).toBe(fatalBody.message);
+		});
+
+		it('surfaces the sentence through extractErrorMessage', () => {
+			expect(extractErrorMessage(fatalBody, 'fallback')).toBe(fatalSentence);
+		});
+
+		it('reads an object `error` on a non-WP body, which the string case never matched', () => {
+			expect(
+				extractErrorMessage({ error: { type: 1, message: 'Out of memory' } }, 'fallback')
+			).toBe('Out of memory');
+		});
+
+		it('reads the detail without a file as the bare message, and ignores an empty one', () => {
+			expect(readWpFatalDetail({ error: { message: 'Out of memory' } })).toBe('Out of memory');
+			expect(
+				readWpFatalDetail({ error: { message: '   ', file: 'x.php', line: 1 } })
+			).toBeUndefined();
+			expect(readWpFatalDetail({ error: 'a string, as some plugins send' })).toBeUndefined();
+			expect(readWpFatalDetail(null)).toBeUndefined();
 		});
 	});
 

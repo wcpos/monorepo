@@ -102,6 +102,34 @@ describe('useEventTitle', () => {
 		expect(titleFor(row({}))).toBe('');
 		expect(titleFor(row({ context: { type: 42 } }))).toBe('');
 	});
+
+	// #2439: a Dutch till showed "Checkout failed" (CHECKOUT101) and "Failed to
+	// send document to server" (SYNC999) in English between translated rows. A
+	// code-carrying row with no event type titles from the code's catalogue
+	// summary — translated at render time, like a registered event type.
+	it("titles a code-carrying row from the code's summary, not the developer message", () => {
+		const title = titleFor(row({ message: 'Checkout failed', code: 'CHECKOUT101' }));
+
+		expect(title).toBe('[es] health.logs.error_summary.CHECKOUT101');
+	});
+
+	it('keeps the registered event translation ahead of the code summary', () => {
+		const title = titleFor(
+			row({
+				message: 'orders 1 — push failed (HTTP 500)',
+				code: 'SYNC131',
+				context: { type: 'push.error' },
+			})
+		);
+
+		expect(title).toBe('[es] health.logs.event.push_error');
+	});
+
+	it('falls back to the message for a code this build does not know', () => {
+		expect(titleFor(row({ message: 'Checkout failed', code: 'CHECKOUT999999' }))).toBe(
+			'Checkout failed'
+		);
+	});
 });
 
 describe('translateEventDescription', () => {

@@ -176,6 +176,79 @@ describe('RowDetail', () => {
 		expect(screen.queryByText(/The server said: D&eacute;sol&eacute;/)).toBeNull();
 	});
 
+	// A WordPress fatal answers `internal_server_error` with the PHP error itself
+	// in the body; the till quoted the machine code and sent the merchant to the
+	// server logs for an answer the row already held (#2439).
+	it("quotes the server's own sentence over its machine code when the body carried one", () => {
+		const sentence =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in /srv/www/wp-includes/class-wpdb.php:2324';
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					code: 'SYNC131',
+					context: {
+						type: 'push.error',
+						direction: 'push',
+						status: 500,
+						reason: 'internal_server_error',
+						serverMessage: sentence,
+					},
+				}}
+				kind="error"
+				title="Could not send a change to your store"
+			/>
+		);
+
+		expect(screen.getByText(`The server said: ${sentence}`)).not.toBeNull();
+		expect(screen.queryByText('The server said: internal_server_error')).toBeNull();
+		// The machine code is still on the row for support — in the Details tree.
+		expect(screen.getByTestId('logs-context').textContent).toContain('internal_server_error');
+	});
+
+	it('still quotes the machine code when the body carried no sentence', () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					code: 'SYNC131',
+					context: { type: 'push.error', direction: 'push', reason: 'internal_server_error' },
+				}}
+				kind="error"
+				title="Could not send a change to your store"
+			/>
+		);
+
+		expect(screen.getByText('The server said: internal_server_error')).not.toBeNull();
+	});
+
+	// `useEventTitle` now titles a code-carrying row with no event type from the
+	// code's summary (#2439); the lead line must not say the same sentence twice.
+	it('does not repeat the title when the title already is the code summary', () => {
+		const summary = mockT('health.logs.error_summary.CHECKOUT101');
+		render(
+			<RowDetail
+				row={{
+					logId: 'log-9',
+					timestamp: 1_000,
+					level: 'error',
+					code: 'CHECKOUT101',
+					message: 'Checkout failed',
+					context: { orderId: 'o1' },
+				}}
+				kind="error"
+				title={summary}
+			/>
+		);
+
+		expect(screen.queryByText(summary)).toBeNull();
+		// Guidance and the help link still lead the detail.
+		expect(screen.getByText(mockT('health.logs.error_action.CHECKOUT101'))).not.toBeNull();
+		expect(screen.getByTestId('logs-help-CHECKOUT101')).not.toBeNull();
+	});
+
 	it('leads a quiet row with its translated event description', () => {
 		render(<RowDetail row={row} kind="sync" title="Saved updates from your store" />);
 
