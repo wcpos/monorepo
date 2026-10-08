@@ -2018,6 +2018,36 @@ describe('PaymentWebview session expiry', () => {
 		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
 	});
 
+	it('a refresh that resolves after checkout closed neither remounts nor polls', async () => {
+		let resolveRefresh: (value: unknown) => void = () => {};
+		mockRefreshFetch.mockReturnValue(new Promise((resolve) => (resolveRefresh = resolve)));
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'completed', number: '42', line_items: [] }],
+		});
+		const setFrameStatus = jest.fn();
+		const view = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		act(() => webViewProps.onLoad({}));
+		act(() => {
+			sendExpiry(42);
+		});
+		view.unmount();
+		await act(async () => {
+			resolveRefresh(response());
+			// Past two poll intervals (3 s each): a chain armed after unmount would have fetched by now.
+			await jest.advanceTimersByTimeAsync(6_000);
+		});
+		expect(webViewMounts).toBe(1);
+		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+	});
+
 	it('a failed refresh does not arm the server-status poll', async () => {
 		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
 		renderFrame();

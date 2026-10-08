@@ -172,6 +172,9 @@ export function PaymentWebview({
 	const http = useRestHttpClient();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+	// Set on unmount so a poll or a session refresh that is still awaiting a
+	// response cannot settle the sale, or arm another poll, after checkout closed.
+	const unmountedRef = React.useRef(false);
 	const loadCountRef = React.useRef(0);
 	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
 	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
@@ -410,7 +413,7 @@ export function PaymentWebview({
 	 */
 	const pollServerTruth = React.useCallback(
 		async (pollUntilMs?: number): Promise<void> => {
-			if (paymentReceivedRef.current) return;
+			if (paymentReceivedRef.current || unmountedRef.current) return;
 			const localStatus = order.getLatest().payload.status;
 			if (!localStatus || localStatus !== 'pos-open') return;
 			let settled = false;
@@ -428,7 +431,7 @@ export function PaymentWebview({
 					params: { include: orderId, per_page: 1 },
 				});
 				const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-				if (!serverOrder || paymentReceivedRef.current) return;
+				if (!serverOrder || paymentReceivedRef.current || unmountedRef.current) return;
 				const serverStatus = serverOrder.status as string;
 				if (serverStatus === localStatus) return;
 				// A status change is not a payment: an unpaid transition leaves everything in
@@ -503,6 +506,7 @@ export function PaymentWebview({
 				if (
 					!settled &&
 					!paymentReceivedRef.current &&
+					!unmountedRef.current &&
 					pollUntilMs !== undefined &&
 					Date.now() < pollUntilMs
 				) {
@@ -550,6 +554,7 @@ export function PaymentWebview({
 		setFrameStatus('loading');
 		try {
 			const token = await refreshAccessToken();
+			if (unmountedRef.current) return;
 			if (token) {
 				sessionReloadsRef.current += 1;
 				setSessionReloads(sessionReloadsRef.current);
@@ -830,7 +835,9 @@ export function PaymentWebview({
 	]);
 
 	React.useEffect(() => {
+		unmountedRef.current = false;
 		return () => {
+			unmountedRef.current = true;
 			if (fallbackTimerRef.current) {
 				clearTimeout(fallbackTimerRef.current);
 			}
