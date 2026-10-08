@@ -15,7 +15,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { Button } from '@wcpos/components/button';
 import { usePointer } from '@wcpos/components/lib/device';
 import { hapticTick } from '@wcpos/components/lib/haptics';
-import { EASE, EASE_EXIT, PANEL_SLIDE_OUT } from '@wcpos/components/lib/motion';
+import { EASE, EASE_EXIT, OVERLAY_FADE, PANEL_SLIDE_OUT } from '@wcpos/components/lib/motion';
 import type { PulseTableRowRef } from '@wcpos/components/table';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -47,8 +47,11 @@ const PEEK_SPRING = { mass: 1, stiffness: 380, damping: 12 };
  * row moves; leaving is then always the cashier's move, never the animation's.
  */
 const HOVER_REACH = PEEK * 2;
-/** Remove swallowing Edit when the pull crosses the line, and Edit returning when it comes back. */
-const SWALLOW = { duration: 160, easing: EASE };
+/**
+ * Remove swallowing Edit when the pull crosses the line, and Edit returning when it comes back:
+ * a cover arriving over a control, on the overlay's own duration.
+ */
+const SWALLOW = { duration: OVERLAY_FADE, easing: EASE };
 /**
  * A press of Remove waits this long before the row flies: the swallow and the row's red land
  * first, so the button plays the same picture as a swipe past the line. It is the row's own
