@@ -1958,6 +1958,7 @@ describe('PaymentWebview session expiry', () => {
 		webViewMounts = 0;
 		globalThis.fetch = mockRefreshFetch;
 		mockRefreshFetch.mockResolvedValue(response());
+		mockGet.mockResolvedValue({ data: [] });
 	});
 	afterEach(() => {
 		globalThis.fetch = originalFetch;
@@ -1990,6 +1991,41 @@ describe('PaymentWebview session expiry', () => {
 			access_token: 'fresh-token',
 			expires_at: 12345,
 		});
+	});
+
+	it('a payment that settles during the refresh is seen by the poll after the remount', async () => {
+		const serverOrder = {
+			id: 42,
+			status: 'completed',
+			number: '42',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockAdoptOrderSnapshot.mockResolvedValue('protected');
+		autoShowReceipt = false;
+		renderFrame();
+		await act(async () => {
+			sendExpiry(42);
+		});
+		expect(webViewMounts).toBe(2);
+		await act(async () => {
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+	});
+
+	it('a failed refresh does not arm the server-status poll', async () => {
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' });
+		renderFrame();
+		await act(async () => {
+			sendExpiry();
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+		expect(mockGet).not.toHaveBeenCalled();
 	});
 
 	it('pins the frame message origin to the store', () => {

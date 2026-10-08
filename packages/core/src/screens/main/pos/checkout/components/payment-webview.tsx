@@ -553,6 +553,9 @@ export function PaymentWebview({
 			if (token) {
 				sessionReloadsRef.current += 1;
 				setSessionReloads(sessionReloadsRef.current);
+				// The remount resets the load count, so its first load never arms the poll.
+				// Still detect a payment that settled during the refresh.
+				void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
 			} else {
 				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
 				frameExpired.current = true;
