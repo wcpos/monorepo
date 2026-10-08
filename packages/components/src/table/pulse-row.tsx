@@ -1,8 +1,10 @@
 import * as React from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 
 import Animated, {
 	cancelAnimation,
 	useAnimatedStyle,
+	useReducedMotion,
 	useSharedValue,
 	withSequence,
 	withTiming,
@@ -35,6 +37,12 @@ type PulseRemoveCallback = () => void | Promise<unknown>;
 
 interface PulseTableRowRef {
 	pulseAdd: (callback?: () => void) => void;
+	/**
+	 * The removal tint without the removal: the cart line turns it on when a swipe crosses
+	 * the remove point and off again when the finger comes back, so the row is already red
+	 * when `pulseRemove` lands. Ignored while a removal is committing.
+	 */
+	armRemove: (on: boolean) => void;
 	pulseRemove: (callback?: PulseRemoveCallback) => void;
 }
 
@@ -43,11 +51,15 @@ interface PulseTableRowRef {
 const LIT = { duration: 120, easing: EASE };
 const SETTLE = { duration: 420, easing: EASE };
 // The removal waits on this pulse, so it is short: nothing over 400 ms on a path the cashier
-// is waiting on.
+// is waiting on. A row the swipe already armed is at full tint and this finishes at once.
 const GOING = { duration: PANEL_SLIDE_OUT, easing: EASE_EXIT };
+// The gap the row leaves closes on the shared ease: the lines below rise into it.
+const CLOSE = { duration: PANEL_SLIDE_OUT, easing: EASE };
 // How strongly the tint washes the row at its peak: enough to read, with the text still clear.
 const TINT_ADDED = 0.22;
 const TINT_REMOVED = 0.3;
+// The row's height while it is not collapsing: its own.
+const NATURAL = -1;
 
 /**
  * Table row with a pulse for add/remove feedback.
@@ -56,6 +68,10 @@ const TINT_REMOVED = 0.3;
  * be the row's own background colour, which a row with an opaque body on top of it (the cart
  * line, whose body hides the swipe strip under it) covered completely: the row pulsed and
  * nobody could see it (filmed and probed 2026-10-02).
+ *
+ * A removal is tint, then the row's height closing to nothing, then the mutation: the line
+ * leaves and the lines below rise into its place before the data changes under them, so the
+ * gap never snaps shut (the cart line's swipe-to-remove, chosen 2026-10-08).
  */
 function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	ref,
@@ -65,12 +81,19 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	row,
 	table,
 	children,
+	onLayout,
 	...viewProps
 }: PulseTableRowProps<TData, TFeatures>) {
+	const reduced = useReducedMotion();
 	const added = useSharedValue(0);
 	const removed = useSharedValue(0);
+	const height = useSharedValue(NATURAL);
+	const measured = React.useRef(0);
 	const addedStyle = useAnimatedStyle(() => ({ opacity: added.value }));
 	const removedStyle = useAnimatedStyle(() => ({ opacity: removed.value }));
+	const rowStyle = useAnimatedStyle(() =>
+		height.value < 0 ? {} : { height: height.value, minHeight: 0, overflow: 'hidden' as const }
+	);
 
 	/**
 	 * `pulseRemove` commits the row's removal from the animation's completion
@@ -89,25 +112,30 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	const removePulseActive = React.useRef(false);
 	const removePulseCallback = React.useRef<PulseRemoveCallback | null>(null);
 
-	const settleRemovePulse = React.useCallback((finished: boolean) => {
-		const callback = removePulseCallback.current;
-		removePulseCallback.current = null;
+	const settleRemovePulse = React.useCallback(
+		(finished: boolean) => {
+			const callback = removePulseCallback.current;
+			removePulseCallback.current = null;
 
-		if (!finished) {
-			// Cancelled before it could commit: nothing was removed.
-			removePulseActive.current = false;
-			return;
-		}
+			if (!finished) {
+				// Cancelled before it could commit: nothing was removed.
+				removePulseActive.current = false;
+				height.set(NATURAL);
+				return;
+			}
 
-		// Committed. Hold the latch until the mutation settles so a press landing
-		// mid-flight can't commit it twice, then release it: on success the row
-		// unmounts and the latch is moot, and on failure the row is still here and
-		// has to stay removable. A rejection keeps propagating — the callback owns
-		// reporting it.
-		void Promise.resolve(callback?.()).finally(() => {
-			removePulseActive.current = false;
-		});
-	}, []);
+			// Committed. Hold the latch until the mutation settles so a press landing
+			// mid-flight can't commit it twice, then release it: on success the row
+			// unmounts and the latch is moot, and on failure the row is still here and
+			// has to stay removable — at its own height again, not the closed gap. A
+			// rejection keeps propagating — the callback owns reporting it.
+			void Promise.resolve(callback?.()).finally(() => {
+				removePulseActive.current = false;
+				height.set(NATURAL);
+			});
+		},
+		[height]
+	);
 
 	React.useImperativeHandle(
 		ref,
@@ -128,6 +156,13 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 					})
 				);
 			},
+			armRemove(on: boolean) {
+				if (removePulseActive.current) {
+					return;
+				}
+				cancelAnimation(removed);
+				removed.value = withTiming(on ? TINT_REMOVED : 0, LIT);
+			},
 			pulseRemove(callback?: PulseRemoveCallback) {
 				if (removePulseActive.current) {
 					return;
@@ -138,13 +173,24 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 				cancelAnimation(added);
 				cancelAnimation(removed);
 				added.value = 0;
+				// Read on this thread: a worklet sees a ref only as the copy it captured.
+				const from = measured.current;
+				const close = !reduced && from > 0;
 				removed.value = withTiming(TINT_REMOVED, GOING, (finished) => {
 					'worklet';
-					scheduleOnRN(settleRemovePulse, !!finished);
+					if (!finished || !close) {
+						scheduleOnRN(settleRemovePulse, !!finished);
+						return;
+					}
+					height.value = from;
+					height.value = withTiming(0, CLOSE, (closed) => {
+						'worklet';
+						scheduleOnRN(settleRemovePulse, !!closed);
+					});
 				});
 			},
 		}),
-		[added, removed, row.id, table, settleRemovePulse]
+		[added, removed, height, reduced, row.id, table, settleRemovePulse]
 	);
 
 	return (
@@ -154,6 +200,14 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 				'bg-table-row web:data-[state=selected]:bg-muted border-border min-h-row relative flex-row border-b',
 				className
 			)}
+			style={rowStyle}
+			onLayout={(event) => {
+				// The height the gap closes from. A collapsing row reports its shrinking height
+				// too; keep the last natural one.
+				if (height.get() < 0) measured.current = event.nativeEvent.layout.height;
+				// The animated view types its handler as possibly a shared value; the table passes a function.
+				(onLayout as ((e: LayoutChangeEvent) => void) | undefined)?.(event);
+			}}
 			{...viewProps}
 		>
 			{children as React.ReactNode}

@@ -8,6 +8,7 @@ import { PulseTableRow, type PulseTableRowRef } from './pulse-row';
 const TINT_REMOVED = 0.3;
 
 type StartedAnimation = { toValue: unknown; callback?: (finished: boolean) => void };
+let mockReduced = false;
 
 /**
  * Faithful-enough reanimated: `withTiming` records the animation it started and
@@ -19,12 +20,17 @@ jest.mock('react-native-reanimated', () => {
 	const actualReact = jest.requireActual<typeof import('react')>('react');
 	const started: StartedAnimation[] = [];
 	const pending: ((finished: boolean) => void)[] = [];
+	const layouts: ((event: unknown) => void)[] = [];
 
 	return {
 		__esModule: true,
 		default: {
-			View: ({ children, ...props }: any) => actualReact.createElement('div', props, children),
+			View: ({ children, onLayout, ...props }: any) => {
+				if (onLayout) layouts.push(onLayout);
+				return actualReact.createElement('div', props, children);
+			},
 		},
+		__layouts: layouts,
 		Easing: { bezier: () => 'ease' },
 		__started: started,
 		__pending: pending,
@@ -32,7 +38,17 @@ jest.mock('react-native-reanimated', () => {
 			pending.splice(0).forEach((callback) => callback(false));
 		},
 		useAnimatedStyle: () => ({}),
-		useSharedValue: (value: any) => ({ value }),
+		useReducedMotion: () => mockReduced,
+		useSharedValue: (value: any) => {
+			const shared = {
+				value,
+				get: () => shared.value,
+				set: (next: any) => {
+					shared.value = next;
+				},
+			};
+			return shared;
+		},
 		withSequence: (...animations: unknown[]) => animations,
 		withTiming: (toValue: unknown, _config: unknown, callback?: (finished: boolean) => void) => {
 			started.push({ toValue, callback });
@@ -51,17 +67,29 @@ jest.mock('react-native-worklets', () => ({
 const reanimated = jest.requireMock('react-native-reanimated') as {
 	__started: StartedAnimation[];
 	__pending: ((finished: boolean) => void)[];
+	__layouts: ((event: unknown) => void)[];
 };
+
+/** The row's natural height, as its layout reports it. */
+function layRowOut(height = 44) {
+	act(() => reanimated.__layouts.at(-1)!({ nativeEvent: { layout: { height } } }));
+}
+/** Every gap-close started so far: the row's height going to nothing. */
+function closes() {
+	return reanimated.__started.filter((animation) => animation.toValue === 0);
+}
 
 /** Every remove pulse started so far (an add pulse rises to its own, lower, tint). */
 function removePulses() {
 	return reanimated.__started.filter((animation) => animation.toValue === TINT_REMOVED);
 }
 
-/** Run every in-flight animation to completion. */
+/** Run every in-flight animation to completion, and whatever each one starts in turn. */
 function finishPendingAnimations() {
 	act(() => {
-		reanimated.__pending.splice(0).forEach((callback) => callback(true));
+		while (reanimated.__pending.length) {
+			reanimated.__pending.splice(0).forEach((callback) => callback(true));
+		}
 	});
 }
 
@@ -88,6 +116,8 @@ function renderRow() {
 beforeEach(() => {
 	reanimated.__started.length = 0;
 	reanimated.__pending.length = 0;
+	reanimated.__layouts.length = 0;
+	mockReduced = false;
 });
 
 describe('PulseTableRow', () => {
@@ -185,6 +215,59 @@ describe('PulseTableRow', () => {
 
 			expect(committedRemoval).toHaveBeenCalledTimes(1);
 			expect(cancelledRemoval).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('swipe to remove (chosen 2026-10-08)', () => {
+		it('armRemove turns the removal tint on and off without committing anything', () => {
+			const { ref } = renderRow();
+			act(() => ref.current!.armRemove(true));
+			expect(removePulses()).toHaveLength(1);
+			act(() => ref.current!.armRemove(false));
+			expect(reanimated.__started.at(-1)?.toValue).toBe(0);
+			finishPendingAnimations();
+			expect(closes()).toHaveLength(1);
+			expect(reanimated.__pending).toHaveLength(0);
+		});
+
+		it('armRemove is ignored while a removal is committing', () => {
+			const { ref } = renderRow();
+			act(() => ref.current!.pulseRemove(jest.fn()));
+			act(() => ref.current!.armRemove(false));
+			expect(reanimated.__started).toHaveLength(1);
+		});
+
+		it('closes the gap after the tint and commits the removal only once it is shut', () => {
+			const { ref } = renderRow();
+			layRowOut(44);
+			const removeLine = jest.fn();
+			act(() => ref.current!.pulseRemove(removeLine));
+			expect(closes()).toHaveLength(0);
+			// The tint lands: the row starts closing, nothing is removed yet.
+			act(() => reanimated.__pending.splice(0).forEach((callback) => callback(true)));
+			expect(closes()).toHaveLength(1);
+			expect(removeLine).not.toHaveBeenCalled();
+			// The gap is shut: the data may change under the rows below.
+			act(() => reanimated.__pending.splice(0).forEach((callback) => callback(true)));
+			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
+
+		it('an unmeasured row, or reduced motion, commits straight after the tint', () => {
+			const { ref } = renderRow();
+			const removeLine = jest.fn();
+			act(() => ref.current!.pulseRemove(removeLine));
+			act(() => reanimated.__pending.splice(0).forEach((callback) => callback(true)));
+			expect(closes()).toHaveLength(0);
+			expect(removeLine).toHaveBeenCalledTimes(1);
+
+			mockReduced = true;
+			const reducedRow = renderRow();
+			layRowOut(44);
+			const removeReduced = jest.fn();
+			act(() => reducedRow.ref.current!.pulseRemove(removeReduced));
+			act(() => reanimated.__pending.splice(0).forEach((callback) => callback(true)));
+			expect(closes()).toHaveLength(0);
+			expect(removeReduced).toHaveBeenCalledTimes(1);
 		});
 	});
 });
