@@ -1992,6 +1992,11 @@ describe('PaymentWebview session expiry', () => {
 		});
 	});
 
+	it('pins the frame message origin to the store', () => {
+		renderFrame();
+		expect(webViewProps.targetOrigin).toBe(new URL(webViewProps.src).origin);
+	});
+
 	it('ignores expiry for another order', async () => {
 		renderFrame();
 		await act(async () => {

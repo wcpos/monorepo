@@ -318,6 +318,17 @@ export function PaymentWebview({
 		return url.toString();
 	}, [paymentURL, jwt]);
 
+	// Pin the frame's message origin to the store: on web the shared WebView then drops
+	// `message` events from any other window or origin (Pro posts with '*', which is the
+	// sender's target; the receiver still sees the store's origin).
+	const frameOrigin = React.useMemo(() => {
+		try {
+			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
+		} catch {
+			return undefined;
+		}
+	}, [paymentURLWithToken]);
+
 	/**
 	 * Best-effort local catch-up after a payment: pull the paid order so the
 	 * cart/receipt reflect the server's status. Bounded, because a require's
@@ -805,6 +816,7 @@ export function PaymentWebview({
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
+					targetOrigin={frameOrigin}
 					onLoad={onWebViewLoaded}
 					onLoadStart={onWebViewLoadStart}
 					onError={onWebViewError}
