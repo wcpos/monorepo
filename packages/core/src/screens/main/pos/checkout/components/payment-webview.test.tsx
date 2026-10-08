@@ -2088,6 +2088,12 @@ describe('PaymentWebview session expiry', () => {
 		});
 		expect(webViewMounts).toBe(1);
 		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// The frame still holds the expired token: a navigation must not reopen the gate.
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 		// The refresher backs off after a transient failure; a real retry comes after that cooldown.
 		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
 		mockRefreshFetch.mockResolvedValueOnce(response('fresh-token'));

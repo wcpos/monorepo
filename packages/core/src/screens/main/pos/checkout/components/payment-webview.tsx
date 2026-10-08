@@ -187,11 +187,13 @@ export function PaymentWebview({
 	// Ref-backed so a message arriving before the next render still sees the real count.
 	const sessionReloadsRef = React.useRef(0);
 	const sessionRefreshInFlight = React.useRef(false);
-	// Latched for a TERMINAL refusal (the refresh token itself rejected) or the reload cap: the
-	// frame then holds an expired token, so it stays failed — no load event may report it ready
-	// and the watchdog must not remount the same expired URL — until the URL itself changes
-	// (a background refresh patched the token). A transient failure (network, 5xx, cooldown)
-	// leaves the frame failed but lets a later message retry.
+	// Two separate facts. `frameExpired`: the frame holds an expired token (any failed refresh,
+	// or the reload cap), so it stays failed — no load event may report it ready and the
+	// watchdog must not remount the same expired URL — until the URL itself changes (a new
+	// token, from this component or a background refresh). `sessionRefreshRefused`: no further
+	// refresh may be attempted (the refresh token itself was rejected, or the cap was reached);
+	// a transient failure (network, 5xx, cooldown) leaves it clear so a later message may retry.
+	const frameExpired = React.useRef(false);
 	const sessionRefreshRefused = React.useRef(false);
 
 	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
@@ -332,6 +334,7 @@ export function PaymentWebview({
 
 	React.useEffect(() => {
 		// A new token (this refresh or a background one) makes the frame live again.
+		frameExpired.current = false;
 		sessionRefreshRefused.current = false;
 	}, [paymentURLWithToken]);
 
@@ -538,6 +541,7 @@ export function PaymentWebview({
 		if (sessionReloadsRef.current >= 2) {
 			// The reloaded frame expired again: close the gate so nothing submits to it.
 			sessionRefreshRefused.current = true;
+			frameExpired.current = true;
 			setFrameStatus('failed');
 			warnReopen();
 			return;
@@ -551,6 +555,7 @@ export function PaymentWebview({
 				setSessionReloads(sessionReloadsRef.current);
 			} else {
 				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
+				frameExpired.current = true;
 				setFrameStatus('failed');
 				warnReopen();
 			}
@@ -695,7 +700,7 @@ export function PaymentWebview({
 			// strictly after that listener exists. It is the strongest readiness
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
-			if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
+			if (sessionRefreshInFlight.current || frameExpired.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
 
@@ -727,8 +732,8 @@ export function PaymentWebview({
 	 * the real fix rather than this gate.
 	 */
 	const onWebViewLoadStart = React.useCallback(() => {
-		// A refused frame stays failed: its navigation must not reopen the gate.
-		if (sessionRefreshRefused.current) return;
+		// An expired frame stays failed: its navigation must not reopen the gate.
+		if (frameExpired.current) return;
 		setFrameStatus('loading');
 		// Only the first document is watched. Later navigations are the gateway's
 		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
@@ -797,12 +802,7 @@ export function PaymentWebview({
 		// No link, no frame, no navigation to watch: the banner already says so.
 		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
-			if (
-				frameSettledRef.current ||
-				sessionRefreshInFlight.current ||
-				sessionRefreshRefused.current
-			)
-				return;
+			if (frameSettledRef.current || sessionRefreshInFlight.current || frameExpired.current) return;
 			if (autoReloads === 0 && retryToken === 0) {
 				orderLogger.warn('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
