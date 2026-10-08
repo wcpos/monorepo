@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -86,6 +86,45 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const stripWidth = editWidth + removeWidth;
 	const [open, setOpenState] = React.useState(false);
 	const [dragging, setDragging] = React.useState(false);
+	/**
+	 * Web: the body's DOM node, and the pointer that is down on it. Gesture Handler captures
+	 * the pointer on whatever cell the pull STARTED on, so the release — `pointerup`, `mouseup`
+	 * and the `click` the browser synthesises — is retargeted to that cell however far the
+	 * mouse has travelled: a pull that began on the name opened the name editor, one that began
+	 * on the price opened the numpad, and the cell wore its hover state for the whole pull
+	 * (traced on the web build, 2026-10-08). When the pan activates the body takes the capture
+	 * instead: the release lands on the body, no cell is clicked, hover follows the pointer.
+	 * Gesture Handler reads the cell's `lostpointercapture` as a cancel, so that one event is
+	 * stopped before it reaches the body's listeners; the body's own loss at release still does.
+	 */
+	const [bodyEl, setBodyEl] = React.useState<HTMLElement | null>(null);
+	const pointerId = useSharedValue(-1);
+	React.useEffect(() => {
+		if (Platform.OS !== 'web' || !bodyEl?.addEventListener) return;
+		const down = (event: PointerEvent) => pointerId.set(event.pointerId);
+		const lost = (event: Event) => {
+			if (event.target !== bodyEl) event.stopPropagation();
+		};
+		bodyEl.addEventListener('pointerdown', down, true);
+		bodyEl.addEventListener('lostpointercapture', lost, true);
+		return () => {
+			bodyEl.removeEventListener('pointerdown', down, true);
+			bodyEl.removeEventListener('lostpointercapture', lost, true);
+		};
+	}, [bodyEl, pointerId]);
+	const takePointer = () => {
+		if (Platform.OS !== 'web' || !bodyEl || pointerId.get() < 0) return;
+		try {
+			bodyEl.setPointerCapture(pointerId.get());
+		} catch {
+			// The pointer is no longer down: nothing to take.
+		}
+		// The mouse-down focused the cell the pull began on, and a focused cell keeps its focus
+		// background after the release, with the pointer long gone (filmed 2026-10-08). Native
+		// cancels the touchable when the pan activates; this is the web's equivalent.
+		const focused = document.activeElement as HTMLElement | null;
+		if (focused && focused !== bodyEl && bodyEl.contains(focused)) focused.blur?.();
+	};
 	/** Past the line: Remove has swallowed Edit and the row is red. */
 	const [armed, setArmedState] = React.useState(false);
 	const armedNow = useSharedValue(false);
@@ -220,6 +259,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 		.onStart(() => {
 			if (leaving.get()) return;
 			setDragging(true);
+			takePointer();
 		})
 		.onUpdate((event) => {
 			if (leaving.get()) return;
@@ -379,6 +419,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}
 			<GestureDetector gesture={pan}>
 				<Animated.View
+					ref={(node: unknown) => setBodyEl(node as HTMLElement | null)}
 					className={
 						dragging ? 'web:select-none bg-card min-h-row flex-row' : 'bg-card min-h-row flex-row'
 					}
