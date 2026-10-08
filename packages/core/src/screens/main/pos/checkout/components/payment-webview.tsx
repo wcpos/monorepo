@@ -834,7 +834,9 @@ export function PaymentWebview({
 		setFrameStatus,
 	]);
 
-	React.useEffect(() => {
+	// A layout effect: its cleanup runs in the commit that removes the frame, so a
+	// poll response arriving before the passive cleanups flush already sees the flag.
+	React.useLayoutEffect(() => {
 		unmountedRef.current = false;
 		return () => {
 			unmountedRef.current = true;
