@@ -627,6 +627,41 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
 	});
 
+	it('stays linear on a long run of unclosed tag openers', async () => {
+		const run = '<a'.repeat(100_000);
+		const started = Date.now();
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, { code: 'x', message: `${run}>` }),
+			})
+		).rejects.toMatchObject({ serverMessage: expect.stringContaining('<a<a<a') });
+		expect(Date.now() - started).toBeLessThan(2_000);
+	});
+
+	it('keeps comparison operators as text — only tag syntax opens a tag', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'x',
+						message: 'Expected x < 5 and y > 2 in <b>wpdb</b> <!-- note -->',
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Expected x < 5 and y > 2 in wpdb' });
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, { code: 'x', message: 'Expected x<y and z>2 in <b>wpdb</b>' }),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Expected x<y and z>2 in wpdb' });
+	});
+
 	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
 		await expect(
 			pushRecordMutation({

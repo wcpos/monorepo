@@ -223,6 +223,13 @@ const fatalLocation = (file: string, line: unknown): string => {
  * and ledger rows, where tags would render literally. Entities are left alone:
  * the renderer decodes them.
  */
+// Longest tag WordPress error copy emits is the troubleshooting link (~90 chars).
+const TAG_MAX = 256;
+const TAG_START = /[A-Za-z/!]/;
+// Tag names WordPress and WooCommerce put in error copy, plus HTML comments.
+const KNOWN_TAG =
+	/^(?:\/?(?:p|a|br|b|strong|i|em|u|code|pre|span|div|ul|ol|li|h[1-6])(?:[\s/][\s\S]*)?|!--[\s\S]*--|!\[CDATA\[[\s\S]*\]\])$/i;
+
 const stripTags = (html: string): string => {
 	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
 	// regex is polynomial on a run of `<` (CodeQL js/polynomial-redos), and the
@@ -235,13 +242,27 @@ const stripTags = (html: string): string => {
 			text += html.slice(cursor);
 			break;
 		}
-		const close = html.indexOf('>', open + 1);
-		if (close === -1) {
-			text += html.slice(cursor);
-			break;
+		// Only tag syntax opens a tag: `<p`, `</p>`, `<!-- -->`. A `<` before a space,
+		// a digit, another `<` or the end of the text is a comparison operator in a
+		// PHP sentence ("Expected x < 5 and y > 2") and is kept, with its `>`.
+		if (!TAG_START.test(html.charAt(open + 1))) {
+			text += html.slice(cursor, open + 1);
+			cursor = open + 1;
+			continue;
+		}
+		// Look for the closing `>` only within TAG_MAX chars, so a crafted body of
+		// `<a<a<a…>` costs a bounded window per `<` and the scan stays linear.
+		const window = html.slice(open + 1, open + 1 + TAG_MAX);
+		const closeInWindow = window.indexOf('>');
+		// The run between `<` and `>` must be one of the tags WordPress's error copy
+		// uses (or a comment); `x<y and z>2` is a sentence, not markup, and is kept.
+		if (closeInWindow === -1 || !KNOWN_TAG.test(window.slice(0, closeInWindow))) {
+			text += html.slice(cursor, open + 1);
+			cursor = open + 1;
+			continue;
 		}
 		text += `${html.slice(cursor, open)} `;
-		cursor = close + 1;
+		cursor = open + 1 + closeInWindow + 1;
 	}
 	return text.replace(/\s+/g, ' ').trim();
 };
