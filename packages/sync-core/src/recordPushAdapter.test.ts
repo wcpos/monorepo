@@ -707,6 +707,29 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		expect(sentence.length).toBeLessThanOrEqual(200);
 	});
 
+	it('reads a Windows host path and bounds an absurd file name, keeping the line number', async () => {
+		const readSentence = async (file: string) =>
+			(
+				(await pushRecordMutation({
+					mutation: mut(),
+					resolveEndpoint,
+					fetcher: async () =>
+						jsonResponse(500, {
+							...WP_FATAL_BODY,
+							data: { status: 500, error: { message: 'Boom', file, line: 7 } },
+						}),
+				}).catch((e: RecordPushError) => e)) as RecordPushError
+			).serverMessage!;
+
+		expect(await readSentence('C:\\inetpub\\wwwroot\\wp-includes\\class-wpdb.php')).toBe(
+			'Boom in wp-includes/class-wpdb.php:7'
+		);
+		expect(await readSentence('C:\\inetpub\\wwwroot\\boot.php')).toBe('Boom in boot.php:7');
+		const silly = await readSentence(`/srv/${'f'.repeat(400)}.php`);
+		expect(silly).toMatch(/^Boom in …f+\.php:7$/);
+		expect(silly.length).toBeLessThanOrEqual(200);
+	});
+
 	it('treats a message that is only markup as no sentence', async () => {
 		await expect(
 			pushRecordMutation({

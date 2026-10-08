@@ -198,16 +198,23 @@ const MIN_MESSAGE_CHARS = 80;
 const fatalLocation = (file: string, line: unknown): string => {
 	const suffix =
 		typeof line === 'number' || (typeof line === 'string' && line !== '') ? `:${line}` : '';
-	const slash = file.lastIndexOf('/');
-	const fileName = slash === -1 ? file : file.slice(slash + 1);
+	// A Windows host reports `C:\inetpub\wwwroot\wp-includes\class-wpdb.php`.
+	const path = file.split('\\').join('/');
+	const slash = path.lastIndexOf('/');
+	const fileName = slash === -1 ? path : path.slice(slash + 1);
+	const maxLocation = QUOTE_CAP - MIN_MESSAGE_CHARS;
 	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
-		const at = file.indexOf(root);
+		const at = path.indexOf(root);
 		if (at === -1) continue;
-		const location = ` in ${file.slice(at + 1)}${suffix}`;
-		if (location.length <= QUOTE_CAP - MIN_MESSAGE_CHARS) return location;
+		const location = ` in ${path.slice(at + 1)}${suffix}`;
+		if (location.length <= maxLocation) return location;
 		break;
 	}
-	return ` in ${fileName}${suffix}`;
+	const location = ` in ${fileName}${suffix}`;
+	if (location.length <= maxLocation) return location;
+	// Even the file name is absurd: keep its tail (extension) and the line number.
+	const room = maxLocation - ` in …${suffix}`.length;
+	return ` in …${fileName.slice(fileName.length - room)}${suffix}`;
 };
 
 /**

@@ -390,6 +390,19 @@ describe('parse-wp-error', () => {
 			expect(detail!.length).toBeLessThanOrEqual(200);
 		});
 
+		it('reads a Windows host path and bounds an absurd file name, keeping the line number', () => {
+			const read = (file: string) =>
+				readWpFatalDetail({ error: { message: 'Boom', file, line: 7 } })!;
+
+			expect(read('C:\\inetpub\\wwwroot\\wp-includes\\class-wpdb.php')).toBe(
+				'Boom in wp-includes/class-wpdb.php:7'
+			);
+			expect(read('C:\\inetpub\\wwwroot\\boot.php')).toBe('Boom in boot.php:7');
+			const silly = read(`/srv/${'f'.repeat(400)}.php`);
+			expect(silly).toMatch(/^Boom in …f+\.php:7$/);
+			expect(silly.length).toBeLessThanOrEqual(200);
+		});
+
 		it('reads the detail without a file as the bare message, and ignores an empty one', () => {
 			expect(readWpFatalDetail({ error: { message: 'Out of memory' } })).toBe('Out of memory');
 			expect(
