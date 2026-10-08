@@ -187,9 +187,13 @@ export function PaymentWebview({
 	// Ref-backed so a message arriving before the next render still sees the real count.
 	const sessionReloadsRef = React.useRef(0);
 	const sessionRefreshInFlight = React.useRef(false);
-	// Latched only for a TERMINAL refusal (the refresh token itself rejected); a transient
-	// failure (network, 5xx, cooldown) leaves the frame failed but lets a later message retry.
+	// Latched for a TERMINAL refusal (the refresh token itself rejected) or the reload cap: the
+	// frame then holds an expired token, so it stays failed — no load event may report it ready
+	// and the watchdog must not remount the same expired URL — until the URL itself changes
+	// (a background refresh patched the token). A transient failure (network, 5xx, cooldown)
+	// leaves the frame failed but lets a later message retry.
 	const sessionRefreshRefused = React.useRef(false);
+
 	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
 	// Create a logger with order context
@@ -201,6 +205,14 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
+
+	// The "reopen the payment" warning is shown once per mount, whatever follows.
+	const reopenWarned = React.useRef(false);
+	const warnReopen = React.useCallback(() => {
+		if (reopenWarned.current) return;
+		reopenWarned.current = true;
+		orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+	}, [orderLogger, t]);
 
 	// Latest collaborators for the preparation effect, refreshed after every render so
 	// the effect can key on order identity rather than on revisions our own write emits.
@@ -321,6 +333,11 @@ export function PaymentWebview({
 	// Pin the frame's message origin to the store: on web the shared WebView then drops
 	// `message` events from any other window or origin (Pro posts with '*', which is the
 	// sender's target; the receiver still sees the store's origin).
+	React.useEffect(() => {
+		// A new token (this refresh or a background one) makes the frame live again.
+		sessionRefreshRefused.current = false;
+	}, [paymentURLWithToken]);
+
 	const frameOrigin = React.useMemo(() => {
 		try {
 			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
@@ -519,7 +536,10 @@ export function PaymentWebview({
 		}
 		if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
 		if (sessionReloadsRef.current >= 2) {
-			orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+			// The reloaded frame expired again: close the gate so nothing submits to it.
+			sessionRefreshRefused.current = true;
+			setFrameStatus('failed');
+			warnReopen();
 			return;
 		}
 		sessionRefreshInFlight.current = true;
@@ -532,7 +552,7 @@ export function PaymentWebview({
 			} else {
 				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
 				setFrameStatus('failed');
-				orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+				warnReopen();
 			}
 		} finally {
 			sessionRefreshInFlight.current = false;
@@ -675,7 +695,7 @@ export function PaymentWebview({
 			// strictly after that listener exists. It is the strongest readiness
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
-			if (sessionRefreshInFlight.current) return;
+			if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
 
@@ -707,6 +727,8 @@ export function PaymentWebview({
 	 * the real fix rather than this gate.
 	 */
 	const onWebViewLoadStart = React.useCallback(() => {
+		// A refused frame stays failed: its navigation must not reopen the gate.
+		if (sessionRefreshRefused.current) return;
 		setFrameStatus('loading');
 		// Only the first document is watched. Later navigations are the gateway's
 		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
@@ -775,7 +797,12 @@ export function PaymentWebview({
 		// No link, no frame, no navigation to watch: the banner already says so.
 		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
-			if (frameSettledRef.current || sessionRefreshInFlight.current) return;
+			if (
+				frameSettledRef.current ||
+				sessionRefreshInFlight.current ||
+				sessionRefreshRefused.current
+			)
+				return;
 			if (autoReloads === 0 && retryToken === 0) {
 				orderLogger.warn('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },

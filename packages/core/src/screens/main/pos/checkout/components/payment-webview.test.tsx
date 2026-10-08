@@ -2010,7 +2010,7 @@ describe('PaymentWebview session expiry', () => {
 	});
 
 	it('allows only two session reloads per mount and warns on the third message', async () => {
-		renderFrame();
+		const { setFrameStatus } = renderFrame();
 		await act(async () => {
 			sendExpiry();
 		});
@@ -2027,6 +2027,13 @@ describe('PaymentWebview session expiry', () => {
 			'pos_checkout.reopen_payment',
 			{ showToast: true }
 		);
+		// The gate closes: the third expiry marks the frame failed and a load cannot reopen it.
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		await act(async () => {
+			webViewProps.onLoadStart?.();
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 
 	it('does not remount on a refused refresh and shows only one warning', async () => {
@@ -2046,11 +2053,12 @@ describe('PaymentWebview session expiry', () => {
 			'pos_checkout.reopen_payment',
 			{ showToast: true }
 		);
-		// The refusal must not silence the frame: a later load still reports ready.
+		// The frame holds an expired token: a later navigation must not reopen the gate.
 		await act(async () => {
+			webViewProps.onLoadStart?.();
 			webViewProps.onLoad?.();
 		});
-		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 
 	it('does not latch a transient refresh failure: a later message may retry', async () => {
@@ -2069,5 +2077,11 @@ describe('PaymentWebview session expiry', () => {
 		});
 		expect(webViewMounts).toBe(2);
 		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('fresh-token');
+		// One reopen warning per mount, however many messages follow (the shared logger mock also
+		// records the refresher's own transient-failure warning, so count by message).
+		const reopenWarnings = (
+			getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn as jest.Mock
+		).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
+		expect(reopenWarnings).toHaveLength(1);
 	});
 });
