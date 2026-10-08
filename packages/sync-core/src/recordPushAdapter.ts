@@ -514,8 +514,10 @@ function fatalLocation(file: string, line: unknown): string {
 const TAG_MAX = 256;
 const TAG_START = /[A-Za-z/!]/;
 // Tag names WordPress and WooCommerce put in error copy, plus HTML comments.
+// Attributes must be `name=value`: `and`/`z` are bare attribute names in HTML too, so
+// `x<a and z>2` would otherwise read as an `<a>` tag and lose the sentence's middle.
 const KNOWN_TAG =
-	/^(?:\/?(?:p|a|br|b|strong|i|em|u|code|pre|span|div|ul|ol|li|h[1-6])(?:[\s/][\s\S]*)?|!--[\s\S]*--|!\[CDATA\[[\s\S]*\]\])$/i;
+	/^(?:\/?(?:p|a|br|b|strong|i|em|u|code|pre|span|div|ul|ol|li|h[1-6])(?:\s+[A-Za-z_:][A-Za-z0-9:._-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=`]+))*\s*\/?|!--[\s\S]*--|!\[CDATA\[[\s\S]*\]\])$/i;
 
 function stripTags(html: string): string {
 	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
