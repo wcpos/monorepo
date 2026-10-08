@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { filter, take } from 'rxjs';
 
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
@@ -183,7 +184,11 @@ export function PaymentWebview({
 	const [navigationStarts, setNavigationStarts] = React.useState(0);
 	const frameSettledRef = React.useRef(false);
 	const [sessionReloads, setSessionReloads] = React.useState(0);
+	// Ref-backed so a message arriving before the next render still sees the real count.
+	const sessionReloadsRef = React.useRef(0);
 	const sessionRefreshInFlight = React.useRef(false);
+	// Latched only for a TERMINAL refusal (the refresh token itself rejected); a transient
+	// failure (network, 5xx, cooldown) leaves the frame failed but lets a later message retry.
 	const sessionRefreshRefused = React.useRef(false);
 	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
@@ -502,7 +507,7 @@ export function PaymentWebview({
 			return;
 		}
 		if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
-		if (sessionReloads >= 2) {
+		if (sessionReloadsRef.current >= 2) {
 			orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
 			return;
 		}
@@ -511,9 +516,10 @@ export function PaymentWebview({
 		try {
 			const token = await refreshAccessToken();
 			if (token) {
-				setSessionReloads((count) => count + 1);
+				sessionReloadsRef.current += 1;
+				setSessionReloads(sessionReloadsRef.current);
 			} else {
-				sessionRefreshRefused.current = true;
+				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
 				setFrameStatus('failed');
 				orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
 			}
@@ -658,7 +664,7 @@ export function PaymentWebview({
 			// strictly after that listener exists. It is the strongest readiness
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
-			if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
+			if (sessionRefreshInFlight.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
 
@@ -758,12 +764,7 @@ export function PaymentWebview({
 		// No link, no frame, no navigation to watch: the banner already says so.
 		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
-			if (
-				frameSettledRef.current ||
-				sessionRefreshInFlight.current ||
-				sessionRefreshRefused.current
-			)
-				return;
+			if (frameSettledRef.current || sessionRefreshInFlight.current) return;
 			if (autoReloads === 0 && retryToken === 0) {
 				orderLogger.warn('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },

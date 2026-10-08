@@ -2041,5 +2041,28 @@ describe('PaymentWebview session expiry', () => {
 			'pos_checkout.reopen_payment',
 			{ showToast: true }
 		);
+		// The refusal must not silence the frame: a later load still reports ready.
+		await act(async () => {
+			webViewProps.onLoad?.();
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+	});
+
+	it('does not latch a transient refresh failure: a later message may retry', async () => {
+		mockRefreshFetch.mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Unavailable' });
+		const { setFrameStatus } = renderFrame();
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(webViewMounts).toBe(1);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// The refresher backs off after a transient failure; a real retry comes after that cooldown.
+		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
+		mockRefreshFetch.mockResolvedValueOnce(response('fresh-token'));
+		await act(async () => {
+			sendExpiry();
+		});
+		expect(webViewMounts).toBe(2);
+		expect(new URL(webViewProps.src).searchParams.get('token')).toBe('fresh-token');
 	});
 });
