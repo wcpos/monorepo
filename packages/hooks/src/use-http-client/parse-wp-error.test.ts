@@ -4,6 +4,7 @@ import {
 	isWpErrorResponse,
 	mapToInternalCode,
 	parseWpError,
+	readWpFatalDetail,
 	WpErrorResponse,
 } from './parse-wp-error';
 
@@ -270,6 +271,145 @@ describe('parse-wp-error', () => {
 		it('should return fallback for objects without known error fields', () => {
 			expect(extractErrorMessage({ foo: 'bar' }, fallback)).toBe(fallback);
 			expect(extractErrorMessage({ data: { nested: 'value' } }, fallback)).toBe(fallback);
+		});
+	});
+
+	// WordPress wraps a PHP fatal in `internal_server_error` whose `message` is the
+	// localized "critical error" boilerplate; the error itself — the sentence that
+	// names the cause — is `data.error` ({ type, message, file, line }), present
+	// only when the site exposes error details (#2439, plugin #2157).
+	describe('WordPress fatal detail', () => {
+		const fatalBody = {
+			code: 'internal_server_error',
+			message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+			data: {
+				status: 500,
+				error: {
+					type: 1,
+					message:
+						'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+					file: '/srv/www/wp-includes/class-wpdb.php',
+					line: 2324,
+				},
+			},
+		};
+		const fatalSentence =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
+
+		it('prefers the PHP error over the critical-error boilerplate, keeping code and status', () => {
+			const parsed = parseWpError(fatalBody, 'fallback');
+
+			expect(parsed.message).toBe(fatalSentence);
+			expect(parsed.serverCode).toBe('internal_server_error');
+			expect(parsed.status).toBe(500);
+			expect(parsed.code).toBe('SYNC131');
+		});
+
+		it('keeps the boilerplate, stripped of its HTML, when the site hides error details', () => {
+			const parsed = parseWpError(
+				{
+					...fatalBody,
+					message:
+						'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
+					data: { status: 500 },
+				},
+				'fallback'
+			);
+
+			expect(parsed.message).toBe(
+				'There has been a critical error on this website. Learn more about troubleshooting WordPress.'
+			);
+		});
+
+		it('keeps a lone `<` as text and stays linear on a run of them', () => {
+			const run = '<'.repeat(5_000);
+			expect(
+				parseWpError({ code: 'x', message: `Stock <b>fell</b> below 3 ${run}` }, 'fallback').message
+			).toBe(`Stock fell below 3 ${run}`);
+		});
+
+		it('leaves entities for the renderer and falls back when the message is only markup', () => {
+			expect(
+				parseWpError({ code: 'x', message: 'D&eacute;sol&eacute;.' }, 'fallback').message
+			).toBe('D&eacute;sol&eacute;.');
+			expect(parseWpError({ code: 'x', message: '<p></p>' }, 'fallback').message).toBe('fallback');
+		});
+
+		it('surfaces the sentence through extractErrorMessage', () => {
+			expect(extractErrorMessage(fatalBody, 'fallback')).toBe(fatalSentence);
+		});
+
+		it('reads an object `error` on a non-WP body, which the string case never matched', () => {
+			expect(
+				extractErrorMessage({ error: { type: 1, message: 'Out of memory' } }, 'fallback')
+			).toBe('Out of memory');
+		});
+
+		it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', () => {
+			const parsed = parseWpError(
+				{
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): billing',
+					data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+				},
+				'fallback'
+			);
+
+			expect(parsed.message).toBe('Invalid parameter(s): billing');
+		});
+
+		it('keeps the location within the ledger’s 200-character cap: first line only, budgeted, host path dropped', () => {
+			const detail = readWpFatalDetail({
+				error: {
+					message: `Uncaught Exception: ${'x'.repeat(300)}\nStack trace:\n#0 boom()`,
+					file: '/home/u1/domains/shop.example/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+					line: 412,
+				},
+			});
+
+			expect(detail).toMatch(
+				/^Uncaught Exception: x+… in wp-content\/plugins\/acme\/includes\/class-acme-sync\.php:412$/
+			);
+			expect(detail!.length).toBeLessThanOrEqual(200);
+			expect(detail).not.toContain('Stack trace');
+			expect(
+				readWpFatalDetail({ error: { message: 'Boom', file: '/opt/app/boot.php', line: 3 } })
+			).toBe('Boom in boot.php:3');
+		});
+
+		it('drops a long plugin path to its file name so the line number still fits under the cap', () => {
+			const detail = readWpFatalDetail({
+				error: {
+					message: `Uncaught Exception: ${'x'.repeat(300)}`,
+					file: `/home/u1/public_html/wp-content/plugins/${'very-long-vendor-segment/'.repeat(8)}class-acme-sync.php`,
+					line: 412,
+				},
+			});
+
+			expect(detail).toMatch(/^Uncaught Exception: x+… in class-acme-sync\.php:412$/);
+			expect(detail!.length).toBeLessThanOrEqual(200);
+		});
+
+		it('reads a Windows host path and bounds an absurd file name, keeping the line number', () => {
+			const read = (file: string) =>
+				readWpFatalDetail({ error: { message: 'Boom', file, line: 7 } })!;
+
+			expect(read('C:\\inetpub\\wwwroot\\wp-includes\\class-wpdb.php')).toBe(
+				'Boom in wp-includes/class-wpdb.php:7'
+			);
+			expect(read('C:\\inetpub\\wwwroot\\boot.php')).toBe('Boom in boot.php:7');
+			const silly = read(`/srv/${'f'.repeat(400)}.php`);
+			expect(silly).toMatch(/^Boom in …f+\.php:7$/);
+			expect(silly.length).toBeLessThanOrEqual(200);
+		});
+
+		it('reads the detail without a file as the bare message, and ignores an empty one', () => {
+			expect(readWpFatalDetail({ error: { message: 'Out of memory' } })).toBe('Out of memory');
+			expect(
+				readWpFatalDetail({ error: { message: '   ', file: 'x.php', line: 1 } })
+			).toBeUndefined();
+			expect(readWpFatalDetail({ error: 'a string, as some plugins send' })).toBeUndefined();
+			expect(readWpFatalDetail(null)).toBeUndefined();
 		});
 	});
 

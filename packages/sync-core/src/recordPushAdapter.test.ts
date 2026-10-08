@@ -547,6 +547,228 @@ describe('pushRecordMutation', () => {
 	});
 });
 
+// A WordPress fatal answers 500 with the localized "critical error" boilerplate
+// as `message` and the PHP error itself in `data.error` — only when the site
+// exposes error details. The error names the cause; the boilerplate does not.
+// This is the body a Dutch till received on 2026-10-08 (#2439, plugin #2157).
+const WP_FATAL_BODY = {
+	code: 'internal_server_error',
+	message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+	data: {
+		status: 500,
+		error: {
+			type: 1,
+			message: 'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+			file: '/srv/www/wp-includes/class-wpdb.php',
+			line: 2324,
+		},
+	},
+};
+
+describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
+	it("carries a WordPress fatal's PHP error, not the critical-error boilerplate, on the error AND the event", async () => {
+		const events: SyncEvent[] = [];
+		const expected =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, WP_FATAL_BODY),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({
+			status: 500,
+			reason: 'internal_server_error',
+			permanent: false,
+			serverMessage: expected,
+		});
+		// The ledger row is written from the EVENT (a 500 is retried, never
+		// dead-lettered), so the sentence has to ride the event to be seen at all.
+		expect(events[0]).toMatchObject({
+			type: 'push.error',
+			level: 'error',
+			fields: { status: 500, reason: 'internal_server_error', serverMessage: expected },
+		});
+	});
+
+	it('keeps the top-level message as the sentence when the site hides error details, without its HTML', async () => {
+		const events: SyncEvent[] = [];
+		const plain =
+			'There has been a critical error on this website. Learn more about troubleshooting WordPress.';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'internal_server_error',
+						message:
+							'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
+						data: { status: 500 },
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ serverMessage: plain });
+		expect(events[0]).toMatchObject({ fields: { serverMessage: plain } });
+	});
+
+	it('keeps a lone `<` as text and stays linear on a run of them', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'x',
+						message: `Stock <b>fell</b> below 3 ${'<'.repeat(5_000)}`,
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
+	});
+
+	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): billing',
+						data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Invalid parameter(s): billing' });
+	});
+
+	it('keeps the location under the observer’s 200-character cap: first line only, budgeted, host path dropped', async () => {
+		const longFirstLine = `Uncaught Exception: ${'x'.repeat(300)}`;
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						...WP_FATAL_BODY,
+						data: {
+							status: 500,
+							error: {
+								type: 1,
+								message: `${longFirstLine}\nStack trace:\n#0 /home/u1/public_html/wp-content/plugins/acme/acme.php(12): boom()`,
+								file: '/home/u1/domains/shop.example/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+								line: 412,
+							},
+						},
+					}),
+			})
+		).rejects.toMatchObject({
+			serverMessage: expect.stringMatching(
+				/^Uncaught Exception: x+… in wp-content\/plugins\/acme\/includes\/class-acme-sync\.php:412$/
+			),
+		});
+		// The whole sentence fits the cap, so the location survives `sanitizeReason`.
+		const error = await pushRecordMutation({
+			mutation: mut(),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(500, {
+					...WP_FATAL_BODY,
+					data: {
+						status: 500,
+						error: {
+							message: `${longFirstLine}\nStack trace`,
+							file: '/home/u1/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
+							line: 412,
+						},
+					},
+				}),
+		}).catch((e: RecordPushError) => e);
+		expect((error as RecordPushError).serverMessage!.length).toBeLessThanOrEqual(200);
+		expect((error as RecordPushError).serverMessage).not.toContain('Stack trace');
+	});
+
+	it('drops a long plugin path to its file name so the line number still fits under the cap', async () => {
+		const deepPath = `/home/u1/public_html/wp-content/plugins/${'very-long-vendor-segment/'.repeat(8)}class-acme-sync.php`;
+		const error = await pushRecordMutation({
+			mutation: mut(),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(500, {
+					...WP_FATAL_BODY,
+					data: {
+						status: 500,
+						error: { message: `Uncaught Exception: ${'x'.repeat(300)}`, file: deepPath, line: 412 },
+					},
+				}),
+		}).catch((e: RecordPushError) => e);
+		const sentence = (error as RecordPushError).serverMessage!;
+		expect(sentence).toMatch(/^Uncaught Exception: x+… in class-acme-sync\.php:412$/);
+		expect(sentence.length).toBeLessThanOrEqual(200);
+	});
+
+	it('reads a Windows host path and bounds an absurd file name, keeping the line number', async () => {
+		const readSentence = async (file: string) =>
+			(
+				(await pushRecordMutation({
+					mutation: mut(),
+					resolveEndpoint,
+					fetcher: async () =>
+						jsonResponse(500, {
+							...WP_FATAL_BODY,
+							data: { status: 500, error: { message: 'Boom', file, line: 7 } },
+						}),
+				}).catch((e: RecordPushError) => e)) as RecordPushError
+			).serverMessage!;
+
+		expect(await readSentence('C:\\inetpub\\wwwroot\\wp-includes\\class-wpdb.php')).toBe(
+			'Boom in wp-includes/class-wpdb.php:7'
+		);
+		expect(await readSentence('C:\\inetpub\\wwwroot\\boot.php')).toBe('Boom in boot.php:7');
+		const silly = await readSentence(`/srv/${'f'.repeat(400)}.php`);
+		expect(silly).toMatch(/^Boom in …f+\.php:7$/);
+		expect(silly.length).toBeLessThanOrEqual(200);
+	});
+
+	it('treats a message that is only markup as no sentence', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, { code: 'x', message: '<p></p>' }),
+			})
+		).rejects.toMatchObject({ serverMessage: undefined });
+	});
+
+	it('omits serverMessage entirely when the body has no sentence (an HTML host page, an empty body)', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(502, {}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ status: 502 });
+		expect(events[0]?.fields).not.toHaveProperty('serverMessage');
+		expect((events[0]?.fields as Record<string, unknown>).reason).toBeUndefined();
+	});
+
+	it('reads the fatal detail without a file as the bare PHP message', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						...WP_FATAL_BODY,
+						data: { status: 500, error: { type: 1, message: 'Out of memory' } },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Out of memory' });
+	});
+});
+
 describe('pushEndpointResolver', () => {
 	it('routes each mutation to {syncBase}/push/{collection} via POST', () => {
 		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/');

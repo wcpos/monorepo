@@ -106,6 +106,7 @@ export function Totals() {
 										icon="badgePercent"
 										label={label}
 										onClear={() => removeCoupon(code)}
+										clearTestID={`remove-coupon-${code}`}
 										clearLabel={
 											intent
 												? t('pos_cart.remove_discount_label', { label })
