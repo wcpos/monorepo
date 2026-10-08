@@ -234,8 +234,8 @@ the app's own screens; a mini-app or display page draws its own, inside its fram
 **Host component**:
 One of the closed, versioned set of app components an extension may compose — field,
 checkbox, button, banner, list and so on — rendered by the app with its theme, spacing and
-touch targets. The only UI an extension can produce, whether it arrives as declared UI or
-from sandboxed extension code (Shopify's POS UI Extensions shape).
+touch targets. The only UI an extension can add to the app's own screens, whether it
+arrives as declared UI or from sandboxed extension code (Shopify's POS UI Extensions shape).
 _Avoid_: accepting markup, styles or a render function from an extension (the WooCommerce
 Blocks checkout mistake)
 
