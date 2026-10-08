@@ -639,6 +639,14 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 					}),
 			})
 		).rejects.toMatchObject({ serverMessage: 'Expected x < 5 and y > 2 in wpdb' });
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, { code: 'x', message: 'Expected x<y and z>2 in <b>wpdb</b>' }),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Expected x<y and z>2 in wpdb' });
 	});
 
 	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {

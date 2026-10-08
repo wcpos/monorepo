@@ -335,6 +335,10 @@ describe('parse-wp-error', () => {
 					'fallback'
 				).message
 			).toBe('Expected x < 5 and y > 2 in wpdb');
+			expect(
+				parseWpError({ code: 'x', message: 'Expected x<y and z>2 in <b>wpdb</b>' }, 'fallback')
+					.message
+			).toBe('Expected x<y and z>2 in wpdb');
 		});
 
 		it('leaves entities for the renderer and falls back when the message is only markup', () => {

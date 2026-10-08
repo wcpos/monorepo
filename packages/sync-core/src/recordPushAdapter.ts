@@ -511,6 +511,9 @@ function fatalLocation(file: string, line: unknown): string {
  * alone: the renderer decodes them.
  */
 const TAG_START = /[A-Za-z/!]/;
+// Tag names WordPress and WooCommerce put in error copy, plus HTML comments.
+const KNOWN_TAG =
+	/^(?:\/?(?:p|a|br|b|strong|i|em|u|code|pre|span|div|ul|ol|li|h[1-6])(?:[\s/][\s\S]*)?|!--[\s\S]*--|!\[CDATA\[[\s\S]*\]\])$/i;
 
 function stripTags(html: string): string {
 	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
@@ -536,6 +539,13 @@ function stripTags(html: string): string {
 		if (close === -1) {
 			text += html.slice(cursor);
 			break;
+		}
+		// The run between `<` and `>` must be one of the tags WordPress's error copy
+		// uses (or a comment); `x<y and z>2` is a sentence, not markup, and is kept.
+		if (!KNOWN_TAG.test(html.slice(open + 1, close))) {
+			text += html.slice(cursor, open + 1);
+			cursor = open + 1;
+			continue;
 		}
 		text += `${html.slice(cursor, open)} `;
 		cursor = close + 1;
