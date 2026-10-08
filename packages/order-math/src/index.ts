@@ -78,6 +78,11 @@ export {
 	LEDGER_SCHEMA,
 	KNOWN_CAPTURE_MODES,
 	KNOWN_KINDS,
+	KNOWN_PREFILLS,
+	FIELDS_SCHEMA,
+	AWAITING_CUSTOMER_META_KEY,
+	readAwaitingCustomer,
+	withAwaitingCustomer,
 } from './payments';
 export type {
 	MetaDataEntry,
@@ -106,4 +111,12 @@ export type {
 	PaymentRefusalBody,
 	PosOrderStatus,
 	DerivedOrderView,
+	AwaitingCustomerStamp,
+	DeclaredComponent,
+	DeclaredFields,
+	DeclaredValues,
+	FieldInput,
+	FieldPrefill,
+	FieldsVerbKind,
+	GatewaySubmitResponse,
 } from './payments';

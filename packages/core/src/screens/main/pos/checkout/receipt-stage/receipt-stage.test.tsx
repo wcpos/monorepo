@@ -459,3 +459,43 @@ it('paints the paid surface neutrally and the success disc semantically', () => 
 	expect(screen.getByTestId('checkout-paid').className).toContain('bg-card');
 	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-success/15');
 });
+it('a sent sale shows the neutral sent moment: where it went, what is due, no tick, no haptic', async () => {
+	Platform.isNative = true;
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_awaiting_customer',
+			value: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-1',
+				sent_at_gmt: '2026-10-08T10:00:00.000Z',
+				cashier_id: 7,
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	await act(async () => {});
+	expect(screen.getByTestId('checkout-sent')).not.toBeNull();
+	expect(screen.queryByTestId('checkout-paid')).toBeNull();
+	expect(screen.getByTestId('checkout-sent-headline').textContent).toBe('Invoice sent');
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'to buyer@example.com · $92.95 due'
+	);
+	expect(screen.getByTestId('receipt-paid-disc').className).toContain('bg-muted');
+	expect(screen.getByTestId('receipt-paid-disc').className).not.toContain('bg-success');
+	expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('checkout-sent-new'));
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+});
+it('a stamp beside settled money is stale: the paid moment wins', () => {
+	mockOrder.payload.meta_data = [
+		...(mockOrder.payload.meta_data as never[]),
+		{
+			key: '_wcpos_awaiting_customer',
+			value: { method_id: 'wcpos_email_invoice', destination: 'x@y.z', attempt_id: 'a' },
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('checkout-paid')).not.toBeNull();
+	expect(screen.queryByTestId('checkout-sent')).toBeNull();
+});

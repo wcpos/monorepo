@@ -14,7 +14,7 @@ import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { derive, readLedger } from '@wcpos/order-math';
+import { derive, readAwaitingCustomer, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
@@ -38,7 +38,12 @@ function StageAction(props: React.ComponentProps<typeof Button>) {
 	return <Button variant="outline" {...props} />;
 }
 
-function PaidMoment({ children }: { children: React.ReactNode }) {
+/**
+ * The moment after a sale. Paid is green with a tick and a success haptic; sent (contract 1.2,
+ * spec §4.2) is the same surface in a neutral state: the money has not arrived, the customer
+ * holds the link, so nothing celebrates.
+ */
+function PaidMoment({ children, sent = false }: { children: React.ReactNode; sent?: boolean }) {
 	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(null);
 	const pop = useSharedValue(0);
 	const animation = React.useRef({ pop });
@@ -55,7 +60,7 @@ function PaidMoment({ children }: { children: React.ReactNode }) {
 			},
 			() => setReduceMotion(true)
 		);
-		if (Platform.isNative) {
+		if (Platform.isNative && !sent) {
 			void (async () => {
 				try {
 					// Pulled in lazily, as play-scan-sound does: a static import of expo-haptics
@@ -71,19 +76,23 @@ function PaidMoment({ children }: { children: React.ReactNode }) {
 		return () => {
 			cancelAnimation(pop);
 		};
-	}, []);
+	}, [sent]);
 	const style = useAnimatedStyle(() => ({
 		opacity: reduceMotion === null ? 0 : reduceMotion ? 1 : pop.value,
 		transform: [{ scale: reduceMotion ? 1 : 0.6 + pop.value * 0.4 }],
 	}));
 	return (
-		<View testID="checkout-paid" className="bg-card w-full">
+		<View testID={sent ? 'checkout-sent' : 'checkout-paid'} className="bg-card w-full">
 			<Animated.View testID="receipt-paid-banner" className="items-center gap-3 p-4" style={style}>
 				<View
 					testID="receipt-paid-disc"
-					className="bg-success/15 size-24 items-center justify-center rounded-full"
+					className={`size-24 items-center justify-center rounded-full ${sent ? 'bg-muted' : 'bg-success/15'}`}
 				>
-					<Icon name="check" className="text-success" />
+					<Icon
+						name={sent ? 'clock' : 'check'}
+						size={sent ? '4xl' : undefined}
+						className={sent ? 'text-muted-foreground' : 'text-success'}
+					/>
 				</View>
 				{children}
 			</Animated.View>
@@ -152,25 +161,35 @@ function ReceiptStageDocument({
 		: paidWith;
 	const finishSale = useFinishSale(order.uuid, compact);
 	useCheckoutBack(finishSale, { escape: false });
+	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
+	const stamp = readAwaitingCustomer(payload.meta_data);
+	const sent = stamp && settledRows.length === 0 && Number(derived.balance) > 0 ? stamp : null;
 	return (
 		<View testID="checkout-receipt-stage" className="bg-card flex-1">
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
 				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
 			) : null}
-			<PaidMoment>
-				<View testID="checkout-paid-headline">
+			<PaidMoment sent={sent !== null}>
+				<View testID={sent ? 'checkout-sent-headline' : 'checkout-paid-headline'}>
 					<Text
 						testID={change > 0 ? 'receipt-change-due' : undefined}
 						className="text-amt text-center font-bold tabular-nums"
 					>
-						{change > 0
-							? t('pos_checkout.change_due', { amount: format(change) })
-							: t('pos_checkout.paid_amount', { amount: format(paid) })}
+						{sent
+							? t('pos_checkout.invoice_sent')
+							: change > 0
+								? t('pos_checkout.change_due', { amount: format(change) })
+								: t('pos_checkout.paid_amount', { amount: format(paid) })}
 					</Text>
 				</View>
 				<Text testID="receipt-paid-with" className="text-muted-foreground text-center">
-					{paidLine}
-					{settledRows.length > 1
+					{sent
+						? t('pos_checkout.sent_to_amount_due', {
+								destination: sent.destination ?? '',
+								amount: format(Number(derived.balance)),
+							})
+						: paidLine}
+					{!sent && settledRows.length > 1
 						? ` · ${t('pos_checkout.payments_taken', { count: settledRows.length })}`
 						: ''}
 				</Text>
@@ -188,14 +207,14 @@ function ReceiptStageDocument({
 					variant="default"
 					size="lg"
 					className={compact ? 'w-full' : 'shrink-0'}
-					testID="receipt-new-sale"
+					testID={sent ? 'checkout-sent-new' : 'receipt-new-sale'}
 					onPress={finishSale}
 					// With auto-print on, finishing before the receipt data lands would unmount
 					// the stage before the configured print ever fires.
 					disabled={doc.autoPrintPending}
 					loading={doc.autoPrintPending}
 				>
-					<ButtonText testID="checkout-paid-print">
+					<ButtonText testID={sent ? 'checkout-sent-print' : 'checkout-paid-print'}>
 						{uiSettings.autoPrintReceipt
 							? t('pos_checkout.print_receipt_new_sale')
 							: t('pos_checkout.new_sale')}

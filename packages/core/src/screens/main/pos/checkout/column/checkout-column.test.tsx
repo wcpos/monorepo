@@ -135,6 +135,10 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The tender pane's declared-fields helpers draw host controls; their native deps stay out of jsdom.
+jest.mock('@wcpos/components/checkbox', () => ({ Checkbox: () => null }));
+jest.mock('@wcpos/components/input', () => ({ Input: () => null }));
+jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>

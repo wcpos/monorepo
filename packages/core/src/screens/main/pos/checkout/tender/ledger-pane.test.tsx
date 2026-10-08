@@ -65,6 +65,7 @@ const row: PaymentRow = {
 	events: [{ t: '2026-09-28T14:04:00', level: 'info', message: 'Taken' }],
 };
 const view: LedgerView = {
+	invoiceSent: null,
 	rows: [
 		row,
 		{ ...row, id: 'card', method_id: 'card', kind: 'card' },
@@ -97,4 +98,26 @@ it('shows paid in full at zero balance and keeps the empty state', () => {
 	expect(screen.getByText('Paid in full · 2:04 PM')).toBeTruthy();
 	rerender(<LedgerLegs view={{ ...view, rows: [] }} format={format} />);
 	expect(screen.getByText('No payments yet')).toBeTruthy();
+});
+it('a sent order with no money taken says where the invoice went instead of the empty state', () => {
+	render(
+		<LedgerLegs
+			view={{
+				...view,
+				rows: [],
+				invoiceSent: {
+					method_id: 'wcpos_email_invoice',
+					destination: 'buyer@example.com',
+					attempt_id: 'a',
+					sent_at_gmt: '',
+					cashier_id: 1,
+				},
+			}}
+			format={format}
+		/>
+	);
+	expect(screen.getByTestId('checkout-ledger-sent').textContent).toBe(
+		'Invoice sent to buyer@example.com · awaiting the customer'
+	);
+	expect(screen.queryByText('No payments yet')).toBeNull();
 });

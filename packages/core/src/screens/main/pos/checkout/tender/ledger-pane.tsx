@@ -165,7 +165,13 @@ export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['
 	const lastTime = settled.at(-1)?.events?.[0]?.t;
 
 	if (view.rows.length === 0) {
-		return (
+		return view.invoiceSent ? (
+			<Text testID="checkout-ledger-sent" className="text-muted-foreground text-sm" decodeHtml>
+				{t('pos_checkout.invoice_sent_awaiting', {
+					destination: view.invoiceSent.destination ?? '',
+				})}
+			</Text>
+		) : (
 			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payments_yet')}</Text>
 		);
 	}

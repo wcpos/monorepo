@@ -113,6 +113,40 @@ jest.mock('./terminal-leg-view', () => ({
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The declared-fields helpers draw host controls; their native deps stay out of jsdom.
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({ testID, checked, onCheckedChange, disabled }: any) => (
+		<input
+			type="checkbox"
+			data-testid={testID}
+			checked={!!checked}
+			disabled={disabled}
+			onChange={(event) => onCheckedChange?.(event.target.checked)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/input', () => ({
+	Input: ({ testID, value, onChangeText, editable }: any) => (
+		<input
+			data-testid={testID}
+			value={value ?? ''}
+			disabled={editable === false}
+			onChange={(event) => onChangeText?.(event.target.value)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/select', () => ({
+	OptionSelect: ({ options, value, onChange, placeholder }: any) => (
+		<select value={value ?? ''} onChange={(event) => onChange?.(event.target.value)}>
+			<option value="">{placeholder}</option>
+			{options.map((option: any) => (
+				<option key={option.value} value={option.value}>
+					{option.label}
+				</option>
+			))}
+		</select>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>

@@ -32,7 +32,13 @@ export type {
 } from './ledger';
 export { toMinor, fromMinor } from './money';
 export type { PaymentMoney } from './money';
-export { KNOWN_CAPTURE_MODES, KNOWN_KINDS } from './types';
+export { FIELDS_SCHEMA, KNOWN_CAPTURE_MODES, KNOWN_KINDS, KNOWN_PREFILLS } from './types';
+export {
+	AWAITING_CUSTOMER_META_KEY,
+	readAwaitingCustomer,
+	withAwaitingCustomer,
+} from './awaiting-customer';
+export type { AwaitingCustomerStamp } from './awaiting-customer';
 export type {
 	PaymentKind,
 	CaptureMode,
@@ -51,6 +57,13 @@ export type {
 	PaymentRouteResponse,
 	PaymentErrorCode,
 	PaymentRefusalBody,
+	DeclaredComponent,
+	DeclaredFields,
+	DeclaredValues,
+	FieldInput,
+	FieldPrefill,
+	FieldsVerbKind,
+	GatewaySubmitResponse,
 	PosOrderStatus,
 	DerivedOrderView,
 } from './types';

@@ -141,6 +141,13 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"type": "checkout.sent",
+		"domain": "CHECKOUT",
+		"label": "Sent the sale to the customer",
+		"description": "The gateway sent the customer away to pay (an invoice, a link); the order waits for them.",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "checkout.split-planned",
 		"domain": "CHECKOUT",
 		"label": "Split the bill",

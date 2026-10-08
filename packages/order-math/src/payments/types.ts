@@ -11,14 +11,66 @@ export const KNOWN_KINDS: readonly PaymentKind[] = [
 	'other',
 ];
 
-export type CaptureMode = 'manual' | 'webview' | 'server' | 'device' | 'stored_value';
+export type CaptureMode = 'manual' | 'webview' | 'server' | 'device' | 'stored_value' | 'gateway';
 export const KNOWN_CAPTURE_MODES: readonly CaptureMode[] = [
 	'manual',
 	'webview',
 	'server',
 	'device',
 	'stored_value',
+	'gateway',
 ];
+
+/**
+ * Contract 1.2: the host components a gateway declares for the tender pane. Flat, one level,
+ * no layout; `id` is the gateway's own `$_POST` key and the value posted is the component's.
+ */
+export const FIELDS_SCHEMA = 1;
+export type FieldInput = 'text' | 'email' | 'tel' | 'number';
+export type FieldPrefill =
+	'order.billing.email' | 'order.billing.phone' | 'customer.email' | 'customer.phone';
+export const KNOWN_PREFILLS: readonly FieldPrefill[] = [
+	'order.billing.email',
+	'order.billing.phone',
+	'customer.email',
+	'customer.phone',
+];
+export type DeclaredComponent =
+	| {
+			component: 'field';
+			id: string;
+			input: OpenEnum<FieldInput>;
+			label: string;
+			required: boolean;
+			default: string;
+			prefill: OpenEnum<FieldPrefill> | null;
+	  }
+	| {
+			component: 'checkbox';
+			id: string;
+			label: string;
+			default: boolean;
+			prefill: OpenEnum<FieldPrefill> | null;
+	  }
+	| {
+			component: 'select';
+			id: string;
+			label: string;
+			required: boolean;
+			default: string;
+			options: { value: string; label: string }[];
+	  }
+	| { component: 'note'; text: string }
+	/** A name this build has never seen: display-only by rule, skipped and logged. */
+	| { component: string & {}; id?: string; [extra: string]: unknown };
+export type FieldsVerbKind = 'take' | 'send';
+export interface DeclaredFields {
+	schema: number;
+	verb: { kind: OpenEnum<FieldsVerbKind>; label: string };
+	components: DeclaredComponent[];
+}
+/** The values the app posts: strings for field and select, booleans for checkbox. */
+export type DeclaredValues = Record<string, string | boolean>;
 
 /** Open vocabularies survive parsing so unknown methods can be shown disabled-with-reason. */
 export type OpenEnum<Known extends string> = Known | (string & {});
@@ -79,6 +131,8 @@ export interface PaymentMethodDescriptor {
 		open_drawer: boolean;
 	};
 	provider_data: Record<string, unknown>;
+	/** Contract 1.2; absent (not empty) on a method that declares nothing. */
+	fields?: DeclaredFields | null;
 }
 
 export interface PaymentMethodsEnvelope {
@@ -151,6 +205,16 @@ export interface PaymentRouteResponse {
 	payment: PaymentRow;
 	order: OrderPaymentSummary;
 }
+/**
+ * `POST orders/{id}/payment-methods/{method}/submit` (contract 1.2): `recorded` carries the
+ * captured row the gateway's own `process_payment()` produced; `sent` carries no row and the
+ * order stays the gateway's status with the awaiting-customer stamp.
+ */
+export interface GatewaySubmitResponse {
+	outcome: 'recorded' | 'sent';
+	payment: PaymentRow | null;
+	order: OrderPaymentSummary;
+}
 
 export type PaymentErrorCode =
 	| 'wcpos_payment_method_not_found'
@@ -164,7 +228,8 @@ export type PaymentErrorCode =
 	| 'wcpos_amount_exceeds_balance'
 	| 'wcpos_order_already_paid'
 	| 'wcpos_refund_not_allocatable'
-	| 'wcpos_provider_error';
+	| 'wcpos_provider_error'
+	| 'wcpos_fields_invalid';
 
 /** A refused row is stored server-side as failed and may be returned with the WP_Error body. */
 export interface PaymentRefusalBody {
@@ -176,6 +241,8 @@ export interface PaymentRefusalBody {
 		order?: OrderPaymentSummary;
 		detail?: unknown;
 		retry_after?: number;
+		/** `wcpos_fields_invalid`: one message per component id, `_form` for the gateway's own line. */
+		errors?: Record<string, string>;
 	};
 }
 

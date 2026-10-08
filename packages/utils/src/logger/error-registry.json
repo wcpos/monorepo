@@ -611,6 +611,26 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT212",
+		"symbol": "PAYMENT_GATEWAY_REFUSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Correct the details and send again, or take a different payment method.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The gateway did not accept this payment.",
+		"docsBody": "The payment gateway refused the details the POS sent it, or ended without taking the payment. Nothing was charged, nothing was sent to the customer, and the order still owes its balance. The gateway's own message is on the log row.",
+		"troubleshooting": [
+			"Read the gateway's message on the toast or the log row.",
+			"Correct the details (the email address, the option chosen) and send again.",
+			"If the gateway keeps refusing, check its settings on the WooCommerce payments page."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#419",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"code": "PAYMENT221",
 		"symbol": "PAYMENT_VOID_REFUSED",
 		"domain": "PAYMENT",

@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { Toast } from '@wcpos/components/toast';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
+	type AwaitingCustomerStamp,
+	type DeclaredValues,
 	derive,
 	fromMinor,
 	mintDevicePayment,
@@ -13,6 +15,7 @@ import {
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	type PaymentTransport,
+	readAwaitingCustomer,
 	readLedger,
 	SPLIT_META_KEY,
 	splitPlanMeta,
@@ -60,6 +63,8 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
+import { useGatewayPayment } from '../payments/use-gateway-payment';
+import { declaredValues, firstMissingRequired, prefillValues } from './declared-fields';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
@@ -152,6 +157,15 @@ export interface TenderFlow {
 	pickMethod: (methodId: string) => void;
 	takeTender: () => Promise<void>;
 	cancelPayment: () => Promise<void>;
+
+	/** Contract 1.2: the values typed into the method's declared components, prefilled per §1.2. */
+	fieldValues: DeclaredValues;
+	setFieldValues: (next: DeclaredValues, changedId: string) => void;
+	/** `wcpos_fields_invalid` lines keyed by component id, `_form` for the gateway's own. */
+	fieldErrors: Record<string, string>;
+	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
+	invoiceSent: AwaitingCustomerStamp | null;
+	cancelInvoice: () => Promise<void>;
 }
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
@@ -188,6 +202,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
 	const queuedOffline = saveState?.kind === 'queued-offline';
 	const recordManualPayment = useRecordManualPayment({ offline: queuedOffline });
+	const gateway = useGatewayPayment();
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
@@ -212,6 +227,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			online: online && !queuedOffline,
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
+			hasLiveLeg: rows.some(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
@@ -258,7 +274,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		currentOrderUuid: order.uuid,
 		transports:
 			state.methodId && state.transport ? { [state.methodId]: state.transport } : undefined,
+		hasLiveLeg: liveRows.length > 0,
 	});
+	const stamp = React.useMemo(() => readAwaitingCustomer(payload.meta_data), [payload.meta_data]);
+	// Any counting row clears the stamp server-side (§3.2); the till does not show a stale one.
+	const invoiceSent = stamp && liveRows.length === 0 && balanceMinor > 0 ? stamp : null;
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
@@ -276,6 +296,37 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
 	useDriverStatus(driver);
+	// Typed values live per method so switching pills and back keeps what was entered; the
+	// first look at a method is its prefill. Errors are the last refusal's and clear on edit.
+	const [valuesByMethod, setValuesByMethod] = React.useState<Record<string, DeclaredValues>>({});
+	const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+	const fields = method?.capture.mode === 'gateway' ? (method.fields ?? null) : null;
+	const fieldValues = React.useMemo(
+		() =>
+			fields && method
+				? (valuesByMethod[method.id] ??
+					prefillValues(fields, {
+						billingEmail: payload.billing?.email,
+						billingPhone: payload.billing?.phone,
+					}))
+				: {},
+		[fields, method, valuesByMethod, payload.billing?.email, payload.billing?.phone]
+	);
+	const methodId = method?.id ?? null;
+	// The view hands back the whole value set it was showing, so the callback needs no
+	// snapshot of the prefill; an edit clears that component's line and the gateway's own.
+	// Memoized by the compiler: a manual useCallback here cannot name the setter's identity.
+	const setFieldValues = (next: DeclaredValues, changedId: string) => {
+		if (busyRef.current || methodId === null) return;
+		setValuesByMethod((previous) => ({ ...previous, [methodId]: next }));
+		setFieldErrors((previous) => {
+			if (!(changedId in previous) && !('_form' in previous)) return previous;
+			const rest = { ...previous };
+			delete rest[changedId];
+			delete rest._form;
+			return rest;
+		});
+	};
 	// The reader connected on the Card readers settings page decides the transport; the cashier
 	// no longer picks one in the pay sheet, so a transport remembered from an earlier reader
 	// must not outrank the one that is connected now (WisePad swapped for Tap to Pay).
@@ -528,7 +579,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						? 'zero-balance'
 						: method?.capture.mode === 'manual'
 							? 'manual'
-							: 'terminal',
+							: method?.capture.mode === 'gateway'
+								? 'gateway'
+								: 'terminal',
 				completing: entryAppliedMinor === balanceMinor,
 				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 				sessionRule: 'require',
@@ -703,6 +756,72 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
+			if (method.capture.mode === 'gateway') {
+				if (!payload.id) {
+					logger.info(t('pos_checkout.order_not_on_store_yet'), {
+						showToast: true,
+						context: orderContext,
+					});
+					return;
+				}
+				const missing = fields ? firstMissingRequired(fields, fieldValues) : null;
+				if (missing) {
+					logger.info(t('pos_checkout.enter_field', { label: missing.label }), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+					return;
+				}
+				await saveProvenance();
+				// One attempt id per press: a lost answer is replayed under it, never sent twice.
+				const outcome = await gateway.submit(order, method.id, {
+					attemptId: uuidv4(),
+					values: fields ? declaredValues(fields, fieldValues) : {},
+				});
+				if (outcome.kind === 'fields_invalid') {
+					setFieldErrors(outcome.errors);
+					return;
+				}
+				if (outcome.kind === 'refused') {
+					// The gateway's own sentence is the cashier copy; a contract refusal gets its code's summary.
+					logger.error(outcome.message, {
+						code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
+						showToast: true,
+						...(outcome.provider ? { toast: { title: outcome.message } } : {}),
+						context: { ...orderContext, method: method.id, refusal: outcome.code },
+					});
+					return;
+				}
+				if (outcome.kind === 'recorded') {
+					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
+					await completeOrderFlow({
+						source: 'manual',
+						via: 'online',
+						row: outcome.row,
+						order: outcome.order,
+						mirrorFailed: false,
+						preparedCompleting: entryAppliedMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor: entryAppliedMinor,
+					}).finally(() => tenderRecorded(outcome.row, 'online'));
+					return;
+				}
+				await completeOrderFlow({ source: 'gateway', order: outcome.order, stamp: outcome.stamp });
+				if (outcome.order.status === 'pos-open') {
+					// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
+					logger.info(t('pos_checkout.order_open_send_again'), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+				} else if (!uiSettings.autoShowReceipt) {
+					logger.info(
+						t('pos_checkout.invoice_sent_to', { destination: outcome.stamp.destination ?? '' }),
+						{ showToast: true, context: { ...orderContext, method: method.id } }
+					);
+				}
+				return;
+			}
+
 			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(entryAppliedMinor, dp),
@@ -825,6 +944,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		gateway,
+		fields,
+		fieldValues,
+		uiSettings.autoShowReceipt,
 		tenderRecorded,
 		remember,
 		saveState,
@@ -946,6 +1069,47 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		});
 		setTenderMethod(order.uuid, leg.row.method_id);
 	}, [service, order.uuid, dp, dispatch]);
+
+	/** §4.3: the stamp's attempt is named; a late retry of it is refused by the store. */
+	const cancelInvoice = React.useCallback(async () => {
+		if (busyRef.current || !invoiceSent) return;
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			const outcome = await gateway.cancel(order, invoiceSent);
+			if (outcome.kind === 'refused') {
+				logger.error(outcome.message, {
+					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
+					showToast: true,
+					context: { ...orderContext, method: invoiceSent.method_id, refusal: outcome.code },
+				});
+				return;
+			}
+			logger.info(t('pos_checkout.invoice_cancelled'), {
+				actor,
+				showToast: true,
+				context: {
+					...orderContext,
+					type: 'checkout.cancelled',
+					method: invoiceSent.method_id,
+					attemptId: invoiceSent.attempt_id,
+					voided: 0,
+				},
+			});
+		} catch (error) {
+			logger.error(t('pos_checkout.payment_not_recorded'), {
+				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				showToast: true,
+				context: {
+					...orderContext,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [gateway, invoiceSent, order, orderContext, actor, t]);
 
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
@@ -1092,6 +1256,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			pickMethod,
 			takeTender,
 			cancelPayment,
+			fieldValues,
+			setFieldValues,
+			fieldErrors,
+			invoiceSent,
+			cancelInvoice,
 		}),
 		[
 			plan,
@@ -1138,6 +1307,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			pickMethod,
 			takeTender,
 			cancelPayment,
+			fieldValues,
+			setFieldValues,
+			fieldErrors,
+			invoiceSent,
+			cancelInvoice,
 		]
 	);
 }

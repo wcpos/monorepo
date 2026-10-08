@@ -191,6 +191,7 @@ let mockPayload: {
 	number?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
+	billing?: { email?: string; phone?: string };
 	line_items?: {
 		id?: number;
 		name: string;
@@ -2407,3 +2408,288 @@ jest.mock('../completion-journal', () => ({
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
 }));
+
+describe('gateway capture mode (contract 1.2)', () => {
+	const invoice = {
+		...card,
+		id: 'wcpos_email_invoice',
+		title: 'Email Invoice',
+		kind: 'other',
+		order: 5,
+		capture: { ...card.capture, mode: 'gateway', webview_available: true },
+		capabilities: { ...card.capabilities, amount: { partial: false }, offline: 'none' },
+		fields: {
+			schema: 1,
+			verb: { kind: 'send', label: 'Send invoice' },
+			components: [
+				{
+					component: 'field',
+					id: 'woocommerce_pos_invoice_email_address',
+					input: 'email',
+					label: 'Email address',
+					required: true,
+					default: '',
+					prefill: 'order.billing.email',
+				},
+				{
+					component: 'checkbox',
+					id: 'woocommerce_pos_save_billing_email',
+					label: 'Save email to billing address',
+					default: false,
+					prefill: null,
+				},
+			],
+		},
+	} satisfies PaymentMethodDescriptor;
+	const summary = (status: string) => ({
+		status,
+		total: '92.95',
+		paid: '0.00',
+		balance: '92.95',
+		payment_method: 'wcpos_email_invoice',
+		payment_method_title: 'Email Invoice',
+	});
+	const stamp = {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-0',
+		sent_at_gmt: '2026-10-08T10:00:00.000Z',
+		cashier_id: 7,
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockLeg = null;
+		mockRealService = null;
+		mockMethods = [cash, invoice];
+		mockPayload = {
+			id: 42,
+			total: '92.95',
+			meta_data: [],
+			billing: { email: 'buyer@example.com', phone: '' },
+		};
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockLocalPatch.mockResolvedValue({ document: order });
+		mockManualMirror.mockResolvedValue(undefined);
+		mockCompleteOrderFlow.mockResolvedValue(undefined);
+	});
+
+	it('prefills the declared components from the order and posts them under a fresh attempt id', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		expect(result.current.fieldValues).toEqual({
+			woocommerce_pos_invoice_email_address: 'buyer@example.com',
+			woocommerce_pos_save_billing_email: false,
+		});
+		act(() =>
+			result.current.setFieldValues(
+				{ ...result.current.fieldValues, woocommerce_pos_save_billing_email: true },
+				'woocommerce_pos_save_billing_email'
+			)
+		);
+		await act(async () => result.current.takeTender());
+		expect(mockManualPost).toHaveBeenCalledWith(
+			'orders/42/payment-methods/wcpos_email_invoice/submit',
+			{
+				attempt_id: expect.stringMatching(/^payment-\d+$/),
+				values: {
+					woocommerce_pos_invoice_email_address: 'buyer@example.com',
+					woocommerce_pos_save_billing_email: true,
+				},
+			}
+		);
+		// The completing provenance went first; the stamp and the server status are mirrored.
+		expect(provenance.persistSaleProvenance).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ online: true })
+		);
+		expect(mockManualMirror).toHaveBeenCalledWith(
+			expect.objectContaining({
+				changes: expect.objectContaining({
+					status: 'pending',
+					meta_data: expect.arrayContaining([
+						expect.objectContaining({
+							key: '_wcpos_awaiting_customer',
+							value: expect.objectContaining({ destination: 'buyer@example.com' }),
+						}),
+					]),
+				}),
+			})
+		);
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
+			source: 'gateway',
+			order: summary('pending'),
+			stamp: expect.objectContaining({ method_id: 'wcpos_email_invoice' }),
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('refuses to send with the required field empty, naming it, without a request', async () => {
+		mockPayload.billing = { email: '', phone: '' };
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.enter_field',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('wcpos_fields_invalid lands under its component and clears when it is edited', async () => {
+		mockManualPost.mockRejectedValue(
+			Object.assign(new Error('invalid'), {
+				response: {
+					status: 400,
+					data: {
+						code: 'wcpos_fields_invalid',
+						message: 'Check the details.',
+						data: { errors: { woocommerce_pos_invoice_email_address: 'Enter a valid email.' } },
+					},
+				},
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(result.current.fieldErrors).toEqual({
+			woocommerce_pos_invoice_email_address: 'Enter a valid email.',
+		});
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockError).not.toHaveBeenCalled();
+		act(() =>
+			result.current.setFieldValues(
+				{ ...result.current.fieldValues, woocommerce_pos_invoice_email_address: 'x@y.z' },
+				'woocommerce_pos_invoice_email_address'
+			)
+		);
+		expect(result.current.fieldErrors).toEqual({});
+	});
+
+	it("the gateway's own refusal is the toast; nothing is completed", async () => {
+		mockManualPost.mockRejectedValue(
+			Object.assign(new Error('refused'), {
+				response: {
+					status: 502,
+					data: { code: 'wcpos_provider_error', message: 'Mail server unreachable.' },
+				},
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockError).toHaveBeenCalledWith(
+			'Mail server unreachable.',
+			expect.objectContaining({
+				code: 'PAYMENT212',
+				showToast: true,
+				toast: { title: 'Mail server unreachable.' },
+			})
+		);
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('a recorded answer is a manual leg: the returned row completes the sale', async () => {
+		const row = payment({
+			id: 'payment-9',
+			method_id: 'wcpos_email_invoice',
+			capture_mode: 'gateway',
+			amount: '92.95',
+			tendered: null,
+		});
+		mockManualPost.mockResolvedValue({
+			data: {
+				outcome: 'recorded',
+				payment: row,
+				order: { ...summary('completed'), balance: '0.00' },
+			},
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				via: 'online',
+				row,
+				mirrorFailed: false,
+				preparedCompleting: true,
+				preLegBalanceMinor: 9295,
+				amountMinor: 9295,
+			})
+		);
+	});
+
+	it('a sent answer whose order is still open writes no stamp and says so', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pos-open') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockManualMirror).toHaveBeenCalledWith(
+			expect.objectContaining({
+				changes: {
+					status: 'pos-open',
+					meta_data: expect.not.arrayContaining([
+						expect.objectContaining({ key: '_wcpos_awaiting_customer' }),
+					]),
+				},
+			})
+		);
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_open_send_again',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('is unavailable beside money already held, with the reason', async () => {
+		mockPayload.meta_data = withLedger([], [payment({ amount: '10.00' })]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(
+			result.current.tiles.find((tile) => tile.method.id === 'wcpos_email_invoice')
+		).toMatchObject({
+			disabled: true,
+			reason: 'not_with_split',
+		});
+		await act(async () => {});
+	});
+
+	it('a sent order carries the stamp; Cancel invoice names its attempt and the order comes back open', async () => {
+		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.invoiceSent).toEqual(stamp);
+		await act(async () => result.current.cancelInvoice());
+		expect(mockManualPost).toHaveBeenCalledWith(
+			'orders/42/payment-methods/wcpos_email_invoice/cancel',
+			{ attempt_id: 'attempt-0' }
+		);
+		expect(mockManualMirror).toHaveBeenCalledWith(
+			expect.objectContaining({ changes: { status: 'pos-open', meta_data: [] } })
+		);
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.invoice_cancelled',
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({ type: 'checkout.cancelled' }),
+			})
+		);
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('a stamp beside a counting row is stale and not shown', async () => {
+		mockPayload.meta_data = [
+			{ key: '_wcpos_awaiting_customer', value: stamp },
+			...withLedger([], [payment({ amount: '10.00' })]),
+		];
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.invoiceSent).toBeNull();
+		await act(async () => {});
+	});
+});

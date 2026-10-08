@@ -84,6 +84,24 @@ const manual = {
 	preLegBalanceMinor: 100,
 	amountMinor: 100,
 } as const;
+const sent = {
+	source: 'gateway',
+	order: {
+		status: 'pending',
+		total: '92.95',
+		paid: '0.00',
+		balance: '92.95',
+		payment_method: 'wcpos_email_invoice',
+		payment_method_title: 'Email Invoice',
+	},
+	stamp: {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-10-08T10:00:00.000Z',
+		cashier_id: 7,
+	},
+} as const;
 addRxPlugin(RxDBLocalDocumentsPlugin);
 afterEach(async () => {
 	await ctx.storeDB.remove();
@@ -137,6 +155,11 @@ it.each([
 		true,
 	],
 	['zero balance', { source: 'zero-balance' }, true],
+	[
+		'gateway sent is never paid',
+		{ source: 'gateway', order: sent.order, stamp: sent.stamp },
+		false,
+	],
 ] as [string, SaleOutcome, boolean][])('%s', (_, outcome, expected) =>
 	expect(isSaleComplete(outcome, 2)).toBe(expected)
 );
@@ -273,6 +296,40 @@ it('does not finish partial or unpaid sales', async () => {
 		)
 	).toBe('not-completed');
 	expect(mockGap).not.toHaveBeenCalled();
+	expect(mockReceipt).not.toHaveBeenCalled();
+	expect(mockInfo).not.toHaveBeenCalled();
+});
+it('a sent sale leaves the till: sent moment, store refresh, checkout.sent row, attempt resolved', async () => {
+	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'gateway' });
+	mockRefresh.mockResolvedValue('refreshed');
+	expect(await completeSale(ctx, order, sent, { host: 'stage', autoShowReceipt: true })).toBe(
+		'sent'
+	);
+	expect(mockReceipt).toHaveBeenCalledWith('order');
+	expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, 42);
+	expect(mockReconcile).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith(
+		expect.stringContaining('sent to the customer'),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				type: 'checkout.sent',
+				orderId: 42,
+				destination: 'buyer@example.com',
+				attemptId: 'attempt-1',
+			}),
+		})
+	);
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+it('a sent answer whose order is open shows no moment and writes no row', async () => {
+	expect(
+		await completeSale(
+			ctx,
+			order,
+			{ ...sent, order: { ...sent.order, status: 'pos-open' } },
+			{ host: 'stage', autoShowReceipt: true }
+		)
+	).toBe('not-completed');
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(mockInfo).not.toHaveBeenCalled();
 });

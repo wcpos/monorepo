@@ -1,5 +1,6 @@
 import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
+	type AwaitingCustomerStamp,
 	isCompletingStatus,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
@@ -145,6 +146,12 @@ export type SaleOutcome =
 			amountMinor: number;
 	  }
 	| { source: 'terminal'; row: PaymentRow; order: OrderPaymentSummary | null; balance?: string }
+	/**
+	 * Contract 1.2 `sent`: the gateway sent the customer away to pay (an invoice, a link) and
+	 * the sale leaves the till without money. A `recorded` answer never arrives here: it is a
+	 * `manual` outcome with the returned row, exactly as a manual record (spec §4.2).
+	 */
+	| { source: 'gateway'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
 	| { source: 'gateway-contract'; status: string }
 	| { source: 'gateway-snapshot'; snapshot: OrderPayload }
 	| { source: 'zero-balance' }
@@ -164,6 +171,8 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
+		case 'gateway': // Sent is never paid: the customer still holds the link.
+			return false;
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
 		case 'gateway-snapshot': // Intentionally a blocklist: on-hold and custom paid statuses are accepted.
@@ -175,13 +184,47 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 export type Presentation =
 	{ host: 'stage'; autoShowReceipt: boolean } | { host: 'modal' } | { host: 'background' };
 
+/**
+ * The sale leaves the till unpaid: the pane shows the sent moment in place of Paid, the
+ * audit row is `checkout.sent`, the order is pulled from the store so the stamp it wrote
+ * replaces the till's placeholder. The response's summary is the truth for the moment
+ * shown: a `sent` whose order is still pos-open (a replay of an earlier send after a later
+ * one was cancelled at another till) shows no moment and writes no row (spec §4.2).
+ */
+async function finishSent(
+	ctx: SaleContext,
+	order: EngineRecord<'orders'>,
+	outcome: Extract<SaleOutcome, { source: 'gateway' }>,
+	presentation: Presentation
+): Promise<'sent' | 'not-completed'> {
+	if (outcome.order.status === 'pos-open') return 'not-completed';
+	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
+	const latest = order.getLatest().payload;
+	if (latest.id) await refreshOrderRecord(ctx.runtime, latest.id).catch(() => undefined);
+	getLogger(['wcpos', 'pos', 'checkout']).info(`Sale ${order.uuid} sent to the customer`, {
+		actor: ctx.actor,
+		context: {
+			type: 'checkout.sent',
+			orderId: latest.id ?? null,
+			orderUUID: order.uuid,
+			orderNumber: latest.number,
+			total: latest.total,
+			method: outcome.stamp.method_id,
+			destination: outcome.stamp.destination,
+			attemptId: outcome.stamp.attempt_id,
+		},
+	});
+	return 'sent';
+}
+
 /** Completion is a sale outcome, not a synchronization or exactly-once guarantee. */
 async function finishSale(
 	ctx: SaleContext,
 	order: EngineRecord<'orders'>,
 	outcome: SaleOutcome,
 	presentation: Presentation
-): Promise<'completed' | 'partial' | 'not-completed'> {
+): Promise<'completed' | 'sent' | 'partial' | 'not-completed'> {
+	if (outcome.source === 'gateway') return finishSent(ctx, order, outcome, presentation);
 	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
 		const latest = order.getLatest().payload;
 		if (
