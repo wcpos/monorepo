@@ -25,6 +25,7 @@ import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { useAccessTokenRefresher } from '../../../../../hooks/use-access-token-refresher';
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
@@ -162,6 +163,7 @@ export function PaymentWebview({
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
+	const refreshAccessToken = useAccessTokenRefresher();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
@@ -180,7 +182,10 @@ export function PaymentWebview({
 	const [autoReloads, setAutoReloads] = React.useState(0);
 	const [navigationStarts, setNavigationStarts] = React.useState(0);
 	const frameSettledRef = React.useRef(false);
-	const frameKey = `${retryToken}:${autoReloads}`;
+	const [sessionReloads, setSessionReloads] = React.useState(0);
+	const sessionRefreshInFlight = React.useRef(false);
+	const sessionRefreshRefused = React.useRef(false);
+	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -491,6 +496,33 @@ export function PaymentWebview({
 			t,
 		]
 	);
+	const handleSessionExpired = async (data: Record<string, unknown>) => {
+		if (Number(data.orderId) !== orderId) {
+			orderLogger.debug('Ignoring session expiry for another order');
+			return;
+		}
+		if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
+		if (sessionReloads >= 2) {
+			orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+			return;
+		}
+		sessionRefreshInFlight.current = true;
+		setFrameStatus('loading');
+		try {
+			const token = await refreshAccessToken();
+			if (token) {
+				setSessionReloads((count) => count + 1);
+			} else {
+				sessionRefreshRefused.current = true;
+				setFrameStatus('failed');
+				orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+			}
+		} finally {
+			sessionRefreshInFlight.current = false;
+			setLoading(false);
+		}
+	};
+
 	/**
 	 *
 	 */
@@ -626,6 +658,7 @@ export function PaymentWebview({
 			// strictly after that listener exists. It is the strongest readiness
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
+			if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
 
@@ -725,7 +758,12 @@ export function PaymentWebview({
 		// No link, no frame, no navigation to watch: the banner already says so.
 		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
-			if (frameSettledRef.current) return;
+			if (
+				frameSettledRef.current ||
+				sessionRefreshInFlight.current ||
+				sessionRefreshRefused.current
+			)
+				return;
 			if (autoReloads === 0 && retryToken === 0) {
 				orderLogger.warn('Payment form did not load in time; reloading it once', {
 					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
@@ -771,6 +809,10 @@ export function PaymentWebview({
 					onError={onWebViewError}
 					onMessage={(event) => {
 						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
+						if (data?.action === 'wcpos-session-expired') {
+							void handleSessionExpired(data);
+							return;
+						}
 						const payload = data?.payload as Record<string, unknown> | undefined;
 						if (data?.action !== 'wcpos-payment-received' && payload?.data) {
 							if (onStockRejection(payload)) {
