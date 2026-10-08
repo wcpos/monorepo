@@ -592,8 +592,10 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		});
 	});
 
-	it('keeps the top-level message as the sentence when the site hides error details', async () => {
+	it('keeps the top-level message as the sentence when the site hides error details, without its HTML', async () => {
 		const events: SyncEvent[] = [];
+		const plain =
+			'There has been a critical error on this website. Learn more about troubleshooting WordPress.';
 		await expect(
 			pushRecordMutation({
 				mutation: mut(),
@@ -601,17 +603,24 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 				fetcher: async () =>
 					jsonResponse(500, {
 						code: 'internal_server_error',
-						message: '<p>There has been a critical error on this website.</p>',
+						message:
+							'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
 						data: { status: 500 },
 					}),
 				observe: (event) => events.push(event),
 			})
-		).rejects.toMatchObject({
-			serverMessage: '<p>There has been a critical error on this website.</p>',
-		});
-		expect(events[0]).toMatchObject({
-			fields: { serverMessage: '<p>There has been a critical error on this website.</p>' },
-		});
+		).rejects.toMatchObject({ serverMessage: plain });
+		expect(events[0]).toMatchObject({ fields: { serverMessage: plain } });
+	});
+
+	it('treats a message that is only markup as no sentence', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, { code: 'x', message: '<p></p>' }),
+			})
+		).rejects.toMatchObject({ serverMessage: undefined });
 	});
 
 	it('omits serverMessage entirely when the body has no sentence (an HTML host page, an empty body)', async () => {

@@ -305,10 +305,27 @@ describe('parse-wp-error', () => {
 			expect(parsed.code).toBe('SYNC131');
 		});
 
-		it('keeps the boilerplate when the site hides error details', () => {
-			const parsed = parseWpError({ ...fatalBody, data: { status: 500 } }, 'fallback');
+		it('keeps the boilerplate, stripped of its HTML, when the site hides error details', () => {
+			const parsed = parseWpError(
+				{
+					...fatalBody,
+					message:
+						'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
+					data: { status: 500 },
+				},
+				'fallback'
+			);
 
-			expect(parsed.message).toBe(fatalBody.message);
+			expect(parsed.message).toBe(
+				'There has been a critical error on this website. Learn more about troubleshooting WordPress.'
+			);
+		});
+
+		it('leaves entities for the renderer and falls back when the message is only markup', () => {
+			expect(
+				parseWpError({ code: 'x', message: 'D&eacute;sol&eacute;.' }, 'fallback').message
+			).toBe('D&eacute;sol&eacute;.');
+			expect(parseWpError({ code: 'x', message: '<p></p>' }, 'fallback').message).toBe('fallback');
 		});
 
 		it('surfaces the sentence through extractErrorMessage', () => {

@@ -164,12 +164,26 @@ export const readWpFatalDetail = (data: unknown): string | undefined => {
 	if (data === null || typeof data !== 'object') return undefined;
 	const error = (data as Record<string, unknown>).error;
 	if (error === null || typeof error !== 'object') return undefined;
-	const { message, file, line } = error as Record<string, unknown>;
-	if (typeof message !== 'string' || message.trim() === '') return undefined;
+	const { message: raw, file, line } = error as Record<string, unknown>;
+	if (typeof raw !== 'string') return undefined;
+	const message = stripTags(raw);
+	if (message === '') return undefined;
 	if (typeof file !== 'string' || file === '') return message;
 	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
 	return `${message} in ${file}${hasLine ? `:${line}` : ''}`;
 };
+
+/**
+ * WordPress ships its error copy as HTML — the critical-error boilerplate is
+ * `<p>…</p><p><a href="…">Learn more…</a></p>` — and the sentence lands in toasts
+ * and ledger rows, where tags would render literally. Entities are left alone:
+ * the renderer decodes them.
+ */
+const stripTags = (html: string): string =>
+	html
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 
 /**
  * Check if the response data looks like a WordPress/WooCommerce error
@@ -223,7 +237,10 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 	let message = fallbackMessage;
 
 	if (data.message && typeof data.message === 'string') {
-		message = data.message;
+		// WP REST error copy may be HTML (the critical-error boilerplate is); this
+		// string is shown in toasts, so tags go, entities stay for the renderer.
+		const plain = stripTags(data.message);
+		if (plain !== '') message = plain;
 	}
 
 	// A WordPress fatal names its cause in `data.error`, not in `message` — see

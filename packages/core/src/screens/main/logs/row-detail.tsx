@@ -228,13 +228,26 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// same summary (`useEventTitle`, #2439), so the lead line would repeat the
 	// title word for word — the same dedupe `narration` applies to quiet rows.
 	const lead = explanation !== null && explanation !== title ? explanation : null;
+	// The persisted message, when it says something the row does not already say.
+	// On a quiet row it is the narration under the event description. On a
+	// problem row it is shown only when there is NO registered engine event: an
+	// engine row's message is a formulaic restatement of its context, but a
+	// `logger.error(<dynamic>, { code })` row's message is often the only place
+	// the specifics live (the security plugin's own sentence, `String(error)`),
+	// and until #2439 it WAS the title — titling from the code summary must not
+	// make it disappear.
+	const isEngineRow = eventType !== undefined && isSyncEventType(eventType);
 	const narration =
-		!isProblem && row.message && row.message !== title && row.message !== eventType
+		row.message &&
+		row.message !== title &&
+		row.message !== eventType &&
+		row.message !== lead &&
+		(!isProblem || !isEngineRow)
 			? row.message
 			: null;
 	const hasContext = Object.keys(context).length > 0;
 	const hasProse = isProblem
-		? Boolean(lead || guidance || (entry && row.code))
+		? Boolean(lead || guidance || narration || (entry && row.code))
 		: Boolean(description || narration);
 	const hasFacts = Boolean(eventType || entries.length > 0);
 
@@ -261,6 +274,9 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 								</Text>
 							) : null}
 							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
+							{narration ? (
+								<Text className="text-muted-foreground text-xs">{narration}</Text>
+							) : null}
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>
 					) : (

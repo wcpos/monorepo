@@ -430,18 +430,35 @@ export function readServerMessage(body: Record<string, unknown> | null): string 
 	if (body === null) return undefined;
 	const fatal = readWpFatalDetail(body.data);
 	if (fatal !== undefined) return fatal;
-	return typeof body.message === 'string' && body.message.length > 0 ? body.message : undefined;
+	if (typeof body.message !== 'string') return undefined;
+	const message = stripTags(body.message);
+	return message.length > 0 ? message : undefined;
 }
 
 function readWpFatalDetail(data: unknown): string | undefined {
 	if (data === null || typeof data !== 'object') return undefined;
 	const error = (data as Record<string, unknown>).error;
 	if (error === null || typeof error !== 'object') return undefined;
-	const { message, file, line } = error as Record<string, unknown>;
-	if (typeof message !== 'string' || message.trim() === '') return undefined;
+	const { message: raw, file, line } = error as Record<string, unknown>;
+	if (typeof raw !== 'string') return undefined;
+	const message = stripTags(raw);
+	if (message === '') return undefined;
 	if (typeof file !== 'string' || file === '') return message;
 	const hasLine = typeof line === 'number' || (typeof line === 'string' && line !== '');
 	return `${message} in ${file}${hasLine ? `:${line}` : ''}`;
+}
+
+/**
+ * WordPress ships its error copy as HTML — the critical-error boilerplate is
+ * `<p>…</p><p><a href="…">Learn more…</a></p>` — and the sentence is quoted on a
+ * ledger row and in toasts, where tags would render literally. Entities are left
+ * alone: the renderer decodes them.
+ */
+function stripTags(html: string): string {
+	return html
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 }
 
 /**

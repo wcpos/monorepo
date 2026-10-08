@@ -247,6 +247,49 @@ describe('RowDetail', () => {
 		// Guidance and the help link still lead the detail.
 		expect(screen.getByText(mockT('health.logs.error_action.CHECKOUT101'))).not.toBeNull();
 		expect(screen.getByTestId('logs-help-CHECKOUT101')).not.toBeNull();
+		// The developer message used to BE the title; now it is a muted subline, so
+		// a dynamic message (`String(error)`, a plugin's own sentence) still shows.
+		expect(screen.getByText('Checkout failed')).not.toBeNull();
+	});
+
+	it("keeps a code-only problem row's dynamic message visible under the guidance", () => {
+		render(
+			<RowDetail
+				row={{
+					logId: 'log-10',
+					timestamp: 1_000,
+					level: 'error',
+					code: 'SYNC131',
+					message: 'Allowed memory size of 134217728 bytes exhausted in class-wpdb.php:2324',
+				}}
+				kind="error"
+				title={mockT('health.logs.error_summary.SYNC131')}
+			/>
+		);
+
+		expect(
+			screen.getByText('Allowed memory size of 134217728 bytes exhausted in class-wpdb.php:2324')
+		).not.toBeNull();
+	});
+
+	it("does not add an engine row's formulaic message under its translated title", () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					code: 'SYNC131',
+					message: 'orders 1 — push failed (HTTP 500: internal_server_error)',
+					context: { type: 'push.error', direction: 'push', reason: 'internal_server_error' },
+				}}
+				kind="error"
+				title="Could not send a change to your store"
+			/>
+		);
+
+		expect(
+			screen.queryByText('orders 1 — push failed (HTTP 500: internal_server_error)')
+		).toBeNull();
 	});
 
 	it('leads a quiet row with its translated event description', () => {
