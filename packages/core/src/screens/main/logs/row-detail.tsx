@@ -193,33 +193,61 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		});
 	}
 
-	// "The server said" framing only when the reason genuinely came back from
-	// the server (push rejection / mapped server code) — client-side reasons
-	// must not be put in the server's mouth.
+	// "The server said" framing only when the sentence genuinely came back from
+	// the server: `serverMessage` is the error body's own prose by construction
+	// (the observer copies it from the engine event, which reads it off the wire),
+	// and a `reason` counts when the row carries a server code or is a push
+	// rejection — client-side reasons must not be put in the server's mouth.
+	const serverMessage =
+		typeof context.serverMessage === 'string' && context.serverMessage.trim() !== ''
+			? context.serverMessage
+			: null;
 	const isServerReason =
 		reason !== null && (detail.serverCode !== undefined || context.direction === 'push');
+	// The server's sentence beats its machine code. A WordPress fatal answers
+	// `internal_server_error` with the PHP error itself ("Allowed memory size of
+	// 134217728 bytes exhausted") in `serverMessage`; quoting the code sent a
+	// merchant to the server logs for an answer the row already held (#2439). The
+	// code is still on the row, in the Details tree.
+	const serverSaid = serverMessage ?? (isServerReason ? reason : null);
 	// `entry.summary` is the registry's ENGLISH copy — the generated
 	// `translateErrorSummary` resolves the same string through the catalogue, so
 	// the reason renders in the language the till runs TODAY. Reading the raw
 	// field here put one English sentence between a translated title and
 	// translated guidance on every non-English till, and on a row with no
 	// registered event type (the 147 code-carrying `logger.error` call sites in
-	// packages/core, whose title falls back to the developer message) it was the
-	// only merchant-readable sentence on the row.
+	// packages/core) it was the only merchant-readable sentence on the row.
 	const explanation = isProblem
-		? isServerReason
-			? t('health.logs.server_said', { reason })
+		? serverSaid !== null
+			? t('health.logs.server_said', { reason: serverSaid })
 			: entry
 				? translateErrorSummary((key) => t(key), entry.code)
 				: reason
 		: null;
+	// A code-carrying row with no registered event type is now TITLED from that
+	// same summary (`useEventTitle`, #2439), so the lead line would repeat the
+	// title word for word — the same dedupe `narration` applies to quiet rows.
+	const lead = explanation !== null && explanation !== title ? explanation : null;
+	// The persisted message, when it says something the row does not already say.
+	// On a quiet row it is the narration under the event description. On a
+	// problem row it is shown only when there is NO registered engine event: an
+	// engine row's message is a formulaic restatement of its context, but a
+	// `logger.error(<dynamic>, { code })` row's message is often the only place
+	// the specifics live (the security plugin's own sentence, `String(error)`),
+	// and until #2439 it WAS the title — titling from the code summary must not
+	// make it disappear.
+	const isEngineRow = eventType !== undefined && isSyncEventType(eventType);
 	const narration =
-		!isProblem && row.message && row.message !== title && row.message !== eventType
+		row.message &&
+		row.message !== title &&
+		row.message !== eventType &&
+		row.message !== lead &&
+		(!isProblem || !isEngineRow)
 			? row.message
 			: null;
 	const hasContext = Object.keys(context).length > 0;
 	const hasProse = isProblem
-		? Boolean(explanation || guidance || (entry && row.code))
+		? Boolean(lead || guidance || narration || (entry && row.code))
 		: Boolean(description || narration);
 	const hasFacts = Boolean(eventType || entries.length > 0);
 
@@ -240,12 +268,15 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 							{/* On the server-said branch this IS the server's own sentence, and WP
 							    REST ships its error copy HTML-encoded — decode so the row reads
 							    as prose rather than markup. */}
-							{explanation ? (
+							{lead ? (
 								<Text className="font-medium" decodeHtml>
-									{explanation}
+									{lead}
 								</Text>
 							) : null}
 							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
+							{narration ? (
+								<Text className="text-muted-foreground text-xs">{narration}</Text>
+							) : null}
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>
 					) : (

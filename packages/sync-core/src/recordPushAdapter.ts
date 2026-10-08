@@ -266,7 +266,7 @@ export async function pushRecordMutation(input: {
 				409,
 				'identity-ambiguous',
 				true,
-				typeof body?.message === 'string' ? body.message : undefined
+				readServerMessage(body, 409)
 			);
 		}
 		emit({
@@ -305,13 +305,14 @@ export async function pushRecordMutation(input: {
 			428,
 			typeof body?.code === 'string' ? body.code : 'precondition-required',
 			false,
-			typeof body?.message === 'string' ? body.message : undefined
+			readServerMessage(body, 428)
 		);
 	}
 
 	if (!response.ok) {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
+		const serverMessage = readServerMessage(body, response.status);
 		emit({
 			type: 'push.error',
 			// The plugin's 401 means no user is logged in; the write drain reports
@@ -322,6 +323,10 @@ export async function pushRecordMutation(input: {
 				...baseFields,
 				status: response.status,
 				...(reason !== undefined ? { reason } : {}),
+				// The server's own sentence rides the event so the ledger row can quote
+				// it: a 500 is retried, never dead-lettered, so this event is the ONLY
+				// place the row's "why" can come from (#2439).
+				...(serverMessage !== undefined ? { serverMessage } : {}),
 			},
 		});
 		throw new RecordPushError(
@@ -329,7 +334,7 @@ export async function pushRecordMutation(input: {
 			response.status,
 			reason,
 			reason === WOO_REST_CANNOT_DELETE,
-			typeof body?.message === 'string' ? body.message : undefined
+			serverMessage
 		);
 	}
 
@@ -409,6 +414,123 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The server's own sentence for a refused push, read from a WP REST error body.
+ *
+ * A WordPress fatal (memory exhausted, a plugin's uncaught exception) answers
+ * 500 as `{ code: 'internal_server_error', message: '<p>There has been a
+ * critical error on this website.</p>…' }` — the top-level `message` is the
+ * localized boilerplate and names nothing. When the site exposes error details,
+ * the PHP error itself rides in `data.error` in the `error_get_last()` shape
+ * `{ type, message, file, line }`, and THAT sentence ("Allowed memory size of
+ * 134217728 bytes exhausted") is the answer support needs, so it wins over the
+ * boilerplate with `file:line` appended the way PHP reports a fatal. Sites that
+ * hide error details send no `data.error`, so the top-level message stays the
+ * fallback (#2439). `readWpFatalDetail` in `@wcpos/hooks` parse-wp-error reads
+ * the same shape for the axios lanes; sync-core stays dependency-free, so the
+ * two are kept in step by hand.
+ */
+export function readServerMessage(
+	body: Record<string, unknown> | null,
+	status: number
+): string | undefined {
+	if (body === null) return undefined;
+	// Only a 5xx is a fatal. A 4xx may carry a caller-defined `data.error` object
+	// of its own (a gateway diagnostic under a validation message), and there the
+	// top-level message is the one written for the cashier.
+	const fatal = status >= 500 ? readWpFatalDetail(body.data) : undefined;
+	if (fatal !== undefined) return fatal;
+	if (typeof body.message !== 'string') return undefined;
+	const message = stripTags(body.message);
+	return message.length > 0 ? message : undefined;
+}
+
+/**
+ * The ledger observer (`sanitizeReason`) caps a quoted sentence at 200
+ * characters, cutting from the END — exactly where the location is appended.
+ * The whole sentence is therefore built to fit under it: the location is sized
+ * first (shortened to its file name when even the WordPress-relative path is
+ * long), and the PHP message takes whatever is left. A fatal's first line is a
+ * sentence, but an uncaught exception's `message` runs on into a stack trace,
+ * so only the first line is quoted.
+ */
+const QUOTE_CAP = 200;
+/** The location may not squeeze the message below this; past it the path drops to its file name. */
+const MIN_MESSAGE_CHARS = 80;
+
+function readWpFatalDetail(data: unknown): string | undefined {
+	if (data === null || typeof data !== 'object') return undefined;
+	const error = (data as Record<string, unknown>).error;
+	if (error === null || typeof error !== 'object') return undefined;
+	const { message: raw, file, line } = error as Record<string, unknown>;
+	if (typeof raw !== 'string') return undefined;
+	const firstLine = stripTags(raw.split('\n')[0] ?? '');
+	if (firstLine === '') return undefined;
+	const location = typeof file === 'string' && file !== '' ? fatalLocation(file, line) : '';
+	const budget = Math.max(QUOTE_CAP - location.length, MIN_MESSAGE_CHARS);
+	const message = firstLine.length > budget ? `${firstLine.slice(0, budget - 1)}…` : firstLine;
+	return `${message}${location}`;
+}
+
+/**
+ * ` in wp-includes/class-wpdb.php:2324`. Everything before the WordPress root
+ * (`/home/u123/domains/shop.example/public_html/`) is the host's directory
+ * layout, which says nothing about the fault and eats the quote budget, so the
+ * path starts at `wp-content/`, `wp-includes/` or `wp-admin/`; a path outside
+ * those roots, or one still too long to leave the message its minimum, keeps
+ * only its file name — the line number always survives.
+ */
+function fatalLocation(file: string, line: unknown): string {
+	const suffix =
+		typeof line === 'number' || (typeof line === 'string' && line !== '') ? `:${line}` : '';
+	// A Windows host reports `C:\inetpub\wwwroot\wp-includes\class-wpdb.php`.
+	const path = file.split('\\').join('/');
+	const slash = path.lastIndexOf('/');
+	const fileName = slash === -1 ? path : path.slice(slash + 1);
+	const maxLocation = QUOTE_CAP - MIN_MESSAGE_CHARS;
+	for (const root of ['/wp-content/', '/wp-includes/', '/wp-admin/']) {
+		const at = path.indexOf(root);
+		if (at === -1) continue;
+		const location = ` in ${path.slice(at + 1)}${suffix}`;
+		if (location.length <= maxLocation) return location;
+		break;
+	}
+	const location = ` in ${fileName}${suffix}`;
+	if (location.length <= maxLocation) return location;
+	// Even the file name is absurd: keep its tail (extension) and the line number.
+	const room = maxLocation - ` in …${suffix}`.length;
+	return ` in …${fileName.slice(fileName.length - room)}${suffix}`;
+}
+
+/**
+ * WordPress ships its error copy as HTML — the critical-error boilerplate is
+ * `<p>…</p><p><a href="…">Learn more…</a></p>` — and the sentence is quoted on a
+ * ledger row and in toasts, where tags would render literally. Entities are left
+ * alone: the renderer decodes them.
+ */
+function stripTags(html: string): string {
+	// A linear scan rather than a `<[^>]*>` regex: on server-controlled input that
+	// regex is polynomial on a run of `<` (CodeQL js/polynomial-redos), and the
+	// scan keeps a lone `<` with no closing `>` as the literal it is.
+	let text = '';
+	let cursor = 0;
+	while (cursor < html.length) {
+		const open = html.indexOf('<', cursor);
+		if (open === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		const close = html.indexOf('>', open + 1);
+		if (close === -1) {
+			text += html.slice(cursor);
+			break;
+		}
+		text += `${html.slice(cursor, open)} `;
+		cursor = close + 1;
+	}
+	return text.replace(/\s+/g, ' ').trim();
 }
 
 /**
