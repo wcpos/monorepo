@@ -71,6 +71,7 @@ async function guardStock<E extends ActionEvent>(
 			deny: {
 				reasonKey: stock.reasonKey,
 				params: stock.params,
+				presented: true, // the toast above is the guard's own; the caller shows nothing more
 				detail: {
 					productId: args.productId,
 					variationId: args.variationId,

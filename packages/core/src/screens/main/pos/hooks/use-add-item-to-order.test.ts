@@ -53,10 +53,11 @@ jest.mock('../../../../contexts/app-state', () => {
 /** The state a resident carries once its create is durably enqueued. */
 const CREATE_QUEUED = { local: { dirty: true, pendingMutationIds: ['mutation-1'] } };
 
+const mockActionLog = jest.fn();
 jest.mock('./use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {
-			log: jest.fn(),
+			log: mockActionLog,
 			t: (key: string) => key,
 			now: Date.now,
 			read: { catalog: mockReadCatalog },
@@ -335,9 +336,8 @@ describe('useAddItemToOrder', () => {
 			document: resident,
 			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
 		});
-		// Stock is validated on both adds, and the second one sees the recovered
-		// resident's line — the lookup runs before the stock check, not after.
-		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
+		// Stock is read on both adds; the guard sees the recovered resident's line because the
+		// lookup runs before the dispatch, and the second patch above carries both lines.
 		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 	});
 
@@ -838,6 +838,32 @@ describe('useAddItemToOrder', () => {
 					line_items: [expect.objectContaining({ quantity: 2 })],
 				}),
 			})
+		);
+	});
+
+	it('shows a dispatcher refusal as a toast when the stock read itself throws', async () => {
+		mockStockGuardEnabled = true;
+		mockReadCatalog.mockRejectedValueOnce(new Error('database closed'));
+		const { result } = renderHook(() => useAddItemToOrder());
+		const outcome = await result.current.addItemToOrder('line_items', {
+			product_id: 1,
+			quantity: 1,
+			name: 'Item',
+		} as never);
+		expect(outcome).toBe(false);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		// The guard's failure is logged with its reason, and the refusal is presented to the cashier.
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'Action hook failed',
+			expect.objectContaining({
+				context: expect.objectContaining({ reason: 'threw', error: 'database closed' }),
+			})
+		);
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'actions.hook_failed',
+			expect.objectContaining({ showToast: true })
 		);
 	});
 

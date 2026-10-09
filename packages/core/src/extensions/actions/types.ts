@@ -44,6 +44,8 @@ export type ActionRefusal = {
 		reasonKey: string;
 		params?: Record<string, string | number>;
 		detail?: Record<string, unknown>;
+		/** Set by a hook that has already shown the reason (a toast of its own); the caller then shows nothing. */
+		presented?: boolean;
 	};
 };
 export function isActionRefusal(value: unknown): value is ActionRefusal {

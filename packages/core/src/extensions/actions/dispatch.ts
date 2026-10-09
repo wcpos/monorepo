@@ -119,6 +119,7 @@ export async function dispatchAction<E extends ActionEvent>({
 			timers.add(timer);
 		};
 		let reason: string;
+		let failure: unknown;
 		try {
 			const pending = hook(ctx, e, next);
 			// A hook that outlives the budget keeps running; its later rejection is nobody's.
@@ -156,6 +157,7 @@ export async function dispatchAction<E extends ActionEvent>({
 		} catch (error) {
 			if (writerFailed && error === writerError) throw error;
 			reason = error === timeout ? 'timeout' : 'threw';
+			failure = error === timeout ? undefined : error;
 		} finally {
 			settled = true;
 			if (timer !== undefined) {
@@ -164,6 +166,22 @@ export async function dispatchAction<E extends ActionEvent>({
 			}
 		}
 		const state = recordActionHookStrike(hookId, reason);
+		// Every strike leaves a row: a refused sale with no trace is the failure mode a till
+		// cannot afford, and only the third strike used to be logged.
+		ctx.log('warn', 'Action hook failed', {
+			context: {
+				hookId,
+				event,
+				reason,
+				strikes: state.strikes,
+				error:
+					failure instanceof Error
+						? failure.message
+						: failure === undefined
+							? undefined
+							: String(failure),
+			},
+		});
 		if (state.strikes === ACTION_HOOK_STRIKES)
 			ctx.log('warn', 'Action hook disabled for this session', {
 				context: { hookId, event, strikes: state.strikes },

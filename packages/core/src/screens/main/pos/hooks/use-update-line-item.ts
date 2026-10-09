@@ -11,7 +11,11 @@ import { reportCartInvariant } from './cart-failure';
 import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
-import { dispatchAction, isActionRefusal } from '../../../../extensions/actions';
+import {
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+} from '../../../../extensions/actions';
 // Still needed for the previous-price value in the update log, not for the merge.
 import { useLineItemData } from './use-line-item-data';
 import { enqueueOrderMutation, type OrderMutationContext } from './order-mutation-queue';
@@ -153,7 +157,11 @@ export const useUpdateLineItem = () => {
 				bottom: (e) =>
 					writeLineItemChanges(capturedOrder, uuid, { ...e.payload.changes } as Changes),
 			});
-			return isActionRefusal(result) ? false : result;
+			if (isActionRefusal(result)) {
+				presentActionRefusal(ctx, result, { orderId: documentRecordId(order) });
+				return false;
+			}
+			return result;
 		},
 		[ctx, actor, writeLineItemChanges]
 	);

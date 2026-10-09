@@ -37,6 +37,7 @@ it('refuses insufficient stock with the existing toast key and params', async ()
 		deny: {
 			reasonKey: 'pos_cart.only_n_available',
 			params: { quantity: 1, name: 'Item' },
+			presented: true,
 			detail: { productId: 1, variationId: 0, available: 1 },
 		},
 	});

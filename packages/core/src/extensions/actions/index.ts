@@ -10,3 +10,4 @@ export {
 export type { DispatchToken } from './registry';
 export { dispatchAction } from './dispatch';
 export { createActionContext } from './context';
+export { presentActionRefusal } from './present';

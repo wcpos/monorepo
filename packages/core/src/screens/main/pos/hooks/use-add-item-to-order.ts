@@ -10,7 +10,11 @@ import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
-import { dispatchAction, isActionRefusal } from '../../../../extensions/actions';
+import {
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+} from '../../../../extensions/actions';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -303,7 +307,11 @@ export const useAddItemToOrder = () => {
 						return result;
 					},
 				});
-				return isActionRefusal(result) ? false : result;
+				if (isActionRefusal(result)) {
+					presentActionRefusal(ctx, result, { orderId: recordId });
+					return false;
+				}
+				return result;
 			});
 		},
 		[
