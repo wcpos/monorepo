@@ -543,6 +543,25 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT113",
+		"symbol": "PAYMENT_INVOICE_NOT_MIRRORED",
+		"domain": "PAYMENT",
+		"severity": "warn",
+		"actionHint": "Nothing to do: the till's copy of the order catches up on the next sync.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The store sent or cancelled the invoice, but this till could not save its copy.",
+		"docsBody": "The store answered: the invoice was sent to the customer, or cancelled, and the order on the store says so. Only this till's local copy of the order failed to save. No money moved and nothing needs to be sent again; the till's copy is replaced by the store's on the next sync.",
+		"troubleshooting": [
+			"Open the order in Orders: the store's copy shows the invoice line or the open status.",
+			"If the till still shows the old state after a sync, check Store health for a stuck record."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#419",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"code": "PAYMENT121",
 		"symbol": "PAYMENT_CAPTURED_ORDER_UNFINISHED",
 		"domain": "PAYMENT",

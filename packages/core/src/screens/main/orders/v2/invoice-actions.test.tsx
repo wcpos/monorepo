@@ -6,11 +6,13 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 
 import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../pos/checkout/checkout-mode';
+import { GatewayCancelMirrorError } from '../../pos/checkout/payments/submit-gateway-payment';
 import { InvoiceActions } from './invoice-actions';
 
 const mockCancel = jest.fn();
 const mockReopen = jest.fn();
 const mockInfo = jest.fn();
+const mockWarn = jest.fn();
 const mockError = jest.fn();
 jest.mock('../../pos/checkout/payments/use-gateway-payment', () => ({
 	useGatewayPayment: () => ({ submit: jest.fn(), cancel: mockCancel }),
@@ -24,6 +26,7 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
+		warn: (...args: unknown[]) => mockWarn(...args),
 		error: (...args: unknown[]) => mockError(...args),
 	}),
 }));
@@ -86,6 +89,28 @@ it("Cancel invoice names the stamp's attempt and reports the order open again", 
 		expect.objectContaining({ showToast: true })
 	);
 	expect(screen.getByTestId('orders-cancel-invoice').hasAttribute('disabled')).toBe(false);
+});
+
+it('a cancel the store applied but the till could not save is still a cancel', async () => {
+	mockCancel.mockRejectedValue(
+		new GatewayCancelMirrorError({ status: 'pos-open' } as never, new Error('disk'))
+	);
+	render(<InvoiceActions order={order} stamp={stamp} />);
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('orders-cancel-invoice'));
+	});
+	expect(mockInfo).toHaveBeenCalledWith(
+		'pos_checkout.invoice_cancelled',
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.cancelled' }) })
+	);
+	expect(mockWarn).toHaveBeenCalledWith(
+		'pos_checkout.invoice_cancelled_not_synced',
+		expect.objectContaining({
+			code: 'PAYMENT113',
+			toast: { title: 'pos_checkout.invoice_cancelled_not_synced' },
+		})
+	);
+	expect(mockError).not.toHaveBeenCalled();
 });
 
 it('a refused cancel is reported with the gateway code and nothing else changes', async () => {

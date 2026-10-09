@@ -2603,7 +2603,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualPost.mockResolvedValue({
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
-		const { result } = renderHook(() => useTenderFlow(order));
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		await act(async () => result.current.takeTender());
 		act(() => result.current.pickMethod('pos_cash'));
@@ -2622,12 +2622,52 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockPayload.meta_data = [
 			{ key: '_wcpos_awaiting_customer', value: { ...stamp, attempt_id: lost } },
 		];
-		const { result: reopened } = renderHook(() => useTenderFlow(order));
-		act(() => reopened.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => reopened.current.takeTender());
+		rerender();
+		await act(async () => result.current.takeTender());
 		expect((mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id).not.toBe(
 			lost
 		);
+	});
+
+	it('the next pill starts from the balance once the invoice pill dropped a plan', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
+		expect(result.current.state.entryMinor).toBe(4648);
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.plan).toBeNull();
+		expect(result.current.state.entryMinor).toBe(9295);
+		await act(async () => {});
+	});
+
+	it('a cancel the store applied but the till could not save is still a cancel', async () => {
+		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.cancelInvoice());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.invoice_cancelled',
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'checkout.cancelled', attemptId: 'attempt-0' }),
+			})
+		);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.invoice_cancelled_not_synced',
+			expect.objectContaining({
+				code: 'PAYMENT113',
+				toast: { title: 'pos_checkout.invoice_cancelled_not_synced' },
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
 	});
 
 	it('a new attempt id after a change of values', async () => {
@@ -2701,7 +2741,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.invoice_sent_not_synced',
 			expect.objectContaining({
-				code: 'PAYMENT111',
+				code: 'PAYMENT113',
 				showToast: true,
 				toast: { title: 'pos_checkout.invoice_sent_not_synced' },
 			})

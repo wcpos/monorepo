@@ -944,7 +944,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						? t('pos_checkout.invoice_sent_not_synced')
 						: t('pos_checkout.payment_recorded_not_synced');
 				logger.warn(sentence, {
-					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					code:
+						outcome.kind === 'sent'
+							? ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED
+							: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
 					showToast: true,
 					...(outcome.kind === 'sent' ? { toast: { title: sentence } } : {}),
 					context: {
@@ -1228,7 +1231,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				// The code's own summary would replace this sentence on the toast; name it explicitly.
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED,
 					showToast: true,
 					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {

@@ -70,7 +70,7 @@ export function InvoiceActions({
 					},
 				});
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED,
 					showToast: true,
 					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {
