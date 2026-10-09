@@ -209,6 +209,22 @@ describe('useUpdateLineItem', () => {
 		expect(mockLocalPatch).toHaveBeenCalled();
 	});
 
+	it('presents a dispatcher refusal when the stock read throws on a quantity increase', async () => {
+		mockReadCatalog.mockRejectedValueOnce(new Error('database closed'));
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let outcome: unknown;
+		await act(async () => {
+			outcome = await result.current.updateLineItem(uuid, { quantity: 2 });
+		});
+		expect(outcome).toBe(false);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			'actions.hook_failed',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
 	it('does not mutate a blocked quantity increase', async () => {
 		mockReadCatalog.mockResolvedValue({
 			manage_stock: true,

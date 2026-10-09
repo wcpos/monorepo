@@ -121,7 +121,17 @@ export async function dispatchAction<E extends ActionEvent>({
 		let reason: string;
 		let failure: unknown;
 		try {
-			const pending = hook(ctx, e, next);
+			// The hook's own view of the context: its `log` goes silent once this dispatch has
+			// settled it (a refusal, a skip, a timeout), so a hook that outlives its budget cannot
+			// toast later for a line that was never written. After-work before the hook returns
+			// still logs, since the hook has not settled yet.
+			const hookCtx: ActionContext = Object.freeze({
+				...ctx,
+				log: ((level, message, options) => {
+					if (!settled) ctx.log(level, message, options);
+				}) as ActionContext['log'],
+			});
+			const pending = hook(hookCtx, e, next);
 			// A hook that outlives the budget keeps running; its later rejection is nobody's.
 			pending.catch(() => undefined);
 			const value = await Promise.race([

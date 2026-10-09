@@ -6,6 +6,7 @@ export {
 	getActionHooks,
 	getActionHookState,
 	resetActionRegistry,
+	resetActionHookStrikes,
 } from './registry';
 export type { DispatchToken } from './registry';
 export { dispatchAction } from './dispatch';

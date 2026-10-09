@@ -84,3 +84,8 @@ export function resetActionRegistry(): void {
 	snapshots.clear();
 	states.clear();
 }
+/** Test-only: clear strikes but keep registrations (a writer test cannot re-register the hooks it imports). */
+export function resetActionHookStrikes(): void {
+	states.clear();
+	snapshots.clear();
+}

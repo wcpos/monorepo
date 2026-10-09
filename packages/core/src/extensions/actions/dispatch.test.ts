@@ -500,6 +500,28 @@ it('presents a refusal through the context unless the hook already did', async (
 	presentActionRefusal(ctx, { deny: { reasonKey: 'pos_products.out_of_stock', presented: true } });
 	expect(log).not.toHaveBeenCalled();
 });
+it("silences a hook's log once its dispatch has settled, so a timed-out guard cannot toast later", async () => {
+	jest.useFakeTimers();
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	register(async (hookCtx, e, next) => {
+		hookCtx.log('info', 'before the budget');
+		await held;
+		hookCtx.log('warn', 'after the budget', { showToast: true });
+		return next(e);
+	});
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1500);
+	expect(await result).toMatchObject({ deny: { reasonKey: 'actions.hook_timeout' } });
+	release();
+	await Promise.resolve();
+	await Promise.resolve();
+	expect(log).toHaveBeenCalledWith('info', 'before the budget', undefined);
+	expect(log).not.toHaveBeenCalledWith('warn', 'after the budget', expect.anything());
+	expect(bottom).not.toHaveBeenCalled();
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

@@ -5,6 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
 
 const mockLocalPatch = jest.fn();
@@ -142,6 +143,7 @@ jest.mock('../contexts/current-order', () => ({
 
 describe('useAddItemToOrder', () => {
 	beforeEach(() => {
+		resetActionHookStrikes();
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
 		mockFindEngineResident.mockResolvedValue(null);
@@ -839,6 +841,29 @@ describe('useAddItemToOrder', () => {
 				}),
 			})
 		);
+	});
+
+	it("toasts a stock refusal exactly once (the guard's own, not presented again)", async () => {
+		mockStockGuardEnabled = true;
+		mockReadCatalog.mockResolvedValueOnce({
+			manage_stock: true,
+			stock_quantity: 0,
+			backorders: 'no',
+			name: 'Item',
+		});
+		const { result } = renderHook(() => useAddItemToOrder());
+		const outcome = await result.current.addItemToOrder('line_items', {
+			product_id: 1,
+			quantity: 1,
+			name: 'Item',
+		} as never);
+		expect(outcome).toBe(false);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		const toasts = mockActionLog.mock.calls.filter(
+			([, , options]) => (options as { showToast?: boolean } | undefined)?.showToast === true
+		);
+		expect(toasts).toHaveLength(1);
+		expect(toasts[0][2]).toMatchObject({ toast: { title: 'pos_cart.only_n_available' } });
 	});
 
 	it('shows a dispatcher refusal as a toast when the stock read itself throws', async () => {
