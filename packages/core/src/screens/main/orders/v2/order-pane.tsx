@@ -9,7 +9,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
-import { readAwaitingCustomer, readLedger } from '@wcpos/order-math';
+import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
@@ -114,15 +114,7 @@ function OrderPaneContent({
 	const canRefund =
 		!!payload.id && !!payload.status && REFUNDABLE_STATUSES.includes(payload.status);
 	// Contract 1.2 §4.3: a sent order waits for its customer; any money taken since clears it.
-	const awaiting = readAwaitingCustomer(payload.meta_data);
-	const invoiceStamp =
-		awaiting &&
-		!!payload.id &&
-		!readLedger(payload.meta_data).some(
-			({ status }) => status === 'captured' || status === 'authorized'
-		)
-			? awaiting
-			: null;
+	const invoiceStamp = payload.id ? activeAwaitingCustomer(payload.meta_data) : null;
 	return (
 		<>
 			<View className="border-border h-12 flex-row items-center gap-2 border-b px-2">

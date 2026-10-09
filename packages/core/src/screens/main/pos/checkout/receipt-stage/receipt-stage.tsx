@@ -14,7 +14,7 @@ import { STAMP } from '@wcpos/components/lib/motion';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { derive, readAwaitingCustomer, readLedger } from '@wcpos/order-math';
+import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
@@ -162,8 +162,8 @@ function ReceiptStageDocument({
 	const finishSale = useFinishSale(order.uuid, compact);
 	useCheckoutBack(finishSale, { escape: false });
 	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
-	const stamp = readAwaitingCustomer(payload.meta_data);
-	const sent = stamp && settledRows.length === 0 && Number(derived.balance) > 0 ? stamp : null;
+	const stamp = activeAwaitingCustomer(payload.meta_data);
+	const sent = stamp && Number(derived.balance) > 0 ? stamp : null;
 	return (
 		<View testID="checkout-receipt-stage" className="bg-card flex-1">
 			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
@@ -184,10 +184,12 @@ function ReceiptStageDocument({
 				</View>
 				<Text testID="receipt-paid-with" className="text-muted-foreground text-center">
 					{sent
-						? t('pos_checkout.sent_to_amount_due', {
-								destination: sent.destination ?? '',
-								amount: format(Number(derived.balance)),
-							})
+						? sent.destination
+							? t('pos_checkout.sent_to_amount_due', {
+									destination: sent.destination,
+									amount: format(Number(derived.balance)),
+								})
+							: t('pos_checkout.sent_amount_due', { amount: format(Number(derived.balance)) })
 						: paidLine}
 					{!sent && settledRows.length > 1
 						? ` · ${t('pos_checkout.payments_taken', { count: settledRows.length })}`

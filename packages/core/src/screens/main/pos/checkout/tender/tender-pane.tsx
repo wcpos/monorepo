@@ -309,7 +309,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				testID="checkout-entry"
 				className={`text-foreground text-amt font-bold tabular-nums ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
 			>
-				{format(flow.state.view === 'select' ? due : flow.state.entryMinor)}
+				{format(
+					flow.state.view === 'select'
+						? due
+						: fixedAmount
+							? flow.entryAppliedMinor
+							: flow.state.entryMinor
+				)}
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
@@ -595,10 +601,12 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 		>
 			<Icon name="clock" size="xs" className="text-muted-foreground" />
 			<Text className="text-foreground flex-1 text-sm" decodeHtml>
-				{t('pos_checkout.invoice_sent_to_on', {
-					destination: stamp.destination ?? '',
-					date: sentOn ?? '',
-				})}
+				{stamp.destination
+					? t('pos_checkout.invoice_sent_to_on', {
+							destination: stamp.destination,
+							date: sentOn ?? '',
+						})
+					: t('pos_checkout.invoice_sent_on', { date: sentOn ?? '' })}
 			</Text>
 			<Button
 				variant="ghost"

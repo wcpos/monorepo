@@ -29,7 +29,11 @@ export function InvoiceActions({
 	const reopen = useReopenOrder(order);
 	const gateway = useGatewayPayment();
 	const [busy, setBusy] = React.useState(false);
+	// State drives the button; the ref closes the same-tick gap a fast double tap falls into.
+	const busyRef = React.useRef(false);
 	const cancel = React.useCallback(async () => {
+		if (busyRef.current) return;
+		busyRef.current = true;
 		setBusy(true);
 		try {
 			const outcome = await gateway.cancel(order, stamp);
@@ -52,7 +56,7 @@ export function InvoiceActions({
 				},
 			});
 		} catch (error) {
-			logger.error(t('pos_checkout.payment_not_recorded'), {
+			logger.error(t('pos_checkout.invoice_cancel_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
 				context: {
@@ -61,6 +65,7 @@ export function InvoiceActions({
 				},
 			});
 		} finally {
+			busyRef.current = false;
 			setBusy(false);
 		}
 	}, [gateway, order, stamp, t]);

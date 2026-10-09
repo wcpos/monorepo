@@ -1,6 +1,11 @@
 import type { DeclaredFields } from '@wcpos/order-math';
 
-import { declaredValues, firstMissingRequired, prefillValues } from './declared-fields';
+import {
+	declaredValues,
+	destinationOf,
+	firstMissingRequired,
+	prefillValues,
+} from './declared-fields';
 
 const fields: DeclaredFields = {
 	schema: 1,
@@ -74,6 +79,37 @@ describe('firstMissingRequired', () => {
 		expect(firstMissingRequired(fields, { email: ' ', when: 'now' })?.id).toBe('email');
 		expect(firstMissingRequired(fields, { email: 'a@b.c', when: '' })?.id).toBe('when');
 		expect(firstMissingRequired(fields, { email: 'a@b.c', when: 'later' })).toBeNull();
+	});
+});
+
+describe('destinationOf', () => {
+	it('is the first declared email or tel field, as the store reads it, never a text field', () => {
+		expect(destinationOf(fields, { email: ' a@b.c ', phone: '555' })).toBe('a@b.c');
+		expect(destinationOf(fields, { email: '', phone: '555' })).toBeNull();
+		const textFirst: DeclaredFields = {
+			...fields,
+			components: [
+				{
+					component: 'field',
+					id: 'ref',
+					input: 'text',
+					label: 'Ref',
+					required: false,
+					default: '',
+					prefill: null,
+				},
+				{
+					component: 'field',
+					id: 'tel',
+					input: 'tel',
+					label: 'Tel',
+					required: false,
+					default: '',
+					prefill: null,
+				},
+			],
+		};
+		expect(destinationOf(textFirst, { ref: 'PO-1', tel: '555' })).toBe('555');
 	});
 });
 

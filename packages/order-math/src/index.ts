@@ -81,6 +81,7 @@ export {
 	KNOWN_PREFILLS,
 	FIELDS_SCHEMA,
 	AWAITING_CUSTOMER_META_KEY,
+	activeAwaitingCustomer,
 	readAwaitingCustomer,
 	withAwaitingCustomer,
 } from './payments';

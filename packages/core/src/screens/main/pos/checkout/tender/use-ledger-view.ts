@@ -2,11 +2,11 @@ import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
+	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	derive,
 	fromMinor,
 	type PaymentRow,
-	readAwaitingCustomer,
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
@@ -38,8 +38,6 @@ export function useLedgerView(
 	const online = useOnlineStatus().status === 'online-website-available';
 	const rows = readLedger(payload.meta_data);
 	const derived = derive(payload.total, rows, methods, { dp });
-	const stamp = readAwaitingCustomer(payload.meta_data);
-	const counting = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
 	const tiles = buildTenderTiles(methods, { online });
 	const { format: formatCurrency } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const format = React.useCallback(
@@ -48,7 +46,7 @@ export function useLedgerView(
 	);
 	return {
 		rows,
-		invoiceSent: stamp && !counting ? stamp : null,
+		invoiceSent: activeAwaitingCustomer(payload.meta_data),
 		tiles,
 		dp,
 		totalMinor: toMinor(payload.total, dp),

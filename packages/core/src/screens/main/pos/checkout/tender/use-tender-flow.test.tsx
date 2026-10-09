@@ -2528,6 +2528,85 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
+	it('runs the whole order whatever another pill left typed, and is journaled as completing', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'key', key: '2' }));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		// The reducer keeps a hand-typed amount across pills (ledger line 1); what is applied is the balance.
+		expect(result.current.entryAppliedMinor).toBe(9295);
+		await act(async () => result.current.takeTender());
+		expect(jest.mocked(provenance.prepareSale)).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ source: 'gateway', completing: true })
+		);
+		expect(provenance.persistSaleProvenance).toHaveBeenCalled();
+	});
+
+	it('keeps the attempt id across a lost answer so the retry replays, and clears it after', async () => {
+		mockManualPost
+			.mockRejectedValueOnce(Object.assign(new Error('down'), { response: { status: 503 } }))
+			.mockResolvedValueOnce({
+				data: { outcome: 'sent', payment: null, order: summary('pending') },
+			})
+			.mockResolvedValueOnce({
+				data: { outcome: 'sent', payment: null, order: summary('pending') },
+			});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ showToast: true })
+		);
+		await act(async () => result.current.takeTender());
+		await act(async () => result.current.takeTender());
+		const ids = mockManualPost.mock.calls.map(
+			([, body]) => (body as { attempt_id: string }).attempt_id
+		);
+		expect(ids).toHaveLength(3);
+		expect(ids[0]).toBe(ids[1]);
+		expect(ids[2]).not.toBe(ids[1]);
+	});
+
+	it('a mirror failure after the store answered sent completes the sale and warns, never "try again"', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.payment_recorded_not_synced',
+			expect.objectContaining({ code: 'PAYMENT111', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({ source: 'gateway', order: summary('pending') })
+		);
+	});
+
+	it('a refusal belongs to the pill it came from', async () => {
+		mockManualPost.mockRejectedValue(
+			Object.assign(new Error('invalid'), {
+				response: {
+					status: 400,
+					data: { code: 'wcpos_fields_invalid', data: { errors: { _form: ['Nope.'] } } },
+				},
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(result.current.fieldErrors).toEqual({ _form: 'Nope.' });
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.fieldErrors).toEqual({});
+	});
+
 	it('refuses to send with the required field empty, naming it, without a request', async () => {
 		mockPayload.billing = { email: '', phone: '' };
 		const { result } = renderHook(() => useTenderFlow(order));

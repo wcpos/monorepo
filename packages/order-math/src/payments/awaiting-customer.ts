@@ -3,7 +3,7 @@
  * projection never drags the order back to pos-open while the customer still holds the link.
  */
 
-import type { MetaDataEntry } from './ledger';
+import { type MetaDataEntry, readLedger } from './ledger';
 
 export const AWAITING_CUSTOMER_META_KEY = '_wcpos_awaiting_customer';
 
@@ -37,6 +37,23 @@ export function readAwaitingCustomer(
 		sent_at_gmt: typeof stamp.sent_at_gmt === 'string' ? stamp.sent_at_gmt : '',
 		cashier_id: typeof stamp.cashier_id === 'number' ? stamp.cashier_id : 0,
 	};
+}
+
+/**
+ * The stamp the till may act on. The store clears it the moment a counting row lands, so a
+ * stamp beside held money is a copy that has not caught up yet; and while a terminal leg is
+ * pending the order is being paid another way. Every surface reads it through here so the
+ * tender pane, the ledger, the tab chips and Orders agree.
+ */
+export function activeAwaitingCustomer(
+	metaData: readonly MetaDataEntry[] | null | undefined
+): AwaitingCustomerStamp | null {
+	const stamp = readAwaitingCustomer(metaData);
+	if (!stamp) return null;
+	const live = readLedger(metaData).some(({ status }) =>
+		['pending', 'authorized', 'captured'].includes(status)
+	);
+	return live ? null : stamp;
 }
 
 /** The stamp as the order document carries it; `null` removes it (a cancelled invoice). */

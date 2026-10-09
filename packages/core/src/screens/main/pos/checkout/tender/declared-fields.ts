@@ -34,18 +34,20 @@ export interface PrefillSources {
 
 /** The source when it is non-empty, else the declared default (§1.2). */
 export function prefillValues(fields: DeclaredFields, sources: PrefillSources): DeclaredValues {
-	const bySource: Record<(typeof KNOWN_PREFILLS)[number], string | null | undefined> = {
-		'order.billing.email': sources.billingEmail,
-		'order.billing.phone': sources.billingPhone,
-		'customer.email': sources.customerEmail,
-		'customer.phone': sources.customerPhone,
-	};
+	// The closed list, in the contract's order: order.billing.email, order.billing.phone,
+	// customer.email, customer.phone (spelled by the constant, not repeated here).
+	const [billingEmail, billingPhone, customerEmail, customerPhone] = KNOWN_PREFILLS;
+	const bySource = new Map<string, string | null | undefined>([
+		[billingEmail, sources.billingEmail],
+		[billingPhone, sources.billingPhone],
+		[customerEmail, sources.customerEmail],
+		[customerPhone, sources.customerPhone],
+	]);
 	const values: DeclaredValues = {};
 	for (const component of fields.components) {
 		if (!isValueComponent(component)) continue;
 		const prefill = 'prefill' in component ? component.prefill : null;
-		const known = KNOWN_PREFILLS.find((key) => key === prefill);
-		const source = known ? bySource[known] : null;
+		const source = prefill ? bySource.get(prefill) : null;
 		if (component.component === 'checkbox') {
 			values[component.id] = component.default;
 		} else {
@@ -65,6 +67,18 @@ export function firstMissingRequired(
 		if (!component.required) continue;
 		const value = values[component.id];
 		if (typeof value !== 'string' || value.trim() === '') return component;
+	}
+	return null;
+}
+
+/** Where the customer was sent (spec §3.2): the first declared email or tel field's value. */
+export function destinationOf(fields: DeclaredFields, values: DeclaredValues): string | null {
+	for (const component of fields.components) {
+		if (!isValueComponent(component) || component.component !== 'field') continue;
+		if (!['email', 'tel'].includes(component.input)) continue;
+		const value = values[component.id];
+		if (typeof value === 'string' && value.trim() !== '') return value.trim();
+		return null;
 	}
 	return null;
 }

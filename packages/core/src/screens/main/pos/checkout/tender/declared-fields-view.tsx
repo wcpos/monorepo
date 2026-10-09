@@ -33,7 +33,15 @@ interface Props {
 export function DeclaredFieldsView({ fields, values, errors, onChange: emit, disabled }: Props) {
 	const t = useT();
 	const onChange = (id: string, value: string | boolean) => emit({ ...values, [id]: value }, id);
-	const [logged] = React.useState(() => new Set<string>());
+	// Logging is a side effect: once per declaration, after render, never while rendering.
+	const unknown = fields.components
+		.filter((component) => !isNote(component) && !isValueComponent(component))
+		.map((component) => component.component)
+		.join(',');
+	React.useEffect(() => {
+		if (unknown === '') return;
+		logger.warn('Skipped unknown payment field components', { context: { components: unknown } });
+	}, [unknown]);
 	return (
 		<View testID="checkout-fields" className="w-full max-w-md gap-3">
 			{fields.components.map((component, index) => {
@@ -44,15 +52,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 						</Text>
 					);
 				}
-				if (!isValueComponent(component)) {
-					if (!logged.has(component.component)) {
-						logged.add(component.component);
-						logger.warn('Skipped an unknown payment field component', {
-							context: { component: component.component },
-						});
-					}
-					return null;
-				}
+				if (!isValueComponent(component)) return null;
 				const error = errors[component.id];
 				const errorLine = error ? (
 					<Text

@@ -27,6 +27,8 @@ export interface GatewayOrder {
 }
 export interface SubmitGatewayPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
+	/** Where the gateway sent the customer, read from the declared fields (spec §3.2). */
+	destination: string | null;
 	/** Mirror the server's answer into the resident order; the status is the summary's. */
 	mirror: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
 	cashierId: number;
@@ -40,25 +42,31 @@ export type SubmitGatewayPaymentOutcome =
 	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
 	| { kind: 'refused'; code: string; message: string; provider: boolean };
 
+/** The server answered 2xx and the till's copy could not be written: the outcome stands. */
+export class GatewayMirrorError extends Error {
+	public constructor(
+		public outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' }>,
+		public cause: unknown
+	) {
+		super('Gateway outcome could not be mirrored locally.', { cause });
+		this.name = 'GatewayMirrorError';
+	}
+}
+
 type ErrorResponse = {
 	status?: number;
 	data?: { code?: string; message?: string; data?: { errors?: unknown; detail?: unknown } };
 };
+/** Free puts the gateway's own notice in `data.detail` under a generic `message`. */
+function refusalMessage(response: ErrorResponse | undefined, code: string): string {
+	const detail = response?.data?.data?.detail;
+	if (typeof detail === 'string' && detail.trim() !== '') return detail;
+	return response?.data?.message ?? code;
+}
 function errorResponse(error: unknown): ErrorResponse | undefined {
 	if (!error || typeof error !== 'object') return undefined;
 	const response = (error as { response?: unknown }).response;
 	return response && typeof response === 'object' ? (response as ErrorResponse) : undefined;
-}
-
-/** The first text-bearing value is the destination the stamp names (an email or a phone). */
-function destinationOf(values: DeclaredValues): string | null {
-	for (const value of Object.values(values)) {
-		if (typeof value === 'string' && value.includes('@')) return value;
-	}
-	for (const value of Object.values(values)) {
-		if (typeof value === 'string' && value.trim() !== '') return value;
-	}
-	return null;
 }
 
 export async function submitGatewayPayment(
@@ -87,7 +95,8 @@ export async function submitGatewayPayment(
 						? Object.fromEntries(
 								Object.entries(errors as Record<string, unknown>).map(([id, message]) => [
 									id,
-									String(message),
+									// `_form` carries every notice the gateway added, as a list.
+									Array.isArray(message) ? message.map(String).join(' ') : String(message),
 								])
 							)
 						: { _form: response?.data?.message ?? '' },
@@ -97,53 +106,56 @@ export async function submitGatewayPayment(
 			return {
 				kind: 'refused',
 				code,
-				message: response?.data?.message ?? code,
+				message: refusalMessage(response, code),
 				provider: code === 'wcpos_provider_error',
 			};
 		}
 		// A 502 is the gateway's own refusal (a notice, an exception, a redirect elsewhere):
 		// Free took nothing and put the previous method back, so it is a refusal, not an outage.
 		if (code === 'wcpos_provider_error') {
-			return {
-				kind: 'refused',
-				code,
-				message: response?.data?.message ?? code,
-				provider: true,
-			};
+			return { kind: 'refused', code, message: refusalMessage(response, code), provider: true };
 		}
 		throw error;
 	}
 	if (!data.order || typeof data.order.status !== 'string')
 		throw new Error('gateway_submit_malformed_response');
+	// Only the request is inside the try above: once the server has answered 2xx the outcome
+	// stands, and a failure writing the till's copy must surface as that, never as a retry.
+	const mirror = async (
+		outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' }>,
+		meta_data: MetaDataEntry[]
+	) => {
+		try {
+			await deps.mirror({ meta_data, status: outcome.order.status });
+		} catch (mirrorError) {
+			throw new GatewayMirrorError(outcome, mirrorError);
+		}
+		return outcome;
+	};
 	if (data.outcome === 'recorded' && data.payment) {
 		const row = data.payment;
-		await deps.mirror({
-			meta_data: withAwaitingCustomer(
+		return mirror(
+			{ kind: 'recorded', row, order: data.order },
+			withAwaitingCustomer(
 				withLedger(order.meta_data, upsertPaymentRow(readLedger(order.meta_data), row)),
 				null
-			),
-			status: data.order.status,
-		});
-		return { kind: 'recorded', row, order: data.order };
+			)
+		);
 	}
 	if (data.outcome === 'sent') {
 		const stamp: AwaitingCustomerStamp = {
 			method_id: methodId,
-			destination: destinationOf(input.values),
+			destination: deps.destination,
 			attempt_id: input.attemptId,
 			sent_at_gmt: (deps.now ?? (() => new Date().toISOString()))(),
 			cashier_id: deps.cashierId,
 		};
 		// A `sent` whose summary is still pos-open is a replay of an earlier send after a later
 		// one was cancelled elsewhere (§4.2): the order is open, and the stamp is not ours to write.
-		await deps.mirror({
-			meta_data: withAwaitingCustomer(
-				order.meta_data,
-				data.order.status === 'pos-open' ? null : stamp
-			),
-			status: data.order.status,
-		});
-		return { kind: 'sent', order: data.order, stamp };
+		return mirror(
+			{ kind: 'sent', order: data.order, stamp },
+			withAwaitingCustomer(order.meta_data, data.order.status === 'pos-open' ? null : stamp)
+		);
 	}
 	throw new Error('gateway_submit_malformed_response');
 }
@@ -175,7 +187,7 @@ export async function cancelGatewayInvoice(
 		const response = errorResponse(error);
 		const code = response?.data?.code;
 		if (code && response?.status !== undefined && response.status < 500)
-			return { kind: 'refused', code, message: response.data?.message ?? code };
+			return { kind: 'refused', code, message: refusalMessage(response, code) };
 		throw error;
 	}
 	await deps.mirror({

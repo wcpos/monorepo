@@ -23,9 +23,10 @@ export function useGatewayPayment() {
 	const { wpCredentials } = useStoreSession();
 
 	const deps = React.useCallback(
-		(order: EngineRecord<'orders'>) => ({
+		(order: EngineRecord<'orders'>, destination: string | null = null) => ({
 			post: (url: string, body: unknown) => http.post(url, body),
 			cashierId: wpCredentials.id ?? 0,
+			destination,
 			mirror: async (changes: { meta_data: unknown[]; status: string }) => {
 				try {
 					await patchEngineResident({
@@ -56,8 +57,8 @@ export function useGatewayPayment() {
 		(
 			order: EngineRecord<'orders'>,
 			methodId: string,
-			input: { attemptId: string; values: DeclaredValues }
-		) => submitGatewayPayment(gatewayOrder(order), methodId, input, deps(order)),
+			input: { attemptId: string; values: DeclaredValues; destination: string | null }
+		) => submitGatewayPayment(gatewayOrder(order), methodId, input, deps(order, input.destination)),
 		[deps]
 	);
 	const cancel = React.useCallback(

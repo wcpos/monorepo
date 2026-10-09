@@ -5,7 +5,11 @@ import {
 	type PaymentRow,
 } from '@wcpos/order-math';
 
-import { cancelGatewayInvoice, submitGatewayPayment } from './submit-gateway-payment';
+import {
+	cancelGatewayInvoice,
+	GatewayMirrorError,
+	submitGatewayPayment,
+} from './submit-gateway-payment';
 
 const stamp = {
 	method_id: 'wcpos_email_invoice',
@@ -61,7 +65,13 @@ function harness(meta: MetaDataEntry[] = []) {
 	const post = jest.fn();
 	const mirror = jest.fn(async () => {});
 	const order = { uuid: 'order-1', id: 42, meta_data: meta };
-	const deps = { post, mirror, cashierId: 7, now: () => '2026-10-08T12:00:00.000Z' };
+	const deps = {
+		post,
+		mirror,
+		cashierId: 7,
+		destination: 'new@b.c',
+		now: () => '2026-10-08T12:00:00.000Z',
+	};
 	return { post, mirror, order, deps };
 }
 const input = { attemptId: 'attempt-1', values: { email: 'new@b.c', save: true } };
@@ -154,6 +164,32 @@ describe('submitGatewayPayment', () => {
 		});
 		post.mockRejectedValueOnce(Object.assign(new Error('down'), { response: { status: 503 } }));
 		await expect(submitGatewayPayment(order, 'g', input, deps)).rejects.toThrow('down');
+	});
+	it("a 502's detail is the gateway's own sentence; a _form list is joined", async () => {
+		const { post, order, deps } = harness();
+		post.mockRejectedValueOnce(
+			refusal(502, 'wcpos_provider_error', { detail: 'Mail server unreachable.' })
+		);
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toMatchObject({
+			kind: 'refused',
+			message: 'Mail server unreachable.',
+			provider: true,
+		});
+		post.mockRejectedValueOnce(
+			refusal(400, 'wcpos_fields_invalid', { errors: { _form: ['Too short.', 'No dots.'] } })
+		);
+		expect(await submitGatewayPayment(order, 'g', input, deps)).toEqual({
+			kind: 'fields_invalid',
+			errors: { _form: 'Too short. No dots.' },
+		});
+	});
+	it('a mirror that fails after a 2xx keeps the outcome in the error, never a retry', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { outcome: 'sent', payment: null, order: summary('pending') } });
+		mirror.mockRejectedValueOnce(new Error('disk'));
+		const error = await submitGatewayPayment(order, 'g', input, deps).catch((e) => e);
+		expect(error).toBeInstanceOf(GatewayMirrorError);
+		expect((error as GatewayMirrorError).outcome).toMatchObject({ kind: 'sent' });
 	});
 	it('a malformed 2xx is an error, never an outcome', async () => {
 		const { post, order, deps } = harness();

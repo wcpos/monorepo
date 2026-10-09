@@ -6,6 +6,7 @@ test('public value surface is exactly the spec', () => {
 			.filter((k) => typeof (api as Record<string, unknown>)[k] === 'function')
 			.sort()
 	).toEqual([
+		'activeAwaitingCustomer',
 		'calculateCartLine',
 		'createCartConfig',
 		'derive',

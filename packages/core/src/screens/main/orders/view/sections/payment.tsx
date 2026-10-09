@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
-import { readAwaitingCustomer } from '@wcpos/order-math';
+import { activeAwaitingCustomer } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { RailSection } from './_section';
@@ -39,7 +39,7 @@ export function PaymentSection({ order, last }: { order: OrderPayload; last?: bo
 
 	const method = order.payment_method_title || order.payment_method;
 	const refunded = totalRefunded(order.refunds);
-	const stamp = readAwaitingCustomer(order.meta_data);
+	const stamp = activeAwaitingCustomer(order.meta_data);
 	const sentOn = useDateFormat(stamp?.sent_at_gmt);
 
 	if (!method && !order.transaction_id && !datePaid && refunded === 0 && !stamp) {
@@ -52,10 +52,11 @@ export function PaymentSection({ order, last }: { order: OrderPayload; last?: bo
 			{stamp ? (
 				<KV
 					k={t('pos_checkout.invoice_sent')}
-					v={t('pos_checkout.sent_to_on', {
-						destination: stamp.destination ?? '',
-						date: sentOn ?? '',
-					})}
+					v={
+						stamp.destination
+							? t('pos_checkout.sent_to_on', { destination: stamp.destination, date: sentOn ?? '' })
+							: t('pos_checkout.sent_on', { date: sentOn ?? '' })
+					}
 				/>
 			) : null}
 			<KV k={t('common.transaction_id')} v={order.transaction_id} />
