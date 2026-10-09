@@ -81,9 +81,19 @@ export function OpenOrderTabs({
 		},
 		[setCurrentOrderID, receiptOrders]
 	);
+	// Focus follows the open cart's tab: a step can take the focused tab off the row, and a
+	// cart picked from the list has no tab until the window moves to it. The tab's ref
+	// settles the focus once it is on the row.
+	const focusPending = React.useRef(false);
+	const focusTab = (node: unknown) =>
+		(node as { focus?: (options?: FocusOptions) => void } | undefined)?.focus?.({
+			preventScroll: true,
+		});
 	const closeList = (id = activeValue) => {
 		setListOpen(false);
-		(tabs.current.get(id) as unknown as { focus?: () => void } | undefined)?.focus?.();
+		const tab = tabs.current.get(id);
+		if (tab) focusTab(tab);
+		else focusPending.current = true;
 	};
 	// Every tab in strip order: open orders, the fresh cart, then receipts of orders that
 	// have left the open list.
@@ -116,7 +126,9 @@ export function OpenOrderTabs({
 	);
 	const step = (delta: number) => {
 		const next = entries[activeIndex + delta];
-		if (next) handleTabPress(next.id);
+		if (!next) return;
+		focusPending.current = true;
+		handleTabPress(next.id);
 	};
 	// Each tab's own width, measured off stage (below) for the carts around the open one;
 	// an unmeasured tab counts as the minimum until its layout lands. Bounded: carts that
@@ -147,8 +159,15 @@ export function OpenOrderTabs({
 					role="tab"
 					aria-selected={active}
 					ref={(node) => {
-						if (node) tabs.current.set(id, node);
-						else tabs.current.delete(id);
+						if (!node) {
+							tabs.current.delete(id);
+							return;
+						}
+						tabs.current.set(id, node);
+						if (active && focusPending.current) {
+							focusPending.current = false;
+							focusTab(node);
+						}
 					}}
 					onPress={() => {
 						handleTabPress(id);
@@ -204,7 +223,7 @@ export function OpenOrderTabs({
 				{window.left && (
 					<Pressable
 						role="button"
-						className={`${CELL} w-9`}
+						className={`${CELL} w-11`}
 						testID="scrollable-tabs-prev"
 						accessibilityLabel={t('pos_cart.previous_cart')}
 						onPress={() => step(-1)}
@@ -258,7 +277,7 @@ export function OpenOrderTabs({
 				{window.right && (
 					<Pressable
 						role="button"
-						className={`${CELL} w-9`}
+						className={`${CELL} w-11`}
 						testID="scrollable-tabs-next"
 						accessibilityLabel={t('pos_cart.next_cart')}
 						onPress={() => step(1)}

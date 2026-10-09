@@ -15,7 +15,8 @@
 export const TAB_MIN = 96;
 // The count badge and its chevron, inside a full-height cell.
 export const TRAY_WIDTH = 56;
-export const ARROW_WIDTH = 36;
+// The touch rule's 44 pt minimum (CODING_STANDARDS § Design, rule 2).
+export const ARROW_WIDTH = 44;
 export const PLUS_WIDTH = 48;
 
 export type TabWindow = {

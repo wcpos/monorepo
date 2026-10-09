@@ -381,15 +381,14 @@ it('overflow shows whole columns around the open cart, and the arrows step to a 
 			record: mockRecord(id, `2026-09-07T1${index}:00:00`),
 		}));
 		mockCurrent = mockOpen[4].record;
-		render(<OpenOrderTabs />);
+		const { rerender } = render(<OpenOrderTabs />);
 		layout(560);
-		// Four whole tabs fit beside the tray and two arrows; they grow out from e, right
+		// Three whole tabs fit beside the tray and two arrows; they grow out from e, right
 		// first. The others are hidden, not cut.
 		expect(screen.getAllByTestId(/^open-order-tab-/).map((el) => el.dataset.testid)).toEqual([
 			'open-order-tab-d',
 			'open-order-tab-e',
 			'open-order-tab-f',
-			'open-order-tab-g',
 		]);
 		expect(screen.getByTestId('open-orders-count').textContent).toBe('8');
 		fireEvent.click(screen.getByTestId('scrollable-tabs-next'));
@@ -398,6 +397,11 @@ it('overflow shows whole columns around the open cart, and the arrows step to a 
 		expect(mockSetOrder).toHaveBeenLastCalledWith('d');
 		fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
 		expect(mockSetOrder).toHaveBeenLastCalledWith('f');
+		// The selection lands and the window moves: the new open tab takes the focus a step
+		// asked for, even though it was not on the row when the key was pressed.
+		mockCurrent = mockOpen[7].record;
+		rerender(<OpenOrderTabs />);
+		expect(document.activeElement).toBe(screen.getByTestId('open-order-tab-h'));
 	} finally {
 		mockOpen = open;
 	}

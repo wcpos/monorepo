@@ -28,23 +28,23 @@ it('carts whose own widths fit are all shown with nothing else', () => {
 });
 
 it('overflow grows outwards from the open cart, right then left, by whole tabs', () => {
-	// 512 - tray 56 - two arrows 72 = 384: four minimum-width tabs. e, then f, d, g.
+	// 512 - tray 56 - two arrows 88 = 368: three minimum-width tabs. e, then f, then d.
 	expect(tabWindow({ width: WIDTH, widths: same(8), active: 4 })).toEqual({
 		fits: false,
 		start: 3,
-		end: 7,
+		end: 6,
 		tray: true,
 		left: true,
 		right: true,
 	});
 	// A wide neighbour that would not fit whole is left out, and the other side keeps growing.
 	const widths = [96, 96, 96, 200, 96, 96, 96, 96];
-	expect(tabWindow({ width: WIDTH, widths, active: 4 })).toMatchObject({ start: 4, end: 8 });
+	expect(tabWindow({ width: WIDTH, widths, active: 4 })).toMatchObject({ start: 4, end: 7 });
 });
 
 it('the first cart grows right only, with only the right arrow', () => {
 	const window = tabWindow({ width: WIDTH, widths: same(8), active: 0 });
-	// 512 - 56 - 36 = 420: four whole tabs.
+	// 512 - 56 - 44 = 412: four whole tabs.
 	expect(window).toEqual({ fits: false, start: 0, end: 4, tray: true, left: false, right: true });
 	expect(WIDTH - PLUS_WIDTH - TRAY_WIDTH - ARROW_WIDTH).toBeGreaterThanOrEqual(4 * TAB_MIN);
 });
