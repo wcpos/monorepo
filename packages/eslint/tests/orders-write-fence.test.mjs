@@ -170,6 +170,9 @@ test('an engine helper or engine.write naming the orders collection is a violati
 		"requestServerDelete(manager.engine, { collection: 'orders', recordId })",
 		"patchAndEnqueueEngineResident({ manager, collection: 'orders', data })",
 		"runtime.engine.write({ collection: 'orders', mutation })",
+		"engine.write({ collection: 'orders', mutation })",
+		"runtime.engine!.write({ collection: 'orders', mutation })",
+		"(runtime.engine as Engine).write({ collection: 'orders', mutation })",
 	]) {
 		assert.deepEqual(scanSource(call, path), [`${path}:1:1:engine-write`]);
 	}

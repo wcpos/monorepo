@@ -134,13 +134,14 @@ export function scanSource(text, path) {
 			}
 			// patchEngineResident({ collection: 'orders' }), manager.engine.write({ collection: 'orders' }),
 			// requestServerDelete(engine, { collection: 'orders' }): the options object may be any argument.
-			// `write` counts only as `<chain>.engine.write`, so an unrelated `write` is not a site.
+			// `write` counts only on an `engine` receiver (`engine.write`, `runtime.engine!.write`,
+			// `(runtime.engine as E).write`), so an unrelated `write` is not a site.
 			const engineWrite =
 				ENGINE_WRITES.has(name) &&
 				(name !== 'write' ||
 					(member &&
-						ts.isPropertyAccessExpression(callee.expression) &&
-						callee.expression.name.text === 'engine'));
+						memberChain(callee.expression) &&
+						lastSegment(unwrap(callee.expression)) === 'engine'));
 			const namesOrders =
 				engineWrite &&
 				node.arguments.some((argument) => {
