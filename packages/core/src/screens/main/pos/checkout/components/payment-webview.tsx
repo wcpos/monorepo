@@ -64,9 +64,12 @@ type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 const UNPAID_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
 
 /**
- * The parked POS statuses are open carts whatever the merchant stored; nothing settles them.
+ * Statuses that never settle a sale whatever the merchant stored: the parked POS statuses
+ * are open carts, and `failed`/`cancelled` are a payment that did not happen. The settings
+ * picker offers every registered status, so a stored `failed` is reachable through the UI;
+ * honouring it would report a failed payment as a finished sale.
  */
-const PARKED_POS_STATUSES = ['pos-open', 'pos-partial'];
+const NEVER_SETTLED_STATUSES = ['pos-open', 'pos-partial', 'failed', 'cancelled'];
 
 /**
  * Whether an order status means the sale is settled at the till.
@@ -88,7 +91,7 @@ export function isSettledOrderStatus(
 	status: string,
 	settledOrderStatus: string | null | undefined
 ): boolean {
-	if (PARKED_POS_STATUSES.includes(status)) return false;
+	if (NEVER_SETTLED_STATUSES.includes(status)) return false;
 	if (!UNPAID_ORDER_STATUSES.includes(status)) return true;
 	return typeof settledOrderStatus === 'string' && settledOrderStatus === status;
 }
@@ -276,7 +279,14 @@ export function PaymentWebview({
 		async (pollUntilMs?: number): Promise<void> => {
 			if (paymentReceivedRef.current) return;
 			const localStatus = order.getLatest().payload.status;
-			if (!localStatus || localStatus !== 'pos-open') return;
+			// The poll reconciles an open cart. The one other local state worth a
+			// read is the gateway's stored status having already arrived through
+			// background sync — the order is settled, but nothing has routed the
+			// cashier off the pay window; the server read below closes it. Any
+			// other local status is a sale this screen no longer owns.
+			const localAlreadySettled =
+				typeof localStatus === 'string' && isSettledOrderStatus(localStatus, settledOrderStatus);
+			if (!localStatus || (localStatus !== 'pos-open' && !localAlreadySettled)) return;
 			let settled = false;
 			try {
 				orderLogger.debug('No postMessage received, checking server order status', {
@@ -294,7 +304,9 @@ export function PaymentWebview({
 				const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
 				if (!serverOrder || paymentReceivedRef.current) return;
 				const serverStatus = serverOrder.status as string;
-				if (serverStatus === localStatus) return;
+				// Unchanged from the open cart: nothing to reconcile. (When the local
+				// copy already carries the settled status, "unchanged" IS the outcome.)
+				if (serverStatus === localStatus && !localAlreadySettled) return;
 				// A status change is not a payment: an unpaid transition leaves everything in
 				// place (the finally releases the spinner) so the cashier can retry from the
 				// cart they still have — unless it is the status the merchant configured the
