@@ -54,7 +54,7 @@ type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
 /**
  * Statuses that mean the payment has NOT happened — the client mirror of the store's
- * received-page emission gate (`! $order->needs_payment()` plus the parked POS statuses):
+ * received-page emission gate (`$order->is_paid()` plus the parked POS statuses):
  * `pending`/`failed` are still payable, `cancelled` means it is never coming, and the POS
  * statuses are open carts. Everything else counts as paid. A BLOCKLIST, not an allowlist of
  * processing/completed: a cheque or BACS gateway configured through POS settings lands on
@@ -62,6 +62,36 @@ type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
  * refusing those would strand a genuinely completed sale as an open cart.
  */
 const UNPAID_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
+
+/**
+ * The parked POS statuses are open carts whatever the merchant stored; nothing settles them.
+ */
+const PARKED_POS_STATUSES = ['pos-open', 'pos-partial'];
+
+/**
+ * Whether an order status means the sale is settled at the till.
+ *
+ * Two things settle a sale: WooCommerce calling the order paid (any status outside the
+ * unpaid blocklist), or the order reaching the status the merchant explicitly configured
+ * for its gateway — `settledOrderStatus`, served by the store's gateway catalog. The second
+ * is what closes a "pay by invoice" sale: BACS configured to land on `pending` so the
+ * customer can still pay through the web pay link. WooCommerce never calls that order
+ * paid, and the blocklist alone left the cashier on a hung pay window with the order
+ * still in the cart.
+ *
+ * It is deliberately the merchant's stored choice and not the status alone: an async
+ * gateway configured for `completed` that redirects before its provider confirms arrives
+ * `pending` too, and that one must keep waiting. A store older than the catalog field
+ * sends no `settledOrderStatus`, and this reduces to the blocklist it always was.
+ */
+export function isSettledOrderStatus(
+	status: string,
+	settledOrderStatus: string | null | undefined
+): boolean {
+	if (PARKED_POS_STATUSES.includes(status)) return false;
+	if (!UNPAID_ORDER_STATUSES.includes(status)) return true;
+	return typeof settledOrderStatus === 'string' && settledOrderStatus === status;
+}
 
 function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
@@ -114,6 +144,12 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	 * silently — the cashier asked for it and is watching.
 	 */
 	retryToken?: number;
+	/**
+	 * The order status the merchant configured the order's gateway to settle a POS
+	 * sale to (`settled_order_status` from the gateway catalog), or null/undefined
+	 * when none is stored or the store predates the field. See isSettledOrderStatus.
+	 */
+	settledOrderStatus?: string | null;
 }
 
 /**
@@ -125,6 +161,7 @@ export function PaymentWebview({
 	setFrameStatus,
 	onStockRejection,
 	retryToken = 0,
+	settledOrderStatus = null,
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
@@ -260,10 +297,11 @@ export function PaymentWebview({
 				if (serverStatus === localStatus) return;
 				// A status change is not a payment: an unpaid transition leaves everything in
 				// place (the finally releases the spinner) so the cashier can retry from the
-				// cart they still have.
-				if (UNPAID_ORDER_STATUSES.includes(serverStatus)) {
+				// cart they still have — unless it is the status the merchant configured the
+				// gateway to settle on, which is the sale finishing.
+				if (!isSettledOrderStatus(serverStatus, settledOrderStatus)) {
 					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
-						context: { serverStatus, source: 'fallback-refresh' },
+						context: { serverStatus, settledOrderStatus, source: 'fallback-refresh' },
 					});
 					return;
 				}
@@ -343,6 +381,7 @@ export function PaymentWebview({
 			setCurrentOrderID,
 			orderLogger,
 			t,
+			settledOrderStatus,
 		]
 	);
 	/**
@@ -364,11 +403,13 @@ export function PaymentWebview({
 				// gateway status is not pos-open — for an async gateway that can be
 				// before the provider confirms, with the order still unpaid. Don't
 				// complete on the message's say-so: leave the poll armed and let
-				// server truth decide.
-				if (UNPAID_ORDER_STATUSES.includes(payload.status)) {
+				// server truth decide. The exception is the status the merchant
+				// configured this gateway to settle on — reaching it IS the sale
+				// finishing, whatever WooCommerce calls it.
+				if (!isSettledOrderStatus(payload.status, settledOrderStatus)) {
 					orderLogger.warn(
 						'Payment received but the order is not paid; deferring to server truth',
-						{ context: { orderId, status: payload.status } }
+						{ context: { orderId, status: payload.status, settledOrderStatus } }
 					);
 					setLoading(false);
 					void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
@@ -451,6 +492,7 @@ export function PaymentWebview({
 			t,
 			adoptSnapshot,
 			pollServerTruth,
+			settledOrderStatus,
 		]
 	);
 
