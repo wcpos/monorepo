@@ -153,6 +153,13 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	 * when none is stored or the store predates the field. See isSettledOrderStatus.
 	 */
 	settledOrderStatus?: string | null;
+	/**
+	 * The gateway `settledOrderStatus` was stored for. A status is only honoured
+	 * for an order paid through that gateway: the pay page can finish with a
+	 * different gateway than the one the cart was opened with, and the stored
+	 * status of one must not close a sale taken through another.
+	 */
+	settledGatewayId?: string | null;
 }
 
 /**
@@ -165,10 +172,36 @@ export function PaymentWebview({
 	onStockRejection,
 	retryToken = 0,
 	settledOrderStatus = null,
+	settledGatewayId = null,
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
 	const orderData = useRecordField(order, (record) => record.payload);
+	// Read through a ref, not the closure: the fallback poll re-arms itself with
+	// the closure of the render it started in, and the gateway catalog can still
+	// be loading at that moment. A later tick must see the catalog that arrived.
+	const settledRef = React.useRef({ status: settledOrderStatus, gatewayId: settledGatewayId });
+	React.useEffect(() => {
+		settledRef.current = { status: settledOrderStatus, gatewayId: settledGatewayId };
+	});
+	/**
+	 * The stored status to judge an order against, or null when the order was
+	 * paid through a different gateway than the one the status was stored for.
+	 */
+	const storedStatusFor = React.useCallback((paymentMethod: unknown): string | null => {
+		const { status, gatewayId } = settledRef.current;
+		if (typeof status !== 'string' || typeof gatewayId !== 'string') return null;
+		return paymentMethod === gatewayId ? status : null;
+	}, []);
+	// False once the modal is gone: a poll still in flight must not navigate or
+	// re-arm itself for a cashier who has already left checkout.
+	const mountedRef = React.useRef(true);
+	React.useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+		};
+	}, []);
 	const paymentURL = orderData.links?.payment?.[0]?.href;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
@@ -278,14 +311,21 @@ export function PaymentWebview({
 	const pollServerTruth = React.useCallback(
 		async (pollUntilMs?: number): Promise<void> => {
 			if (paymentReceivedRef.current) return;
-			const localStatus = order.getLatest().payload.status;
+			const localPayload = order.getLatest().payload;
+			const localStatus = localPayload.status;
 			// The poll reconciles an open cart. The one other local state worth a
 			// read is the gateway's stored status having already arrived through
 			// background sync — the order is settled, but nothing has routed the
-			// cashier off the pay window; the server read below closes it. Any
-			// other local status is a sale this screen no longer owns.
+			// cashier off the pay window; the server read below closes it. Exactly
+			// that status, for exactly that gateway: any other local status is a
+			// sale this screen no longer owns (a partial tender, a sale settled by
+			// someone else).
+			const localStored = storedStatusFor(localPayload.payment_method);
 			const localAlreadySettled =
-				typeof localStatus === 'string' && isSettledOrderStatus(localStatus, settledOrderStatus);
+				typeof localStatus === 'string' &&
+				localStored !== null &&
+				localStatus === localStored &&
+				isSettledOrderStatus(localStatus, localStored);
 			if (!localStatus || (localStatus !== 'pos-open' && !localAlreadySettled)) return;
 			let settled = false;
 			try {
@@ -311,12 +351,14 @@ export function PaymentWebview({
 				// place (the finally releases the spinner) so the cashier can retry from the
 				// cart they still have — unless it is the status the merchant configured the
 				// gateway to settle on, which is the sale finishing.
-				if (!isSettledOrderStatus(serverStatus, settledOrderStatus)) {
+				const serverStored = storedStatusFor(serverOrder.payment_method);
+				if (!isSettledOrderStatus(serverStatus, serverStored)) {
 					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
-						context: { serverStatus, settledOrderStatus, source: 'fallback-refresh' },
+						context: { serverStatus, settledOrderStatus: serverStored, source: 'fallback-refresh' },
 					});
 					return;
 				}
+				if (!mountedRef.current) return;
 				paymentReceivedRef.current = true;
 				settled = true;
 				setCurrentOrderID('');
@@ -369,6 +411,7 @@ export function PaymentWebview({
 				if (
 					!settled &&
 					!paymentReceivedRef.current &&
+					mountedRef.current &&
 					pollUntilMs !== undefined &&
 					Date.now() < pollUntilMs
 				) {
@@ -393,7 +436,7 @@ export function PaymentWebview({
 			setCurrentOrderID,
 			orderLogger,
 			t,
-			settledOrderStatus,
+			storedStatusFor,
 		]
 	);
 	/**
@@ -402,6 +445,9 @@ export function PaymentWebview({
 	const handlePaymentReceived = React.useCallback(
 		async (event: MessageEvent) => {
 			if (event?.data?.action === 'wcpos-payment-received') {
+				// The fallback poll may have settled this sale first; a late message
+				// for the same order must not route and toast a second time.
+				if (paymentReceivedRef.current) return;
 				const payload = event.data.payload;
 				if (!isOrderSnapshot(payload)) {
 					orderLogger.warn('Payment received with an invalid order snapshot', {
@@ -418,10 +464,11 @@ export function PaymentWebview({
 				// server truth decide. The exception is the status the merchant
 				// configured this gateway to settle on — reaching it IS the sale
 				// finishing, whatever WooCommerce calls it.
-				if (!isSettledOrderStatus(payload.status, settledOrderStatus)) {
+				const payloadStored = storedStatusFor(payload.payment_method);
+				if (!isSettledOrderStatus(payload.status, payloadStored)) {
 					orderLogger.warn(
 						'Payment received but the order is not paid; deferring to server truth',
-						{ context: { orderId, status: payload.status, settledOrderStatus } }
+						{ context: { orderId, status: payload.status, settledOrderStatus: payloadStored } }
 					);
 					setLoading(false);
 					void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
@@ -504,7 +551,7 @@ export function PaymentWebview({
 			t,
 			adoptSnapshot,
 			pollServerTruth,
-			settledOrderStatus,
+			storedStatusFor,
 		]
 	);
 

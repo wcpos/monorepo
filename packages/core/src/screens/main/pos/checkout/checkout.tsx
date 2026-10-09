@@ -213,6 +213,7 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								setFrameStatus={reportFrameStatus}
 								retryToken={frameRetryToken}
 								settledOrderStatus={gateway?.settled_order_status ?? null}
+								settledGatewayId={gateway?.id ?? null}
 								onStockRejection={handleStockRejection}
 							/>
 						) : (
