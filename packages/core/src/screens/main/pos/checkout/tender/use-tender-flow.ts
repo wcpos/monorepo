@@ -255,6 +255,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
 			}));
+		// The reducer starts from the STORED plan, not the active view of it: a split whose planned
+		// legs are all taken but which still owes money (a short leg) is still that split, and its
+		// last leg must journal every share. `activePlan` only decides what the keypad shows.
 		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
 		const { readers, lockToDefault } = selectableReaders(
 			byId.get(methodId ?? '') ?? null,
@@ -263,7 +266,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		);
 		return {
 			...initial,
-			plan,
+			plan: balanceMinor > 0 ? storedPlan : null,
 			entryMinor: plan
 				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
 				: initial.entryMinor,
@@ -586,10 +589,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			};
 			const next = tenderReducer(state, action);
 			reducerDispatch(action);
-			setTenderPlan(
-				order.uuid,
-				activePlan(state.plan, action.rowsSinceFrom.length, action.balanceMinor)
-			);
+			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
+			// of a short split must come back with the plan, or that leg wipes the split record.
+			setTenderPlan(order.uuid, action.balanceMinor > 0 ? state.plan : null);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
 		},
 		[order, state, dp, byId, actor, orderContext]
