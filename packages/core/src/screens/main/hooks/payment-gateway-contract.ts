@@ -11,6 +11,12 @@ export interface PaymentGatewayContract {
 		requires_hardware?: boolean;
 	};
 	provider_data?: Record<string, unknown>;
+	/**
+	 * The order status (no `wc-` prefix) the merchant configured this gateway to
+	 * settle a POS sale to, or null when nothing is stored. Stores older than the
+	 * field omit it. See `isSettledOrderStatus` in the payment webview.
+	 */
+	settled_order_status?: string | null;
 }
 
 export type RefundDestination = 'original_method' | 'cash';

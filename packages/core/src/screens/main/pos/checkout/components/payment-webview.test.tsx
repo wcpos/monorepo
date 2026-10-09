@@ -7,7 +7,11 @@ import { act, render } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
+import {
+	isSettledOrderStatus,
+	PAYMENT_FRAME_LOAD_TIMEOUT_MS,
+	PaymentWebview,
+} from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
 // `onLoad` lifecycle the same way the real iframe/native webview would.
@@ -848,6 +852,463 @@ describe('PaymentWebview fallback order refresh', () => {
 			expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 		}
 	);
+});
+
+/**
+ * A merchant's "pay by invoice" workflow: BACS configured through POS settings to
+ * land on `pending`, so the customer can still pay through the web pay link. The
+ * store's gateway catalog serves that choice as `settled_order_status`; reaching it
+ * is the sale finishing, even though WooCommerce never calls the order paid. Before
+ * this, the cashier was left on a hung pay window with the order still in the cart.
+ */
+describe('PaymentWebview settled order status', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.useRealTimers();
+		webViewProps = {};
+		autoShowReceipt = false;
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockAdoptOrderSnapshot.mockResolvedValue('applied');
+	});
+
+	const pendingPayload = {
+		id: 42,
+		number: '42',
+		status: 'pending',
+		payment_method: 'bacs',
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+		line_items: [],
+	};
+
+	const postReceived = async (payload: unknown) => {
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+	};
+
+	describe('isSettledOrderStatus', () => {
+		it.each(['processing', 'completed', 'on-hold', 'invoiced'])(
+			'treats %s as settled with no stored status (the blocklist it always was)',
+			(status) => {
+				expect(isSettledOrderStatus(status, null)).toBe(true);
+				expect(isSettledOrderStatus(status, undefined)).toBe(true);
+			}
+		);
+
+		it.each(['pending', 'failed', 'cancelled'])(
+			'treats %s as unpaid with no stored status',
+			(status) => {
+				expect(isSettledOrderStatus(status, null)).toBe(false);
+				expect(isSettledOrderStatus(status, undefined)).toBe(false);
+			}
+		);
+
+		it('treats an unpaid status as settled only when it is the stored status', () => {
+			expect(isSettledOrderStatus('pending', 'pending')).toBe(true);
+			expect(isSettledOrderStatus('pending', 'completed')).toBe(false);
+			expect(isSettledOrderStatus('failed', 'pending')).toBe(false);
+		});
+
+		it.each(['pos-open', 'pos-partial', 'failed', 'cancelled'])(
+			'never settles %s, even when it is the stored status',
+			(status) => {
+				// The settings picker offers every registered status; a stored `failed`
+				// must not turn a failed payment into a finished sale.
+				expect(isSettledOrderStatus(status, status)).toBe(false);
+				expect(isSettledOrderStatus(status, null)).toBe(false);
+			}
+		);
+	});
+
+	it('completes from the fallback poll when background sync already moved the local order to the stored status', async () => {
+		// Sync can apply the server's `pending` to the local document before the poll
+		// runs. The order is settled, but nothing has routed the cashier off the pay
+		// window; the poll must still read server truth and close the sale rather than
+		// bail on "local status is not pos-open".
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const serverOrder = { ...pendingPayload, total: '75.00', payment_method: 'bacs' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		const localOrder = {
+			uuid: 'uuid-42',
+			payload: {
+				id: 42,
+				number: '42',
+				status: 'pending',
+				payment_method: 'bacs',
+				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+				line_items: [],
+			},
+			getLatest: () => localOrder,
+		};
+
+		render(
+			<PaymentWebview
+				order={localOrder as never}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(logger.success).toHaveBeenCalledTimes(1);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+	});
+
+	it('does not honour the stored status for an order paid through a different gateway', async () => {
+		// The pay page can finish with a gateway other than the one the cart was
+		// opened with. BACS stores `pending`; a card gateway sitting `pending` while
+		// its provider confirms must not borrow that.
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ ...pendingPayload, payment_method: 'acme_cards' });
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('sees a gateway catalog that arrives after the poll has started', async () => {
+		// The poll re-arms itself from the closure it started in. The catalog can
+		// still be loading at that moment; a later tick must read the status that
+		// arrived, or a pay-by-invoice sale never closes.
+		jest.useFakeTimers();
+		const serverOrder = { ...pendingPayload, total: '75.00' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+
+		const { rerender } = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus={null}
+				settledGatewayId={null}
+			/>
+		);
+
+		// Arms the poll with no catalog: pending reads as unpaid, so it re-arms.
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		rerender(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps polling a local pending order until the gateway catalog arrives, then completes', async () => {
+		// Sync landed `pending` locally before the catalog loaded. Without a catalog
+		// nothing says it is settled, but bailing would skip the re-arm, and the
+		// catalog arriving later would find no poll to close the pay window.
+		jest.useFakeTimers();
+		const serverOrder = { ...pendingPayload, total: '75.00' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		const localOrder = {
+			uuid: 'uuid-42',
+			payload: {
+				id: 42,
+				number: '42',
+				status: 'pending',
+				payment_method: 'bacs',
+				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+				line_items: [],
+			},
+			getLatest: () => localOrder,
+		};
+		const props = {
+			order: localOrder as never,
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+
+		const { rerender } = render(
+			<PaymentWebview {...props} settledOrderStatus={null} settledGatewayId={null} />
+		);
+
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		// Still no catalog: the poll re-arms rather than giving up.
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		rerender(<PaymentWebview {...props} settledOrderStatus="pending" settledGatewayId="bacs" />);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+	});
+
+	it('ignores a late payment message once the poll has already settled the sale', async () => {
+		const serverOrder = { ...pendingPayload, total: '75.00' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+
+		await postReceived(pendingPayload);
+
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not navigate or re-arm after the modal has unmounted', async () => {
+		jest.useFakeTimers();
+		let resolveGet: (value: unknown) => void = () => {};
+		mockGet.mockReturnValue(
+			new Promise((resolve) => {
+				resolveGet = resolve;
+			})
+		);
+
+		const { unmount } = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ not: 'an order' });
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		unmount();
+
+		await act(async () => {
+			resolveGet({ data: [{ ...pendingPayload, total: '75.00' }] });
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(10_000);
+		});
+
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+	});
+
+	it('still ignores a local order that is not open and not settled', async () => {
+		// A partial tender locally: still owed money, not this poll's to close —
+		// exactly as before.
+		mockGet.mockResolvedValue({ data: [{ ...pendingPayload, status: 'pos-partial' }] });
+		const localOrder = {
+			uuid: 'uuid-42',
+			payload: {
+				id: 42,
+				number: '42',
+				status: 'pos-partial',
+				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+				line_items: [],
+			},
+			getLatest: () => localOrder,
+		};
+
+		render(
+			<PaymentWebview
+				order={localOrder as never}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("completes a pending sale from the postMessage when pending is the gateway's stored status", async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setLoading = jest.fn();
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived(pendingPayload);
+
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect(logger.success).toHaveBeenCalledTimes(1);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(pendingPayload);
+		expect(setLoading).toHaveBeenCalledWith(false);
+		// Settled on the message's say-so, so no server poll was armed.
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	it("still defers a pending postMessage when the gateway's stored status is something else", async () => {
+		// An async gateway configured for `completed` that redirected before its
+		// provider confirmed: pending is not ITS status, so the sale is not done.
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="completed"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived(pendingPayload);
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+	});
+
+	it("completes a pending sale from the fallback poll when pending is the gateway's stored status", async () => {
+		// A hardened store emits nothing it does not call paid, so the only signal is
+		// the poll: server truth says pending, and pending is what the merchant chose.
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const serverOrder = { ...pendingPayload, total: '75.00', payment_method: 'bacs' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		// A malformed message arms the poll immediately, with no timer to advance.
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(logger.success).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ status: 'pending', source: 'fallback-refresh' }),
+			})
+		);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+	});
+
+	it('never settles a parked status even when it is the stored status', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pos-open"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived({ ...pendingPayload, status: 'pos-open' });
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+	});
 });
 
 /**
