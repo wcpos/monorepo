@@ -28,13 +28,14 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { ensureRegisterOpen, getStoreVariant } from './fixtures';
+import { ensureRegisterOpen, getStoreVariant, navigateToPage } from './fixtures';
 import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	readCartMoney,
 	readOrder,
+	type ServerOrder,
 	stampRunLabel,
 	type TrackedOrder,
 } from './order-lifecycle';
@@ -762,4 +763,151 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			}
 		);
 	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* Contract 1.2: a gateway that declares its fields (roadmap#419)             */
+/* -------------------------------------------------------------------------- */
+
+interface GatewayDescriptor extends Descriptor {
+	capabilities?: { change?: boolean; amount?: { partial?: boolean } };
+	fields?: {
+		schema?: number;
+		verb?: { kind?: string; label?: string };
+		components?: { component?: string; id?: string; input?: string; required?: boolean }[];
+	};
+}
+
+/**
+ * The first method the app drives itself with a `send` verb and an email field, in a fields
+ * schema this app knows and taking the whole order — the shape the walk below asserts.
+ */
+function sendGateway(descriptors: Descriptor[]): GatewayDescriptor | undefined {
+	return (descriptors as GatewayDescriptor[]).find(
+		(method) =>
+			method.pos_enabled &&
+			method.capture?.mode === 'gateway' &&
+			(method.fields?.schema ?? 1) <= 1 &&
+			method.capabilities?.amount?.partial === false &&
+			method.fields?.verb?.kind === 'send' &&
+			method.fields.components?.some(
+				(component) => component.component === 'field' && component.input === 'email'
+			)
+	);
+}
+
+function awaitingCustomer(order: ServerOrder): { attempt_id?: string } | null {
+	const meta = order.meta_data as { key?: string; value?: unknown }[] | undefined;
+	const value = meta?.find((entry) => entry.key === '_wcpos_awaiting_customer')?.value;
+	return value && typeof value === 'object' ? (value as { attempt_id?: string }) : null;
+}
+
+liveTest.describe('POS declared UI: a gateway that sends the customer away (live store)', () => {
+	liveTest.beforeEach(async ({}, testInfo) => {
+		liveTest.skip(getStoreVariant(testInfo) !== 'pro', 'tender checkout smoke runs on Pro');
+	});
+
+	liveTest(
+		'sends an invoice, sends it again from Orders, then cancels it from Orders',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const { orderId, uuid, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const gateway = sendGateway(descriptors);
+			liveTest.skip(!gateway, 'store declares no gateway-mode method with a send verb');
+			const emailField = gateway!.fields!.components!.find(
+				(component) => component.component === 'field' && component.input === 'email'
+			)!;
+			const email = `invoice-${orderId}@example.com`;
+
+			// 1. Send: the pill, the declared helpers, the verb on the commit, the sent moment.
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			await page.getByTestId(`checkout-method-${gateway!.id}`).click();
+			await expect(page.getByTestId('checkout-fields')).toBeVisible({ timeout: 15_000 });
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
+				.toBe(balance);
+			// The entry is read-only for a method that takes no part payment.
+			expect(await page.getByTestId('checkout-key-5').isDisabled()).toBe(true);
+			await expect(page.getByTestId('checkout-commit')).toContainText(
+				gateway!.fields!.verb!.label!
+			);
+			await page.getByTestId(`checkout-field-${emailField.id}`).fill(email);
+			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
+			await page.getByTestId('checkout-commit').click();
+			// Language-agnostic: the sent surface by its test IDs, the destination by the value typed.
+			await expect(page.getByTestId('checkout-sent')).toBeVisible({ timeout: 120_000 });
+			await expect(page.getByTestId('checkout-sent-headline')).toBeVisible();
+			await expect(page.getByTestId('receipt-paid-with')).toContainText(email);
+			await page.getByTestId('checkout-sent-new').click();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+
+			let server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => awaitingCustomer(order) !== null && order.status !== 'pos-open',
+				'the server must stamp the sent order and leave it unpaid'
+			);
+			expect(ledgerRows(server), 'a sent order carries no payment leg').toHaveLength(0);
+			const firstAttempt = awaitingCustomer(server)!.attempt_id;
+
+			// 2. Send again from Orders: the pane lists the invoice line and re-opens the till on
+			//    the gateway, under a new attempt.
+			await navigateToPage(page, 'orders');
+			const screen = page.getByTestId('screen-orders');
+			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
+			const row = screen.getByTestId(`data-table-row-${uuid}`);
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.click();
+			await expect(page.getByTestId('order-pane')).toBeVisible({ timeout: 15_000 });
+			await expect(page.getByTestId('orders-send-again')).toBeVisible({ timeout: 15_000 });
+			await page.getByTestId('orders-send-again').click();
+			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
+			await page.getByTestId('checkout-button').click();
+			await expect(page.getByTestId('checkout-invoice-sent')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('checkout-invoice-sent')).toContainText(email);
+			await expect(page.getByTestId('checkout-fields')).toBeVisible({ timeout: 15_000 });
+			// The last destination is prefilled for Send again; a guest order has no billing email.
+			await expect(page.getByTestId(`checkout-field-${emailField.id}`)).toHaveValue(email);
+			await page.getByTestId('checkout-commit').click();
+			await expect(page.getByTestId('checkout-sent')).toBeVisible({ timeout: 120_000 });
+			await page.getByTestId('checkout-sent-new').click();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+			server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => {
+					const stamp = awaitingCustomer(order);
+					return stamp !== null && stamp.attempt_id !== firstAttempt;
+				},
+				'a second send must replace the stamp with a new attempt'
+			);
+
+			// 3. Cancel from Orders: the order comes back open, the stamp goes.
+			await navigateToPage(page, 'orders');
+			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.click();
+			await expect(page.getByTestId('orders-cancel-invoice')).toBeVisible({ timeout: 15_000 });
+			await page.getByTestId('orders-cancel-invoice').click();
+			server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => awaitingCustomer(order) === null && order.status === 'pos-open',
+				'cancelling the invoice must return the order to pos-open without the stamp'
+			);
+			expect(ledgerRows(server), 'a cancelled invoice records no payment').toHaveLength(0);
+		}
+	);
 });

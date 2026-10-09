@@ -52,6 +52,59 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
+// The declared-fields helpers draw host controls; their native deps stay out of jsdom.
+type MockCheckboxProps = {
+	testID?: string;
+	checked?: boolean;
+	disabled?: boolean;
+	onCheckedChange?: (next: boolean) => void;
+};
+type MockInputProps = {
+	testID?: string;
+	value?: string;
+	editable?: boolean;
+	onChangeText?: (next: string) => void;
+};
+type MockSelectProps = {
+	options: { value: string; label: string }[];
+	value?: string;
+	placeholder: string;
+	onChange?: (next: string) => void;
+};
+jest.mock('@wcpos/components/checkbox', () => ({
+	Checkbox: ({ testID, checked, onCheckedChange, disabled }: MockCheckboxProps) => (
+		<input
+			type="checkbox"
+			data-testid={testID}
+			checked={!!checked}
+			disabled={disabled}
+			onChange={(event) => onCheckedChange?.(event.target.checked)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/input', () => ({
+	Input: ({ testID, value, onChangeText, editable }: MockInputProps) => (
+		<input
+			data-testid={testID}
+			value={value ?? ''}
+			disabled={editable === false}
+			onChange={(event) => onChangeText?.(event.target.value)}
+		/>
+	),
+}));
+jest.mock('@wcpos/components/select', () => ({
+	OptionSelect: ({ options, value, onChange, placeholder }: MockSelectProps) => (
+		<select value={value ?? ''} onChange={(event) => onChange?.(event.target.value)}>
+			<option value="">{placeholder}</option>
+			{options.map((option) => (
+				<option key={option.value} value={option.value}>
+					{option.label}
+				</option>
+			))}
+		</select>
+	),
+}));
 // The leg view has its own suite; here it only needs to stay out of the saving skeleton's way.
 jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({
@@ -161,6 +214,11 @@ function makeFlow(count = 1): TenderFlow {
 		pickMethod: jest.fn(),
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
+		fieldValues: {},
+		setFieldValues: jest.fn(),
+		fieldErrors: {},
+		invoiceSent: null,
+		cancelInvoice: jest.fn(),
 	};
 }
 // The pane while saving is the keypad it is about to be, inert: the save settling must not
@@ -726,4 +784,166 @@ it.each([
 		expect(row.className).toContain('flex-row gap-2');
 		expect(row.children).toHaveLength(columns);
 	}
+});
+
+describe('declared UI (contract 1.2)', () => {
+	const invoice: PaymentMethodDescriptor = {
+		...method,
+		id: 'wcpos_email_invoice',
+		title: 'Email Invoice',
+		kind: 'other',
+		capture: { mode: 'gateway', provider: null, hardware: null, webview_available: true },
+		capabilities: {
+			...method.capabilities,
+			amount: { partial: false },
+			change: false,
+			offline: 'none',
+		},
+		fields: {
+			schema: 1,
+			verb: { kind: 'send', label: 'Send invoice' },
+			components: [
+				{ component: 'note', text: 'An email will be sent.' },
+				{
+					component: 'field',
+					id: 'woocommerce_pos_invoice_email_address',
+					input: 'email',
+					label: 'Email address',
+					required: true,
+					default: '',
+					prefill: 'order.billing.email',
+				},
+				{
+					component: 'checkbox',
+					id: 'woocommerce_pos_save_billing_email',
+					label: 'Save email to billing address',
+					default: false,
+					prefill: null,
+				},
+				{ component: 'hologram', id: 'future' },
+			],
+		},
+	};
+	function invoiceFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
+		return {
+			...makeFlow(),
+			saveState: null,
+			method: invoice,
+			tiles: [{ method: invoice, disabled: false, reason: null, worksOffline: false }],
+			state: { ...initialTenderState, view: 'amount', methodId: invoice.id, entryMinor: 9295 },
+			entryAppliedMinor: 9295,
+			fieldValues: {
+				woocommerce_pos_invoice_email_address: 'buyer@example.com',
+				woocommerce_pos_save_billing_email: false,
+			},
+			...overrides,
+		};
+	}
+	it('draws the components in declaration order with the verb on the commit, keypad read-only', () => {
+		const flow = invoiceFlow();
+		render(<TenderPane flow={flow} format={String} />);
+		const fields = screen.getByTestId('checkout-fields');
+		expect(fields.textContent).toContain('An email will be sent.');
+		const email = screen.getByTestId(
+			'checkout-field-woocommerce_pos_invoice_email_address'
+		) as HTMLInputElement;
+		const save = screen.getByTestId(
+			'checkout-field-woocommerce_pos_save_billing_email'
+		) as HTMLInputElement;
+		expect(email.value).toBe('buyer@example.com');
+		expect(save.checked).toBe(false);
+		expect(screen.queryByText('future')).toBeNull();
+		expect(screen.getByTestId('checkout-commit').textContent).toBe('Send invoice · 9295');
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+		expect(screen.getByTestId('checkout-key-5').hasAttribute('disabled')).toBe(true);
+		expect(screen.queryByTestId('checkout-quick-balance')).toBeNull();
+		fireEvent.change(screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address'), {
+			target: { value: 'x@y.z' },
+		});
+		expect(flow.setFieldValues).toHaveBeenCalledWith(
+			{ woocommerce_pos_invoice_email_address: 'x@y.z', woocommerce_pos_save_billing_email: false },
+			'woocommerce_pos_invoice_email_address'
+		);
+		fireEvent.click(screen.getByTestId('checkout-commit'));
+		expect(flow.takeTender).toHaveBeenCalled();
+	});
+	it('an amount typed over the balance on another pill is not an overpayment here', () => {
+		render(
+			<TenderPane
+				flow={invoiceFlow({
+					state: {
+						...initialTenderState,
+						view: 'amount',
+						methodId: invoice.id,
+						entryMinor: 10000,
+						entryDirty: true,
+					},
+				})}
+				format={String}
+			/>
+		);
+		expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+		expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	});
+	it('holds Send until the required component is filled, naming it', () => {
+		render(
+			<TenderPane
+				flow={invoiceFlow({ fieldValues: { woocommerce_pos_invoice_email_address: '' } })}
+				format={String}
+			/>
+		);
+		expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('Enter Email address');
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	});
+	it('renders a refusal under its component and the form line above the commit', () => {
+		render(
+			<TenderPane
+				flow={invoiceFlow({
+					fieldErrors: {
+						woocommerce_pos_invoice_email_address: 'Enter a valid email.',
+						_form: 'Mail server unreachable.',
+					},
+				})}
+				format={String}
+			/>
+		);
+		expect(
+			screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address-error').textContent
+		).toBe('Enter a valid email.');
+		expect(screen.getByTestId('checkout-form-error').textContent).toBe('Mail server unreachable.');
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	});
+	it('a sent order shows where the invoice went and offers to cancel it', () => {
+		const flow = invoiceFlow({
+			invoiceSent: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-0',
+				sent_at_gmt: '2026-10-08T10:35:00.000Z',
+				cashier_id: 7,
+			},
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-invoice-sent').textContent).toContain(
+			'Invoice sent to buyer@example.com on Oct 8, 10:35 PM'
+		);
+		fireEvent.click(screen.getByTestId('checkout-cancel-invoice'));
+		expect(flow.cancelInvoice).toHaveBeenCalled();
+	});
+	it('lists an unavailable gateway with the split reason', () => {
+		const flow = invoiceFlow({
+			method: null,
+			state: initialTenderState,
+			tiles: [
+				{ method, disabled: false, reason: null, worksOffline: true },
+				{ method: invoice, disabled: true, reason: 'not_with_split', worksOffline: false },
+			],
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+		expect(screen.getByTestId('checkout-unavailable-wcpos_email_invoice').textContent).toContain(
+			'Takes the whole order, so not once a payment has been taken'
+		);
+	});
 });

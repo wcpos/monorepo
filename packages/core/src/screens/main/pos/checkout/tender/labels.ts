@@ -59,6 +59,10 @@ export function disabledReasonKey(reason: TileDisabledReason): string {
 			return 'pos_checkout.no_readers_set_up';
 		case 'offline':
 			return 'pos_checkout.needs_a_connection';
+		case 'not_with_split':
+			return 'pos_checkout.not_with_split';
+		case 'unsupported_fields':
+			return 'pos_checkout.update_app_to_use';
 	}
 }
 

@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
+import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
@@ -32,6 +33,7 @@ import { TotalsSection } from '../view/sections/totals';
 import { useOrderRefunds } from '../view/use-order-refunds';
 import { OrderStatusBadge } from './cells/status';
 import { OrderActionsMenu } from './order-menu';
+import { InvoiceActions } from './invoice-actions';
 
 type Props = { selected: string; onClose: () => void };
 type OrderPayload = EngineRecord<'orders'>['payload'];
@@ -111,6 +113,8 @@ function OrderPaneContent({
 					: undefined;
 	const canRefund =
 		!!payload.id && !!payload.status && REFUNDABLE_STATUSES.includes(payload.status);
+	// Contract 1.2 §4.3: a sent order waits for its customer; any money taken since clears it.
+	const invoiceStamp = payload.id ? activeAwaitingCustomer(payload.meta_data) : null;
 	return (
 		<>
 			<View className="border-border h-12 flex-row items-center gap-2 border-b px-2">
@@ -169,7 +173,8 @@ function OrderPaneContent({
 				<PaymentSection order={payload} />
 				<POSMetadataSection order={payload} last />
 			</ScrollView>
-			<View className="border-border flex-row justify-end gap-2 border-t p-2">
+			<View className="border-border flex-row flex-wrap justify-end gap-2 border-t p-2">
+				{!readOnly && invoiceStamp ? <InvoiceActions order={order} stamp={invoiceStamp} /> : null}
 				{canRefund && (
 					<Button
 						variant="outline-destructive"

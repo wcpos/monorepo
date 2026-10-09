@@ -1,7 +1,15 @@
 import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { derive, fromMinor, type PaymentRow, readLedger, toMinor } from '@wcpos/order-math';
+import {
+	activeAwaitingCustomer,
+	type AwaitingCustomerStamp,
+	derive,
+	fromMinor,
+	type PaymentRow,
+	readLedger,
+	toMinor,
+} from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { buildTenderTiles, type TenderTile } from './tiles';
@@ -11,6 +19,8 @@ import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 
 export interface LedgerView {
 	rows: PaymentRow[];
+	/** Contract 1.2: the order was sent to the customer and no money has been taken since. */
+	invoiceSent: AwaitingCustomerStamp | null;
 	tiles: TenderTile[];
 	dp: number;
 	totalMinor: number;
@@ -36,6 +46,7 @@ export function useLedgerView(
 	);
 	return {
 		rows,
+		invoiceSent: activeAwaitingCustomer(payload.meta_data),
 		tiles,
 		dp,
 		totalMinor: toMinor(payload.total, dp),

@@ -24,9 +24,11 @@ export type ErrorCode =
 	| 'CHECKOUT301'
 	| 'PAYMENT101'
 	| 'PAYMENT111'
+	| 'PAYMENT113'
 	| 'PAYMENT121'
 	| 'PAYMENT201'
 	| 'PAYMENT211'
+	| 'PAYMENT212'
 	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT401'
@@ -339,6 +341,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'money-moved',
 		summary: 'The store recorded this payment, but the till could not save its own copy.',
 	},
+	PAYMENT113: {
+		code: 'PAYMENT113',
+		symbol: 'PAYMENT_INVOICE_NOT_MIRRORED',
+		domain: 'PAYMENT',
+		severity: 'warn',
+		actionHint: "Nothing to do: the till's copy of the order catches up on the next sync.",
+		dataSafety: 'no-impact',
+		summary: 'The store sent or cancelled the invoice, but this till could not save its copy.',
+	},
 	PAYMENT121: {
 		code: 'PAYMENT121',
 		symbol: 'PAYMENT_CAPTURED_ORDER_UNFINISHED',
@@ -365,6 +376,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Ask for another card or take a different payment method.',
 		dataSafety: 'no-impact',
 		summary: 'The terminal did not take this payment.',
+	},
+	PAYMENT212: {
+		code: 'PAYMENT212',
+		symbol: 'PAYMENT_GATEWAY_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Correct the details and send again, or take a different payment method.',
+		dataSafety: 'no-impact',
+		summary: 'The gateway did not accept this payment.',
 	},
 	PAYMENT221: {
 		code: 'PAYMENT221',
@@ -1095,9 +1115,11 @@ export const ERROR_CODES = {
 	SKU_DUPLICATE: 'CHECKOUT301',
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
 	PAYMENT_RECORDED_NOT_MIRRORED: 'PAYMENT111',
+	PAYMENT_INVOICE_NOT_MIRRORED: 'PAYMENT113',
 	PAYMENT_CAPTURED_ORDER_UNFINISHED: 'PAYMENT121',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	PAYMENT_TERMINAL_REFUSED: 'PAYMENT211',
+	PAYMENT_GATEWAY_REFUSED: 'PAYMENT212',
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',

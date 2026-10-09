@@ -15,6 +15,8 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
+import { firstMissingRequired } from './declared-fields';
+import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { deviceTransports, selectableReaders } from './tiles';
@@ -23,6 +25,7 @@ import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useT } from '../../../../../contexts/translations';
+import { useDateFormat } from '../../../hooks/use-date-format';
 
 import type { OrderSaveState } from '../checkout-mode';
 import type { TenderKey } from './tender-state';
@@ -177,6 +180,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const givesChange = method?.capabilities.change === true;
 	const server = method?.capture.mode === 'server';
 	const remote = server || method?.capture.mode === 'device';
+	// Contract 1.2: the gateway's declared components are the helpers; its verb is the commit.
+	// The entry is pre-typed to the balance and read-only for a method that takes no part payment.
+	const fields = method?.capture.mode === 'gateway' ? (method.fields ?? null) : null;
+	const missing = fields ? firstMissingRequired(fields, flow.fieldValues) : null;
+	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
 	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
 	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
 	const needsReader =
@@ -191,7 +199,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const groupDone =
 		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
 	const due = flow.thisPaymentMinor;
-	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.balanceMinor);
+	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
+	const noChange = Boolean(
+		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
+	);
 	const left = flow.balanceMinor - flow.entryAppliedMinor;
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
@@ -219,23 +230,30 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</Button>
 		);
 	});
-	const hint = noChange
-		? t('pos_checkout.no_change_for_method', {
-				amount: format(flow.balanceMinor),
-				method: method?.title,
-			})
-		: flow.entryChangeMinor > 0
-			? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
-			: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
-				? plan
-					? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
-					: t('pos_checkout.part_payment_left', { left: format(left) })
-				: '';
+	const hint = missing
+		? t('pos_checkout.enter_field', { label: missing.label })
+		: noChange
+			? t('pos_checkout.no_change_for_method', {
+					amount: format(flow.balanceMinor),
+					method: method?.title,
+				})
+			: flow.entryChangeMinor > 0
+				? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
+				: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+					? plan
+						? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
+						: t('pos_checkout.part_payment_left', { left: format(left) })
+					: '';
 	const commit = method
-		? t(remote ? 'pos_checkout.send_amount_to' : 'pos_checkout.take_amount_in', {
-				amount: format(flow.entryAppliedMinor),
-				method: method.title,
-			}) +
+		? (fields
+				? t('pos_checkout.send_verb_amount', {
+						label: fields.verb.label,
+						amount: format(flow.entryAppliedMinor),
+					})
+				: t(remote ? 'pos_checkout.send_amount_to' : 'pos_checkout.take_amount_in', {
+						amount: format(flow.entryAppliedMinor),
+						method: method.title,
+					})) +
 			(plan && !groupDone
 				? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
 				: left > 0
@@ -249,6 +267,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		<ScrollView
 			testID="checkout-keypad-pane"
 			className="bg-card flex-1"
+			// A declared field leaves the keyboard open: the first tap on Send must reach it.
+			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
 			contentContainerClassName="items-center gap-2"
 			contentContainerStyle={{ height: contentHeight }}
@@ -271,7 +291,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
-				{flow.balanceMinor > 0 ? (
+				{flow.balanceMinor > 0 && !fixedAmount ? (
 					<Chip
 						on={!!plan}
 						label={t('pos_checkout.split')}
@@ -294,7 +314,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				testID="checkout-entry"
 				className={`text-foreground text-amt font-bold tabular-nums ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
 			>
-				{format(flow.state.view === 'select' ? due : flow.state.entryMinor)}
+				{format(
+					flow.state.view === 'select'
+						? due
+						: fixedAmount
+							? flow.entryAppliedMinor
+							: flow.state.entryMinor
+				)}
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
@@ -303,6 +329,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			>
 				{hint}
 			</Text>
+			{flow.invoiceSent ? <InvoiceSentLine flow={flow} busy={busy} /> : null}
 			{plan ? (
 				<View
 					testID="checkout-plan"
@@ -487,7 +514,17 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</VStack>
 			) : null}
 
-			{method ? (
+			{fields ? (
+				<DeclaredFieldsView
+					fields={fields}
+					values={flow.fieldValues}
+					errors={flow.fieldErrors}
+					onChange={flow.setFieldValues}
+					disabled={busy}
+				/>
+			) : null}
+
+			{method && !fixedAmount ? (
 				<View className="flex-row flex-wrap justify-center gap-2">
 					{(givesChange && !remote ? flow.quickAmountsMinor : []).map((minor) => (
 						<Chip
@@ -513,7 +550,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			) : null}
 
 			<Keypad
-				rows={KEYPAD_ROWS.map((row) => row.map((key) => ({ ...key, disabled: busy })))}
+				rows={KEYPAD_ROWS.map((row) =>
+					row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
+				)}
 				onPress={(value) => flow.dispatch({ type: 'key', key: value as TenderKey })}
 				fit={shrink ? 'shrink' : 'tile'}
 				testID="checkout-keypad"
@@ -533,7 +572,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						flow.entryAppliedMinor <= 0 ||
 						needsReader ||
 						Boolean(reason) ||
-						noChange
+						noChange ||
+						missing !== null
 					}
 					onPress={() => void flow.takeTender()}
 				>
@@ -548,6 +588,42 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 function methodIcon(method: TenderTile['method']) {
 	return method.kind === 'cash' ? 'cashRegister' : 'creditCard';
+}
+
+/**
+ * §4.3: an order sent to the customer and opened again. The keypad above takes money on the
+ * full balance (a counting row clears the stamp), the gateway pill sends again under a new
+ * attempt, and Cancel invoice names the attempt the store is holding.
+ */
+function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
+	const t = useT();
+	const stamp = flow.invoiceSent!;
+	const sentOn = useDateFormat(stamp.sent_at_gmt, 'MMM d, h:mm a', false);
+	return (
+		<View
+			testID="checkout-invoice-sent"
+			className="bg-muted w-full max-w-md flex-row flex-wrap items-center gap-2 rounded-md px-3 py-2"
+		>
+			<Icon name="clock" size="xs" className="text-muted-foreground" />
+			<Text className="text-foreground flex-1 text-sm" decodeHtml>
+				{stamp.destination
+					? t('pos_checkout.invoice_sent_to_on', {
+							destination: stamp.destination,
+							date: sentOn ?? '',
+						})
+					: t('pos_checkout.invoice_sent_on', { date: sentOn ?? '' })}
+			</Text>
+			<Button
+				variant="ghost-destructive"
+				size="sm"
+				testID="checkout-cancel-invoice"
+				disabled={busy || !flow.online}
+				onPress={() => void flow.cancelInvoice()}
+			>
+				<ButtonText className="underline">{t('pos_checkout.cancel_invoice')}</ButtonText>
+			</Button>
+		</View>
+	);
 }
 
 function MethodStatus({ tile, selected }: { tile: TenderTile; selected?: boolean }) {

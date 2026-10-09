@@ -264,3 +264,42 @@ it('allows SDK login setup without making a logged-out reader ready for payment'
 			.reason
 	).toEqual({ type: 'reader_in_use', number: '99' });
 });
+
+describe('gateway capture mode (contract 1.2)', () => {
+	const invoice = makeMethod({
+		id: 'wcpos_email_invoice',
+		title: 'Email Invoice',
+		kind: 'other',
+		order: 5,
+		capture: { mode: 'gateway', webview_available: true },
+		capabilities: { amount: { partial: false }, change: false, offline: 'none' },
+		fields: { schema: 1, verb: { kind: 'send', label: 'Send invoice' }, components: [] },
+	});
+	it('is a pill online with no live leg, offline it needs a connection', () => {
+		expect(buildTenderTiles([invoice], { online: true })[0]).toMatchObject({
+			disabled: false,
+			reason: null,
+		});
+		expect(buildTenderTiles([invoice], { online: false })[0].reason).toBe('offline');
+	});
+	it('cannot be one leg beside money already held', () => {
+		expect(buildTenderTiles([invoice], { online: true, hasLiveLeg: true })[0].reason).toBe(
+			'not_with_split'
+		);
+	});
+	it('a fields schema this build does not know disables the pill and keeps the Legacy tab', () => {
+		const newer = { ...invoice, fields: { ...invoice.fields!, schema: 2 } };
+		expect(buildTenderTiles([newer], { online: true })[0].reason).toBe('unsupported_fields');
+		expect(legacyPaymentMethods([invoice, newer]).map((method) => method.id)).toEqual([
+			'wcpos_email_invoice',
+		]);
+	});
+	it('a method the app can drive is no longer offered on the Legacy tab', () => {
+		const legacy = makeMethod({ id: 'legacy', capture: { mode: 'webview' } });
+		const fallback = makeMethod({ id: 'fallback', capture: { webview_available: true } });
+		expect(legacyPaymentMethods([invoice, legacy, fallback]).map((method) => method.id)).toEqual([
+			'legacy',
+			'fallback',
+		]);
+	});
+});

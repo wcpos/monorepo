@@ -28,6 +28,7 @@ export const SYNC_EVENT_TYPES = [
 	'checkout.opened',
 	'checkout.order-refresh',
 	'checkout.provenance-skipped',
+	'checkout.sent',
 	'checkout.split-planned',
 	'connectivity.device-offline',
 	'connectivity.restored',
@@ -334,6 +335,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.checkout_provenance_skipped',
 		description:
 			'This till is not bound to a register, so the sale carries no register or sale number.',
+		introducedIn: '2.0.0',
+	},
+	'checkout.sent': {
+		type: 'checkout.sent',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.checkout_sent',
+		label: 'Sent the sale to the customer',
+		descriptionKey: 'health.logs.event_description.checkout_sent',
+		description:
+			'The gateway sent the customer away to pay (an invoice, a link); the order waits for them.',
 		introducedIn: '2.0.0',
 	},
 	'checkout.split-planned': {

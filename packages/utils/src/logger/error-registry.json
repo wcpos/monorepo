@@ -543,6 +543,25 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT113",
+		"symbol": "PAYMENT_INVOICE_NOT_MIRRORED",
+		"domain": "PAYMENT",
+		"severity": "warn",
+		"actionHint": "Nothing to do: the till's copy of the order catches up on the next sync.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The store sent or cancelled the invoice, but this till could not save its copy.",
+		"docsBody": "The store answered: the invoice was sent to the customer, or cancelled, and the order on the store says so. Only this till's local copy of the order failed to save. No money moved and nothing needs to be sent again; the till's copy is replaced by the store's on the next sync.",
+		"troubleshooting": [
+			"Open the order in Orders: the store's copy shows the invoice line or the open status.",
+			"If the till still shows the old state after a sync, check Store health for a stuck record."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#419",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"code": "PAYMENT121",
 		"symbol": "PAYMENT_CAPTURED_ORDER_UNFINISHED",
 		"domain": "PAYMENT",
@@ -608,6 +627,26 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "PAYMENT212",
+		"symbol": "PAYMENT_GATEWAY_REFUSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Correct the details and send again, or take a different payment method.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The gateway did not accept this payment.",
+		"docsBody": "The payment gateway refused the details the POS sent it, or ended without taking the payment. Nothing was charged, nothing was sent to the customer, and the order still owes its balance. The gateway's own message is on the log row.",
+		"troubleshooting": [
+			"Read the gateway's message on the toast or the log row.",
+			"Correct the details (the email address, the option chosen) and send again.",
+			"If the gateway keeps refusing, check its settings on the WooCommerce payments page."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#419",
 		"introducedIn": "2.0.0"
 	},
 	{

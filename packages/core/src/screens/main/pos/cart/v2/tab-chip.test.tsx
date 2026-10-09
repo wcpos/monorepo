@@ -128,6 +128,24 @@ it.each(['pending', 'authorized'] as const)(
 	}
 );
 
+it('a sent order at its receipt moment reads Invoice sent, not Paid', () => {
+	enterReceipt('a');
+	const order = {
+		uuid: 'a',
+		payload: {
+			total: '10.00',
+			meta_data: [
+				{
+					key: '_wcpos_awaiting_customer',
+					value: { method_id: 'wcpos_email_invoice', attempt_id: 'x', destination: 'b@c.d' },
+				},
+			],
+		},
+	} as unknown as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Invoice sent · receipt');
+});
+
 it('suppresses active chips and renders a phone dot without a word', () => {
 	enterCheckout('a');
 	const order = {

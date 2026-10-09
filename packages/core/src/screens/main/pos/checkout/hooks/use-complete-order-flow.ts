@@ -25,17 +25,16 @@ export function useCompleteOrderFlow(
 
 	return React.useCallback(
 		async (outcome: SaleOutcome) => {
-			if (
-				(await completeSale(
-					ctx,
-					order,
-					outcome,
-					receiptHost === 'stage'
-						? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
-						: { host: 'modal' }
-				)) !== 'completed'
-			)
-				return;
+			const result = await completeSale(
+				ctx,
+				order,
+				outcome,
+				receiptHost === 'stage'
+					? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
+					: { host: 'modal' }
+			);
+			// A sent sale leaves the till exactly as a completed one does (spec §4.2).
+			if (result !== 'completed' && result !== 'sent') return;
 			// The webview already routed before catch-up; never route it a second time.
 			if (outcome.source === 'gateway-snapshot') return;
 

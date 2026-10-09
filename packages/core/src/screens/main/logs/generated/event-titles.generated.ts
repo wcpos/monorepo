@@ -60,6 +60,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.checkout_order_refresh');
 		case 'checkout.provenance-skipped':
 			return t('health.logs.event.checkout_provenance_skipped');
+		case 'checkout.sent':
+			return t('health.logs.event.checkout_sent');
 		case 'checkout.split-planned':
 			return t('health.logs.event.checkout_split_planned');
 		case 'connectivity.device-offline':
@@ -323,6 +325,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.checkout_order_refresh');
 		case 'checkout.provenance-skipped':
 			return t('health.logs.event_description.checkout_provenance_skipped');
+		case 'checkout.sent':
+			return t('health.logs.event_description.checkout_sent');
 		case 'checkout.split-planned':
 			return t('health.logs.event_description.checkout_split_planned');
 		case 'connectivity.device-offline':

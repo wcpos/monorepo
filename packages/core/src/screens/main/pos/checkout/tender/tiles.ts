@@ -1,4 +1,5 @@
 import {
+	FIELDS_SCHEMA,
 	KNOWN_CAPTURE_MODES,
 	type PaymentMethodDescriptor,
 	type PaymentTransport,
@@ -27,6 +28,10 @@ export type TileDisabledReason =
 	| 'driver_not_logged_in'
 	/** The method needs the network and the till is offline. */
 	| 'offline'
+	/** A gateway runs the whole order; it cannot be one leg beside money already held. */
+	| 'not_with_split'
+	/** The `fields` block names a schema with value-bearing components this build cannot post. */
+	| 'unsupported_fields'
 	| 'no_readers'
 	| { type: 'reader_in_use'; number: string };
 
@@ -99,6 +104,8 @@ export function buildTenderTiles(
 		readersInUse?: ReadersInUse;
 		currentOrderUuid?: string;
 		transports?: Record<string, PaymentTransport>;
+		/** The ledger holds pending, authorized or captured money. */
+		hasLiveLeg?: boolean;
 	}
 ): TenderTile[] {
 	return methods
@@ -135,6 +142,10 @@ export function buildTenderTiles(
 					reason = { type: 'reader_in_use', number: holder.orderNumber };
 			} else if (method.capture.mode === 'stored_value') {
 				reason = 'no_driver';
+			} else if (method.capture.mode === 'gateway') {
+				if (!appCanDrive(method)) reason = 'unsupported_fields';
+				else if (!options.online) reason = 'offline';
+				else if (options.hasLiveLeg) reason = 'not_with_split';
 			} else if (method.capture.mode === 'server') {
 				const { readers } = selectableReaders(
 					method,
@@ -157,7 +168,18 @@ export function buildTenderTiles(
 			};
 		});
 }
-/** The methods the Legacy tab offers: webview mode or a declared webview fallback. */
+/**
+ * A `gateway` method the app can drive: its `fields` block (if any) is a schema this build
+ * knows, so every value the gateway expects can be posted. A higher schema may carry a
+ * value-bearing component this build would silently omit (contract 1.2 §1.2).
+ */
+export function appCanDrive(method: PaymentMethodDescriptor): boolean {
+	return (
+		method.capture.mode === 'gateway' && (method.fields?.schema ?? FIELDS_SCHEMA) <= FIELDS_SCHEMA
+	);
+}
+
+/** The methods the Legacy tab offers: webview mode or a declared webview fallback the app cannot drive itself. */
 export function legacyPaymentMethods(
 	methods: readonly PaymentMethodDescriptor[]
 ): PaymentMethodDescriptor[] {
@@ -165,7 +187,8 @@ export function legacyPaymentMethods(
 		.filter(
 			(method) =>
 				method.pos_enabled &&
-				(method.capture.mode === 'webview' || method.capture.webview_available)
+				(method.capture.mode === 'webview' ||
+					(method.capture.webview_available && !appCanDrive(method)))
 		)
 		.sort(byOrderThenTitle);
 }

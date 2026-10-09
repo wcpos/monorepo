@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
+import { activeAwaitingCustomer } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { RailSection } from './_section';
@@ -38,14 +39,26 @@ export function PaymentSection({ order, last }: { order: OrderPayload; last?: bo
 
 	const method = order.payment_method_title || order.payment_method;
 	const refunded = totalRefunded(order.refunds);
+	const stamp = activeAwaitingCustomer(order.meta_data);
+	const sentOn = useDateFormat(stamp?.sent_at_gmt, 'MMM d, h:mm a', false);
 
-	if (!method && !order.transaction_id && !datePaid && refunded === 0) {
+	if (!method && !order.transaction_id && !datePaid && refunded === 0 && !stamp) {
 		return null;
 	}
 
 	return (
 		<RailSection title={t('common.payment_method')} last={last}>
 			<KV k={t('common.payment_method')} v={method} />
+			{stamp ? (
+				<KV
+					k={t('pos_checkout.invoice_sent')}
+					v={
+						stamp.destination
+							? t('pos_checkout.sent_to_on', { destination: stamp.destination, date: sentOn ?? '' })
+							: t('pos_checkout.sent_on', { date: sentOn ?? '' })
+					}
+				/>
+			) : null}
 			<KV k={t('common.transaction_id')} v={order.transaction_id} />
 			<KV k={t('orders.captured')} v={datePaid ?? undefined} />
 			{refunded > 0 ? <KV k={t('orders.refund')} v={format(-refunded)} tone="destructive" /> : null}

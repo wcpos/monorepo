@@ -1,6 +1,6 @@
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
-import { derive, readLedger } from '@wcpos/order-math';
+import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -41,6 +41,8 @@ export function TabChip({
 	const { balance } = derive(payload.total, rows, methods, { dp: store.price_num_decimals ?? 2 });
 	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
 	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
+	// Contract 1.2: a sent order waits for its customer; its receipt moment is not a Paid one.
+	const sent = activeAwaitingCustomer(payload.meta_data) !== null;
 	const waiting = rows.find(
 		(row) =>
 			row.capture_mode === 'server' && (row.status === 'pending' || row.status === 'authorized')
@@ -49,7 +51,7 @@ export function TabChip({
 		saveState?.kind === 'rejected'
 			? t('pos_checkout.chip_save_refused')
 			: stage === 'receipt'
-				? t('pos_checkout.chip_paid_receipt')
+				? t(sent ? 'pos_checkout.chip_sent_receipt' : 'pos_checkout.chip_paid_receipt')
 				: waiting
 					? t('pos_checkout.chip_waiting_for_terminal', { amount: format(Number(waiting.amount)) })
 					: captured && Number(balance) > 0

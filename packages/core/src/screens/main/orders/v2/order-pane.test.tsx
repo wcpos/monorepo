@@ -42,6 +42,8 @@ jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null 
 jest.mock('./cells/status', () => ({
 	OrderStatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
+// The invoice actions reach the REST client; they have their own suite.
+jest.mock('./invoice-actions', () => ({ InvoiceActions: () => null }));
 jest.mock('./order-menu', () => ({
 	OrderActionsMenu: ({ trigger }: { trigger: React.ReactNode }) => trigger,
 }));

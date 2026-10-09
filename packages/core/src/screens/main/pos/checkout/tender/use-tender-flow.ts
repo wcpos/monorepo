@@ -6,6 +6,9 @@ import { useRouter } from 'expo-router';
 import { Toast } from '@wcpos/components/toast';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
+	activeAwaitingCustomer,
+	type AwaitingCustomerStamp,
+	type DeclaredValues,
 	derive,
 	fromMinor,
 	mintDevicePayment,
@@ -60,6 +63,15 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
+import { GatewayCancelMirrorError, GatewayMirrorError } from '../payments/submit-gateway-payment';
+import { useGatewayPayment } from '../payments/use-gateway-payment';
+import {
+	declaredValues,
+	destinationOf,
+	firstMissingRequired,
+	isValueComponent,
+	prefillValues,
+} from './declared-fields';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
@@ -152,6 +164,15 @@ export interface TenderFlow {
 	pickMethod: (methodId: string) => void;
 	takeTender: () => Promise<void>;
 	cancelPayment: () => Promise<void>;
+
+	/** Contract 1.2: the values typed into the method's declared components, prefilled per §1.2. */
+	fieldValues: DeclaredValues;
+	setFieldValues: (next: DeclaredValues, changedId: string) => void;
+	/** `wcpos_fields_invalid` lines keyed by component id, `_form` for the gateway's own. */
+	fieldErrors: Record<string, string>;
+	/** The awaiting-customer stamp when the order was sent and no money has been taken since. */
+	invoiceSent: AwaitingCustomerStamp | null;
+	cancelInvoice: () => Promise<void>;
 }
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
@@ -178,6 +199,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const { uiSettings } = useUISettings('pos-cart');
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const intentRow = React.useRef<string | null>(null);
+	// One attempt per press, kept across a lost answer: the retry replays the same id, so the
+	// store answers what it did instead of sending a second invoice. Cleared on any definitive
+	// answer, on a change of pill or of the values (a different attempt), and once the stamp
+	// already names it (the lost answer has synced in; the next press is Send again).
+	const attemptRef = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -188,6 +214,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
 	const queuedOffline = saveState?.kind === 'queued-offline';
 	const recordManualPayment = useRecordManualPayment({ offline: queuedOffline });
+	const gateway = useGatewayPayment();
 	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
@@ -212,6 +239,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			online: online && !queuedOffline,
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
+			hasLiveLeg: rows.some(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
@@ -258,7 +286,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		currentOrderUuid: order.uuid,
 		transports:
 			state.methodId && state.transport ? { [state.methodId]: state.transport } : undefined,
+		hasLiveLeg: liveRows.length > 0,
 	});
+	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
+	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
+	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
@@ -276,6 +308,54 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
 	useDriverStatus(driver);
+	// Typed values live per method so switching pills and back keeps what was entered; the
+	// first look at a method is its prefill. Errors are the last refusal's and clear on edit.
+	const [valuesByMethod, setValuesByMethod] = React.useState({} as Record<string, DeclaredValues>);
+	// A refusal belongs to the pill it came from: errors are keyed by method and vanish on a switch.
+	const [errorsFor, setErrorsFor] = React.useState({
+		methodId: null as string | null,
+		errors: {} as Record<string, string>,
+	});
+	const fields = method?.capture.mode === 'gateway' ? (method.fields ?? null) : null;
+	const fieldValues = React.useMemo(() => {
+		if (!fields || !method) return {};
+		if (valuesByMethod[method.id]) return valuesByMethod[method.id];
+		const values = prefillValues(fields, {
+			billingEmail: payload.billing?.email,
+			billingPhone: payload.billing?.phone,
+		});
+		// Send again (§4.3): where the last invoice went is the best guess for where this one goes.
+		if (stamp?.method_id === method.id && stamp.destination && !destinationOf(fields, values)) {
+			const target = fields.components.find(
+				(component) =>
+					isValueComponent(component) &&
+					component.component === 'field' &&
+					['email', 'tel'].includes(component.input)
+			);
+			if (target && isValueComponent(target)) values[target.id] = stamp.destination;
+		}
+		return values;
+	}, [fields, method, valuesByMethod, payload.billing?.email, payload.billing?.phone, stamp]);
+	const methodId = method?.id ?? null;
+	const fieldErrors = React.useMemo(
+		() => (errorsFor.methodId === methodId ? errorsFor.errors : {}),
+		[errorsFor, methodId]
+	);
+	// The view hands back the whole value set it was showing, so the callback needs no
+	// snapshot of the prefill; an edit clears that component's line and the gateway's own.
+	// Memoized by the compiler: a manual useCallback here cannot name the setter's identity.
+	const setFieldValues = (next: DeclaredValues, changedId: string) => {
+		if (busyRef.current || methodId === null) return;
+		attemptRef.current = null;
+		setValuesByMethod((previous) => ({ ...previous, [methodId]: next }));
+		setErrorsFor((previous) => {
+			if (!(changedId in previous.errors) && !('_form' in previous.errors)) return previous;
+			const errors = { ...previous.errors };
+			delete errors[changedId];
+			delete errors._form;
+			return { ...previous, errors };
+		});
+	};
 	// The reader connected on the Card readers settings page decides the transport; the cashier
 	// no longer picks one in the pay sheet, so a transport remembered from an earlier reader
 	// must not outrank the one that is connected now (WisePad swapped for Tap to Pay).
@@ -304,7 +384,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,
 		}));
-	const plan = activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
+	// A gateway that runs the whole order has no split: whatever plan is stored is ignored for it
+	// (the Split chip is hidden on its keypad) and never written as the sale's provenance.
+	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
+	const plan = fixedAmount ? null : activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
 	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
 	const lines = (payload.line_items ?? []).flatMap((line) => {
 		const id = getUuidFromLineItem(line) ?? line.id;
@@ -347,7 +430,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const planMore = Boolean(label?.rest && lines.some((line) => !state.linesPaidBy[line.id]));
 	const plannedLegMinor = figures?.thisPaymentMinor ?? balanceMinor;
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
-	const entryAppliedMinor = appliedMinor(state.entryMinor, legCapMinor);
+	// A gateway that takes no part payment runs the whole order (§4.1): the entry is the balance
+	// whatever another pill or a plan left typed, so the leg completes and is journaled as such.
+	const entryAppliedMinor = fixedAmount
+		? balanceMinor
+		: appliedMinor(state.entryMinor, legCapMinor);
 	const entryChangeMinor = changeMinor(
 		state.entryMinor,
 		entryAppliedMinor,
@@ -404,7 +491,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? deviceTransports(tile.method).find((item) => item.offline === 'queue')
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;
-			const prefillMinor = state.view === 'amount' ? state.entryMinor : plannedLegMinor;
+			// The entry is shared across pills (ledger line 1), so a fixed gateway never writes the
+			// balance into it: `entryAppliedMinor` applies the balance for it instead. A split plan
+			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
+			const fixed =
+				tile.method.capture.mode === 'gateway' && !tile.method.capabilities.amount.partial;
+			const dropsPlan = fixed && state.plan !== null;
+			if (dropsPlan) {
+				reducerDispatch({ type: 'clear-plan', balanceMinor });
+				setTenderPlan(order.uuid, null);
+			}
+			if (methodId !== state.methodId) attemptRef.current = null;
+			// With the plan gone its share is gone too: the next pill starts from the balance.
+			const prefillMinor = dropsPlan
+				? balanceMinor
+				: state.view === 'amount'
+					? state.entryMinor
+					: plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
@@ -421,10 +524,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		},
 		[
 			plannedLegMinor,
+			balanceMinor,
 			order.uuid,
 			saveState,
 			state.view,
 			state.entryMinor,
+			state.methodId,
+			state.plan,
 			tiles,
 			service,
 			reducerDispatch,
@@ -506,11 +612,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const hasStaleSplit = (payload.meta_data ?? []).some(
 			({ key, value }) => key === SPLIT_META_KEY && value !== null
 		);
-		const splitMeta = state.plan
+		// The STORED plan is journaled, not the active one: the last leg of a finished split still
+		// records its shares (activePlan is null once the legs are done). A whole-order gateway
+		// never has one.
+		const journaledPlan = fixedAmount ? null : state.plan;
+		const splitMeta = journaledPlan
 			? [
 					splitPlanMeta({
-						kind: state.plan.kind,
-						ways: planLegs(state.plan, rowsSinceFrom, balanceMinor).label.ways,
+						kind: journaledPlan.kind,
+						ways: planLegs(journaledPlan, rowsSinceFrom, balanceMinor).label.ways,
 						shares: [
 							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
 							fromMinor(entryAppliedMinor, dp),
@@ -528,7 +638,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						? 'zero-balance'
 						: method?.capture.mode === 'manual'
 							? 'manual'
-							: 'terminal',
+							: method?.capture.mode === 'gateway'
+								? 'gateway'
+								: 'terminal',
 				completing: entryAppliedMinor === balanceMinor,
 				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 				sessionRule: 'require',
@@ -703,6 +815,91 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
+			if (method.capture.mode === 'gateway') {
+				if (!payload.id) {
+					logger.info(t('pos_checkout.order_not_on_store_yet'), {
+						showToast: true,
+						context: orderContext,
+					});
+					return;
+				}
+				const missing = fields ? firstMissingRequired(fields, fieldValues) : null;
+				if (missing) {
+					logger.info(t('pos_checkout.enter_field', { label: missing.label }), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+					return;
+				}
+				await saveProvenance();
+				// A leg can land while the provenance saves (a terminal elsewhere, a late mirror): a
+				// gateway runs the whole order and cannot become one leg beside money already held.
+				if (
+					readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
+						['pending', 'authorized', 'captured'].includes(status)
+					)
+				) {
+					logger.info(t(disabledReasonKey('not_with_split'), { title: method.title }), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+					return;
+				}
+				if (attemptRef.current && invoiceSent?.attempt_id === attemptRef.current)
+					attemptRef.current = null;
+				attemptRef.current ??= uuidv4();
+				const outcome = await gateway.submit(order, method.id, {
+					attemptId: attemptRef.current,
+					values: fields ? declaredValues(fields, fieldValues) : {},
+					destination: fields ? destinationOf(fields, fieldValues) : null,
+				});
+				attemptRef.current = null;
+				if (outcome.kind === 'fields_invalid') {
+					setErrorsFor({ methodId: method.id, errors: outcome.errors });
+					return;
+				}
+				if (outcome.kind === 'refused') {
+					// The gateway's own sentence is the cashier copy; a contract refusal gets its code's summary.
+					logger.error(outcome.message, {
+						code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
+						showToast: true,
+						...(outcome.provider ? { toast: { title: outcome.message } } : {}),
+						context: { ...orderContext, method: method.id, refusal: outcome.code },
+					});
+					return;
+				}
+				if (outcome.kind === 'recorded') {
+					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
+					await completeOrderFlow({
+						source: 'manual',
+						via: 'online',
+						row: outcome.row,
+						order: outcome.order,
+						mirrorFailed: false,
+						preparedCompleting: entryAppliedMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor: entryAppliedMinor,
+					}).finally(() => tenderRecorded(outcome.row, 'online'));
+					return;
+				}
+				await completeOrderFlow({ source: 'gateway', order: outcome.order, stamp: outcome.stamp });
+				if (outcome.order.status === 'pos-open') {
+					// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
+					logger.info(t('pos_checkout.order_open_send_again'), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+				} else if (!uiSettings.autoShowReceipt) {
+					logger.info(
+						outcome.stamp.destination
+							? t('pos_checkout.invoice_sent_to', { destination: outcome.stamp.destination })
+							: t('pos_checkout.invoice_sent'),
+						{ showToast: true, context: { ...orderContext, method: method.id } }
+					);
+				}
+				return;
+			}
+
 			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(entryAppliedMinor, dp),
@@ -738,6 +935,51 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) {
 				presentSessionRequired(logger, t, orderContext);
+				return;
+			}
+			if (error instanceof GatewayMirrorError) {
+				// The store answered: the money or the invoice is on the order there, and only this
+				// till's copy failed to save. "Try again" would send or charge a second time.
+				attemptRef.current = null;
+				const { outcome } = error;
+				// PAYMENT111's summary speaks of a recorded payment; a sent invoice needs its own sentence.
+				const sentence =
+					outcome.kind === 'sent'
+						? t('pos_checkout.invoice_sent_not_synced')
+						: t('pos_checkout.payment_recorded_not_synced');
+				logger.warn(sentence, {
+					code:
+						outcome.kind === 'sent'
+							? ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED
+							: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					showToast: true,
+					...(outcome.kind === 'sent' ? { toast: { title: sentence } } : {}),
+					context: {
+						type: 'payment.not-mirrored',
+						...orderContext,
+						method: method?.id ?? null,
+						outcome: outcome.kind,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				if (outcome.kind === 'recorded') {
+					await completeOrderFlow({
+						source: 'manual',
+						via: 'online',
+						row: outcome.row,
+						order: outcome.order,
+						mirrorFailed: true,
+						preparedCompleting: entryAppliedMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor: entryAppliedMinor,
+					}).finally(() => tenderRecorded(outcome.row, 'online'));
+				} else {
+					await completeOrderFlow({
+						source: 'gateway',
+						order: outcome.order,
+						stamp: outcome.stamp,
+					});
+				}
 				return;
 			}
 			if (error instanceof RecordManualPaymentMirrorError) {
@@ -825,12 +1067,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		gateway,
+		fields,
+		fieldValues,
+		uiSettings.autoShowReceipt,
 		tenderRecorded,
 		remember,
 		saveState,
 		bindingStatus,
 		state.entryMinor,
 		state.plan,
+		fixedAmount,
 		rowsSinceFrom,
 		state.readerId,
 		payload.id,
@@ -946,6 +1193,72 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		});
 		setTenderMethod(order.uuid, leg.row.method_id);
 	}, [service, order.uuid, dp, dispatch]);
+
+	/** §4.3: the stamp's attempt is named; a late retry of it is refused by the store. */
+	const cancelInvoice = React.useCallback(async () => {
+		if (busyRef.current || !invoiceSent) return;
+		busyRef.current = true;
+		setBusy(true);
+		try {
+			attemptRef.current = null;
+			const outcome = await gateway.cancel(order, invoiceSent);
+			if (outcome.kind === 'refused') {
+				logger.error(outcome.message, {
+					code: ERROR_CODES.PAYMENT_GATEWAY_REFUSED,
+					showToast: true,
+					context: { ...orderContext, method: invoiceSent.method_id, refusal: outcome.code },
+				});
+				return;
+			}
+			logger.info(t('pos_checkout.invoice_cancelled'), {
+				actor,
+				showToast: true,
+				context: {
+					...orderContext,
+					type: 'checkout.cancelled',
+					method: invoiceSent.method_id,
+					attemptId: invoiceSent.attempt_id,
+					voided: 0,
+				},
+			});
+		} catch (error) {
+			if (error instanceof GatewayCancelMirrorError) {
+				// The store cancelled it; only this till's copy is behind. "Try again" would 409.
+				logger.info(t('pos_checkout.invoice_cancelled'), {
+					actor,
+					context: {
+						...orderContext,
+						type: 'checkout.cancelled',
+						method: invoiceSent.method_id,
+						attemptId: invoiceSent.attempt_id,
+						voided: 0,
+					},
+				});
+				// The code's own summary would replace this sentence on the toast; name it explicitly.
+				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
+					code: ERROR_CODES.PAYMENT_INVOICE_NOT_MIRRORED,
+					showToast: true,
+					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
+					context: {
+						...orderContext,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				return;
+			}
+			logger.error(t('pos_checkout.invoice_cancel_failed'), {
+				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				showToast: true,
+				context: {
+					...orderContext,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
+			busyRef.current = false;
+			setBusy(false);
+		}
+	}, [gateway, invoiceSent, order, orderContext, actor, t]);
 
 	const cancelPayment = React.useCallback(async () => {
 		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
@@ -1092,6 +1405,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			pickMethod,
 			takeTender,
 			cancelPayment,
+			fieldValues,
+			setFieldValues,
+			fieldErrors,
+			invoiceSent,
+			cancelInvoice,
 		}),
 		[
 			plan,
@@ -1138,6 +1456,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			pickMethod,
 			takeTender,
 			cancelPayment,
+			fieldValues,
+			setFieldValues,
+			fieldErrors,
+			invoiceSent,
+			cancelInvoice,
 		]
 	);
 }

@@ -28,23 +28,15 @@ import {
 	useRecordField,
 	WriteOutcomeError,
 } from '@wcpos/query';
-import {
-	NO_STORE,
-	POS_META_KEYS,
-	remoteIdOrNull,
-	WOO_REST_CANNOT_DELETE,
-	wooMetaCarrier,
-} from '@wcpos/sync-core';
+import { remoteIdOrNull, WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useRegister } from '../../../../services/register/use-register';
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { useReopenOrder } from './use-reopen-order';
 
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
 
@@ -65,11 +57,8 @@ export function OrderActionsMenu({
 	const record = order;
 	const router = useRouter();
 	const status = useRecordField(record, ({ payload }) => payload.status);
-	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const { store, wpCredentials, site } = useStoreSession();
-	const register = useRegister();
 	const orderID = useRecordField(record, ({ payload }) => payload.id);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
@@ -99,41 +88,7 @@ export function OrderActionsMenu({
 			});
 	}, [runtime, orderID]);
 
-	/**
-	 * To re-open an order, we need to:
-	 * - change the status to 'pos-open'
-	 * - update _pos_user meta to current user
-	 * - update _pos_store meta to current store
-	 * - navigate to POS screen
-	 */
-	const handleOpen = React.useCallback(async () => {
-		// #163 ruling R5: re-opening writes status + cashier/store meta to the order.
-		// With the worker dead that write cannot be recorded, and the cart it lands
-		// in could not be checked out anyway.
-		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-
-		const existingMeta = order.payload.meta_data ?? [];
-		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
-		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
-			userId: wpCredentials.id!,
-			tillId: register?.id,
-			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
-			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id!,
-		});
-		if (store.id === NO_STORE && existingStoreId === null) {
-			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
-		}
-
-		await localPatch({
-			document: order,
-			data: { status: 'pos-open', meta_data },
-		});
-		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-		router.push({
-			pathname: '/cart/[...orderId]',
-			params: { orderId: order.uuid ? [order.uuid] : [] },
-		});
-	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id, register, site.uuid]);
+	const handleOpen = useReopenOrder(order);
 
 	/**
 	 * Handle delete button click
