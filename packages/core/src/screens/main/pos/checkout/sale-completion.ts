@@ -13,6 +13,17 @@ import {
 import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
+import {
+	type ActionActor,
+	type ActionContext,
+	type ActionResult,
+	CHECKOUT_COMPLETE_EVENT,
+	dispatchAction,
+	type DispatchToken,
+	isActionRefusal,
+} from '../../../../extensions/actions';
+import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
+import './audit-hook';
 import { readBoundRegister } from '../../../../services/register/register-document';
 import { requireOpenSession } from '../../../../services/register-session/session-store';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
@@ -30,6 +41,8 @@ import { reportProvenanceGap } from './provenance/provenance-gap';
 export { refreshOrderRecord } from './hooks/reconcile-completed-order';
 type OrderPayload = EngineRecord<'orders'>['payload'];
 export interface SaleContext {
+	actionCtx: ActionContext;
+	actionActor: ActionActor;
 	userDB: UserDatabase;
 	storeDB: StoreDatabase;
 	siteUuid: string;
@@ -246,8 +259,9 @@ async function finishSale(
 	order: EngineRecord<'orders'>,
 	outcome: SaleOutcome,
 	presentation: Presentation
-): Promise<'completed' | 'sent' | 'partial' | 'not-completed'> {
-	if (outcome.source === 'gateway') return finishSent(ctx, order, outcome, presentation);
+): Promise<ActionResult<typeof CHECKOUT_COMPLETE_EVENT>> {
+	if (outcome.source === 'gateway')
+		return { outcome: await finishSent(ctx, order, outcome, presentation), summary: null };
 	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
 		const latest = order.getLatest().payload;
 		if (
@@ -276,9 +290,11 @@ async function finishSale(
 				});
 			}
 		}
-		return outcome.source === 'manual' || outcome.source === 'terminal'
-			? 'partial'
-			: 'not-completed';
+		return {
+			outcome:
+				outcome.source === 'manual' || outcome.source === 'terminal' ? 'partial' : 'not-completed',
+			summary: null,
+		};
 	}
 	// Enter BEFORE refresh: the paid order has left pos-open and otherwise the cashier sees an empty cart.
 	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
@@ -308,25 +324,27 @@ async function finishSale(
 		else stockAdjustment(ctx.runtime, reduced);
 	} else await reconcileCompletedOrder(ctx.runtime, order, refresh, ctx.stockAdjustment);
 	latest = payload();
-	getLogger(['wcpos', 'pos', 'checkout']).info(`Sale ${order.uuid} completed`, {
-		actor: ctx.actor,
-		context: {
-			type: 'checkout.completed',
-			...(outcome.source === 'replay' ? { replayed: true } : {}),
+	return {
+		outcome: 'completed',
+		summary: {
 			orderId: latest.id ?? null,
 			orderUUID: order.uuid,
-			orderNumber: latest.number,
-			total: latest.total,
+			orderNumber: latest.number ?? null,
+			total: latest.total ?? null,
 			paymentLegs: readLedger(latest.meta_data).filter(
 				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
 			).length,
 		},
-	});
-	return 'completed';
+	};
 }
 
-export async function completeSale(...args: Parameters<typeof finishSale>) {
-	const [ctx, order, outcome] = args;
+export async function completeSale(
+	ctx: SaleContext,
+	order: EngineRecord<'orders'>,
+	outcome: SaleOutcome,
+	presentation: Presentation,
+	queue?: OrderMutationContext
+) {
 	// No entry snapshot: resolve/fail unconditionally belong to the current attempt, even in replay.
 	// A paid order cannot start a new completing attempt while its finish is running.
 	try {
@@ -339,10 +357,37 @@ export async function completeSale(...args: Parameters<typeof finishSale>) {
 					...(ctx.actor ? { actor: ctx.actor } : {}),
 				});
 		}
-		const result = await finishSale(...args);
+		const source =
+			outcome.source === 'replay'
+				? 'replay'
+				: presentation.host === 'background'
+					? 'system'
+					: 'user';
+		const run = (token: DispatchToken) =>
+			dispatchAction({
+				event: CHECKOUT_COMPLETE_EVENT,
+				token,
+				ctx: ctx.actionCtx,
+				input: {
+					orderId: order.uuid,
+					actor: ctx.actionActor,
+					source,
+					payload: {
+						source: outcome.source,
+						presentation: presentation.host,
+						actor: ctx.actor ?? null,
+					},
+				},
+				bottom: () => finishSale(ctx, order, outcome, presentation),
+			});
+		const result = queue
+			? await run(queue.dispatchToken)
+			: await enqueueOrderMutation(order.uuid, (q) => run(q.dispatchToken));
+		if (isActionRefusal(result))
+			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
 		await resolveCompletionAttempt(ctx.storeDB, order.uuid);
-		return result;
+		return result.outcome;
 	} catch (error) {
 		try {
 			await failCompletionAttempt(ctx.storeDB, order.uuid, error, {
