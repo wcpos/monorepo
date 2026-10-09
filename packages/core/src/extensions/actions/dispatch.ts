@@ -49,7 +49,7 @@ export async function dispatchAction<E extends ActionEvent>({
 	// One budget per TIER, started when that tier's first hook runs: extensions run first and
 	// must never be able to spend the guards' time (a slow extension that starved a guard into a
 	// timeout would be an extension veto). Hook latency before the writer is bounded by two
-	// budgets; after-work budgets (below) add one per hook that awaited `next`.
+	// budgets; after-work budgets (below) add one per hook that called `next`.
 	const deadlines: Partial<Record<ActionHookTier, number>> = {};
 	const deadlineFor = (tier: ActionHookTier) =>
 		(deadlines[tier] ??= ctx.now() + ACTION_BUDGET_MS[event]);
@@ -76,7 +76,9 @@ export async function dispatchAction<E extends ActionEvent>({
 			// disabled in the meantime (a dispatch for another order struck it) is skipped, as
 			// getActionHooks would have skipped it — a refusal from it would be an extension veto.
 			if (tier === 'guard')
-				return { deny: { reasonKey: 'actions.hook_disabled', detail: { hookId, event } } };
+				return deepFreeze({
+					deny: { reasonKey: 'actions.hook_disabled', detail: { hookId, event } },
+				});
 			return runAt(i + 1, e);
 		}
 		let nextCalled = false;
@@ -168,12 +170,12 @@ export async function dispatchAction<E extends ActionEvent>({
 		if (nextCalled) return inner;
 		return tier === 'extension'
 			? runAt(i + 1, e)
-			: {
+			: deepFreeze({
 					deny: {
 						reasonKey: reason === 'timeout' ? 'actions.hook_timeout' : 'actions.hook_failed',
 						detail: { hookId, event },
 					},
-				};
+				});
 	}
 	return run(clone({ ...input, event }));
 }

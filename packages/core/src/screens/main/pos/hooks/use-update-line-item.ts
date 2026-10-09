@@ -4,20 +4,17 @@ import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
 import { calculateCartLine, type EngineWarning } from '@wcpos/order-math';
-import {
-	isMiscProductLine,
-	MISC_PRODUCT_ID,
-	POS_META_KEYS,
-	wooMetaCarrier,
-} from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartInvariant } from './cart-failure';
 import { useCartConfig } from './use-cart-config';
-import { useCartStockGuard } from './use-cart-stock-guard';
+import './stock-guard-hook';
+import { useActionContext } from './use-action-context';
+import { dispatchAction, isActionRefusal } from '../../../../extensions/actions';
 // Still needed for the previous-price value in the update log, not for the merge.
 import { useLineItemData } from './use-line-item-data';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueOrderMutation, type OrderMutationContext } from './order-mutation-queue';
 import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -50,7 +47,7 @@ export const useUpdateLineItem = () => {
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { getLineItemData } = useLineItemData();
-	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
+	const { ctx, actor } = useActionContext();
 
 	/**
 	 * Update line item
@@ -69,44 +66,16 @@ export const useUpdateLineItem = () => {
 	 * The caller captures the order at press time and threads it through. `getLatest()` still
 	 * gets the freshest revision — of that order.
 	 */
-	const applyLineItemChanges = React.useCallback(
-		async (
-			capturedOrder: CurrentOrderRecord,
-			uuid: string,
-			changes: Changes,
-			options?: UpdateLineItemOptions
-		) => {
+	const writeLineItemChanges = React.useCallback(
+		async (capturedOrder: CurrentOrderRecord, uuid: string, changes: Changes) => {
 			const order = capturedOrder.getLatest();
 			const json = order.toMutableJSON().payload;
 			let updated = false;
 			let warnings: readonly EngineWarning[] = [];
-			let stockWarningName: string | null = null;
 			const lineItemToUpdate = json.line_items?.find(
 				(lineItem) => wooMetaCarrier.lineUuid(lineItem) === uuid
 			);
 			const previousData = lineItemToUpdate ? getLineItemData(lineItemToUpdate) : undefined;
-
-			if (
-				stockGuardEnabled &&
-				!options?.skipStockGuard &&
-				lineItemToUpdate &&
-				!isMiscProductLine(lineItemToUpdate) &&
-				typeof changes.quantity === 'number' &&
-				changes.quantity > (lineItemToUpdate.quantity ?? 0)
-			) {
-				const stockResult = await checkCartStock({
-					lineItems: json.line_items ?? [],
-					productId: lineItemToUpdate.product_id ?? MISC_PRODUCT_ID,
-					variationId: lineItemToUpdate.variation_id ?? 0,
-					requestedQuantity: changes.quantity,
-					excludedLineItemUuid: uuid,
-					name: lineItemToUpdate.name,
-				});
-				if (!stockResult.allowed) return false;
-				if (stockResult.warning === 'backorder') {
-					stockWarningName = stockResult.name;
-				}
-			}
 
 			const updatedLineItems = json.line_items?.map((lineItem) => {
 				if (updated || wooMetaCarrier.lineUuid(lineItem) !== uuid) {
@@ -149,19 +118,44 @@ export const useUpdateLineItem = () => {
 						},
 					});
 				}
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 				return result;
 			}
 		},
-		[
-			cartConfig,
-			checkCartStock,
-			getLineItemData,
-			localPatch,
-			reportEngineWarnings,
-			showBackorderWarning,
-			stockGuardEnabled,
-		]
+		[cartConfig, getLineItemData, localPatch, reportEngineWarnings]
+	);
+
+	const applyLineItemChanges = React.useCallback(
+		async (
+			capturedOrder: CurrentOrderRecord,
+			uuid: string,
+			changes: Changes,
+			context: OrderMutationContext,
+			options?: UpdateLineItemOptions
+		) => {
+			const order = capturedOrder.getLatest();
+			const lineItems = order.toMutableJSON().payload.line_items ?? [];
+			const result = await dispatchAction({
+				event: 'cart.line.update',
+				token: context.dispatchToken,
+				ctx,
+				input: {
+					orderId: documentRecordId(order)!,
+					actor,
+					source: 'user',
+					payload: {
+						lineUuid: uuid,
+						changes: { ...changes } as Record<string, unknown>,
+						line: lineItems.find((line) => wooMetaCarrier.lineUuid(line) === uuid) ?? null,
+						lineItems,
+						options: { skipStockGuard: options?.skipStockGuard },
+					},
+				},
+				bottom: (e) =>
+					writeLineItemChanges(capturedOrder, uuid, { ...e.payload.changes } as Changes),
+			});
+			return isActionRefusal(result) ? false : result;
+		},
+		[ctx, actor, writeLineItemChanges]
 	);
 
 	const updateLineItem = React.useCallback(
@@ -170,8 +164,8 @@ export const useUpdateLineItem = () => {
 			const capturedOrder = getCurrentOrderRecord();
 			const recordId = documentRecordId(capturedOrder.getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, () =>
-				applyLineItemChanges(capturedOrder, uuid, changes, options)
+			return enqueueOrderMutation(recordId, (context) =>
+				applyLineItemChanges(capturedOrder, uuid, changes, context, options)
 			);
 		},
 		[applyLineItemChanges, getCurrentOrderRecord]
@@ -182,15 +176,20 @@ export const useUpdateLineItem = () => {
 			const capturedOrder = getCurrentOrderRecord();
 			const recordId = documentRecordId(capturedOrder.getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, async () => {
+			return enqueueOrderMutation(recordId, async (context) => {
 				const lineItem = capturedOrder
 					.getLatest()
 					.toMutableJSON()
 					.payload.line_items?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 				if (!lineItem) return;
-				return applyLineItemChanges(capturedOrder, uuid, {
-					quantity: (lineItem.quantity ?? 0) + quantity,
-				});
+				return applyLineItemChanges(
+					capturedOrder,
+					uuid,
+					{
+						quantity: (lineItem.quantity ?? 0) + quantity,
+					},
+					context
+				);
 			});
 		},
 		[applyLineItemChanges, getCurrentOrderRecord]

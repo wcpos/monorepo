@@ -75,7 +75,10 @@ export interface ActionContext {
 	readonly t: (key: string, params?: Record<string, string | number>) => string;
 	readonly now: () => number;
 	readonly read: {
-		catalog(kind: 'product' | 'variation', wooId: number): Promise<Record<string, unknown> | null>;
+		readonly catalog: (
+			kind: 'product' | 'variation',
+			wooId: number
+		) => Promise<Record<string, unknown> | null>;
 	};
 	readonly store: { readonly preventOverselling: boolean };
 }

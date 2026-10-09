@@ -4,11 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
-import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
+import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
-import { useCartStockGuard } from './use-cart-stock-guard';
+import './stock-guard-hook';
+import { useActionContext } from './use-action-context';
+import { dispatchAction, isActionRefusal } from '../../../../extensions/actions';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -75,7 +77,7 @@ export const useAddItemToOrder = () => {
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
-	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
+	const { ctx, actor } = useActionContext();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { store, wpCredentials, site } = useStoreSession();
@@ -265,56 +267,54 @@ export const useAddItemToOrder = () => {
 						}
 					}
 				}
-				let stockWarningName: string | null = null;
-				if (type === 'line_items' && stockGuardEnabled && !isMiscProductLine(data as LineItem)) {
-					const lineItem = data as LineItem;
-					const stockResult = await checkCartStock({
-						lineItems: latest.payload.line_items ?? [],
-						productId: lineItem.product_id ?? MISC_PRODUCT_ID,
-						variationId: lineItem.variation_id ?? 0,
-						requestedQuantity: lineItem.quantity ?? 1,
-						name: lineItem.name,
-					});
-					if (!stockResult.allowed) return false;
-					if (stockResult.warning === 'backorder') {
-						stockWarningName = stockResult.name;
-					}
-				}
 
-				let result;
-				if (isNew) {
-					const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
-						orphanedSkeleton,
-					});
-					context.order = savedOrder;
-					result = savedOrder;
-				} else {
-					result = await localPatch({
-						document: latest,
-						data: {
-							[type]: buildCartLines(
-								latest.uuid,
-								(latest.payload[type] as CartLine[] | undefined) ?? [],
-								type,
-								data
-							),
-						} as never,
-					});
-				}
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-				return result;
+				const result = await dispatchAction({
+					event: 'cart.line.add',
+					token: context.dispatchToken,
+					ctx,
+					input: {
+						orderId: recordId,
+						actor,
+						source: 'user',
+						payload: { type, line: data, lineItems: latest.payload.line_items ?? [] },
+					},
+					bottom: async (e) => {
+						const data = { ...e.payload.line } as CartLine;
+						let result;
+						if (isNew) {
+							const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
+								orphanedSkeleton,
+							});
+							context.order = savedOrder;
+							result = savedOrder;
+						} else {
+							result = await localPatch({
+								document: latest,
+								data: {
+									[type]: buildCartLines(
+										latest.uuid,
+										(latest.payload[type] as CartLine[] | undefined) ?? [],
+										type,
+										data
+									),
+								} as never,
+							});
+						}
+						return result;
+					},
+				});
+				return isActionRefusal(result) ? false : result;
 			});
 		},
 		[
 			buildCartLines,
-			checkCartStock,
+			ctx,
+			actor,
 			getCurrentOrderRecord,
 			localPatch,
 			runtime,
 			saveNewOrder,
 			setCurrentOrderID,
-			showBackorderWarning,
-			stockGuardEnabled,
 		]
 	);
 

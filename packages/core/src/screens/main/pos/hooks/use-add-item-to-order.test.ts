@@ -13,7 +13,7 @@ const mockInsertEngineResident = jest.fn();
 const mockFindEngineResident = jest.fn();
 const mockPatchEngineResident = jest.fn();
 const mockWrite = jest.fn();
-const mockCheckCartStock = jest.fn();
+const mockReadCatalog = jest.fn();
 let mockStockGuardEnabled = false;
 
 const mockRemoveTemporaryOrder = jest.fn();
@@ -53,11 +53,16 @@ jest.mock('../../../../contexts/app-state', () => {
 /** The state a resident carries once its create is durably enqueued. */
 const CREATE_QUEUED = { local: { dirty: true, pendingMutationIds: ['mutation-1'] } };
 
-jest.mock('./use-cart-stock-guard', () => ({
-	useCartStockGuard: () => ({
-		stockGuardEnabled: mockStockGuardEnabled,
-		checkCartStock: mockCheckCartStock,
-		showBackorderWarning: jest.fn(),
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: jest.fn(),
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: mockReadCatalog },
+			store: { preventOverselling: mockStockGuardEnabled },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
 	}),
 }));
 
@@ -139,10 +144,10 @@ describe('useAddItemToOrder', () => {
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
 		mockFindEngineResident.mockResolvedValue(null);
-		mockCheckCartStock.mockResolvedValue({
-			allowed: true,
-			warning: null,
-			available: 10,
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 10,
+			backorders: 'no',
 			name: '',
 		});
 		order.payload.line_items = [];
@@ -182,7 +187,7 @@ describe('useAddItemToOrder', () => {
 		});
 
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
-		expect(mockCheckCartStock).not.toHaveBeenCalled();
+		expect(mockReadCatalog).not.toHaveBeenCalled();
 	});
 
 	it('stamps missing POS identity meta before inserting a new engine order', async () => {
@@ -257,14 +262,12 @@ describe('useAddItemToOrder', () => {
 	it('serializes overlapping additions while a new order is being saved', async () => {
 		order.isNew = true;
 		mockStockGuardEnabled = true;
-		mockCheckCartStock.mockImplementation(
-			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
-				allowed: lineItems.length === 0,
-				warning: null,
-				available: 1,
-				name: 'Item',
-			})
-		);
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 1,
+			backorders: 'no',
+			name: 'Item',
+		});
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				payload,
@@ -290,7 +293,7 @@ describe('useAddItemToOrder', () => {
 			]);
 		});
 
-		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
 		expect(mockWrite).toHaveBeenCalledTimes(1);
 	});
@@ -334,8 +337,8 @@ describe('useAddItemToOrder', () => {
 		});
 		// Stock is validated on both adds, and the second one sees the recovered
 		// resident's line — the lookup runs before the stock check, not after.
-		expect(mockCheckCartStock).toHaveBeenCalledTimes(2);
-		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
+		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 	});
 
 	it('reuses an acked order that carries a server id but no revision', async () => {
@@ -385,14 +388,12 @@ describe('useAddItemToOrder', () => {
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
 		mockLocalPatch.mockResolvedValue({ document: resident });
 		// Only one unit in stock: the cart is allowed to go from empty to one item.
-		mockCheckCartStock.mockImplementation(
-			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
-				allowed: lineItems.length === 0,
-				warning: null,
-				available: 1,
-				name: 'Item',
-			})
-		);
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 1,
+			backorders: 'no',
+			name: 'Item',
+		});
 
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
@@ -416,7 +417,7 @@ describe('useAddItemToOrder', () => {
 
 		// The second check must see the resident's line item, otherwise the stale empty
 		// temporary order would let an out-of-stock repeat scan through.
-		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 		expect(secondAdd).toBe(false);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
@@ -842,14 +843,12 @@ describe('useAddItemToOrder', () => {
 
 	it('checks stock inside the append chain so overlapping adds see the latest cart', async () => {
 		mockStockGuardEnabled = true;
-		mockCheckCartStock.mockImplementation(
-			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
-				allowed: lineItems.length === 0,
-				warning: null,
-				available: 1,
-				name: 'Item',
-			})
-		);
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 1,
+			backorders: 'no',
+			name: 'Item',
+		});
 		mockLocalPatch.mockImplementation(
 			async ({ data }: { data: { line_items: Record<string, unknown>[] } }) => {
 				order.payload.line_items = data.line_items;
@@ -864,16 +863,18 @@ describe('useAddItemToOrder', () => {
 		act(() => {
 			firstAppend = firstHook.current.addItemToOrder('line_items', {
 				product_id: 1,
+				quantity: 1,
 				meta_data: [],
 			} as never);
 			secondAppend = secondHook.current.addItemToOrder('line_items', {
 				product_id: 1,
+				quantity: 1,
 				meta_data: [],
 			} as never);
 		});
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
-		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	});
 });

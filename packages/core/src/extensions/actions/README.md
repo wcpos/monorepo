@@ -31,6 +31,11 @@ unrelated queued writes.
 | `cart.line.add`    | `useAddItemToOrder` | `line`          | yes        |
 | `cart.line.update` | `useUpdateLineItem` | `changes`       | yes        |
 
+First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),
+the prevent-overselling check moved onto the two cart events as guards. Ids are unique per event
+and strikes follow the id, so the two stock functions carry distinct ids: a fault in one never
+disables the other.
+
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
 (a) today: `checkout.tender.commit` and `checkout.complete` (their slices are next), receipt
@@ -81,13 +86,13 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
 - `ACTION_BUDGET_MS[event]`: one budget per **tier** on a dispatch, started when that tier's
   first hook runs and shared by the tier's hooks, so a slow extension can never spend the guards'
   time (hook latency before the writer is bounded by two budgets; the after-work budgets below
-  add one per hook that awaited `next`, since each starts when the chain beneath it settles); the bottom
+  add one per hook that called `next`, since each starts when the chain beneath it settles); the bottom
   handler's time is not counted, and neither is the time a hook spends waiting on `next` (its
   own timer stops when it calls `next`; the hooks beneath keep theirs). A hook still pending at
   the deadline before calling `next` is timed out; it keeps running in JavaScript but its result
   is ignored and it can reach nothing (`ctx` is frozen and read-only, no document is in reach).
-  After-work (once `next` has answered) gets a fresh budget of the same length: a hook that never
-  returns is struck and the inner answer stands, so the dispatch, and the order's queue behind it,
+  After-work (once `next` has answered) gets a fresh budget of the same length for every hook that
+  called `next`: a hook that never returns is struck and the inner answer stands, so the dispatch, and the order's queue behind it,
   never hang.
 - `ACTION_HOOK_STRIKES` failures in a session (a timeout, a throw, a return without `next`, or a
   deny of its own after `next`) switch a hook off; one warn row names it. A disabled extension leaves the chain. A disabled **guard stays** and refuses every
@@ -106,4 +111,8 @@ rewrite is always applied against an unchanged target.
 - Pass an `RxDocument` or any live object in `payload`; `toJSON()` it.
 - Dispatch outside the order mutation queue.
 - Give `ctx` an effectful method that runs before `next`.
+- Put anything live in `deny.detail`; it is frozen on the way out, so it holds plain data the
+  guard built itself (ids, counts), never a catalog record.
+- Mint a dispatch token anywhere but the order mutation queue (the factory is deliberately not
+  on this module's barrel; the queue imports it from `registry.ts`).
 - Add an event that fails the admission test, or a matcher argument (none in v1).

@@ -16,8 +16,7 @@ jest.mock('uuid', () => ({
 
 // Mock the localPatch function
 const mockLocalPatch = jest.fn();
-const mockCheckCartStock = jest.fn();
-const mockShowBackorderWarning = jest.fn();
+const mockReadCatalog = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
@@ -53,11 +52,16 @@ jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 	ERROR_CODES: { UNEXPECTED_ERROR: 'UNEXPECTED_ERROR' },
 }));
 
-jest.mock('./use-cart-stock-guard', () => ({
-	useCartStockGuard: () => ({
-		stockGuardEnabled: true,
-		checkCartStock: mockCheckCartStock,
-		showBackorderWarning: mockShowBackorderWarning,
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: (_level: string, message: string, options: unknown) => mockLoggerWarn(message, options),
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: mockReadCatalog },
+			store: { preventOverselling: true },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
 	}),
 }));
 
@@ -185,10 +189,10 @@ describe('useUpdateLineItem', () => {
 		mockGetCurrentOrderCalls = 0;
 		mockLocalPatch.mockResolvedValue({ changes: {} });
 		mockLineItemQuantity = 1;
-		mockCheckCartStock.mockResolvedValue({
-			allowed: true,
-			warning: null,
-			available: 10,
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 10,
+			backorders: 'no',
 			name: 'Item 1',
 		});
 	});
@@ -201,15 +205,15 @@ describe('useUpdateLineItem', () => {
 			await result.current.updateLineItem(uuid, { quantity: 0.5 });
 		});
 
-		expect(mockCheckCartStock).not.toHaveBeenCalled();
+		expect(mockReadCatalog).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalled();
 	});
 
 	it('does not mutate a blocked quantity increase', async () => {
-		mockCheckCartStock.mockResolvedValue({
-			allowed: false,
-			warning: null,
-			available: 1,
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 1,
+			backorders: 'no',
 			name: 'Item 1',
 		});
 		const { result } = renderHook(() => useUpdateLineItem());
@@ -223,10 +227,10 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('warns about a backorder after mutating an allowed increase', async () => {
-		mockCheckCartStock.mockResolvedValue({
-			allowed: true,
-			warning: 'backorder',
-			available: 1,
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 1,
+			backorders: 'notify',
 			name: 'Item 1',
 		});
 		const { result } = renderHook(() => useUpdateLineItem());
@@ -237,8 +241,11 @@ describe('useUpdateLineItem', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalled();
-		expect(mockShowBackorderWarning).toHaveBeenCalledWith('Item 1');
-		expect(mockShowBackorderWarning.mock.invocationCallOrder[0]).toBeGreaterThan(
+		expect(mockLoggerWarn).toHaveBeenCalledWith('Product will be backordered', {
+			toast: { title: 'pos_cart.will_be_backordered' },
+			showToast: true,
+		});
+		expect(mockLoggerWarn.mock.invocationCallOrder[0]).toBeGreaterThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
 	});

@@ -1,9 +1,10 @@
 import * as React from 'react';
 
-import { engineCollection, useDocField, useQueryRuntime } from '@wcpos/query';
-import { catalogDocumentId, MISC_PRODUCT_ID, remoteIdOrNull } from '@wcpos/sync-core';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { MISC_PRODUCT_ID } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { readStockDocument } from './read-stock-document';
 import {
 	aggregateExistingCartQuantity,
 	evaluateStockForCartChange,
@@ -53,30 +54,6 @@ export const useCartStockGuard = () => {
 	const runtime = useQueryRuntime();
 	const t = useT();
 
-	const readStockDocument = React.useCallback(
-		async (collectionName: 'products' | 'variations', wooId: number) => {
-			const collection = engineCollection(runtime.engine.active()?.database, collectionName);
-			if (!collection) return null;
-			const remoteId = remoteIdOrNull(wooId);
-			if (remoteId === null) return null;
-			const result = await collection.findOne({ selector: { remoteId } }).exec();
-			if (result) {
-				return result.getLatest().payload as StockDocument;
-			}
-			const documentId = catalogDocumentId(
-				collectionName === 'products' ? 'product' : 'variation',
-				remoteId
-			);
-			const [deletedDocument] = await collection.storageInstance.findDocumentsById(
-				[documentId],
-				true
-			);
-			const payload = (deletedDocument as { payload?: unknown } | undefined)?.payload;
-			return payload !== null && typeof payload === 'object' ? (payload as StockDocument) : null;
-		},
-		[runtime]
-	);
-
 	const checkCartStock = React.useCallback(
 		async ({
 			lineItems,
@@ -94,7 +71,7 @@ export const useCartStockGuard = () => {
 
 			const product = suppliedProduct
 				? latest(suppliedProduct)
-				: await readStockDocument('products', productId);
+				: await readStockDocument(runtime, 'products', productId);
 			if (!product) {
 				const name = suppliedName ?? '';
 				cartLogger.warn('Product is out of stock', {
@@ -107,7 +84,7 @@ export const useCartStockGuard = () => {
 			const variation = variationId
 				? suppliedVariation
 					? latest(suppliedVariation)
-					: await readStockDocument('variations', variationId)
+					: await readStockDocument(runtime, 'variations', variationId)
 				: undefined;
 			const name = suppliedName ?? product.name ?? '';
 			if (variationId && !variation) {
@@ -151,17 +128,17 @@ export const useCartStockGuard = () => {
 
 			return { ...result, name };
 		},
-		[preventOverselling, readStockDocument, t]
+		[preventOverselling, runtime, t]
 	);
 
 	const resolveStockOwnerId = React.useCallback(
 		async (productId: number, variationId = 0) => {
 			if (!variationId) return productId;
-			const variation = await readStockDocument('variations', variationId);
+			const variation = await readStockDocument(runtime, 'variations', variationId);
 			if (!variation) return variationId;
 			return variation?.manage_stock === true ? variationId : productId;
 		},
-		[readStockDocument]
+		[runtime]
 	);
 
 	const showBackorderWarning = React.useCallback(

@@ -481,3 +481,28 @@ it('refuses a disabled guard without calling it or bottom', async () => {
 	expect(bottom).not.toHaveBeenCalled();
 	expect(log).toHaveBeenCalledTimes(1);
 });
+it('freezes a dispatcher hook_failed refusal before an extension can edit it', async () => {
+	register(async () => {
+		throw new Error('broken');
+	});
+	let refusal: unknown;
+	let mutationThrew = false;
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			const result = await next(e);
+			refusal = result;
+			try {
+				(result as { deny: { reasonKey: string } }).deny.reasonKey = 'edited';
+			} catch {
+				mutationThrew = true;
+			}
+			return result;
+		},
+		{ id: 'tampering.extension', tier: 'extension' }
+	);
+	expect(await dispatch()).toMatchObject({ deny: { reasonKey: 'actions.hook_failed' } });
+	expect(mutationThrew).toBe(true);
+	expect(Object.isFrozen(refusal)).toBe(true);
+	expect(bottom).not.toHaveBeenCalled();
+});
