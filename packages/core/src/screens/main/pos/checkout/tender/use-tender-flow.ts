@@ -255,9 +255,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				minor: toMinor(row.amount, dp),
 				title: byId.get(row.method_id)?.title ?? row.method_id,
 			}));
-		// The reducer starts from the STORED plan, not the active view of it: a split whose planned
-		// legs are all taken but which still owes money (a short leg) is still that split, and its
-		// last leg must journal every share. `activePlan` only decides what the keypad shows.
+		// The active view of the plan decides only what the keypad shows (legs, entry prefill).
 		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
 		const { readers, lockToDefault } = selectableReaders(
 			byId.get(methodId ?? '') ?? null,
@@ -266,6 +264,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		);
 		return {
 			...initial,
+			// The reducer starts from the STORED plan, not the active view of it: a split whose planned
+			// legs are all taken but which still owes money (a short leg) is still that split, and its
+			// last leg must journal every share.
 			plan: balanceMinor > 0 ? storedPlan : null,
 			entryMinor: plan
 				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
