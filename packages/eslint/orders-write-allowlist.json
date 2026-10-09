@@ -14,15 +14,6 @@
 	"packages/core/src/screens/main/pos/cart/totals/customer-note.tsx": {
 		"local-write": 1
 	},
-	"packages/core/src/screens/main/pos/cart/user-sheet.tsx": {
-		"engine-write": 1
-	},
-	"packages/core/src/screens/main/pos/checkout/components/payment-webview.tsx": {
-		"engine-write": 1
-	},
-	"packages/core/src/screens/main/pos/checkout/hooks/reconcile-completed-order.ts": {
-		"engine-write": 1
-	},
 	"packages/core/src/screens/main/pos/checkout/payments/use-gateway-payment.ts": {
 		"engine-write": 1
 	},
@@ -56,8 +47,5 @@
 	},
 	"packages/core/src/screens/main/pos/hooks/use-update-shipping-line.ts": {
 		"local-write": 1
-	},
-	"packages/core/src/services/register-session/use-register-session.ts": {
-		"engine-write": 2
 	}
 }

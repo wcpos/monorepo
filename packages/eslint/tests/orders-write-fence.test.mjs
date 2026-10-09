@@ -126,6 +126,10 @@ test('ignores comments, strings, reads, unrelated receivers and non-chain expres
 		border.patch(data);
 		recorder.update(data);
 		patchEngineResident({ collection: 'products', data });
+		observeEngineQuery({ collection: 'orders', where });
+		runtime.engine.require({ collection: 'orders', uuid });
+		readEngineOrders({ collection: 'orders' });
+		socket.write({ collection: 'orders' });
 		order.getLatest();
 		getContext().order.patch(data);
 		collections.products.insert(data);
@@ -164,6 +168,8 @@ test('an engine helper or engine.write naming the orders collection is a violati
 		"insertEngineResident({ manager, collection: 'orders', document })",
 		"manager.engine.write({ collection: 'orders', mutation })",
 		"requestServerDelete(manager.engine, { collection: 'orders', recordId })",
+		"patchAndEnqueueEngineResident({ manager, collection: 'orders', data })",
+		"runtime.engine.write({ collection: 'orders', mutation })",
 	]) {
 		assert.deepEqual(scanSource(call, path), [`${path}:1:1:engine-write`]);
 	}
@@ -188,4 +194,14 @@ test('a cast, a non-null assertion or parentheses do not hide an order write', (
 	assert.deepEqual(scanSource('localModify({ document: ctx.order, data })', path), [
 		`${path}:1:1:local-write`,
 	]);
+});
+
+test('an order read that names the collection is not a site', () => {
+	for (const call of [
+		"observeEngineQuery({ manager, collection: 'orders', where })",
+		"runtime.engine.require({ collection: 'orders', uuid })",
+		"runtime.engine.require({ collection: 'orders', uuid }).then(use)",
+	]) {
+		assert.deepEqual(scanSource(call, path), []);
+	}
 });

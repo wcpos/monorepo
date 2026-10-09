@@ -20,7 +20,15 @@ const DOCUMENT_WRITES = new Set([
 	'update',
 	'remove',
 ]);
-// Engine helpers and `manager.engine.write` name the collection in their first argument.
+// Engine write helpers and `engine.write` name the collection in an options argument. Reads
+// (`observeEngineQuery`, `engine.require`) name it the same way and are not sites.
+const ENGINE_WRITES = new Set([
+	'patchEngineResident',
+	'patchAndEnqueueEngineResident',
+	'insertEngineResident',
+	'requestServerDelete',
+	'write',
+]);
 const ENGINE_COLLECTION_KEY = 'collection';
 // Local mutation helpers take the order in their document property.
 const LOCAL_WRITES = new Set(['localPatch', 'localModify']);
@@ -126,14 +134,23 @@ export function scanSource(text, path) {
 			}
 			// patchEngineResident({ collection: 'orders' }), manager.engine.write({ collection: 'orders' }),
 			// requestServerDelete(engine, { collection: 'orders' }): the options object may be any argument.
-			const namesOrders = node.arguments.some((argument) => {
-				const collection = propertyNamed(argument, ENGINE_COLLECTION_KEY);
-				return (
-					collection &&
-					ts.isStringLiteral(collection.initializer) &&
-					collection.initializer.text === 'orders'
-				);
-			});
+			// `write` counts only as `<chain>.engine.write`, so an unrelated `write` is not a site.
+			const engineWrite =
+				ENGINE_WRITES.has(name) &&
+				(name !== 'write' ||
+					(member &&
+						ts.isPropertyAccessExpression(callee.expression) &&
+						callee.expression.name.text === 'engine'));
+			const namesOrders =
+				engineWrite &&
+				node.arguments.some((argument) => {
+					const collection = propertyNamed(argument, ENGINE_COLLECTION_KEY);
+					return (
+						collection &&
+						ts.isStringLiteral(collection.initializer) &&
+						collection.initializer.text === 'orders'
+					);
+				});
 			if (namesOrders) construct = 'engine-write';
 			if (construct) {
 				const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
