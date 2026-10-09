@@ -48,7 +48,8 @@ export async function dispatchAction<E extends ActionEvent>({
 	const hooks = getActionHooks(event);
 	// One budget per TIER, started when that tier's first hook runs: extensions run first and
 	// must never be able to spend the guards' time (a slow extension that starved a guard into a
-	// timeout would be an extension veto). Total hook latency is bounded by two budgets.
+	// timeout would be an extension veto). Hook latency before the writer is bounded by two
+	// budgets; after-work budgets (below) add one per hook that awaited `next`.
 	const deadlines: Partial<Record<ActionHookTier, number>> = {};
 	const deadlineFor = (tier: ActionHookTier) =>
 		(deadlines[tier] ??= ctx.now() + ACTION_BUDGET_MS[event]);
@@ -144,7 +145,8 @@ export async function dispatchAction<E extends ActionEvent>({
 				// have written, so it is a failure, and the inner answer stands.
 				reason = 'deny_after_next';
 			} else if (isActionRefusal(value)) {
-				if (tier === 'guard') return value;
+				// Frozen on the way out, so no hook above can edit the refusal in place.
+				if (tier === 'guard') return deepFreeze(value);
 				ctx.log('warn', 'Extension hook refusal ignored', { context: { hookId, event } });
 				return runAt(i + 1, e);
 			} else reason = 'returned_without_next';

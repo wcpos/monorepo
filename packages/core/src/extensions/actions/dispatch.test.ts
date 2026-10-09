@@ -359,6 +359,9 @@ it('gives a hook that calls next synchronously no timer of its own', async () =>
 		{ id: 'reading.guard', tier: 'guard', order: 1 }
 	);
 	const result = dispatch();
+	await Promise.resolve();
+	// One timer: the reading guard's. The forwarding guard, having called next, has none.
+	expect(jest.getTimerCount()).toBe(1);
 	await jest.advanceTimersByTimeAsync(1500);
 	expect(getActionHookState('forwarding.guard').strikes).toBe(0);
 	expect(await result).toEqual({
@@ -440,6 +443,25 @@ it("keeps a guard's refusal when an extension's after-work returns something els
 	expect(bottom).not.toHaveBeenCalled();
 	expect(getActionHookState('careless.extension').strikes).toBe(0);
 	expect(getActionHookState('forgetful.extension').strikes).toBe(0);
+});
+it('hands a guard refusal out frozen, so an extension cannot edit it in place', async () => {
+	registerActionHook('cart.line.add', async () => ({ deny: { reasonKey: 'no_stock' } }), {
+		id: 'stock.guard',
+		tier: 'guard',
+	});
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			const r = await next(e);
+			expect(() => {
+				(r as { deny: { reasonKey: string } }).deny.reasonKey = 'ok';
+			}).toThrow(TypeError);
+			return r;
+		},
+		{ id: 'tampering.extension', tier: 'extension' }
+	);
+	expect(await dispatch()).toEqual({ deny: { reasonKey: 'no_stock' } });
+	expect(bottom).not.toHaveBeenCalled();
 });
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
