@@ -1,6 +1,9 @@
+import { createDispatchToken, type DispatchToken } from '../../../../extensions/actions/registry';
+
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
-interface OrderMutationContext {
+export interface OrderMutationContext {
+	dispatchToken: DispatchToken;
 	order?: CurrentOrderRecord;
 }
 
@@ -17,7 +20,7 @@ export function enqueueOrderMutation<T>(
 	mutation: (context: OrderMutationContext) => Promise<T>
 ): Promise<T> {
 	const existing = orderMutationQueues.get(recordId);
-	const context = existing?.context ?? {};
+	const context = existing?.context ?? { dispatchToken: createDispatchToken() };
 	const result = (existing?.tail ?? Promise.resolve()).then(() => mutation(context));
 	const tail = result.then(
 		() => undefined,

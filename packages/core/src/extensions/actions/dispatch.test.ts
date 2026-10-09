@@ -1,5 +1,6 @@
 import { createActionContext } from './context';
 import { dispatchAction } from './dispatch';
+import { presentActionRefusal } from './present';
 import {
 	createDispatchToken,
 	getActionHookState,
@@ -89,7 +90,7 @@ it('refuses a throwing guard', async () => {
 	});
 	expect(bottom).not.toHaveBeenCalled();
 });
-it('disables after the third strike and logs once, skipping the hook on later dispatches', async () => {
+it('disables after the third strike, logging every strike and the disabling, skipping the hook on later dispatches', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');
 	});
@@ -99,7 +100,17 @@ it('disables after the third strike and logs once, skipping the hook on later di
 	await dispatch();
 	expect(await dispatch()).toBe('saved');
 	expect(hook).toHaveBeenCalledTimes(3);
-	expect(log).toHaveBeenCalledTimes(1);
+	// One row per strike, then the disabled row.
+	expect(log).toHaveBeenCalledTimes(4);
+	expect(log).toHaveBeenNthCalledWith(1, 'warn', 'Action hook failed', {
+		context: {
+			hookId: 'test.hook',
+			event: 'cart.line.add',
+			reason: 'threw',
+			strikes: 1,
+			error: 'broken',
+		},
+	});
 	expect(log).toHaveBeenCalledWith('warn', 'Action hook disabled for this session', {
 		context: { hookId: 'test.hook', event: 'cart.line.add', strikes: 3 },
 	});
@@ -463,6 +474,54 @@ it('hands a guard refusal out frozen, so an extension cannot edit it in place', 
 	expect(await dispatch()).toEqual({ deny: { reasonKey: 'no_stock' } });
 	expect(bottom).not.toHaveBeenCalled();
 });
+it("freezes a copy of a guard's refusal, never the objects the guard put in it", async () => {
+	const shared = { stock: 3 };
+	const refusal = { deny: { reasonKey: 'no_stock', detail: { record: shared } } };
+	register(async () => refusal);
+	const result = await dispatch();
+	expect(result).toEqual(refusal);
+	expect(result).not.toBe(refusal);
+	expect(Object.isFrozen(result)).toBe(true);
+	expect(Object.isFrozen(shared)).toBe(false);
+	shared.stock = 4; // still the guard's to change
+	expect((result as typeof refusal).deny.detail.record.stock).toBe(3);
+});
+it('presents a refusal through the context unless the hook already did', async () => {
+	presentActionRefusal(
+		ctx,
+		{ deny: { reasonKey: 'actions.hook_failed', detail: { hookId: 'x' } } },
+		{ orderId: 'o' }
+	);
+	expect(log).toHaveBeenCalledWith('warn', 'actions.hook_failed', {
+		showToast: true,
+		context: { orderId: 'o', hookId: 'x', reasonKey: 'actions.hook_failed' },
+	});
+	log.mockClear();
+	presentActionRefusal(ctx, { deny: { reasonKey: 'pos_products.out_of_stock', presented: true } });
+	expect(log).not.toHaveBeenCalled();
+});
+it("silences a hook's log once its dispatch has settled, so a timed-out guard cannot toast later", async () => {
+	jest.useFakeTimers();
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	register(async (hookCtx, e, next) => {
+		hookCtx.log('info', 'before the budget');
+		await held;
+		hookCtx.log('warn', 'after the budget', { showToast: true });
+		return next(e);
+	});
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1500);
+	expect(await result).toMatchObject({ deny: { reasonKey: 'actions.hook_timeout' } });
+	release();
+	await Promise.resolve();
+	await Promise.resolve();
+	expect(log).toHaveBeenCalledWith('info', 'before the budget', undefined);
+	expect(log).not.toHaveBeenCalledWith('warn', 'after the budget', expect.anything());
+	expect(bottom).not.toHaveBeenCalled();
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');
@@ -479,5 +538,30 @@ it('refuses a disabled guard without calling it or bottom', async () => {
 	});
 	expect(hook).toHaveBeenCalledTimes(3);
 	expect(bottom).not.toHaveBeenCalled();
-	expect(log).toHaveBeenCalledTimes(1);
+	expect(log).toHaveBeenCalledTimes(4);
+});
+it('freezes a dispatcher hook_failed refusal before an extension can edit it', async () => {
+	register(async () => {
+		throw new Error('broken');
+	});
+	let refusal: unknown;
+	let mutationThrew = false;
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			const result = await next(e);
+			refusal = result;
+			try {
+				(result as { deny: { reasonKey: string } }).deny.reasonKey = 'edited';
+			} catch {
+				mutationThrew = true;
+			}
+			return result;
+		},
+		{ id: 'tampering.extension', tier: 'extension' }
+	);
+	expect(await dispatch()).toMatchObject({ deny: { reasonKey: 'actions.hook_failed' } });
+	expect(mutationThrew).toBe(true);
+	expect(Object.isFrozen(refusal)).toBe(true);
+	expect(bottom).not.toHaveBeenCalled();
 });

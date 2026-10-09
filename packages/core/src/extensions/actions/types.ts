@@ -44,6 +44,8 @@ export type ActionRefusal = {
 		reasonKey: string;
 		params?: Record<string, string | number>;
 		detail?: Record<string, unknown>;
+		/** Set by a hook that has already shown the reason (a toast of its own); the caller then shows nothing. */
+		presented?: boolean;
 	};
 };
 export function isActionRefusal(value: unknown): value is ActionRefusal {
@@ -67,15 +69,23 @@ export type ActionHook<E extends ActionEvent> = (
 	next: ActionNext<E>
 ) => Promise<ActionResult<E> | ActionRefusal>;
 export interface ActionContext {
+	/**
+	 * The app's logger. `options` are the logger's own (showToast, toast, context); `category`
+	 * names the row's category (`['wcpos', 'pos', 'cart', 'stock']`) so a hook that replaces code
+	 * keeps that code's rows where the logs screen already files them; default `wcpos.pos.actions`.
+	 */
 	readonly log: (
 		level: 'debug' | 'info' | 'warn' | 'error',
 		message: string,
-		options?: Record<string, unknown>
+		options?: Record<string, unknown> & { category?: readonly string[] }
 	) => void;
 	readonly t: (key: string, params?: Record<string, string | number>) => string;
 	readonly now: () => number;
 	readonly read: {
-		catalog(kind: 'product' | 'variation', wooId: number): Promise<Record<string, unknown> | null>;
+		readonly catalog: (
+			kind: 'product' | 'variation',
+			wooId: number
+		) => Promise<Record<string, unknown> | null>;
 	};
 	readonly store: { readonly preventOverselling: boolean };
 }
