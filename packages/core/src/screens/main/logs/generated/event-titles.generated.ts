@@ -16,6 +16,12 @@ type TranslateEvent = (key: string) => string;
  */
 export function translateEventTitle(t: TranslateEvent, type: SyncEventType): string {
 	switch (type) {
+		case 'actions.hook.disabled':
+			return t('health.logs.event.actions_hook_disabled');
+		case 'actions.hook.failed':
+			return t('health.logs.event.actions_hook_failed');
+		case 'actions.hook.timeout':
+			return t('health.logs.event.actions_hook_timeout');
 		case 'apply.barcode-rederive':
 			return t('health.logs.event.apply_barcode_rederive');
 		case 'apply.delete':
@@ -307,6 +313,12 @@ export function translateEventDescription(
 	type: SyncEventType
 ): string | undefined {
 	switch (type) {
+		case 'actions.hook.disabled':
+			return t('health.logs.event_description.actions_hook_disabled');
+		case 'actions.hook.failed':
+			return t('health.logs.event_description.actions_hook_failed');
+		case 'actions.hook.timeout':
+			return t('health.logs.event_description.actions_hook_timeout');
 		case 'apply.barcode-rederive':
 			return t('health.logs.event_description.apply_barcode_rederive');
 		case 'apply.delete':

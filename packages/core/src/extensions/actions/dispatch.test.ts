@@ -70,6 +70,16 @@ it('refuses a timed-out guard', async () => {
 			detail: { hookId: 'test.hook', event: 'cart.line.add' },
 		},
 	});
+	expect(log).toHaveBeenCalledWith('warn', 'Action hook failed', {
+		context: {
+			type: 'actions.hook.timeout',
+			hookId: 'test.hook',
+			event: 'cart.line.add',
+			reason: 'timeout',
+			strikes: 1,
+			error: undefined,
+		},
+	});
 	expect(bottom).not.toHaveBeenCalled();
 });
 it('skips a timed-out extension', async () => {
@@ -105,6 +115,7 @@ it('disables after the third strike, logging every strike and the disabling, ski
 	expect(log).toHaveBeenCalledTimes(4);
 	expect(log).toHaveBeenNthCalledWith(1, 'warn', 'Action hook failed', {
 		context: {
+			type: 'actions.hook.failed',
 			hookId: 'test.hook',
 			event: 'cart.line.add',
 			reason: 'threw',
@@ -112,9 +123,20 @@ it('disables after the third strike, logging every strike and the disabling, ski
 			error: 'broken',
 		},
 	});
-	expect(log).toHaveBeenCalledWith('warn', 'Action hook disabled for this session', {
-		context: { hookId: 'test.hook', event: 'cart.line.add', strikes: 3 },
-	});
+	expect(log.mock.calls.filter(([, message]) => message === 'Action hook disabled')).toEqual([
+		[
+			'warn',
+			'Action hook disabled',
+			{
+				context: {
+					type: 'actions.hook.disabled',
+					hookId: 'test.hook',
+					event: 'cart.line.add',
+					strikes: 3,
+				},
+			},
+		],
+	]);
 });
 it('freezes cloned nested data without freezing caller objects', async () => {
 	register(async (_, e, next) => {
