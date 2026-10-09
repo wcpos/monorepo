@@ -384,7 +384,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			minor: toMinor(row.amount, dp),
 			title: byId.get(row.method_id)?.title ?? row.method_id,
 		}));
-	const plan = activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
+	// A gateway that runs the whole order has no split: whatever plan is stored is ignored for it
+	// (the Split chip is hidden on its keypad) and never written as the sale's provenance.
+	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
+	const plan = fixedAmount ? null : activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
 	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
 	const lines = (payload.line_items ?? []).flatMap((line) => {
 		const id = getUuidFromLineItem(line) ?? line.id;
@@ -429,7 +432,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
 	// A gateway that takes no part payment runs the whole order (§4.1): the entry is the balance
 	// whatever another pill or a plan left typed, so the leg completes and is journaled as such.
-	const fixedAmount = method?.capture.mode === 'gateway' && !method.capabilities.amount.partial;
 	const entryAppliedMinor = fixedAmount
 		? balanceMinor
 		: appliedMinor(state.entryMinor, legCapMinor);
@@ -494,12 +496,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
 			const fixed =
 				tile.method.capture.mode === 'gateway' && !tile.method.capabilities.amount.partial;
-			if (fixed && state.plan) {
+			const dropsPlan = fixed && state.plan !== null;
+			if (dropsPlan) {
 				reducerDispatch({ type: 'clear-plan', balanceMinor });
 				setTenderPlan(order.uuid, null);
 			}
 			if (methodId !== state.methodId) attemptRef.current = null;
-			const prefillMinor = state.view === 'amount' ? state.entryMinor : plannedLegMinor;
+			// With the plan gone its share is gone too: the next pill starts from the balance.
+			const prefillMinor = dropsPlan
+				? balanceMinor
+				: state.view === 'amount'
+					? state.entryMinor
+					: plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
@@ -604,11 +612,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const hasStaleSplit = (payload.meta_data ?? []).some(
 			({ key, value }) => key === SPLIT_META_KEY && value !== null
 		);
-		const splitMeta = state.plan
+		const splitMeta = plan
 			? [
 					splitPlanMeta({
-						kind: state.plan.kind,
-						ways: planLegs(state.plan, rowsSinceFrom, balanceMinor).label.ways,
+						kind: plan.kind,
+						ways: planLegs(plan, rowsSinceFrom, balanceMinor).label.ways,
 						shares: [
 							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
 							fromMinor(entryAppliedMinor, dp),
@@ -1055,7 +1063,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		saveState,
 		bindingStatus,
 		state.entryMinor,
-		state.plan,
+		plan,
 		rowsSinceFrom,
 		state.readerId,
 		payload.id,
@@ -1202,8 +1210,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		} catch (error) {
 			if (error instanceof GatewayCancelMirrorError) {
 				// The store cancelled it; only this till's copy is behind. "Try again" would 409.
+				logger.info(t('pos_checkout.invoice_cancelled'), {
+					actor,
+					context: {
+						...orderContext,
+						type: 'checkout.cancelled',
+						method: invoiceSent.method_id,
+						attemptId: invoiceSent.attempt_id,
+						voided: 0,
+					},
+				});
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
-					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
 					context: {
 						...orderContext,

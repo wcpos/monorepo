@@ -2574,7 +2574,63 @@ describe('gateway capture mode (contract 1.2)', () => {
 		await act(async () => {});
 	});
 
-	it('a new attempt id after a change of pill or of values; the stamped id is never replayed', async () => {
+	it('a split plan set after the invoice pill is picked is ignored and never journaled', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
+		expect(result.current.plan).toBeNull();
+		expect(result.current.planLabel).toBeNull();
+		await act(async () => result.current.takeTender());
+		expect(provenance.persistSaleProvenance).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ extraMeta: undefined })
+		);
+	});
+
+	it('a change of pill mints a new attempt; the id the stamp already names is never replayed', async () => {
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new Error('down'), { response: { status: 503 } })
+		);
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		const ids = mockManualPost.mock.calls.map(
+			([, body]) => (body as { attempt_id: string }).attempt_id
+		);
+		expect(ids[0]).not.toBe(ids[1]);
+		// The lost answer syncs in as the stamp: the next press is Send again, under a new id.
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new Error('down'), { response: { status: 503 } })
+		);
+		await act(async () => result.current.takeTender());
+		const lost = (mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id;
+		mockPayload.meta_data = [
+			{ key: '_wcpos_awaiting_customer', value: { ...stamp, attempt_id: lost } },
+		];
+		const { result: reopened } = renderHook(() => useTenderFlow(order));
+		act(() => reopened.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => reopened.current.takeTender());
+		expect((mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id).not.toBe(
+			lost
+		);
+	});
+
+	it('a new attempt id after a change of values', async () => {
 		mockManualPost.mockRejectedValueOnce(
 			Object.assign(new Error('down'), { response: { status: 503 } })
 		);

@@ -60,8 +60,17 @@ export function InvoiceActions({
 			});
 		} catch (error) {
 			if (error instanceof GatewayCancelMirrorError) {
+				logger.info(t('pos_checkout.invoice_cancelled'), {
+					context: {
+						orderId: order.uuid,
+						type: 'checkout.cancelled',
+						method: stamp.method_id,
+						attemptId: stamp.attempt_id,
+						voided: 0,
+					},
+				});
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
-					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
 					context: {
 						orderId: order.uuid,

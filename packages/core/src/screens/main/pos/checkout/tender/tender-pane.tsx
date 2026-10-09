@@ -291,7 +291,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
-				{flow.balanceMinor > 0 ? (
+				{flow.balanceMinor > 0 && !fixedAmount ? (
 					<Chip
 						on={!!plan}
 						label={t('pos_checkout.split')}
