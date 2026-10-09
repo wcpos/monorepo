@@ -121,7 +121,7 @@ function OrderRow({
 	const entries = cartContents(payload);
 	const parts = entries.map((entry) =>
 		entry.kind === 'line'
-			? entry.quantity > 1
+			? entry.quantity !== 1
 				? `${entry.name} ×${entry.quantity}`
 				: entry.name
 			: entry.kind === 'fee'

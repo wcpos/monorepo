@@ -24,17 +24,19 @@ it('an empty or absent cart has no entries', () => {
 	expect(cartContents({ line_items: [], fee_lines: null, shipping_lines: undefined })).toEqual([]);
 });
 
-it('a missing quantity reads as one; a zero-quantity line is left off', () => {
+it('a missing quantity reads as one; zero is left off; a negative line stays', () => {
 	expect(
 		cartContents({
 			line_items: [
 				{ name: 'Belt' },
 				{ name: 'Gloves', quantity: 0 },
 				{ name: 'Scarf', quantity: 'many' },
+				{ name: 'Returned mug', quantity: -2 },
 			],
 		})
 	).toEqual([
 		{ kind: 'line', name: 'Belt', quantity: 1 },
 		{ kind: 'line', name: 'Scarf', quantity: 1 },
+		{ kind: 'line', name: 'Returned mug', quantity: -2 },
 	]);
 });
