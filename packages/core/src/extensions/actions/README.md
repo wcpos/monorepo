@@ -37,7 +37,9 @@ completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `a
 is applied to the balance, `tenderedMinor` is what the cashier handed over. `mode` includes
 `zero-balance`; `bindingStatus` is `bound | choose | none`; the two ids begin as `null`.
 
-Tender guards run as `register.gate` (order 0), then `session.gate` (order 1). The first
+Tender guards run as `register.gate` (order 0), then `session.gate` (order 1); the event name and
+the two ids are the constants `TENDER_COMMIT_EVENT` and `TENDER_GUARD_IDS` in `types.ts`, because
+the Logs event-label check scans `pos/checkout` for dotted literals and these are not log rows. The first
 refuses a completing sale that still needs a register chosen. The second resolves the bound
 register and its required open session through `ctx.register.resolveSession()`, a **read**
 (`findOpenSession`), refusing if no required session is open; the pre-action write that

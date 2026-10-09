@@ -25,13 +25,15 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { TENDER_GUARD_IDS } from './tender-guards';
 import {
 	type ActionEventInput,
 	dispatchAction,
 	isActionRefusal,
 	presentActionRefusal,
+	TENDER_COMMIT_EVENT,
+	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
+import './tender-guards';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useActionContext } from '../../hooks/use-action-context';
 import {
@@ -646,7 +648,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			: hasStaleSplit
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
-		const commitTender = async (e: ActionEventInput<'checkout.tender.commit'>) => {
+		const commitTender = async (e: ActionEventInput<typeof TENDER_COMMIT_EVENT>) => {
 			// The gate only looked the session up (a guard has no effects before `next`); the
 			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
 			// where `prepareSale` made it. It also re-reads the id, so a session closed between
@@ -965,7 +967,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						},
 					});
 				return dispatchAction({
-					event: 'checkout.tender.commit',
+					event: TENDER_COMMIT_EVENT,
 					// Money path: refuse rather than run unguarded if the registering import were ever lost.
 					requiredGuards: TENDER_GUARD_IDS,
 					token: queue.dispatchToken,

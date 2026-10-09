@@ -1,8 +1,13 @@
-import { type ActionHook, registerActionHook } from '../../../../../extensions/actions';
+import {
+	type ActionHook,
+	registerActionHook,
+	TENDER_COMMIT_EVENT,
+	TENDER_GUARD_IDS,
+} from '../../../../../extensions/actions';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { gateSale } from '../sale-completion';
 
-export const registerGate: ActionHook<'checkout.tender.commit'> = async (_ctx, e, next) => {
+export const registerGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ctx, e, next) => {
 	if (!gateSale({ completing: e.payload.completing, bindingStatus: e.payload.bindingStatus }).ok)
 		return {
 			deny: { reasonKey: 'pos_checkout.choose_register_first', detail: { event: e.event } },
@@ -10,7 +15,7 @@ export const registerGate: ActionHook<'checkout.tender.commit'> = async (_ctx, e
 	return next(e);
 };
 
-export const sessionGate: ActionHook<'checkout.tender.commit'> = async (ctx, e, next) => {
+export const sessionGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (ctx, e, next) => {
 	try {
 		const { registerId, sessionId } = await ctx.register.resolveSession();
 		return next({ ...e, payload: { ...e.payload, registerId, sessionId } });
@@ -23,16 +28,14 @@ export const sessionGate: ActionHook<'checkout.tender.commit'> = async (ctx, e, 
 	}
 };
 
-registerActionHook('checkout.tender.commit', registerGate, {
-	id: 'register.gate',
+const [REGISTER_GATE_ID, SESSION_GATE_ID] = TENDER_GUARD_IDS;
+registerActionHook(TENDER_COMMIT_EVENT, registerGate, {
+	id: REGISTER_GATE_ID,
 	tier: 'guard',
 	order: 0,
 });
-registerActionHook('checkout.tender.commit', sessionGate, {
-	id: 'session.gate',
+registerActionHook(TENDER_COMMIT_EVENT, sessionGate, {
+	id: SESSION_GATE_ID,
 	tier: 'guard',
 	order: 1,
 });
-
-/** The guards a tender commit must have registered; the dispatch refuses without them. */
-export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;

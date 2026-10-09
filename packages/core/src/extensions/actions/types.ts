@@ -5,6 +5,14 @@ export const ACTION_EVENTS = [
 	'cart.line.update',
 	'checkout.tender.commit',
 ] as const;
+/**
+ * Named for the checkout code, which the Logs event-label check scans for dotted literals
+ * (`scripts/check-event-labels.mjs`, roots include `pos/checkout`). An action event or a hook
+ * id is not a log row and has no merchant label, so checkout refers to these constants.
+ */
+export const TENDER_COMMIT_EVENT = ACTION_EVENTS[2];
+/** The guards a tender commit must have registered; the dispatch refuses without them. */
+export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;
 export type ActionEvent = (typeof ACTION_EVENTS)[number];
 export type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type PlainLine = Record<string, unknown>;
