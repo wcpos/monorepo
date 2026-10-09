@@ -938,9 +938,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// till's copy failed to save. "Try again" would send or charge a second time.
 				attemptRef.current = null;
 				const { outcome } = error;
-				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
+				// PAYMENT111's summary speaks of a recorded payment; a sent invoice needs its own sentence.
+				const sentence =
+					outcome.kind === 'sent'
+						? t('pos_checkout.invoice_sent_not_synced')
+						: t('pos_checkout.payment_recorded_not_synced');
+				logger.warn(sentence, {
 					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
 					showToast: true,
+					...(outcome.kind === 'sent' ? { toast: { title: sentence } } : {}),
 					context: {
 						type: 'payment.not-mirrored',
 						...orderContext,
@@ -1220,9 +1226,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						voided: 0,
 					},
 				});
+				// The code's own summary would replace this sentence on the toast; name it explicitly.
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
+					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {
 						...orderContext,
 						error: error.cause instanceof Error ? error.cause.message : String(error.cause),

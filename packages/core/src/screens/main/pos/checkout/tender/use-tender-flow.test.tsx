@@ -2699,8 +2699,12 @@ describe('gateway capture mode (contract 1.2)', () => {
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		await act(async () => result.current.takeTender());
 		expect(mockWarn).toHaveBeenCalledWith(
-			'pos_checkout.payment_recorded_not_synced',
-			expect.objectContaining({ code: 'PAYMENT111', showToast: true })
+			'pos_checkout.invoice_sent_not_synced',
+			expect.objectContaining({
+				code: 'PAYMENT111',
+				showToast: true,
+				toast: { title: 'pos_checkout.invoice_sent_not_synced' },
+			})
 		);
 		expect(mockError).not.toHaveBeenCalled();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(

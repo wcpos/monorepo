@@ -72,6 +72,7 @@ export function InvoiceActions({
 				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
+					toast: { title: t('pos_checkout.invoice_cancelled_not_synced') },
 					context: {
 						orderId: order.uuid,
 						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
