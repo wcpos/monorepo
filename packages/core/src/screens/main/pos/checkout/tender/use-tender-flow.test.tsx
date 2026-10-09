@@ -1974,6 +1974,33 @@ describe('provider completion provenance before intent', () => {
 			},
 		});
 	});
+	it('the last leg of a split past its planned ways still records the shares', async () => {
+		// Two legs of 30.00 against a 2-way plan, then the rest: activePlan is null by then, the
+		// stored plan is not. The journal must carry every share (Greptile on #2453).
+		mockMethods = [cash];
+		mockPayload.meta_data = withLedger(
+			[],
+			[payment({ id: 'a', amount: '30.00' }), payment({ id: 'b', amount: '30.00' })]
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 3295,
+			})
+		);
+		expect(result.current.plan).toBeNull();
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 3295 }));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.extraMeta?.[0].key).toBe('_wcpos_split');
+		expect(JSON.parse(input.extraMeta?.[0].value as string)).toMatchObject({
+			kind: 'even',
+			shares: ['30.00', '30.00', '32.95'],
+		});
+	});
 	it('hands the split summary to a cash leg, which never passes through saveProvenance', async () => {
 		mockMethods = [cash];
 		const { result } = renderHook(() => useTenderFlow(order));

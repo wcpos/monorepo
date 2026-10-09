@@ -612,11 +612,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const hasStaleSplit = (payload.meta_data ?? []).some(
 			({ key, value }) => key === SPLIT_META_KEY && value !== null
 		);
-		const splitMeta = plan
+		// The STORED plan is journaled, not the active one: the last leg of a finished split still
+		// records its shares (activePlan is null once the legs are done). A whole-order gateway
+		// never has one.
+		const journaledPlan = fixedAmount ? null : state.plan;
+		const splitMeta = journaledPlan
 			? [
 					splitPlanMeta({
-						kind: plan.kind,
-						ways: planLegs(plan, rowsSinceFrom, balanceMinor).label.ways,
+						kind: journaledPlan.kind,
+						ways: planLegs(journaledPlan, rowsSinceFrom, balanceMinor).label.ways,
 						shares: [
 							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
 							fromMinor(entryAppliedMinor, dp),
@@ -1072,7 +1076,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		saveState,
 		bindingStatus,
 		state.entryMinor,
-		plan,
+		state.plan,
+		fixedAmount,
 		rowsSinceFrom,
 		state.readerId,
 		payload.id,
