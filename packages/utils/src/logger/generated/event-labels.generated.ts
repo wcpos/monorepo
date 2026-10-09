@@ -192,7 +192,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'An add-on ran out of time',
 		descriptionKey: 'health.logs.event_description.actions_hook_timeout',
 		description:
-			'A hook on a POS action took longer than its budget. The action was refused if the hook was a guard, and skipped the hook otherwise.',
+			"A hook on a POS action took longer than its budget. Before the hook passed the action on, a guard's timeout refuses the action and an add-on's is skipped; after it passed the action on, the action's own answer stands and the hook is struck.",
 		introducedIn: '2.0.0',
 	},
 	'apply.barcode-rederive': {

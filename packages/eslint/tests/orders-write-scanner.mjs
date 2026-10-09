@@ -7,13 +7,21 @@ import { ROOT } from './uniwind-scanner.mjs';
 
 export { countSites, ROOT } from './uniwind-scanner.mjs';
 
-// Order document identifiers (the last segment of a member chain): any name that says "order",
-// so `freshOrder`, `currentOrderRecord` and `latestOrder` are sites too. A writer that holds an
-// order under a name without the word (`document` in temporary-order.ts) escapes this fence;
-// the scanner is name-based, not type-based.
-const ORDER_DOCUMENT = /order/i;
-// Direct document methods that mutate an order.
-const DOCUMENT_WRITES = new Set(['incrementalModify', 'incrementalPatch', 'patch', 'update']);
+// Order document identifiers (the last segment of a member chain): any name with "order" or
+// "orders" as a camel-case word, so `freshOrder`, `currentOrderRecord` and `latestOrder` are
+// sites while `border` and `recorder` are not. Name-based, not type-based: a writer that holds
+// an order under another name (`document`, `latest`) or behind a helper escapes this fence.
+const isOrderName = (name) => name.split(/(?=[A-Z])|_/).some((word) => /^orders?$/i.test(word));
+// Direct document methods that mutate or delete an order.
+const DOCUMENT_WRITES = new Set([
+	'incrementalModify',
+	'incrementalPatch',
+	'patch',
+	'update',
+	'remove',
+]);
+// Engine helpers and `manager.engine.write` name the collection in their first argument.
+const ENGINE_COLLECTION_KEY = 'collection';
 // Local mutation helpers take the order in their document property.
 const LOCAL_WRITES = new Set(['localPatch', 'localModify']);
 // Collection methods that create or replace orders.
@@ -39,15 +47,42 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/checkout/payments/use-record-manual-payment.ts',
 	// checkout.tender.commit delegates terminal leg persistence and mirroring here.
 	'packages/core/src/screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts',
-	// Payments ledger 9–10: the void route owns the payment's voided order mirror.
-	'packages/core/src/screens/main/pos/checkout/payments/use-void-payments.ts',
 	// checkout.tender.commit / checkout.complete delegate the order's provenance stamp here.
 	'packages/core/src/screens/main/pos/checkout/provenance/persist-provenance.ts',
 ]);
 
+// `order as X`, `order!`, `(order)` and `<X>order` are the same receiver.
+function unwrap(node) {
+	while (
+		ts.isAsExpression(node) ||
+		ts.isNonNullExpression(node) ||
+		ts.isParenthesizedExpression(node) ||
+		ts.isTypeAssertionExpression(node) ||
+		ts.isSatisfiesExpression?.(node)
+	)
+		node = node.expression;
+	return node;
+}
+
 function memberChain(node) {
+	node = unwrap(node);
 	return (
 		ts.isIdentifier(node) || (ts.isPropertyAccessExpression(node) && memberChain(node.expression))
+	);
+}
+
+function lastSegment(node) {
+	node = unwrap(node);
+	return ts.isIdentifier(node) ? node.text : node.name.text;
+}
+
+function propertyNamed(options, key) {
+	if (!options || !ts.isObjectLiteralExpression(options)) return undefined;
+	return options.properties.find(
+		(property) =>
+			ts.isPropertyAssignment(property) &&
+			(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+			property.name.text === key
 	);
 }
 
@@ -68,9 +103,9 @@ export function scanSource(text, path) {
 			const name = ts.isIdentifier(callee) ? callee.text : member ? callee.name.text : undefined;
 			let construct;
 			if (member && memberChain(callee.expression)) {
-				const receiver = callee.expression;
-				const last = ts.isIdentifier(receiver) ? receiver.text : receiver.name.text;
-				if (DOCUMENT_WRITES.has(name) && ORDER_DOCUMENT.test(last)) construct = 'doc-write';
+				const receiver = unwrap(callee.expression);
+				const last = lastSegment(receiver);
+				if (DOCUMENT_WRITES.has(name) && isOrderName(last)) construct = 'doc-write';
 				if (
 					COLLECTION_WRITES.has(name) &&
 					ts.isPropertyAccessExpression(receiver) &&
@@ -83,21 +118,23 @@ export function scanSource(text, path) {
 				(ts.isIdentifier(callee) ||
 					(member && ts.isIdentifier(callee.expression) && callee.expression.text === 'ctx'))
 			) {
-				const options = node.arguments[0];
-				if (
-					options &&
-					ts.isObjectLiteralExpression(options) &&
-					options.properties.some(
-						(property) =>
-							ts.isPropertyAssignment(property) &&
-							(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-							property.name.text === 'document' &&
-							ts.isIdentifier(property.initializer) &&
-							ORDER_DOCUMENT.test(property.initializer.text)
-					)
-				)
-					construct = 'local-write';
+				const document = propertyNamed(node.arguments[0], 'document');
+				if (document) {
+					const value = unwrap(document.initializer);
+					if (memberChain(value) && isOrderName(lastSegment(value))) construct = 'local-write';
+				}
 			}
+			// patchEngineResident({ collection: 'orders' }), manager.engine.write({ collection: 'orders' }),
+			// requestServerDelete(engine, { collection: 'orders' }): the options object may be any argument.
+			const namesOrders = node.arguments.some((argument) => {
+				const collection = propertyNamed(argument, ENGINE_COLLECTION_KEY);
+				return (
+					collection &&
+					ts.isStringLiteral(collection.initializer) &&
+					collection.initializer.text === 'orders'
+				);
+			});
+			if (namesOrders) construct = 'engine-write';
 			if (construct) {
 				const { line, character } = source.getLineAndCharacterOfPosition(node.getStart(source));
 				sites.push(`${path}:${line + 1}:${character + 1}:${construct}`);

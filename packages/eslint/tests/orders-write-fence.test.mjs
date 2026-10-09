@@ -123,10 +123,12 @@ test('ignores comments, strings, reads, unrelated receivers and non-chain expres
 		const prose = 'collections.orders.insert(data)';
 		product.patch(data);
 		widget.update(data);
+		border.patch(data);
+		recorder.update(data);
+		patchEngineResident({ collection: 'products', data });
 		order.getLatest();
 		getContext().order.patch(data);
 		collections.products.insert(data);
-		localModify({ document: ctx.order, data });
 	`,
 			path
 		),
@@ -153,5 +155,37 @@ test('reports call positions and counts separate sites on the same line', () => 
 	assert.deepEqual(scanSource('\n  order.patch(data); order.update(data)', path), [
 		`${path}:2:22:doc-write`,
 		`${path}:2:3:doc-write`,
+	]);
+});
+
+test('an engine helper or engine.write naming the orders collection is a violation', () => {
+	for (const call of [
+		"patchEngineResident({ manager, collection: 'orders', data })",
+		"insertEngineResident({ manager, collection: 'orders', document })",
+		"manager.engine.write({ collection: 'orders', mutation })",
+		"requestServerDelete(manager.engine, { collection: 'orders', recordId })",
+	]) {
+		assert.deepEqual(scanSource(call, path), [`${path}:1:1:engine-write`]);
+	}
+});
+
+test('a cast, a non-null assertion or parentheses do not hide an order write', () => {
+	for (const receiver of [
+		'(order as MutationDocument)',
+		'order!',
+		'(order)',
+		'ctx.current.order!',
+	]) {
+		assert.deepEqual(scanSource(`${receiver}.incrementalPatch(data)`, path), [
+			`${path}:1:1:doc-write`,
+		]);
+	}
+	assert.deepEqual(
+		scanSource('localPatch({ document: freshOrder as MutationDocument, data })', path),
+		[`${path}:1:1:local-write`]
+	);
+	assert.deepEqual(scanSource('order.remove()', path), [`${path}:1:1:doc-write`]);
+	assert.deepEqual(scanSource('localModify({ document: ctx.order, data })', path), [
+		`${path}:1:1:local-write`,
 	]);
 });

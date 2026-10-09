@@ -2010,7 +2010,7 @@
 	"health.logs.event.transport_request": "Request to your store",
 	"health.logs.event_description.actions_hook_disabled": "A hook on a POS action failed three times in this session and is switched off until the app restarts. A guard that is switched off refuses its action.",
 	"health.logs.event_description.actions_hook_failed": "A hook on a POS action threw or returned something the action could not use.",
-	"health.logs.event_description.actions_hook_timeout": "A hook on a POS action took longer than its budget. The action was refused if the hook was a guard, and skipped the hook otherwise.",
+	"health.logs.event_description.actions_hook_timeout": "A hook on a POS action took longer than its budget. Before the hook passed the action on, a guard's timeout refuses the action and an add-on's is skipped; after it passed the action on, the action's own answer stands and the hook is struck.",
 	"health.logs.event_description.apply_barcode_rederive": "Barcode lookups were rebuilt after product changes.",
 	"health.logs.event_description.apply_delete": "Items deleted in your store were removed on this device.",
 	"health.logs.event_description.apply_pull": "Updates made in your store were saved to this device.",
