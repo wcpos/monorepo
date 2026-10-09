@@ -30,6 +30,21 @@ unrelated queued writes.
 | ------------------ | ------------------- | --------------- | ---------- |
 | `cart.line.add`    | `useAddItemToOrder` | `line`          | yes        |
 | `cart.line.update` | `useUpdateLineItem` | `changes`       | yes        |
+| `checkout.tender.commit` | `takeTender` | `amountMinor`, `tenderedMinor`, `registerId`, `sessionId` | yes |
+
+The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
+completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `amountMinor`
+is applied to the balance, `tenderedMinor` is what the cashier handed over. `mode` includes
+`zero-balance`; `bindingStatus` is `bound | choose | none`; the two ids begin as `null`.
+
+Tender guards run as `register.gate` (order 0), then `session.gate` (order 1). The first
+refuses a completing sale that still needs a register chosen. The second resolves the bound
+register and its required open session through `ctx.register.resolveSession()`, refusing if
+no required session is open. It is **a guard that stamps what it resolved**:
+`next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
+those ids, records the attempt, then keeps the existing provenance and leg sequence.
+The caller presents the two gate refusals with the existing checkout toasts and any other
+refusal through `presentActionRefusal` (unless already presented).
 
 First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),
 the prevent-overselling check moved onto the two cart events as guards. Ids are unique per event
@@ -38,7 +53,7 @@ disables the other.
 
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
-(a) today: `checkout.tender.commit` and `checkout.complete` (their slices are next), receipt
+(a) today: `checkout.complete` (its slice is next), receipt
 print, register open/close, discount apply, customer set, refund.
 
 ## The hook
@@ -105,7 +120,9 @@ failed`, with the reason and the error message); the disabling writes one more. 
 
 Every dispatch runs **inside** `enqueueOrderMutation(orderId, …)`: `dispatchAction` takes the
 queue's `dispatchToken` and throws without one. The queue serialises an order's writes, so a
-rewrite is always applied against an unchanged target.
+rewrite is always applied against an unchanged target. Tender commit also runs inside the order's
+mutation queue: cart edits wait until the manual leg finishes or the terminal leg is handed
+to its service. No new lock is added.
 
 ## Do not
 

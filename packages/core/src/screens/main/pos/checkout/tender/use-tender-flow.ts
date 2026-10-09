@@ -25,6 +25,15 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import './tender-guards';
+import {
+	type ActionEventInput,
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+} from '../../../../../extensions/actions';
+import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { useActionContext } from '../../hooks/use-action-context';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
@@ -32,7 +41,7 @@ import {
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { returnToTill } from '../till-route';
-import { completionMetaFor, persistSaleProvenance, prepareSale } from '../sale-completion';
+import { completionMetaFor, persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -178,6 +187,7 @@ export interface TenderFlow {
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
+	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
@@ -630,8 +640,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			: hasStaleSplit
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
-		try {
-			const prepared = await prepareSale(ctx, {
+		const commitTender = async (e: ActionEventInput<'checkout.tender.commit'>) => {
+			await recordSaleAttempt(ctx, {
 				order,
 				source:
 					balanceMinor === 0
@@ -641,18 +651,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							: method?.capture.mode === 'gateway'
 								? 'gateway'
 								: 'terminal',
-				completing: entryAppliedMinor === balanceMinor,
-				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-				sessionRule: 'require',
+				completing: e.payload.completing,
 			});
-			if (!prepared.ok) {
-				logger.info(t('pos_checkout.choose_register_first'), {
-					showToast: true,
-					context: orderContext,
-				});
-				return;
-			}
-			const { registerId, sessionId } = prepared;
+			const { registerId, sessionId } = e.payload;
 			const saveProvenance = async () => {
 				if (entryAppliedMinor !== balanceMinor) return;
 
@@ -734,7 +735,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					transport: deviceTransport,
 					recordedOffline: offline,
 					orderId: payload.id ?? null,
-					amount: fromMinor(entryAppliedMinor, dp),
+					amount: fromMinor(e.payload.amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -759,7 +760,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						method.capabilities.tips === 'on_reader' &&
 						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
 							'on_reader'
-							? entryAppliedMinor
+							? e.payload.amountMinor
 							: null,
 				});
 				reducerDispatch({ type: 'tender-started' });
@@ -791,7 +792,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					sessionId,
 					method,
 					orderId: payload.id,
-					amount: fromMinor(entryAppliedMinor, dp),
+					amount: fromMinor(e.payload.amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -876,9 +877,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						row: outcome.row,
 						order: outcome.order,
 						mirrorFailed: false,
-						preparedCompleting: entryAppliedMinor === balanceMinor,
+						preparedCompleting: e.payload.amountMinor === balanceMinor,
 						preLegBalanceMinor: balanceMinor,
-						amountMinor: entryAppliedMinor,
+						amountMinor: e.payload.amountMinor,
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
@@ -900,9 +901,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
-			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
+			const tendered = method.capabilities.change ? fromMinor(e.payload.tenderedMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {
-				amount: fromMinor(entryAppliedMinor, dp),
+				amount: fromMinor(e.payload.amountMinor, dp),
 				tendered,
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
@@ -911,9 +912,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					source: 'manual',
 					...outcome,
 					mirrorFailed: false,
-					preparedCompleting: entryAppliedMinor === balanceMinor,
+					preparedCompleting: e.payload.amountMinor === balanceMinor,
 					preLegBalanceMinor: balanceMinor,
-					amountMinor: entryAppliedMinor,
+					amountMinor: e.payload.amountMinor,
 				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
@@ -932,6 +933,44 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				showToast: true,
 				context: { ...orderContext, method: method.id },
 			});
+		};
+		try {
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+				dispatchAction({
+					event: 'checkout.tender.commit',
+					token: queue.dispatchToken,
+					ctx: actionCtx,
+					input: {
+						orderId: order.uuid,
+						actor: actionActor,
+						source: 'user',
+						payload: {
+							methodId: method?.id ?? null,
+							mode: balanceMinor === 0 ? 'zero-balance' : (method?.capture.mode ?? null),
+							amountMinor: entryAppliedMinor,
+							tenderedMinor: state.entryMinor,
+							balanceMinor,
+							completing: entryAppliedMinor === balanceMinor,
+							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+							registerId: null,
+							sessionId: null,
+						},
+					},
+					bottom: commitTender,
+				})
+			);
+			if (isActionRefusal(outcome)) {
+				if (outcome.deny.presented) return;
+				if (outcome.deny.reasonKey === 'pos_checkout.open_register_first') {
+					presentSessionRequired(logger, t, orderContext);
+				} else if (outcome.deny.reasonKey === 'pos_checkout.choose_register_first') {
+					logger.info(t('pos_checkout.choose_register_first'), {
+						showToast: true,
+						context: orderContext,
+					});
+				} else presentActionRefusal(actionCtx, outcome, orderContext);
+				return;
+			}
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) {
 				presentSessionRequired(logger, t, orderContext);
@@ -1054,6 +1093,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
+		actionCtx,
+		actionActor,
 		ctx,
 		balanceMinor,
 		deviceTransport,

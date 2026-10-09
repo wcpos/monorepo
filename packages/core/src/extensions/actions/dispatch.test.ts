@@ -24,6 +24,7 @@ const ctx = createActionContext({
 	t: (key) => key,
 	readCatalog: async () => null,
 	preventOverselling: true,
+	resolveSession: async () => ({ registerId: null, sessionId: null }),
 });
 const dispatch = () =>
 	dispatchAction({ event: 'cart.line.add', input, ctx, token: createDispatchToken(), bottom });
@@ -564,4 +565,44 @@ it('freezes a dispatcher hook_failed refusal before an extension can edit it', a
 	expect(mutationThrew).toBe(true);
 	expect(Object.isFrozen(refusal)).toBe(true);
 	expect(bottom).not.toHaveBeenCalled();
+});
+
+it('passes tender register and session rewrites to bottom', async () => {
+	registerActionHook(
+		'checkout.tender.commit',
+		async (_, e, next) =>
+			next({
+				...e,
+				payload: { ...e.payload, registerId: 'resolved-register', sessionId: 'resolved-session' },
+			}),
+		{ id: 'session.gate', tier: 'guard' }
+	);
+	await dispatchAction({
+		event: 'checkout.tender.commit',
+		ctx,
+		token: createDispatchToken(),
+		bottom,
+		input: {
+			...input,
+			payload: {
+				methodId: 'cash',
+				mode: 'manual',
+				amountMinor: 100,
+				tenderedMinor: 100,
+				balanceMinor: 100,
+				completing: true,
+				bindingStatus: 'bound',
+				registerId: null,
+				sessionId: null,
+			},
+		},
+	});
+	expect(bottom).toHaveBeenCalledWith(
+		expect.objectContaining({
+			payload: expect.objectContaining({
+				registerId: 'resolved-register',
+				sessionId: 'resolved-session',
+			}),
+		})
+	);
 });

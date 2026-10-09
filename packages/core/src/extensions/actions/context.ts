@@ -8,12 +8,14 @@ export function createActionContext({
 	now = () => Date.now(),
 	readCatalog,
 	preventOverselling,
+	resolveSession,
 }: {
 	log: ActionContext['log'];
 	t: ActionContext['t'];
 	now?: () => number;
 	readCatalog: ActionContext['read']['catalog'];
 	preventOverselling: boolean;
+	resolveSession: ActionContext['register']['resolveSession'];
 }): ActionContext {
 	// Frozen so a hook cannot swap a noun out from under the hooks after it.
 	return Object.freeze({
@@ -22,5 +24,6 @@ export function createActionContext({
 		now,
 		read: Object.freeze({ catalog: readCatalog }),
 		store: Object.freeze({ preventOverselling }),
+		register: Object.freeze({ resolveSession }),
 	});
 }

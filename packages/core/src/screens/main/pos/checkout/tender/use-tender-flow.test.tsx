@@ -26,6 +26,9 @@ import {
 	useCheckoutMode,
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
+import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { resetActionHookStrikes } from '../../../../../extensions/actions';
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 import { rememberedReaders } from './remembered-readers';
@@ -2241,9 +2244,7 @@ beforeEach(() => {
 
 it('no open session: toasts without POST, recording a leg or rejecting tender', async () => {
 	jest.clearAllMocks();
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
+	mockResolveSession.mockRejectedValueOnce(new RegisterSessionRequiredError());
 	mockSessionsOn = true;
 	mockSessionId = null;
 	mockLeg = null;
@@ -2375,6 +2376,7 @@ jest.mock('../sale-completion', () => {
 	);
 	return {
 		...actual,
+		recordSaleAttempt: jest.fn(actual.recordSaleAttempt),
 		completionMetaFor,
 		persistSaleProvenance: jest.fn(
 			async (
@@ -2566,7 +2568,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		// The reducer keeps a hand-typed amount across pills (ledger line 1); what is applied is the balance.
 		expect(result.current.entryAppliedMinor).toBe(9295);
 		await act(async () => result.current.takeTender());
-		expect(jest.mocked(provenance.prepareSale)).toHaveBeenCalledWith(
+		expect(jest.mocked(provenance.recordSaleAttempt)).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ source: 'gateway', completing: true })
 		);
@@ -2977,4 +2979,92 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.invoiceSent).toBeNull();
 		await act(async () => {});
 	});
+});
+
+const mockActionLog = jest.fn();
+const mockResolveSession = jest.fn();
+jest.mock('../../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: () => Date.now(),
+			read: { catalog: async () => null },
+			store: { preventOverselling: false },
+			register: { resolveSession: mockResolveSession },
+		},
+		actor: { userId: 7, registerId: mockBoundRegisterId, sessionId: null },
+	}),
+}));
+beforeEach(() => {
+	resetActionHookStrikes();
+	mockActionLog.mockClear();
+	mockResolveSession.mockReset().mockImplementation(async () => ({
+		registerId: mockBoundRegisterId,
+		sessionId: mockSessionsOn ? mockSessionId : null,
+	}));
+});
+it('presents a failed session guard and never starts the tender writer', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockResolveSession.mockRejectedValueOnce(new Error('session storage unavailable'));
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => result.current.takeTender());
+	expect(mockActionLog).toHaveBeenCalledWith(
+		'warn',
+		'actions.hook_failed',
+		expect.objectContaining({
+			showToast: true,
+			context: expect.objectContaining({
+				hookId: 'session.gate',
+				reasonKey: 'actions.hook_failed',
+			}),
+		})
+	);
+	expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(mockBegin).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
+});
+
+it('waits for the order mutation queue before resolving the session or recording tender', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	let release!: () => void;
+	const ahead = enqueueOrderMutation(
+		order.uuid,
+		() =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			})
+	);
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	let taking!: Promise<void>;
+	await act(async () => {
+		taking = result.current.takeTender();
+		await Promise.resolve();
+	});
+	try {
+		expect(mockResolveSession).not.toHaveBeenCalled();
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	} finally {
+		await act(async () => {
+			release();
+			await ahead;
+			await taking;
+		});
+	}
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 });
