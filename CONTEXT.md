@@ -275,6 +275,31 @@ host may reject, and never a database object. The name knowingly overlaps Expo R
 wcpos/roadmap#139, 2026-09-03.
 _Avoid_: target (Shopify's word for the same thing)
 
+**Action event**:
+A named thing the POS is about to do (`cart.line.add`), dispatched through a chain of hooks
+before its one writer runs. Closed dotted list (`<domain>.<noun>.<verb>`, imperative); a new
+event needs one writer function already in place, a typed result and a waiting consumer.
+Complementary to RxDB: intent, the moment before the write and the power to refuse live here;
+the fact of a change is an RxDB subscription. Ruled wcpos/roadmap#421, 2026-10-09;
+`@wcpos/core/extensions/actions`.
+_Avoid_: filter, event bus, "fire" (a bus is fire-and-forget; here the hook owns the result)
+
+**Hook**:
+A function `(ctx, e, next)` registered on an action event that observes (`next(e)`), rewrites
+(`next({ ...e, payload })`) or refuses (`{ deny: { reasonKey } }` without `next`) it. `e` is
+frozen plain data stamped with `actor` and `source`; `ctx` is read-only until the writer runs.
+_Avoid_: listener (RxDB's side), middleware (we say hook), RxDB's own `preSave` for this
+
+**Guard**:
+A first-party hook (`tier: 'guard'`) that may refuse and fails closed: a timeout, a throw or a
+disabled guard refuses the dispatch. An extension-tier hook may only observe and rewrite and
+fails open.
+
+**Bottom handler**:
+The one function that writes for an action event; nothing else writes that collection for that
+action. Every dispatch runs inside the order's mutation queue, so a rewrite lands on an
+unchanged target.
+
 **Bridge**:
 The versioned JSON postMessage channel between the host app and a mini-app:
 request/response RPC with correlation ids, plus host-initiated events. Supersedes the

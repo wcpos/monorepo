@@ -7,6 +7,7 @@
 	"main": "src/index.tsx",
 	"exports": {
 		".": "./src/index.tsx",
+		"./extensions/actions": "./src/extensions/actions/index.ts",
 		"./extensions/slots": "./src/extensions/slots/index.ts",
 		"./contexts/app-state": "./src/contexts/app-state/index.tsx",
 		"./contexts/hydration-providers": "./src/contexts/hydration-providers.tsx",
