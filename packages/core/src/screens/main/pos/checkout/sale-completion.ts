@@ -1,5 +1,6 @@
 import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
+	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	isCompletingStatus,
 	type MetaDataEntry,
@@ -161,8 +162,13 @@ const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancel
 
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
-		case 'replay': // Replay trusts the resident status, never re-collects money.
-			return !!payload?.status && !UNPAID_STATUSES.includes(payload.status);
+		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
+			// waits for its customer whatever status its gateway chose (on-hold included).
+			return (
+				!!payload?.status &&
+				!UNPAID_STATUSES.includes(payload.status) &&
+				activeAwaitingCustomer(payload.meta_data) === null
+			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
 			return typeof outcome.order?.balance === 'string' &&
 				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&

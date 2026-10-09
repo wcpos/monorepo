@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { AwaitingCustomerStamp } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -28,6 +29,7 @@ export function InvoiceActions({
 	const t = useT();
 	const reopen = useReopenOrder(order);
 	const gateway = useGatewayPayment();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const [busy, setBusy] = React.useState(false);
 	// State drives the button; the ref closes the same-tick gap a fast double tap falls into.
 	const busyRef = React.useRef(false);
@@ -71,10 +73,12 @@ export function InvoiceActions({
 	}, [gateway, order, stamp, t]);
 	return (
 		<>
+			{/* Destructive sits apart from constructive: ghost on the left, never the same weight. */}
 			<Button
-				variant="outline"
+				variant="ghost-destructive"
+				className="mr-auto"
 				testID="orders-cancel-invoice"
-				disabled={busy}
+				disabled={busy || !online}
 				loading={busy}
 				onPress={() => void cancel()}
 			>

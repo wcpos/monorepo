@@ -219,6 +219,14 @@ describe('cancelGatewayInvoice', () => {
 			meta_data: [{ key: 'other', value: 1 }],
 		});
 	});
+	it('an empty 2xx confirms nothing: no stamp is cleared', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: {} });
+		await expect(cancelGatewayInvoice(order, stamp, deps)).rejects.toThrow(
+			'gateway_cancel_malformed_response'
+		);
+		expect(mirror).not.toHaveBeenCalled();
+	});
 	it('a refusal leaves the order alone', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockRejectedValue(refusal(409, 'wcpos_payment_conflict'));

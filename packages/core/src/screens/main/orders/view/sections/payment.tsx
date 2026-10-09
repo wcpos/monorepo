@@ -40,7 +40,7 @@ export function PaymentSection({ order, last }: { order: OrderPayload; last?: bo
 	const method = order.payment_method_title || order.payment_method;
 	const refunded = totalRefunded(order.refunds);
 	const stamp = activeAwaitingCustomer(order.meta_data);
-	const sentOn = useDateFormat(stamp?.sent_at_gmt);
+	const sentOn = useDateFormat(stamp?.sent_at_gmt, 'MMM d, h:mm a', false);
 
 	if (!method && !order.transaction_id && !datePaid && refunded === 0 && !stamp) {
 		return null;

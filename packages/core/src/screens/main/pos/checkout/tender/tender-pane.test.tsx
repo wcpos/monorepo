@@ -54,8 +54,26 @@ jest.mock('@wcpos/components/button', () => ({
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
 // The declared-fields helpers draw host controls; their native deps stay out of jsdom.
+type MockCheckboxProps = {
+	testID?: string;
+	checked?: boolean;
+	disabled?: boolean;
+	onCheckedChange?: (next: boolean) => void;
+};
+type MockInputProps = {
+	testID?: string;
+	value?: string;
+	editable?: boolean;
+	onChangeText?: (next: string) => void;
+};
+type MockSelectProps = {
+	options: { value: string; label: string }[];
+	value?: string;
+	placeholder: string;
+	onChange?: (next: string) => void;
+};
 jest.mock('@wcpos/components/checkbox', () => ({
-	Checkbox: ({ testID, checked, onCheckedChange, disabled }: any) => (
+	Checkbox: ({ testID, checked, onCheckedChange, disabled }: MockCheckboxProps) => (
 		<input
 			type="checkbox"
 			data-testid={testID}
@@ -66,7 +84,7 @@ jest.mock('@wcpos/components/checkbox', () => ({
 	),
 }));
 jest.mock('@wcpos/components/input', () => ({
-	Input: ({ testID, value, onChangeText, editable }: any) => (
+	Input: ({ testID, value, onChangeText, editable }: MockInputProps) => (
 		<input
 			data-testid={testID}
 			value={value ?? ''}
@@ -76,10 +94,10 @@ jest.mock('@wcpos/components/input', () => ({
 	),
 }));
 jest.mock('@wcpos/components/select', () => ({
-	OptionSelect: ({ options, value, onChange, placeholder }: any) => (
+	OptionSelect: ({ options, value, onChange, placeholder }: MockSelectProps) => (
 		<select value={value ?? ''} onChange={(event) => onChange?.(event.target.value)}>
 			<option value="">{placeholder}</option>
-			{options.map((option: any) => (
+			{options.map((option) => (
 				<option key={option.value} value={option.value}>
 					{option.label}
 				</option>

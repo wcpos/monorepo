@@ -802,6 +802,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					return;
 				}
 				await saveProvenance();
+				// A leg can land while the provenance saves (a terminal elsewhere, a late mirror): a
+				// gateway runs the whole order and cannot become one leg beside money already held.
+				if (
+					readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
+						['pending', 'authorized', 'captured'].includes(status)
+					)
+				) {
+					logger.info(t(disabledReasonKey('not_with_split'), { title: method.title }), {
+						showToast: true,
+						context: { ...orderContext, method: method.id },
+					});
+					return;
+				}
 				attemptRef.current ??= uuidv4();
 				const outcome = await gateway.submit(order, method.id, {
 					attemptId: attemptRef.current,

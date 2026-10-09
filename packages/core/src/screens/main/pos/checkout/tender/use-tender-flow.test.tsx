@@ -2607,6 +2607,23 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.fieldErrors).toEqual({});
 	});
 
+	it('a leg that lands while provenance saves stops the send', async () => {
+		jest.mocked(provenance.persistSaleProvenance).mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger(mockPayload.meta_data, [payment({ status: 'pending' })]);
+		});
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockManualPost).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.not_with_split',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
 	it('refuses to send with the required field empty, naming it, without a request', async () => {
 		mockPayload.billing = { email: '', phone: '' };
 		const { result } = renderHook(() => useTenderFlow(order));

@@ -175,14 +175,11 @@ export async function cancelGatewayInvoice(
 			`orders/${order.id}/payment-methods/${stamp.method_id}/cancel`,
 			{ attempt_id: stamp.attempt_id }
 		);
-		summary = ((response.data ?? {}) as { order?: OrderPaymentSummary }).order ?? {
-			status: 'pos-open',
-			total: '',
-			paid: '',
-			balance: '',
-			payment_method: '',
-			payment_method_title: '',
-		};
+		const answer = ((response.data ?? {}) as { order?: OrderPaymentSummary }).order;
+		// Only the store's own summary says what the order is now; an empty 2xx confirms nothing.
+		if (!answer || typeof answer.status !== 'string')
+			throw new Error('gateway_cancel_malformed_response');
+		summary = answer;
 	} catch (error) {
 		const response = errorResponse(error);
 		const code = response?.data?.code;

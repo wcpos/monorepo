@@ -67,7 +67,11 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 					return (
 						<View key={component.id} className="gap-1">
 							<Pressable
-								className="flex-row items-center gap-2"
+								// The row is the target, not the box: the 44pt floor on a shared tablet.
+								className="min-h-ctl flex-row items-center gap-2 py-2"
+								accessibilityRole="checkbox"
+								accessibilityLabel={component.label}
+								accessibilityState={{ checked, disabled }}
 								disabled={disabled}
 								onPress={() => onChange(component.id, !checked)}
 							>
@@ -92,7 +96,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 							{component.label}
 						</Text>
 						{component.component === 'select' ? (
-							<View testID={`checkout-field-${component.id}`}>
+							<View testID={`checkout-field-${component.id}`} accessibilityLabel={component.label}>
 								<OptionSelect
 									options={component.options}
 									value={value === '' ? undefined : value}
@@ -104,6 +108,7 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 						) : (
 							<Input
 								testID={`checkout-field-${component.id}`}
+								accessibilityLabel={component.label}
 								type={INPUT_TYPES[component.input as keyof typeof INPUT_TYPES] ?? 'text'}
 								autoCapitalize="none"
 								autoCorrect={false}

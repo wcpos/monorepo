@@ -264,6 +264,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		<ScrollView
 			testID="checkout-keypad-pane"
 			className="bg-card flex-1"
+			// A declared field leaves the keyboard open: the first tap on Send must reach it.
+			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
 			contentContainerClassName="items-center gap-2"
 			contentContainerStyle={{ height: contentHeight }}
@@ -593,7 +595,7 @@ function methodIcon(method: TenderTile['method']) {
 function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 	const t = useT();
 	const stamp = flow.invoiceSent!;
-	const sentOn = useDateFormat(stamp.sent_at_gmt, 'MMM d, h:mm a');
+	const sentOn = useDateFormat(stamp.sent_at_gmt, 'MMM d, h:mm a', false);
 	return (
 		<View
 			testID="checkout-invoice-sent"
@@ -609,10 +611,10 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 					: t('pos_checkout.invoice_sent_on', { date: sentOn ?? '' })}
 			</Text>
 			<Button
-				variant="ghost"
+				variant="ghost-destructive"
 				size="sm"
 				testID="checkout-cancel-invoice"
-				disabled={busy}
+				disabled={busy || !flow.online}
 				onPress={() => void flow.cancelInvoice()}
 			>
 				<ButtonText className="underline">{t('pos_checkout.cancel_invoice')}</ButtonText>

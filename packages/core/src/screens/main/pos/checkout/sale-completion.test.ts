@@ -321,6 +321,17 @@ it('a sent sale leaves the till: sent moment, store refresh, checkout.sent row, 
 	);
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 });
+it('replay never completes a sent order, whatever status its gateway chose', () => {
+	const onHold = {
+		...payload,
+		status: 'on-hold',
+		meta_data: [{ key: '_wcpos_awaiting_customer', value: sent.stamp }],
+	};
+	expect(isSaleComplete({ source: 'replay' }, 2, onHold as never)).toBe(false);
+	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status: 'on-hold' } as never)).toBe(
+		true
+	);
+});
 it('a sent answer whose order is open shows no moment and writes no row', async () => {
 	expect(
 		await completeSale(

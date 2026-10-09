@@ -770,6 +770,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 /* -------------------------------------------------------------------------- */
 
 interface GatewayDescriptor extends Descriptor {
+	capabilities?: { change?: boolean; amount?: { partial?: boolean } };
 	fields?: {
 		schema?: number;
 		verb?: { kind?: string; label?: string };
@@ -777,12 +778,17 @@ interface GatewayDescriptor extends Descriptor {
 	};
 }
 
-/** The first method the app drives itself with a `send` verb and one required email field. */
+/**
+ * The first method the app drives itself with a `send` verb and an email field, in a fields
+ * schema this app knows and taking the whole order — the shape the walk below asserts.
+ */
 function sendGateway(descriptors: Descriptor[]): GatewayDescriptor | undefined {
 	return (descriptors as GatewayDescriptor[]).find(
 		(method) =>
 			method.pos_enabled &&
 			method.capture?.mode === 'gateway' &&
+			(method.fields?.schema ?? 1) <= 1 &&
+			method.capabilities?.amount?.partial === false &&
 			method.fields?.verb?.kind === 'send' &&
 			method.fields.components?.some(
 				(component) => component.component === 'field' && component.input === 'email'
@@ -834,8 +840,9 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await page.getByTestId(`checkout-field-${emailField.id}`).fill(email);
 			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 			await page.getByTestId('checkout-commit').click();
+			// Language-agnostic: the sent surface by its test IDs, the destination by the value typed.
 			await expect(page.getByTestId('checkout-sent')).toBeVisible({ timeout: 120_000 });
-			await expect(page.getByTestId('checkout-sent-headline')).toContainText('Invoice sent');
+			await expect(page.getByTestId('checkout-sent-headline')).toBeVisible();
 			await expect(page.getByTestId('receipt-paid-with')).toContainText(email);
 			await page.getByTestId('checkout-sent-new').click();
 			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
