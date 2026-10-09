@@ -92,6 +92,16 @@ async function guardStock<E extends ActionEvent>(
 	return result;
 }
 
+/** A finite number from a number or a non-empty numeric string; null for anything else. */
+function numericQuantity(value: unknown): number | null {
+	if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+	if (typeof value === 'string' && value.trim() !== '') {
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+	return null;
+}
+
 export const stockGuardOnAdd: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
 	const { type, lineItems } = e.payload;
 	const line = e.payload.line as LineItem;
@@ -109,20 +119,25 @@ export const stockGuardOnAdd: ActionHook<'cart.line.add'> = async (ctx, e, next)
 export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e, next) => {
 	const { lineUuid, changes, lineItems, options } = e.payload;
 	const line = e.payload.line as LineItem | null;
+	// The native quantity cell hands the hook the typed text; the web one a number. The
+	// guard judges the number either way (the old inline check only ran for numbers, so a
+	// quantity typed on a phone skipped it). A string that is not a number is left to the
+	// writer, as before.
+	const requested = numericQuantity(changes.quantity);
 	if (
 		!ctx.store.preventOverselling ||
 		options.skipStockGuard ||
 		!line ||
 		isMiscProductLine(line) ||
-		typeof changes.quantity !== 'number' ||
-		changes.quantity <= (line.quantity ?? 0)
+		requested === null ||
+		requested <= (line.quantity ?? 0)
 	)
 		return next(e);
 	return guardStock(ctx, e, next, {
 		lineItems,
 		productId: line.product_id ?? MISC_PRODUCT_ID,
 		variationId: line.variation_id ?? 0,
-		requestedQuantity: changes.quantity,
+		requestedQuantity: requested,
 		excludedLineItemUuid: lineUuid,
 		name: line.name,
 	});

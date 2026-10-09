@@ -144,3 +144,28 @@ it('evaluates a quantity increase excluding the target line from the stock total
 	).toBe('saved');
 	expect(readCatalog).toHaveBeenCalledWith('product', 1);
 });
+it('guards a quantity typed as text on the native cell, and leaves non-numeric text to the writer', async () => {
+	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 1, backorders: 'no' });
+	const base = {
+		event: 'cart.line.update' as const,
+		orderId: 'order',
+		actor: { userId: 7, registerId: null, sessionId: null },
+		source: 'user' as const,
+		payload: {
+			lineUuid: 'line',
+			changes: { quantity: '5' },
+			line: { product_id: 1, quantity: 1, name: 'Item' },
+			lineItems: [{ product_id: 1, quantity: 1, name: 'Item' }],
+			options: {},
+		},
+	};
+	const typed = jest.fn(async () => 'saved');
+	expect(await stockGuardOnUpdate(ctx, base, typed)).toMatchObject({
+		deny: { reasonKey: 'pos_cart.only_n_available', params: { quantity: 1, name: 'Item' } },
+	});
+	expect(typed).not.toHaveBeenCalled();
+	const junk = jest.fn(async () => 'saved');
+	const junkEvent = { ...base, payload: { ...base.payload, changes: { quantity: 'abc' } } };
+	expect(await stockGuardOnUpdate(ctx, junkEvent, junk)).toBe('saved');
+	expect(junk).toHaveBeenCalledWith(junkEvent);
+});
