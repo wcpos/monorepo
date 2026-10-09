@@ -1,13 +1,13 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
+import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated';
 
 import { Badge } from '@wcpos/components/badge';
-import { Button } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
-import { IconButton } from '@wcpos/components/icon-button';
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { CROSSFADE, EASE } from '@wcpos/components/lib/motion';
 import { SlideOver } from '@wcpos/components/slide-over';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -19,6 +19,15 @@ import { useCurrentOrder } from '../../contexts/current-order';
 import { CartTabTitle } from '../tab-title';
 import { OpenOrdersList } from './open-orders-list';
 import { TabChip } from './tab-chip';
+import { TAB_MIN, tabWindow } from './tab-window';
+
+// Every control in the strip is a full-height cell: the hover and the press fill the
+// rectangle (Paul, 2026-10-09), never a round button inside it.
+const CELL = 'web:hover:bg-muted active:bg-muted h-full items-center justify-center';
+// A tab is as wide as its text (Paul, 2026-10-09): the same classes measure it and show it.
+const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
+// A step slides the row by the width of the tab that left it.
+const SHIFT = LinearTransition.duration(CROSSFADE).easing(EASE).reduceMotion(ReduceMotion.System);
 
 export function OpenOrderTabs({
 	position = 'bottom',
@@ -50,12 +59,8 @@ export function OpenOrderTabs({
 	}, [onCoverChange]);
 	React.useEffect(() => () => void uncover.current?.(false), []);
 	// Where the strip sits in the cart column: the list covers the cart on the far side of it.
-	const [strip, setStrip] = React.useState({ y: 0, height: 0 });
-	const scroll = React.useRef<React.ElementRef<typeof ScrollView>>(null);
-	const positions = React.useRef(new Map<string, number>());
+	const [strip, setStrip] = React.useState({ y: 0, height: 0, width: 0 });
 	const tabs = React.useRef(new Map<string, React.ElementRef<typeof Pressable>>());
-	const scrollX = React.useRef(0);
-	const viewport = React.useRef(0);
 	const activeValue =
 		selectedReceiptOrder ??
 		((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid);
@@ -76,61 +81,104 @@ export function OpenOrderTabs({
 		},
 		[setCurrentOrderID, receiptOrders]
 	);
-	const reveal = React.useCallback((id: string) => {
-		const x = positions.current.get(id);
-		if (x !== undefined) scroll.current?.scrollTo({ x, animated: true });
-	}, []);
-	// Selection changes outside this strip must reveal the active tab in the native scroll view.
-	React.useEffect(() => {
-		reveal(activeValue);
-	}, [activeValue, reveal]);
 	const closeList = (id = activeValue) => {
 		setListOpen(false);
-		// The new-order holder is a View: focus the button inside it where the platform allows.
-		const target = tabs.current.get(id) as unknown as
-			| { focus?: () => void; querySelector?: (s: string) => { focus?: () => void } | null }
-			| undefined;
-		(target?.querySelector?.('button') ?? target)?.focus?.();
+		(tabs.current.get(id) as unknown as { focus?: () => void } | undefined)?.focus?.();
 	};
-	const renderTab = (id: string, content: React.ReactNode) => (
-		<Pressable
-			key={id}
-			testID={`open-order-tab-${id}`}
-			role="tab"
-			aria-selected={id === activeValue}
-			ref={(node) => {
-				if (node) tabs.current.set(id, node);
-				else tabs.current.delete(id);
-			}}
-			onLayout={({ nativeEvent }) => {
-				positions.current.set(id, nativeEvent.layout.x);
-				if (id === activeValue) reveal(id);
-			}}
-			onPress={() => {
-				handleTabPress(id);
-				setListOpen(false);
-			}}
-			className={`active:bg-muted h-13 justify-center px-3 ${id === activeValue ? 'border-primary border-b-2' : 'border-b-2 border-transparent'}`}
-		>
-			{content}
-		</Pressable>
+	// Every tab in strip order: open orders, the fresh cart, then receipts of orders that
+	// have left the open list.
+	// `measure` is the same content without its testIDs, for the off-stage measuring row:
+	// a testID must point at one element.
+	const entries: { id: string; content: React.ReactNode; measure: React.ReactNode }[] = [
+		...[...openOrders, ...freshCart].map(({ id, record }) => ({
+			id,
+			content: <TabContent order={record} active={id === activeValue} phone={phone} />,
+			measure: <TabContent order={record} active={id === activeValue} phone={phone} measuring />,
+		})),
+		...extraReceiptIds.map((uuid) => ({
+			id: uuid,
+			content: (
+				// Suspend receipt content only: one loading receipt must not hide the other tabs.
+				<React.Suspense fallback={null}>
+					<ReceiptTabContent uuid={uuid} active={uuid === activeValue} phone={phone} />
+				</React.Suspense>
+			),
+			measure: (
+				<React.Suspense fallback={null}>
+					<ReceiptTabContent uuid={uuid} active={uuid === activeValue} phone={phone} measuring />
+				</React.Suspense>
+			),
+		})),
+	];
+	const activeIndex = Math.max(
+		entries.findIndex(({ id }) => id === activeValue),
+		0
 	);
+	const step = (delta: number) => {
+		const next = entries[activeIndex + delta];
+		if (next) handleTabPress(next.id);
+	};
+	// Each tab's own width, measured off stage (below) for the carts around the open one;
+	// an unmeasured tab counts as the minimum until its layout lands. Bounded: carts that
+	// have left the strip leave the map (orders close all day).
+	const [widths, setWidths] = React.useState<ReadonlyMap<string, number>>(() => new Map());
+	const live = new Set(entries.map(({ id }) => id));
+	// Before the first layout every tab is on the row: the same shape, measured next frame.
+	const window =
+		strip.width > 0
+			? tabWindow({
+					width: strip.width,
+					widths: entries.map(({ id }) => widths.get(id) ?? TAB_MIN),
+					active: activeIndex,
+				})
+			: { fits: true, start: 0, end: entries.length, tray: false, left: false, right: false };
+	// Only carts that could reach the row are measured: the row holds at most this many
+	// minimum-width tabs either side of the open one.
+	const reach = Math.ceil((strip.width || 800) / TAB_MIN) + 1;
+	const toMeasure = entries.slice(Math.max(activeIndex - reach, 0), activeIndex + reach + 1);
+	// A sole cart has nothing to be selected against: no underline (board, "One cart").
+	const solo = entries.length === 1;
+	const renderTab = ({ id, content }: (typeof entries)[number]) => {
+		const active = id === activeValue;
+		return (
+			<Animated.View key={id} layout={SHIFT} className="h-full">
+				<Pressable
+					testID={`open-order-tab-${id}`}
+					role="tab"
+					aria-selected={active}
+					ref={(node) => {
+						if (node) tabs.current.set(id, node);
+						else tabs.current.delete(id);
+					}}
+					onPress={() => {
+						handleTabPress(id);
+						setListOpen(false);
+					}}
+					style={{ minWidth: TAB_MIN }}
+					className={`${TAB} web:hover:bg-muted active:bg-muted ${active && !solo ? 'border-primary' : 'border-transparent'}`}
+				>
+					{content}
+				</Pressable>
+			</Animated.View>
+		);
+	};
 	return (
 		<>
 			<View
-				className="bg-card border-border flex-row items-stretch border-t"
+				testID="open-order-strip"
+				className="bg-card border-border h-13 flex-row items-stretch border-t"
 				onLayout={({ nativeEvent: { layout } }) => {
 					setStrip((was) =>
-						was.y === layout.y && was.height === layout.height
+						was.y === layout.y && was.height === layout.height && was.width === layout.width
 							? was
-							: { y: layout.y, height: layout.height }
+							: { y: layout.y, height: layout.height, width: layout.width }
 					);
 				}}
 			>
-				<View className="border-border justify-center border-r">
-					<Button
-						variant="ghost"
-						className="h-ctl flex-row gap-1 px-2"
+				{window.tray && (
+					<Pressable
+						role="button"
+						className={`${CELL} border-border w-14 flex-row gap-1 border-r ${listOpen ? 'bg-muted' : ''}`}
 						testID="open-orders-count"
 						accessibilityLabel={t('pos_cart.open_orders_count', { count: openOrders.length })}
 						aria-expanded={listOpen}
@@ -151,68 +199,91 @@ export function OpenOrderTabs({
 							size="sm"
 							className="text-muted-foreground"
 						/>
-					</Button>
-				</View>
-				<View className="min-w-0 flex-1">
-					<ScrollView
-						ref={scroll}
-						horizontal
-						showsHorizontalScrollIndicator={false}
-						onLayout={({ nativeEvent }) => {
-							viewport.current = nativeEvent.layout.width;
-						}}
-						onScroll={({ nativeEvent }) => {
-							scrollX.current = nativeEvent.contentOffset.x;
-						}}
-						scrollEventThrottle={16}
+					</Pressable>
+				)}
+				{window.left && (
+					<Pressable
+						role="button"
+						className={`${CELL} w-9`}
+						testID="scrollable-tabs-prev"
+						accessibilityLabel={t('pos_cart.previous_cart')}
+						onPress={() => step(-1)}
 					>
-						{[...openOrders, ...freshCart].map(({ id, record }) =>
-							renderTab(id, <TabContent order={record} active={id === activeValue} phone={phone} />)
-						)}
-						{extraReceiptIds.map((uuid) =>
-							renderTab(
-								uuid,
-								// Suspend receipt content only: one loading receipt must not hide the other tabs.
-								<React.Suspense fallback={null}>
-									<ReceiptTabContent uuid={uuid} active={uuid === activeValue} phone={phone} />
-								</React.Suspense>
-							)
-						)}
-					</ScrollView>
-					{/* Translucent edge overlays are the RN equivalent of the prototype's fade. They
-					    stay inside the tabs' 12 px padding so a fully revealed amount is never washed. */}
-					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 left-0 w-3" />
-					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 right-0 w-3" />
-				</View>
-				<IconButton
-					name="chevronRight"
-					testID="scrollable-tabs-next"
-					accessibilityLabel={t('pos_cart.next_orders')}
-					onPress={() =>
-						scroll.current?.scrollTo({ x: scrollX.current + viewport.current, animated: true })
-					}
-				/>
-				{/* A View, not a Pressable: the wrapper only holds the focus target for the list's
-				    close and must not add a dead tab stop beside the real button. */}
+						<Icon name="chevronLeft" className="text-muted-foreground" />
+					</Pressable>
+				)}
 				<View
+					role="tablist"
+					className="min-w-0 flex-1 flex-row overflow-hidden"
+					onKeyDown={
+						Platform.OS === 'web'
+							? (event) => {
+									const key = event.nativeEvent.key;
+									if ((key === 'ArrowLeft' || key === 'ArrowRight') && !event.defaultPrevented) {
+										event.preventDefault();
+										step(key === 'ArrowLeft' ? -1 : 1);
+									}
+								}
+							: undefined
+					}
+				>
+					{entries.slice(window.start, window.end).map(renderTab)}
+					{/* The measuring row: the same tabs at their own width, off stage. It is never
+					    read by a cashier or a screen reader, only by the layout pass. */}
+					<View
+						aria-hidden
+						pointerEvents="none"
+						className="absolute top-0 h-full flex-row opacity-0"
+						style={{ left: -100000 }}
+					>
+						{toMeasure.map(({ id, measure }) => (
+							<View
+								key={id}
+								onLayout={({ nativeEvent: { layout } }) => {
+									const width = Math.ceil(layout.width);
+									setWidths((was) => {
+										if (was.get(id) === width && [...was.keys()].every((k) => live.has(k)))
+											return was;
+										return new Map([...was].filter(([k]) => live.has(k))).set(id, width);
+									});
+								}}
+								className={TAB}
+								style={{ minWidth: TAB_MIN }}
+							>
+								{measure}
+							</View>
+						))}
+					</View>
+				</View>
+				{window.right && (
+					<Pressable
+						role="button"
+						className={`${CELL} w-9`}
+						testID="scrollable-tabs-next"
+						accessibilityLabel={t('pos_cart.next_cart')}
+						onPress={() => step(1)}
+					>
+						<Icon name="chevronRight" className="text-muted-foreground" />
+					</Pressable>
+				)}
+				<Pressable
+					role="button"
+					className={`${CELL} w-12`}
+					testID="new-order-tab"
+					accessibilityLabel={t('pos_cart.new_order')}
 					ref={(node) => {
-						if (node)
-							tabs.current.set('new', node as unknown as React.ElementRef<typeof Pressable>);
+						if (node) tabs.current.set('new', node);
 						else tabs.current.delete('new');
 					}}
+					onPress={() => {
+						handleTabPress('new');
+						// The strip stays pressable beside the open list: the fresh cart must not
+						// be left covered by it.
+						setListOpen(false);
+					}}
 				>
-					<IconButton
-						name="plus"
-						testID="new-order-tab"
-						accessibilityLabel={t('pos_cart.new_order')}
-						onPress={() => {
-							handleTabPress('new');
-							// The strip stays pressable beside the open list: the fresh cart must not
-							// be left covered by it.
-							setListOpen(false);
-						}}
-					/>
-				</View>
+					<Icon name="plus" />
+				</Pressable>
 			</View>
 			{/* The list comes out of the strip and covers the cart beside it; the strip stays put. */}
 			<SlideOver
@@ -224,7 +295,7 @@ export function OpenOrderTabs({
 						? { top: 0, height: strip.y }
 						: { top: strip.y + strip.height, bottom: 0 }
 				}
-				coverClassName="bg-background"
+				coverClassName="bg-card"
 			>
 				<OpenOrdersList
 					orders={openOrders}
@@ -237,14 +308,18 @@ export function OpenOrderTabs({
 		</>
 	);
 }
+
 function TabContent({
 	order,
 	active,
 	phone,
+	measuring = false,
 }: {
 	order: EngineRecord<'orders'>;
 	active: boolean;
 	phone: boolean;
+	/** Off stage, for its width only: no testIDs. */
+	measuring?: boolean;
 }) {
 	const t = useT();
 	return (
@@ -259,6 +334,7 @@ function TabContent({
 				active={active}
 				compact={phone}
 				fallbackLabel={t('pos_cart.tab_cart')}
+				testIDs={!measuring}
 			/>
 		</View>
 	);
@@ -267,10 +343,12 @@ function ReceiptTabContent({
 	uuid,
 	active,
 	phone,
+	measuring = false,
 }: {
 	uuid: string;
 	active: boolean;
 	phone: boolean;
+	measuring?: boolean;
 }) {
 	const resource = useEngineRecord('orders', uuid);
 	const record = useObservableSuspense(resource);
@@ -280,5 +358,5 @@ function ReceiptTabContent({
 		if (!record) finishReceipt(uuid);
 	}, [record, uuid]);
 	if (!record) return null;
-	return <TabContent order={record} active={active} phone={phone} />;
+	return <TabContent order={record} active={active} phone={phone} measuring={measuring} />;
 }

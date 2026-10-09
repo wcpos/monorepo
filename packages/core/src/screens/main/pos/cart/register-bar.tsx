@@ -73,68 +73,75 @@ function RegisterBarContent({
 	});
 	const { open: userOpen, setOpen: setUserOpen } = useCashierSheet();
 	const [storeOpen, setStoreOpen] = React.useState(false);
+	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
+	// and inside the bar's gap row that root was an invisible 8 pt cell pushing the bell and
+	// the drawer icon out of line with the row below (Paul, 2026-10-09).
 	return (
-		<HStack
-			testID={strip ? 'register-bar-strip' : undefined}
-			className={
-				strip ? 'flex-1 gap-2 px-2' : 'bg-background border-border h-12 gap-2 border-b px-2'
-			}
-		>
-			{screenSize !== 'lg' && (
-				<Button
-					variant="ghost"
-					className="h-11 w-11 p-0"
-					testID="pos-drawer-open-button"
-					aria-label={t('common.menu')}
-					onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
-				>
-					<Icon name="bars" />
-				</Button>
-			)}
-			<View className="min-w-0 shrink">
-				{stores?.length > 1 ? (
+		<>
+			<HStack
+				testID={strip ? 'register-bar-strip' : undefined}
+				className={strip ? 'flex-1 gap-2 px-2' : 'border-border h-12 gap-2 border-b px-2'}
+			>
+				{screenSize !== 'lg' && (
 					<Button
-						testID="register-bar-store"
 						variant="ghost"
-						className="h-11 min-w-11 shrink items-start px-0"
-						onPress={() => setStoreOpen(true)}
+						className="h-11 w-11 p-0"
+						testID="pos-drawer-open-button"
+						aria-label={t('common.menu')}
+						onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
 					>
+						<Icon name="bars" />
+					</Button>
+				)}
+				<View className="min-w-0 shrink">
+					{stores?.length > 1 ? (
+						<Button
+							testID="register-bar-store"
+							variant="ghost"
+							className="h-11 min-w-11 shrink items-start px-0"
+							onPress={() => setStoreOpen(true)}
+						>
+							<Text
+								testID="register-bar-place"
+								className="text-base font-semibold"
+								numberOfLines={1}
+							>
+								{place}
+							</Text>
+						</Button>
+					) : (
 						<Text testID="register-bar-place" className="text-base font-semibold" numberOfLines={1}>
 							{place}
 						</Text>
-					</Button>
-				) : (
-					<Text testID="register-bar-place" className="text-base font-semibold" numberOfLines={1}>
-						{place}
-					</Text>
+					)}
+				</View>
+				{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
+				<View className="flex-1" />
+				{(session || lastClosure) && (
+					<IconButton
+						name="cashRegister"
+						testID="register-bar-drawer"
+						iconClassName={overdue ? 'text-warning' : 'text-foreground'}
+						onPress={() => onPanelOpenChange(true)}
+					/>
 				)}
-			</View>
-			{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
-			<View className="flex-1" />
-			{(session || lastClosure) && (
-				<IconButton
-					name="cashRegister"
-					testID="register-bar-drawer"
-					iconClassName={overdue ? 'text-warning' : 'text-foreground'}
-					onPress={() => onPanelOpenChange(true)}
-				/>
-			)}
-			<NotificationBell testID="register-bar-bell" portalHost="pos" />
-			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
-			{/* The rail carries the avatar only on `lg`; every other layout (the phone, and the
+				<NotificationBell testID="register-bar-bell" portalHost="pos" />
+				{/* The rail carries the avatar only on `lg`; every other layout (the phone, and the
 			    medium widths that keep the old front drawer) needs the bar's. */}
-			{screenSize !== 'lg' && (
-				<Button
-					variant="ghost"
-					className="h-11 w-11 p-0"
-					testID="register-bar-avatar"
-					onPress={() => setUserOpen(true)}
-				>
-					<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-				</Button>
-			)}
+				{screenSize !== 'lg' && (
+					<Button
+						variant="ghost"
+						className="h-11 w-11 p-0"
+						testID="register-bar-avatar"
+						onPress={() => setUserOpen(true)}
+					>
+						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
+					</Button>
+				)}
+			</HStack>
+			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
 			<UserSheet open={userOpen} onOpenChange={setUserOpen} onSwitchRegister={onSwitchRegister} />
 			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} />
-		</HStack>
+		</>
 	);
 }

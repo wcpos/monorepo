@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { useRecordField } from '@wcpos/query';
 
@@ -33,17 +33,16 @@ export function Customer({
 	 */
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<ButtonPill
+			{/* The same chip as the products column's filter pills, so the two columns read
+			    as one control set (Paul, 2026-10-09). */}
+			<Chip
 				testID="cart-customer-name"
-				size="xs"
-				variant="outline"
-				rightIcon="chevronDown"
+				icon="user"
+				label={name}
 				onPress={() => onShowCustomerSelect(true)}
 				// The order sheet has no address editor; keep it on long press.
 				onLongPress={() => setOpen(true)}
-			>
-				<ButtonText>{name}</ButtonText>
-			</ButtonPill>
+			/>
 			<DialogContent side={side} testID="customer-address-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>

@@ -13,6 +13,10 @@ import {
 import { CartTabTitle } from '../tab-title';
 
 // RN Web drops className without Uniwind's app transform; keep the supplied classes observable.
+type LayoutEvent = {
+	nativeEvent: { layout: { x: number; y: number; width: number; height: number } };
+};
+const mockLayouts = new Map<string, (event: LayoutEvent) => void>();
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const host = (tag: string) =>
@@ -23,13 +27,33 @@ jest.mock('react-native', () => {
 				className?: string;
 				testID?: string;
 				onPress?: () => void;
+				onLayout?: (event: LayoutEvent) => void;
+				onKeyDown?: (event: {
+					nativeEvent: { key: string };
+					defaultPrevented: boolean;
+					preventDefault: () => void;
+				}) => void;
 				role?: string;
+				accessibilityLabel?: string;
 				'aria-selected'?: boolean;
+				'aria-expanded'?: boolean;
 			}
 		>(function Host(
-			{ children, className, testID, onPress, role, 'aria-selected': selected },
+			{
+				children,
+				className,
+				testID,
+				onPress,
+				onLayout,
+				onKeyDown,
+				role,
+				accessibilityLabel,
+				'aria-selected': selected,
+				'aria-expanded': expanded,
+			},
 			ref
 		) {
+			if (testID && onLayout) mockLayouts.set(testID, onLayout);
 			return React.createElement(
 				tag,
 				{
@@ -37,14 +61,38 @@ jest.mock('react-native', () => {
 					className,
 					'data-testid': testID,
 					onClick: onPress,
+					onKeyDown: onKeyDown
+						? (event: React.KeyboardEvent) =>
+								onKeyDown({
+									nativeEvent: { key: event.key },
+									defaultPrevented: event.defaultPrevented,
+									preventDefault: () => event.preventDefault(),
+								})
+						: undefined,
 					role,
+					'aria-label': accessibilityLabel,
 					'aria-selected': selected,
+					'aria-expanded': expanded,
 				},
 				children
 			);
 		});
-	return { ...actual, View: host('div'), Pressable: host('button'), Text: host('span') };
+	return {
+		...actual,
+		Platform: { ...actual.Platform, OS: 'web' },
+		View: host('div'),
+		Pressable: host('button'),
+		Text: host('span'),
+	};
 });
+// The strip lays itself out from its measured width; jsdom measures nothing, so a test
+// hands it one. 200 is too narrow for two tabs; 100 is too narrow for one.
+const layout = (width: number) =>
+	act(() =>
+		mockLayouts.get('open-order-strip')?.({
+			nativeEvent: { layout: { x: 0, y: 0, width, height: 52 } },
+		})
+	);
 const mockSetOrder = jest.fn();
 const mockRecord = (uuid: string, date: string) => ({
 	uuid,
@@ -56,6 +104,9 @@ const mockTimings: number[] = [];
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: { View: jest.requireActual('react-native').View },
+	LinearTransition: {
+		duration: () => ({ easing: () => ({ reduceMotion: () => 'layout' }) }),
+	},
 	ReduceMotion: { System: 'system' },
 	Easing: { bezier: () => 'ease', linear: 'linear' },
 	Extrapolation: { CLAMP: 'clamp' },
@@ -128,28 +179,6 @@ jest.mock('@wcpos/components/slide-over', () => ({
 		<div data-testid="open-orders-cover" data-open={String(open)} data-from={from} />
 	),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		onPress,
-		testID,
-		accessibilityLabel,
-	}: {
-		children: React.ReactNode;
-		onPress: () => void;
-		testID: string;
-		accessibilityLabel?: string;
-	}) => (
-		<button data-testid={testID} onClick={onPress} aria-label={accessibilityLabel}>
-			{children}
-		</button>
-	),
-}));
-jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
-		<button data-testid={testID} onClick={onPress} />
-	),
-}));
 beforeEach(() => {
 	mockSuspended = null;
 	mockPhone = false;
@@ -176,9 +205,16 @@ it('shows a fresh cart as the active last tab, and only while the current order 
 	expect(screen.getByTestId('open-order-status-fresh').textContent).toBe('Cart');
 	// After the open orders, before the +; it is not an open order, so the count stays.
 	expect(open.compareDocumentPosition(fresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-	expect(screen.getByTestId('open-orders-count').textContent).toBe('1');
 	fireEvent.click(open);
 	expect(mockSetOrder).toHaveBeenCalledWith('open');
+	// Too narrow for both: the tray appears with the open-order count (the fresh cart is not
+	// one), the fresh cart keeps its column, and the arrow steps to the hidden one.
+	layout(200);
+	expect(screen.getByTestId('open-orders-count').textContent).toBe('1');
+	expect(screen.queryByTestId('open-order-tab-open')).toBeNull();
+	expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
+	fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
+	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
 });
 it('appends receipt-only tabs after open orders, avoids duplicates, and selects each kind', () => {
 	enterReceipt('late');
@@ -244,6 +280,7 @@ it('marks selection with an underline and keeps an amount above the cart status'
 	// The active tab carries its status as text, never as a chip.
 	expect(screen.queryByTestId('open-order-chip-late')).toBeNull();
 	expect(screen.getByTestId('open-order-status-late')).toBeTruthy();
+	layout(200);
 	expect(screen.getByTestId('open-orders-count').textContent).toBe('1');
 	expect(screen.getByTestId('open-orders-count').getAttribute('aria-label')).toBe('1 open');
 });
@@ -271,6 +308,7 @@ it('opens the list from the strip, and the count button or a tab closes it again
 	expect(screen.getByTestId('open-orders-cover').dataset.from).toBe('top');
 	unmount();
 	render(<OpenOrderTabs />);
+	layout(100);
 	const cover = () => screen.getByTestId('open-orders-cover').dataset;
 	// The strip sits under the cart by default, so the list rises out of its top edge.
 	expect(cover()).toMatchObject({ open: 'false', from: 'bottom' });
@@ -290,6 +328,7 @@ it('opens the list from the strip, and the count button or a tab closes it again
 it('tells the cart column when the list covers it, and when the strip goes away', () => {
 	const onCoverChange = jest.fn();
 	const { unmount } = render(<OpenOrderTabs onCoverChange={onCoverChange} />);
+	layout(100);
 	// Nothing is covered on mount, and the host is told in the press itself.
 	expect(onCoverChange).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('open-orders-count'));
@@ -305,6 +344,7 @@ it('the count badge beats for a new open order, not for another scope arriving',
 	const open = mockOpen;
 	try {
 		const { rerender } = render(<OpenOrderTabs />);
+		layout(100);
 		mockTimings.length = 0;
 		// Another store, register or cashier: a different count, not a changed one.
 		mockScope = '7:3:r2';
@@ -317,5 +357,66 @@ it('the count badge beats for a new open order, not for another scope arriving',
 	} finally {
 		mockOpen = open;
 		mockScope = '7:2:r1';
+	}
+});
+
+it('a sole cart has no tray, no arrows and no underline', () => {
+	render(<OpenOrderTabs />);
+	layout(560);
+	expect(screen.queryByTestId('open-orders-count')).toBeNull();
+	expect(screen.queryByTestId('scrollable-tabs-prev')).toBeNull();
+	expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
+	const tab = screen.getByTestId('open-order-tab-open');
+	expect(tab.getAttribute('aria-selected')).toBe('true');
+	expect(tab.className).toContain('border-transparent');
+	expect(tab.className).not.toContain('border-primary');
+	expect(screen.getByTestId('new-order-tab')).not.toBeNull();
+});
+
+it('overflow shows whole columns around the open cart, and the arrows step to a neighbour', () => {
+	const open = mockOpen;
+	try {
+		mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id, index) => ({
+			id,
+			record: mockRecord(id, `2026-09-07T1${index}:00:00`),
+		}));
+		mockCurrent = mockOpen[4].record;
+		render(<OpenOrderTabs />);
+		layout(560);
+		// Four whole tabs fit beside the tray and two arrows; they grow out from e, right
+		// first. The others are hidden, not cut.
+		expect(screen.getAllByTestId(/^open-order-tab-/).map((el) => el.dataset.testid)).toEqual([
+			'open-order-tab-d',
+			'open-order-tab-e',
+			'open-order-tab-f',
+			'open-order-tab-g',
+		]);
+		expect(screen.getByTestId('open-orders-count').textContent).toBe('8');
+		fireEvent.click(screen.getByTestId('scrollable-tabs-next'));
+		expect(mockSetOrder).toHaveBeenLastCalledWith('f');
+		fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
+		expect(mockSetOrder).toHaveBeenLastCalledWith('d');
+		fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+		expect(mockSetOrder).toHaveBeenLastCalledWith('f');
+	} finally {
+		mockOpen = open;
+	}
+});
+
+it('the first cart pins to the left edge with only the right arrow', () => {
+	const open = mockOpen;
+	try {
+		mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id, index) => ({
+			id,
+			record: mockRecord(id, `2026-09-07T1${index}:00:00`),
+		}));
+		mockCurrent = mockOpen[0].record;
+		render(<OpenOrderTabs />);
+		layout(560);
+		expect(screen.queryByTestId('scrollable-tabs-prev')).toBeNull();
+		expect(screen.getByTestId('scrollable-tabs-next')).not.toBeNull();
+		expect(screen.getByTestId('open-order-tab-a').getAttribute('aria-selected')).toBe('true');
+	} finally {
+		mockOpen = open;
 	}
 });
