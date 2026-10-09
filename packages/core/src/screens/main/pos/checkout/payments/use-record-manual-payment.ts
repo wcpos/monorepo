@@ -69,7 +69,7 @@ export function useRecordManualPayment(
 	return React.useCallback(
 		async (order, method, input) => {
 			// A caller that already passed the tender gates hands the resolved ids over; the writer
-			// resolves for itself only when nothing upstream did (the legacy callers).
+			// resolves for itself when a caller passes no session.
 			const { registerId, sessionId } = input.session ?? (await resolveForWriter());
 			async function resolveForWriter() {
 				const prepared = await prepareSale(ctx, {

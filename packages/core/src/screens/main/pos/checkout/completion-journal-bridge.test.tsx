@@ -15,6 +15,7 @@ import {
 	rememberLegacyUnsentChanges,
 } from '@wcpos/utils/unsent-changes';
 
+import { createActionContext } from '../../../../extensions/actions';
 import * as journal from './completion-journal';
 import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
 import { SaleCompletionBridge } from './completion-journal-bridge';
@@ -82,6 +83,18 @@ beforeEach(async () => {
 	mockStartVersion = 0;
 	mockManager = {};
 	mockContext = {
+		actionActor: { userId: 7, registerId: 'register', sessionId: null },
+		actionCtx: createActionContext({
+			log: (_level, message, options) => {
+				const { category: _category, ...rest } = options ?? {};
+				mockInfo(message, rest);
+			},
+			t: (key) => key,
+			readCatalog: async () => null,
+			preventOverselling: false,
+			resolveSession: async () => ({ registerId: null, sessionId: null }),
+		}),
+
 		storeDB: await createRxDatabase({
 			name: `bridge${Math.random().toString(36).slice(2)}`,
 			storage: getRxStorageMemory(),

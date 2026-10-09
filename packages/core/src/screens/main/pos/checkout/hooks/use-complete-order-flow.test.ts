@@ -5,6 +5,8 @@ import { act, renderHook } from '@testing-library/react';
 
 import { withLedger } from '@wcpos/order-math';
 
+import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { createActionContext } from '../../../../../extensions/actions';
 import { row } from '../payments/device/fixtures.test-utils';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
@@ -123,6 +125,7 @@ describe('useCompleteOrderFlow', () => {
 				orderNumber: '1042',
 				total: '50.00',
 				paymentLegs: 2,
+				hookIds: [],
 			},
 		});
 		expect(mockRequire).toHaveBeenCalledWith({
@@ -261,6 +264,18 @@ describe('useCompleteOrderFlow provenance gap', () => {
 
 jest.mock('./use-sale-context', () => ({
 	useSaleContext: () => ({
+		actionActor: { userId: 7, registerId: 'register', sessionId: null },
+		actionCtx: createActionContext({
+			log: (_level, message, options) => {
+				const { category: _category, ...rest } = options ?? {};
+				mockInfo(message, rest);
+			},
+			t: (key) => key,
+			readCatalog: async () => null,
+			preventOverselling: false,
+			resolveSession: async () => ({ registerId: null, sessionId: null }),
+		}),
+
 		userDB: mockUserDB,
 		siteUuid: 'site',
 		storeId: 1,
@@ -277,3 +292,17 @@ jest.mock('../completion-journal', () => ({
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
 }));
+
+it('completes inside the caller queue without waiting on itself', async () => {
+	const { record } = makeOrder();
+	const { result } = renderHook(() => useCompleteOrderFlow(record));
+	await act(async () => {
+		await enqueueOrderMutation('uuid-42', (queue) =>
+			result.current({ source: 'zero-balance' }, queue)
+		);
+	});
+	expect(mockInfo).toHaveBeenCalledWith(
+		'Sale uuid-42 completed',
+		expect.objectContaining({ context: expect.objectContaining({ type: 'checkout.completed' }) })
+	);
+});

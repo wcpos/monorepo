@@ -634,3 +634,36 @@ it('passes tender register and session rewrites to bottom', async () => {
 		})
 	);
 });
+
+it('an event with no rewritable keys or hooks reaches bottom with frozen input and returns its result', async () => {
+	const completion = {
+		orderId: 'order',
+		actor: input.actor,
+		source: 'system' as const,
+		payload: {
+			source: 'zero-balance' as const,
+			presentation: 'background' as const,
+			actor: { id: '7', name: 'Pat' },
+		},
+	};
+	const result = { outcome: 'completed' as const, summary: null };
+	const writer = jest.fn(async (e: ActionEventInput<'checkout.complete'>) => {
+		expect(e).toEqual({ event: 'checkout.complete', ...completion });
+		expect(Object.isFrozen(e)).toBe(true);
+		expect(Object.isFrozen(e.payload)).toBe(true);
+		expect(Object.isFrozen(e.payload.actor)).toBe(true);
+		expect(Object.isFrozen(e.actor)).toBe(true);
+		return result;
+	});
+	expect(
+		await dispatchAction({
+			event: 'checkout.complete',
+			input: completion,
+			ctx,
+			token: createDispatchToken(),
+			bottom: writer,
+		})
+	).toBe(result);
+	expect(writer).toHaveBeenCalledTimes(1);
+	expect(Object.isFrozen(completion.payload)).toBe(false);
+});

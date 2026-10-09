@@ -7,6 +7,10 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
 
+import { createDispatchToken } from '../../../../extensions/actions/registry';
+import * as mutationQueue from '../hooks/order-mutation-queue';
+import * as actions from '../../../../extensions/actions/dispatch';
+import { CHECKOUT_COMPLETE_EVENT, createActionContext } from '../../../../extensions/actions';
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -64,7 +68,16 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 const payload = { id: 42, status: 'completed', meta_data: [], line_items: [] };
 const order = { uuid: 'order', getLatest: () => ({ payload }) } as never;
+const mockActionLog = jest.fn();
 const ctx = {
+	actionCtx: createActionContext({
+		log: mockActionLog,
+		t: (key) => key,
+		readCatalog: async () => null,
+		preventOverselling: false,
+		resolveSession: async () => ({ registerId: null, sessionId: null }),
+	}),
+	actionActor: { userId: 7, registerId: 'register', sessionId: null },
 	userDB: {},
 	siteUuid: 'site',
 	storeId: 1,
@@ -116,6 +129,10 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	jest.clearAllMocks();
+	mockActionLog.mockImplementation((_level, message, options) => {
+		const { category: _category, ...rest } = options ?? {};
+		mockInfo(message, rest);
+	});
 	mockRefresh.mockReset();
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
@@ -265,7 +282,7 @@ it.each([
 		expect(mockReconcile).not.toHaveBeenCalled();
 		expect(ctx.stockAdjustment).toHaveBeenCalledWith([]);
 	}
-	expect(mockInfo).toHaveBeenCalledTimes(1);
+	expect(mockActionLog).toHaveBeenCalledTimes(1);
 	if (refresh)
 		expect(mockGap.mock.invocationCallOrder[0]).toBeLessThan(
 			mockReconcile.mock.invocationCallOrder[0]
@@ -425,7 +442,7 @@ it.each([
 ] as const)('clears a decided %s only after the audit call', async (outcome, result) => {
 	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
 	let atAudit: ReturnType<typeof pendingCompletions> | undefined;
-	mockInfo.mockImplementationOnce(() => {
+	mockActionLog.mockImplementationOnce(() => {
 		atAudit = pendingCompletions(ctx.storeDB);
 	});
 	expect(await completeSale(ctx, order, outcome, { host: 'background' })).toBe(result);
@@ -452,7 +469,8 @@ it.each([42, 0])(
 			'completed'
 		);
 		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, resident, !!id, ctx.stockAdjustment);
-		expect(mockInfo).toHaveBeenCalledWith(
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'info',
 			expect.any(String),
 			expect.objectContaining({
 				context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
@@ -727,3 +745,130 @@ it.each([false, true])(
 		expect(mockSession).not.toHaveBeenCalled();
 	}
 );
+
+it('uses the caller queue without enqueueing completion again', async () => {
+	const enqueue = jest.spyOn(mutationQueue, 'enqueueOrderMutation');
+	try {
+		expect(
+			await completeSale(
+				ctx,
+				order,
+				manual,
+				{ host: 'modal' },
+				{ dispatchToken: createDispatchToken() }
+			)
+		).toBe('completed');
+		expect(enqueue).not.toHaveBeenCalled();
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'info',
+			'Sale order completed',
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'checkout.completed', hookIds: [] }),
+			})
+		);
+	} finally {
+		enqueue.mockRestore();
+	}
+});
+it('enqueues completion when no caller queue is supplied', async () => {
+	const enqueue = jest.spyOn(mutationQueue, 'enqueueOrderMutation');
+	try {
+		await completeSale(ctx, order, manual, { host: 'modal' });
+		expect(enqueue).toHaveBeenCalledWith('order', expect.any(Function));
+	} finally {
+		enqueue.mockRestore();
+	}
+});
+it('a refused completion dispatch throws and records a failed attempt', async () => {
+	const dispatch = jest
+		.spyOn(actions, 'dispatchAction')
+		.mockResolvedValueOnce({ deny: { reasonKey: 'unexpected_guard' } });
+	try {
+		await expect(completeSale(ctx, order, manual, { host: 'background' })).rejects.toThrow(
+			'checkout.complete refused: unexpected_guard'
+		);
+		expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+			attempts: 1,
+			lastError: 'checkout.complete refused: unexpected_guard',
+		});
+	} finally {
+		dispatch.mockRestore();
+	}
+});
+
+it.each([
+	['manual', { host: 'stage', autoShowReceipt: false }, 'user'],
+	['manual', { host: 'modal' }, 'user'],
+	['terminal', { host: 'background' }, 'system'],
+	['replay', { host: 'background' }, 'replay'],
+] as const)('dispatches %s from %j as %s', async (kind, presentation, source) => {
+	const dispatch = jest.spyOn(actions, 'dispatchAction');
+	const outcome: SaleOutcome =
+		kind === 'manual'
+			? manual
+			: kind === 'terminal'
+				? { source: kind, row, order: null, balance: '0' }
+				: { source: kind };
+	try {
+		await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, order, outcome, presentation);
+		expect(dispatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				event: CHECKOUT_COMPLETE_EVENT,
+				input: {
+					orderId: 'order',
+					actor: ctx.actionActor,
+					source,
+					payload: {
+						source: kind,
+						presentation: presentation.host,
+						actor: { id: '7', name: 'Pat' },
+					},
+				},
+			})
+		);
+	} finally {
+		dispatch.mockRestore();
+	}
+});
+it('audits the summary read after reconciliation, including counted payment legs', async () => {
+	let latest = { ...payload, number: 'before', total: '0.00' };
+	const resident = { uuid: 'order', getLatest: () => ({ payload: latest }) } as never;
+	mockReconcile.mockImplementationOnce(async () => {
+		latest = {
+			...payload,
+			number: '1042',
+			total: '50.00',
+			meta_data: withLedger(
+				[],
+				[
+					{ ...row, status: 'captured' },
+					{ ...row, id: 'offline', status: 'authorized', recorded_offline: true },
+					{ ...row, id: 'online', status: 'authorized', recorded_offline: false },
+					{ ...row, id: 'failed', status: 'failed' },
+				]
+			) as never[],
+		};
+	});
+	await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, resident, manual, {
+		host: 'modal',
+	});
+	expect(mockActionLog.mock.calls).toEqual([
+		[
+			'info',
+			'Sale order completed',
+			{
+				category: ['wcpos', 'pos', 'checkout'],
+				actor: { id: '7', name: 'Pat' },
+				context: {
+					type: 'checkout.completed',
+					orderId: 42,
+					orderUUID: 'order',
+					orderNumber: '1042',
+					total: '50.00',
+					paymentLegs: 2,
+					hookIds: [],
+				},
+			},
+		],
+	]);
+});

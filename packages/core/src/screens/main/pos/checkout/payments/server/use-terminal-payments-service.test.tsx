@@ -4,6 +4,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import { withLedger } from '@wcpos/order-math';
 
+import { createActionContext } from '../../../../../../extensions/actions';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
 import {
 	getTerminalPaymentsService,
@@ -375,6 +376,18 @@ jest.mock('../../sale-completion', () => {
 
 jest.mock('../../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
+		actionActor: { userId: 7, registerId: 'register', sessionId: null },
+		actionCtx: createActionContext({
+			log: (_level, message, options) => {
+				const { category: _category, ...rest } = options ?? {};
+				mockInfo(message, rest);
+			},
+			t: (key) => key,
+			readCatalog: async () => null,
+			preventOverselling: false,
+			resolveSession: async () => ({ registerId: null, sessionId: null }),
+		}),
+
 		userDB: {},
 		siteUuid: 'site',
 		storeId: 1,

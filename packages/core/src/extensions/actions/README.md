@@ -30,6 +30,7 @@ unrelated queued writes.
 | ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
 | `cart.line.update`       | `useUpdateLineItem` | `changes`                                                      | yes        |
+| `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`        | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
@@ -47,6 +48,8 @@ register and its required open session through `ctx.register.resolveSession()`, 
 `next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
 those ids, records the attempt, then keeps the existing provenance and leg sequence; the
 manual writer takes those same ids as its `session` input rather than resolving again.
+If the handler's pre-action `requireOpenSession` write returns a different session id from
+the gate's stamped id, the commit refuses through the open-register path before recording an attempt or payment.
 Before the dispatch, inside its queue slot, `takeTender` recomputes the balance from the
 latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
 it, since the keypad's facts were read at render.
@@ -58,9 +61,15 @@ the prevent-overselling check moved onto the two cart events as guards. Ids are 
 and strikes follow the id, so the two stock functions carry distinct ids: a fault in one never
 disables the other.
 
+The audit observer (`audit.sale-completed`) is the first extension-tier hook and the first
+after-work hook: it logs the `checkout.completed` row from the completed result, after reconciliation,
+with the actor and `hookIds: []`. No guard is registered for `checkout.complete`: money has moved.
+`completeSale` accepts the caller's queue context when already inside the order's queue (the manual
+tender path), and enqueues for callers outside it (the terminal service and replay).
+
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
-(a) today: `checkout.complete` (its slice is next), receipt
+(a) today: receipt
 print, register open/close, discount apply, customer set, refund.
 
 ## The hook

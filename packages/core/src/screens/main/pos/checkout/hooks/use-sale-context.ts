@@ -7,12 +7,14 @@ import { useRegisterSessionCollection } from '../../../../../services/register-s
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import { useActionContext } from '../../hooks/use-action-context';
 
 import type { SaleContext } from '../sale-completion';
 
 export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext['actor']> } {
 	const { userDB, storeDB, site, store, wpCredentials } = useStoreSession();
 	const sessions = useRegisterSessionCollection();
+	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
@@ -36,6 +38,8 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			runtime,
 			dp: store.price_num_decimals ?? 2,
 			actor,
+			actionCtx,
+			actionActor,
 			localPatch,
 			pushDocument,
 			stockAdjustment,
@@ -50,6 +54,8 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			sessionsOn,
 			runtime,
 			actor,
+			actionCtx,
+			actionActor,
 			localPatch,
 			pushDocument,
 			stockAdjustment,

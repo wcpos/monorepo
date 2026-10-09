@@ -34,7 +34,7 @@ import {
 	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
 import './tender-guards';
-import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { enqueueOrderMutation, type OrderMutationContext } from '../../hooks/order-mutation-queue';
 import { useActionContext } from '../../hooks/use-action-context';
 import {
 	RegisterSessionRequiredError,
@@ -648,13 +648,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			: hasStaleSplit
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
-		const commitTender = async (e: ActionEventInput<typeof TENDER_COMMIT_EVENT>) => {
+		const commitTender = async (
+			e: ActionEventInput<typeof TENDER_COMMIT_EVENT>,
+			queue: OrderMutationContext
+		) => {
 			// The gate only looked the session up (a guard has no effects before `next`); the
 			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
 			// where `prepareSale` made it. It also re-reads the id, so a session closed between
 			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
-			const { registerId } = e.payload;
-			const sessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+			const { registerId, sessionId } = e.payload;
+			const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+			// A replacement session invalidates the facts the gate approved; its stamped id is binding.
+			if (writtenSessionId !== sessionId) throw new RegisterSessionRequiredError();
 			await recordSaleAttempt(ctx, {
 				order,
 				source:
@@ -691,7 +696,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					},
 				});
 				if (!result) throw new Error('zero_balance_completion_failed');
-				await completeOrderFlow({ source: 'zero-balance' });
+				await completeOrderFlow({ source: 'zero-balance' }, queue);
 				return;
 			}
 			if (!method) return;
@@ -884,19 +889,25 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				}
 				if (outcome.kind === 'recorded') {
 					// Observed money wins (§3.1): a row from the gateway is a manual leg from here on.
-					await completeOrderFlow({
-						source: 'manual',
-						via: 'online',
-						row: outcome.row,
-						order: outcome.order,
-						mirrorFailed: false,
-						preparedCompleting: e.payload.amountMinor === balanceMinor,
-						preLegBalanceMinor: balanceMinor,
-						amountMinor: e.payload.amountMinor,
-					}).finally(() => tenderRecorded(outcome.row, 'online'));
+					await completeOrderFlow(
+						{
+							source: 'manual',
+							via: 'online',
+							row: outcome.row,
+							order: outcome.order,
+							mirrorFailed: false,
+							preparedCompleting: e.payload.amountMinor === balanceMinor,
+							preLegBalanceMinor: balanceMinor,
+							amountMinor: e.payload.amountMinor,
+						},
+						queue
+					).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
-				await completeOrderFlow({ source: 'gateway', order: outcome.order, stamp: outcome.stamp });
+				await completeOrderFlow(
+					{ source: 'gateway', order: outcome.order, stamp: outcome.stamp },
+					queue
+				);
 				if (outcome.order.status === 'pos-open') {
 					// A replayed send whose later attempt was cancelled elsewhere: the order is open again.
 					logger.info(t('pos_checkout.order_open_send_again'), {
@@ -923,14 +934,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				session: { registerId, sessionId },
 			});
 			if (outcome.kind === 'recorded') {
-				await completeOrderFlow({
-					source: 'manual',
-					...outcome,
-					mirrorFailed: false,
-					preparedCompleting: e.payload.amountMinor === balanceMinor,
-					preLegBalanceMinor: balanceMinor,
-					amountMinor: e.payload.amountMinor,
-				}).finally(() => tenderRecorded(outcome.row, outcome.via));
+				await completeOrderFlow(
+					{
+						source: 'manual',
+						...outcome,
+						mirrorFailed: false,
+						preparedCompleting: e.payload.amountMinor === balanceMinor,
+						preLegBalanceMinor: balanceMinor,
+						amountMinor: e.payload.amountMinor,
+					},
+					queue
+				).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
 			if (outcome.kind === 'refused') {
@@ -988,7 +1002,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							sessionId: null,
 						},
 					},
-					bottom: commitTender,
+					bottom: (e) => commitTender(e, queue),
 				});
 			});
 			if (isActionRefusal(outcome)) {

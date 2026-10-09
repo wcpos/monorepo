@@ -11,6 +11,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
+import { createActionContext, resetActionHookStrikes } from '../../../../../extensions/actions';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useTerminalPaymentsService } from '../payments/server/use-terminal-payments-service';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
@@ -28,7 +29,6 @@ import {
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
-import { resetActionHookStrikes } from '../../../../../extensions/actions';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
@@ -40,11 +40,11 @@ import type {
 } from '../../../../../services/terminal-payments';
 
 // The writer re-runs `requireOpenSession` (the pre-action write) after the gate's read; the
-// fixtures carry no session collection, so the write is stubbed to answer the gate's id.
+// fixtures carry no session collection; both reads share the happy-path session id.
 jest.mock('../../../../../services/register-session/session-store', () => ({
 	...jest.requireActual('../../../../../services/register-session/session-store'),
 	requireOpenSession: jest.fn(async (_sessions: unknown, _registerId: unknown, enabled: boolean) =>
-		enabled ? 'session' : null
+		enabled ? mockSessionId : null
 	),
 }));
 
@@ -576,14 +576,11 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(
-			order,
-			cash,
-			expect.objectContaining({
-				amount: '92.95',
-				tendered: '100.00',
-			})
-		);
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
+			amount: '92.95',
+			tendered: '100.00',
+			session: { registerId: 'register', sessionId: null },
+		});
 	});
 
 	it('completes a fully paid online order after the record resolves', async () => {
@@ -595,7 +592,8 @@ describe('useTenderFlow', () => {
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
-			expect.objectContaining({ source: 'manual', via: 'online' })
+			expect.objectContaining({ source: 'manual', via: 'online' }),
+			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
 	});
 
@@ -613,7 +611,10 @@ describe('useTenderFlow', () => {
 				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
 			},
 		});
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ source: 'zero-balance' });
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'zero-balance' },
+			expect.objectContaining({ dispatchToken: expect.any(Object) })
+		);
 	});
 
 	it('does not record an online-only method after connectivity drops', async () => {
@@ -645,21 +646,19 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(
-			order,
-			cash,
-			expect.objectContaining({
-				amount: '50.00',
-				tendered: '50.00',
-			})
-		);
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
+			amount: '50.00',
+			tendered: '50.00',
+			session: { registerId: 'register', sessionId: null },
+		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
 				mirrorFailed: false,
 				preLegBalanceMinor: 9295,
 				amountMinor: 5000,
-			})
+			}),
+			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
 		expect(provenance.isSaleComplete(mockCompleteOrderFlow.mock.calls[0][0], 2)).toBe(false);
 		expect(result.current.state.view).toBe('amount');
@@ -672,14 +671,11 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(
-			order,
-			card,
-			expect.objectContaining({
-				amount: '92.95',
-				tendered: null,
-			})
-		);
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, card, {
+			amount: '92.95',
+			tendered: null,
+			session: { registerId: 'register', sessionId: null },
+		});
 	});
 
 	it('uses a split share as the next tender pre-fill', async () => {
@@ -2459,6 +2455,18 @@ jest.mock('../sale-completion', () => {
 
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
+		actionActor: { userId: 7, registerId: 'register', sessionId: null },
+		actionCtx: createActionContext({
+			log: (_level, message, options) => {
+				const { category: _category, ...rest } = options ?? {};
+				mockInfo(message, rest);
+			},
+			t: (key) => key,
+			readCatalog: async () => null,
+			preventOverselling: false,
+			resolveSession: async () => ({ registerId: null, sessionId: null }),
+		}),
+
 		userDB: { getLocal: async () => null },
 		sessionsOn: mockSessionsOn,
 		siteUuid: 'site',
@@ -2589,11 +2597,14 @@ describe('gateway capture mode (contract 1.2)', () => {
 				}),
 			})
 		);
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
-			source: 'gateway',
-			order: summary('pending'),
-			stamp: expect.objectContaining({ method_id: 'wcpos_email_invoice' }),
-		});
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{
+				source: 'gateway',
+				order: summary('pending'),
+				stamp: expect.objectContaining({ method_id: 'wcpos_email_invoice' }),
+			},
+			expect.objectContaining({ dispatchToken: expect.any(Object) })
+		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(result.current.busy).toBe(false);
 	});
@@ -2949,7 +2960,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 				preparedCompleting: true,
 				preLegBalanceMinor: 9295,
 				amountMinor: 9295,
-			})
+			}),
+			expect.objectContaining({ dispatchToken: expect.any(Object) })
 		);
 	});
 
@@ -3215,6 +3227,35 @@ it('a session closed between the gate and the write refuses with the open-regist
 	requireOpenSession.mockImplementationOnce(async () => {
 		throw new RegisterSessionRequiredError();
 	});
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => {
+		await expect(result.current.takeTender()).resolves.toBeUndefined();
+	});
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(mockInfo).toHaveBeenCalledWith(
+		'pos_checkout.open_register_first',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(jest.mocked(recordCompletionAttempt)).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
+});
+
+it('a session replaced between the gate and the write refuses with the open-register toast, no attempt, no payment', async () => {
+	jest.clearAllMocks();
+	mockSessionsOn = true;
+	mockSessionId = 'session';
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { requireOpenSession } = jest.requireMock(
+		'../../../../../services/register-session/session-store'
+	) as { requireOpenSession: jest.Mock };
+	requireOpenSession.mockResolvedValueOnce('replacement-session');
 	const { result } = renderHook(() => useTenderFlow(order));
 	act(() => result.current.pickMethod('pos_cash'));
 	await act(async () => {

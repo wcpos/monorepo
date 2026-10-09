@@ -12,11 +12,13 @@ import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { completeSale, type SaleOutcome } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
 
+import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
+
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
 	receiptHost: 'stage' | 'modal' = 'stage'
-): (outcome: SaleOutcome) => Promise<void> {
+): (outcome: SaleOutcome, queue?: OrderMutationContext) => Promise<void> {
 	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
@@ -24,14 +26,15 @@ export function useCompleteOrderFlow(
 	const { setCurrentOrderID } = useCurrentOrderActions();
 
 	return React.useCallback(
-		async (outcome: SaleOutcome) => {
+		async (outcome: SaleOutcome, queue?: OrderMutationContext) => {
 			const result = await completeSale(
 				ctx,
 				order,
 				outcome,
 				receiptHost === 'stage'
 					? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
-					: { host: 'modal' }
+					: { host: 'modal' },
+				queue
 			);
 			// A sent sale leaves the till exactly as a completed one does (spec §4.2).
 			if (result !== 'completed' && result !== 'sent') return;

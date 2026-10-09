@@ -10,6 +10,7 @@ import {
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { createActionContext } from '../../../../../extensions/actions';
 import { persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
@@ -703,6 +704,17 @@ jest.mock('../sale-completion', () => {
 
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
+		actionActor: { userId: 7, registerId: 'register', sessionId: null },
+		actionCtx: createActionContext({
+			log: (_level, message, options) => {
+				const { category: _category, ...rest } = options ?? {};
+				mockCheckoutInfo(message, rest);
+			},
+			t: (key) => key,
+			readCatalog: async () => null,
+			preventOverselling: false,
+			resolveSession: async () => ({ registerId: null, sessionId: null }),
+		}),
 		userDB: { getLocal: async () => null },
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,

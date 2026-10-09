@@ -1,22 +1,55 @@
 export const ACTION_API_VERSION = 1;
-/** Closed list. Checkout completion arrives with its own slice. */
-export const ACTION_EVENTS = [
-	'cart.line.add',
-	'cart.line.update',
-	'checkout.tender.commit',
-] as const;
 /**
  * Named for the checkout code, which the Logs event-label check scans for dotted literals
  * (`scripts/check-event-labels.mjs`, roots include `pos/checkout`). An action event or a hook
  * id is not a log row and has no merchant label, so checkout refers to these constants.
  */
-export const TENDER_COMMIT_EVENT = ACTION_EVENTS[2];
+export const TENDER_COMMIT_EVENT = 'checkout.tender.commit' as const satisfies ActionEvent;
+export const CHECKOUT_COMPLETE_EVENT = 'checkout.complete' as const satisfies ActionEvent;
+/** Closed list for v1. */
+export const ACTION_EVENTS = [
+	'cart.line.add',
+	'cart.line.update',
+	TENDER_COMMIT_EVENT,
+	CHECKOUT_COMPLETE_EVENT,
+] as const satisfies readonly ActionEvent[];
 /** The guards a tender commit must have registered; the dispatch refuses without them. */
 export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;
-export type ActionEvent = (typeof ACTION_EVENTS)[number];
+export type ActionEvent = keyof ActionContracts;
 export type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type PlainLine = Record<string, unknown>;
+/**
+ * Mirrors `SaleOutcome['source']` in `pos/checkout/sale-completion.ts`; the primitive does not
+ * import from a consumer. The dispatch in `completeSale` passes `outcome.source`, so a drift is a
+ * type error there.
+ */
+export type SaleCompletionSource =
+	| 'manual'
+	| 'terminal'
+	| 'gateway'
+	| 'gateway-contract'
+	| 'gateway-snapshot'
+	| 'zero-balance'
+	| 'replay';
 export interface ActionContracts {
+	'checkout.complete': {
+		payload: {
+			source: SaleCompletionSource;
+			presentation: 'stage' | 'modal' | 'background';
+			actor: { id: string; name: string } | null;
+		};
+		result: {
+			outcome: 'completed' | 'partial' | 'not-completed' | 'sent';
+			/** Only when completed: what the audit row needs, read AFTER the reconcile. */
+			summary: {
+				orderId: number | null;
+				orderUUID: string;
+				orderNumber: string | null;
+				total: string | null;
+				paymentLegs: number;
+			} | null;
+		};
+	};
 	'checkout.tender.commit': {
 		payload: {
 			methodId: string | null;
@@ -48,6 +81,7 @@ export interface ActionContracts {
 }
 /** Every other payload key is restored by the dispatcher. */
 export const REWRITABLE_PAYLOAD_KEYS = {
+	[CHECKOUT_COMPLETE_EVENT]: [],
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
 	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
