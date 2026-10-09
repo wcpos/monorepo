@@ -119,10 +119,9 @@ export const stockGuardOnAdd: ActionHook<'cart.line.add'> = async (ctx, e, next)
 export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e, next) => {
 	const { lineUuid, changes, lineItems, options } = e.payload;
 	const line = e.payload.line as LineItem | null;
-	// The native quantity cell hands the hook the typed text; the web one a number. The
-	// guard judges the number either way (the old inline check only ran for numbers, so a
-	// quantity typed on a phone skipped it). A string that is not a number is left to the
-	// writer, as before.
+	// Both quantity cells hand the hook a number today. Should a caller ever pass the typed
+	// text instead, the guard judges its number rather than skipping the check (the old
+	// inline check ran only for numbers). Text that is not a number is left to the writer.
 	const requested = numericQuantity(changes.quantity);
 	if (
 		!ctx.store.preventOverselling ||

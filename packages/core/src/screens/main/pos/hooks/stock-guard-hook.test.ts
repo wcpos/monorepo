@@ -144,7 +144,7 @@ it('evaluates a quantity increase excluding the target line from the stock total
 	).toBe('saved');
 	expect(readCatalog).toHaveBeenCalledWith('product', 1);
 });
-it('guards a quantity typed as text on the native cell, and leaves non-numeric text to the writer', async () => {
+it('guards a numeric-string quantity should a caller pass one, and leaves non-numeric text to the writer', async () => {
 	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 1, backorders: 'no' });
 	const base = {
 		event: 'cart.line.update' as const,
