@@ -42,7 +42,11 @@ export interface ActionContracts {
 export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
-	'checkout.tender.commit': ['amountMinor', 'tenderedMinor', 'registerId', 'sessionId'],
+	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
+	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
+	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the
+	// handler to derive everything from the payload first, then opens these keys.
+	'checkout.tender.commit': ['registerId', 'sessionId'],
 } as const satisfies Record<ActionEvent, readonly string[]>;
 export type ActionActor = {
 	userId: number | null;

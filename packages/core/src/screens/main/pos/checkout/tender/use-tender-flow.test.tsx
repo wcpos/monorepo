@@ -38,6 +38,15 @@ import type {
 	TerminalPaymentsService,
 } from '../../../../../services/terminal-payments';
 
+// The writer re-runs `requireOpenSession` (the pre-action write) after the gate's read; the
+// fixtures carry no session collection, so the write is stubbed to answer the gate's id.
+jest.mock('../../../../../services/register-session/session-store', () => ({
+	...jest.requireActual('../../../../../services/register-session/session-store'),
+	requireOpenSession: jest.fn(async (_sessions: unknown, _registerId: unknown, enabled: boolean) =>
+		enabled ? 'session' : null
+	),
+}));
+
 const persistProvenanceSpy = jest.spyOn(provenance, 'persistSaleProvenance');
 
 let mockRealService: TerminalPaymentsService | null = null;
@@ -1721,9 +1730,6 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 }));
 
 it('zero balance writes completion and provenance together exactly once', async () => {
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockPayload = { total: '0.00', meta_data: [] };
 	mockLocalPatch.mockClear();
@@ -1834,9 +1840,6 @@ it.each([
 
 it('full manual online tender persists provenance before POST and the mirror', async () => {
 	jest.mocked(provenance.completionMetaFor).mockClear();
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockUseRealManual = true;
 	mockLocalPatch.mockClear();
@@ -2026,9 +2029,6 @@ describe('provider completion provenance before intent', () => {
 		});
 	});
 	it('awaits the explicit tuple write before beginning the server leg', async () => {
-		jest
-			.mocked(provenance.prepareSale)
-			.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 		jest.mocked(recordCompletionAttempt).mockClear();
 		let finish!: (value: typeof order) => void;
 		mockPushDocument.mockImplementationOnce(

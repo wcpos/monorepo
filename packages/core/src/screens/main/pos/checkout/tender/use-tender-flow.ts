@@ -25,7 +25,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import './tender-guards';
+import { TENDER_GUARD_IDS } from './tender-guards';
 import {
 	type ActionEventInput,
 	dispatchAction,
@@ -34,7 +34,10 @@ import {
 } from '../../../../../extensions/actions';
 import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
 import { useActionContext } from '../../hooks/use-action-context';
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
@@ -641,6 +644,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
 		const commitTender = async (e: ActionEventInput<'checkout.tender.commit'>) => {
+			// The gate only looked the session up (a guard has no effects before `next`); the
+			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
+			// where `prepareSale` made it. It also re-reads the id, so a session closed between
+			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
+			const { registerId } = e.payload;
+			const sessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
 			await recordSaleAttempt(ctx, {
 				order,
 				source:
@@ -653,7 +662,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								: 'terminal',
 				completing: e.payload.completing,
 			});
-			const { registerId, sessionId } = e.payload;
 			const saveProvenance = async () => {
 				if (entryAppliedMinor !== balanceMinor) return;
 
@@ -938,6 +946,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
 				dispatchAction({
 					event: 'checkout.tender.commit',
+					// Money path: refuse rather than run unguarded if the registering import were ever lost.
+					requiredGuards: TENDER_GUARD_IDS,
 					token: queue.dispatchToken,
 					ctx: actionCtx,
 					input: {

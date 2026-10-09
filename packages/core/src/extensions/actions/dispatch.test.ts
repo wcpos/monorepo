@@ -523,6 +523,34 @@ it("silences a hook's log once its dispatch has settled, so a timed-out guard ca
 	expect(log).not.toHaveBeenCalledWith('warn', 'after the budget', expect.anything());
 	expect(bottom).not.toHaveBeenCalled();
 });
+it('refuses when a required guard is not registered, and runs when it is', async () => {
+	const args = {
+		event: 'cart.line.add' as const,
+		input,
+		ctx,
+		bottom,
+		requiredGuards: ['stock.guard'],
+	};
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toEqual({
+		deny: {
+			reasonKey: 'actions.guard_missing',
+			detail: { hookId: 'stock.guard', event: 'cart.line.add' },
+		},
+	});
+	expect(bottom).not.toHaveBeenCalled();
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'stock.guard',
+		tier: 'extension',
+	});
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toMatchObject({
+		deny: { reasonKey: 'actions.guard_missing' },
+	});
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'stock.guard',
+		tier: 'guard',
+	});
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toBe('saved');
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

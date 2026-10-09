@@ -33,3 +33,6 @@ registerActionHook('checkout.tender.commit', sessionGate, {
 	tier: 'guard',
 	order: 1,
 });
+
+/** The guards a tender commit must have registered; the dispatch refuses without them. */
+export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;

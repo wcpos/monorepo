@@ -13,7 +13,7 @@ import {
 } from '../../../../extensions/actions';
 import { useRegister } from '../../../../services/register/use-register';
 import { readBoundRegister } from '../../../../services/register/register-document';
-import { requireOpenSession } from '../../../../services/register-session/session-store';
+import { findOpenSession } from '../../../../services/register-session/session-store';
 import { useRegisterSessionCollection } from '../../../../services/register-session/use-register-session-collections';
 
 const ACTIONS_CATEGORY = ['wcpos', 'pos', 'actions'];
@@ -49,10 +49,12 @@ export function useActionContext(): { ctx: ActionContext; actor: ActionActor } {
 						id
 					)) as Record<string, unknown> | null,
 				preventOverselling,
+				// A read, so a guard may call it before `next`: the pre-action write that
+				// `requireOpenSession` makes stays with the writer (the tender's bottom handler).
 				resolveSession: async () => {
 					const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
-					const sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
-					return { registerId, sessionId };
+					const session = await findOpenSession(sessions, registerId, sessionsOn);
+					return { registerId, sessionId: session?.id ?? null };
 				},
 			}),
 			actor: { userId, registerId, sessionId: null }, // Stamped when the checkout slice lands.

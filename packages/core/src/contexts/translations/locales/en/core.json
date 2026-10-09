@@ -2,6 +2,7 @@
 	"actions.hook_timeout": "A checkout rule timed out, so this action was refused",
 	"actions.hook_failed": "A checkout rule failed, so this action was refused",
 	"actions.hook_disabled": "A checkout rule is switched off until the app restarts, so this action was refused",
+	"actions.guard_missing": "A checkout rule is missing, so this action was refused",
 	"products.no_products_yet": "No products yet",
 	"products.no_products_yet_description": "Products you add to the store will appear here.",
 	"products.display_options": "Display options",

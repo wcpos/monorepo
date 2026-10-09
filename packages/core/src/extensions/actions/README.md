@@ -26,11 +26,11 @@ unrelated queued writes.
 
 ## The events (closed list)
 
-| Event              | Raised by           | Rewritable keys | Can refuse |
-| ------------------ | ------------------- | --------------- | ---------- |
-| `cart.line.add`    | `useAddItemToOrder` | `line`          | yes        |
-| `cart.line.update` | `useUpdateLineItem` | `changes`       | yes        |
-| `checkout.tender.commit` | `takeTender` | `amountMinor`, `tenderedMinor`, `registerId`, `sessionId` | yes |
+| Event                    | Raised by           | Rewritable keys                                                | Can refuse |
+| ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
+| `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
+| `cart.line.update`       | `useUpdateLineItem` | `changes`                                                      | yes        |
+| `checkout.tender.commit` | `takeTender`        | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
 completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `amountMinor`
@@ -39,8 +39,9 @@ is applied to the balance, `tenderedMinor` is what the cashier handed over. `mod
 
 Tender guards run as `register.gate` (order 0), then `session.gate` (order 1). The first
 refuses a completing sale that still needs a register chosen. The second resolves the bound
-register and its required open session through `ctx.register.resolveSession()`, refusing if
-no required session is open. It is **a guard that stamps what it resolved**:
+register and its required open session through `ctx.register.resolveSession()`, a **read**
+(`findOpenSession`), refusing if no required session is open; the pre-action write that
+`requireOpenSession` makes stays in the bottom handler, where `prepareSale` made it. It is **a guard that stamps what it resolved**:
 `next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
 those ids, records the attempt, then keeps the existing provenance and leg sequence.
 The caller presents the two gate refusals with the existing checkout toasts and any other
@@ -115,6 +116,13 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
 failed`, with the reason and the error message); the disabling writes one more. A disabled extension leaves the chain. A disabled **guard stays** and refuses every
   dispatch with `actions.hook_disabled`, because a money-path guard that silently dropped out
   would fail open.
+
+## Required guards
+
+A money path passes `requiredGuards: [...ids]` to `dispatchAction`; if any is not registered as a
+guard the dispatch refuses with `actions.guard_missing` rather than running unguarded (the tender
+commit does this with `TENDER_GUARD_IDS`). Guards register by a side-effect import, so this is
+what keeps a lost import from becoming a silent hole.
 
 ## Where a dispatch runs
 
