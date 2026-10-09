@@ -21,7 +21,15 @@ export function cartContents(payload: {
 	const entries: CartEntry[] = [];
 	for (const { name, quantity } of payload.line_items ?? []) {
 		const label = decode(name ?? '').trim();
-		if (label) entries.push({ kind: 'line', name: label, quantity: Number(quantity) || 1 });
+		// A missing or unreadable quantity reads as one; an explicit zero is a line with nothing
+		// ordered and stays off the line (CodeRabbit on #2460).
+		const count =
+			quantity === undefined || quantity === null || quantity === ''
+				? 1
+				: Number.isFinite(Number(quantity))
+					? Number(quantity)
+					: 1;
+		if (label && count > 0) entries.push({ kind: 'line', name: label, quantity: count });
 	}
 	for (const { name } of payload.fee_lines ?? []) {
 		const label = decode(name ?? '').trim();
