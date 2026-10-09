@@ -25,14 +25,28 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import {
+	type ActionEventInput,
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+	TENDER_COMMIT_EVENT,
+	TENDER_GUARD_IDS,
+} from '../../../../../extensions/actions';
+import './tender-guards';
+import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { useActionContext } from '../../hooks/use-action-context';
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { returnToTill } from '../till-route';
-import { completionMetaFor, persistSaleProvenance, prepareSale } from '../sale-completion';
+import { completionMetaFor, persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -178,6 +192,7 @@ export interface TenderFlow {
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
 	const ctx = useSaleContext();
+	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
@@ -633,8 +648,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			: hasStaleSplit
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
-		try {
-			const prepared = await prepareSale(ctx, {
+		const commitTender = async (e: ActionEventInput<typeof TENDER_COMMIT_EVENT>) => {
+			// The gate only looked the session up (a guard has no effects before `next`); the
+			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
+			// where `prepareSale` made it. It also re-reads the id, so a session closed between
+			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
+			const { registerId } = e.payload;
+			const sessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+			await recordSaleAttempt(ctx, {
 				order,
 				source:
 					balanceMinor === 0
@@ -644,18 +665,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							: method?.capture.mode === 'gateway'
 								? 'gateway'
 								: 'terminal',
-				completing: entryAppliedMinor === balanceMinor,
-				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-				sessionRule: 'require',
+				completing: e.payload.completing,
 			});
-			if (!prepared.ok) {
-				logger.info(t('pos_checkout.choose_register_first'), {
-					showToast: true,
-					context: orderContext,
-				});
-				return;
-			}
-			const { registerId, sessionId } = prepared;
 			const saveProvenance = async () => {
 				if (entryAppliedMinor !== balanceMinor) return;
 
@@ -737,7 +748,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					transport: deviceTransport,
 					recordedOffline: offline,
 					orderId: payload.id ?? null,
-					amount: fromMinor(entryAppliedMinor, dp),
+					amount: fromMinor(e.payload.amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -762,7 +773,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						method.capabilities.tips === 'on_reader' &&
 						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
 							'on_reader'
-							? entryAppliedMinor
+							? e.payload.amountMinor
 							: null,
 				});
 				reducerDispatch({ type: 'tender-started' });
@@ -794,7 +805,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					sessionId,
 					method,
 					orderId: payload.id,
-					amount: fromMinor(entryAppliedMinor, dp),
+					amount: fromMinor(e.payload.amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -879,9 +890,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						row: outcome.row,
 						order: outcome.order,
 						mirrorFailed: false,
-						preparedCompleting: entryAppliedMinor === balanceMinor,
+						preparedCompleting: e.payload.amountMinor === balanceMinor,
 						preLegBalanceMinor: balanceMinor,
-						amountMinor: entryAppliedMinor,
+						amountMinor: e.payload.amountMinor,
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
@@ -903,20 +914,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
-			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
+			const tendered = method.capabilities.change ? fromMinor(e.payload.tenderedMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {
-				amount: fromMinor(entryAppliedMinor, dp),
+				amount: fromMinor(e.payload.amountMinor, dp),
 				tendered,
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
+				// The gate resolved and the handler wrote; the writer must not resolve again.
+				session: { registerId, sessionId },
 			});
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow({
 					source: 'manual',
 					...outcome,
 					mirrorFailed: false,
-					preparedCompleting: entryAppliedMinor === balanceMinor,
+					preparedCompleting: e.payload.amountMinor === balanceMinor,
 					preLegBalanceMinor: balanceMinor,
-					amountMinor: entryAppliedMinor,
+					amountMinor: e.payload.amountMinor,
 				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
@@ -935,6 +948,61 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				showToast: true,
 				context: { ...orderContext, method: method.id },
 			});
+		};
+		try {
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
+				// The keypad's facts were read at render; a cart edit queued just before Pay has
+				// now been applied. If it moved the balance, the entry no longer describes this
+				// order: refuse here, before any gate or leg, and let the cashier look again.
+				const latest = order.getLatest().payload;
+				const latestBalanceMinor = toMinor(
+					derive(latest.total, readLedger(latest.meta_data), methods, { dp }).balance,
+					dp
+				);
+				if (latestBalanceMinor !== balanceMinor)
+					return Promise.resolve({
+						deny: {
+							reasonKey: 'pos_checkout.order_changed_retry',
+							detail: { balanceMinor, latestBalanceMinor },
+						},
+					});
+				return dispatchAction({
+					event: TENDER_COMMIT_EVENT,
+					// Money path: refuse rather than run unguarded if the registering import were ever lost.
+					requiredGuards: TENDER_GUARD_IDS,
+					token: queue.dispatchToken,
+					ctx: actionCtx,
+					input: {
+						orderId: order.uuid,
+						actor: actionActor,
+						source: 'user',
+						payload: {
+							methodId: method?.id ?? null,
+							mode: balanceMinor === 0 ? 'zero-balance' : (method?.capture.mode ?? null),
+							amountMinor: entryAppliedMinor,
+							tenderedMinor: state.entryMinor,
+							balanceMinor,
+							completing: entryAppliedMinor === balanceMinor,
+							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+							registerId: null,
+							sessionId: null,
+						},
+					},
+					bottom: commitTender,
+				});
+			});
+			if (isActionRefusal(outcome)) {
+				if (outcome.deny.presented) return;
+				if (outcome.deny.reasonKey === 'pos_checkout.open_register_first') {
+					presentSessionRequired(logger, t, orderContext);
+				} else if (outcome.deny.reasonKey === 'pos_checkout.choose_register_first') {
+					logger.info(t('pos_checkout.choose_register_first'), {
+						showToast: true,
+						context: orderContext,
+					});
+				} else presentActionRefusal(actionCtx, outcome, orderContext);
+				return;
+			}
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) {
 				presentSessionRequired(logger, t, orderContext);
@@ -1057,6 +1125,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
+		actionCtx,
+		actionActor,
 		ctx,
 		balanceMinor,
 		deviceTransport,

@@ -1,10 +1,36 @@
 export const ACTION_API_VERSION = 1;
-/** Closed list. The two checkout events arrive with their own slices. */
-export const ACTION_EVENTS = ['cart.line.add', 'cart.line.update'] as const;
+/** Closed list. Checkout completion arrives with its own slice. */
+export const ACTION_EVENTS = [
+	'cart.line.add',
+	'cart.line.update',
+	'checkout.tender.commit',
+] as const;
+/**
+ * Named for the checkout code, which the Logs event-label check scans for dotted literals
+ * (`scripts/check-event-labels.mjs`, roots include `pos/checkout`). An action event or a hook
+ * id is not a log row and has no merchant label, so checkout refers to these constants.
+ */
+export const TENDER_COMMIT_EVENT = ACTION_EVENTS[2];
+/** The guards a tender commit must have registered; the dispatch refuses without them. */
+export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;
 export type ActionEvent = (typeof ACTION_EVENTS)[number];
 export type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type PlainLine = Record<string, unknown>;
 export interface ActionContracts {
+	'checkout.tender.commit': {
+		payload: {
+			methodId: string | null;
+			mode: 'manual' | 'server' | 'device' | 'zero-balance' | string | null;
+			amountMinor: number;
+			tenderedMinor: number;
+			balanceMinor: number;
+			completing: boolean;
+			bindingStatus: 'bound' | 'choose' | 'none';
+			registerId: string | null;
+			sessionId: string | null;
+		};
+		result: unknown;
+	};
 	'cart.line.add': {
 		payload: { type: CartLineType; line: PlainLine; lineItems: PlainLine[] };
 		result: unknown;
@@ -24,6 +50,11 @@ export interface ActionContracts {
 export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
+	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
+	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
+	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the
+	// handler to derive everything from the payload first, then opens these keys.
+	'checkout.tender.commit': ['registerId', 'sessionId'],
 } as const satisfies Record<ActionEvent, readonly string[]>;
 export type ActionActor = {
 	userId: number | null;
@@ -86,6 +117,10 @@ export interface ActionContext {
 			kind: 'product' | 'variation',
 			wooId: number
 		) => Promise<Record<string, unknown> | null>;
+	};
+	readonly register: {
+		/** The bound register and its open session, or throws RegisterSessionRequiredError. */
+		resolveSession(): Promise<{ registerId: string | null; sessionId: string | null }>;
 	};
 	readonly store: { readonly preventOverselling: boolean };
 }

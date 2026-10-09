@@ -27,6 +27,9 @@ import {
 	useCheckoutMode,
 } from '../checkout-mode';
 import * as provenance from '../sale-completion';
+import { enqueueOrderMutation } from '../../hooks/order-mutation-queue';
+import { resetActionHookStrikes } from '../../../../../extensions/actions';
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 import { rememberedReaders } from './remembered-readers';
@@ -35,6 +38,15 @@ import type {
 	TerminalLegState,
 	TerminalPaymentsService,
 } from '../../../../../services/terminal-payments';
+
+// The writer re-runs `requireOpenSession` (the pre-action write) after the gate's read; the
+// fixtures carry no session collection, so the write is stubbed to answer the gate's id.
+jest.mock('../../../../../services/register-session/session-store', () => ({
+	...jest.requireActual('../../../../../services/register-session/session-store'),
+	requireOpenSession: jest.fn(async (_sessions: unknown, _registerId: unknown, enabled: boolean) =>
+		enabled ? 'session' : null
+	),
+}));
 
 const persistProvenanceSpy = jest.spyOn(provenance, 'persistSaleProvenance');
 
@@ -564,10 +576,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
-			amount: '92.95',
-			tendered: '100.00',
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			cash,
+			expect.objectContaining({
+				amount: '92.95',
+				tendered: '100.00',
+			})
+		);
 	});
 
 	it('completes a fully paid online order after the record resolves', async () => {
@@ -629,10 +645,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
-			amount: '50.00',
-			tendered: '50.00',
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			cash,
+			expect.objectContaining({
+				amount: '50.00',
+				tendered: '50.00',
+			})
+		);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
@@ -652,10 +672,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, card, {
-			amount: '92.95',
-			tendered: null,
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			card,
+			expect.objectContaining({
+				amount: '92.95',
+				tendered: null,
+			})
+		);
 	});
 
 	it('uses a split share as the next tender pre-fill', async () => {
@@ -720,6 +744,9 @@ describe('useTenderFlow', () => {
 				value: { schema: 1, payments: [payment(), payment({ id: 'void', status: 'voided' })] },
 			},
 		];
+		// In the app the ledger change re-renders the keypad before the next tap; without this the
+		// commit sees a balance that moved since the keypad was drawn and refuses, as it should.
+		rerender();
 		await act(async () => result.current.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
@@ -1762,9 +1789,6 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 }));
 
 it('zero balance writes completion and provenance together exactly once', async () => {
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockPayload = { total: '0.00', meta_data: [] };
 	mockLocalPatch.mockClear();
@@ -1875,9 +1899,6 @@ it.each([
 
 it('full manual online tender persists provenance before POST and the mirror', async () => {
 	jest.mocked(provenance.completionMetaFor).mockClear();
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 	jest.mocked(recordCompletionAttempt).mockClear();
 	mockUseRealManual = true;
 	mockLocalPatch.mockClear();
@@ -2067,9 +2088,6 @@ describe('provider completion provenance before intent', () => {
 		});
 	});
 	it('awaits the explicit tuple write before beginning the server leg', async () => {
-		jest
-			.mocked(provenance.prepareSale)
-			.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 		jest.mocked(recordCompletionAttempt).mockClear();
 		let finish!: (value: typeof order) => void;
 		mockPushDocument.mockImplementationOnce(
@@ -2285,9 +2303,7 @@ beforeEach(() => {
 
 it('no open session: toasts without POST, recording a leg or rejecting tender', async () => {
 	jest.clearAllMocks();
-	jest
-		.mocked(provenance.prepareSale)
-		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
+	mockResolveSession.mockRejectedValueOnce(new RegisterSessionRequiredError());
 	mockSessionsOn = true;
 	mockSessionId = null;
 	mockLeg = null;
@@ -2419,6 +2435,7 @@ jest.mock('../sale-completion', () => {
 	);
 	return {
 		...actual,
+		recordSaleAttempt: jest.fn(actual.recordSaleAttempt),
 		completionMetaFor,
 		persistSaleProvenance: jest.fn(
 			async (
@@ -2435,24 +2452,6 @@ jest.mock('../sale-completion', () => {
 					mockPayload.meta_data = meta_data;
 					await ctx.pushDocument(input.order);
 				}
-			}
-		),
-		prepareSale: jest.fn(
-			async (
-				_ctx: import('../sale-completion').SaleContext,
-				input: Parameters<typeof actual.prepareSale>[1]
-			) => {
-				if (input.completing && input.bindingStatus === 'choose')
-					return { ok: false, reason: 'choose_register' };
-				if (mockSessionsOn && !mockSessionId)
-					throw new (jest.requireActual(
-						'../../../../../services/register-session/session-store'
-					).RegisterSessionRequiredError)();
-				return {
-					ok: true,
-					registerId: mockBoundRegisterId,
-					sessionId: mockSessionsOn ? mockSessionId : null,
-				};
 			}
 		),
 	};
@@ -2610,7 +2609,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		// The reducer keeps a hand-typed amount across pills (ledger line 1); what is applied is the balance.
 		expect(result.current.entryAppliedMinor).toBe(9295);
 		await act(async () => result.current.takeTender());
-		expect(jest.mocked(provenance.prepareSale)).toHaveBeenCalledWith(
+		expect(jest.mocked(provenance.recordSaleAttempt)).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ source: 'gateway', completing: true })
 		);
@@ -3021,4 +3020,212 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.invoiceSent).toBeNull();
 		await act(async () => {});
 	});
+});
+
+const mockActionLog = jest.fn();
+const mockResolveSession = jest.fn();
+jest.mock('../../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: () => Date.now(),
+			read: { catalog: async () => null },
+			store: { preventOverselling: false },
+			register: { resolveSession: mockResolveSession },
+		},
+		actor: { userId: 7, registerId: mockBoundRegisterId, sessionId: null },
+	}),
+}));
+beforeEach(() => {
+	resetActionHookStrikes();
+	mockActionLog.mockClear();
+	mockResolveSession.mockReset().mockImplementation(async () => ({
+		registerId: mockBoundRegisterId,
+		sessionId: mockSessionsOn ? mockSessionId : null,
+	}));
+});
+it('presents a failed session guard and never starts the tender writer', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockResolveSession.mockRejectedValueOnce(new Error('session storage unavailable'));
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => result.current.takeTender());
+	expect(mockActionLog).toHaveBeenCalledWith(
+		'warn',
+		'actions.hook_failed',
+		expect.objectContaining({
+			showToast: true,
+			context: expect.objectContaining({
+				hookId: 'session.gate',
+				reasonKey: 'actions.hook_failed',
+			}),
+		})
+	);
+	expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(mockBegin).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
+});
+
+it('waits for the order mutation queue before resolving the session or recording tender', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	let release!: () => void;
+	const ahead = enqueueOrderMutation(
+		order.uuid,
+		() =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			})
+	);
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	let taking!: Promise<void>;
+	await act(async () => {
+		taking = result.current.takeTender();
+		await Promise.resolve();
+	});
+	try {
+		expect(mockResolveSession).not.toHaveBeenCalled();
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	} finally {
+		await act(async () => {
+			release();
+			await ahead;
+			await taking;
+		});
+	}
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+});
+
+it('refuses the commit when a cart edit queued before Pay moved the balance', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	let release!: () => void;
+	// The edit ahead in the queue changes the order's total while the keypad still shows 92.95.
+	const ahead = enqueueOrderMutation(
+		order.uuid,
+		() =>
+			new Promise<void>((resolve) => {
+				release = () => {
+					mockPayload.total = '100.00';
+					resolve();
+				};
+			})
+	);
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	let taking!: Promise<void>;
+	await act(async () => {
+		taking = result.current.takeTender();
+		await Promise.resolve();
+	});
+	await act(async () => {
+		release();
+		await ahead;
+		await taking;
+	});
+	// Refused before any gate or leg ran: nothing resolved, nothing recorded.
+	expect(mockResolveSession).not.toHaveBeenCalled();
+	expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	// The cashier is told why, once, with both balances in the row.
+	expect(mockActionLog).toHaveBeenCalledTimes(1);
+	expect(mockActionLog).toHaveBeenCalledWith(
+		'warn',
+		'pos_checkout.order_changed_retry',
+		expect.objectContaining({
+			showToast: true,
+			context: expect.objectContaining({
+				reasonKey: 'pos_checkout.order_changed_retry',
+				balanceMinor: 9295,
+				latestBalanceMinor: 10000,
+			}),
+		})
+	);
+	expect(result.current.busy).toBe(false);
+});
+
+it("writes the session's pre-action reset in the handler, after the gate's read and before the attempt record", async () => {
+	jest.clearAllMocks();
+	mockSessionsOn = true;
+	mockSessionId = 'session';
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { requireOpenSession } = jest.requireMock(
+		'../../../../../services/register-session/session-store'
+	) as { requireOpenSession: jest.Mock };
+	requireOpenSession.mockClear();
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => result.current.takeTender());
+	// The gate read first, the handler then wrote, then the attempt was recorded.
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(requireOpenSession).toHaveBeenCalledTimes(1);
+	// The fixture's sale context carries no session collection; the register id and the flag are the facts.
+	expect(requireOpenSession.mock.calls[0].slice(1)).toEqual(['register', true]);
+	expect(jest.mocked(recordCompletionAttempt)).toHaveBeenCalledTimes(1);
+	expect(mockResolveSession.mock.invocationCallOrder[0]).toBeLessThan(
+		requireOpenSession.mock.invocationCallOrder[0]
+	);
+	expect(requireOpenSession.mock.invocationCallOrder[0]).toBeLessThan(
+		jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]
+	);
+	// The writer records the ids the gate stamped, and resolves nothing itself.
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	expect(mockRecordManualPayment.mock.calls[0][2]).toEqual(
+		expect.objectContaining({ session: { registerId: 'register', sessionId: 'session' } })
+	);
+});
+
+it('a session closed between the gate and the write refuses with the open-register toast, no attempt, no payment', async () => {
+	jest.clearAllMocks();
+	mockSessionsOn = true;
+	mockSessionId = 'session';
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { requireOpenSession } = jest.requireMock(
+		'../../../../../services/register-session/session-store'
+	) as { requireOpenSession: jest.Mock };
+	requireOpenSession.mockImplementationOnce(async () => {
+		throw new RegisterSessionRequiredError();
+	});
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => {
+		await expect(result.current.takeTender()).resolves.toBeUndefined();
+	});
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(mockInfo).toHaveBeenCalledWith(
+		'pos_checkout.open_register_first',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(jest.mocked(recordCompletionAttempt)).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
 });

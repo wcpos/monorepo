@@ -36,16 +36,28 @@ export async function dispatchAction<E extends ActionEvent>({
 	token,
 	ctx,
 	bottom,
+	requiredGuards,
 }: {
 	event: E;
 	input: Omit<ActionEventInput<E>, 'event'>;
 	token: DispatchToken;
 	ctx: ActionContext;
 	bottom: (e: ActionEventInput<E>) => Promise<ActionResult<E>>;
+	/** Guard ids that must be registered, else the dispatch refuses (`actions.guard_missing`). */
+	requiredGuards?: readonly string[];
 }): Promise<ActionResult<E> | ActionRefusal> {
 	if (!isDispatchToken(token))
 		throw new Error('dispatchAction must run inside enqueueOrderMutation');
 	const hooks = getActionHooks(event);
+	// A money path names the guards it cannot run without; losing their registering import must
+	// refuse the action, never run it unguarded.
+	const missing = (requiredGuards ?? []).find(
+		(id) => !hooks.some((hook) => hook.id === id && hook.tier === 'guard')
+	);
+	if (missing !== undefined)
+		return deepFreeze({
+			deny: { reasonKey: 'actions.guard_missing', detail: { hookId: missing, event } },
+		});
 	// One budget per TIER, started when that tier's first hook runs: extensions run first and
 	// must never be able to spend the guards' time (a slow extension that starved a guard into a
 	// timeout would be an extension veto). Hook latency before the writer is bounded by two

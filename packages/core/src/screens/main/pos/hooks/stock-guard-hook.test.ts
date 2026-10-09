@@ -4,7 +4,13 @@ import { stockGuardOnAdd, stockGuardOnUpdate } from './stock-guard-hook';
 const readCatalog = jest.fn();
 const log = jest.fn();
 const next = jest.fn();
-const ctx = createActionContext({ log, t: (key) => key, readCatalog, preventOverselling: true });
+const ctx = createActionContext({
+	log,
+	t: (key) => key,
+	readCatalog,
+	preventOverselling: true,
+	resolveSession: async () => ({ registerId: null, sessionId: null }),
+});
 const e: ActionEventInput<'cart.line.add'> = {
 	event: 'cart.line.add',
 	orderId: 'order',

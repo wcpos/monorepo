@@ -44,6 +44,28 @@ export interface SaleContext {
 	stockAdjustment?: Parameters<typeof reconcileCompletedOrder>[3];
 }
 
+/** Pure binding gate; only completing sales require a chosen register. */
+export function gateSale(input: {
+	completing: boolean;
+	bindingStatus: 'bound' | 'choose' | 'none';
+}): { ok: false; reason: 'choose_register' } | { ok: true } {
+	return input.completing && input.bindingStatus === 'choose'
+		? { ok: false, reason: 'choose_register' }
+		: { ok: true };
+}
+
+export async function recordSaleAttempt(
+	ctx: SaleContext,
+	input: { order: EngineRecord<'orders'>; completing: boolean; source: SaleOutcome['source'] }
+): Promise<void> {
+	if (input.completing)
+		await recordCompletionAttempt(ctx.storeDB, {
+			orderUuid: input.order.uuid,
+			source: input.source,
+			...(ctx.actor ? { actor: ctx.actor } : {}),
+		});
+}
+
 /** Before money: require a session when the route requests it; gate completing sales on binding. */
 export async function prepareSale(
 	ctx: SaleContext,
@@ -58,8 +80,8 @@ export async function prepareSale(
 	| { ok: true; registerId: string | null; sessionId: string | null }
 	| { ok: false; reason: 'choose_register' }
 > {
-	if (input.completing && input.bindingStatus === 'choose')
-		return { ok: false, reason: 'choose_register' };
+	const gate = gateSale(input);
+	if (!gate.ok) return gate;
 	const registerId =
 		input.sessionRule === 'none'
 			? null
@@ -68,12 +90,7 @@ export async function prepareSale(
 		input.sessionRule === 'none'
 			? null
 			: await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
-	if (input.completing)
-		await recordCompletionAttempt(ctx.storeDB, {
-			orderUuid: input.order.uuid,
-			source: input.source,
-			...(ctx.actor ? { actor: ctx.actor } : {}),
-		});
+	await recordSaleAttempt(ctx, input);
 	return { ok: true, registerId, sessionId };
 }
 

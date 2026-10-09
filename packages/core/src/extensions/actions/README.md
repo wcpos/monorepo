@@ -26,10 +26,32 @@ unrelated queued writes.
 
 ## The events (closed list)
 
-| Event              | Raised by           | Rewritable keys | Can refuse |
-| ------------------ | ------------------- | --------------- | ---------- |
-| `cart.line.add`    | `useAddItemToOrder` | `line`          | yes        |
-| `cart.line.update` | `useUpdateLineItem` | `changes`       | yes        |
+| Event                    | Raised by           | Rewritable keys                                                | Can refuse |
+| ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
+| `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
+| `cart.line.update`       | `useUpdateLineItem` | `changes`                                                      | yes        |
+| `checkout.tender.commit` | `takeTender`        | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
+
+The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
+completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `amountMinor`
+is applied to the balance, `tenderedMinor` is what the cashier handed over. `mode` includes
+`zero-balance`; `bindingStatus` is `bound | choose | none`; the two ids begin as `null`.
+
+Tender guards run as `register.gate` (order 0), then `session.gate` (order 1); the event name and
+the two ids are the constants `TENDER_COMMIT_EVENT` and `TENDER_GUARD_IDS` in `types.ts`, because
+the Logs event-label check scans `pos/checkout` for dotted literals and these are not log rows. The first
+refuses a completing sale that still needs a register chosen. The second resolves the bound
+register and its required open session through `ctx.register.resolveSession()`, a **read**
+(`findOpenSession`), refusing if no required session is open; the pre-action write that
+`requireOpenSession` makes stays in the bottom handler, where `prepareSale` made it. It is **a guard that stamps what it resolved**:
+`next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
+those ids, records the attempt, then keeps the existing provenance and leg sequence; the
+manual writer takes those same ids as its `session` input rather than resolving again.
+Before the dispatch, inside its queue slot, `takeTender` recomputes the balance from the
+latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
+it, since the keypad's facts were read at render.
+The caller presents the two gate refusals with the existing checkout toasts and any other
+refusal through `presentActionRefusal` (unless already presented).
 
 First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),
 the prevent-overselling check moved onto the two cart events as guards. Ids are unique per event
@@ -38,7 +60,7 @@ disables the other.
 
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
-(a) today: `checkout.tender.commit` and `checkout.complete` (their slices are next), receipt
+(a) today: `checkout.complete` (its slice is next), receipt
 print, register open/close, discount apply, customer set, refund.
 
 ## The hook
@@ -101,11 +123,20 @@ failed`, with the reason and the error message); the disabling writes one more. 
   dispatch with `actions.hook_disabled`, because a money-path guard that silently dropped out
   would fail open.
 
+## Required guards
+
+A money path passes `requiredGuards: [...ids]` to `dispatchAction`; if any is not registered as a
+guard the dispatch refuses with `actions.guard_missing` rather than running unguarded (the tender
+commit does this with `TENDER_GUARD_IDS`). Guards register by a side-effect import, so this is
+what keeps a lost import from becoming a silent hole.
+
 ## Where a dispatch runs
 
 Every dispatch runs **inside** `enqueueOrderMutation(orderId, …)`: `dispatchAction` takes the
 queue's `dispatchToken` and throws without one. The queue serialises an order's writes, so a
-rewrite is always applied against an unchanged target.
+rewrite is always applied against an unchanged target. Tender commit also runs inside the order's
+mutation queue: cart edits wait until the manual leg finishes or the terminal leg is handed
+to its service. No new lock is added.
 
 ## Do not
 

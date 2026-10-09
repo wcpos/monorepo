@@ -17,9 +17,11 @@ import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,
 	completionMetaFor,
+	gateSale,
 	isSaleComplete,
 	persistSaleProvenance,
 	prepareSale,
+	recordSaleAttempt,
 } from './sale-completion';
 
 import type { SaleContext, SaleOutcome } from './sale-completion';
@@ -697,3 +699,31 @@ describe('gateway session attribution on retry', () => {
 		expect(await completionMetaFor(ctx, original, { sessionId: 'session-B' })).toEqual(original);
 	});
 });
+
+it.each(['bound', 'choose', 'none'] as const)(
+	'gateSale checks only completing and binding: %s',
+	(bindingStatus) => {
+		for (const completing of [false, true]) {
+			expect(gateSale({ completing, bindingStatus })).toEqual(
+				completing && bindingStatus === 'choose'
+					? { ok: false, reason: 'choose_register' }
+					: { ok: true }
+			);
+		}
+		expect(mockBound).not.toHaveBeenCalled();
+		expect(mockSession).not.toHaveBeenCalled();
+	}
+);
+it.each([false, true])(
+	'recordSaleAttempt journals only completing sales: %s',
+	async (completing) => {
+		const actor = { id: '7', name: 'Pat' };
+		await recordSaleAttempt({ ...ctx, actor }, { order, completing, source: 'manual' });
+		const attempts = await pendingCompletions(ctx.storeDB);
+		if (completing)
+			expect(attempts.order).toEqual(expect.objectContaining({ source: 'manual', actor }));
+		else expect(attempts.order).toBeUndefined();
+		expect(mockBound).not.toHaveBeenCalled();
+		expect(mockSession).not.toHaveBeenCalled();
+	}
+);

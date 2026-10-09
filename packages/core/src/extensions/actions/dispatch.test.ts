@@ -24,6 +24,7 @@ const ctx = createActionContext({
 	t: (key) => key,
 	readCatalog: async () => null,
 	preventOverselling: true,
+	resolveSession: async () => ({ registerId: null, sessionId: null }),
 });
 const dispatch = () =>
 	dispatchAction({ event: 'cart.line.add', input, ctx, token: createDispatchToken(), bottom });
@@ -522,6 +523,34 @@ it("silences a hook's log once its dispatch has settled, so a timed-out guard ca
 	expect(log).not.toHaveBeenCalledWith('warn', 'after the budget', expect.anything());
 	expect(bottom).not.toHaveBeenCalled();
 });
+it('refuses when a required guard is not registered, and runs when it is', async () => {
+	const args = {
+		event: 'cart.line.add' as const,
+		input,
+		ctx,
+		bottom,
+		requiredGuards: ['stock.guard'],
+	};
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toEqual({
+		deny: {
+			reasonKey: 'actions.guard_missing',
+			detail: { hookId: 'stock.guard', event: 'cart.line.add' },
+		},
+	});
+	expect(bottom).not.toHaveBeenCalled();
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'stock.guard',
+		tier: 'extension',
+	});
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toMatchObject({
+		deny: { reasonKey: 'actions.guard_missing' },
+	});
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'stock.guard',
+		tier: 'guard',
+	});
+	expect(await dispatchAction({ ...args, token: createDispatchToken() })).toBe('saved');
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');
@@ -564,4 +593,44 @@ it('freezes a dispatcher hook_failed refusal before an extension can edit it', a
 	expect(mutationThrew).toBe(true);
 	expect(Object.isFrozen(refusal)).toBe(true);
 	expect(bottom).not.toHaveBeenCalled();
+});
+
+it('passes tender register and session rewrites to bottom', async () => {
+	registerActionHook(
+		'checkout.tender.commit',
+		async (_, e, next) =>
+			next({
+				...e,
+				payload: { ...e.payload, registerId: 'resolved-register', sessionId: 'resolved-session' },
+			}),
+		{ id: 'session.gate', tier: 'guard' }
+	);
+	await dispatchAction({
+		event: 'checkout.tender.commit',
+		ctx,
+		token: createDispatchToken(),
+		bottom,
+		input: {
+			...input,
+			payload: {
+				methodId: 'cash',
+				mode: 'manual',
+				amountMinor: 100,
+				tenderedMinor: 100,
+				balanceMinor: 100,
+				completing: true,
+				bindingStatus: 'bound',
+				registerId: null,
+				sessionId: null,
+			},
+		},
+	});
+	expect(bottom).toHaveBeenCalledWith(
+		expect.objectContaining({
+			payload: expect.objectContaining({
+				registerId: 'resolved-register',
+				sessionId: 'resolved-session',
+			}),
+		})
+	);
 });

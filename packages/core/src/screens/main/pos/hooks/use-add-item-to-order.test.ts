@@ -62,6 +62,7 @@ jest.mock('./use-action-context', () => ({
 			t: (key: string) => key,
 			now: Date.now,
 			read: { catalog: mockReadCatalog },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
 			store: { preventOverselling: mockStockGuardEnabled },
 		},
 		actor: { userId: 7, registerId: 'till', sessionId: null },

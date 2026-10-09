@@ -4,6 +4,7 @@ import type { ActionEvent, ActionHook, ActionHookRegistration, ActionHookState }
 export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	'cart.line.add': 1500,
 	'cart.line.update': 1500,
+	'checkout.tender.commit': 5_000, // a card leg already waits longer
 };
 /** Three failures switch off a repeatedly broken hook for this session. */
 export const ACTION_HOOK_STRIKES = 3;
