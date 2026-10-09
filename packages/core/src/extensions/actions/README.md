@@ -43,7 +43,11 @@ register and its required open session through `ctx.register.resolveSession()`, 
 (`findOpenSession`), refusing if no required session is open; the pre-action write that
 `requireOpenSession` makes stays in the bottom handler, where `prepareSale` made it. It is **a guard that stamps what it resolved**:
 `next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
-those ids, records the attempt, then keeps the existing provenance and leg sequence.
+those ids, records the attempt, then keeps the existing provenance and leg sequence; the
+manual writer takes those same ids as its `session` input rather than resolving again.
+Before the dispatch, inside its queue slot, `takeTender` recomputes the balance from the
+latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
+it, since the keypad's facts were read at render.
 The caller presents the two gate refusals with the existing checkout toasts and any other
 refusal through `presentActionRefusal` (unless already presented).
 

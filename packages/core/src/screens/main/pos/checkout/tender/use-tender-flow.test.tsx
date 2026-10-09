@@ -3146,6 +3146,20 @@ it('refuses the commit when a cart edit queued before Pay moved the balance', as
 	expect(mockResolveSession).not.toHaveBeenCalled();
 	expect(recordCompletionAttempt).not.toHaveBeenCalled();
 	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	// The cashier is told why, once, with both balances in the row.
+	expect(mockActionLog).toHaveBeenCalledTimes(1);
+	expect(mockActionLog).toHaveBeenCalledWith(
+		'warn',
+		'pos_checkout.order_changed_retry',
+		expect.objectContaining({
+			showToast: true,
+			context: expect.objectContaining({
+				reasonKey: 'pos_checkout.order_changed_retry',
+				balanceMinor: 9295,
+				latestBalanceMinor: 10000,
+			}),
+		})
+	);
 	expect(result.current.busy).toBe(false);
 });
 
@@ -3178,7 +3192,11 @@ it("writes the session's pre-action reset in the handler, after the gate's read 
 	expect(requireOpenSession.mock.invocationCallOrder[0]).toBeLessThan(
 		jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]
 	);
+	// The writer records the ids the gate stamped, and resolves nothing itself.
 	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	expect(mockRecordManualPayment.mock.calls[0][2]).toEqual(
+		expect.objectContaining({ session: { registerId: 'register', sessionId: 'session' } })
+	);
 });
 
 it('a session closed between the gate and the write refuses with the open-register toast, no attempt, no payment', async () => {
