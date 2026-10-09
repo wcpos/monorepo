@@ -463,6 +463,18 @@ it('hands a guard refusal out frozen, so an extension cannot edit it in place', 
 	expect(await dispatch()).toEqual({ deny: { reasonKey: 'no_stock' } });
 	expect(bottom).not.toHaveBeenCalled();
 });
+it("freezes a copy of a guard's refusal, never the objects the guard put in it", async () => {
+	const shared = { stock: 3 };
+	const refusal = { deny: { reasonKey: 'no_stock', detail: { record: shared } } };
+	register(async () => refusal);
+	const result = await dispatch();
+	expect(result).toEqual(refusal);
+	expect(result).not.toBe(refusal);
+	expect(Object.isFrozen(result)).toBe(true);
+	expect(Object.isFrozen(shared)).toBe(false);
+	shared.stock = 4; // still the guard's to change
+	expect((result as typeof refusal).deny.detail.record.stock).toBe(3);
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

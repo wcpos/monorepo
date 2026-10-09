@@ -147,8 +147,9 @@ export async function dispatchAction<E extends ActionEvent>({
 				// have written, so it is a failure, and the inner answer stands.
 				reason = 'deny_after_next';
 			} else if (isActionRefusal(value)) {
-				// Frozen on the way out, so no hook above can edit the refusal in place.
-				if (tier === 'guard') return deepFreeze(value);
+				// Cloned, then frozen on the way out: no hook above can edit the refusal in place,
+				// and nothing the guard put in `detail` is frozen under it.
+				if (tier === 'guard') return clone(value);
 				ctx.log('warn', 'Extension hook refusal ignored', { context: { hookId, event } });
 				return runAt(i + 1, e);
 			} else reason = 'returned_without_next';
