@@ -867,6 +867,25 @@ describe('declared UI (contract 1.2)', () => {
 		fireEvent.click(screen.getByTestId('checkout-commit'));
 		expect(flow.takeTender).toHaveBeenCalled();
 	});
+	it('an amount typed over the balance on another pill is not an overpayment here', () => {
+		render(
+			<TenderPane
+				flow={invoiceFlow({
+					state: {
+						...initialTenderState,
+						view: 'amount',
+						methodId: invoice.id,
+						entryMinor: 10000,
+						entryDirty: true,
+					},
+				})}
+				format={String}
+			/>
+		);
+		expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+		expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+		expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	});
 	it('holds Send until the required component is filled, naming it', () => {
 		render(
 			<TenderPane

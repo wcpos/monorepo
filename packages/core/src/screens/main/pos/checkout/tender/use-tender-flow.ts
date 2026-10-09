@@ -63,12 +63,13 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
-import { GatewayMirrorError } from '../payments/submit-gateway-payment';
+import { GatewayCancelMirrorError, GatewayMirrorError } from '../payments/submit-gateway-payment';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
 	declaredValues,
 	destinationOf,
 	firstMissingRequired,
+	isValueComponent,
 	prefillValues,
 } from './declared-fields';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
@@ -199,7 +200,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const intentRow = React.useRef<string | null>(null);
 	// One attempt per press, kept across a lost answer: the retry replays the same id, so the
-	// store answers what it did instead of sending a second invoice. Cleared on any definitive answer.
+	// store answers what it did instead of sending a second invoice. Cleared on any definitive
+	// answer, on a change of pill or of the values (a different attempt), and once the stamp
+	// already names it (the lost answer has synced in; the next press is Send again).
 	const attemptRef = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
@@ -314,17 +317,25 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		errors: {} as Record<string, string>,
 	});
 	const fields = method?.capture.mode === 'gateway' ? (method.fields ?? null) : null;
-	const fieldValues = React.useMemo(
-		() =>
-			fields && method
-				? (valuesByMethod[method.id] ??
-					prefillValues(fields, {
-						billingEmail: payload.billing?.email,
-						billingPhone: payload.billing?.phone,
-					}))
-				: {},
-		[fields, method, valuesByMethod, payload.billing?.email, payload.billing?.phone]
-	);
+	const fieldValues = React.useMemo(() => {
+		if (!fields || !method) return {};
+		if (valuesByMethod[method.id]) return valuesByMethod[method.id];
+		const values = prefillValues(fields, {
+			billingEmail: payload.billing?.email,
+			billingPhone: payload.billing?.phone,
+		});
+		// Send again (§4.3): where the last invoice went is the best guess for where this one goes.
+		if (stamp?.method_id === method.id && stamp.destination && !destinationOf(fields, values)) {
+			const target = fields.components.find(
+				(component) =>
+					isValueComponent(component) &&
+					component.component === 'field' &&
+					['email', 'tel'].includes(component.input)
+			);
+			if (target && isValueComponent(target)) values[target.id] = stamp.destination;
+		}
+		return values;
+	}, [fields, method, valuesByMethod, payload.billing?.email, payload.billing?.phone, stamp]);
 	const methodId = method?.id ?? null;
 	const fieldErrors = React.useMemo(
 		() => (errorsFor.methodId === methodId ? errorsFor.errors : {}),
@@ -335,6 +346,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// Memoized by the compiler: a manual useCallback here cannot name the setter's identity.
 	const setFieldValues = (next: DeclaredValues, changedId: string) => {
 		if (busyRef.current || methodId === null) return;
+		attemptRef.current = null;
 		setValuesByMethod((previous) => ({ ...previous, [methodId]: next }));
 		setErrorsFor((previous) => {
 			if (!(changedId in previous.errors) && !('_form' in previous.errors)) return previous;
@@ -477,13 +489,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? deviceTransports(tile.method).find((item) => item.offline === 'queue')
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;
+			// The entry is shared across pills (ledger line 1), so a fixed gateway never writes the
+			// balance into it: `entryAppliedMinor` applies the balance for it instead. A split plan
+			// cannot survive a method that runs the whole order; one with no legs yet is dropped.
 			const fixed =
 				tile.method.capture.mode === 'gateway' && !tile.method.capabilities.amount.partial;
-			const prefillMinor = fixed
-				? balanceMinor
-				: state.view === 'amount'
-					? state.entryMinor
-					: plannedLegMinor;
+			if (fixed && state.plan) {
+				reducerDispatch({ type: 'clear-plan', balanceMinor });
+				setTenderPlan(order.uuid, null);
+			}
+			if (methodId !== state.methodId) attemptRef.current = null;
+			const prefillMinor = state.view === 'amount' ? state.entryMinor : plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
@@ -505,6 +521,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			saveState,
 			state.view,
 			state.entryMinor,
+			state.methodId,
+			state.plan,
 			tiles,
 			service,
 			reducerDispatch,
@@ -815,6 +833,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					});
 					return;
 				}
+				if (attemptRef.current && invoiceSent?.attempt_id === attemptRef.current)
+					attemptRef.current = null;
 				attemptRef.current ??= uuidv4();
 				const outcome = await gateway.submit(order, method.id, {
 					attemptId: attemptRef.current,
@@ -1158,6 +1178,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		busyRef.current = true;
 		setBusy(true);
 		try {
+			attemptRef.current = null;
 			const outcome = await gateway.cancel(order, invoiceSent);
 			if (outcome.kind === 'refused') {
 				logger.error(outcome.message, {
@@ -1179,6 +1200,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				},
 			});
 		} catch (error) {
+			if (error instanceof GatewayCancelMirrorError) {
+				// The store cancelled it; only this till's copy is behind. "Try again" would 409.
+				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
+					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					showToast: true,
+					context: {
+						...orderContext,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				return;
+			}
 			logger.error(t('pos_checkout.invoice_cancel_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,

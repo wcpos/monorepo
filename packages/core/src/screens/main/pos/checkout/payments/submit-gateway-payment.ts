@@ -53,6 +53,17 @@ export class GatewayMirrorError extends Error {
 	}
 }
 
+/** The store cancelled the invoice and the till's copy could not be written. */
+export class GatewayCancelMirrorError extends Error {
+	public constructor(
+		public order: OrderPaymentSummary,
+		public cause: unknown
+	) {
+		super('Cancelled invoice could not be mirrored locally.', { cause });
+		this.name = 'GatewayCancelMirrorError';
+	}
+}
+
 type ErrorResponse = {
 	status?: number;
 	data?: { code?: string; message?: string; data?: { errors?: unknown; detail?: unknown } };
@@ -187,9 +198,13 @@ export async function cancelGatewayInvoice(
 			return { kind: 'refused', code, message: refusalMessage(response, code) };
 		throw error;
 	}
-	await deps.mirror({
-		meta_data: withAwaitingCustomer(order.meta_data, null),
-		status: summary.status,
-	});
+	try {
+		await deps.mirror({
+			meta_data: withAwaitingCustomer(order.meta_data, null),
+			status: summary.status,
+		});
+	} catch (mirrorError) {
+		throw new GatewayCancelMirrorError(summary, mirrorError);
+	}
 	return { kind: 'cancelled', order: summary };
 }

@@ -2440,6 +2440,7 @@
 	"pos_checkout.invoice_sent_on": "Invoice sent on {date}",
 	"pos_checkout.sent_on": "on {date}",
 	"pos_checkout.invoice_sent_awaiting_customer": "Invoice sent · awaiting the customer",
+	"pos_checkout.invoice_cancelled_not_synced": "The invoice was cancelled at the store, but this till could not save it. Refresh the order.",
 	"pos_checkout.invoice_cancel_failed": "The invoice could not be cancelled. Try again.",
 	"pos_checkout.order_open_send_again": "The order is open again at the store. Send the invoice again if the customer still needs it.",
 	"register.close_register_title": "Close register · {name}",

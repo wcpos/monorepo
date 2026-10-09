@@ -199,7 +199,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const groupDone =
 		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
 	const due = flow.thisPaymentMinor;
-	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.balanceMinor);
+	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
+	const noChange = Boolean(
+		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
+	);
 	const left = flow.balanceMinor - flow.entryAppliedMinor;
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||

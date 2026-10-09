@@ -808,7 +808,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 	});
 
 	liveTest(
-		'sends an invoice, sends it again from Orders, then cancels it from the re-opened checkout',
+		'sends an invoice, sends it again from Orders, then cancels it from Orders',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, uuid, mode } = await newOrderAtCheckout(page, trackOrder);
@@ -874,6 +874,8 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await expect(page.getByTestId('checkout-invoice-sent')).toBeVisible({ timeout: 30_000 });
 			await expect(page.getByTestId('checkout-invoice-sent')).toContainText(email);
 			await expect(page.getByTestId('checkout-fields')).toBeVisible({ timeout: 15_000 });
+			// The last destination is prefilled for Send again; a guest order has no billing email.
+			await expect(page.getByTestId(`checkout-field-${emailField.id}`)).toHaveValue(email);
 			await page.getByTestId('checkout-commit').click();
 			await expect(page.getByTestId('checkout-sent')).toBeVisible({ timeout: 120_000 });
 			await page.getByTestId('checkout-sent-new').click();
@@ -890,7 +892,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 				'a second send must replace the stamp with a new attempt'
 			);
 
-			// 3. Cancel from the re-opened checkout: the order comes back open, the stamp goes.
+			// 3. Cancel from Orders: the order comes back open, the stamp goes.
 			await navigateToPage(page, 'orders');
 			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 			await expect(row).toBeVisible({ timeout: 30_000 });

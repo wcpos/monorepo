@@ -9,6 +9,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../../contexts/translations';
 import { setTenderMethod } from '../../pos/checkout/checkout-mode';
+import { GatewayCancelMirrorError } from '../../pos/checkout/payments/submit-gateway-payment';
 import { useGatewayPayment } from '../../pos/checkout/payments/use-gateway-payment';
 import { useReopenOrder } from './use-reopen-order';
 
@@ -58,6 +59,17 @@ export function InvoiceActions({
 				},
 			});
 		} catch (error) {
+			if (error instanceof GatewayCancelMirrorError) {
+				logger.warn(t('pos_checkout.invoice_cancelled_not_synced'), {
+					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					showToast: true,
+					context: {
+						orderId: order.uuid,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				return;
+			}
 			logger.error(t('pos_checkout.invoice_cancel_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,

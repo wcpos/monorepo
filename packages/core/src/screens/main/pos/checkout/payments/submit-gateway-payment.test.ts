@@ -7,6 +7,7 @@ import {
 
 import {
 	cancelGatewayInvoice,
+	GatewayCancelMirrorError,
 	GatewayMirrorError,
 	submitGatewayPayment,
 } from './submit-gateway-payment';
@@ -226,6 +227,14 @@ describe('cancelGatewayInvoice', () => {
 			'gateway_cancel_malformed_response'
 		);
 		expect(mirror).not.toHaveBeenCalled();
+	});
+	it('a cancelled invoice whose local write fails is still cancelled', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({ data: { order: summary('pos-open') } });
+		mirror.mockRejectedValueOnce(new Error('disk'));
+		const error = await cancelGatewayInvoice(order, stamp, deps).catch((e) => e);
+		expect(error).toBeInstanceOf(GatewayCancelMirrorError);
+		expect((error as GatewayCancelMirrorError).order.status).toBe('pos-open');
 	});
 	it('a refusal leaves the order alone', async () => {
 		const { post, mirror, order, deps } = harness();

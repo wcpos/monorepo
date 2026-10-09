@@ -2546,6 +2546,68 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(provenance.persistSaleProvenance).toHaveBeenCalled();
 	});
 
+	it('leaves the shared entry alone: a typed cash amount survives a visit to the invoice pill', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 4648 }));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		expect(result.current.entryAppliedMinor).toBe(9295);
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.entryMinor).toBe(4648);
+		expect(result.current.entryAppliedMinor).toBe(4648);
+		await act(async () => {});
+	});
+
+	it('drops an unstarted split plan when a whole-order gateway is picked', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
+		expect(result.current.plan).not.toBeNull();
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		expect(result.current.plan).toBeNull();
+		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toBeUndefined();
+		await act(async () => {});
+	});
+
+	it('a new attempt id after a change of pill or of values; the stamped id is never replayed', async () => {
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new Error('down'), { response: { status: 503 } })
+		);
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'sent', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		act(() =>
+			result.current.setFieldValues(
+				{ ...result.current.fieldValues, woocommerce_pos_invoice_email_address: 'other@b.c' },
+				'woocommerce_pos_invoice_email_address'
+			)
+		);
+		await act(async () => result.current.takeTender());
+		const ids = mockManualPost.mock.calls.map(
+			([, body]) => (body as { attempt_id: string }).attempt_id
+		);
+		expect(ids[0]).not.toBe(ids[1]);
+	});
+
+	it('Send again prefills where the last invoice went when the order has no billing email', async () => {
+		mockPayload.billing = { email: '', phone: '' };
+		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		expect(result.current.fieldValues.woocommerce_pos_invoice_email_address).toBe(
+			'buyer@example.com'
+		);
+		await act(async () => {});
+	});
+
 	it('keeps the attempt id across a lost answer so the retry replays, and clears it after', async () => {
 		mockManualPost
 			.mockRejectedValueOnce(Object.assign(new Error('down'), { response: { status: 503 } }))
