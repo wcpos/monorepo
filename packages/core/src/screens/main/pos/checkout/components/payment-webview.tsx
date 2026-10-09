@@ -326,7 +326,22 @@ export function PaymentWebview({
 				localStored !== null &&
 				localStatus === localStored &&
 				isSettledOrderStatus(localStatus, localStored);
-			if (!localStatus || (localStatus !== 'pos-open' && !localAlreadySettled)) return;
+			// Sync can land the stored status locally before the gateway catalog has
+			// loaded, so nothing yet says it is settled. Returning here would skip the
+			// re-arm in `finally`, and the catalog arriving later would find no poll
+			// to close the pay window. Keep polling, bounded, while a payable local
+			// status awaits the catalog; a later tick judges it with the catalog.
+			const localAwaitingCatalog =
+				typeof settledRef.current.status !== 'string' &&
+				typeof localStatus === 'string' &&
+				UNPAID_ORDER_STATUSES.includes(localStatus) &&
+				!NEVER_SETTLED_STATUSES.includes(localStatus);
+			if (
+				!localStatus ||
+				(localStatus !== 'pos-open' && !localAlreadySettled && !localAwaitingCatalog)
+			) {
+				return;
+			}
 			let settled = false;
 			try {
 				orderLogger.debug('No postMessage received, checking server order status', {

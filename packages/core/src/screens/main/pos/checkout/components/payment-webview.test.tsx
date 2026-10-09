@@ -1041,6 +1041,59 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockReplace).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps polling a local pending order until the gateway catalog arrives, then completes', async () => {
+		// Sync landed `pending` locally before the catalog loaded. Without a catalog
+		// nothing says it is settled, but bailing would skip the re-arm, and the
+		// catalog arriving later would find no poll to close the pay window.
+		jest.useFakeTimers();
+		const serverOrder = { ...pendingPayload, total: '75.00' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+		const localOrder = {
+			uuid: 'uuid-42',
+			payload: {
+				id: 42,
+				number: '42',
+				status: 'pending',
+				payment_method: 'bacs',
+				links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+				line_items: [],
+			},
+			getLatest: () => localOrder,
+		};
+		const props = {
+			order: localOrder as never,
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+
+		const { rerender } = render(
+			<PaymentWebview {...props} settledOrderStatus={null} settledGatewayId={null} />
+		);
+
+		await postReceived({ not: 'an order' });
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		// Still no catalog: the poll re-arms rather than giving up.
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		rerender(<PaymentWebview {...props} settledOrderStatus="pending" settledGatewayId="bacs" />);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+	});
+
 	it('ignores a late payment message once the poll has already settled the sale', async () => {
 		const serverOrder = { ...pendingPayload, total: '75.00' };
 		mockGet.mockResolvedValue({ data: [serverOrder] });
