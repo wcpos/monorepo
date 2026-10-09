@@ -246,20 +246,22 @@ it('skips, rather than refuses for, an extension disabled while a dispatch was i
 	const held = new Promise<void>((resolve) => {
 		release = resolve;
 	});
+	// The hold sits in an extension that runs BEFORE the flaky one, so the in-flight dispatch
+	// reaches the flaky entry only after other dispatches have struck it out.
 	registerActionHook(
 		'cart.line.add',
 		async (_, e, next) => {
 			if (e.payload.line.hold === true) await held;
 			return next(e);
 		},
-		{ id: 'slow.guard', tier: 'guard' }
+		{ id: 'holding.extension', tier: 'extension', order: 0 }
 	);
 	registerActionHook(
 		'cart.line.add',
 		async () => {
 			throw new Error('broken');
 		},
-		{ id: 'flaky.extension', tier: 'extension' }
+		{ id: 'flaky.extension', tier: 'extension', order: 1 }
 	);
 	const inFlight = dispatchAction({
 		event: 'cart.line.add',
@@ -285,7 +287,8 @@ it('waits for the writer when a hook returns without awaiting next, and surfaces
 	});
 	await expect(dispatch()).rejects.toBe(error);
 	bottom.mockResolvedValue('saved');
-	expect(await dispatch()).toBe('own value');
+	// The chain's answer stands; the hook's own return after `next` is ignored.
+	expect(await dispatch()).toBe('saved');
 	expect(bottom).toHaveBeenCalledTimes(2);
 });
 it('does not strike a guard that is only waiting on next while an inner hook times out', async () => {
@@ -391,6 +394,52 @@ it('treats a rewrite that cannot be cloned as a hook failure with next not calle
 	});
 	expect(bottom).not.toHaveBeenCalled();
 	expect(getActionHookState('test.hook').strikes).toBe(1);
+});
+it('gives guards a budget of their own, so a slow extension cannot starve one', async () => {
+	jest.useFakeTimers();
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			await new Promise((resolve) => setTimeout(resolve, 1400));
+			return next(e);
+		},
+		{ id: 'slow.extension', tier: 'extension' }
+	);
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			return next(e);
+		},
+		{ id: 'reading.guard', tier: 'guard' }
+	);
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1700);
+	expect(await result).toBe('saved');
+	expect(getActionHookState('reading.guard').strikes).toBe(0);
+	expect(getActionHookState('slow.extension').strikes).toBe(0);
+});
+it("keeps a guard's refusal when an extension's after-work returns something else or nothing", async () => {
+	registerActionHook('cart.line.add', async () => denial, { id: 'stock.guard', tier: 'guard' });
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			await next(e);
+			return 'looks saved';
+		},
+		{ id: 'careless.extension', tier: 'extension', order: 0 }
+	);
+	registerActionHook(
+		'cart.line.add',
+		(async (_, e, next) => {
+			await next(e);
+		}) as ActionHook<'cart.line.add'>,
+		{ id: 'forgetful.extension', tier: 'extension', order: 1 }
+	);
+	expect(await dispatch()).toEqual(denial);
+	expect(bottom).not.toHaveBeenCalled();
+	expect(getActionHookState('careless.extension').strikes).toBe(0);
+	expect(getActionHookState('forgetful.extension').strikes).toBe(0);
 });
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {

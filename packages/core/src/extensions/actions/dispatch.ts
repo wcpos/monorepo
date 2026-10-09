@@ -13,6 +13,7 @@ import type {
 	ActionContext,
 	ActionEvent,
 	ActionEventInput,
+	ActionHookTier,
 	ActionNext,
 	ActionRefusal,
 	ActionResult,
@@ -45,7 +46,12 @@ export async function dispatchAction<E extends ActionEvent>({
 	if (!isDispatchToken(token))
 		throw new Error('dispatchAction must run inside enqueueOrderMutation');
 	const hooks = getActionHooks(event);
-	const deadline = ctx.now() + ACTION_BUDGET_MS[event];
+	// One budget per TIER, started when that tier's first hook runs: extensions run first and
+	// must never be able to spend the guards' time (a slow extension that starved a guard into a
+	// timeout would be an extension veto). Total hook latency is bounded by two budgets.
+	const deadlines: Partial<Record<ActionHookTier, number>> = {};
+	const deadlineFor = (tier: ActionHookTier) =>
+		(deadlines[tier] ??= ctx.now() + ACTION_BUDGET_MS[event]);
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	let reachedBottom = false;
 	let writerFailed = false;
@@ -121,20 +127,21 @@ export async function dispatchAction<E extends ActionEvent>({
 					// A hook that already called `next` (synchronously, before its first await) is
 					// waiting on the chain beneath it and gets no timer of its own.
 					if (!reachedBottom && !nextCalled) {
-						timer = setTimeout(() => reject(timeout), Math.max(0, deadline - ctx.now()));
+						timer = setTimeout(() => reject(timeout), Math.max(0, deadlineFor(tier) - ctx.now()));
 						timers.add(timer);
 					}
 				}),
 			]);
 			if (nextCalled) {
-				// The writer may still be running when a hook returns without awaiting `next`:
-				// the dispatch settles only once the inner chain has, and a writer error is the
-				// caller's, so it propagates from here.
+				// Once `next` was called, what the chain beneath answered IS the dispatch's answer:
+				// a hook's return after `next` is ignored, so an after-hook can neither replace a
+				// guard's refusal with a value of its own nor lose it by forgetting `return`. The
+				// writer may still be running when the hook returns, so the dispatch settles only
+				// once the inner chain has, and a writer error is the caller's: it propagates.
 				const innerValue = await inner;
-				if (!isActionRefusal(value) || value === innerValue) return value;
-				// A refusal of the hook's own, after the chain beneath it answered: the writer may
-				// have written, so the refusal is a failure and the inner answer stands. Passing
-				// on the refusal an inner guard returned is not that: it is the same value.
+				if (!isActionRefusal(value) || value === innerValue) return innerValue;
+				// A refusal of the hook's own after the chain beneath it answered: the writer may
+				// have written, so it is a failure, and the inner answer stands.
 				reason = 'deny_after_next';
 			} else if (isActionRefusal(value)) {
 				if (tier === 'guard') return value;

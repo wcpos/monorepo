@@ -55,7 +55,9 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
   `source` (`user | replay | system`) are stamped by the dispatcher.
 - `return next(e)` observes; `next({ ...e, payload })` rewrites, and only the event's rewritable
   keys survive (the dispatcher restores the rest); returning `{ deny }` without calling `next`
-  refuses; `await next(e)` then work is the after-hook.
+  refuses; `await next(e)` then work is the after-hook. Once `next` was called, what the chain
+  beneath answered is the dispatch's answer: the hook's own return is ignored, so an after-hook
+  can neither replace a guard's refusal nor lose it by forgetting `return`.
 - A `deny` of the hook's own returned **after** `next` is a failure (the writer has written):
   a strike, and the inner result stands, so nothing is refused. Passing on the refusal an inner
   guard returned is not that. `next` called twice throws into the hook.
@@ -76,7 +78,9 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
 
 ## Budget and strikes
 
-- `ACTION_BUDGET_MS[event]`: one budget shared by every hook on a dispatch; the bottom
+- `ACTION_BUDGET_MS[event]`: one budget per **tier** on a dispatch, started when that tier's
+  first hook runs and shared by the tier's hooks, so a slow extension can never spend the guards'
+  time (total hook latency is bounded by two budgets); the bottom
   handler's time is not counted, and neither is the time a hook spends waiting on `next` (its
   own timer stops when it calls `next`; the hooks beneath keep theirs). A hook still pending at
   the deadline before calling `next` is timed out; it keeps running in JavaScript but its result
