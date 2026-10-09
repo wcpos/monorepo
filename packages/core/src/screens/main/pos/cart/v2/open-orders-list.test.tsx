@@ -96,7 +96,7 @@ it('a list that is leaving does not pull focus back to its selected row', () => 
 	expect(document.activeElement).toBe(screen.getByTestId('tab'));
 });
 
-it('a row says who, what, how long and its status, and the open one carries a check', () => {
+it('a row says who, what, how long and its status; from three entries the line is counted', () => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-10-09T10:30:00Z'));
 	try {
 		const orders = [
@@ -111,6 +111,8 @@ it('a row says who, what, how long and its status, and the open one carries a ch
 							{ name: 'Blue T-shirt', quantity: 2 },
 							{ name: 'Hoodie &amp; Cap', quantity: 1 },
 						],
+						fee_lines: [{ name: 'Gift wrap' }],
+						shipping_lines: [{ method_title: 'Flat rate' }],
 					},
 				} as unknown as EngineRecord<'orders'>,
 			},
@@ -126,17 +128,18 @@ it('a row says who, what, how long and its status, and the open one carries a ch
 			<OpenOrdersList orders={orders} activeValue="b" onSelect={jest.fn()} onClose={jest.fn()} />
 		);
 		expect(screen.getByTestId('avatar').textContent).toBe('AL');
+		// Products with quantity, then the fee, then shipping; four entries, so the count leads.
 		expect(screen.getByTestId('open-orders-row-a-items').textContent).toBe(
-			'Blue T-shirt ×2, Hoodie & Cap'
+			'pos_cart.n_items · Blue T-shirt ×2, Hoodie & Cap, Gift wrap, pos_cart.shipping_item'
 		);
 		expect(screen.getByTestId('open-orders-row-a-age').textContent).toBe(
 			'health.database.n_minutes'
 		);
-		expect(screen.queryByTestId('open-orders-row-a-current')).toBeNull();
-		// The guest's empty cart: a user mark, "Empty", and an age that has gone stale.
+		// The guest's empty cart: a user mark, "Empty", and an age that has gone stale. The open
+		// cart is told by the row itself (aria-selected, the fill and the bar), not by a mark.
 		expect(screen.getByTestId('open-orders-row-b-items').textContent).toBe('pos_cart.cart_empty');
 		expect(screen.getByTestId('open-orders-row-b-age').className).toContain('text-warning');
-		expect(screen.getByTestId('open-orders-row-b-current')).not.toBeNull();
+		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {
 		jest.useRealTimers();

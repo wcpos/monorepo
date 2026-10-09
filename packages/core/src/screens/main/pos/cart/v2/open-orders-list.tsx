@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { decode } from 'html-entities';
-
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -16,11 +14,14 @@ import { useT } from '../../../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../../../hooks/use-local-date';
 import { useNowMs, useRelativeTime } from '../../../../../hooks/use-relative-time';
 import { CartTabTitle } from '../tab-title';
+import { cartContents } from './cart-contents';
 import { TabChip } from './tab-chip';
 
 // The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows
 // must not re-render every second.
 const AGE_TICK_MS = 60_000;
+// From three entries the line leads with its count, so whatever the ellipsis hides is counted.
+const COUNT_FROM = 3;
 // A cart parked for an hour is one somebody forgot: its age turns the warning colour so it
 // stands out from the live ones (Blaze's "parked list grows stale" in one row).
 const STALE_AFTER_MS = 60 * 60_000;
@@ -85,6 +86,7 @@ export function OpenOrdersList({
  * Who, what, how much, how long, and the status (board, chosen 2026-10-09). The item line
  * is what a cashier remembers a cart by when the customer is "Guest"; the age is a quiet
  * number until the cart has waited an hour. Nothing appears on hover: the row is the button.
+ * The open cart is the filled row with the bar on its left; it needs no further mark.
  */
 function OrderRow({
 	order,
@@ -116,12 +118,20 @@ function OrderRow({
 		[selected, takesFocus]
 	);
 	const name = [billing?.first_name, billing?.last_name].filter(Boolean).join(' ');
-	const items = (payload.line_items ?? [])
-		.map(({ name: item, quantity }: { name?: string; quantity?: number | string }) =>
-			Number(quantity) > 1 ? `${decode(item ?? '')} ×${quantity}` : decode(item ?? '')
-		)
-		.filter(Boolean)
-		.join(', ');
+	const entries = cartContents(payload);
+	const parts = entries.map((entry) =>
+		entry.kind === 'line'
+			? entry.quantity > 1
+				? `${entry.name} ×${entry.quantity}`
+				: entry.name
+			: entry.kind === 'fee'
+				? entry.name
+				: t('pos_cart.shipping_item', { method: entry.method })
+	);
+	const items =
+		entries.length >= COUNT_FROM
+			? `${t('pos_cart.n_items', { n: entries.length, count: entries.length })} · ${parts.join(', ')}`
+			: parts.join(', ');
 	const openedMs = payload.date_created_gmt
 		? convertUTCStringToLocalDate(payload.date_created_gmt).getTime()
 		: undefined;
@@ -143,17 +153,9 @@ function OrderRow({
 				</View>
 			)}
 			<View className="min-w-0 flex-1">
-				<HStack space="xs">
-					<Text className="shrink font-semibold" numberOfLines={1}>
-						{name || t('pos_cart.guest')}
-					</Text>
-					{/* The check says "this one is open" without leaning on the fill alone. */}
-					{selected && (
-						<View testID={`open-orders-row-${order.uuid}-current`}>
-							<Icon name="check" size="sm" className="text-primary" />
-						</View>
-					)}
-				</HStack>
+				<Text className="font-semibold" numberOfLines={1}>
+					{name || t('pos_cart.guest')}
+				</Text>
 				<Text
 					testID={`open-orders-row-${order.uuid}-items`}
 					className="text-muted-foreground text-xs"
