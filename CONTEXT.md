@@ -291,8 +291,8 @@ frozen plain data stamped with `actor` and `source`; `ctx` is read-only until th
 _Avoid_: listener (RxDB's side), middleware (we say hook), RxDB's own `preSave` for this
 
 **Guard**:
-A first-party hook (`tier: 'guard'`) that may refuse and fails closed: a timeout, a throw or a
-disabled guard refuses the dispatch. An extension-tier hook may only observe and rewrite and
+A first-party hook (`tier: 'guard'`) that may refuse and fails closed: a timeout, a throw, a
+return without `next`, or a disabled guard refuses the dispatch. An extension-tier hook may only observe and rewrite and
 fails open.
 
 **Bottom handler**:

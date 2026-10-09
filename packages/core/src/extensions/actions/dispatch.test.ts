@@ -224,6 +224,70 @@ it('keeps the inner result when a hook throws after next', async () => {
 	expect(getActionHookState('test.hook').strikes).toBe(1);
 });
 
+it('does not strike an outer guard that passes on an inner guard refusal', async () => {
+	let allow = false;
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'outer.guard',
+		tier: 'guard',
+		order: 0,
+	});
+	registerActionHook('cart.line.add', async (_, e, next) => (allow ? next(e) : denial), {
+		id: 'inner.guard',
+		tier: 'guard',
+		order: 1,
+	});
+	for (let i = 0; i < 3; i++) expect(await dispatch()).toEqual(denial);
+	expect(getActionHookState('outer.guard').strikes).toBe(0);
+	allow = true;
+	expect(await dispatch()).toBe('saved');
+});
+it('skips, rather than refuses for, an extension disabled while a dispatch was in flight', async () => {
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			if (e.payload.line.hold === true) await held;
+			return next(e);
+		},
+		{ id: 'slow.guard', tier: 'guard' }
+	);
+	registerActionHook(
+		'cart.line.add',
+		async () => {
+			throw new Error('broken');
+		},
+		{ id: 'flaky.extension', tier: 'extension' }
+	);
+	const inFlight = dispatchAction({
+		event: 'cart.line.add',
+		input: { ...input, payload: { ...input.payload, line: { quantity: 1, hold: true } } },
+		ctx,
+		bottom,
+		token: createDispatchToken(),
+	});
+	// Three dispatches for other orders strike the extension out while the first is held.
+	await dispatch();
+	await dispatch();
+	await dispatch();
+	expect(getActionHookState('flaky.extension').disabled).toBe(true);
+	release();
+	expect(await inFlight).toBe('saved');
+});
+it('waits for the writer when a hook returns without awaiting next, and surfaces its error', async () => {
+	const error = new Error('writer failed');
+	bottom.mockRejectedValue(error);
+	register(async (_, e, next) => {
+		void next(e);
+		return 'own value';
+	});
+	await expect(dispatch()).rejects.toBe(error);
+	bottom.mockResolvedValue('saved');
+	expect(await dispatch()).toBe('own value');
+	expect(bottom).toHaveBeenCalledTimes(2);
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

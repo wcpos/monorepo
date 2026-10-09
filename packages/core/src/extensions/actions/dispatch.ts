@@ -65,8 +65,12 @@ export async function dispatchAction<E extends ActionEvent>({
 		}
 		const { id: hookId, tier, hook } = hooks[i];
 		if (getActionHookState(hookId).disabled) {
-			// Only a guard is still in the chain once disabled (see getActionHooks): fail closed.
-			return { deny: { reasonKey: 'actions.hook_disabled', detail: { hookId, event } } };
+			// A guard disabled since this dispatch took its hook list fails closed; an extension
+			// disabled in the meantime (a dispatch for another order struck it) is skipped, as
+			// getActionHooks would have skipped it — a refusal from it would be an extension veto.
+			if (tier === 'guard')
+				return { deny: { reasonKey: 'actions.hook_disabled', detail: { hookId, event } } };
+			return runAt(i + 1, e);
 		}
 		let nextCalled = false;
 		let settled = false;
@@ -99,15 +103,21 @@ export async function dispatchAction<E extends ActionEvent>({
 					}
 				}),
 			]);
-			if (isActionRefusal(value)) {
-				if (nextCalled) reason = 'deny_after_next';
-				else if (tier === 'guard') return value;
-				else {
-					ctx.log('warn', 'Extension hook refusal ignored', { context: { hookId, event } });
-					return runAt(i + 1, e);
-				}
-			} else if (nextCalled) return value;
-			else reason = 'returned_without_next';
+			if (nextCalled) {
+				// The writer may still be running when a hook returns without awaiting `next`:
+				// the dispatch settles only once the inner chain has, and a writer error is the
+				// caller's, so it propagates from here.
+				const innerValue = await inner;
+				if (!isActionRefusal(value) || value === innerValue) return value;
+				// A refusal of the hook's own, after the chain beneath it answered: the writer may
+				// have written, so the refusal is a failure and the inner answer stands. Passing
+				// on the refusal an inner guard returned is not that: it is the same value.
+				reason = 'deny_after_next';
+			} else if (isActionRefusal(value)) {
+				if (tier === 'guard') return value;
+				ctx.log('warn', 'Extension hook refusal ignored', { context: { hookId, event } });
+				return runAt(i + 1, e);
+			} else reason = 'returned_without_next';
 		} catch (error) {
 			if (writerFailed && error === writerError) throw error;
 			reason = error === timeout ? 'timeout' : 'threw';
