@@ -192,6 +192,7 @@ export async function dispatchAction<E extends ActionEvent>({
 		// cannot afford, and only the third strike used to be logged.
 		ctx.log('warn', 'Action hook failed', {
 			context: {
+				type: reason === 'timeout' ? 'actions.hook.timeout' : 'actions.hook.failed',
 				hookId,
 				event,
 				reason,
@@ -205,8 +206,8 @@ export async function dispatchAction<E extends ActionEvent>({
 			},
 		});
 		if (state.strikes === ACTION_HOOK_STRIKES)
-			ctx.log('warn', 'Action hook disabled for this session', {
-				context: { hookId, event, strikes: state.strikes },
+			ctx.log('warn', 'Action hook disabled', {
+				context: { type: 'actions.hook.disabled', hookId, event, strikes: state.strikes },
 			});
 		if (nextCalled) return inner;
 		return tier === 'extension'

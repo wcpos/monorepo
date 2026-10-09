@@ -6,6 +6,9 @@
  * when the engine emits a type this registry does not label.
  */
 export const SYNC_EVENT_TYPES = [
+	'actions.hook.disabled',
+	'actions.hook.failed',
+	'actions.hook.timeout',
 	'apply.barcode-rederive',
 	'apply.delete',
 	'apply.escalation',
@@ -163,6 +166,35 @@ export interface EventLabelEntry {
 }
 
 export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
+	'actions.hook.disabled': {
+		type: 'actions.hook.disabled',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.actions_hook_disabled',
+		label: 'An add-on was switched off',
+		descriptionKey: 'health.logs.event_description.actions_hook_disabled',
+		description:
+			'A hook on a POS action failed three times in this session and is switched off until the app restarts. A guard that is switched off refuses its action.',
+		introducedIn: '2.0.0',
+	},
+	'actions.hook.failed': {
+		type: 'actions.hook.failed',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.actions_hook_failed',
+		label: 'An add-on failed',
+		descriptionKey: 'health.logs.event_description.actions_hook_failed',
+		description: 'A hook on a POS action threw or returned something the action could not use.',
+		introducedIn: '2.0.0',
+	},
+	'actions.hook.timeout': {
+		type: 'actions.hook.timeout',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.actions_hook_timeout',
+		label: 'An add-on ran out of time',
+		descriptionKey: 'health.logs.event_description.actions_hook_timeout',
+		description:
+			'A hook on a POS action took longer than its budget. The action was refused if the hook was a guard, and skipped the hook otherwise.',
+		introducedIn: '2.0.0',
+	},
 	'apply.barcode-rederive': {
 		type: 'apply.barcode-rederive',
 		domain: 'SYNC',

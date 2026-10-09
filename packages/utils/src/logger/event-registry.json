@@ -1,5 +1,26 @@
 [
 	{
+		"type": "actions.hook.disabled",
+		"domain": "CHECKOUT",
+		"label": "An add-on was switched off",
+		"description": "A hook on a POS action failed three times in this session and is switched off until the app restarts. A guard that is switched off refuses its action.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "actions.hook.failed",
+		"domain": "CHECKOUT",
+		"label": "An add-on failed",
+		"description": "A hook on a POS action threw or returned something the action could not use.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "actions.hook.timeout",
+		"domain": "CHECKOUT",
+		"label": "An add-on ran out of time",
+		"description": "A hook on a POS action took longer than its budget. The action was refused if the hook was a guard, and skipped the hook otherwise.",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "apply.barcode-rederive",
 		"domain": "SYNC",
 		"label": "Rebuilt barcode lookups",

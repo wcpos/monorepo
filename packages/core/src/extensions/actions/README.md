@@ -132,6 +132,12 @@ failed`, with the reason and the error message); the disabling writes one more. 
   dispatch with `actions.hook_disabled`, because a money-path guard that silently dropped out
   would fail open.
 
+## Rows
+
+The dispatcher writes `actions.hook.timeout` on a timeout strike and `actions.hook.failed`
+on every other strike. The strike that switches a hook off also writes its own
+`actions.hook.disabled` row. All three have registered Logs titles.
+
 ## Required guards
 
 A money path passes `requiredGuards: [...ids]` to `dispatchAction`; if any is not registered as a

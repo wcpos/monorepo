@@ -38,6 +38,13 @@ describe('useEventTitle', () => {
 		expect(title).not.toContain(EVENT_LABELS['queue.scheduler.drain'].label);
 	});
 
+	it('renders the registered title for a disabled action hook, not its raw code', () => {
+		const title = titleFor(row({ context: { type: 'actions.hook.disabled' } }));
+
+		expect(title).toBe('[es] health.logs.event.actions_hook_disabled');
+		expect(title).not.toBe('actions.hook.disabled');
+	});
+
 	it('never shows a raw dotted code as the title of a registered event', () => {
 		for (const type of Object.keys(EVENT_LABELS)) {
 			expect(titleFor(row({ context: { type } }))).not.toMatch(/^[a-z][a-z0-9_-]*\./);

@@ -1,0 +1,41 @@
+{
+	"packages/core/src/screens/main/pos/cart/add-customer.tsx": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/cart/buttons/edit-order-meta/form.tsx": {
+		"local-write": 3
+	},
+	"packages/core/src/screens/main/pos/cart/edit-cart-customer.tsx": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/cart/totals/customer-note.tsx": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/contexts/current-order/temporary-order.ts": {
+		"collection-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-add-coupon.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-add-customer.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-add-quick-discount.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-cart-settlement.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-remove-coupon.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts": {
+		"local-write": 2
+	},
+	"packages/core/src/screens/main/pos/hooks/use-update-fee-line.ts": {
+		"local-write": 1
+	},
+	"packages/core/src/screens/main/pos/hooks/use-update-shipping-line.ts": {
+		"local-write": 1
+	}
+}
