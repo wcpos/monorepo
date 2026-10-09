@@ -86,6 +86,13 @@ export async function dispatchAction<E extends ActionEvent>({
 					Object.assign(payload, { [key]: rewrite.payload[key as keyof typeof rewrite.payload] });
 			}
 			nextCalled = true;
+			// From here the hook is waiting on the chain beneath it, whose hooks keep their own
+			// timers against the same deadline: a timeout now would be theirs, not this hook's.
+			if (timer !== undefined) {
+				clearTimeout(timer);
+				timers.delete(timer);
+				timer = undefined;
+			}
 			inner = runAt(i + 1, clone({ ...e, payload }));
 			return inner;
 		};
@@ -143,5 +150,5 @@ export async function dispatchAction<E extends ActionEvent>({
 					},
 				};
 	}
-	return run(clone({ event, ...input }));
+	return run(clone({ ...input, event }));
 }

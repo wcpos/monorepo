@@ -56,27 +56,31 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
 - `return next(e)` observes; `next({ ...e, payload })` rewrites, and only the event's rewritable
   keys survive (the dispatcher restores the rest); returning `{ deny }` without calling `next`
   refuses; `await next(e)` then work is the after-hook.
-- A `deny` returned **after** `next` is a failure (the writer has written): a strike, and the
-  inner result stands. `next` called twice throws into the hook.
+- A `deny` of the hook's own returned **after** `next` is a failure (the writer has written):
+  a strike, and the inner result stands, so nothing is refused. Passing on the refusal an inner
+  guard returned is not that. `next` called twice throws into the hook.
 
 ## Tiers and order
 
-- `guard`: first-party only, runs **outermost**, may refuse, **fails closed**: a timeout refuses
-  with `actions.hook_timeout`; a throw, a return without `next`, or a deny of its own after `next`
-  refuses with `actions.hook_failed` (the last keeps the inner answer); disabled refuses with
-  `actions.hook_disabled`. Passing on the refusal an inner guard returned is not a strike.
+- `guard`: first-party only, runs **innermost** (right before the writer, after every
+  extension's rewrite), may refuse, **fails closed**: a timeout before `next` refuses with
+  `actions.hook_timeout`; a throw or a return without `next` refuses with `actions.hook_failed`;
+  disabled refuses with `actions.hook_disabled`. A deny of its own after `next` is a strike and
+  the inner answer stands. Passing on the refusal an inner guard returned is not a strike.
 - `extension`: may observe and rewrite; its `deny` is ignored and logged; **fails open** (a
   timeout or throw skips it).
-- Chain: guards by `order` then `id`, then extensions the same way, then the bottom handler.
-  A guard that must judge the _final_ payload registers with the highest `order` among guards;
-  rewrites flow inward, so it sees what the extensions before it left.
+- Chain: extensions by `order` then `id`, then guards the same way, then the bottom handler.
+  Rewrites flow inward, so every guard judges the payload the writer will write and an extension
+  can never rewrite past a guard. The price: an extension's after-work runs after the guards'
+  refusal is known, never before; and a refusal costs the extensions' work first.
 
 ## Budget and strikes
 
 - `ACTION_BUDGET_MS[event]`: one budget shared by every hook on a dispatch; the bottom
-  handler's time is not counted. A hook still pending at the deadline is timed out; it keeps
-  running in JavaScript but its result is ignored and it can reach nothing (`ctx` is read-only
-  and no document is in reach).
+  handler's time is not counted, and neither is the time a hook spends waiting on `next` (its
+  own timer stops when it calls `next`; the hooks beneath keep theirs). A hook still pending at
+  the deadline before calling `next` is timed out; it keeps running in JavaScript but its result
+  is ignored and it can reach nothing (`ctx` is frozen and read-only, no document is in reach).
 - `ACTION_HOOK_STRIKES` failures in a session (a timeout, a throw, a return without `next`, or a
   deny of its own after `next`) switch a hook off; one warn row names it. A disabled extension leaves the chain. A disabled **guard stays** and refuses every
   dispatch with `actions.hook_disabled`, because a money-path guard that silently dropped out

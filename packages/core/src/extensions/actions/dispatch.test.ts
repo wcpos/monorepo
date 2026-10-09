@@ -288,6 +288,53 @@ it('waits for the writer when a hook returns without awaiting next, and surfaces
 	expect(await dispatch()).toBe('own value');
 	expect(bottom).toHaveBeenCalledTimes(2);
 });
+it('does not strike a guard that is only waiting on next while an inner hook times out', async () => {
+	jest.useFakeTimers();
+	// Extensions run first now, so the slow hook here is an inner guard beneath a waiting one.
+	registerActionHook('cart.line.add', async (_, e, next) => next(e), {
+		id: 'waiting.guard',
+		tier: 'guard',
+		order: 0,
+	});
+	registerActionHook('cart.line.add', async () => new Promise(() => undefined), {
+		id: 'slow.guard',
+		tier: 'guard',
+		order: 1,
+	});
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1500);
+	expect(await result).toEqual({
+		deny: {
+			reasonKey: 'actions.hook_timeout',
+			detail: { hookId: 'slow.guard', event: 'cart.line.add' },
+		},
+	});
+	expect(getActionHookState('waiting.guard').strikes).toBe(0);
+	expect(getActionHookState('slow.guard').strikes).toBe(1);
+});
+it('lets a guard judge the payload after an extension rewrote it', async () => {
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => next({ ...e, payload: { ...e.payload, line: { quantity: 100 } } }),
+		{ id: 'greedy.extension', tier: 'extension' }
+	);
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => ((e.payload.line.quantity as number) > 10 ? denial : next(e)),
+		{ id: 'stock.guard', tier: 'guard' }
+	);
+	expect(await dispatch()).toEqual(denial);
+	expect(bottom).not.toHaveBeenCalled();
+});
+it('does not let a hook replace a context noun', async () => {
+	register(async (ctx, e, next) => {
+		expect(() => {
+			(ctx.read as { catalog: unknown }).catalog = async () => ({ hacked: true });
+		}).toThrow(TypeError);
+		return next(e);
+	});
+	expect(await dispatch()).toBe('saved');
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

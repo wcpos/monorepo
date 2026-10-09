@@ -292,8 +292,9 @@ _Avoid_: listener (RxDB's side), middleware (we say hook), RxDB's own `preSave` 
 
 **Guard**:
 A first-party hook (`tier: 'guard'`) that may refuse and fails closed: a timeout, a throw, a
-return without `next`, or a disabled guard refuses the dispatch. An extension-tier hook may only observe and rewrite and
-fails open.
+return without `next`, or a disabled guard refuses the dispatch. Guards run last, right before
+the writer, so they judge the payload after every extension's rewrite. An extension-tier hook
+may only observe and rewrite and fails open.
 
 **Bottom handler**:
 The one function that writes for an action event; nothing else writes that collection for that

@@ -12,7 +12,7 @@ const pass: ActionHook<'cart.line.add'> = async (_, e, next) => next(e);
 beforeEach(() => resetActionRegistry());
 afterEach(() => jest.restoreAllMocks());
 
-it('orders guards before extensions, then by order and id within each tier', () => {
+it('orders extensions before guards, then by order and id within each tier', () => {
 	for (const tier of ['extension', 'guard'] as const) {
 		for (const [id, order] of [
 			['z', 1],
@@ -23,12 +23,12 @@ it('orders guards before extensions, then by order and id within each tier', () 
 		}
 	}
 	expect(getActionHooks('cart.line.add').map(({ id }) => id)).toEqual([
-		'guard.first',
-		'guard.a',
-		'guard.z',
 		'extension.first',
 		'extension.a',
 		'extension.z',
+		'guard.first',
+		'guard.a',
+		'guard.z',
 	]);
 });
 it('keeps snapshots stable until registration changes', () => {

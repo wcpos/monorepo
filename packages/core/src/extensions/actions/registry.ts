@@ -45,7 +45,10 @@ export function registerActionHook<E extends ActionEvent>(
 	snapshots.delete(event);
 }
 /**
- * Guards first; order then id within each tier. Stable until registration or disablement.
+ * Extensions first, guards last; order then id within each tier. Stable until registration or
+ * disablement. Guards run innermost, right before the writer, so a guard judges the payload the
+ * writer will write — after every extension's rewrite — and an extension can never slip a value
+ * past a guard that already passed (the review of #2454 found the outermost order allowed that).
  * A disabled extension leaves the chain; a disabled guard STAYS, so the dispatcher refuses for
  * it (a money-path guard that silently dropped out after three strikes would fail open).
  */
@@ -57,7 +60,7 @@ export function getActionHooks<E extends ActionEvent>(event: E): readonly Regist
 				.filter(({ id, tier }) => tier === 'guard' || !getActionHookState(id).disabled)
 				.sort(
 					(a, b) =>
-						Number(a.tier === 'extension') - Number(b.tier === 'extension') ||
+						Number(a.tier === 'guard') - Number(b.tier === 'guard') ||
 						a.order - b.order ||
 						a.id.localeCompare(b.id)
 				)

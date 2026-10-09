@@ -13,5 +13,12 @@ export function createActionContext({
 	readCatalog: ActionContext['read']['catalog'];
 	preventOverselling: boolean;
 }): ActionContext {
-	return { log, t, now, read: { catalog: readCatalog }, store: { preventOverselling } };
+	// Frozen so a hook cannot swap a noun out from under the hooks after it.
+	return Object.freeze({
+		log,
+		t,
+		now,
+		read: Object.freeze({ catalog: readCatalog }),
+		store: Object.freeze({ preventOverselling }),
+	});
 }
