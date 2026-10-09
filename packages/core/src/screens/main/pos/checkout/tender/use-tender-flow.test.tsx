@@ -2410,24 +2410,6 @@ jest.mock('../sale-completion', () => {
 				}
 			}
 		),
-		prepareSale: jest.fn(
-			async (
-				_ctx: import('../sale-completion').SaleContext,
-				input: Parameters<typeof actual.prepareSale>[1]
-			) => {
-				if (input.completing && input.bindingStatus === 'choose')
-					return { ok: false, reason: 'choose_register' };
-				if (mockSessionsOn && !mockSessionId)
-					throw new (jest.requireActual(
-						'../../../../../services/register-session/session-store'
-					).RegisterSessionRequiredError)();
-				return {
-					ok: true,
-					registerId: mockBoundRegisterId,
-					sessionId: mockSessionsOn ? mockSessionId : null,
-				};
-			}
-		),
 	};
 });
 
@@ -3119,6 +3101,69 @@ it('refuses the commit when a cart edit queued before Pay moved the balance', as
 	// Refused before any gate or leg ran: nothing resolved, nothing recorded.
 	expect(mockResolveSession).not.toHaveBeenCalled();
 	expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
+});
+
+it("writes the session's pre-action reset in the handler, after the gate's read and before the attempt record", async () => {
+	jest.clearAllMocks();
+	mockSessionsOn = true;
+	mockSessionId = 'session';
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { requireOpenSession } = jest.requireMock(
+		'../../../../../services/register-session/session-store'
+	) as { requireOpenSession: jest.Mock };
+	requireOpenSession.mockClear();
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => result.current.takeTender());
+	// The gate read first, the handler then wrote, then the attempt was recorded.
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(requireOpenSession).toHaveBeenCalledTimes(1);
+	// The fixture's sale context carries no session collection; the register id and the flag are the facts.
+	expect(requireOpenSession.mock.calls[0].slice(1)).toEqual(['register', true]);
+	expect(jest.mocked(recordCompletionAttempt)).toHaveBeenCalledTimes(1);
+	expect(mockResolveSession.mock.invocationCallOrder[0]).toBeLessThan(
+		requireOpenSession.mock.invocationCallOrder[0]
+	);
+	expect(requireOpenSession.mock.invocationCallOrder[0]).toBeLessThan(
+		jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]
+	);
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+});
+
+it('a session closed between the gate and the write refuses with the open-register toast, no attempt, no payment', async () => {
+	jest.clearAllMocks();
+	mockSessionsOn = true;
+	mockSessionId = 'session';
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { requireOpenSession } = jest.requireMock(
+		'../../../../../services/register-session/session-store'
+	) as { requireOpenSession: jest.Mock };
+	requireOpenSession.mockImplementationOnce(async () => {
+		throw new RegisterSessionRequiredError();
+	});
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => {
+		await expect(result.current.takeTender()).resolves.toBeUndefined();
+	});
+	expect(mockResolveSession).toHaveBeenCalledTimes(1);
+	expect(mockInfo).toHaveBeenCalledWith(
+		'pos_checkout.open_register_first',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(jest.mocked(recordCompletionAttempt)).not.toHaveBeenCalled();
 	expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	expect(result.current.busy).toBe(false);
 });

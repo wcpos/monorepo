@@ -45,6 +45,13 @@ jest.mock('../../../../services/register/register-document', () => ({
 jest.mock('../../../../services/register-session/session-store', () => ({
 	...jest.requireActual('../../../../services/register-session/session-store'),
 	findOpenSession: (...args: unknown[]) => mockFindOpenSession(...args),
+	// The writing helper, stubbed to write visibly: if the resolver ever used it, the
+	// "never writes" assertion below is what fails, not a fixture type error.
+	requireOpenSession: async (...args: unknown[]) => {
+		const session = await mockFindOpenSession(...args);
+		await session?.incrementalPatch({ server_expected: null, server_sales_count: null });
+		return session?.id ?? null;
+	},
 }));
 jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
 	useRegisterSessionCollection: () => 'sessions',
