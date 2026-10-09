@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { Option } from '@wcpos/components/combobox/types';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -55,7 +55,7 @@ export function CartHeader() {
 		}
 	}, []);
 	return (
-		<HStack className="border-border min-h-ctl border-b py-2">
+		<HStack className="border-border min-h-ctl border-b px-2 py-2">
 			{/* `min-w-0` and the shrinking wrapper: a long customer name truncates instead of
 			    pushing the add and settings controls off the row. */}
 			<HStack className="h-ctl min-w-0 flex-1">
@@ -71,14 +71,11 @@ export function CartHeader() {
 							>
 								{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
 								<ComboboxTrigger ref={triggerRef} asChild>
-									<ButtonPill
+									<Chip
 										testID="cart-customer-select"
-										size="xs"
-										rightIcon="chevronDown"
-										variant="outline"
-									>
-										<ButtonText>{t('common.select_customer')}</ButtonText>
-									</ButtonPill>
+										icon="user"
+										label={t('common.select_customer')}
+									/>
 								</ComboboxTrigger>
 								<ComboboxContent>
 									<CustomerSearch withGuest />

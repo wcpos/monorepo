@@ -142,8 +142,10 @@ export function OpenOrders({
 			strip={barInStrip}
 		/>
 	);
+	// In its column the cart has no frame of its own: the register bar, the customer row and
+	// the foot run their hairlines to the column's edges (Paul, 2026-10-09).
 	return (
-		<VStack className={`h-full gap-1 p-2 ${isColumn ? 'bg-card pl-0' : ''}`}>
+		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(

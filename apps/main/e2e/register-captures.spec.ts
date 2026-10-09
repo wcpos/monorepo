@@ -224,16 +224,20 @@ for (const [device, viewport] of Object.entries({
 						}
 					);
 					await state('order-sheet-open', () => openOrderSheet(page), escape);
-					await state(
-						'open-orders-list',
-						async () => {
-							await page.getByTestId('open-orders-count').click();
-							await expect(page.getByTestId('open-orders-list')).toBeVisible();
-						},
-						async () => {
-							await page.getByTestId('open-orders-close').click();
-						}
-					);
+					// The tray (count + list) only exists once the open carts overflow the strip
+					// (2026-10-09); a store with a few carts has no list to capture.
+					if (await page.getByTestId('open-orders-count').isVisible()) {
+						await state(
+							'open-orders-list',
+							async () => {
+								await page.getByTestId('open-orders-count').click();
+								await expect(page.getByTestId('open-orders-list')).toBeVisible();
+							},
+							async () => {
+								await page.getByTestId('open-orders-close').click();
+							}
+						);
+					}
 					await state(
 						'cart-settings',
 						async () => {

@@ -43,8 +43,11 @@ export function Chip({
 			{icon && <Icon name={icon} className="text-foreground" />}
 			<Text
 				testID={onClear ? undefined : id('label')}
+				// One line: a long label (a customer's full name) truncates inside the pill
+				// instead of pushing the pill over the controls beside it.
+				numberOfLines={1}
 				className={cn(
-					'text-base font-medium',
+					'shrink text-base font-medium',
 					add ? 'text-muted-foreground' : 'text-foreground',
 					on && 'text-primary font-semibold'
 				)}
@@ -75,7 +78,7 @@ export function Chip({
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
 				// drawn chip is inline-flex.
-				'h-ctl bg-card active:bg-muted web:hover:bg-muted flex-row items-center gap-1.5 self-start rounded-full border px-3',
+				'h-ctl bg-card active:bg-muted web:hover:bg-muted max-w-full flex-row items-center gap-1.5 self-start rounded-full border px-3',
 				on ? 'border-primary' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',

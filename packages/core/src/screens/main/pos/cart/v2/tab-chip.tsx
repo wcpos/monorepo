@@ -21,6 +21,7 @@ export function TabChip({
 	compact = false,
 	fallbackLabel,
 	fallbackIsStatus = false,
+	testIDs = true,
 }: {
 	order: EngineRecord<'orders'>;
 	active?: boolean;
@@ -28,6 +29,8 @@ export function TabChip({
 	fallbackLabel?: string;
 	/** The fallback is a real order status (the open-orders list), not the strip's "Cart" word. */
 	fallbackIsStatus?: boolean;
+	/** Off: a copy rendered for measurement only, so a testID still points at one element. */
+	testIDs?: boolean;
 }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
@@ -71,14 +74,17 @@ export function TabChip({
 	// status at all, so it never gets a dot on any tab.
 	if (active || (label === fallbackLabel && !fallbackIsStatus)) {
 		return compact ? null : (
-			<Text testID={`open-order-status-${order.uuid}`} className="text-muted-foreground text-sm">
+			<Text
+				testID={testIDs ? `open-order-status-${order.uuid}` : undefined}
+				className="text-muted-foreground text-sm"
+			>
 				{label}
 			</Text>
 		);
 	}
 	return (
 		<StatusBadge
-			testID={`open-order-chip-${order.uuid}`}
+			testID={testIDs ? `open-order-chip-${order.uuid}` : undefined}
 			label={compact ? '' : label}
 			accessibilityLabel={label}
 			variant={saveState?.kind === 'rejected' ? 'error' : stage === 'receipt' ? 'success' : 'info'}
