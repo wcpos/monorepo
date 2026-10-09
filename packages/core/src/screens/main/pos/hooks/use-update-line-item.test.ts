@@ -242,6 +242,7 @@ describe('useUpdateLineItem', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalled();
 		expect(mockLoggerWarn).toHaveBeenCalledWith('Product will be backordered', {
+			category: ['wcpos', 'pos', 'cart', 'stock'],
 			toast: { title: 'pos_cart.will_be_backordered' },
 			showToast: true,
 		});

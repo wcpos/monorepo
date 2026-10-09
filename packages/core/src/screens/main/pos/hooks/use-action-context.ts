@@ -13,7 +13,7 @@ import {
 } from '../../../../extensions/actions';
 import { useRegister } from '../../../../services/register/use-register';
 
-const logger = getLogger(['wcpos', 'pos', 'actions']);
+const ACTIONS_CATEGORY = ['wcpos', 'pos', 'actions'];
 
 export function useActionContext(): { ctx: ActionContext; actor: ActionActor } {
 	const runtime = useQueryRuntime();
@@ -28,8 +28,15 @@ export function useActionContext(): { ctx: ActionContext; actor: ActionActor } {
 			ctx: createActionContext({
 				// The logger's `error` wants a code the contract does not carry; a hook's row is a warn
 				// at most, so the widened call is safe and the type is the only thing in the way.
-				log: (level, message, options) =>
-					(logger[level] as (message: string, options?: unknown) => void)(message, options),
+				log: (level, message, options) => {
+					const { category, ...rest } = options ?? {};
+					(
+						getLogger([...(category ?? ACTIONS_CATEGORY)])[level] as (
+							message: string,
+							options?: unknown
+						) => void
+					)(message, rest);
+				},
 				t,
 				readCatalog: async (kind, id) =>
 					(await readStockDocument(

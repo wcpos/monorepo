@@ -12,6 +12,8 @@ import type {
 } from '../../../../extensions/actions';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+/** The category the hook it replaced logged under; the logs screen filters by prefix. */
+const STOCK_LOG_CATEGORY = ['wcpos', 'pos', 'cart', 'stock'] as const;
 type StockArgs = Omit<
 	Parameters<typeof aggregateExistingCartQuantity>[0],
 	'product' | 'variation'
@@ -48,6 +50,7 @@ export async function evaluateCartStock(ctx: ActionContext, args: StockArgs) {
 					? 'Stock check failed because availability is unknown'
 					: 'Stock check found insufficient inventory',
 			{
+				category: STOCK_LOG_CATEGORY,
 				showToast: true,
 				toast: { title: ctx.t(reasonKey, params) },
 				context: missing
@@ -82,6 +85,7 @@ async function guardStock<E extends ActionEvent>(
 	const result = await next(e);
 	if (stock.warning === 'backorder')
 		ctx.log('warn', 'Product will be backordered', {
+			category: STOCK_LOG_CATEGORY,
 			toast: { title: ctx.t('pos_cart.will_be_backordered', { name: stock.name }) },
 			showToast: true,
 		});

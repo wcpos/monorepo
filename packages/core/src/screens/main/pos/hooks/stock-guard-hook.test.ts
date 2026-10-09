@@ -43,6 +43,7 @@ it('refuses insufficient stock with the existing toast key and params', async ()
 	});
 	expect(next).not.toHaveBeenCalled();
 	expect(log).toHaveBeenCalledWith('warn', 'Stock check found insufficient inventory', {
+		category: ['wcpos', 'pos', 'cart', 'stock'],
 		showToast: true,
 		toast: { title: 'pos_cart.only_n_available' },
 		context: { productId: 1, variationId: 0, available: 1 },
@@ -55,6 +56,7 @@ it('refuses unknown stock with the existing out-of-stock toast', async () => {
 	});
 	expect(next).not.toHaveBeenCalled();
 	expect(log).toHaveBeenCalledWith('warn', 'Product is out of stock', {
+		category: ['wcpos', 'pos', 'cart', 'stock'],
 		showToast: true,
 		toast: { title: 'pos_products.out_of_stock' },
 		context: { productId: 1, variationId: 0, reason: 'missing_stock_record' },
@@ -64,6 +66,7 @@ it('warns about a backorder only after next resolves', async () => {
 	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 1, backorders: 'notify' });
 	expect(await stockGuardOnAdd(ctx, e, next)).toBe('saved');
 	expect(log).toHaveBeenCalledWith('warn', 'Product will be backordered', {
+		category: ['wcpos', 'pos', 'cart', 'stock'],
 		toast: { title: 'pos_cart.will_be_backordered' },
 		showToast: true,
 	});
