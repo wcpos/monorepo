@@ -77,6 +77,7 @@ export async function dispatchAction<E extends ActionEvent>({
 		let inner: Promise<ActionResult<E>> | undefined;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const timeout = Symbol('timeout');
+		let rejectRace: (reason: unknown) => void = () => undefined;
 		const next: ActionNext<E> = (rewrite) => {
 			if (nextCalled) throw new Error('next called twice');
 			if (settled) return Promise.resolve(undefined); // Late next cannot write after refusal/skip.
@@ -85,6 +86,9 @@ export async function dispatchAction<E extends ActionEvent>({
 				if (key in rewrite.payload)
 					Object.assign(payload, { [key]: rewrite.payload[key as keyof typeof rewrite.payload] });
 			}
+			// Clone before anything is recorded: a rewrite that cannot be cloned (a cycle, a
+			// BigInt) throws into the hook as any other hook error, with `next` not yet called.
+			const rewritten = clone({ ...e, payload });
 			nextCalled = true;
 			// From here the hook is waiting on the chain beneath it, whose hooks keep their own
 			// timers against the same deadline: a timeout now would be theirs, not this hook's.
@@ -93,8 +97,17 @@ export async function dispatchAction<E extends ActionEvent>({
 				timers.delete(timer);
 				timer = undefined;
 			}
-			inner = runAt(i + 1, clone({ ...e, payload }));
+			inner = runAt(i + 1, rewritten);
+			// After-work (what the hook does once the chain beneath has answered) gets a budget
+			// of its own, so a hook that never returns cannot leave the dispatch, and the order's
+			// queue behind it, pending forever. On timeout the inner answer stands.
+			inner.then(startAfterTimer, startAfterTimer);
 			return inner;
+		};
+		const startAfterTimer = () => {
+			if (settled || timer !== undefined) return;
+			timer = setTimeout(() => rejectRace(timeout), ACTION_BUDGET_MS[event]);
+			timers.add(timer);
 		};
 		let reason: string;
 		try {
@@ -104,7 +117,10 @@ export async function dispatchAction<E extends ActionEvent>({
 			const value = await Promise.race([
 				pending,
 				new Promise<never>((_, reject) => {
-					if (!reachedBottom) {
+					rejectRace = reject;
+					// A hook that already called `next` (synchronously, before its first await) is
+					// waiting on the chain beneath it and gets no timer of its own.
+					if (!reachedBottom && !nextCalled) {
 						timer = setTimeout(() => reject(timeout), Math.max(0, deadline - ctx.now()));
 						timers.add(timer);
 					}

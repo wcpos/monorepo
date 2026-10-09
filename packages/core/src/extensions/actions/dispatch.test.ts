@@ -335,6 +335,63 @@ it('does not let a hook replace a context noun', async () => {
 	});
 	expect(await dispatch()).toBe('saved');
 });
+it('gives a hook that calls next synchronously no timer of its own', async () => {
+	jest.useFakeTimers();
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	// Calls next before its first await, so next runs before the race's timer is created.
+	registerActionHook('cart.line.add', (_, e, next) => next(e), {
+		id: 'forwarding.guard',
+		tier: 'guard',
+		order: 0,
+	});
+	registerActionHook(
+		'cart.line.add',
+		async (_, e, next) => {
+			await held;
+			return next(e);
+		},
+		{ id: 'reading.guard', tier: 'guard', order: 1 }
+	);
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1500);
+	expect(getActionHookState('forwarding.guard').strikes).toBe(0);
+	expect(await result).toEqual({
+		deny: {
+			reasonKey: 'actions.hook_timeout',
+			detail: { hookId: 'reading.guard', event: 'cart.line.add' },
+		},
+	});
+	release();
+});
+it('times out after-work that never returns, keeps the inner answer and strikes the hook', async () => {
+	jest.useFakeTimers();
+	register(async (_, e, next) => {
+		await next(e);
+		await new Promise(() => undefined);
+		return 'never';
+	});
+	const result = dispatch();
+	await jest.advanceTimersByTimeAsync(1500);
+	expect(await result).toBe('saved');
+	expect(bottom).toHaveBeenCalledTimes(1);
+	expect(getActionHookState('test.hook').strikes).toBe(1);
+});
+it('treats a rewrite that cannot be cloned as a hook failure with next not called', async () => {
+	const cyclic: Record<string, unknown> = {};
+	cyclic.self = cyclic;
+	register(async (_, e, next) => next({ ...e, payload: { ...e.payload, line: cyclic } }));
+	expect(await dispatch()).toEqual({
+		deny: {
+			reasonKey: 'actions.hook_failed',
+			detail: { hookId: 'test.hook', event: 'cart.line.add' },
+		},
+	});
+	expect(bottom).not.toHaveBeenCalled();
+	expect(getActionHookState('test.hook').strikes).toBe(1);
+});
 it('refuses a disabled guard without calling it or bottom', async () => {
 	const hook = jest.fn(async () => {
 		throw new Error('broken');

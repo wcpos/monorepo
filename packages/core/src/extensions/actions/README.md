@@ -81,6 +81,9 @@ const hook: ActionHook<'cart.line.add'> = async (ctx, e, next) => {
   own timer stops when it calls `next`; the hooks beneath keep theirs). A hook still pending at
   the deadline before calling `next` is timed out; it keeps running in JavaScript but its result
   is ignored and it can reach nothing (`ctx` is frozen and read-only, no document is in reach).
+  After-work (once `next` has answered) gets a fresh budget of the same length: a hook that never
+  returns is struck and the inner answer stands, so the dispatch, and the order's queue behind it,
+  never hang.
 - `ACTION_HOOK_STRIKES` failures in a session (a timeout, a throw, a return without `next`, or a
   deny of its own after `next`) switch a hook off; one warn row names it. A disabled extension leaves the chain. A disabled **guard stays** and refuses every
   dispatch with `actions.hook_disabled`, because a money-path guard that silently dropped out
