@@ -514,3 +514,26 @@ it('does not fallback-stamp an accepted response whose status is still partial',
 	expect(mockLocalPatch).not.toHaveBeenCalled();
 	expect(jest.requireMock('../sale-completion').completionMetaFor).not.toHaveBeenCalled();
 });
+
+it('uses the ids the tender gates handed over and does not resolve the session again', async () => {
+	const { result } = renderHook(() => useRecordManualPayment());
+	const { prepareSale } = jest.requireMock('../sale-completion') as {
+		prepareSale: jest.Mock;
+	};
+	prepareSale.mockClear();
+
+	await act(() =>
+		result.current(order, method, {
+			amount: 40,
+			tendered: 50,
+			session: { registerId: 'register-from-gate', sessionId: 'session-from-gate' },
+		})
+	);
+
+	expect(prepareSale).not.toHaveBeenCalled();
+	const { readLedger } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const row = readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0];
+	expect(row.session_id).toBe('session-from-gate');
+	expect(row.register_id).toBe('register-from-gate');
+});

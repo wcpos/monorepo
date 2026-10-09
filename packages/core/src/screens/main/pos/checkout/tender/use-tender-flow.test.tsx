@@ -575,10 +575,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
-			amount: '92.95',
-			tendered: '100.00',
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			cash,
+			expect.objectContaining({
+				amount: '92.95',
+				tendered: '100.00',
+			})
+		);
 	});
 
 	it('completes a fully paid online order after the record resolves', async () => {
@@ -640,10 +644,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
-			amount: '50.00',
-			tendered: '50.00',
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			cash,
+			expect.objectContaining({
+				amount: '50.00',
+				tendered: '50.00',
+			})
+		);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
@@ -663,10 +671,14 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.takeTender());
 
-		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, card, {
-			amount: '92.95',
-			tendered: null,
-		});
+		expect(mockRecordManualPayment).toHaveBeenCalledWith(
+			order,
+			card,
+			expect.objectContaining({
+				amount: '92.95',
+				tendered: null,
+			})
+		);
 	});
 
 	it('uses a split share as the next tender pre-fill', async () => {
@@ -731,6 +743,9 @@ describe('useTenderFlow', () => {
 				value: { schema: 1, payments: [payment(), payment({ id: 'void', status: 'voided' })] },
 			},
 		];
+		// In the app the ledger change re-renders the keypad before the next tap; without this the
+		// commit sees a balance that moved since the keypad was drawn and refuses, as it should.
+		rerender();
 		await act(async () => result.current.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
@@ -3067,4 +3082,43 @@ it('waits for the order mutation queue before resolving the session or recording
 	}
 	expect(mockResolveSession).toHaveBeenCalledTimes(1);
 	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+});
+
+it('refuses the commit when a cart edit queued before Pay moved the balance', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	mockMethods = [cash];
+	mockPayload = { id: 42, total: '92.95', meta_data: [] };
+	mockBlockIfDegraded.mockReturnValue(false);
+	let release!: () => void;
+	// The edit ahead in the queue changes the order's total while the keypad still shows 92.95.
+	const ahead = enqueueOrderMutation(
+		order.uuid,
+		() =>
+			new Promise<void>((resolve) => {
+				release = () => {
+					mockPayload.total = '100.00';
+					resolve();
+				};
+			})
+	);
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	let taking!: Promise<void>;
+	await act(async () => {
+		taking = result.current.takeTender();
+		await Promise.resolve();
+	});
+	await act(async () => {
+		release();
+		await ahead;
+		await taking;
+	});
+	// Refused before any gate or leg ran: nothing resolved, nothing recorded.
+	expect(mockResolveSession).not.toHaveBeenCalled();
+	expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
 });

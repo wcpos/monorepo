@@ -52,7 +52,10 @@ export function useRecordManualPayment(
 ): (
 	order: EngineRecord<'orders'>,
 	method: PaymentMethodDescriptor,
-	input: RecordManualPaymentInput
+	input: RecordManualPaymentInput & {
+		/** Ids already resolved by the tender gates; given, the writer does not resolve again. */
+		session?: { registerId: string | null; sessionId: string | null };
+	}
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
 	const ctx = useSaleContext();
@@ -65,15 +68,20 @@ export function useRecordManualPayment(
 
 	return React.useCallback(
 		async (order, method, input) => {
-			const prepared = await prepareSale(ctx, {
-				order,
-				source: 'manual',
-				completing: false,
-				bindingStatus: 'none',
-				sessionRule: 'require',
-			});
-			if (!prepared.ok) throw new Error(prepared.reason);
-			const { registerId, sessionId } = prepared;
+			// A caller that already passed the tender gates hands the resolved ids over; the writer
+			// resolves for itself only when nothing upstream did (the legacy callers).
+			const { registerId, sessionId } = input.session ?? (await resolveForWriter());
+			async function resolveForWriter() {
+				const prepared = await prepareSale(ctx, {
+					order,
+					source: 'manual',
+					completing: false,
+					bindingStatus: 'none',
+					sessionRule: 'require',
+				});
+				if (!prepared.ok) throw new Error(prepared.reason);
+				return { registerId: prepared.registerId, sessionId: prepared.sessionId };
+			}
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
 				uuid: order.uuid,

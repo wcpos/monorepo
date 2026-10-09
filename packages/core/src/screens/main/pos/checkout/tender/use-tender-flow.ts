@@ -914,6 +914,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				amount: fromMinor(e.payload.amountMinor, dp),
 				tendered,
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
+				// The gate resolved and the handler wrote; the writer must not resolve again.
+				session: { registerId, sessionId },
 			});
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow({
@@ -943,8 +945,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 		};
 		try {
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
-				dispatchAction({
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
+				// The keypad's facts were read at render; a cart edit queued just before Pay has
+				// now been applied. If it moved the balance, the entry no longer describes this
+				// order: refuse here, before any gate or leg, and let the cashier look again.
+				const latest = order.getLatest().payload;
+				const latestBalanceMinor = toMinor(
+					derive(latest.total, readLedger(latest.meta_data), methods, { dp }).balance,
+					dp
+				);
+				if (latestBalanceMinor !== balanceMinor)
+					return Promise.resolve({
+						deny: {
+							reasonKey: 'pos_checkout.order_changed_retry',
+							detail: { balanceMinor, latestBalanceMinor },
+						},
+					});
+				return dispatchAction({
 					event: 'checkout.tender.commit',
 					// Money path: refuse rather than run unguarded if the registering import were ever lost.
 					requiredGuards: TENDER_GUARD_IDS,
@@ -967,8 +984,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						},
 					},
 					bottom: commitTender,
-				})
-			);
+				});
+			});
 			if (isActionRefusal(outcome)) {
 				if (outcome.deny.presented) return;
 				if (outcome.deny.reasonKey === 'pos_checkout.open_register_first') {
