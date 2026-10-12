@@ -80,12 +80,12 @@ function deps(
 						payload: state.order ?? { customer_id: 0, billing: BILLING },
 						dirty: state.dirty ?? false,
 					},
-		stampCustomer: async (doc, customerId) => {
-			stamps.push({ document: doc, customerId });
+		stampCustomer: async (order, customerId) => {
+			stamps.push({ document: order.document, customerId });
 			return state.stampResult ?? true;
 		},
 		orderHasQueuedDelete: async () => state.queuedDelete ?? false,
-		serializeOrder: (_uuid, run) => run(),
+		serializeOrder: (_uuid, run) => run({}),
 		drop: async (uuid) => {
 			drops.push(uuid);
 		},

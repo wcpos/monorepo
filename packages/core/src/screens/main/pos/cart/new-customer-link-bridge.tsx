@@ -17,8 +17,14 @@ import {
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import {
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+} from '../../../../extensions/actions';
 import { getTemporaryOrder } from '../contexts/current-order/temporary-order';
-import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
+import { useActionContext } from '../hooks/use-action-context';
 import {
 	customerLinkChanges,
 	type CustomerLinkDeps,
@@ -53,6 +59,7 @@ export function NewCustomerLinkBridge(): null {
 	const { storeDB } = useStoreSession();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
+	const { ctx: actionCtx, actor } = useActionContext();
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 
@@ -81,13 +88,35 @@ export function NewCustomerLinkBridge(): null {
 				};
 				return { document, payload: payload ?? {}, dirty: local?.dirty === true };
 			},
-			stampCustomer: async (document, customerId) =>
-				Boolean(
-					await localPatch({
-						document: document as MutationDocument,
-						data: { customer_id: customerId },
-					})
-				),
+			// The acknowledged Woo id reaches the order through the same event as any customer
+			// set, as a system action: a hook on `cart.customer.set` sees the real id arrive.
+			stampCustomer: async (order, customerId, slot) => {
+				const document = order.document as MutationDocument;
+				const orderId = order.uuid;
+				const outcome = await dispatchAction({
+					event: 'cart.customer.set',
+					token: (slot as OrderMutationContext).dispatchToken,
+					ctx: actionCtx,
+					input: {
+						orderId,
+						actor,
+						source: 'system',
+						payload: {
+							customerId,
+							previousCustomerId: (order.payload.customer_id as number | undefined) ?? null,
+							billing: null,
+							shipping: null,
+							taxIds: null,
+						},
+					},
+					bottom: () => localPatch({ document, data: { customer_id: customerId } }),
+				});
+				if (isActionRefusal(outcome)) {
+					presentActionRefusal(actionCtx, outcome, { orderId, customerId });
+					return false;
+				}
+				return Boolean(outcome);
+			},
 			orderHasQueuedDelete: async (uuid) => {
 				const database = runtime.engine.active()?.database;
 				// Thrown, not guessed: the pass keeps the link and the next pass retries.
@@ -106,7 +135,7 @@ export function NewCustomerLinkBridge(): null {
 					.exec();
 				return row !== null;
 			},
-			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, () => run()),
+			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, (slot) => run(slot)),
 			drop: (uuid, at) => dropCustomerLink(storeDB, uuid, at),
 			now: () => Date.now(),
 		};
@@ -217,7 +246,7 @@ export function NewCustomerLinkBridge(): null {
 			linkedResidents.unsubscribe();
 			unsubscribe();
 		};
-	}, [storeDB, runtime, localPatch, format, t]);
+	}, [storeDB, runtime, localPatch, format, t, actionCtx, actor]);
 
 	return null;
 }

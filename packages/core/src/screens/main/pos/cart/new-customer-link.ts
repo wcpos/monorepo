@@ -156,9 +156,14 @@ export interface CustomerLinkDeps {
 	 */
 	orderHasQueuedDelete(orderUuid: string): Promise<boolean>;
 	/** Write `customer_id` through the normal order mutation path. False when the write failed. */
-	stampCustomer(document: unknown, customerId: number): Promise<boolean>;
+	/** The stamp runs inside the order's queue slot the bridge opened; `slot` is that slot's context. */
+	stampCustomer(
+		order: { uuid: string; document: unknown; payload: Record<string, unknown> },
+		customerId: number,
+		slot: unknown
+	): Promise<boolean>;
 	/** Serialise with the cart's own writes to this order (the template-to-resident birth). */
-	serializeOrder<T>(orderUuid: string, run: () => Promise<T>): Promise<T>;
+	serializeOrder<T>(orderUuid: string, run: (slot: unknown) => Promise<T>): Promise<T>;
 	drop(orderUuid: string, expectAt: string): Promise<void>;
 	now(): number;
 }
@@ -215,7 +220,7 @@ export async function reconcileCustomerLink(
 	if (!customer) return 'waiting';
 	if (customer.remoteId === null) return options.rejected ? 'rejected' : 'waiting';
 	const customerId = customer.remoteId;
-	return deps.serializeOrder(orderUuid, async () => {
+	return deps.serializeOrder(orderUuid, async (slot) => {
 		const order = await deps.findOrder(orderUuid);
 		if (!order) return 'waiting';
 		const current = order.payload.customer_id as number | null | undefined;
@@ -239,7 +244,8 @@ export async function reconcileCustomerLink(
 			await deps.drop(orderUuid, link.at);
 			return 'dropped';
 		}
-		if (!(await deps.stampCustomer(order.document, customerId))) return 'waiting';
+		if (!(await deps.stampCustomer({ ...order, uuid: orderUuid }, customerId, slot)))
+			return 'waiting';
 		return 'stamped';
 	});
 }
