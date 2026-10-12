@@ -121,7 +121,10 @@ jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrderRecord: () => mockCurrentOrder,
 }));
 
-let mockHeldLeg: { phase: string; row: { id: string; capture_mode: string } } | null = null;
+let mockHeldLeg: {
+	phase: string;
+	row: { id: string; capture_mode: string; status?: string };
+} | null = null;
 let mockResolveSession: () => Promise<{
 	registerId: string | null;
 	sessionId: string | null;
@@ -532,6 +535,27 @@ describe('VoidButton', () => {
 					'warn',
 					'pos_cart.void_payments_first',
 					expect.objectContaining({ context: expect.objectContaining({ live: 1 }) })
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+		} finally {
+			mockHeldLeg = null;
+		}
+	});
+
+	it('a settled card leg the service holds with a captured row the ledger never got counts as captured', async () => {
+		mockHeldLeg = {
+			phase: 'final',
+			row: { id: 'held-leg', capture_mode: 'device', status: 'captured' },
+		};
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({ context: expect.objectContaining({ live: 0, captured: 1 }) })
 				)
 			);
 			expect(mockEngine.write).not.toHaveBeenCalled();

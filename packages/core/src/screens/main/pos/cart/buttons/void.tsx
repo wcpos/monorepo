@@ -117,19 +117,21 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 				const live = (row: { status: string }) =>
 					row.status === 'pending' || row.status === 'authorized';
 				const captured = (row: { status: string }) => row.status === 'captured';
-				// A terminal leg the service still holds and the ledger does not show yet is live too:
-				// the reader may still capture. One already mirrored into the ledger is counted there.
+				// A terminal leg the service still holds and the ledger does not show yet counts too:
+				// in flight, the reader may still capture; settled with a captured row (the ledger write
+				// failed), the money is real. One already mirrored into the ledger is counted there.
 				const heldLeg = getTerminalPaymentsService()?.get(recordId);
 				const heldUnmirrored =
-					heldLeg && heldLeg.phase !== 'final' && !ledger.some((row) => row.id === heldLeg.row.id)
-						? heldLeg.row
-						: null;
+					heldLeg && !ledger.some((row) => row.id === heldLeg.row.id) ? heldLeg : null;
+				const heldLive = heldUnmirrored && heldUnmirrored.phase !== 'final' ? 1 : 0;
+				const heldCaptured = heldUnmirrored && captured(heldUnmirrored.row) ? 1 : 0;
 				const paymentLegs = {
-					live: ledger.filter(live).length + (heldUnmirrored ? 1 : 0),
-					captured: ledger.filter(captured).length,
+					live: ledger.filter(live).length + heldLive,
+					captured: ledger.filter(captured).length + heldCaptured,
 					device:
 						ledger.filter((row) => row.capture_mode === 'device' && (live(row) || captured(row)))
-							.length + (heldUnmirrored?.capture_mode === 'device' ? 1 : 0),
+							.length +
+						(heldUnmirrored?.row.capture_mode === 'device' && (heldLive || heldCaptured) ? 1 : 0),
 				};
 				// A read: the session the void happens in, for the row. A void needs no open session,
 				// so a register whose sessions are on with none open is simply "no session".
