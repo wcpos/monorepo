@@ -31,6 +31,8 @@ unrelated queued writes.
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
 | `cart.line.update`       | `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` (`type` says which list) | `changes` | yes |
 | `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
+| `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
+| `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
@@ -82,7 +84,10 @@ action, (b) the event has a typed result, (c) a named consumer is waiting. Candi
 (a) today: receipt
 print, register open/close, refund, void (its writes sit in a component). Admitted by the spec's
 2026-10-12 amendment and landing in order: `cart.line.remove` and the fee/shipping edits on
-`cart.line.update` (this PR), `cart.coupon.apply` / `cart.coupon.remove`, `cart.customer.set`.
+`cart.line.update`, `cart.coupon.apply` / `cart.coupon.remove` (one writer in
+`screens/main/pos/hooks/coupon-line-actions.ts`: a quick discount is a coupon line carrying its
+intent meta, so both hooks hand their line to the same recalculate-and-patch), `cart.customer.set`.
+A coupon refusal reaches the cashier through the coupon field's own error line, not a toast.
 
 ## The hook
 

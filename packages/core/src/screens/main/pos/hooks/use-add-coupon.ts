@@ -27,6 +27,8 @@ import {
 } from './engine-coupon-data';
 import { readQuickDiscountIntent } from './quick-discount';
 import { reportCartFailure } from './cart-failure';
+import { applyCouponLine, CartChangedError, isActionRefusal } from './coupon-line-actions';
+import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
@@ -48,6 +50,7 @@ export const useAddCoupon = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const runtime = useQueryRuntime();
 	const { recalculate } = useRecalculateCoupons();
+	const { ctx, actor } = useActionContext();
 	const couponRejectionMessage = useCouponRejectionMessage();
 
 	const orderLogger = React.useMemo(
@@ -198,65 +201,41 @@ export const useAddCoupon = () => {
 				};
 				const newCouponLine = wooMetaCarrier.ensureLineUuid(newCouponLineData, uuidv4);
 
-				const cartSnapshot = {
-					line_items: order.payload.line_items,
-					coupon_lines: order.payload.coupon_lines,
-				};
-
-				const latestBeforeRecalculate = currentOrderRecord.getLatest();
+				// The cart the coupon was validated against must be the cart it is applied to; the
+				// writer re-checks after its recalculation, inside the order's queue slot.
+				const validatedAgainst = currentOrderRecord.getLatest();
 				if (
-					!isEqual(cartSnapshot, {
-						line_items: latestBeforeRecalculate.payload.line_items,
-						coupon_lines: latestBeforeRecalculate.payload.coupon_lines,
-					})
+					!isEqual(
+						{ line_items: order.payload.line_items, coupon_lines: order.payload.coupon_lines },
+						{
+							line_items: validatedAgainst.payload.line_items,
+							coupon_lines: validatedAgainst.payload.coupon_lines,
+						}
+					)
 				) {
-					return {
-						success: false,
-						error: t('pos_cart.cart_changed'),
-					};
+					return { success: false, error: t('pos_cart.cart_changed') };
 				}
 
-				const allCouponLines = [...(order.payload.coupon_lines || []), newCouponLine];
-
-				// Note: recalculate() re-queries coupon/product docs from the engine, so
-				// there's a theoretical TOCTOU gap if a background sync changes docs
-				// between validateCoupon() and recalculate(). In practice the window
-				// is milliseconds and the server will re-validate on sync. A full fix
-				// would require passing pre-loaded docs into recalculate(), which we
-				// defer to avoid over-engineering.
-				const result = await recalculate(order.payload.line_items || [], allCouponLines);
-
-				// Re-check freshness after async recalculate — the order may have
-				// changed during engine lookups inside recalculate()
-				const latestOrder = currentOrderRecord.getLatest();
-				if (
-					!isEqual(cartSnapshot, {
-						line_items: latestOrder.payload.line_items,
-						coupon_lines: latestOrder.payload.coupon_lines,
-					})
-				) {
+				const outcome = await applyCouponLine(
+					{ ctx, actor, recalculate, localPatch },
+					currentOrderRecord,
+					newCouponLine
+				);
+				// A hook's refusal is the coupon field's error line, where the cashier is looking.
+				if (isActionRefusal(outcome)) {
 					return {
 						success: false,
-						error: t('pos_cart.cart_changed'),
+						error: ctx.t(outcome.deny.reasonKey, outcome.deny.params),
 					};
 				}
-
-				const patchResult = await localPatch({
-					document: order,
-					data: {
-						coupon_lines: result.couponLines,
-						line_items: result.lineItems,
-					},
-				});
-
-				if (!patchResult) {
+				if (!outcome) {
 					return {
 						success: false,
 						error: t('pos_cart.coupon_apply_failed'),
 					};
 				}
 
-				const appliedCouponLine = result.couponLines.find(
+				const appliedCouponLine = (currentOrderRecord.getLatest().payload.coupon_lines ?? []).find(
 					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied'), {
@@ -269,6 +248,9 @@ export const useAddCoupon = () => {
 
 				return { success: true };
 			} catch (error) {
+				if (error instanceof CartChangedError) {
+					return { success: false, error: t('pos_cart.cart_changed') };
+				}
 				const message = getErrorMessage(error);
 				reportCartFailure(orderLogger, 'Local mutation failed', {
 					toastTitle: t('common.there_was_an_error', { message }),
@@ -277,7 +259,17 @@ export const useAddCoupon = () => {
 				return { success: false, error: message };
 			}
 		},
-		[runtime, currentOrderRecord, localPatch, t, orderLogger, recalculate, couponRejectionMessage]
+		[
+			runtime,
+			currentOrderRecord,
+			localPatch,
+			t,
+			orderLogger,
+			recalculate,
+			couponRejectionMessage,
+			ctx,
+			actor,
+		]
 	);
 
 	return { addCoupon };

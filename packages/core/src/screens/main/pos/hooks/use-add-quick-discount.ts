@@ -17,6 +17,8 @@ import {
 	quickDiscountCouponConfig,
 	readQuickDiscountIntent,
 } from './quick-discount';
+import { applyCouponLine, CartChangedError, isActionRefusal } from './coupon-line-actions';
+import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -28,6 +30,7 @@ export const useAddQuickDiscount = () => {
 	const { localPatch } = useLocalMutation();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { recalculate } = useRecalculateCoupons();
+	const { ctx, actor } = useActionContext();
 	const runtime = useQueryRuntime();
 	const couponRejectionMessage = useCouponRejectionMessage();
 	const t = useT();
@@ -106,24 +109,23 @@ export const useAddQuickDiscount = () => {
 					line_items: order.payload.line_items,
 					coupon_lines: order.payload.coupon_lines,
 				};
-				const isFresh = () => {
-					const latest = currentOrderRecord.getLatest();
-					return isEqual(snapshot, {
+				const latest = currentOrderRecord.getLatest();
+				if (
+					!isEqual(snapshot, {
 						line_items: latest.payload.line_items,
 						coupon_lines: latest.payload.coupon_lines,
-					});
-				};
-				if (!isFresh()) return { success: false, error: t('pos_cart.cart_changed') };
-				const result = await recalculate(order.payload.line_items || [], [...couponLines, newLine]);
-				if (!isFresh()) return { success: false, error: t('pos_cart.cart_changed') };
-				const patched = await localPatch({
-					document: order,
-					data: {
-						coupon_lines: result.couponLines,
-						line_items: result.lineItems,
-					},
-				});
-				if (!patched) return { success: false, error: t('pos_cart.coupon_apply_failed') };
+					})
+				)
+					return { success: false, error: t('pos_cart.cart_changed') };
+				// The writer recalculates inside the order's queue slot and re-checks the cart after.
+				const outcome = await applyCouponLine(
+					{ ctx, actor, recalculate, localPatch },
+					currentOrderRecord,
+					newLine
+				);
+				if (isActionRefusal(outcome))
+					return { success: false, error: ctx.t(outcome.deny.reasonKey, outcome.deny.params) };
+				if (!outcome) return { success: false, error: t('pos_cart.coupon_apply_failed') };
 				orderLogger.info('Quick discount added', {
 					context: {
 						event: 'quick_discount.added',
@@ -134,6 +136,8 @@ export const useAddQuickDiscount = () => {
 				});
 				return { success: true };
 			} catch (error) {
+				if (error instanceof CartChangedError)
+					return { success: false, error: t('pos_cart.cart_changed') };
 				const message = getErrorMessage(error);
 				reportCartFailure(orderLogger, 'Local mutation failed', {
 					toastTitle: t('common.there_was_an_error', { message }),
@@ -151,6 +155,8 @@ export const useAddQuickDiscount = () => {
 			whenCouponReferencesSettled,
 			t,
 			orderLogger,
+			ctx,
+			actor,
 		]
 	);
 	return { addQuickDiscount };

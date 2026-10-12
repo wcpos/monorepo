@@ -124,6 +124,22 @@ const currentOrderRecord = {
 	getLatest: () => currentOrderRecord,
 };
 
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string, params?: Record<string, unknown>) =>
+				params ? `${key} ${JSON.stringify(params)}` : key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
