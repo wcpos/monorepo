@@ -71,6 +71,9 @@ export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
+/** The catalog before it loads, and the prop default: no gateway has a stored status. */
+const NO_SETTLED_ORDER_STATUSES: Record<string, string | null> = {};
+
 function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
 	const candidate = payload as Record<string, unknown>;
@@ -125,19 +128,17 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	 */
 	retryToken?: number;
 	/**
-	 * The order status the merchant configured the order's gateway to settle a POS
-	 * sale to (`settled_order_status` from the gateway catalog), or null/undefined
-	 * when none is stored or the store predates the field. See isSettledOrderStatus
-	 * in sale-completion.
+	 * The order status the merchant configured EACH gateway to settle a POS sale
+	 * to (`settled_order_status` from the gateway catalog), keyed by gateway id;
+	 * null for a gateway with nothing stored. Empty until the catalog has loaded,
+	 * and on a store that predates the field. See isSettledOrderStatus.
+	 *
+	 * The whole catalog, not the opened gateway's entry: the pay page inside the
+	 * frame lists every POS gateway, so the order can come back settled through a
+	 * different one. A status is only honoured for the gateway it was stored for —
+	 * the stored status of one must not close a sale taken through another.
 	 */
-	settledOrderStatus?: string | null;
-	/**
-	 * The gateway `settledOrderStatus` was stored for. A status is only honoured
-	 * for an order paid through that gateway: the pay page can finish with a
-	 * different gateway than the one the cart was opened with, and the stored
-	 * status of one must not close a sale taken through another.
-	 */
-	settledGatewayId?: string | null;
+	settledOrderStatuses?: Record<string, string | null>;
 }
 
 /**
@@ -150,8 +151,7 @@ export function PaymentWebview({
 	setFrameStatus,
 	onStockRejection,
 	retryToken = 0,
-	settledOrderStatus = null,
-	settledGatewayId = null,
+	settledOrderStatuses = NO_SETTLED_ORDER_STATUSES,
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
@@ -163,18 +163,17 @@ export function PaymentWebview({
 	// Read through a ref, not the closure: the fallback poll re-arms itself with
 	// the closure of the render it started in, and the gateway catalog can still
 	// be loading at that moment. A later tick must see the catalog that arrived.
-	const settledRef = React.useRef({ status: settledOrderStatus, gatewayId: settledGatewayId });
+	const settledRef = React.useRef(settledOrderStatuses);
 	React.useEffect(() => {
-		settledRef.current = { status: settledOrderStatus, gatewayId: settledGatewayId };
+		settledRef.current = settledOrderStatuses;
 	});
 	/**
-	 * The stored status to judge an order against, or null when the order was
-	 * paid through a different gateway than the one the status was stored for.
+	 * The stored status to judge an order against: the one stored for the gateway
+	 * the order was paid through, or null when that gateway has none stored (or
+	 * the catalog has not loaded).
 	 */
 	const storedStatusFor = React.useCallback((paymentMethod: unknown): string | null => {
-		const { status, gatewayId } = settledRef.current;
-		if (typeof status !== 'string' || typeof gatewayId !== 'string') return null;
-		return paymentMethod === gatewayId ? status : null;
+		return typeof paymentMethod === 'string' ? (settledRef.current[paymentMethod] ?? null) : null;
 	}, []);
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -285,7 +284,10 @@ export function PaymentWebview({
 					methodId: paymentMethod,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 					online,
-					settledOrderStatus: storedStatusFor(paymentMethod),
+					// The whole catalog, not the opened gateway's entry: the pay page can settle
+					// through any POS gateway, and replay judges the gateway the order comes back
+					// carrying. The method on the order here is the one the sale was OPENED with.
+					settledOrderStatuses: settledRef.current,
 				});
 				if (!active) return;
 				if (isActionRefusal(committed)) {
@@ -333,7 +335,6 @@ export function PaymentWebview({
 		sessionRetry,
 		bindingStatus,
 		sessionsOn,
-		storedStatusFor,
 	]);
 
 	// Readiness follows the prepared row; only a session refusal observes reopening.
@@ -474,11 +475,10 @@ export function PaymentWebview({
 			// loaded, so nothing yet says it is settled. Returning here would skip the
 			// re-arm in `finally`, and the catalog arriving later would find no poll
 			// to close the pay window. Keep polling, bounded, while a payable local
-			// status awaits the catalog; a later tick judges it with the catalog.
+			// status has no stored status to be judged against (the catalog has not
+			// loaded, or stores none for this gateway); a later tick judges it.
 			const localAwaitingCatalog =
-				typeof settledRef.current.status !== 'string' &&
-				typeof localStatus === 'string' &&
-				awaitsStoredStatus(localStatus);
+				localStored === null && typeof localStatus === 'string' && awaitsStoredStatus(localStatus);
 			if (
 				!localStatus ||
 				(localStatus !== 'pos-open' && !localAlreadySettled && !localAwaitingCatalog)

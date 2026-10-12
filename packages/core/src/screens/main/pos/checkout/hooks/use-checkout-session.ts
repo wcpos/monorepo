@@ -114,12 +114,24 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		[orderData.payment_method]
 	);
 	const {
+		gateways,
 		gateway,
 		loading: gatewayLoading,
 		error: gatewayError,
 		refetch,
 	} = usePaymentGateways(gatewayId);
 	const gatewayResolved = !gatewayLoading;
+	// Every gateway's stored settled status, keyed by id. The pay page inside the
+	// legacy webview lists every POS gateway, so the order can settle through one
+	// other than the gateway this cart was opened with; the webview must be able
+	// to judge whichever gateway the order comes back carrying.
+	const settledOrderStatuses = React.useMemo(
+		() =>
+			Object.fromEntries(
+				gateways.map((item) => [item.id, item.settled_order_status ?? null] as const)
+			),
+		[gateways]
+	);
 
 	// The displayed error is the gateway fetch error (derived from the gateways
 	// hook) when present, otherwise the checkout flow's own error. Derived during
@@ -388,6 +400,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		gateway,
 		gatewayResolved,
 		gatewayId,
+		settledOrderStatuses,
 		mode,
 		startCheckout,
 		handleStockRejection,

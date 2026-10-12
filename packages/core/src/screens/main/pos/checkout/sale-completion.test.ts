@@ -206,6 +206,23 @@ it.each([
 		)
 	).toBe(expected);
 });
+it.each([
+	['the entry for the gateway the order carries settles it', 'bacs', true],
+	["another gateway's entry never does", 'pos_card', false],
+	['an order carrying no gateway is judged with nothing stored', undefined, false],
+] as const)('replay with a journaled catalog: %s', (_, method, expected) => {
+	const resident = { ...payload, status: 'pending', payment_method: method, meta_data: [] };
+	expect(
+		isSaleComplete(
+			{
+				source: 'replay',
+				settledOrderStatuses: { pos_cash: null, bacs: 'pending', pos_card: null },
+			},
+			2,
+			resident as never
+		)
+	).toBe(expected);
+});
 it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'])(
 	'snapshot excludes %s',
 	(status) =>
@@ -384,6 +401,18 @@ it('journals the stored status with a gateway attempt, and nothing when none is 
 		settledOrderStatus: null,
 	});
 	expect((await pendingCompletions(ctx.storeDB)).order).not.toHaveProperty('settledOrderStatus');
+});
+it("journals a pay-page attempt's whole catalog, keyed by gateway id", async () => {
+	const catalog = { pos_cash: null, bacs: 'pending' };
+	await recordSaleAttempt(ctx, {
+		order,
+		completing: true,
+		source: 'gateway-snapshot',
+		settledOrderStatuses: catalog,
+	});
+	const journaled = (await pendingCompletions(ctx.storeDB)).order;
+	expect(journaled).toMatchObject({ source: 'gateway-snapshot', settledOrderStatuses: catalog });
+	expect(journaled).not.toHaveProperty('settledOrderStatus');
 });
 it('replay never completes a sent order, whatever status its gateway chose', () => {
 	const onHold = {

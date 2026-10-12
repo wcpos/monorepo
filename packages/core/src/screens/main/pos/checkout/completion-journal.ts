@@ -15,6 +15,12 @@ type Attempt = {
 	 * settles the order as the pay window would (sale-completion isSettledOrderStatus).
 	 */
 	settledOrderStatus?: string | null;
+	/**
+	 * A legacy pay-page attempt journals every gateway's stored status, keyed by id: the
+	 * pay page can settle through any POS gateway, so replay looks up the gateway the
+	 * resident order carries, not the one the sale was opened with.
+	 */
+	settledOrderStatuses?: Record<string, string | null>;
 	lastError?: string;
 };
 type Journal = { pending: Record<string, Attempt> };
@@ -38,7 +44,10 @@ export async function recordCompletionAttempt(
 	{
 		orderUuid,
 		...facts
-	}: { orderUuid: string } & Pick<Attempt, 'source' | 'paymentId' | 'actor' | 'settledOrderStatus'>
+	}: { orderUuid: string } & Pick<
+		Attempt,
+		'source' | 'paymentId' | 'actor' | 'settledOrderStatus' | 'settledOrderStatuses'
+	>
 ) {
 	const doc = await journal(storeDB);
 	await doc.incrementalModify((data) => {

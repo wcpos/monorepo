@@ -114,7 +114,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// Each Retry press hands the frame a new token; the frame remounts on it.
 	const [frameRetryToken, setFrameRetryToken] = React.useState(0);
 	const retryPaymentFrame = React.useCallback(() => setFrameRetryToken((n) => n + 1), []);
-	const { loading, mode, error, startCheckout, handleStockRejection, gateway } =
+	const { loading, mode, error, startCheckout, handleStockRejection, settledOrderStatuses } =
 		useCheckoutSession(order);
 	// #163 ruling R5. This modal is where a checkout already in progress is caught:
 	// it was opened while storage was healthy, and the worker can die at any point
@@ -240,8 +240,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								setLoading={setLegacyLoading}
 								setFrameStatus={reportFrameStatus}
 								retryToken={frameRetryToken}
-								settledOrderStatus={gateway?.settled_order_status ?? null}
-								settledGatewayId={gateway?.id ?? null}
+								settledOrderStatuses={settledOrderStatuses}
 								onStockRejection={handleStockRejection}
 							/>
 						) : (

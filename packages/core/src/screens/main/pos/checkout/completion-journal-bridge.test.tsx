@@ -794,6 +794,67 @@ it.each([
 	}
 );
 
+it.each([
+	['through bacs, at the status stored for bacs, completes', 'bacs', true],
+	['through a gateway with nothing stored stays unpaid', 'pos_card', false],
+] as const)(
+	'a pay-page attempt opened for pos_cash and paid %s',
+	async (_, paidWith, completes) => {
+		// The attempt is journaled at the tender commit, before the pay page opens: the order
+		// still carries pos_cash then. The pay page settles it through another gateway, and
+		// replay must judge THAT gateway's stored status (#2475 review of the next port).
+		const catalog = { pos_cash: null, bacs: 'pending', pos_card: null };
+		await owner.recordSaleAttempt(mockContext, {
+			order: {
+				uuid: 'order',
+				getLatest: () => ({
+					payload: { id: 42, status: 'pos-open', payment_method: 'pos_cash', meta_data: [] },
+				}),
+			} as never,
+			completing: true,
+			source: 'gateway-snapshot',
+			settledOrderStatuses: catalog,
+		});
+		mockFind.mockResolvedValue({
+			uuid: 'order',
+			getLatest: () => ({
+				payload: {
+					id: 42,
+					status: 'pending',
+					payment_method: paidWith,
+					meta_data: [],
+					line_items: [],
+				},
+			}),
+		});
+		render(<SaleCompletionBridge />);
+		if (completes) {
+			await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+			expect(owner.completeSale).toHaveBeenCalledWith(
+				mockContext,
+				expect.objectContaining({ uuid: 'order' }),
+				{ source: 'replay', settledOrderStatuses: catalog },
+				{ host: 'background' }
+			);
+			expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+			expect(mockInfo).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
+				})
+			);
+		} else {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					unpaidStarts: 1,
+				})
+			);
+			expect(owner.completeSale).not.toHaveBeenCalled();
+			expect(mockReceipt).not.toHaveBeenCalled();
+		}
+	}
+);
+
 it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
 	'replays the recorded actor %j, never the reopening cashier',
 	async (actor) => {
