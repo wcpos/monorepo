@@ -27,13 +27,14 @@ import {
 	type QueryHandle,
 	queryHandleResource,
 	queryHandleResults$,
+	type QueryHandleSpec,
 	type QueryResult,
 	type QuerySnapshot,
 	releaseHandles,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
 import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
@@ -66,11 +67,18 @@ export function demandPlanFor(compiled: CompiledQuery): DemandPlan {
 // Demand ids are the handle's own: two components sharing a handle share one declaration.
 let nextHandleId = 0;
 
+/**
+ * The parents of the variations a search matched: a read that must ask the engine for the
+ * parent records it may not hold. The ask (a targeted requirement) is made only while the
+ * handle is OWNED; a reader that outlives the owner (a deferred handle drawn while the next
+ * query loads) keeps the local read and declares nothing (roadmap#423: readers never declare).
+ */
 function observeParentLookup(
 	engine: RxdbSyncEngine,
 	id: string,
 	parentIds: number[],
-	searchFields: string[] | undefined
+	searchFields: string[] | undefined,
+	owned$: Observable<boolean>
 ): Observable<ProductsResult> {
 	if (parentIds.length === 0) return of(emptyResult());
 	return new Observable<ProductsResult>((subscriber) => {
@@ -89,10 +97,19 @@ function observeParentLookup(
 			{ id, targeted: parentIds, searchFields }
 		);
 		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
-		const handles = declareRequirements(engine, requirements);
+		let handles: RequirementHandle[] = [];
+		const ownership = owned$.subscribe((owned) => {
+			if (owned && handles.length === 0) {
+				handles = declareRequirements(engine, requirements);
+			} else if (!owned && handles.length > 0) {
+				releaseHandles(handles);
+				handles = [];
+			}
+		});
 		const subscription = observeEngineQuery(engine, descriptor).subscribe(subscriber);
 		return () => {
 			subscription.unsubscribe();
+			ownership.unsubscribe();
 			releaseHandles(handles);
 		};
 	});
@@ -128,7 +145,7 @@ export function acquireProductsQueryHandle(
 		};
 		const search = compiled.read.search;
 		const demands = [createDemand(engine, `${id}:parent`, demandPlanFor(compiled))];
-		let result$: (engine: RxdbSyncEngine) => Observable<ProductsResult>;
+		let result$: QueryHandleSpec<ProductsResult>['result$'];
 		if (!search) {
 			result$ = (target) => observeEngineQuery(target, descriptor);
 		} else {
@@ -152,7 +169,7 @@ export function acquireProductsQueryHandle(
 				{ id: `${id}:child`, searchFields: childSearchFields }
 			);
 			demands.push(createDemand(engine, `${id}:child`, demandPlanFor(childCompiled)));
-			result$ = (target) => {
+			result$ = (target, owned$) => {
 				const direct$ = observeEngineQuery(target, {
 					...descriptor,
 					read: { ...compiled.read, limit: undefined },
@@ -174,7 +191,8 @@ export function acquireProductsQueryHandle(
 							target,
 							`${id}:lookup`,
 							parentIds,
-							descriptor.searchFields
+							descriptor.searchFields,
+							owned$
 						).pipe(map((lookup) => ({ direct, lookup, counts, searchAnswered })));
 					}),
 					switchMap(({ direct, lookup, counts, searchAnswered }) => {

@@ -434,6 +434,37 @@ describe('query handle', () => {
 		await expect(handle.whenAnswered()).resolves.toBeUndefined();
 	});
 
+	it('a read that asks the engine as part of reading does so only while owned', async () => {
+		// The relational products lookup: a targeted requirement declared from inside the read.
+		const asked: boolean[] = [];
+		const handle = acquireQueryHandle(engine, 'p', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('p', of(EMPTY)),
+					result$: (_engine, owned$) =>
+						new Observable<Result>((subscriber) => {
+							const ownership = owned$.subscribe((owned) => asked.push(owned));
+							subscriber.next(EMPTY);
+							return () => ownership.unsubscribe();
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		const leaveReader = handle.subscribe(() => undefined);
+		expect(asked).toEqual([false]);
+		const release = handle.retain();
+		expect(asked).toEqual([false, true]);
+		// The owner leaves, the reader stays: the ask is withdrawn, the read goes on.
+		release();
+		await settle();
+		expect(asked).toEqual([false, true, false]);
+		expect(handle.value.ready).toBe(true);
+		leaveReader();
+	});
+
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
 		const handle = acquire('e', of(EMPTY), [searchPlan('ada')]);
 		handle.retain();

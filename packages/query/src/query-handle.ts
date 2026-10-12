@@ -601,8 +601,13 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 
 export type QueryHandleSpec<R extends QueryResult<RxCollection>> = {
 	key: string;
-	/** The read, built once per handle. Subscribed while the handle is retained. */
-	result$: (engine: RxdbSyncEngine) => Observable<R>;
+	/**
+	 * The read, built once per handle, subscribed while any reader or owner holds it. `owned$`
+	 * is true while an owner holds the handle: a read that must ask the engine for something as
+	 * part of reading (the relational products lookup) declares only while owned, so a reader
+	 * outliving the owner keeps rows and nothing else.
+	 */
+	result$: (engine: RxdbSyncEngine, owned$: Observable<boolean>) => Observable<R>;
 	/** The demands this read needs; the first one's coverage names the total. */
 	demands: Demand[];
 	/** The collections whose pull activity the snapshot's `active` reflects. */
@@ -662,11 +667,14 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	let readers = 0;
 	let started = false;
 	let demandLive = false;
+	const owned$ = new BehaviorSubject(false);
 	let read: Subscription | null = null;
 	let stopScheduled = false;
 
 	const [primary] = spec.demands;
-	const result$ = spec.result$(engine).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+	const result$ = spec
+		.result$(engine, owned$.pipe(distinctUntilChanged()))
+		.pipe(shareReplay({ bufferSize: 1, refCount: true }));
 	const active$ =
 		spec.activeCollections.length === 0
 			? of(false)
@@ -800,10 +808,12 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		if (demandLive || mirrored) return;
 		demandLive = true;
 		for (const demand of spec.demands) demand.start();
+		owned$.next(true);
 	};
 	const demandOff = () => {
 		if (!demandLive) return;
 		demandLive = false;
+		owned$.next(false);
 		for (const demand of spec.demands) demand.stop();
 		// A reader still holding the object sees the rows it had and no demand in flight.
 		publish({ ...snapshot$.getValue(), pending: false });
