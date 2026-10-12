@@ -277,14 +277,13 @@ describe('POSProducts query-state wiring', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		});
+		// The table reads the products handle (roadmap#423), not the eight-observable binding.
 		expect(mockDataTableProps).toMatchObject({
 			collectionName: 'products',
-			resource: mockBinding.resource,
+			handle: mockHandle,
 			sort: { field: 'name', direction: 'asc' },
-			active$: mockBinding.active$,
-			total$: mockBinding.total$,
-			sync: mockBinding.sync,
 		});
+		expect(mockDataTableProps).not.toHaveProperty('resource');
 		expect(mockDataTableProps).not.toHaveProperty('query');
 		expect(mockFilterBarProps).toEqual({
 			level: 'products',

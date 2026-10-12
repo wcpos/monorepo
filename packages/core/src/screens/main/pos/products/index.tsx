@@ -408,7 +408,6 @@ function POSProductsContent({
 										handle={handle}
 										actions={tableActions}
 										noDataMessage={noDataMessage}
-										loading={loading}
 									/>
 								) : (
 									<DataTable<ProductRow>

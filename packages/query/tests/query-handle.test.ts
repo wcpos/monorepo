@@ -393,6 +393,38 @@ describe('query handle', () => {
 		expect(attempts).toBe(2);
 	});
 
+	it('whenAnswered settles on the first answer, rejects on a failure, and waits on the retry', async () => {
+		let attempts = 0;
+		const late = new Subject<Result>();
+		const handle = acquireQueryHandle(engine, 'o', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('o', of(EMPTY)),
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return attempts === 1 ? throwError(() => new Error('storage gone')) : late;
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		// Before anything subscribes: a stable promise nobody has settled.
+		const first = handle.whenAnswered();
+		expect(handle.whenAnswered()).toBe(first);
+		handle.subscribe(() => undefined);
+		await expect(first).rejects.toThrow('storage gone');
+		await expect(handle.whenAnswered()).rejects.toThrow('storage gone');
+		handle.retry();
+		const second = handle.whenAnswered();
+		expect(second).not.toBe(first);
+		late.next({ count: 1, hits: [] });
+		await expect(second).resolves.toBeUndefined();
+		await expect(handle.whenAnswered()).resolves.toBeUndefined();
+	});
+
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
 		const handle = acquire('e', of(EMPTY), [searchPlan('ada')]);
 		handle.subscribe(() => undefined);

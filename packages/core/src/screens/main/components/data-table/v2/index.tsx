@@ -13,15 +13,21 @@ import {
 } from '@tanstack/react-table';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { find } from 'lodash';
+import { of } from 'rxjs';
 
 import { usePointer } from '@wcpos/components/lib/device';
 import { Table, TableBody, TableFooter, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { QueryResult } from '@wcpos/query';
+import type { QueryHandle, QueryResult } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
-import { useGuardedExtendLimit } from '../../../../../query';
+import {
+	bindingObservablesFor,
+	useGuardedExtendLimitFor,
+	useQueryHandleFields,
+	useQuerySnapshot,
+} from '../../../../../query';
 import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
 import { RecordTextCell } from '../../record-text-cell';
 import { useT } from '../../../../../contexts/translations';
@@ -105,27 +111,118 @@ interface CommonProps<TData extends RowData> {
 	onEndReached?: () => void;
 }
 
-type BindingProps<TSortField extends string> = {
+type TableProps<TSortField extends string> = {
 	collectionName: DataTableCollectionKey;
-	binding?: Pick<import('../../../../../query').QueryBinding, 'pending$' | 'exhausted$'>;
-	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
 	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
+};
+
+/** The source as the eight-observable binding: the Suspense resource and the streams. */
+type StreamSource = {
+	binding?: Pick<import('../../../../../query').QueryBinding, 'pending$' | 'exhausted$'>;
+	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	active$: import('rxjs').Observable<boolean>;
 	total$: import('rxjs').Observable<number | null>;
 	sync: () => Promise<void>;
 };
 
+/**
+ * The source as a query handle (roadmap#423): one snapshot, suspended on until the engine's
+ * first answer (the screen's boundary draws the skeleton, as it does for the stream source), a
+ * changed query keeping its rows while the next one suspends (`useDeferredValue(handle)`). The
+ * footers still take streams, derived from the handle, until they move with their screens.
+ */
+type HandleSource = {
+	handle: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+};
+
 type Props<TData extends RowData, TSortField extends string> = CommonProps<TData> &
-	BindingProps<TSortField>;
+	TableProps<TSortField> &
+	(StreamSource | HandleSource);
+
+/** What the body draws, whichever source it came from. */
+type BodySource = {
+	result: QueryResult<import('rxdb').RxCollection>;
+	syncing: boolean;
+	engine: { pending: boolean; exhausted: boolean | null };
+	active$: import('rxjs').Observable<boolean>;
+	total$: import('rxjs').Observable<number | null>;
+	sync: () => Promise<void>;
+};
+
+type BodyProps<TData extends RowData, TSortField extends string> = CommonProps<TData> &
+	TableProps<TSortField> &
+	BodySource;
+
+const NOT_PENDING$ = of(false);
+const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
+const TABLE_FIELDS = ['pending', 'exhausted'] as const;
+const ACTIVE_FIELD = ['active'] as const;
+
+function DataTable<TData extends RowData, TSortField extends string = string>(
+	props: Props<TData, TSortField>
+) {
+	return 'handle' in props ? (
+		<HandleDataTable<TData, TSortField> {...props} />
+	) : (
+		<StreamDataTable<TData, TSortField> {...props} />
+	);
+}
+
+function StreamDataTable<TData extends RowData, TSortField extends string>(
+	props: CommonProps<TData> & TableProps<TSortField> & StreamSource
+) {
+	const { resource, binding, active$, total$, sync, ...rest } = props;
+	const result = useObservableSuspense(resource);
+	const syncing = useObservableState(active$, false);
+	const pending = useObservableState(binding?.pending$ ?? NOT_PENDING$, false);
+	const exhausted = useObservableState(binding?.exhausted$ ?? UNKNOWN_EXHAUSTED$, null);
+	return (
+		<DataTableBody<TData, TSortField>
+			{...rest}
+			result={result}
+			syncing={syncing}
+			engine={{ pending, exhausted }}
+			active$={active$}
+			total$={total$}
+			sync={sync}
+		/>
+	);
+}
+
+function HandleDataTable<TData extends RowData, TSortField extends string>(
+	props: CommonProps<TData> & TableProps<TSortField> & HandleSource
+) {
+	const { handle, ...rest } = props;
+	// Stale-while-loading: the deferred handle's rows stay while the new one suspends.
+	const shown = React.useDeferredValue(handle);
+	const settling = shown !== handle;
+	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
+	// The spinner is the engine's now, whichever query is drawn.
+	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	// The footers' streams, one set per handle (they subscribe themselves, as they always did).
+	const streams = React.useMemo(() => bindingObservablesFor(shown), [shown]);
+	return (
+		<DataTableBody<TData, TSortField>
+			{...rest}
+			result={snapshot.result}
+			syncing={active}
+			// A changed query that has not answered is in flight for paging (#1221).
+			engine={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
+			active$={streams.active$}
+			total$={streams.total$}
+			sync={handle.sync}
+		/>
+	);
+}
 
 /** Skeleton rows shown in an empty list while the collection is still syncing: enough to read
  *  as a table filling, few enough that a store with three coupons does not flash a page. */
 const SYNCING_SKELETON_ROWS = 5;
 
-function DataTable<TData extends RowData, TSortField extends string = string>(
-	props: Props<TData, TSortField>
+function DataTableBody<TData extends RowData, TSortField extends string = string>(
+	props: BodyProps<TData, TSortField>
 ) {
 	/*
 	 * NOTE (react-table v9): this component is now compiled by the React
@@ -162,7 +259,6 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		onEndReached,
 	} = props;
 	const pointer = usePointer();
-	const resource = props.resource;
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
 	const settingsColumns = useDocField(uiSettings, (value) => value.columns);
 	const [widths, setWidths] = React.useState(() => new Map<string, number>());
@@ -176,10 +272,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		[settingsColumns, widths]
 	);
 	const t = useT();
-	const result = useObservableSuspense(resource);
+	const { result, syncing, engine } = props;
 	const deferredResult = React.useDeferredValue(result);
-	const { active$ } = props;
-	const syncing = useObservableState(active$, false);
 
 	const columns = React.useMemo(
 		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
@@ -204,10 +298,10 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.
-	const handleEndReached = useGuardedExtendLimit(
+	const handleEndReached = useGuardedExtendLimitFor(
 		props.actions.extendLimit,
 		deferredResult.hits.length,
-		props.binding
+		engine
 	);
 
 	const table = useTable<DataTableFeatures, DataTableRow>({

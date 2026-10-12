@@ -574,6 +574,13 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	 */
 	retry(): void;
 	/**
+	 * Settles when the handle has an answer (`value.ready`) and rejects when its read fails:
+	 * what a reader throws to suspend on, one stable promise per handle until it settles, then a
+	 * fresh one after a failure so a retry can be waited on. Never starts the read itself — the
+	 * owner's retain does, from an effect above the Suspense boundary.
+	 */
+	whenAnswered(): Promise<void>;
+	/**
 	 * The snapshot stream, one subscription per subscriber, retaining like `subscribe`. For the
 	 * React edge and the compatibility bindings; readers take `value` + `subscribe`.
 	 */
@@ -723,9 +730,35 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		);
 	});
 
+	// The answer promise: settled by the first ready snapshot, rejected by a read failure, and
+	// replaced after a failure so the next wait is for the retry.
+	let answered: {
+		promise: Promise<void>;
+		resolve: () => void;
+		reject: (e: unknown) => void;
+	} | null = null;
+	const answer = () => {
+		if (answered) return answered;
+		let resolve!: () => void;
+		let reject!: (error: unknown) => void;
+		const promise = new Promise<void>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		// A rejection nobody awaited yet must not surface as unhandled; readers attach later.
+		promise.catch(() => undefined);
+		answered = { promise, resolve, reject };
+		return answered;
+	};
 	const publish = (snapshot: QuerySnapshot<R>) => {
 		if (sameSnapshot(snapshot$.getValue(), snapshot)) return;
 		snapshot$.next(snapshot);
+		if (snapshot.error) {
+			answer().reject(snapshot.error);
+			answered = null;
+		} else if (snapshot.ready) {
+			answer().resolve();
+		}
 		for (const { notify } of [...listeners]) notify();
 	};
 	const onReadError = (error: unknown) => {
@@ -844,6 +877,13 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				return;
 			}
 			if (started && read === null) subscribeRead();
+		},
+		whenAnswered: () => {
+			if (mirrored) return mirrored.whenAnswered();
+			const current = snapshot$.getValue();
+			if (current.error) return Promise.reject(current.error);
+			if (current.ready) return Promise.resolve();
+			return answer().promise;
 		},
 	};
 }

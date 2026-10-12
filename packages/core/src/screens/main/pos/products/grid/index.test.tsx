@@ -11,8 +11,22 @@ import { ProductGrid } from './index';
 
 let mockResult: { hits: object[] };
 let mockReady = true;
-let mockSettling = false;
 let mockError: unknown = null;
+// Settling is `useDeferredValue(handle) !== handle`: while set, the deferred handle the grid
+// draws is a previous one, as React would hand it while the new handle suspends.
+let mockSettling = false;
+const mockPending = new Promise<void>(() => undefined);
+const mockPreviousHandle = { key: 'previous', sync: jest.fn() };
+jest.mock('react', () => {
+	const actual = jest.requireActual<typeof import('react')>('react');
+	return {
+		...actual,
+		useDeferredValue: <T,>(value: T): T =>
+			mockSettling && (value as { key?: string }).key === 'test'
+				? (mockPreviousHandle as unknown as T)
+				: actual.useDeferredValue(value),
+	};
+});
 const mockGuard = jest.fn();
 // The grid reads one snapshot from the handle; the double hands it the current `mockResult`.
 const mockSnapshot = () => ({
@@ -39,12 +53,13 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 }));
 jest.mock('../../../../../query', () => ({
-	useQueryHandleView: () => ({
-		value: mockSnapshot(),
-		current: mockSnapshot(),
-		settling: mockSettling,
-		error: mockError,
-	}),
+	// The Suspense-native reader, as the grid sees it: an answer, or a thrown promise / error.
+	useQuerySnapshot: () => {
+		if (mockError) throw mockError;
+		if (!mockReady) throw mockPending;
+		return mockSnapshot();
+	},
+	useQueryHandleFields: () => mockSnapshot(),
 	useQueryHandleValue: () => mockSnapshot(),
 	useGuardedExtendLimitFor: (...args: unknown[]) => {
 		mockGuard(...args);
@@ -169,17 +184,21 @@ it('uses supplied tiles for both kinds and retains the defaults otherwise', () =
 });
 
 describe('ProductGrid on the handle snapshot', () => {
+	const handle = { key: 'test', sync: jest.fn() };
 	const props = () =>
 		({
-			handle: { key: 'test', sync: jest.fn() },
+			handle,
 			actions: { extendLimit: jest.fn() },
-			loading: <div data-testid="grid-loading" />,
 		}) as unknown as React.ComponentProps<typeof ProductGrid>;
 
-	it('draws the loading state until the handle answers, then the rows — never the empty state between', () => {
+	it('suspends until the handle answers, then draws the rows — never the empty state between', () => {
 		mockReady = false;
 		mockResult = { hits: [] };
-		const { rerender } = render(<ProductGrid {...props()} />);
+		const { rerender } = render(
+			<React.Suspense fallback={<div data-testid="grid-loading" />}>
+				<ProductGrid {...props()} />
+			</React.Suspense>
+		);
 		expect(screen.getByTestId('grid-loading')).toBeTruthy();
 		expect(screen.queryByTestId('no-data-message')).toBeNull();
 
@@ -187,7 +206,11 @@ describe('ProductGrid on the handle snapshot', () => {
 		mockResult = {
 			hits: [{ record: { uuid: 'p1', payload: { type: 'simple', name: 'One' } } }],
 		};
-		rerender(<ProductGrid {...props()} />);
+		rerender(
+			<React.Suspense fallback={<div data-testid="grid-loading" />}>
+				<ProductGrid {...props()} />
+			</React.Suspense>
+		);
 		expect(screen.queryByTestId('grid-loading')).toBeNull();
 		expect(screen.queryByTestId('no-data-message')).toBeNull();
 		expect(screen.getByTestId('default-tile')).toBeTruthy();

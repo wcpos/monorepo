@@ -459,51 +459,28 @@ export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
 }
 
 /**
- * The snapshot a screen should DRAW: the handle's own once it has answered, and until then the
- * last answered snapshot this component drew — so a changed query (a keystroke, an extended
- * limit) keeps the current rows on screen while the next read loads instead of flashing the
- * loading state, which is what the Suspense resource's `reload` did. `settling` says the drawn
- * snapshot is not yet the current handle's answer. Before any answer, `value.ready` is false and
- * the screen shows its loading state: the gate that used to be a Suspense boundary.
+ * A ready snapshot, or a suspension: the reader's one hook (roadmap#423).
+ *
+ * Suspense-native. While the handle has no answer the reader throws `handle.whenAnswered()`,
+ * one stable promise per handle, and the nearest boundary draws its fallback; the owner's
+ * retain (an effect above the boundary) is what starts the read, so nothing subscribes during
+ * render. A failed read is thrown to the boundary. Stale-while-loading is React's own: a reader
+ * that renders `useDeferredValue(handle)` keeps the previous handle's rows on screen while the
+ * new one suspends (`deferred !== handle` is "settling", and is pending for paging).
+ *
+ * A boundary reset remounts the reader over the same failure; the owner's boundary wires
+ * `onReset={() => handle.retry()}` so the reset asks the engine again and the reader suspends
+ * on the retry instead of throwing the old failure back.
  */
-export function useQueryHandleView<R extends QueryResult<RxCollection>>(
+export function useQuerySnapshot<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>,
 	/** Re-render for these fields beside the answer; every field when omitted. */
 	fields?: SnapshotFields
-): {
-	/** The snapshot to draw: the current one once answered, else the last one drawn. */
-	value: Readonly<QuerySnapshot<R>>;
-	/** The current handle's snapshot, answered or not — status fields read from here. */
-	current: Readonly<QuerySnapshot<R>>;
-	settling: boolean;
-	/**
-	 * The current handle's failure, for the reader to throw to its boundary — unless the failure
-	 * was already there when this reader mounted: then the reader is the boundary's reset, the
-	 * handle is asked again (`retry`) and the reader draws its loading state meanwhile.
-	 */
-	error: unknown;
-} {
-	const current = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
-	const [inherited] = React.useState(() => current.error);
-	React.useEffect(() => {
-		if (inherited && handle.value.error === inherited) handle.retry();
-	}, [handle, inherited]);
-	const error = current.error === inherited ? null : current.error;
-	// What the previous handle had answered when this one took over — kept per handle, so a
-	// snapshot change on the SAME handle never re-renders through state (a handle never goes
-	// from answered back to unanswered). Derived during render, React's documented pattern.
-	const [held, setHeld] = React.useState<{
-		handle: QueryHandle<R>;
-		last: Readonly<QuerySnapshot<R>> | null;
-	}>({ handle, last: null });
-	let last = held.last;
-	if (held.handle !== handle) {
-		last = held.handle.value.ready ? held.handle.value : held.last;
-		setHeld({ handle, last });
-	}
-	// An answer or a failure is always the current handle's; the reader rethrows the failure.
-	const value = current.ready || error ? current : (last ?? current);
-	return { value, current, settling: value !== current, error };
+): Readonly<QuerySnapshot<R>> {
+	const snapshot = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
+	if (snapshot.error) throw snapshot.error;
+	if (!snapshot.ready) throw handle.whenAnswered();
+	return snapshot;
 }
 
 /**
