@@ -1,6 +1,6 @@
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
-import { cartRestartsOnAdd, isCartEmpty } from './cart-restart';
+import { cartRestartsOnAdd, isCartEmpty, restartStamp } from './cart-restart';
 
 const open = (extra: Record<string, unknown> = {}) => ({ status: 'pos-open', ...extra });
 
@@ -51,4 +51,13 @@ it('isCartEmpty is the live-line test the row and the restart share', () => {
 	// A live line with nothing to say (zero quantity, a blank title) is still a line.
 	expect(isCartEmpty({ line_items: [{ product_id: 41 }] })).toBe(false);
 	expect(isCartEmpty({ shipping_lines: [{ method_id: 'flat_rate' }] })).toBe(false);
+});
+
+it('restartStamp writes the GMT value and the store-local date_created in the STORE zone', () => {
+	const now = new Date('2026-07-14T23:30:00Z');
+	expect(restartStamp(now, 'America/New_York')).toEqual({
+		date_created_gmt: '2026-07-14T23:30:00',
+		date_created: '2026-07-14T19:30:00',
+	});
+	expect(restartStamp(now, 'Australia/Sydney').date_created).toBe('2026-07-15T09:30:00');
 });

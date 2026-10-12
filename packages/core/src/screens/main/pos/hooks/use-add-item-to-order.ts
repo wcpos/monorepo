@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { format } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
 import { calculateCartLine } from '@wcpos/order-math';
@@ -16,11 +15,12 @@ import {
 	isActionRefusal,
 	presentActionRefusal,
 } from '../../../../extensions/actions';
-import { cartRestartsOnAdd } from './cart-restart';
+import { cartRestartsOnAdd, restartStamp } from './cart-restart';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
+import { resolveDayTimezone } from '../../../../hooks/use-store-day';
 import {
 	documentRecordId,
 	findEngineResident,
@@ -297,13 +297,8 @@ export const useAddItemToOrder = () => {
 							// A line going into an emptied cart RESTARTS it: the creation time is
 							// the start of the sale in front of the cashier, not of the abandoned
 							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
-							// Both dates: the receipt prints `date_created` (store-local; the server's
-							// own value replaces this device-local one on the next acknowledgement).
 							const restart = cartRestartsOnAdd(latest.payload)
-								? {
-										date_created_gmt: convertLocalDateToUTCString(new Date()),
-										date_created: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-									}
+								? restartStamp(new Date(), resolveDayTimezone(store, site).timezone)
 								: {};
 							result = await localPatch({
 								document: latest,
@@ -337,6 +332,8 @@ export const useAddItemToOrder = () => {
 			runtime,
 			saveNewOrder,
 			setCurrentOrderID,
+			site,
+			store,
 		]
 	);
 

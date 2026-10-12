@@ -958,10 +958,14 @@ describe('useAddItemToOrder', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		// Both creation fields are restamped to now (the values are restartStamp's, pinned in
+		// cart-restart.test.ts); the abandoned cart's date is gone from the patch.
+		const wcDate = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 		expect(mockLocalPatch.mock.calls[0][0].data).toMatchObject({
-			date_created_gmt: '2026-07-14T00:00:00',
-			date_created: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/),
+			date_created_gmt: expect.stringMatching(wcDate),
+			date_created: expect.stringMatching(wcDate),
 		});
+		expect(mockLocalPatch.mock.calls[0][0].data.date_created_gmt).not.toBe('2026-07-01T00:00:00');
 		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toHaveLength(2);
 	});
 

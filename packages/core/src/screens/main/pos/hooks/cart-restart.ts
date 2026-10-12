@@ -1,4 +1,13 @@
+import { utc } from '@date-fns/utc';
+import { format } from 'date-fns';
+
 import { readLedger } from '@wcpos/order-math';
+
+import { inZone, zoneOptions } from '../../../../hooks/store-zone';
+
+// WooCommerce's wire shape for both fields: no zone suffix (use-local-date's helpers, which
+// this leaf cannot import without dragging the app context into every test that reads it).
+const WC_DATE = "yyyy-MM-dd'T'HH:mm:ss";
 
 type Payload = {
 	status?: string | null;
@@ -38,4 +47,17 @@ export function isCartEmpty(payload: Payload): boolean {
 		(payload.fee_lines ?? []).some((fee) => fee.name !== null) ||
 		(payload.shipping_lines ?? []).some((ship) => ship.method_id !== null);
 	return !live;
+}
+
+/**
+ * The two creation fields a restart writes: the GMT value the server keeps, and the
+ * store-local `date_created` the receipt prints, in the STORE's zone (a till in another
+ * zone must not print its own clock on an offline receipt). The server's own values replace
+ * both on the next acknowledgement.
+ */
+export function restartStamp(now: Date, storeZone: string) {
+	return {
+		date_created_gmt: format(now, WC_DATE, { in: utc }),
+		date_created: format(inZone(storeZone, now), WC_DATE, zoneOptions(storeZone)),
+	};
 }
