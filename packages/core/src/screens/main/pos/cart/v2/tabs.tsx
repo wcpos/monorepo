@@ -27,8 +27,12 @@ import { NEW_TAB_WIDTH, PLUS_WIDTH, TAB_MIN, tabWindow } from './tab-window';
 const CELL = 'web:hover:bg-muted active:bg-muted h-full items-center justify-center';
 // A tab is as wide as its text (Paul, 2026-10-09): the same classes measure it and show it.
 const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
-// A step slides the row by the width of the tab that left it.
+// A step slides the row by the width of the tab that left it. The + cell's fold and unfold
+// ride the same layout transition: the one place the strip animates a layout, not a
+// transform (CODING_STANDARDS § Design 6; stated in #2460 and #2481).
 const SHIFT = LinearTransition.duration(CROSSFADE).easing(EASE).reduceMotion(ReduceMotion.System);
+// The DOM id the tablist owns the + cell by (web).
+const NEW_TAB_ID = 'new-order-tab';
 
 export function OpenOrderTabs({
 	position = 'bottom',
@@ -250,7 +254,13 @@ export function OpenOrderTabs({
 						<Icon name="chevronLeft" className="text-muted-foreground" />
 					</Pressable>
 				)}
-				<View role="tablist" className="min-w-0 flex-1 flex-row overflow-hidden">
+				{/* The + cell sits after the right arrow, outside this view, but it is one of the
+				    tabs: the tablist owns it so a reader finds the selected New tab among them. */}
+				<View
+					role="tablist"
+					aria-owns={NEW_TAB_ID}
+					className="min-w-0 flex-1 flex-row overflow-hidden"
+				>
 					{entries.slice(window.start, window.end).map(renderTab)}
 					{/* The measuring row: the same tabs at their own width, off stage. It is never
 					    read by a cashier or a screen reader, only by the layout pass. */}
@@ -297,6 +307,7 @@ export function OpenOrderTabs({
 				<Animated.View layout={SHIFT} className="h-full">
 					<Pressable
 						role="tab"
+						nativeID={NEW_TAB_ID}
 						aria-selected={fresh}
 						style={{ width: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH }}
 						className={`${CELL} ${fresh ? `flex-row gap-1.5 border-b-2 ${solo ? 'border-transparent' : 'border-primary'}` : ''}`}

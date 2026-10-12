@@ -37,6 +37,8 @@ jest.mock('react-native', () => {
 				accessibilityLabel?: string;
 				'aria-selected'?: boolean;
 				'aria-expanded'?: boolean;
+				'aria-owns'?: string;
+				nativeID?: string;
 				style?: React.CSSProperties;
 			}
 		>(function Host(
@@ -51,6 +53,8 @@ jest.mock('react-native', () => {
 				accessibilityLabel,
 				'aria-selected': selected,
 				'aria-expanded': expanded,
+				'aria-owns': owns,
+				nativeID,
 				style,
 			},
 			ref
@@ -75,6 +79,8 @@ jest.mock('react-native', () => {
 					'aria-label': accessibilityLabel,
 					'aria-selected': selected,
 					'aria-expanded': expanded,
+					'aria-owns': owns,
+					id: nativeID,
 					style,
 				},
 				children
@@ -216,6 +222,8 @@ it("the + cell is the blank cart's tab: it unfolds while the current order is ne
 	expect(fresh.style.width).toBe('112px');
 	expect(fresh.className).toContain('border-primary');
 	expect(screen.getByTestId('new-order-tab-label').textContent).toBe('New');
+	// The tablist owns the cell, so the selected New tab is one of its tabs to a reader.
+	expect(screen.getByRole('tablist').getAttribute('aria-owns')).toBe(fresh.id);
 	expect(open.className).toContain('border-transparent');
 	expect(screen.getAllByTestId(/^open-order-tab-/)).toHaveLength(1);
 	expect(screen.queryByTestId('open-orders-count')).toBeNull();
