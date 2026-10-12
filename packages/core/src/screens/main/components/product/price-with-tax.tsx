@@ -7,9 +7,17 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
+import { useT } from '../../../../contexts/translations';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useTaxDisplayValues } from '../../hooks/use-tax-display-values';
+
+// "incl. 0,86 € tax" / "excl. 0,86 € tax": one translated sentence per side of the tax switch.
+function taxLineText(t: ReturnType<typeof useT>, inclOrExcl: string, amount: string): string {
+	return inclOrExcl === 'incl'
+		? t('common.incl_tax_amount', { amount })
+		: t('common.excl_tax_amount', { amount });
+}
 
 interface Props {
 	price: string;
@@ -29,6 +37,7 @@ export function PriceWithTax({
 	strikethrough,
 	className,
 }: Props) {
+	const t = useT();
 	const { format } = useCurrencyFormat();
 	const { calcTaxes } = useTaxSettings();
 	const taxable = taxStatus === 'taxable' && calcTaxes;
@@ -57,7 +66,7 @@ export function PriceWithTax({
 					</Text>
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
+					<Text>{taxLineText(t, inclOrExcl, format(taxTotal))}</Text>
 				</TooltipContent>
 			</Tooltip>
 		);
@@ -83,7 +92,9 @@ export function PriceWithTax({
 						strikethrough && 'line-through',
 						'text-muted-foreground text-right text-sm'
 					)}
-				>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
+				>
+					{taxLineText(t, inclOrExcl, format(taxTotal))}
+				</Text>
 			</VStack>
 		);
 	}
@@ -108,6 +119,7 @@ export function TaxLine({
 	taxClass,
 	className,
 }: Pick<Props, 'price' | 'taxStatus' | 'taxClass' | 'className'>) {
+	const t = useT();
 	const { format } = useCurrencyFormat();
 	const { calcTaxes } = useTaxSettings();
 	const { taxTotal, inclOrExcl } = useTaxDisplayValues({
@@ -117,5 +129,5 @@ export function TaxLine({
 		context: 'shop',
 	});
 	if (taxStatus !== 'taxable' || !calcTaxes) return null;
-	return <Text className={className}>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>;
+	return <Text className={className}>{taxLineText(t, inclOrExcl, format(taxTotal))}</Text>;
 }
