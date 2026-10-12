@@ -240,6 +240,10 @@ export function canonicalQueryKey(value: unknown): string {
 
 const noop = () => undefined;
 
+function idSet(ids: readonly number[] | undefined): number[] {
+	return [...new Set(ids ?? [])].sort((a, b) => a - b);
+}
+
 /**
  * The products handle for a query state, retained while the caller is mounted.
  *
@@ -261,7 +265,18 @@ export function useProductsQueryHandle(
 		'products',
 		productsScope,
 		variationsScope,
-		{ ...state, search: state.search.trim() },
+		{
+			...state,
+			search: state.search.trim(),
+			filters: {
+				...state.filters,
+				// Term membership is a set: the translator dedupes and sorts these before they
+				// reach the engine, so their selection order is not part of the query's identity.
+				categories: idSet(state.filters.categories),
+				tags: idSet(state.filters.tags),
+				brands: idSet(state.filters.brands),
+			},
+		},
 		parentSearchFields ?? null,
 		childSearchFields ?? null,
 	]);

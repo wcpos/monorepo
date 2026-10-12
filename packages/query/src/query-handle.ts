@@ -628,7 +628,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	spec: QueryHandleSpec<R>,
 	/** The read's value before the engine answers; `ready: false` until it does. */
 	initial: R,
-	registry?: { onStart(): void; onStop(): void }
+	registry?: QueryHandleRegistration<R>
 ): QueryHandle<R> {
 	const listeners = new Set<() => void>();
 	const snapshot$ = new BehaviorSubject<QuerySnapshot<R>>(emptySnapshot(initial));
@@ -727,14 +727,29 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		read = null;
 		publish({ ...snapshot$.getValue(), error });
 	};
+	const subscribeRead = () => {
+		// The first composed value restates the current snapshot; nobody is told twice. A read
+		// that errors synchronously has already cleared `read`; a closed subscription must not
+		// take its place, or the next reader could never retry.
+		const subscription = composed$.subscribe({ next: publish, error: onReadError });
+		if (!subscription.closed) read = subscription;
+	};
+	// A handle that stopped while a reader kept the object, then was retained again after the
+	// registry handed its key to a successor: it mirrors that owner rather than running the
+	// same query beside it (two reads, two demands, two answers for one key).
+	let mirrored: QueryHandle<R> | null = null;
 	const start = () => {
 		if (started) return;
 		started = true;
-		registry?.onStart();
+		const owner = registry?.claim() ?? null;
+		if (owner) {
+			mirrored = owner;
+			read = owner.observe().subscribe(publish);
+			return;
+		}
 		// Demand first, so the first snapshot already carries `pending` and the coverage target.
 		for (const demand of spec.demands) demand.start();
-		// The first composed value restates the current snapshot; nobody is told twice.
-		read = composed$.subscribe({ next: publish, error: onReadError });
+		subscribeRead();
 	};
 	const stop = () => {
 		if (!started) return;
@@ -742,16 +757,20 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		// The read first: the demand's reset values must not land in the stored snapshot.
 		read?.unsubscribe();
 		read = null;
+		if (mirrored) {
+			mirrored = null;
+			return;
+		}
 		for (const demand of spec.demands) demand.stop();
 		// A reader still holding the object sees the rows it had and no demand in flight.
 		publish({ ...snapshot$.getValue(), pending: false });
-		registry?.onStop();
+		registry?.release();
 	};
 	const retain = () => {
 		subscribers += 1;
-		if (started && read === null) {
+		if (started && read === null && !mirrored) {
 			// The read failed earlier; a new reader asks the engine again.
-			read = composed$.subscribe({ next: publish, error: onReadError });
+			subscribeRead();
 			return;
 		}
 		start();
@@ -802,19 +821,33 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 }
 
 /**
- * One handle per key per engine. A handle leaves the registry when it stops (its last reader
- * released and no successor subscribed within the task), so the next reader of that key builds
- * it afresh; while it lives, every reader of the key shares it.
+ * One handle per key per engine. A handle enters the registry when it STARTS (its first
+ * reader), not when it is built: a render that acquires one and is then abandoned before its
+ * effects run would otherwise leave an entry nobody can stop. Two renders that build the same
+ * key before either commits reconcile at start, the second mirroring the first. A handle leaves
+ * the registry when it stops (its last reader released and no successor subscribed within the
+ * task), so the next reader of that key builds it afresh; while it lives, every reader shares it.
  */
 const registries = new WeakMap<
 	RxdbSyncEngine,
 	Map<string, QueryHandle<QueryResult<RxCollection>>>
 >();
 
+/** What the registry tells a handle at start and stop. */
+export type QueryHandleRegistration<R extends QueryResult<RxCollection>> = {
+	/**
+	 * Claim the key. Returns null when the handle now owns it (it was the owner, or the key was
+	 * free), or the live handle that owns it, which the claimant then mirrors.
+	 */
+	claim(): QueryHandle<R> | null;
+	/** Give the key up, if this handle holds it. */
+	release(): void;
+};
+
 export function acquireQueryHandle<R extends QueryResult<RxCollection>>(
 	engine: RxdbSyncEngine,
 	key: string,
-	create: (registry: { onStart(): void; onStop(): void }) => QueryHandle<R>
+	create: (registry: QueryHandleRegistration<R>) => QueryHandle<R>
 ): QueryHandle<R> {
 	let registry = registries.get(engine);
 	if (!registry) {
@@ -824,16 +857,18 @@ export function acquireQueryHandle<R extends QueryResult<RxCollection>>(
 	const existing = registry.get(key);
 	if (existing) return existing as QueryHandle<R>;
 	const handle = create({
-		// A handle that stopped and is retained again (a reader kept the object) re-enters
-		// the registry, so a later acquire of the key shares it instead of doubling the read.
-		onStart() {
-			if (!registry.has(key)) registry.set(key, handle as QueryHandle<QueryResult<RxCollection>>);
+		claim() {
+			const owner = registry.get(key);
+			if (owner === undefined) {
+				registry.set(key, handle as QueryHandle<QueryResult<RxCollection>>);
+				return null;
+			}
+			return owner === handle ? null : (owner as QueryHandle<R>);
 		},
-		onStop() {
+		release() {
 			if (registry.get(key) === handle) registry.delete(key);
 		},
 	});
-	registry.set(key, handle as QueryHandle<QueryResult<RxCollection>>);
 	return handle;
 }
 

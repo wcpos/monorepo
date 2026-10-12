@@ -84,10 +84,11 @@ describe('query handle', () => {
 
 	it('is one object per key while retained, and a fresh one after its last reader leaves', async () => {
 		const first = acquire('a', of(EMPTY));
-		expect(acquire('a', of(EMPTY))).toBe(first);
-		expect(queryHandleCount(engine)).toBe(1);
+		// Built, not yet started: a render that never commits leaves nothing behind.
+		expect(queryHandleCount(engine)).toBe(0);
 
 		const unsubscribe = first.subscribe(() => undefined);
+		expect(queryHandleCount(engine)).toBe(1);
 		expect(acquire('a', of(EMPTY))).toBe(first);
 		unsubscribe();
 		// Still registered inside the task: a successor subscribing now keeps it.
@@ -232,6 +233,52 @@ describe('query handle', () => {
 		expect(handle.value.count).toBe(1);
 		expect(acquire(key, results)).toBe(handle);
 		leave();
+	});
+
+	it("mirrors the key's new owner when a kept handle restarts after its replacement was acquired", async () => {
+		const plan = searchPlan('ada');
+		const first = acquire('h', of(EMPTY), [plan]);
+		const leaveFirst = first.subscribe(() => undefined);
+		leaveFirst();
+		await settle();
+		const results = new Subject<Result>();
+		const second = acquire('h', results, [searchPlan('ada')]);
+		expect(second).not.toBe(first);
+		second.subscribe(() => undefined);
+		const declaredBefore = engine.searchRequireCalls.length;
+
+		// A reader that kept the first object subscribes again: no second read, no second demand.
+		first.subscribe(() => undefined);
+		expect(engine.searchRequireCalls.length).toBe(declaredBefore);
+		results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] });
+		expect(first.value.count).toBe(1);
+		expect(first.value.result).toBe(second.value.result);
+		expect(queryHandleCount(engine)).toBe(1);
+	});
+
+	it('retries a read that failed synchronously while another reader stayed subscribed', () => {
+		let attempts = 0;
+		const handle = acquireQueryHandle(engine, 'i', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('i', of(EMPTY)),
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return attempts === 1 ? throwError(() => new Error('storage gone')) : of(EMPTY);
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		handle.subscribe(() => undefined);
+		expect(handle.value.error).toBeInstanceOf(Error);
+		// The first reader is still there; the second asks again and gets the answer.
+		handle.subscribe(() => undefined);
+		expect(attempts).toBe(2);
+		expect(handle.value.ready).toBe(true);
 	});
 
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
