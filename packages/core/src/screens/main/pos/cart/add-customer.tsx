@@ -24,7 +24,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -44,7 +44,7 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useLocalMutation();
+	const setCartCustomer = useSetCartCustomer();
 	const { storeDB } = useStoreSession();
 	const runtime = useQueryRuntime();
 
@@ -85,13 +85,11 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 					if (currentOrderRecord) {
 						const orderUuid = currentOrderRecord.uuid;
 						const scopeId = runtime.engine.status().activeScopeId;
-						const attached = await localPatch({
-							document: currentOrderRecord,
-							data: {
-								customer_id: GUEST_CUSTOMER_ID,
-								billing: saved?.billing,
-								shipping: saved?.shipping,
-							},
+						const attached = await setCartCustomer(currentOrderRecord, {
+							customerId: GUEST_CUSTOMER_ID,
+							billing: saved?.billing,
+							shipping: saved?.shipping,
+							taxIds: null,
 						});
 						// After the attach, never before: a link whose order does not yet
 						// carry the copied identity would be dropped as "cashier moved on".
@@ -100,7 +98,15 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 								await recordCustomerLink(storeDB, orderUuid, {
 									customerUuid: record.uuid,
 									scopeId,
-									identity: customerLinkIdentity(saved?.billing),
+									// From the order the write landed on (a first add queued ahead may have
+									// replaced the temporary record), as it now stands: a hook may have
+									// completed or kept an address, and the bridge compares against that.
+									identity: customerLinkIdentity(
+										(
+											(attached as { document?: typeof currentOrderRecord }).document ??
+											currentOrderRecord
+										).getLatest().payload.billing as typeof saved.billing
+									),
 									at: new Date().toISOString(),
 								});
 							} catch (error) {
@@ -128,7 +134,7 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				setLoading(false);
 			}
 		},
-		[create, currentOrderRecord, format, localPatch, onClose, runtime, storeDB, t]
+		[create, currentOrderRecord, format, setCartCustomer, onClose, runtime, storeDB, t]
 	);
 
 	return (

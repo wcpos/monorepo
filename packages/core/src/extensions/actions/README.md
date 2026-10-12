@@ -33,6 +33,7 @@ unrelated queued writes.
 | `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
 | `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
 | `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
+| `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit) | `billing`, `shipping`, `taxIds` | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
@@ -86,8 +87,12 @@ print, register open/close, refund, void (its writes sit in a component). Admitt
 2026-10-12 amendment and landing in order: `cart.line.remove` and the fee/shipping edits on
 `cart.line.update`, `cart.coupon.apply` / `cart.coupon.remove` (one writer in
 `screens/main/pos/hooks/coupon-line-actions.ts`: a quick discount is a coupon line carrying its
-intent meta, so both hooks hand their line to the same recalculate-and-patch), `cart.customer.set`.
-A coupon refusal reaches the cashier through the coupon field's own error line, not a toast.
+intent meta, so both hooks hand their line to the same recalculate-and-patch), `cart.customer.set`
+(one writer, `use-set-cart-customer.ts`, for the picker, the new-customer form and the address edit;
+the address edit dispatches with the customer unchanged). A coupon refusal reaches the cashier
+through the coupon field's own error line, not a toast. With it the cart domain is complete: every
+price-affecting cart write goes through the chain, and the fence allowlist holds only the void (its
+own ruling), the payments mirrors, settlement, the order-meta form and the customer note.
 
 ## The hook
 

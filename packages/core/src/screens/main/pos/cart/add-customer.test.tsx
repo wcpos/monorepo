@@ -20,7 +20,11 @@ const mockRecordCustomerLink = jest.fn();
 const mockStoreDB = { name: 'store-db' };
 let mockSubmitCustomer: SubmitCustomer | undefined;
 
-const currentOrderRecord = { uuid: 'order-1' };
+const currentOrderRecord = {
+	uuid: 'order-1',
+	payload: { customer_id: 7 } as Record<string, unknown>,
+	getLatest: () => currentOrderRecord,
+};
 
 // No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
 jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
@@ -100,6 +104,21 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: mockFormat }),
 }));
 
+const mockActionLog = jest.fn();
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
@@ -111,6 +130,8 @@ describe.each([
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockSubmitCustomer = undefined;
+		// The attach mocks write into this record; start each case from the same order.
+		currentOrderRecord.payload = { customer_id: 7 };
 	});
 
 	// #1523: a born-local customer (no Woo id yet, as offline) is attached at once.
@@ -132,7 +153,11 @@ describe.each([
 			getLatest: () => ({ uuid: 'customer-1', payload }),
 			toJSON,
 		});
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
+		// The order carries what was written, as it does in the app.
+		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+			Object.assign(currentOrderRecord.payload, data);
+			return { changes: data, document: currentOrderRecord };
+		});
 
 		render(renderComponent());
 		expect(mockSubmitCustomer).toBeDefined();
@@ -164,6 +189,27 @@ describe.each([
 		expect(mockFormat).toHaveBeenCalledWith(payload);
 		expect(mockLoggerError).not.toHaveBeenCalled();
 		expect(toJSON).not.toHaveBeenCalled();
+	});
+
+	it('a new customer with no shipping address leaves the order shipping alone', async () => {
+		const payload = { first_name: 'Ada', billing: { first_name: 'Ada', email: 'ada@example.com' } };
+		mockCreate.mockResolvedValue({
+			uuid: 'customer-1',
+			payload,
+			getLatest: () => ({ uuid: 'customer-1', payload }),
+			toJSON: () => ({ payload }),
+		});
+		// The order carries what was written, as it does in the app.
+		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+			Object.assign(currentOrderRecord.payload, data);
+			return { changes: data, document: currentOrderRecord };
+		});
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+		const { data } = mockLocalPatch.mock.calls[0][0];
+		expect(data).toEqual({ customer_id: 0, billing: payload.billing, shipping: undefined });
 	});
 
 	it('keeps the form open and records no link when the create could not be queued', async () => {

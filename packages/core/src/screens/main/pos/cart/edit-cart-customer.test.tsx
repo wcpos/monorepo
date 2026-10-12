@@ -44,6 +44,9 @@ const currentOrderRecord = {
 			tax_ids: currentOrder.tax_ids$.value,
 		};
 	},
+	getLatest() {
+		return currentOrderRecord;
+	},
 };
 
 jest.mock('observable-hooks', () => ({
@@ -131,6 +134,21 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({ caps: { canEditCustomers }, known: true }),
 }));
+const mockActionLog = jest.fn();
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
@@ -154,6 +172,9 @@ describe('EditCartCustomerForm', () => {
 		fireEvent.click(screen.getByTestId('pos_cart.save_to_order_customer'));
 
 		await waitFor(() => expect(localPatch).toHaveBeenCalled());
+		// The customer stays who it is: the edit writes the addresses and tax ids, never the id.
+		const written = (localPatch as jest.Mock).mock.calls[0][0] as { data: Record<string, unknown> };
+		expect('customer_id' in written.data).toBe(false);
 		expect(customerFindOne).toHaveBeenCalledWith({
 			selector: { remoteId: '42' },
 		});

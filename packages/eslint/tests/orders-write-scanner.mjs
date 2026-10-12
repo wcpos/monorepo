@@ -54,6 +54,8 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts',
 	// cart.coupon.apply / cart.coupon.remove: the one coupon-line writer (actions ledger 28).
 	'packages/core/src/screens/main/pos/hooks/coupon-line-actions.ts',
+	// cart.customer.set: the one writer for the order's customer and addresses (actions ledger 29).
+	'packages/core/src/screens/main/pos/hooks/use-set-cart-customer.ts',
 	// checkout.tender.commit: the tender sequence, including zero-balance completion.
 	'packages/core/src/screens/main/pos/checkout/tender/use-tender-flow.ts',
 	// checkout.complete: finishSale is the completion writer (actions ledger 23).

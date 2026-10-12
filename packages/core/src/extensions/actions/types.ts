@@ -13,6 +13,7 @@ export const ACTION_EVENTS = [
 	'cart.line.remove',
 	'cart.coupon.apply',
 	'cart.coupon.remove',
+	'cart.customer.set',
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
 ] as const satisfies readonly ActionEvent[];
@@ -117,6 +118,18 @@ export interface ActionContracts {
 		};
 		result: unknown;
 	};
+	'cart.customer.set': {
+		payload: {
+			customerId: number;
+			previousCustomerId: number | null;
+			/** `null` when the caller supplied no address; the write then leaves the field absent. */
+			billing: PlainLine | null;
+			shipping: PlainLine | null;
+			/** The order's tax-id snapshot; `null` means the write leaves the current one alone. */
+			taxIds: PlainLine[] | null;
+		};
+		result: unknown;
+	};
 }
 /** Every other payload key is restored by the dispatcher. */
 export const REWRITABLE_PAYLOAD_KEYS = {
@@ -128,6 +141,7 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	// to rewrite a coupon line first makes the recalculation read the payload.
 	'cart.coupon.apply': [],
 	'cart.coupon.remove': [],
+	'cart.customer.set': ['billing', 'shipping', 'taxIds'],
 	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
 	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
 	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the

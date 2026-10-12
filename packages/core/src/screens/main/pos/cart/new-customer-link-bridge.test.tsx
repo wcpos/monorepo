@@ -174,6 +174,21 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: () => '2026-09-30T00:00:00',
 }));
 
+const mockActionLog = jest.fn();
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order/temporary-order', () => ({
 	getTemporaryOrder: async () => null,
 	patchTemporaryOrderPayload: async () => null,
@@ -332,6 +347,63 @@ describe('NewCustomerLinkBridge', () => {
 		});
 		// Still an open cart, so the stamp is only held: the link stays until the store has it.
 		expect(Object.keys(await pendingCustomerLinks(mockStoreDB))).toEqual([ORDER]);
+	});
+
+	it('the stamp is a system cart.customer.set: a hook sees the real id arrive, and may refuse it', async () => {
+		const { registerActionHook, resetActionRegistry } = jest.requireActual<
+			typeof import('../../../../extensions/actions')
+		>('../../../../extensions/actions');
+		resetActionRegistry();
+		const seen: unknown[] = [];
+		registerActionHook(
+			'cart.customer.set',
+			async (_ctx, e, next) => {
+				seen.push(e);
+				return e.source === 'system' && e.payload.customerId === 91
+					? { deny: { reasonKey: 'loyalty.customer_blocked' } }
+					: next(e);
+			},
+			{ id: 'test.loyalty', tier: 'guard' }
+		);
+		try {
+			seed({ order: attachedOpenCart });
+			await linkOrderToCustomer();
+			render(<NewCustomerLinkBridge />);
+			await flush();
+			await acknowledgeCustomer(91);
+			emit({
+				type: 'write-acknowledged',
+				collection: 'customers',
+				recordId: CUSTOMER,
+				mutationId: 'm-customer',
+				currentRevision: null,
+			});
+			await flush();
+			expect(seen).toEqual([
+				expect.objectContaining({
+					event: 'cart.customer.set',
+					source: 'system',
+					orderId: ORDER,
+					payload: expect.objectContaining({
+						customerId: 91,
+						previousCustomerId: 0,
+						billing: null,
+						shipping: null,
+						taxIds: null,
+					}),
+				}),
+			]);
+			// Refused: no stamp, the order stays a guest, and the link waits for another pass.
+			expect(orderUpdates()).toEqual([]);
+			expect(residents.orders!.get(ORDER)!.payload.customer_id).toBe(0);
+			expect(mockActionLog).toHaveBeenCalledWith(
+				'warn',
+				'loyalty.customer_blocked',
+				expect.objectContaining({ showToast: true })
+			);
+		} finally {
+			resetActionRegistry();
+		}
 	});
 
 	it('sends a follow-up update carrying the id when the order was already pushed as a guest', async () => {

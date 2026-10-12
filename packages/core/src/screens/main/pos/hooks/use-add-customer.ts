@@ -4,10 +4,10 @@ import { isGuestCustomer } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
+import { useSetCartCustomer } from './use-set-cart-customer';
 import { transformCustomerJSONToOrderJSON } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -21,7 +21,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 export const useAddCustomer = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const guestCustomer = useGuestCustomer();
-	const { localPatch } = useLocalMutation();
+	const setCartCustomer = useSetCartCustomer();
 	const { store } = useAppState();
 	const country = useDocField(store, (value) => value.store_country);
 	const t = useT();
@@ -53,12 +53,17 @@ export const useAddCustomer = () => {
 				? t('common.guest')
 				: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email || `#${data.id}`;
 
-			const result = await localPatch({
-				document: currentOrderRecord,
-				data: transformCustomerJSONToOrderJSON(
-					data as unknown as import('@wcpos/database').CustomerDocument,
-					country as string
-				),
+			const { customer_id, billing, shipping, tax_ids } = transformCustomerJSONToOrderJSON(
+				data as unknown as import('@wcpos/database').CustomerDocument,
+				country as string
+			);
+			const result = await setCartCustomer(currentOrderRecord, {
+				// A born-local customer picked before its create is acknowledged has no id yet; the
+				// order keeps its customer and takes the addresses, as it always did.
+				customerId: customer_id,
+				billing,
+				shipping,
+				taxIds: tax_ids,
 			});
 
 			// A failed local write returns a falsy result. Logging success anyway records
@@ -79,7 +84,7 @@ export const useAddCustomer = () => {
 
 			return result;
 		},
-		[country, currentOrderRecord, guestCustomer, localPatch, orderLogger, t]
+		[country, currentOrderRecord, guestCustomer, setCartCustomer, orderLogger, t]
 	);
 
 	return {
