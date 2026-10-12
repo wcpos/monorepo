@@ -39,3 +39,9 @@ export type {
 	SearchSelectBinding,
 	SearchSelectCollection,
 } from './query-bindings';
+export {
+	useProductsQueryHandle,
+	useQueryHandleResource,
+	useQueryHandleValue,
+} from './query-handles';
+export type { QueryHandle, QuerySnapshot } from '@wcpos/query';

@@ -73,3 +73,30 @@ export {
 	storageQueryProjectionReader,
 } from './projection-read';
 export type { ProjectionCollection, ProjectionReader, ProjectionRow } from './projection-read';
+export {
+	acquireQueryHandle,
+	ATTEMPTED,
+	censusTotal$,
+	coverageProjection$,
+	coverageTargetFor,
+	coverageTargetKey,
+	createDemand,
+	createQueryHandle,
+	exhaustedFromCoverage$,
+	NO_CENSUS_TOTAL$,
+	NOT_ATTEMPTED,
+	queryHandleCount,
+	queryHandleResource,
+	queryHandleResults$,
+	readinessFrom,
+	releaseHandles,
+} from './query-handle';
+export type {
+	Demand,
+	DemandPlan,
+	DemandReadiness,
+	QueryHandle,
+	QueryHandleSpec,
+	QueryLaneProgress,
+	QuerySnapshot,
+} from './query-handle';
