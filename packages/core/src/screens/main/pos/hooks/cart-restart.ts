@@ -24,6 +24,15 @@ export function cartRestartsOnAdd(payload: Payload): boolean {
 	if (payload.status !== 'pos-open') return false;
 	if (payload.date_paid_gmt) return false;
 	if (readLedger(payload.meta_data as never).length > 0) return false;
+	return isCartEmpty(payload);
+}
+
+/**
+ * No live product, fee or shipping line: the same test useCartLines applies before it draws
+ * the rows. The open-carts row reads it too (an empty cart shows no age, because its creation
+ * time is the next line's), so the row and the restart can never disagree about "empty".
+ */
+export function isCartEmpty(payload: Payload): boolean {
 	const live =
 		(payload.line_items ?? []).some((line) => line.product_id !== null) ||
 		(payload.fee_lines ?? []).some((fee) => fee.name !== null) ||

@@ -960,6 +960,7 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch.mock.calls[0][0].data).toMatchObject({
 			date_created_gmt: '2026-07-14T00:00:00',
+			date_created: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/),
 		});
 		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toHaveLength(2);
 	});

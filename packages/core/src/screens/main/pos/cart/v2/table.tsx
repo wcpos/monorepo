@@ -337,64 +337,63 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 					</TableRow>
 				))}
 			</TableHeader>
-			<ScrollView
-				ref={scrollViewRef}
-				testID="cart-table-scroll"
-				contentContainerClassName={data.length === 0 ? 'flex-1' : undefined}
-			>
-				{data.length === 0 && <EmptyCart />}
-				<TableBody>
-					{table.getRowModel().rows.map((row, index) => (
-						<PulseTableRow
-							key={row.id}
-							ref={(ref) => {
-								rowRefs.current.set(row.id, ref);
-							}}
-							index={index}
-							table={table}
-							row={row}
-							className="bg-card border-border min-h-row border-b"
-							onLayout={(e) => {
-								const { y, height } = e.nativeEvent.layout;
-								rowLayouts.current.set(row.id, { y, height });
-							}}
-						>
-							<LineStrip line={row.original} rowRefs={rowRefs}>
-								{(wrapTotal) => {
-									const visible = row.getVisibleCells();
-									// The strip's press target is the Total cell; with Total hidden in the
-									// settings it is the last visible cell, so Edit and Remove stay reachable.
-									const targetId = visible.some((cell) => cell.column.id === 'total')
-										? 'total'
-										: visible.at(-1)?.column.id;
-									return visible.map((cell) => {
-										const meta = cell.column.columnDef.meta;
-										const content = flexRender(cell.column.columnDef.cell, cell.getContext());
-										return (
-											<TableCell
-												key={cell.id}
-												className={AMOUNT_COLUMNS[cell.column.id]?.cell}
-												style={
-													AMOUNT_COLUMNS[cell.column.id]
-														? { alignItems: getFlexAlign(meta?.align || 'left') }
-														: {
-																flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-																flexBasis: meta?.width ? meta.width : undefined,
-																flexShrink: cell.column.id === 'name' ? 1 : 0,
-																alignItems: getFlexAlign(meta?.align || 'left'),
-															}
-												}
-											>
-												{cell.column.id === targetId ? wrapTotal(content) : content}
-											</TableCell>
-										);
-									});
+			{data.length === 0 ? (
+				<EmptyCart />
+			) : (
+				<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
+					<TableBody>
+						{table.getRowModel().rows.map((row, index) => (
+							<PulseTableRow
+								key={row.id}
+								ref={(ref) => {
+									rowRefs.current.set(row.id, ref);
 								}}
-							</LineStrip>
-						</PulseTableRow>
-					))}
-				</TableBody>
-			</ScrollView>
+								index={index}
+								table={table}
+								row={row}
+								className="bg-card border-border min-h-row border-b"
+								onLayout={(e) => {
+									const { y, height } = e.nativeEvent.layout;
+									rowLayouts.current.set(row.id, { y, height });
+								}}
+							>
+								<LineStrip line={row.original} rowRefs={rowRefs}>
+									{(wrapTotal) => {
+										const visible = row.getVisibleCells();
+										// The strip's press target is the Total cell; with Total hidden in the
+										// settings it is the last visible cell, so Edit and Remove stay reachable.
+										const targetId = visible.some((cell) => cell.column.id === 'total')
+											? 'total'
+											: visible.at(-1)?.column.id;
+										return visible.map((cell) => {
+											const meta = cell.column.columnDef.meta;
+											const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+											return (
+												<TableCell
+													key={cell.id}
+													className={AMOUNT_COLUMNS[cell.column.id]?.cell}
+													style={
+														AMOUNT_COLUMNS[cell.column.id]
+															? { alignItems: getFlexAlign(meta?.align || 'left') }
+															: {
+																	flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+																	flexBasis: meta?.width ? meta.width : undefined,
+																	flexShrink: cell.column.id === 'name' ? 1 : 0,
+																	alignItems: getFlexAlign(meta?.align || 'left'),
+																}
+													}
+												>
+													{cell.column.id === targetId ? wrapTotal(content) : content}
+												</TableCell>
+											);
+										});
+									}}
+								</LineStrip>
+							</PulseTableRow>
+						))}
+					</TableBody>
+				</ScrollView>
+			)}
 		</Table>
 	);
 }

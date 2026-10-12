@@ -134,6 +134,18 @@ it('a row says who, what, how long and its status; from three entries the line i
 					},
 				} as unknown as EngineRecord<'orders'>,
 			},
+			{
+				id: 'd',
+				record: {
+					uuid: 'd',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T10:26:00',
+						// A live shipping line with its title cleared: nothing to list, but a line.
+						shipping_lines: [{ method_id: 'flat_rate', method_title: '' }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
 		];
 		render(
 			<OpenOrdersList orders={orders} activeValue="b" onSelect={jest.fn()} onClose={jest.fn()} />
@@ -153,6 +165,9 @@ it('a row says who, what, how long and its status; from three entries the line i
 		expect(screen.queryByTestId('open-orders-row-b-age')).toBeNull();
 		// A cart with a line that has sat for hours shows its age gone stale.
 		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warning');
+		// The age follows the live-line test, not the summary text (Greptile/Codex on #2467).
+		expect(screen.getByTestId('open-orders-row-d-items').textContent).toBe('pos_cart.cart_empty');
+		expect(screen.getByTestId('open-orders-row-d-age')).toBeTruthy();
 		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {

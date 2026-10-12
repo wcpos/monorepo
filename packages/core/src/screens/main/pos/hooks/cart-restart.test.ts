@@ -1,6 +1,6 @@
 import { LEDGER_META_KEY } from '@wcpos/order-math';
 
-import { cartRestartsOnAdd } from './cart-restart';
+import { cartRestartsOnAdd, isCartEmpty } from './cart-restart';
 
 const open = (extra: Record<string, unknown> = {}) => ({ status: 'pos-open', ...extra });
 
@@ -43,4 +43,12 @@ it('only an unpaid pos-open cart restarts', () => {
 			})
 		)
 	).toBe(false);
+});
+
+it('isCartEmpty is the live-line test the row and the restart share', () => {
+	expect(isCartEmpty({})).toBe(true);
+	expect(isCartEmpty({ line_items: [{ product_id: null }] })).toBe(true);
+	// A live line with nothing to say (zero quantity, a blank title) is still a line.
+	expect(isCartEmpty({ line_items: [{ product_id: 41 }] })).toBe(false);
+	expect(isCartEmpty({ shipping_lines: [{ method_id: 'flat_rate' }] })).toBe(false);
 });

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { format } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
 import { calculateCartLine } from '@wcpos/order-math';
@@ -296,8 +297,13 @@ export const useAddItemToOrder = () => {
 							// A line going into an emptied cart RESTARTS it: the creation time is
 							// the start of the sale in front of the cashier, not of the abandoned
 							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
+							// Both dates: the receipt prints `date_created` (store-local; the server's
+							// own value replaces this device-local one on the next acknowledgement).
 							const restart = cartRestartsOnAdd(latest.payload)
-								? { date_created_gmt: convertLocalDateToUTCString(new Date()) }
+								? {
+										date_created_gmt: convertLocalDateToUTCString(new Date()),
+										date_created: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
+									}
 								: {};
 							result = await localPatch({
 								document: latest,

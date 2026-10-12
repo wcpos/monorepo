@@ -15,6 +15,7 @@ import { convertUTCStringToLocalDate } from '../../../../../hooks/use-local-date
 import { useNowMs, useRelativeTime } from '../../../../../hooks/use-relative-time';
 import { CartTabTitle } from '../tab-title';
 import { cartContents } from './cart-contents';
+import { isCartEmpty } from '../../hooks/cart-restart';
 import { TabChip } from './tab-chip';
 
 // The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows
@@ -170,7 +171,7 @@ function OrderRow({
 				</View>
 				<HStack space="sm">
 					{/* An empty cart has no age: its creation time restarts with the next line (#2183). */}
-					{openedMs !== undefined && entries.length > 0 && (
+					{openedMs !== undefined && !isCartEmpty(payload) && (
 						<HStack space="xs">
 							<Icon
 								name="clock"
