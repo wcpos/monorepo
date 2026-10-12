@@ -941,6 +941,8 @@
 	"pos_cart.remove_line_not_found": "That item is no longer in the cart.",
 	"pos_cart.only_n_available": "Only {quantity} available for {name}",
 	"pos_cart.n_available": "{quantity} available",
+	"pos_cart.reduce_line": "Reduce",
+	"pos_cart.checkout_blocked": "Checkout blocked, {n} to fix",
 	"pos_cart.open_new_order": "Open new order",
 	"pos_cart.open_orders_position": "Open orders position",
 	"pos_cart.status_cashier_warning": "Changing the status or the cashier sends this order to the server and removes it from your cart.",

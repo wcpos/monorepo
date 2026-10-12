@@ -38,6 +38,8 @@ import {
 	useRegisterPickerRequested,
 } from './register-picker-request';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
+import { CartConditionsNotice } from './conditions-notice';
+import { CartConditionsProvider } from '../conditions/use-cart-conditions';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 const NEVER_CHANGES = () => () => {};
@@ -49,7 +51,15 @@ const LOADING_ROWS = (
 	</View>
 );
 
-export function OpenOrders({
+export function OpenOrders(props: React.ComponentProps<typeof CartColumn>) {
+	return (
+		<CartConditionsProvider>
+			<CartColumn {...props} />
+		</CartConditionsProvider>
+	);
+}
+
+function CartColumn({
 	isColumn = false,
 	receiptOrderUuid,
 }: {
@@ -212,6 +222,9 @@ export function OpenOrders({
 								</View>
 								<ErrorBoundary>
 									<CartTotalsChangedBanner />
+								</ErrorBoundary>
+								<ErrorBoundary>
+									<CartConditionsNotice />
 								</ErrorBoundary>
 								<ErrorBoundary>
 									<Totals />

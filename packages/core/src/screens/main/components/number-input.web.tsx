@@ -41,6 +41,9 @@ export interface NumberInputProps {
 
 	/**  */
 	testID?: string;
+
+	/** `focus()` opens the numpad, as a tap does (the native input focuses its field). */
+	ref?: React.Ref<{ focus: () => void }>;
 }
 
 /**
@@ -55,13 +58,15 @@ export function NumberInput({
 	textClassName,
 	formatOptions,
 	testID,
+	ref,
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useDocField(store, (value) => value.price_decimal_sep) as
 		string | undefined;
 	const t = useT();
-	const triggerRef = React.useRef<{ close: () => void }>(null);
+	const triggerRef = React.useRef<{ open: () => void; close: () => void }>(null);
+	React.useImperativeHandle(ref, () => ({ focus: () => triggerRef.current?.open() }), []);
 	const numpadRef = React.useRef<{ getValue: () => number }>(null);
 	const { format } = useNumberFormat(formatOptions);
 	const { format: formatDisplay } = useNumberFormat({

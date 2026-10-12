@@ -3232,6 +3232,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 
 const mockActionLog = jest.fn();
 const mockResolveSession = jest.fn();
+let mockPreventOverselling = false;
+const mockCatalog = jest.fn(async (_kind: string, _id: number): Promise<unknown> => null);
 jest.mock('../../hooks/use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {
@@ -3239,10 +3241,10 @@ jest.mock('../../hooks/use-action-context', () => ({
 			t: (key: string) => key,
 			now: () => Date.now(),
 			read: {
-				catalog: async () => null,
+				catalog: mockCatalog,
 				paymentMethod: (id: string) => mockMethods.find((method) => method.id === id) ?? null,
 			},
-			store: { preventOverselling: false, priceDecimals: 2 },
+			store: { preventOverselling: mockPreventOverselling, priceDecimals: 2 },
 			register: { resolveSession: mockResolveSession },
 		},
 		actor: { userId: 7, registerId: mockBoundRegisterId, sessionId: null },
@@ -3372,6 +3374,113 @@ it('refuses the commit when a cart edit queued before Pay moved the balance', as
 		})
 	);
 	expect(result.current.busy).toBe(false);
+});
+
+describe('the conditions gate (roadmap#62)', () => {
+	const belt = (quantity: number) => ({
+		product_id: 5,
+		variation_id: 0,
+		quantity,
+		name: 'Belt',
+		total: '92.95',
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: 'belt' }],
+	});
+	const stocked = (stock_quantity: number, backorders = 'no') =>
+		mockCatalog.mockImplementation(async () => ({
+			manage_stock: true,
+			stock_quantity,
+			backorders,
+		}));
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockLeg = null;
+		mockRealService = null;
+		resetCheckoutMode();
+		mockMethods = [cash];
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockPreventOverselling = true;
+	});
+	afterEach(() => {
+		mockPreventOverselling = false;
+		mockCatalog.mockReset().mockImplementation(async () => null);
+	});
+	const take = async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		return result;
+	};
+
+	it('refuses with the first unmet line’s reason; no attempt, no leg', async () => {
+		mockPayload = { id: 42, total: '92.95', meta_data: [], line_items: [belt(3)] };
+		stocked(2);
+		const result = await take();
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_cart.only_n_available',
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({
+					reasonKey: 'pos_cart.only_n_available',
+					lineUuid: 'belt',
+				}),
+			})
+		);
+		expect(jest.mocked(recordCompletionAttempt)).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(result.current.busy).toBe(false);
+	});
+
+	it('passes a backorder the store notifies about', async () => {
+		mockPayload = { id: 42, total: '92.95', meta_data: [], line_items: [belt(3)] };
+		stocked(2, 'notify');
+		await take();
+		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	});
+
+	it('judges nothing with overselling allowed', async () => {
+		mockPayload = { id: 42, total: '92.95', meta_data: [], line_items: [belt(3)] };
+		mockPreventOverselling = false;
+		stocked(0);
+		await take();
+		expect(mockCatalog).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	});
+
+	it('the slot’s count decides: a line raised by a write queued ahead is refused', async () => {
+		mockPayload = { id: 42, total: '92.95', meta_data: [], line_items: [belt(1)] };
+		stocked(2);
+		let release!: () => void;
+		// The edit ahead raises the line past the stock while the keypad, and the press, see 1.
+		const ahead = enqueueOrderMutation(
+			order.uuid,
+			() =>
+				new Promise<void>((resolve) => {
+					release = () => {
+						mockPayload.line_items = [belt(3)];
+						resolve();
+					};
+				})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		let taking!: Promise<void>;
+		await act(async () => {
+			taking = result.current.takeTender();
+			await Promise.resolve();
+		});
+		await act(async () => {
+			release();
+			await ahead;
+			await taking;
+		});
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_cart.only_n_available',
+			expect.anything()
+		);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
 });
 
 it("writes the session's pre-action reset in the handler, after the gate's read and before the attempt record", async () => {

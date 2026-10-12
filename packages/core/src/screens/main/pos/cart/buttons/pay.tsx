@@ -1,8 +1,10 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 
 import { Button } from '@wcpos/components/button';
+import { CROSSFADE } from '@wcpos/components/lib/motion';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
@@ -18,6 +20,7 @@ import {
 	markOrderSaving,
 } from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
+import { scrollToLine, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -27,6 +30,7 @@ import { showOrderRefusedToast } from '../../checkout/refusal-toast';
 import { returnToTill } from '../../checkout/till-route';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
+const BLOCKED_OPACITY = 0.38; // the dimmed Pay of the checkout-conditions board (roadmap#62)
 
 /**
  *
@@ -45,6 +49,8 @@ export function PayButton() {
 	const save = useCheckoutSave();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
+	const unmet = useCartUnmet();
+	const reduced = useReducedMotion();
 
 	const displayTotal = getNetPaymentTotal(total, refunds);
 
@@ -52,6 +58,12 @@ export function PayButton() {
 	 *
 	 */
 	const handlePay = React.useCallback(async () => {
+		if (unmet.length > 0) {
+			scrollToLine(unmet[0].lineUuid);
+			return checkoutLogger.info(t('pos_cart.checkout_blocked', { n: unmet.length }), {
+				context: { orderId: currentOrderRecord.uuid, unmet: unmet.map((u) => [u.id, u.lineUuid]) },
+			});
+		}
 		// #163 ruling R5: a dead storage worker hard-blocks the money paths. Cash
 		// taken for an order the device cannot persist has no local record at all.
 		if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
@@ -161,6 +173,7 @@ export function PayButton() {
 			setLoading(false);
 		}
 	}, [
+		unmet,
 		blockIfDegraded,
 		pushDocument,
 		save,
@@ -178,19 +191,31 @@ export function PayButton() {
 	 *
 	 */
 	return (
-		<Button
-			testID="checkout-button"
-			size="lg"
-			onPress={handlePay}
-			// The same 56 px as the foot's Open/Close register buttons. `w-full`, not `flex-1`:
-			// the foot's wrapper is a column, where `flex-1` collapses the height to the label.
-			className="min-h-14 w-full"
-			loading={loading}
-			disabled={storageDegraded}
+		<Animated.View
+			testID="checkout-button-frame"
+			className="w-full"
+			// Dimmed, not `disabled` (a dead tap is a bug); the resolved beat eases back (rule 6).
+			style={{
+				opacity: unmet.length > 0 ? BLOCKED_OPACITY : 1,
+				transitionProperty: 'opacity',
+				transitionDuration: reduced ? 0 : CROSSFADE,
+				transitionTimingFunction: 'ease-out',
+			}}
 		>
-			{t('pos_cart.checkout', {
-				order_total: format(displayTotal || 0),
-			})}
-		</Button>
+			<Button
+				testID="checkout-button"
+				size="lg"
+				onPress={handlePay}
+				// The same 56 px as the foot's Open/Close register buttons. `w-full`, not `flex-1`:
+				// the foot's wrapper is a column, where `flex-1` collapses the height to the label.
+				className="min-h-14 w-full"
+				loading={loading}
+				disabled={storageDegraded}
+			>
+				{t('pos_cart.checkout', {
+					order_total: format(displayTotal || 0),
+				})}
+			</Button>
+		</Animated.View>
 	);
 }

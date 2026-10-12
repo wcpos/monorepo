@@ -4,15 +4,21 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { ProductName } from './product-name';
+import { openLineQuantity } from '../../../conditions/use-cart-conditions';
 
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, decodeHtml, ...props }: React.PropsWithChildren<{ decodeHtml?: boolean }>) => {
+	Text: ({
+		children,
+		decodeHtml,
+		className,
+		...props
+	}: React.PropsWithChildren<{ decodeHtml?: boolean; className?: string }>) => {
 		const { Text } = jest.requireActual('react-native');
 		const { decode } = jest.requireActual('html-entities');
 		return (
-			<Text {...props}>
+			<Text {...props} dataSet={{ classname: className }}>
 				{decodeHtml && typeof children === 'string' ? decode(children) : children}
 			</Text>
 		);
@@ -27,9 +33,20 @@ jest.mock('../../../hooks/use-update-line-item', () => ({
 }));
 jest.mock('../../../hooks/stock-rejection', () => ({
 	stockRejection$: new (jest.requireActual('rxjs').BehaviorSubject)(null),
-	getStockRejectionForLine: () => null,
+	getStockRejectionForLine: () => mockRejection,
 }));
-jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../../../contexts/translations', () => ({
+	useT: () => (key: string, params?: Record<string, unknown>) =>
+		params ? `${key} ${JSON.stringify(params)}` : key,
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: ({ name }: { name: string }) => `[${name}]` }));
+let mockUnmet: { lineUuid: string; available: number | null }[] = [];
+let mockRejection: { available: number | null } | null = null;
+jest.mock('../../../conditions/use-cart-conditions', () => ({
+	...jest.requireActual('../../../conditions/use-cart-conditions'),
+	useCartUnmet: () => mockUnmet,
+}));
+jest.mock('../../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
 jest.mock('../../../../components/editable-field', () => ({ EditableField: () => null }));
 
 it('joins public metadata into a decoded subline while keeping value-only selectors', () => {
@@ -65,4 +82,65 @@ it('joins public metadata into a decoded subline while keeping value-only select
 	expect(colour.parentElement).toBe(size.parentElement);
 	expect(colour.parentElement?.textContent).toBe('Colour: Natural & cream · Size: L');
 	expect(screen.queryByTestId('cart-line-meta-_private')).toBeNull();
+});
+
+describe('the stock mark (roadmap#62)', () => {
+	const scrollToRow = jest.fn();
+	const props = (uuid: string) =>
+		({
+			row: { original: { uuid, type: 'line_items', item: { name: 'Belt', meta_data: [] } } },
+			column: { columnDef: { meta: { show: () => false } } },
+			table: { options: { data: [], meta: { scrollToRow } } },
+		}) as unknown as React.ComponentProps<typeof ProductName>;
+	afterEach(() => {
+		mockUnmet = [];
+		mockRejection = null;
+		scrollToRow.mockClear();
+	});
+
+	it('marks a line the cart judges over stock: attention icon, words readable in both themes', () => {
+		mockUnmet = [{ lineUuid: 'line-1', available: 2 }];
+		render(<ProductName {...props('line-1')} />);
+		const mark = screen.getByTestId('cart-line-stock-mark');
+		expect(mark.textContent).toBe('[box]pos_cart.n_available {"quantity":2}');
+		expect(mark.innerHTML).toContain('text-foreground');
+		expect(mark.innerHTML).not.toMatch(/text-destructive|text-attention/);
+	});
+
+	it('says out of stock when nothing is known, and marks no other line', () => {
+		mockUnmet = [{ lineUuid: 'line-1', available: null }];
+		render(<ProductName {...props('line-1')} />);
+		expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe('[box]common.out_of_stock');
+		render(<ProductName {...props('line-2')} />);
+		expect(screen.getAllByTestId('cart-line-stock-mark')).toHaveLength(1);
+	});
+
+	it.each([0, -2])(
+		'reads out of stock at %d left, never a count of what is not there',
+		(available) => {
+			mockUnmet = [{ lineUuid: 'line-1', available }];
+			render(<ProductName {...props('line-1')} />);
+			expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe(
+				'[box]common.out_of_stock'
+			);
+		}
+	);
+
+	it('prefers the cart’s own judgement over the server’s refusal', () => {
+		mockRejection = { available: 5 };
+		mockUnmet = [{ lineUuid: 'line-1', available: 2 }];
+		render(<ProductName {...props('line-1')} />);
+		expect(screen.getByTestId('cart-line-stock-mark').textContent).toBe(
+			'[box]pos_cart.n_available {"quantity":2}'
+		);
+	});
+
+	it('registers the line’s scroll, so the notice reaches it with the quantity column hidden', () => {
+		const { unmount } = render(<ProductName {...props('line-s')} />);
+		openLineQuantity('line-s'); // no keypad registered: the tap still scrolls to the line
+		expect(scrollToRow).toHaveBeenCalledWith('line-s');
+		unmount();
+		openLineQuantity('line-s');
+		expect(scrollToRow).toHaveBeenCalledTimes(1);
+	});
 });

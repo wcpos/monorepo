@@ -14,6 +14,7 @@ module.exports = {
 	Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
 	interpolate: lands,
 	useAnimatedStyle: () => ({}),
+	useReducedMotion: () => false,
 	useSharedValue: (value) => React.useRef({ value }).current,
 	withSequence: (...steps) => steps.at(-1),
 	withSpring: lands,
