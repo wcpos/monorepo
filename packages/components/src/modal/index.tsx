@@ -29,7 +29,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button, type ButtonProps } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT } from '../lib/motion';
-import { OVERLAY_MOTION } from '../lib/overlay';
+import { OVERLAY_MOTION, SCRIM_WRAPPER } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -134,7 +134,8 @@ function ModalOverlayWeb({
 	side?: ModalSide;
 }) {
 	const { onClose } = useRootContext();
-	// Radix adds a content wrapper; display: contents preserves the panel's flex sizing.
+	// Radix adds a content wrapper; SCRIM_WRAPPER sizes it as the panel's box (never
+	// `display: contents`, which kills native drag inside the panel).
 	return (
 		<DialogPrimitive.Root
 			asChild
@@ -145,7 +146,8 @@ function ModalOverlayWeb({
 		>
 			<DialogPrimitive.Overlay
 				className={cn(
-					'web:animate-overlay-in absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full [&>[role=dialog]]:contents',
+					'web:animate-overlay-in absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+					SCRIM_WRAPPER[side],
 					overlayAlignment[side],
 					className
 				)}
@@ -238,7 +240,8 @@ const modalContentVariants = cva(
 				center: '',
 				right: 'h-full max-h-full max-w-full rounded-none border-r-0',
 				left: 'h-full max-h-full max-w-full rounded-none border-l-0',
-				bottom: 'max-h-[85%] w-full max-w-full rounded-none border-b-0',
+				// Native keeps its own cap; on web the cap sits on the Radix wrapper (SCRIM_WRAPPER).
+				bottom: 'web:max-h-full max-h-[85%] w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {

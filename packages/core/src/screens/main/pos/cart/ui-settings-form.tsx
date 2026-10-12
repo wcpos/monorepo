@@ -142,7 +142,7 @@ export function UISettingsForm() {
 									{...field}
 									label={t('pos_cart.sort_items')}
 									value={sortOptions.find(
-										(option) => option.value === (field.value ?? 'newest_bottom')
+										(option) => option.value === (field.value ?? 'newest_top')
 									)}
 								>
 									<SelectTrigger testID="cart-sort-items">

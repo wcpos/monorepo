@@ -192,7 +192,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 			...formatCartItems(fee_lines, 'fee_lines'),
 			...formatCartItems(shipping_lines, 'shipping_lines'),
 		];
-		return sortLines(flattenedArray, setting ?? 'newest_bottom');
+		return sortLines(flattenedArray, setting ?? 'newest_top');
 	}, [line_items, fee_lines, shipping_lines, setting]);
 	/**
 	 * Pulse rows green when a line is added or its quantity changes.

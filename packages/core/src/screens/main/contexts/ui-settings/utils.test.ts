@@ -48,7 +48,7 @@ describe('mergeWithInitalValues', () => {
 
 	it('does not write state when columns are already semantically equal', async () => {
 		const currentState = {
-			sortLines: 'newest_bottom',
+			sortLines: 'newest_top',
 			openOrdersPosition: 'bottom',
 			sortBy: 'id',
 			sortDirection: 'asc',
@@ -251,6 +251,30 @@ describe('mergeWithInitalValues', () => {
 		await mergeWithInitalValues('pos-products', state as never);
 
 		expect(currentState.position).toBe('right');
+	});
+
+	it('seeds a cart with no sort as newest at top, and keeps a stored newest_bottom', async () => {
+		// The default moved to newest_top (2026-10-12); a profile that chose or was seeded with
+		// newest_bottom keeps it — the merge fills only what is missing.
+		for (const [stored, expected] of [
+			[undefined, 'newest_top'],
+			['newest_bottom', 'newest_bottom'],
+		] as const) {
+			const currentState: Record<string, unknown> = { columns: [] };
+			if (stored) currentState.sortLines = stored;
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+
+			await mergeWithInitalValues('pos-cart', state as never);
+
+			expect(currentState.sortLines).toBe(expected);
+			const wrote = state.set.mock.calls.some(([key]) => key === 'sortLines');
+			expect(wrote).toBe(stored === undefined);
+		}
 	});
 
 	it('resets a browseBy outside the vocabulary to the default, categories', async () => {
