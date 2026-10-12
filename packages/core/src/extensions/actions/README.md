@@ -29,7 +29,8 @@ unrelated queued writes.
 | Event                    | Raised by           | Rewritable keys                                                | Can refuse |
 | ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
-| `cart.line.update`       | `useUpdateLineItem` | `changes`                                                      | yes        |
+| `cart.line.update`       | `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` (`type` says which list) | `changes` | yes |
+| `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
@@ -79,7 +80,9 @@ tender path), and enqueues for callers outside it (the terminal service and repl
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
 (a) today: receipt
-print, register open/close, discount apply, customer set, refund.
+print, register open/close, refund, void (its writes sit in a component). Admitted by the spec's
+2026-10-12 amendment and landing in order: `cart.line.remove` and the fee/shipping edits on
+`cart.line.update` (this PR), `cart.coupon.apply` / `cart.coupon.remove`, `cart.customer.set`.
 
 ## The hook
 

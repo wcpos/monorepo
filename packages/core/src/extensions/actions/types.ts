@@ -10,6 +10,7 @@ export const CHECKOUT_COMPLETE_EVENT = 'checkout.complete' as const satisfies Ac
 export const ACTION_EVENTS = [
 	'cart.line.add',
 	'cart.line.update',
+	'cart.line.remove',
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
 ] as const satisfies readonly ActionEvent[];
@@ -70,11 +71,24 @@ export interface ActionContracts {
 	};
 	'cart.line.update': {
 		payload: {
+			/** The list the line sits in; fee and shipping edits dispatch this event too. */
+			type: CartLineType;
 			lineUuid: string;
 			changes: PlainLine;
 			line: PlainLine | null;
+			/** The order's product lines, whatever `type` is: what a stock or pricing hook reads. */
 			lineItems: PlainLine[];
 			options: { skipStockGuard?: boolean };
+		};
+		result: unknown;
+	};
+	'cart.line.remove': {
+		payload: {
+			type: CartLineType;
+			lineUuid: string;
+			/** The line as it is about to leave; `null` when the uuid is no longer in the order. */
+			line: PlainLine | null;
+			lineItems: PlainLine[];
 		};
 		result: unknown;
 	};
@@ -84,6 +98,7 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	[CHECKOUT_COMPLETE_EVENT]: [],
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
+	'cart.line.remove': [],
 	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
 	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
 	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the

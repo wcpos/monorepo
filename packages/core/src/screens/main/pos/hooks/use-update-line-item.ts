@@ -147,6 +147,7 @@ export const useUpdateLineItem = () => {
 					actor,
 					source: 'user',
 					payload: {
+						type: 'line_items',
 						lineUuid: uuid,
 						changes: { ...changes } as Record<string, unknown>,
 						line: lineItems.find((line) => wooMetaCarrier.lineUuid(line) === uuid) ?? null,

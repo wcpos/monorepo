@@ -3,6 +3,11 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import {
+	type ActionEventInput,
+	registerActionHook,
+	resetActionRegistry,
+} from '../../../../extensions/actions';
 import { useRemoveLineItem } from './use-remove-line-item';
 
 const mockLocalPatch = jest.fn();
@@ -59,11 +64,112 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
 
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 describe('useRemoveLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		resetActionRegistry();
 		mockLocalPatch.mockResolvedValue(true);
 		mockLines = [];
+	});
+	const coffee = {
+		id: 11,
+		name: 'Coffee',
+		product_id: 82,
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
+	};
+
+	it('dispatches cart.line.remove with the leaving line, then writes', async () => {
+		mockLines = [coffee];
+		const seen: ActionEventInput<'cart.line.remove'>[] = [];
+		registerActionHook(
+			'cart.line.remove',
+			async (_ctx, e, next) => {
+				seen.push(e);
+				expect(mockLocalPatch).not.toHaveBeenCalled();
+				return next(e);
+			},
+			{ id: 'test.observer', tier: 'extension' }
+		);
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		expect(seen).toEqual([
+			expect.objectContaining({
+				event: 'cart.line.remove',
+				orderId: 'order-uuid',
+				source: 'user',
+				actor: { userId: 7, registerId: 'till', sessionId: null },
+				payload: { type: 'line_items', lineUuid: 'line-1', line: coffee, lineItems: [coffee] },
+			}),
+		]);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('a guard refusal leaves the line in the cart and presents the reason', async () => {
+		mockLines = [coffee];
+		registerActionHook(
+			'cart.line.remove',
+			async () => ({ deny: { reasonKey: 'test.no_removals' } }),
+			{ id: 'test.guard', tier: 'guard' }
+		);
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'test.no_removals',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	it('Undo re-enters through cart.line.add, so a guard can refuse the restore', async () => {
+		mockLines = [coffee];
+		const adds: ActionEventInput<'cart.line.add'>[] = [];
+		registerActionHook(
+			'cart.line.add',
+			async (_ctx, e, next) => {
+				adds.push(e);
+				return e.payload.line.name === 'Coffee'
+					? { deny: { reasonKey: 'pos_products.out_of_stock', params: { name: 'Coffee' } } }
+					: next(e);
+			},
+			{ id: 'test.stock', tier: 'guard' }
+		);
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		mockLines = [];
+		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+		expect(adds).toEqual([
+			expect.objectContaining({
+				event: 'cart.line.add',
+				payload: expect.objectContaining({
+					type: 'line_items',
+					line: expect.objectContaining({ name: 'Coffee' }),
+				}),
+			}),
+		]);
+		// The remove wrote once; the refused restore did not.
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_products.out_of_stock',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 
 	it('patches a matching line and logs success with an undo action', async () => {

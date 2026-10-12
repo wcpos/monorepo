@@ -47,6 +47,11 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/hooks/use-add-item-to-order.ts',
 	// cart.line.update: the queued line-update writer.
 	'packages/core/src/screens/main/pos/hooks/use-update-line-item.ts',
+	// cart.line.update for fee and shipping lines (actions ledger 27).
+	'packages/core/src/screens/main/pos/hooks/use-update-fee-line.ts',
+	'packages/core/src/screens/main/pos/hooks/use-update-shipping-line.ts',
+	// cart.line.remove, and Undo's cart.line.add restore (actions ledger 27).
+	'packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts',
 	// checkout.tender.commit: the tender sequence, including zero-balance completion.
 	'packages/core/src/screens/main/pos/checkout/tender/use-tender-flow.ts',
 	// checkout.complete: finishSale is the completion writer (actions ledger 23).
