@@ -50,11 +50,7 @@ import {
 import type { CoverageTarget, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
-import {
-	bindingObservablesFor,
-	useProductsQueryHandle,
-	useQueryHandleResource,
-} from './query-handles';
+import { useProductsQueryHandle, useQueryBindingFor } from './query-handles';
 import {
 	compileQuery,
 	requirementsForCompiledQuery,
@@ -615,9 +611,7 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
  * handle's snapshot directly.
  */
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
-	const handle = useProductsQueryHandle(state);
-	const resource = useQueryHandleResource(handle);
-	return React.useMemo(() => ({ resource, ...bindingObservablesFor(handle) }), [handle, resource]);
+	return useQueryBindingFor(useProductsQueryHandle(state));
 }
 
 export type SearchSelectCollection =

@@ -10,18 +10,43 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ProductGrid } from './index';
 
 let mockResult: { hits: object[] };
+let mockReady = true;
+let mockSettling = false;
+let mockError: unknown = null;
 const mockGuard = jest.fn();
+// The grid reads one snapshot from the handle; the double hands it the current `mockResult`.
+const mockSnapshot = () => ({
+	ready: mockReady,
+	error: mockError,
+	result: mockResult,
+	hits: mockResult.hits,
+	count: mockResult.hits.length,
+	searchActive: false,
+	searchState: undefined,
+	active: false,
+	pending: false,
+	exhausted: null,
+	total: null,
+	laneProgress: null,
+});
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 
+// `mockUseDocField` reads settings through observable-hooks; the grid itself no longer imports it.
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
-	useObservableSuspense: () => mockResult,
 }));
 jest.mock('../../../../../query', () => ({
-	useGuardedExtendLimit: (...args: unknown[]) => {
+	useQueryHandleView: () => ({
+		value: mockSnapshot(),
+		current: mockSnapshot(),
+		settling: mockSettling,
+		error: mockError,
+	}),
+	useQueryHandleValue: () => mockSnapshot(),
+	useGuardedExtendLimitFor: (...args: unknown[]) => {
 		mockGuard(...args);
 		return jest.fn();
 	},
@@ -68,7 +93,7 @@ jest.mock('./product-tile', () => ({ ProductTile: () => <div data-testid="defaul
 jest.mock('./variable-product-tile', () => ({
 	VariableProductTile: () => <div data-testid="default-variable-tile" />,
 }));
-jest.mock('../../../components/data-table/footer', () => ({ DataTableFooter: () => null }));
+jest.mock('../../../components/data-table/footer', () => ({ DataTableFooterFor: () => null }));
 jest.mock('../../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
 
 function staleHit(uuid: string) {
@@ -83,6 +108,12 @@ function staleHit(uuid: string) {
 	};
 }
 
+beforeEach(() => {
+	mockReady = true;
+	mockSettling = false;
+	mockError = null;
+});
+
 describe('ProductGrid stale-hit reporting', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -91,7 +122,7 @@ describe('ProductGrid stale-hit reporting', () => {
 
 	it('logs a replacement stale-hit set when the skipped count is unchanged', async () => {
 		const props = {
-			binding: { resource: {}, active$: {}, total$: {}, sync: jest.fn() },
+			handle: { key: 'test', sync: jest.fn() },
 			actions: { extendLimit: jest.fn() },
 		} as unknown as React.ComponentProps<typeof ProductGrid>;
 		const { rerender } = render(<ProductGrid {...props} />);
@@ -99,7 +130,11 @@ describe('ProductGrid stale-hit reporting', () => {
 		await waitFor(() => expect(getLogger([]).warn).toHaveBeenCalledTimes(1));
 		expect(screen.getByTestId('product-grid-footer-count').textContent).toBe('0');
 		expect(screen.getByTestId('product-grid-footer-result-count').textContent).toBe('1');
-		expect(mockGuard).toHaveBeenLastCalledWith(props.actions.extendLimit, 1, props.binding);
+		expect(mockGuard).toHaveBeenLastCalledWith(
+			props.actions.extendLimit,
+			1,
+			expect.objectContaining({ pending: false, exhausted: null })
+		);
 		mockResult = { hits: [staleHit('second')] };
 		rerender(<ProductGrid {...props} />);
 
@@ -114,7 +149,7 @@ it('uses supplied tiles for both kinds and retains the defaults otherwise', () =
 		})),
 	};
 	const props = {
-		binding: { resource: {}, active$: {}, total$: {}, sync: jest.fn() },
+		handle: { key: 'test', sync: jest.fn() },
 		actions: { extendLimit: jest.fn() },
 	} as unknown as React.ComponentProps<typeof ProductGrid>;
 	const { rerender } = render(<ProductGrid {...props} />);
@@ -131,4 +166,49 @@ it('uses supplied tiles for both kinds and retains the defaults otherwise', () =
 	expect(screen.getByTestId('custom-variable-tile')).toBeTruthy();
 	expect(screen.queryByTestId('default-tile')).toBeNull();
 	expect(screen.queryByTestId('default-variable-tile')).toBeNull();
+});
+
+describe('ProductGrid on the handle snapshot', () => {
+	const props = () =>
+		({
+			handle: { key: 'test', sync: jest.fn() },
+			actions: { extendLimit: jest.fn() },
+			loading: <div data-testid="grid-loading" />,
+		}) as unknown as React.ComponentProps<typeof ProductGrid>;
+
+	it('draws the loading state until the handle answers, then the rows — never the empty state between', () => {
+		mockReady = false;
+		mockResult = { hits: [] };
+		const { rerender } = render(<ProductGrid {...props()} />);
+		expect(screen.getByTestId('grid-loading')).toBeTruthy();
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+
+		mockReady = true;
+		mockResult = {
+			hits: [{ record: { uuid: 'p1', payload: { type: 'simple', name: 'One' } } }],
+		};
+		rerender(<ProductGrid {...props()} />);
+		expect(screen.queryByTestId('grid-loading')).toBeNull();
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+		expect(screen.getByTestId('default-tile')).toBeTruthy();
+	});
+
+	it('treats a changed query that has not answered as pending for the paging guard', () => {
+		mockResult = { hits: [] };
+		mockSettling = true;
+		render(<ProductGrid {...props()} />);
+		expect(mockGuard).toHaveBeenLastCalledWith(
+			expect.any(Function),
+			0,
+			expect.objectContaining({ pending: true })
+		);
+	});
+
+	it('throws a failed read to the boundary above it', () => {
+		mockResult = { hits: [] };
+		mockError = new Error('storage gone');
+		const silence = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		expect(() => render(<ProductGrid {...props()} />)).toThrow('storage gone');
+		silence.mockRestore();
+	});
 });

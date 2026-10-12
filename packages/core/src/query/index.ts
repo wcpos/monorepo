@@ -9,10 +9,12 @@ export type { QueryStateStore } from './query-state-store';
 export {
 	getPagingVerdict,
 	usePagingVerdict,
+	usePagingVerdictFor,
 	useGuardedExtendLimit,
+	useGuardedExtendLimitFor,
 	useGuardedExtension,
 } from './use-guarded-extend-limit';
-export type { PagingVerdict } from './use-guarded-extend-limit';
+export type { EngineOpinion, PagingVerdict } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
 	useLogsBinding,
@@ -41,7 +43,11 @@ export type {
 } from './query-bindings';
 export {
 	useProductsQueryHandle,
+	useQueryBindingFor,
+	useQueryHandleFields,
 	useQueryHandleResource,
 	useQueryHandleValue,
+	useQueryHandleView,
 } from './query-handles';
+export type { SnapshotFields } from './query-handles';
 export type { QueryHandle, QuerySnapshot } from '@wcpos/query';

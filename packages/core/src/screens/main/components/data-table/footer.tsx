@@ -25,24 +25,42 @@ export type BindingDataTableFooterProps = CommonProps & {
 	sync: () => Promise<void>;
 };
 
+/** The footer for a reader that holds the query-handle snapshot's `active` and `total`. */
+export type ValuesDataTableFooterProps = CommonProps & {
+	collectionName: CollectionKey;
+	active: boolean;
+	total: number | null;
+	sync: () => Promise<void>;
+};
+
 type FooterContentProps = CommonProps &
 	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$'> & {
 		clearAndSync: () => Promise<void>;
 	};
 
+type FooterRowProps = CommonProps &
+	Pick<ValuesDataTableFooterProps, 'active' | 'sync' | 'total'> & {
+		clearAndSync: () => Promise<void>;
+	};
+
+/** The streams read once, then the row. */
+function FooterContent({ active$, total$, ...props }: FooterContentProps) {
+	const loading = useObservableEagerState(active$);
+	const total = useObservableState(total$, null);
+	return <FooterRow {...props} active={loading} total={total} />;
+}
+
 /**
  *
  */
-function FooterContent({
+function FooterRow({
 	children,
 	count,
-	active$,
-	total$,
+	active: loading,
+	total,
 	sync,
 	clearAndSync,
-}: FooterContentProps) {
-	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, null);
+}: FooterRowProps) {
 	const t = useT();
 
 	return (
@@ -80,14 +98,23 @@ function FooterContent({
 	);
 }
 
-export function DataTableFooter({ collectionName, ...props }: BindingDataTableFooterProps) {
+function useResetQueryAndCollection(collectionName: CollectionKey): () => Promise<void> {
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const { clearSearch, resetFilters } = useQueryStateActions();
-	const resetQueryAndCollection = React.useCallback(() => {
+	return React.useCallback(() => {
 		clearSearch();
 		resetFilters();
 		return clearAndSync();
 	}, [clearAndSync, clearSearch, resetFilters]);
+}
 
+export function DataTableFooter({ collectionName, ...props }: BindingDataTableFooterProps) {
+	const resetQueryAndCollection = useResetQueryAndCollection(collectionName);
 	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
+}
+
+/** {@link DataTableFooter} for a reader that holds the snapshot's `active` and `total`. */
+export function DataTableFooterFor({ collectionName, ...props }: ValuesDataTableFooterProps) {
+	const resetQueryAndCollection = useResetQueryAndCollection(collectionName);
+	return <FooterRow {...props} clearAndSync={resetQueryAndCollection} />;
 }

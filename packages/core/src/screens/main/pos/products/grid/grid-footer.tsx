@@ -5,12 +5,13 @@ import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePagingVerdict } from '../../../../../query';
+import { usePagingVerdictFor } from '../../../../../query';
 
-import type { QueryBinding } from '../../../../../query';
+import type { EngineOpinion } from '../../../../../query';
 
 interface ProductGridFooterProps {
-	binding: Pick<QueryBinding, 'pending$' | 'exhausted$'>;
+	/** The handle snapshot's `pending` and `exhausted`, as the grid holds them. */
+	engine: EngineOpinion;
 	/** Rendered product rows — the footer says nothing under an empty grid. */
 	renderedCount: number;
 	/** Local query hits before stale-hit suppression, matching the paging guard. */
@@ -27,12 +28,12 @@ interface ProductGridFooterProps {
  * exist. A full local read is never terminal, matching the paging guard. The footer's
  * "Showing X of Y" is untouched: Y is the store's census by ruling.
  */
-export function ProductGridFooter({ binding, renderedCount, hitCount }: ProductGridFooterProps) {
+export function ProductGridFooter({ engine, renderedCount, hitCount }: ProductGridFooterProps) {
 	const t = useT();
-	const { verdict, pending } = usePagingVerdict(hitCount, binding);
+	const { verdict } = usePagingVerdictFor(hitCount, engine);
 
 	if (renderedCount === 0) return null;
-	if (pending) {
+	if (engine.pending) {
 		return (
 			<View className="items-center justify-center p-3" testID="pos-products-grid-loading">
 				<Loader />

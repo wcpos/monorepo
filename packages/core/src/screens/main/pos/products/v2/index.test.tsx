@@ -19,7 +19,8 @@ const mockBinding = {
 	total$: of(40),
 	sync: jest.fn(async () => undefined),
 };
-const mockUseRelationalCollectionBinding = jest.fn((_state: unknown) => mockBinding);
+const mockHandle = { key: 'pos-products-handle', sync: mockBinding.sync };
+const mockUseProductsQueryHandle = jest.fn((_state: unknown) => mockHandle);
 const mockUseBarcode = jest.fn(
 	(_setSearch: (search: string) => void, _clearSearch: () => void) => ({
 		onKeyPress: jest.fn(),
@@ -70,7 +71,8 @@ jest.mock('../../../../../query', () => {
 	const actual = jest.requireActual('../../../../../query');
 	return {
 		...actual,
-		useRelationalCollectionBinding: (state: unknown) => mockUseRelationalCollectionBinding(state),
+		useProductsQueryHandle: (state: unknown) => mockUseProductsQueryHandle(state),
+		useQueryBindingFor: () => mockBinding,
 		useScopeKey: () => mockScopeKey,
 	};
 });
@@ -199,7 +201,7 @@ jest.mock('../../../components/product/variation-image', () => ({
 jest.mock('../../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
 function latestState(): QueryStateOf<'products'> {
-	const call = mockUseRelationalCollectionBinding.mock.calls.at(-1);
+	const call = mockUseProductsQueryHandle.mock.calls.at(-1);
 	if (!call) throw new Error('POS products binding was not called');
 	return call[0] as QueryStateOf<'products'>;
 }
@@ -426,11 +428,11 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'name', direction: 'desc' });
 	});
 
-	it('serves grid mode from the same binding and pagination action', () => {
+	it('serves grid mode from the products handle and the same pagination action', () => {
 		mockViewMode = 'grid';
 		render(<POSProducts />);
 
-		expect(mockGridProps).toMatchObject({ binding: mockBinding });
+		expect(mockGridProps).toMatchObject({ handle: mockHandle });
 		// Tiles drill in on the deal stage; rows keep the sliding pane.
 		expect(document.querySelector('[data-testid="deal-stage"]')).not.toBeNull();
 		const actions = mockGridProps.actions as { extendLimit: () => void };

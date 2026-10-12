@@ -308,6 +308,154 @@ export function useQueryHandleValue<R extends QueryResult<RxCollection>>(
 	return React.useSyncExternalStore(handle.subscribe, getSnapshot, getSnapshot);
 }
 
+/** The fields a reader re-renders for; the answer itself (`ready`, `error`, `result`) always. */
+const EVERY_FIELD: SnapshotFields = [
+	'active',
+	'pending',
+	'exhausted',
+	'total',
+	'laneProgress',
+	'count',
+	'searchActive',
+	'searchState',
+];
+export type SnapshotFields = readonly (keyof QuerySnapshot<QueryResult<RxCollection>>)[];
+const ANSWER_FIELDS: SnapshotFields = ['ready', 'error', 'result'];
+
+/**
+ * `useQueryHandleValue` for a reader that cares about SOME fields: the snapshot it holds moves
+ * only when the answer or one of `fields` does. One snapshot still carries everything, so the
+ * grid body can stay put while the sync spinner flips `active` and the footer, reading
+ * `['active', 'total']` itself, follows it.
+ */
+export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>,
+	fields: SnapshotFields
+): Readonly<QuerySnapshot<R>> {
+	const last = React.useRef<Readonly<QuerySnapshot<R>> | null>(null);
+	// A reader's list is a constant; its contents are the dependency, not its identity.
+	const watched = fields.join(',');
+	const getSnapshot = React.useCallback(() => {
+		const current = handle.value;
+		const held = last.current;
+		if (
+			held &&
+			ANSWER_FIELDS.every((field) => held[field] === current[field]) &&
+			watched
+				.split(',')
+				.every(
+					(field) => held[field as keyof typeof held] === current[field as keyof typeof current]
+				)
+		) {
+			return held;
+		}
+		last.current = current;
+		return current;
+	}, [handle, watched]);
+	return React.useSyncExternalStore(handle.subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * The snapshot a screen should DRAW: the handle's own once it has answered, and until then the
+ * last answered snapshot this component drew — so a changed query (a keystroke, an extended
+ * limit) keeps the current rows on screen while the next read loads instead of flashing the
+ * loading state, which is what the Suspense resource's `reload` did. `settling` says the drawn
+ * snapshot is not yet the current handle's answer. Before any answer, `value.ready` is false and
+ * the screen shows its loading state: the gate that used to be a Suspense boundary.
+ */
+export function useQueryHandleView<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>,
+	/** Re-render for these fields beside the answer; every field when omitted. */
+	fields?: SnapshotFields
+): {
+	/** The snapshot to draw: the current one once answered, else the last one drawn. */
+	value: Readonly<QuerySnapshot<R>>;
+	/** The current handle's snapshot, answered or not — status fields read from here. */
+	current: Readonly<QuerySnapshot<R>>;
+	settling: boolean;
+	/**
+	 * The current handle's failure, for the reader to throw to its boundary — unless the failure
+	 * was already there when this reader mounted: then the reader is the boundary's reset, the
+	 * handle is asked again (`retry`) and the reader draws its loading state meanwhile.
+	 */
+	error: unknown;
+} {
+	const current = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
+	const [inherited] = React.useState(() => current.error);
+	React.useEffect(() => {
+		if (inherited && handle.value.error === inherited) handle.retry();
+	}, [handle, inherited]);
+	const error = current.error === inherited ? null : current.error;
+	// What the previous handle had answered when this one took over — kept per handle, so a
+	// snapshot change on the SAME handle never re-renders through state (a handle never goes
+	// from answered back to unanswered). Derived during render, React's documented pattern.
+	const [held, setHeld] = React.useState<{
+		handle: QueryHandle<R>;
+		last: Readonly<QuerySnapshot<R>> | null;
+	}>({ handle, last: null });
+	let last = held.last;
+	if (held.handle !== handle) {
+		last = held.handle.value.ready ? held.handle.value : held.last;
+		setHeld({ handle, last });
+	}
+	// An answer or a failure is always the current handle's; the reader rethrows the failure.
+	const value = current.ready || error ? current : (last ?? current);
+	return { value, current, settling: value !== current, error };
+}
+
+/**
+ * The eight-observable `QueryBinding` shape over a handle, for the shared consumers that still
+ * take it (the data table, the browse stage's footers). The Suspense resource is created on
+ * first access, not on mount — a grid that reads the snapshot never builds one, so nothing
+ * subscribes during render on that path — and it reloads (keeps its rows) when the handle moves.
+ */
+export function useQueryBindingFor<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>
+): {
+	resource: ObservableResource<R>;
+	result$: Observable<R>;
+	active$: Observable<boolean>;
+	pending$: Observable<boolean>;
+	exhausted$: Observable<boolean | null>;
+	total$: Observable<number | null>;
+	laneProgress$: Observable<QuerySnapshot<R>['laneProgress']>;
+	sync: () => Promise<void>;
+} {
+	const held = React.useRef<{ handle: QueryHandle<R>; resource: ObservableResource<R> } | null>(
+		null
+	);
+	React.useEffect(() => {
+		// The resource follows the handle in an effect, never in a reader's render (a reload
+		// subscribes the new read on the spot, and a live shared handle would then emit into the
+		// table's Suspense state while another component renders). Until the effect runs, a
+		// reader gets the resource as it is — the previous rows, which is what `reload` keeps.
+		// It follows even if nobody reads it again (the view switched from table to grid), or it
+		// would retain that handle for good.
+		const current = held.current;
+		if (!current || current.handle === handle) return;
+		current.resource.reload(queryHandleResults$(handle));
+		held.current = { handle, resource: current.resource };
+	}, [handle]);
+	React.useEffect(
+		() => () => {
+			held.current?.resource.destroy();
+			held.current = null;
+		},
+		[]
+	);
+	return React.useMemo(
+		() => ({
+			get resource() {
+				// Built on first access only; a reader that never asks (the grid) never subscribes.
+				if (!held.current) held.current = { handle, resource: queryHandleResource(handle) };
+				return held.current.resource;
+			},
+			...bindingObservablesFor(handle),
+		}),
+		[handle]
+	);
+}
+
 /**
  * A Suspense resource over a handle, owned by the calling component: it suspends until the
  * engine's first answer, and when the handle changes it RELOADS rather than re-suspends, so

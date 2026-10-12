@@ -1,16 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
-import { type Observable, Subscription } from 'rxjs';
-
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord, QueryResult } from '@wcpos/query';
+import type { EngineRecord, QueryHandle, QueryResult } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
-import { useGuardedExtendLimit } from '../../../../../query';
+import {
+	useGuardedExtendLimitFor,
+	useQueryHandleValue,
+	useQueryHandleView,
+} from '../../../../../query';
 import {
 	logResultEmission,
 	markSyncActive,
@@ -23,12 +24,12 @@ import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { DataTableFooter } from '../../../components/data-table/footer';
+import { DataTableFooterFor } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { RxCollection } from 'rxdb';
-import type { QueryStateActions } from '../../../../../query';
+import type { QueryStateActions, SnapshotFields } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 
@@ -36,42 +37,32 @@ type ProductHit = {
 	record: EngineRecord<'products'>;
 };
 
+type ProductsResult = QueryResult<RxCollection>;
+
 /**
  * Troubleshooting probe (render-probe.ts), hosted by the grid's FIRST child. Effects run
  * children-first and in tree order, so a leaf placed before the list (1) seeds the sync phase
- * from `binding.active$` and (2) advances the emission counter — both BEFORE any tile's render
- * row in the same commit is stamped, including the first commit of a grid whose sync is already
- * active. A deferred value catching up is the same result committing again: no second row.
+ * from the snapshot's `active` and (2) advances the emission counter — both BEFORE any tile's
+ * render row in the same commit is stamped, including the first commit of a grid whose sync is
+ * already active. A deferred value catching up is the same result committing again: no second
+ * row.
  */
-function EmissionProbe({
-	result,
-	binding,
-}: {
-	result: QueryResult<RxCollection>;
-	binding: ProductGridProps['binding'];
-}) {
+function EmissionProbe({ handle }: { handle: QueryHandle<ProductsResult> }) {
+	// Every field: the probe is a leaf, its re-renders reach nothing.
+	const { active, pending, exhausted, total, result } = useQueryHandleValue(handle);
 	React.useEffect(() => {
-		if (!RENDER_PROBE_ENABLED) return;
-		// Test doubles hand the grid a partial binding; only a real stream is tapped.
-		const tap = <T,>(stream: unknown, next: (value: T) => void) =>
-			typeof (stream as { subscribe?: unknown })?.subscribe === 'function'
-				? (stream as Observable<T>).subscribe(next)
-				: new Subscription();
-		const subscription = tap<boolean>(binding.active$, markSyncActive);
-		subscription.add(
-			tap<boolean>(binding.pending$, (pending) => probeEvent('binding.pending$', { pending }))
-		);
-		subscription.add(
-			tap<boolean | null>(binding.exhausted$, (exhausted) =>
-				probeEvent('binding.exhausted$', { exhausted })
-			)
-		);
-		subscription.add(
-			tap<number | null>(binding.total$, (total) => probeEvent('binding.total$', { total }))
-		);
-		return () => subscription.unsubscribe();
-	}, [binding]);
-	const previousHits = React.useRef<QueryResult<RxCollection>['hits'] | null>(null);
+		if (RENDER_PROBE_ENABLED) markSyncActive(active);
+	}, [active]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.pending', { pending });
+	}, [pending]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.exhausted', { exhausted });
+	}, [exhausted]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.total', { total });
+	}, [total]);
+	const previousHits = React.useRef<ProductsResult['hits'] | null>(null);
 	React.useEffect(() => {
 		if (!RENDER_PROBE_ENABLED) return;
 		logResultEmission(previousHits.current, result.hits, {
@@ -84,12 +75,47 @@ function EmissionProbe({
 	return null;
 }
 
+/**
+ * The status row under the grid, reading `active` and `total` itself so the grid body does not
+ * re-render when the sync spinner flips or the census lands.
+ */
+function GridStatusFooter({
+	handle,
+	count,
+	children,
+}: {
+	handle: QueryHandle<ProductsResult>;
+	count: number;
+	children?: React.ReactNode;
+}) {
+	// The total rides with the drawn rows (a changed query keeps "of N" until it answers); the
+	// spinner is the engine's now, whichever query is drawn.
+	const { value, current } = useQueryHandleView(handle, STATUS_FIELDS);
+	return (
+		<DataTableFooterFor
+			collectionName="products"
+			active={current.active}
+			total={value.total}
+			sync={handle.sync}
+			count={count}
+		>
+			{children}
+		</DataTableFooterFor>
+	);
+}
+const STATUS_FIELDS: SnapshotFields = ['active', 'total'];
+// The grid body re-renders for the answer and the engine's paging opinion, nothing else.
+const GRID_FIELDS: SnapshotFields = ['pending', 'exhausted'];
+
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
 	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
 	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
-	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
+	/** The products query handle (roadmap#423): one snapshot, read here, nowhere else. */
+	handle: QueryHandle<ProductsResult>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
+	/** Drawn until the handle's first answer — the gate that used to be a Suspense boundary. */
+	loading?: React.ReactNode;
 }
 
 interface GridFields {
@@ -105,9 +131,10 @@ interface GridFields {
 }
 
 export function ProductGrid({
-	binding,
+	handle,
 	actions,
 	noDataMessage,
+	loading = null,
 	tile: Tile = ProductTile,
 	variableTile: VariableTile = VariableProductTile,
 }: ProductGridProps) {
@@ -117,22 +144,35 @@ export function ProductGrid({
 	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 
-	const result = useObservableSuspense(binding.resource);
-	const deferredResult = React.useDeferredValue(result);
+	// One subscription, one object: rows, count, total, activity and the engine's paging
+	// opinion arrive together. A changed query keeps the current rows until it answers.
+	const { value: current, settling, error } = useQueryHandleView(handle, GRID_FIELDS);
+	// The WHOLE snapshot is deferred, gate included: an urgent commit of "ready" with the
+	// deferred rows still empty would draw the empty state for a frame on every cold open.
+	const snapshot = React.useDeferredValue(current);
+	const deferredResult = snapshot.result;
+	// A query that has not answered yet, or a deferred frame behind the answer, is in flight
+	// for paging: the guard must not extend on the previous query's opinion (#1221), and the
+	// footer must not call the previous page the end.
+	const engine = {
+		pending: snapshot.pending || settling || snapshot !== current,
+		exhausted: snapshot.exhausted,
+	};
 
 	// Troubleshooting probe (render-probe.ts): the sync phase and result rows come from the first
 	// child (EmissionProbe); here only the deferred catch-up and this component's own reasons.
 	React.useEffect(() => {
-		if (!RENDER_PROBE_ENABLED || deferredResult === result) return;
-		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
-	}, [result, deferredResult]);
+		if (!RENDER_PROBE_ENABLED || snapshot === current) return;
+		probeEvent('grid.deferred', { hits: snapshot.hits.length }, 'grid');
+	}, [current, snapshot]);
 	useRenderProbe('ProductGrid', 'grid', {
-		result,
-		deferredResult,
+		current,
+		snapshot,
+		settling,
 		hits: deferredResult.hits,
 		gridColumns,
 		gridFields,
-		binding,
+		handle,
 		actions,
 		uiSettings,
 		calcTaxes,
@@ -144,10 +184,10 @@ export function ProductGrid({
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.
-	const handleEndReached = useGuardedExtendLimit(
+	const handleEndReached = useGuardedExtendLimitFor(
 		actions.extendLimit,
 		deferredResult.hits.length,
-		binding
+		engine
 	);
 
 	/**
@@ -188,11 +228,17 @@ export function ProductGrid({
 		}
 	}, [deferredResult.hits, skippedStaleHits]);
 
+	// A failed read reaches the screen's ErrorBoundary as it did through the Suspense resource;
+	// a reader mounted over the failure (the boundary's reset) has asked the handle again and
+	// draws the loading state until it answers.
+	if (error) throw error;
+	if (!snapshot.ready) return <>{loading}</>;
+
 	return (
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
-			<EmissionProbe result={result} binding={binding} />
+			{RENDER_PROBE_ENABLED ? <EmissionProbe handle={handle} /> : null}
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
@@ -220,7 +266,7 @@ export function ProductGrid({
 					onEndReached={handleEndReached}
 					ListFooterComponent={
 						<ProductGridFooter
-							binding={binding}
+							engine={engine}
 							renderedCount={renderedCount}
 							hitCount={deferredResult.hits.length}
 						/>
@@ -242,23 +288,11 @@ export function ProductGrid({
 			</VirtualizedList.Root>
 			{/* The footer draws its own top line; a bordered wrapper here doubled it. */}
 			{calcTaxes ? (
-				<DataTableFooter
-					collectionName="products"
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
-					count={renderedCount}
-				>
+				<GridStatusFooter handle={handle} count={renderedCount}>
 					<TaxBasedOn />
-				</DataTableFooter>
+				</GridStatusFooter>
 			) : (
-				<DataTableFooter
-					collectionName="products"
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
-					count={renderedCount}
-				/>
+				<GridStatusFooter handle={handle} count={renderedCount} />
 			)}
 		</View>
 	);
