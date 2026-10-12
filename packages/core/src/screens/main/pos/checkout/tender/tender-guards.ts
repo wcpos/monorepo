@@ -10,9 +10,12 @@ import { RegisterSessionRequiredError } from '../../../../../services/register-s
 export const CHOOSE_REGISTER_REASON = 'pos_checkout.choose_register_first';
 export const SESSION_REQUIRED_REASON = 'pos_checkout.open_register_first';
 
-/** Only a completing sale needs a chosen register: a store with several and none picked cannot start one. */
+/**
+ * Only a completing sale needs a chosen register: a store with several and none picked cannot start
+ * one. Judged on the amounts the writer will write, so a rounding rewrite that settles is caught.
+ */
 export const registerGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ctx, e, next) => {
-	if (e.payload.completing && e.payload.bindingStatus === 'choose')
+	if (e.payload.amountMinor === e.payload.balanceMinor && e.payload.bindingStatus === 'choose')
 		return { deny: { reasonKey: CHOOSE_REGISTER_REASON, detail: { event: e.event } } };
 	return next(e);
 };

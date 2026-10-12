@@ -8,6 +8,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
+	calculateCartLine,
 	type DeclaredValues,
 	derive,
 	fromMinor,
@@ -17,11 +18,14 @@ import {
 	type PaymentRow,
 	type PaymentTransport,
 	readLedger,
+	roundedDue,
+	settlesAtRoundedDue,
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -33,8 +37,10 @@ import {
 	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
 import './tender-guards';
+import '../cash-rounding-hook';
 import { enqueueOrderMutation, type OrderMutationContext } from '../../hooks/order-mutation-queue';
 import { useActionContext } from '../../hooks/use-action-context';
+import { useCartConfig } from '../../hooks/use-cart-config';
 import {
 	RegisterSessionRequiredError,
 	requireOpenSession,
@@ -72,7 +78,7 @@ import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
-import { getUuidFromLineItem } from '../../hooks/utils';
+import { getUuidFromLineItem, parsePosData } from '../../hooks/utils';
 import {
 	RecordManualPaymentMirrorError,
 	useRecordManualPayment,
@@ -115,6 +121,8 @@ import {
 
 const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 
+type TenderPayload = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'];
+
 /** The notes a cashier is handed: the balance itself, then the next whole 5, 10 and 50. */
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
@@ -135,6 +143,7 @@ export interface TenderFlow {
 	retryTerminalCapture: () => void;
 	dismissTerminalLeg: () => void;
 	retryTerminalLeg: () => void;
+	/** The reducer's state, with an untouched balance prefill shown as the rounded cash due. */
 	state: TenderState;
 	dispatch: React.Dispatch<TenderAction>;
 
@@ -170,6 +179,10 @@ export interface TenderFlow {
 	entryAppliedMinor: number;
 	/** What the current entry would hand back, zero for a method that gives no change. */
 	entryChangeMinor: number;
+	/** The balance rounded for the selected manual method (#66, #84); the balance when it has none. */
+	roundedDueMinor: number;
+	/** `roundedDueMinor - balanceMinor` when the current entry settles at the rounded due, else 0. */
+	roundingMinor: number;
 	/** Quick tendered chips for the current method; empty when it gives no change. */
 	quickAmountsMinor: number[];
 
@@ -225,6 +238,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const { localPatch } = useLocalMutation();
+	const cartConfig = useCartConfig();
 	// A save queued offline is an order the server does not have yet (or has stale): even
 	// once connectivity is back and before the ack lands, tender must behave as offline —
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
@@ -460,19 +474,36 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const planMore = Boolean(label?.rest && lines.some((line) => !state.linesPaidBy[line.id]));
 	const plannedLegMinor = figures?.thisPaymentMinor ?? balanceMinor;
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
+	// Cash rounding (#66, #84) previews what the cash.rounding hook decides at commit, with the
+	// same functions on the same facts the commit dispatches.
+	const { dueMinor: roundedDueMinor } = roundedDue(
+		balanceMinor,
+		method?.capture.mode === 'manual' ? method.defaults.rounding : null,
+		dp
+	);
+	// An untouched prefill of the balance is the due, so under rounding it is the rounded due.
+	const entryMinor =
+		!state.entryDirty && state.entryMinor === balanceMinor ? roundedDueMinor : state.entryMinor;
 	// A gateway that takes no part payment runs the whole order (§4.1): the entry is the balance
 	// whatever another pill or a plan left typed, so the leg completes and is journaled as such.
-	const entryAppliedMinor = fixedAmount
-		? balanceMinor
-		: appliedMinor(state.entryMinor, legCapMinor);
+	const enteredLegMinor = fixedAmount ? balanceMinor : appliedMinor(entryMinor, legCapMinor);
+	const roundingMinor = settlesAtRoundedDue({
+		amountMinor: enteredLegMinor,
+		tenderedMinor: entryMinor,
+		balanceMinor,
+		dueMinor: roundedDueMinor,
+	})
+		? roundedDueMinor - balanceMinor
+		: 0;
+	const entryAppliedMinor = roundingMinor !== 0 ? roundedDueMinor : enteredLegMinor;
 	const entryChangeMinor = changeMinor(
-		state.entryMinor,
+		entryMinor,
 		entryAppliedMinor,
 		method?.capabilities.change ?? false
 	);
 	const thisPaymentMinor = plannedLegMinor;
 	const afterThisPaymentMinor =
-		balanceMinor - (state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor);
+		balanceMinor + roundingMinor - (state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor);
 
 	const quickAmountsMinor = React.useMemo(
 		() =>
@@ -488,6 +519,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
 		(action) => {
 			if (busyRef.current) return;
+			// The rounded prefill is what the cashier sees, so a backspace edits that figure.
+			if (action.type === 'key' && action.key === 'backspace' && entryMinor !== state.entryMinor)
+				reducerDispatch({ type: 'set-entry', minor: entryMinor });
 			reducerDispatch(action);
 			if (action.type === 'set-plan') setTenderPlan(order.uuid, action.plan);
 			if (action.type === 'clear-plan' || action.type === 'arm-custom' || action.type === 'reset')
@@ -495,7 +529,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
-		[order.uuid, reducerDispatch]
+		[order.uuid, reducerDispatch, entryMinor, state.entryMinor]
 	);
 
 	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
@@ -645,29 +679,89 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		// records its shares (activePlan is null once the legs are done). A whole-order gateway
 		// never has one.
 		const journaledPlan = fixedAmount ? null : state.plan;
-		const splitMeta = journaledPlan
-			? [
-					splitPlanMeta({
-						kind: journaledPlan.kind,
-						ways: planLegs(journaledPlan, rowsSinceFrom, balanceMinor).label.ways,
-						shares: [
-							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
-							fromMinor(entryAppliedMinor, dp),
-						],
-					}),
-				]
-			: hasStaleSplit
-				? [{ key: SPLIT_META_KEY, value: null }]
-				: undefined;
+		// The amounts the chain settled on (a hook may rewrite them, cash rounding does): every
+		// step after the dispatch, the mirror-error paths below included, reads these.
+		let committed = null as TenderPayload | null;
+		const completionFacts = ({
+			amountMinor,
+			balanceMinor,
+		}: {
+			amountMinor: number;
+			balanceMinor: number;
+		}) => ({
+			preparedCompleting: amountMinor === balanceMinor,
+			preLegBalanceMinor: balanceMinor,
+			amountMinor,
+		});
 		const commitTender = async (
 			e: ActionEventInput<typeof TENDER_COMMIT_EVENT>,
 			queue: OrderMutationContext
 		) => {
+			committed = e.payload;
+			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
+			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = e.payload;
+			const splitMeta = journaledPlan
+				? [
+						splitPlanMeta({
+							kind: journaledPlan.kind,
+							ways: planLegs(journaledPlan, rowsSinceFrom, balanceMinor).label.ways,
+							shares: [
+								...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
+								fromMinor(amountMinor, dp),
+							],
+						}),
+					]
+				: hasStaleSplit
+					? [{ key: SPLIT_META_KEY, value: null }]
+					: undefined;
+			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
+			// push and the store's ledger all see the rounded due; it names the row it rounds. A fee
+			// edit moves the stored total by the fee money alone (the rounding fee has no tax) and
+			// recomputes nothing: the store may own the order's money (ADR 0032).
+			type FeeLines = NonNullable<typeof payload.fee_lines>;
+			const target = queue.order ?? order;
+			const feeMinor = (fees: FeeLines) =>
+				fees.reduce(
+					(sum, fee) =>
+						fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
+					0
+				);
+			const withFees = (latest: typeof payload, edit: (fees: FeeLines) => FeeLines) => {
+				const fees = latest.fee_lines ?? [];
+				const fee_lines = edit(fees);
+				const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines) - feeMinor(fees);
+				return { fee_lines, total: fromMinor(totalMinor, dp) };
+			};
+			const roundingFee = (latest: typeof payload, paymentRef: string | null) =>
+				withFees(latest, (fees) => {
+					const posData = {
+						amount: fromMinor(roundingMinor, dp),
+						percent: false,
+						prices_include_tax: false,
+						rounding: { ...method?.defaults.rounding, payment_ref: paymentRef },
+					};
+					const line = wooMetaCarrier.ensureLineUuid(
+						{
+							name: t('pos_checkout.rounding'),
+							tax_class: '',
+							tax_status: 'none',
+							meta_data: [{ key: POS_META_KEYS.posData, value: posData }],
+						},
+						uuidv4
+					);
+					const fee = calculateCartLine(
+						{ kind: 'fee', line, cartLineItems: latest.line_items ?? [] },
+						cartConfig
+					);
+					return [...fees, fee.line] as FeeLines;
+				});
+			const patchFees = async (data: ReturnType<typeof withFees>) => {
+				if (!(await localPatch({ document: target, data }))) throw new Error('rounding_fee_failed');
+			};
 			// The gate only looked the session up (a guard has no effects before `next`); the
 			// pre-action write `requireOpenSession` makes belongs here, before the attempt record.
 			// It also re-reads the id, so a session closed between
 			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
-			const { registerId, sessionId } = e.payload;
 			const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
 			// A replacement session invalidates the facts the gate approved; its stamped id is binding.
 			if (writtenSessionId !== sessionId) throw new RegisterSessionRequiredError();
@@ -681,11 +775,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							: method?.capture.mode === 'gateway'
 								? 'gateway'
 								: 'terminal',
-				completing: e.payload.completing,
+				completing: amountMinor === balanceMinor,
 				settledOrderStatus,
 			});
 			const saveProvenance = async () => {
-				if (entryAppliedMinor !== balanceMinor) return;
+				if (amountMinor !== balanceMinor) return;
 
 				savingProvenance = online && !queuedOffline && !!payload.id;
 				await persistSaleProvenance(ctx, {
@@ -696,15 +790,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				savingProvenance = false;
 			};
+			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
+				const latest = order.getLatest().payload;
 				const result = await localPatch({
 					document: order,
 					data: {
+						...(roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 						status: 'completed',
-						meta_data: await completionMetaFor(ctx, order.getLatest().payload.meta_data, {
-							sessionId,
-						}),
+						meta_data: await completionMetaFor(ctx, latest.meta_data, { sessionId }),
 					},
 				});
 				if (!result) throw new Error('zero_balance_completion_failed');
@@ -712,7 +807,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			if (!method) return;
-			if (entryAppliedMinor <= 0) {
+			if (amountMinor <= 0) {
 				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true, context: orderContext });
 				return;
 			}
@@ -765,7 +860,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					transport: deviceTransport,
 					recordedOffline: offline,
 					orderId: payload.id ?? null,
-					amount: fromMinor(e.payload.amountMinor, dp),
+					amount: fromMinor(amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -790,7 +885,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						method.capabilities.tips === 'on_reader' &&
 						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
 							'on_reader'
-							? e.payload.amountMinor
+							? amountMinor
 							: null,
 				});
 				reducerDispatch({ type: 'tender-started' });
@@ -822,7 +917,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					sessionId,
 					method,
 					orderId: payload.id,
-					amount: fromMinor(e.payload.amountMinor, dp),
+					amount: fromMinor(amountMinor, dp),
 					currency: store.currency ?? '',
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
@@ -908,9 +1003,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							row: outcome.row,
 							order: outcome.order,
 							mirrorFailed: false,
-							preparedCompleting: e.payload.amountMinor === balanceMinor,
-							preLegBalanceMinor: balanceMinor,
-							amountMinor: e.payload.amountMinor,
+							...completionFacts(e.payload),
 						},
 						queue
 					).finally(() => tenderRecorded(outcome.row, 'online'));
@@ -960,22 +1053,40 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 
 			const tendered = method.capabilities.change ? fromMinor(e.payload.tenderedMinor, dp) : null;
+			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
+			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
+			// A leg that did not land takes its rounding with it: the next tender may be a card.
+			const unround = () =>
+				patchFees(
+					withFees(target.getLatest().payload, (fees) =>
+						fees.flatMap((fee) => {
+							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
+							if (!paymentId || rounding?.payment_ref !== paymentId) return [fee];
+							return fee.id ? [{ ...fee, name: null }] : [];
+						})
+					)
+				);
 			const outcome = await recordManualPayment(order, method, {
-				amount: fromMinor(e.payload.amountMinor, dp),
+				amount: fromMinor(amountMinor, dp),
 				tendered,
+				...(paymentId ? { paymentId } : {}),
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 				// The gate resolved and the handler wrote; the writer must not resolve again.
 				session: { registerId, sessionId },
+			}).catch(async (error: unknown) => {
+				const landed =
+					error instanceof RecordManualPaymentMirrorError && error.outcome.kind === 'recorded';
+				if (paymentId && !landed) await unround().catch(() => undefined);
+				throw error;
 			});
+			if (paymentId && outcome.kind !== 'recorded') await unround();
 			if (outcome.kind === 'recorded') {
 				await completeOrderFlow(
 					{
 						source: 'manual',
 						...outcome,
 						mirrorFailed: false,
-						preparedCompleting: e.payload.amountMinor === balanceMinor,
-						preLegBalanceMinor: balanceMinor,
-						amountMinor: e.payload.amountMinor,
+						...completionFacts(e.payload),
 					},
 					queue
 				).finally(() => tenderRecorded(outcome.row, outcome.via));
@@ -1027,10 +1138,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						payload: {
 							methodId: method?.id ?? null,
 							mode: balanceMinor === 0 ? 'zero-balance' : (method?.capture.mode ?? null),
-							amountMinor: entryAppliedMinor,
-							tenderedMinor: state.entryMinor,
+							amountMinor: enteredLegMinor,
+							tenderedMinor: entryMinor,
 							balanceMinor,
-							completing: entryAppliedMinor === balanceMinor,
+							roundingMinor: 0,
+							completing: enteredLegMinor === balanceMinor,
 							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							registerId: null,
 							sessionId: null,
@@ -1080,9 +1192,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						row: outcome.row,
 						order: outcome.order,
 						mirrorFailed: true,
-						preparedCompleting: entryAppliedMinor === balanceMinor,
-						preLegBalanceMinor: balanceMinor,
-						amountMinor: entryAppliedMinor,
+						// A mirror error is thrown from inside the handler: the chain has settled the amounts.
+						...completionFacts(committed as TenderPayload),
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
@@ -1134,9 +1245,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					source: 'manual',
 					...outcome,
 					mirrorFailed: true,
-					preparedCompleting: entryAppliedMinor === balanceMinor,
-					preLegBalanceMinor: balanceMinor,
-					amountMinor: entryAppliedMinor,
+					...completionFacts(committed as TenderPayload),
 				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
@@ -1177,7 +1286,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		blockIfDegraded,
 		completeOrderFlow,
 		dp,
-		entryAppliedMinor,
+		enteredLegMinor,
+		entryMinor,
+		cartConfig,
 		method,
 		localPatch,
 		order,
@@ -1191,7 +1302,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		remember,
 		saveState,
 		bindingStatus,
-		state.entryMinor,
 		state.plan,
 		fixedAmount,
 		rowsSinceFrom,
@@ -1489,7 +1599,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			retryTerminalCapture,
 			dismissTerminalLeg,
 			retryTerminalLeg,
-			state,
+			state: entryMinor === state.entryMinor ? state : { ...state, entryMinor },
 			dispatch,
 			dp,
 			totalMinor,
@@ -1515,6 +1625,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			method,
 			entryAppliedMinor,
 			entryChangeMinor,
+			roundedDueMinor,
+			roundingMinor,
 			quickAmountsMinor,
 			busy,
 			saveState,
@@ -1549,6 +1661,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			dismissTerminalLeg,
 			retryTerminalLeg,
 			state,
+			entryMinor,
 			dispatch,
 			dp,
 			totalMinor,
@@ -1566,6 +1679,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			method,
 			entryAppliedMinor,
 			entryChangeMinor,
+			roundedDueMinor,
+			roundingMinor,
 			quickAmountsMinor,
 			busy,
 			saveState,

@@ -91,7 +91,9 @@ beforeEach(async () => {
 			},
 			t: (key) => key,
 			readCatalog: async () => null,
+			readPaymentMethod: () => null,
 			preventOverselling: false,
+			priceDecimals: 2,
 			resolveSession: async () => ({ registerId: null, sessionId: null }),
 		}),
 

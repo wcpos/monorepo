@@ -8,7 +8,9 @@ const ctx = createActionContext({
 	log,
 	t: (key) => key,
 	readCatalog,
+	readPaymentMethod: () => null,
 	preventOverselling: true,
+	priceDecimals: 2,
 	resolveSession: async () => ({ registerId: null, sessionId: null }),
 });
 const e: ActionEventInput<'cart.line.add'> = {
@@ -84,7 +86,11 @@ it('passes misc products straight through', async () => {
 	expect(next).toHaveBeenCalledTimes(1);
 });
 it('passes straight through with preventOverselling false', async () => {
-	await stockGuardOnAdd({ ...ctx, store: { preventOverselling: false } }, e, next);
+	await stockGuardOnAdd(
+		{ ...ctx, store: { preventOverselling: false, priceDecimals: 2 } },
+		e,
+		next
+	);
 	expect(readCatalog).not.toHaveBeenCalled();
 	expect(next).toHaveBeenCalledTimes(1);
 });

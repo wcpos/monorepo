@@ -2009,7 +2009,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 				log: () => undefined,
 				t: (key) => key,
 				readCatalog: async () => null,
+				readPaymentMethod: () => null,
 				preventOverselling: false,
+				priceDecimals: 2,
 				// The session gate reads the bound register and its open session the way the app does.
 				resolveSession: async () => {
 					const { readBoundRegister } = jest.requireActual<

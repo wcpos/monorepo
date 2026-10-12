@@ -36,10 +36,13 @@ unrelated queued writes.
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit) | `billing`, `shipping`, `taxIds` | yes |
 | `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
+| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`; extension `cash.rounding` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
-completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `amountMinor`
+roundingMinor, completing, bindingStatus, registerId, sessionId }`; the handler and `register.gate`
+judge completion as `amountMinor === balanceMinor` on the payload the chain hands them, and
+`cash.rounding` (#66, #84) rewrites a settling cash tender to the rounded due, the handler
+writing the difference as a fee line before the leg. Amounts are minor units: `amountMinor`
 is applied to the balance, `tenderedMinor` is what the cashier handed over. `mode` includes
 `zero-balance`; `bindingStatus` is `bound | choose | none`; the two ids begin as `null`.
 

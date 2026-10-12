@@ -208,6 +208,8 @@ function makeFlow(count = 1): TenderFlow {
 		method,
 		entryAppliedMinor: 0,
 		entryChangeMinor: 0,
+		roundedDueMinor: 9295,
+		roundingMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
 		saveState: { kind: 'saving' },
@@ -360,6 +362,7 @@ it.each([
 			...makeFlow(),
 			saveState: null,
 			balanceMinor: balance,
+			roundedDueMinor: balance,
 			thisPaymentMinor: balance,
 			entryAppliedMinor: applied,
 			entryChangeMinor: change ? entry - applied : 0,
@@ -386,6 +389,97 @@ it.each([
 		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: balance });
 	}
 );
+
+it.each([
+	// 10.03 rounds up to 10.05; 10.02 down to 10.00 (#66, #84).
+	[1003, 1005, 1005, '', 'Take 1005 in Cash'],
+	[1003, 1005, 2000, 'Change 995', 'Take 1005 in Cash'],
+	[1002, 1000, 1000, '', 'Take 1000 in Cash'],
+])(
+	'shows a cash tender of %s at its rounded due %s (entry %s)',
+	(balance, due, entry, hint, label) => {
+		const flow: TenderFlow = {
+			...makeFlow(),
+			saveState: null,
+			totalMinor: balance,
+			balanceMinor: balance,
+			thisPaymentMinor: balance,
+			roundedDueMinor: due,
+			roundingMinor: due - balance,
+			entryAppliedMinor: due,
+			entryChangeMinor: entry - due,
+			quickAmountsMinor: [due, 1500],
+			state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: entry },
+		};
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-entry').textContent).toBe(String(entry));
+		expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(hint);
+		expect(screen.getByTestId('checkout-rounded-from').textContent).toBe(`Rounded from ${balance}`);
+		expect(screen.getByTestId('checkout-commit').textContent).toBe(label);
+		expect(screen.getByTestId('checkout-quick-exact').textContent).toBe(`Exact ${due}`);
+		expect(screen.getByTestId(`checkout-quick-${(due / 100).toFixed(2)}`)).not.toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: due });
+	}
+);
+
+it('a partial cash entry is not rounded, but the exact chip still offers the rounded due', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		totalMinor: 1003,
+		balanceMinor: 1003,
+		thisPaymentMinor: 1003,
+		roundedDueMinor: 1005,
+		roundingMinor: 0,
+		entryAppliedMinor: 500,
+		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 500 },
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.queryByTestId('checkout-rounded-from')).toBeNull();
+	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 500 in Cash · 503 left');
+	expect(screen.getByTestId('checkout-quick-exact').textContent).toBe('Exact 1005');
+});
+
+it('an exact unrounded cash entry pays it off, as the hook lets it', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		balanceMinor: 1003,
+		thisPaymentMinor: 1003,
+		roundedDueMinor: 1005,
+		roundingMinor: 0,
+		entryAppliedMinor: 1003,
+		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 1003 },
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 1003 in Cash · pays it off');
+	expect(screen.queryByTestId('checkout-rounded-from')).toBeNull();
+});
+
+it('a split share the hook will settle previews the rounded due', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		plan: { kind: 'fixed', firstMinor: 1001, title: null, from: 0 },
+		planLegs: [
+			{ minor: 1001, state: 'now' },
+			{ minor: 1, state: 'rest' },
+		],
+		balanceMinor: 1002,
+		thisPaymentMinor: 1001,
+		roundedDueMinor: 1000,
+		roundingMinor: -2,
+		entryAppliedMinor: 1000,
+		entryChangeMinor: 1000,
+		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 2000 },
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('Change 1000');
+	expect(screen.getByTestId('checkout-rounded-from').textContent).toBe('Rounded from 1002');
+	expect(screen.getByTestId('checkout-commit').textContent).toMatch(/^Take 1000 in Cash/);
+});
 
 it('blocks no-change over-tender and restores full balance from a partial entry', () => {
 	const card = {
@@ -437,6 +531,7 @@ it('shows plan legs, labels, a short entry hint and numbered commit tail', () =>
 		],
 		thisPaymentMinor: 450,
 		balanceMinor: 900,
+		roundedDueMinor: 900,
 		entryAppliedMinor: 200,
 		state: { ...initialTenderState, view: 'amount', entryMinor: 200, entryDirty: true },
 	};
@@ -628,6 +723,7 @@ it('does not cap manual card at the planned split share', () => {
 		plan: { kind: 'even', ways: 2, from: 0 },
 		saveState: null,
 		balanceMinor: 2000,
+		roundedDueMinor: 2000,
 		thisPaymentMinor: 1000,
 		entryAppliedMinor: 1500,
 		method: { ...method, title: 'Card', capabilities: { ...method.capabilities, change: false } },
@@ -648,6 +744,7 @@ it('keeps fixed plans numbered out of two, but stops numbering a completed item 
 		...makeFlow(),
 		saveState: null,
 		balanceMinor: 1,
+		roundedDueMinor: 1,
 		thisPaymentMinor: 1,
 		entryAppliedMinor: 1,
 		plan: { kind: 'fixed', firstMinor: 1, title: null, from: 0 },

@@ -1,3 +1,5 @@
+import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+
 export const ACTION_API_VERSION = 1;
 /**
  * Named for the checkout code, which the Logs event-label check scans for dotted literals
@@ -69,6 +71,9 @@ export interface ActionContracts {
 			amountMinor: number;
 			tenderedMinor: number;
 			balanceMinor: number;
+			/** What a rounding hook added to (or took off) the balance; callers pass `0`. */
+			roundingMinor: number;
+			/** The caller's view before the chain; the gate and the writer judge `amountMinor === balanceMinor`. */
 			completing: boolean;
 			bindingStatus: 'bound' | 'choose' | 'none';
 			registerId: string | null;
@@ -166,11 +171,15 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.coupon.remove': [],
 	'cart.customer.set': ['billing', 'shipping', 'taxIds'],
 	[ORDER_VOID_EVENT]: [],
-	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
-	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
-	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the
-	// handler to derive everything from the payload first, then opens these keys.
-	'checkout.tender.commit': ['registerId', 'sessionId'],
+	// The handler derives the split, provenance and completion facts from the payload after the
+	// chain, so the amounts are rewritable (cash rounding, #66 and #84).
+	'checkout.tender.commit': [
+		'amountMinor',
+		'balanceMinor',
+		'roundingMinor',
+		'registerId',
+		'sessionId',
+	],
 } as const satisfies Record<ActionEvent, readonly string[]>;
 export type ActionActor = {
 	userId: number | null;
@@ -233,12 +242,15 @@ export interface ActionContext {
 			kind: 'product' | 'variation',
 			wooId: number
 		) => Promise<Record<string, unknown> | null>;
+		/** The till's descriptor for a payment method, or null when the till does not offer it. */
+		readonly paymentMethod: (id: string) => PaymentMethodDescriptor | null;
 	};
 	readonly register: {
 		/** The bound register and its open session, or throws RegisterSessionRequiredError. */
 		resolveSession(): Promise<{ registerId: string | null; sessionId: string | null }>;
 	};
-	readonly store: { readonly preventOverselling: boolean };
+	/** `priceDecimals` is what every `*Minor` amount in a payload is counted in. */
+	readonly store: { readonly preventOverselling: boolean; readonly priceDecimals: number };
 }
 export type ActionHookRegistration = { id: string; tier: ActionHookTier; order?: number };
 export type ActionHookState = { strikes: number; disabled: boolean };

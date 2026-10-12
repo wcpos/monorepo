@@ -132,9 +132,9 @@ jest.mock('./use-action-context', () => ({
 			t: (key: string, params?: Record<string, unknown>) =>
 				params ? `${key} ${JSON.stringify(params)}` : key,
 			now: Date.now,
-			read: { catalog: async () => null },
+			read: { catalog: async () => null, paymentMethod: () => null },
 			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
-			store: { preventOverselling: false },
+			store: { preventOverselling: false, priceDecimals: 2 },
 		},
 		actor: { userId: 7, registerId: 'till', sessionId: null },
 	}),

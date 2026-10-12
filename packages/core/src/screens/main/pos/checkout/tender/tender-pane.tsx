@@ -198,12 +198,15 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const ways = plan?.kind === 'fixed' ? 2 : Math.max(plan?.ways ?? 1, n);
 	const groupDone =
 		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
-	const due = flow.thisPaymentMinor;
+	// A cash entry the cash.rounding hook will settle is due the rounded amount (#66, #84); the
+	// Exact chip offers it whenever this leg is the whole balance, since tapping it settles.
+	const due = flow.roundingMinor !== 0 ? flow.roundedDueMinor : flow.thisPaymentMinor;
+	const exactMinor = flow.thisPaymentMinor === flow.balanceMinor ? flow.roundedDueMinor : due;
 	// A fixed-amount gateway applies the balance whatever is typed, so excess entry is not an overpayment.
 	const noChange = Boolean(
 		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
 	);
-	const left = flow.balanceMinor - flow.entryAppliedMinor;
+	const left = flow.balanceMinor + flow.roundingMinor - flow.entryAppliedMinor;
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
 		(tile.reason === 'offline' &&
@@ -329,6 +332,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			>
 				{hint}
 			</Text>
+			{flow.roundingMinor !== 0 ? (
+				<Text testID="checkout-rounded-from" className="text-muted-foreground text-sm" decodeHtml>
+					{t('pos_checkout.rounded_from', { amount: format(flow.balanceMinor) })}
+				</Text>
+			) : null}
 			{flow.invoiceSent ? <InvoiceSentLine flow={flow} busy={busy} /> : null}
 			{plan ? (
 				<View
@@ -540,11 +548,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							(givesChange && !remote) || plan
 								? 'pos_checkout.exact_amount'
 								: 'pos_checkout.full_balance',
-							{ amount: format(due) }
+							{ amount: format(exactMinor) }
 						)}
 						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 						disabled={busy}
-						onPress={() => flow.dispatch({ type: 'set-entry', minor: due })}
+						onPress={() => flow.dispatch({ type: 'set-entry', minor: exactMinor })}
 					/>
 				</View>
 			) : null}
@@ -569,7 +577,8 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					disabled={
 						!method ||
 						busy ||
-						flow.entryAppliedMinor <= 0 ||
+						// A cash due rounded to nothing still settles the sale.
+						(flow.entryAppliedMinor <= 0 && flow.roundingMinor === 0) ||
 						needsReader ||
 						Boolean(reason) ||
 						noChange ||
