@@ -42,16 +42,19 @@ export const useSetCartCustomer = () => {
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
 			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
+				// A first add queued ahead turns the temporary order into a saved one and leaves the
+				// saved record on the slot; that is the order this write lands on.
+				const target = queue.order ?? order;
 				// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
 				// customer this write keeps, not the one the form last rendered.
-				const current = order.getLatest().payload.customer_id ?? null;
+				const current = target.getLatest().payload.customer_id ?? null;
 				const setsCustomer = fields.customerId !== undefined;
 				return dispatchAction({
 					event: 'cart.customer.set',
 					token: queue.dispatchToken,
 					ctx,
 					input: {
-						orderId: order.uuid,
+						orderId: target.uuid,
 						actor,
 						source: 'user',
 						payload: {
@@ -65,7 +68,7 @@ export const useSetCartCustomer = () => {
 					},
 					bottom: (e) =>
 						localPatch({
-							document: order,
+							document: target,
 							data: {
 								...(setsCustomer ? { customer_id: e.payload.customerId } : {}),
 								billing: e.payload.billing ?? undefined,

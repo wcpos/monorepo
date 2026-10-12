@@ -153,3 +153,28 @@ it('without a customer id the write keeps whoever the order is for, read inside 
 	expect('customer_id' in data).toBe(false);
 	expect(data).toEqual({ billing, shipping, tax_ids: [] });
 });
+
+it('lands on the saved order a first add left on the slot, not the temporary record it was called with', async () => {
+	const { enqueueOrderMutation } =
+		jest.requireActual<typeof import('./order-mutation-queue')>('./order-mutation-queue');
+	const saved = {
+		uuid: 'order-uuid',
+		payload: { id: 18, customer_id: 0 },
+		getLatest: () => saved,
+	} as never;
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	void enqueueOrderMutation('order-uuid', async (queue) => {
+		await gate;
+		queue.order = saved;
+	});
+	const { result } = renderHook(() => useSetCartCustomer());
+	const pending = act(async () => {
+		await result.current(order, { customerId: 9, billing, shipping, taxIds: null });
+	});
+	release();
+	await pending;
+	expect(localPatch).toHaveBeenCalledWith(
+		expect.objectContaining({ document: saved, data: expect.objectContaining({ customer_id: 9 }) })
+	);
+});

@@ -22,7 +22,7 @@ let mockSubmitCustomer: SubmitCustomer | undefined;
 
 const currentOrderRecord = {
 	uuid: 'order-1',
-	payload: { customer_id: 7 },
+	payload: { customer_id: 7 } as Record<string, unknown>,
 	getLatest: () => currentOrderRecord,
 };
 
@@ -151,7 +151,11 @@ describe.each([
 			getLatest: () => ({ uuid: 'customer-1', payload }),
 			toJSON,
 		});
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
+		// The order carries what was written, as it does in the app.
+		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+			Object.assign(currentOrderRecord.payload, data);
+			return { changes: data, document: currentOrderRecord };
+		});
 
 		render(renderComponent());
 		expect(mockSubmitCustomer).toBeDefined();
@@ -193,7 +197,11 @@ describe.each([
 			getLatest: () => ({ uuid: 'customer-1', payload }),
 			toJSON: () => ({ payload }),
 		});
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
+		// The order carries what was written, as it does in the app.
+		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+			Object.assign(currentOrderRecord.payload, data);
+			return { changes: data, document: currentOrderRecord };
+		});
 		render(renderComponent());
 		await act(async () => {
 			await mockSubmitCustomer?.({ first_name: 'Ada' });

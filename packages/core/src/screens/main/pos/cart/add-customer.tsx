@@ -98,9 +98,10 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 								await recordCustomerLink(storeDB, orderUuid, {
 									customerUuid: record.uuid,
 									scopeId,
-									// From what was written: a hook may have completed the address.
+									// From the order as it now stands: a hook may have completed or kept
+									// an address, and the bridge compares against what the order carries.
 									identity: customerLinkIdentity(
-										(attached.changes?.billing as typeof saved.billing) ?? saved?.billing
+										currentOrderRecord.getLatest().payload.billing as typeof saved.billing
 									),
 									at: new Date().toISOString(),
 								});
