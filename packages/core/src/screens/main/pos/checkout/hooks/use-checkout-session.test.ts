@@ -126,6 +126,30 @@ describe('useCheckoutSession', () => {
 		expect(result.current.error).toBe('payment_gateways_fetch_failed');
 	});
 
+	it('maps every catalog entry to its stored settled status, keyed by gateway id', async () => {
+		// The pay page can settle the order through any POS gateway, so the webview
+		// needs the whole catalog: id -> stored status, null where nothing is stored
+		// or the store predates the field.
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{ id: 'pos_cash', title: 'Cash', settled_order_status: 'completed' },
+				{ id: 'bacs', title: 'Bank transfer', settled_order_status: 'pending' },
+				{ id: 'pos_card', title: 'Card', settled_order_status: null },
+				{ id: 'cheque', title: 'Cheque' },
+			],
+		});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		expect(result.current.settledOrderStatuses).toEqual({
+			pos_cash: 'completed',
+			bacs: 'pending',
+			pos_card: null,
+			cheque: null,
+		});
+	});
+
 	it('polls contract checkout to completed and refreshes the order', async () => {
 		jest.useFakeTimers();
 		mockGet
