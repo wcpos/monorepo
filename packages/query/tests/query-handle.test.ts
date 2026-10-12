@@ -98,7 +98,7 @@ describe('query handle', () => {
 		expect(acquire('a', of(EMPTY))).not.toBe(first);
 	});
 
-	it('does nothing until the first reader subscribes, then reads and declares', async () => {
+	it('a reader starts the read and declares nothing; an owner declares; each release lands a microtask later', async () => {
 		const results = new Subject<Result>();
 		const handle = acquire('b', results, [searchPlan('ada')]);
 		expect(handle.value.ready).toBe(false);
@@ -106,27 +106,36 @@ describe('query handle', () => {
 
 		const seen: QuerySnapshot<Result>[] = [];
 		const unsubscribe = handle.subscribe(() => seen.push(handle.value));
-		expect(engine.searchRequireCalls).toHaveLength(1);
-		expect(handle.value.pending).toBe(true);
-
+		// The read is live, the demand is not: readers never declare.
+		expect(engine.searchRequireCalls).toHaveLength(0);
 		results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] });
 		expect(handle.value.ready).toBe(true);
 		expect(handle.value.count).toBe(1);
 		expect(seen.at(-1)).toBe(handle.value);
 
-		unsubscribe();
+		const release = handle.retain();
+		expect(engine.searchRequireCalls).toHaveLength(1);
+		expect(handle.value.pending).toBe(true);
+
+		// The owner leaves: the demand goes, the read stays for the reader.
+		release();
 		await settle();
 		expect(engine.searchRequireCalls[0]?.released).toBe(true);
 		expect(handle.value.pending).toBe(false);
+		expect(queryHandleCount(engine)).toBe(1);
+
+		unsubscribe();
+		await settle();
+		expect(queryHandleCount(engine)).toBe(0);
 	});
 
 	it('releases after the successor declares when a reader moves between handles in one task', async () => {
 		const a = acquire('a', of(EMPTY), [searchPlan('ada')]);
 		const b = acquire('b', of(EMPTY), [searchPlan('ada')]);
-		const leaveA = a.subscribe(() => undefined);
+		const leaveA = a.retain();
 		// React: cleanup of the old effect, then setup of the new one, synchronously.
 		leaveA();
-		b.subscribe(() => undefined);
+		b.retain();
 		await settle();
 		const search = engine.demandEvents.filter((event) => event.endsWith(':search'));
 		// require (a), require (b), release (a) — never require, release, require.
@@ -238,17 +247,17 @@ describe('query handle', () => {
 	it("mirrors the key's new owner when a kept handle restarts after its replacement was acquired", async () => {
 		const plan = searchPlan('ada');
 		const first = acquire('h', of(EMPTY), [plan]);
-		const leaveFirst = first.subscribe(() => undefined);
+		const leaveFirst = first.retain();
 		leaveFirst();
 		await settle();
 		const results = new Subject<Result>();
 		const second = acquire('h', results, [searchPlan('ada')]);
 		expect(second).not.toBe(first);
-		second.subscribe(() => undefined);
+		second.retain();
 		const declaredBefore = engine.searchRequireCalls.length;
 
-		// A reader that kept the first object subscribes again: no second read, no second demand.
-		first.subscribe(() => undefined);
+		// An owner that kept the first object holds it again: no second read, no second demand.
+		first.retain();
 		expect(engine.searchRequireCalls.length).toBe(declaredBefore);
 		results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] });
 		expect(first.value.count).toBe(1);
@@ -427,7 +436,7 @@ describe('query handle', () => {
 
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
 		const handle = acquire('e', of(EMPTY), [searchPlan('ada')]);
-		handle.subscribe(() => undefined);
+		handle.retain();
 		await handle.sync();
 		const forced = engine.requireCalls.find((call) => call.id?.endsWith(':sync:search'));
 		expect(forced).toMatchObject({ priority: 1000, forceRefresh: true });

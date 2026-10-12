@@ -123,6 +123,80 @@ describe('useQuerySnapshot', () => {
 	});
 });
 
+describe('useQuerySnapshot with useDeferredValue(handle)', () => {
+	it('keeps the previous handle’s rows while the new one suspends, and only its read', async () => {
+		const first = new Subject<Result>();
+		const second = new Subject<Result>();
+		let demandA = 0;
+		let demandB = 0;
+		const withDemand = (key: string, results: Subject<Result>, count: () => void) =>
+			createQueryHandle(
+				engine,
+				{
+					key,
+					result$: () => results,
+					demands: [
+						{
+							collection: 'products',
+							coverageTarget$: of(null),
+							searchLane$: of(null),
+							pending$: of(false),
+							fetched$: of(false),
+							whenReady: async () => ({ attempted: true, fetched: false }),
+							declareOnce: async () => ({ attempted: true, fetched: false }),
+							sync: async () => undefined,
+							start: count,
+							stop: () => undefined,
+						},
+					],
+					activeCollections: [],
+					censusScoped: false,
+					observeActive: () => of(false),
+				},
+				EMPTY
+			);
+		const handles = {
+			a: withDemand('switch-a', first, () => (demandA += 1)),
+			b: withDemand('switch-b', second, () => (demandB += 1)),
+		};
+		// The owner: retains the live handle from an effect above the boundary, as the screens do.
+		function Owner({ which }: { which: 'a' | 'b' }) {
+			const handle = handles[which];
+			React.useEffect(() => handle.retain(), [handle]);
+			return (
+				<React.Suspense fallback={<span data-testid="fallback" />}>
+					<Reader handle={handle} />
+				</React.Suspense>
+			);
+		}
+		function Reader({ handle }: { handle: QueryHandle<Result> }) {
+			const shown = React.useDeferredValue(handle);
+			const snapshot = useQuerySnapshot(shown);
+			return (
+				<span data-testid="rows">
+					{snapshot.count}:{shown === handle ? 'settled' : 'settling'}
+				</span>
+			);
+		}
+		const { rerender } = render(<Owner which="a" />);
+		expect(screen.getByTestId('fallback')).toBeTruthy();
+		await act(async () => first.next({ count: 1, hits: [] }));
+		expect(screen.getByTestId('rows').textContent).toBe('1:settled');
+		expect(demandA).toBe(1);
+
+		rerender(<Owner which="b" />);
+		await act(async () => undefined);
+		// B suspends; A's rows stay on screen, flagged as settling. A's demand is gone with its
+		// owner (B declared first), A's read stays for the reader.
+		expect(screen.getByTestId('rows').textContent).toBe('1:settling');
+		expect(demandB).toBe(1);
+		expect(handles.a.value.pending).toBe(false);
+
+		await act(async () => second.next({ count: 2, hits: [] }));
+		expect(screen.getByTestId('rows').textContent).toBe('2:settled');
+	});
+});
+
 describe('useQueryHandleFields', () => {
 	it('holds its snapshot while only an unwatched field moves, and follows a watched one', () => {
 		const results = new Subject<Result>();

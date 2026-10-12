@@ -28,6 +28,7 @@ import {
 	useQueryHandleFields,
 	useQuerySnapshot,
 } from '../../../../../query';
+import { DataTableFooterFor } from '../footer';
 import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
 import { RecordTextCell } from '../../record-text-cell';
 import { useT } from '../../../../../contexts/translations';
@@ -120,6 +121,7 @@ type TableProps<TSortField extends string> = {
 
 /** The source as the eight-observable binding: the Suspense resource and the streams. */
 type StreamSource = {
+	handle?: never;
 	binding?: Pick<import('../../../../../query').QueryBinding, 'pending$' | 'exhausted$'>;
 	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	active$: import('rxjs').Observable<boolean>;
@@ -135,6 +137,11 @@ type StreamSource = {
  */
 type HandleSource = {
 	handle: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+	binding?: never;
+	resource?: never;
+	active$?: never;
+	total$?: never;
+	sync?: never;
 };
 
 type Props<TData extends RowData, TSortField extends string> = CommonProps<TData> &
@@ -149,6 +156,8 @@ type BodySource = {
 	active$: import('rxjs').Observable<boolean>;
 	total$: import('rxjs').Observable<number | null>;
 	sync: () => Promise<void>;
+	/** The default footer; the handle source supplies one that reads values in the same commit. */
+	footer?: React.ComponentType<{ count: number }>;
 };
 
 type BodyProps<TData extends RowData, TSortField extends string> = CommonProps<TData> &
@@ -159,11 +168,40 @@ const NOT_PENDING$ = of(false);
 const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
 const TABLE_FIELDS = ['pending', 'exhausted'] as const;
 const ACTIVE_FIELD = ['active'] as const;
+const TOTAL_FIELD = ['total'] as const;
+
+/**
+ * The handle source's default footer: `total` from the drawn handle in the SAME commit as the
+ * rows it counts (a stream's value lands one commit later), the spinner from the live one.
+ */
+function HandleFooter({
+	collectionName,
+	handle,
+	shown,
+	count,
+}: {
+	collectionName: DataTableCollectionKey;
+	handle: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+	shown: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+	count: number;
+}) {
+	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
+	return (
+		<DataTableFooterFor
+			collectionName={collectionName}
+			active={active}
+			total={total}
+			sync={handle.sync}
+			count={count}
+		/>
+	);
+}
 
 function DataTable<TData extends RowData, TSortField extends string = string>(
 	props: Props<TData, TSortField>
 ) {
-	return 'handle' in props ? (
+	return props.handle ? (
 		<HandleDataTable<TData, TSortField> {...props} />
 	) : (
 		<StreamDataTable<TData, TSortField> {...props} />
@@ -201,8 +239,21 @@ function HandleDataTable<TData extends RowData, TSortField extends string>(
 	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
 	// The spinner is the engine's now, whichever query is drawn.
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
-	// The footers' streams, one set per handle (they subscribe themselves, as they always did).
-	const streams = React.useMemo(() => bindingObservablesFor(shown), [shown]);
+	// Streams for the custom footer props that still take them (they subscribe themselves):
+	// the spinner's from the live handle, the total's from the drawn one, like the values.
+	const live = React.useMemo(() => bindingObservablesFor(handle), [handle]);
+	const drawn = React.useMemo(() => bindingObservablesFor(shown), [shown]);
+	const footer = React.useCallback(
+		({ count }: { count: number }) => (
+			<HandleFooter
+				collectionName={props.collectionName}
+				handle={handle}
+				shown={shown}
+				count={count}
+			/>
+		),
+		[handle, props.collectionName, shown]
+	);
 	return (
 		<DataTableBody<TData, TSortField>
 			{...rest}
@@ -210,9 +261,10 @@ function HandleDataTable<TData extends RowData, TSortField extends string>(
 			syncing={active}
 			// A changed query that has not answered is in flight for paging (#1221).
 			engine={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
-			active$={streams.active$}
-			total$={streams.total$}
+			active$={live.active$}
+			total$={drawn.total$}
 			sync={handle.sync}
+			footer={footer}
 		/>
 	);
 }
@@ -274,6 +326,12 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 	const t = useT();
 	const { result, syncing, engine } = props;
 	const deferredResult = React.useDeferredValue(result);
+	// A deferred frame behind the answer is in flight for paging too: the guard must not judge
+	// the new answer on the old hit count (#1221).
+	const paging = {
+		pending: engine.pending || deferredResult !== result,
+		exhausted: engine.exhausted,
+	};
 
 	const columns = React.useMemo(
 		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
@@ -301,7 +359,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 	const handleEndReached = useGuardedExtendLimitFor(
 		props.actions.extendLimit,
 		deferredResult.hits.length,
-		engine
+		paging
 	);
 
 	const table = useTable<DataTableFeatures, DataTableRow>({
@@ -460,6 +518,8 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 							sync={props.sync}
 							count={result.hits.length}
 						/>
+					) : props.footer ? (
+						<props.footer count={result.hits.length} />
 					) : (
 						<DataTableFooter
 							collectionName={props.collectionName}

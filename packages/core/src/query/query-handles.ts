@@ -239,8 +239,6 @@ export function canonicalQueryKey(value: unknown): string {
 	});
 }
 
-const noop = () => undefined;
-
 type CollectionHandleKey = Exclude<CollectionKey, 'logs'>;
 
 export type CollectionHandleInput<C extends CollectionHandleKey> = {
@@ -339,7 +337,7 @@ export function useCollectionQueryHandle<C extends CollectionHandleKey>(
 			searchFields: fields ?? undefined,
 		});
 	}, [collection, engine, key, storeScope]);
-	React.useEffect(() => handle.subscribe(noop), [handle]);
+	React.useEffect(() => handle.retain(), [handle]);
 	return handle;
 }
 
@@ -398,8 +396,9 @@ export function useProductsQueryHandle(
 			childSearchFields: child ?? undefined,
 		});
 	}, [engine, key]);
-	// The owner retains: readers come and go (a footer, a count badge), the declaration stays.
-	React.useEffect(() => handle.subscribe(noop), [handle]);
+	// The owner retains: the demand is declared while this screen holds the handle; readers
+	// (the grid, a footer, a count badge) come and go and only keep the read.
+	React.useEffect(() => handle.retain(), [handle]);
 	return handle;
 }
 
@@ -471,6 +470,13 @@ export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
  * A boundary reset remounts the reader over the same failure; the owner's boundary wires
  * `onReset={() => handle.retry()}` so the reset asks the engine again and the reader suspends
  * on the retry instead of throwing the old failure back.
+ *
+ * One constraint: the owner must COMMIT for the promise to settle, since its retain effect is
+ * what starts the read. Every handle input today (the query-state store, the scope key) arrives
+ * through `useSyncExternalStore`, whose updates are synchronous, so the owner always commits.
+ * A handle input delivered inside a transition would suspend the reader within that transition
+ * on an already-revealed boundary, and the owner's effect would wait on a commit that waits on
+ * the reader: do not feed a handle from a transition.
  */
 export function useQuerySnapshot<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>,
