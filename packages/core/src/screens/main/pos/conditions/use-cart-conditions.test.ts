@@ -83,3 +83,19 @@ it('judges nothing and reads nothing with overselling allowed', async () => {
 	expect(result.current.unmet).toEqual([]);
 	expect(mockReadStock).not.toHaveBeenCalled();
 });
+
+it('re-judges a variation that manages its own stock when the variation moves', async () => {
+	mockLineItems = [{ ...lineItem('v', 2), variation_id: 7 }];
+	mockStock = {
+		products: { 1: { manage_stock: false } },
+		variations: { 7: { manage_stock: true, stock_quantity: 5, backorders: 'no' } },
+	};
+	const { result } = render();
+	await waitFor(() => expect(mockReadStock).toHaveBeenCalledWith(mockRuntime, 'variations', 7));
+	expect(result.current.unmet).toEqual([]);
+	mockStock.variations[7] = { manage_stock: true, stock_quantity: 1, backorders: 'no' };
+	act(() => mockCatalog$.variations.next([{ remoteId: 'changed' }]));
+	await waitFor(() =>
+		expect(result.current.unmet).toMatchObject([{ lineUuid: 'v', available: 1, fix: 'reduce' }])
+	);
+});

@@ -54,14 +54,23 @@ describe('evaluateConditions (stock)', () => {
 		]);
 	});
 
-	it('nothing left, or nothing below zero, is remove', () => {
+	it('nothing left, or below zero, is out of stock and remove — never "Only 0 available"', () => {
 		for (const level of [0, -2]) {
 			expect(
 				evaluateConditions(
 					snapshot([line('a', 1)], { '1:0': { product: managed(level), variation: null } }),
 					ON
 				)
-			).toMatchObject([{ fix: 'remove', available: level }]);
+			).toEqual([
+				{
+					id: 'stock',
+					reasonKey: 'pos_products.out_of_stock',
+					params: { name: 'A' },
+					lineUuid: 'a',
+					fix: 'remove',
+					available: level,
+				},
+			]);
 		}
 	});
 

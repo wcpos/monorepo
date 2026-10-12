@@ -70,20 +70,20 @@ export function CartConditionsProvider({ children }: { children: React.ReactNode
 /** The cart's unmet conditions, in line order; empty outside a cart. */
 export const useCartUnmet = () => React.useContext(CartConditionsContext);
 
-/** The quantity cells register here, so the notice and a blocked Pay can reach a mounted line. */
-const lines = new Map<string, { scroll: () => void; openQuantity: () => void }>();
-
-/** A quantity input's ref: registers the line while it is mounted (a React 19 ref cleanup). */
-export function lineFocusRef(uuid: string, scroll: () => void) {
-	return (input: { focus: () => void } | null) => {
-		if (!input) return;
-		const focus = { scroll, openQuantity: () => input.focus() };
-		lines.set(uuid, focus);
-		return () => void (lines.get(uuid) === focus && lines.delete(uuid));
+// How the notice and Pay reach a line: the name cell (always shown) registers `scroll`, the
+// quantity keypad (a column the merchant may hide) `openQuantity`, each only while mounted.
+type Part = 'scroll' | 'openQuantity';
+const lines = new Map<string, Partial<Record<Part, () => void>>>();
+export function lineRef<T>(uuid: string, part: Part, act: (node: T) => void) {
+	let run: (() => void) | undefined; // null on detach: merged host refs drop a ref's cleanup
+	return (node: T | null) => {
+		if (run && lines.get(uuid)?.[part] === run) delete lines.get(uuid)![part];
+		run = node ? () => act(node) : undefined;
+		if (run) lines.set(uuid, { ...lines.get(uuid), [part]: run });
 	};
 }
-export const scrollToLine = (uuid: string) => lines.get(uuid)?.scroll();
+export const scrollToLine = (uuid: string) => lines.get(uuid)?.scroll?.();
 export function openLineQuantity(uuid: string) {
-	lines.get(uuid)?.scroll();
-	lines.get(uuid)?.openQuantity();
+	scrollToLine(uuid);
+	lines.get(uuid)?.openQuantity?.();
 }

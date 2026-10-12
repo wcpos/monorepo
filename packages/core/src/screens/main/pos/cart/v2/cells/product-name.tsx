@@ -12,7 +12,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
 import { useT } from '../../../../../../contexts/translations';
 import { EditableField } from '../../../../components/editable-field';
-import { useCartUnmet } from '../../../conditions/use-cart-conditions';
+import { lineRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
 import { getStockRejectionForLine, stockRejection$ } from '../../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 import { useCurrentOrder } from '../../../contexts/current-order';
@@ -28,8 +28,11 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	const { updateLineItem } = useUpdateLineItem();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
-	// The cart's own judgement (checkout conditions), or the server's refusal below.
 	const unmet = useCartUnmet().find((condition) => condition.lineUuid === uuid);
+	const scrollRef = React.useMemo(
+		() => lineRef(uuid, 'scroll', () => table.options.meta?.scrollToRow?.(uuid)),
+		[uuid, table]
+	);
 	/**
 	 * Highlight lines the server rejected at checkout, until the quantity no
 	 * longer exceeds what the server said was available (self-clearing).
@@ -63,7 +66,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	return (
 		<VStack className="w-full gap-0">
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
-			<View className="w-full">
+			<View className="w-full" ref={scrollRef}>
 				{/* Two lines: the name is what the cashier reads, and the amount columns hold
 				    their width at every scale step, so a long name wraps rather than truncates. */}
 				<EditableField
@@ -81,10 +84,10 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					testID="cart-line-stock-mark"
 				>
 					<Icon name="box" size="xs" variant="attention" />
-					<Text className="text-attention-foreground text-xs font-semibold">
-						{stockMark.available === null
-							? t('common.out_of_stock')
-							: t('pos_cart.n_available', { quantity: stockMark.available })}
+					<Text className="text-foreground text-xs font-semibold">
+						{(stockMark.available ?? 0) > 0
+							? t('pos_cart.n_available', { quantity: stockMark.available! })
+							: t('common.out_of_stock')}
 					</Text>
 				</HStack>
 			)}

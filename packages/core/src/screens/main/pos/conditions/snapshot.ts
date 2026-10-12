@@ -6,8 +6,11 @@ import type { StockFields } from '../hooks/stock-guard';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type Read = (kind: 'product' | 'variation', id: number) => Promise<unknown>;
+const reducedStock = (line: LineItem) =>
+	line.meta_data?.find((meta) => meta.key === '_reduced_stock')?.value;
 
-/** Product lines (not misc, not retired) and their catalog records, via the add guard's read. */
+// Product lines (not misc, not retired), each net of the stock it already took (`_reduced_stock`,
+// on a reopened order, as the server's validator skips it), and their records via the add guard's read.
 export async function buildConditionSnapshot(
 	lineItems: readonly LineItem[],
 	read: Read
@@ -18,9 +21,10 @@ export async function buildConditionSnapshot(
 			uuid: wooMetaCarrier.lineUuid(line) ?? '',
 			productId: line.product_id!,
 			variationId: line.variation_id ?? 0,
-			quantity: Number.isFinite(line.quantity) ? line.quantity! : 0,
+			quantity: Math.max(0, (line.quantity || 0) - (Number(reducedStock(line)) || 0)),
 			name: line.name ?? '',
-		}));
+		}))
+		.filter((line) => line.quantity > 0);
 	const stock: ConditionSnapshot['stock'] = {};
 	const keys = new Set(lines.map((line) => `${line.productId}:${line.variationId}`));
 	await Promise.all(

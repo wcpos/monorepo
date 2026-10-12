@@ -7,7 +7,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../../contexts/translations';
 import { NumberInput } from '../../../../components/number-input';
-import { lineFocusRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
+import { lineRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -15,15 +15,14 @@ interface Props {
 	item: LineItem;
 	type: 'line_items';
 }
-export function Quantity({ row, column, table }: CellContext<Props, 'quantity'>) {
+export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	const { updateLineItem, splitLineItem } = useUpdateLineItem();
 	const t = useT();
 	const overStock = useCartUnmet().some((condition) => condition.lineUuid === uuid);
-	// How the conditions notice and a blocked Pay reach this line.
 	const focusRef = React.useMemo(
-		() => lineFocusRef(uuid, () => table.options.meta?.scrollToRow?.(uuid)),
-		[uuid, table]
+		() => lineRef(uuid, 'openQuantity', (input: { focus: () => void }) => input.focus()),
+		[uuid]
 	);
 	return (
 		<VStack className="min-h-row items-center justify-center gap-1">

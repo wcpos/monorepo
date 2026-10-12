@@ -58,7 +58,6 @@ export function PayButton() {
 	 *
 	 */
 	const handlePay = React.useCallback(async () => {
-		// An unmet checkout condition: show the first line to fix, never save or enter checkout.
 		if (unmet.length > 0) {
 			scrollToLine(unmet[0].lineUuid);
 			return checkoutLogger.info(t('pos_cart.checkout_blocked', { n: unmet.length }), {

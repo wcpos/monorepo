@@ -9,8 +9,8 @@ import {
 export type ConditionRule = { id: 'stock'; kind: 'stock'; enabled: boolean };
 export type StockFacts = { product: StockFields; variation: StockFields | null };
 export type ConditionSnapshot = {
+	// stock is keyed `${productId}:${variationId}`; `null` when the local catalog does not hold it.
 	lines: { uuid: string; productId: number; variationId: number; quantity: number; name: string }[];
-	/** Keyed `${productId}:${variationId}`; `null` when the local catalog does not hold it. */
 	stock: Record<string, StockFacts | null>;
 };
 export type UnmetCondition = {
@@ -22,15 +22,12 @@ export type UnmetCondition = {
 	available: number | null;
 };
 
-/** The rules the cart state and the tender gate both judge by. */
 export const conditionRules = (preventOverselling: boolean): ConditionRule[] => [
 	{ id: 'stock', kind: 'stock', enabled: preventOverselling },
 ];
 
-/**
- * The one pure predicate for the cart state and the gate: the add guard's judgement per line, with
- * the stock owner's other lines summed. A backorder warning is not unmet; an unknown record is.
- */
+// The one pure predicate for the cart and the gate: the add guard's, per line, with the stock
+// owner's other lines summed. A backorder warning is not unmet; an unknown record is.
 export function evaluateConditions(
 	snapshot: ConditionSnapshot,
 	rules: readonly ConditionRule[]
@@ -56,14 +53,14 @@ export function evaluateConditions(
 				})
 			: { allowed: false, available: null };
 		if (allowed) return [];
-		const counted = available !== null;
+		const counted = available !== null && available > 0; // none left reads as out of stock
 		return [
 			{
 				id: 'stock',
 				reasonKey: counted ? 'pos_cart.only_n_available' : 'pos_products.out_of_stock',
 				params: counted ? { quantity: available, name: line.name } : { name: line.name },
 				lineUuid: line.uuid,
-				fix: counted && available > 0 ? 'reduce' : 'remove',
+				fix: counted ? 'reduce' : 'remove',
 				available,
 			},
 		];

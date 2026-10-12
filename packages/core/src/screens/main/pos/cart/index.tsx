@@ -51,7 +51,6 @@ const LOADING_ROWS = (
 	</View>
 );
 
-/** The cart, judged once for its checkout conditions (roadmap#62). */
 export function OpenOrders(props: React.ComponentProps<typeof CartColumn>) {
 	return (
 		<CartConditionsProvider>

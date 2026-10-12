@@ -61,23 +61,19 @@ it.each([
 	expect(mockUpdateLineItem).toHaveBeenCalledWith('line-1', { quantity: 3 });
 });
 
-it('the conditions notice and a blocked Pay reach a mounted line: scroll, then its keypad', () => {
-	const scrollToRow = jest.fn();
+it('a mounted keypad is what the notice opens; it registers no scroll of its own', () => {
 	const props = {
-		row: { original: { uuid: 'line-1', type: 'line_items', item: { quantity: 3 } } },
+		row: { original: { uuid: 'line-q', type: 'line_items', item: { quantity: 3 } } },
 		column: { columnDef: { meta: { show: () => false } } },
-		table: { options: { meta: { scrollToRow } } },
 	} as unknown as React.ComponentProps<typeof Quantity>;
 	const { unmount } = render(<Quantity {...props} />);
 	const input = screen.getByTestId('cart-quantity-input');
-	scrollToLine('line-1');
-	expect(scrollToRow).toHaveBeenCalledWith('line-1');
+	scrollToLine('line-q'); // nothing registered a scroll: a no-op, not a throw
 	expect(document.activeElement).not.toBe(input);
-	openLineQuantity('line-1');
-	expect(scrollToRow).toHaveBeenCalledTimes(2);
+	openLineQuantity('line-q');
 	expect(document.activeElement).toBe(input);
-	// Unmounted, the line is no longer reachable.
+	input.blur();
 	unmount();
-	scrollToLine('line-1');
-	expect(scrollToRow).toHaveBeenCalledTimes(2);
+	openLineQuantity('line-q');
+	expect(document.activeElement).not.toBe(input);
 });
