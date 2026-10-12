@@ -22,10 +22,8 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 // Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
-jest.mock('../deal-stack', () => ({ useCopyPicture: () => undefined }));
-jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-}));
+const mockCopyPicture = jest.fn(() => undefined);
+jest.mock('../deal-stack', () => ({ useCopyPicture: () => mockCopyPicture() }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));
@@ -47,9 +45,6 @@ jest.mock('@wcpos/components/image', () => ({
 			onError={onError}
 		/>
 	),
-}));
-jest.mock('../../../../components/product/product-image-placeholder', () => ({
-	PRODUCT_IMAGE_PLACEHOLDER: 'placeholder.png',
 }));
 // react-native-web drops `className`; surface it (and a View's style) so the tiles' layout
 // classes can be read.
@@ -95,6 +90,11 @@ const breakfast = {
 	description: 'Hot Food + Bakery',
 };
 
+// The square, whatever its picture: the frame's first view after any stack.
+const square = (testID: string) =>
+	screen.getByTestId(testID).querySelector('[data-class-name*="aspect-square"]')!;
+const squareClasses = (testID: string) => square(testID).getAttribute('data-class-name')!;
+
 describe('TermTile', () => {
 	it('renders an image tile with name and count, and reports its press with itself', () => {
 		const onPress = jest.fn();
@@ -102,13 +102,19 @@ describe('TermTile', () => {
 		expect(screen.getByText('Drinks')).toBeTruthy();
 		expect(screen.getByText('12 products')).toBeTruthy();
 		expect(screen.getByTestId('browse-term-7-image')).toBeTruthy();
+		// A photo category never reads as a photo product: the folder sits on it.
+		expect(screen.getByTestId('icon-folder')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('browse-term-7'));
 		expect(onPress).toHaveBeenCalledWith(drinks, expect.anything());
 	});
-	it('renders a name-on-muted tile when there is no image', () => {
+	it('renders a name on its tint, with the folder, when there is no image', () => {
 		render(<TermTile term={snacks} onPress={jest.fn()} />);
 		expect(screen.queryByTestId('browse-term-8-image')).toBeNull();
+		expect(screen.queryByTestId('term-image')).toBeNull();
 		expect(screen.getByText('Snacks')).toBeTruthy();
+		// tintOf(8): 8 % 6 = 2.
+		expect(squareClasses('browse-term-8')).toContain('bg-tile-tint-2');
+		expect(screen.getByTestId('icon-folder')).toBeTruthy();
 	});
 	it('shows no count on a term the storefront counts as empty (kept for its POS-only products)', () => {
 		render(<TermTile term={{ ...snacks, count: 0 }} onPress={jest.fn()} />);
@@ -116,14 +122,18 @@ describe('TermTile', () => {
 		render(<TermRow term={{ ...snacks, count: 0 }} onPress={jest.fn()} />);
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
-	it('renders All products with no count', () => {
+	it('renders All products with its grid glyph on the last tint, and no count', () => {
 		render(<TermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
 		expect(screen.getByTestId('browse-all-products')).toHaveAttribute('aria-label', 'All products');
+		expect(screen.getByTestId('icon-grid')).toBeTruthy();
+		expect(squareClasses('browse-all-products')).toContain('bg-tile-tint-5');
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 	});
-	it('renders a shortcut with its description', () => {
+	it('renders a shortcut with its sliders glyph and its description under the name', () => {
 		render(<TermTile term={breakfast} onPress={jest.fn()} />);
-		expect(screen.getByTestId('browse-shortcut-qf-1')).toBeTruthy();
+		expect(screen.getByTestId('icon-sliders')).toBeTruthy();
+		expect(squareClasses('browse-shortcut-qf-1')).toContain('bg-tile-tint-5');
+		expect(screen.getByTestId('poster-words').textContent).toBe('BreakfastHot Food + Bakery');
 		// Read at arm's length on the register: the default size, not the row's small print.
 		expect(screen.getByText('Hot Food + Bakery')).not.toHaveClass('text-xs');
 	});
@@ -131,74 +141,48 @@ describe('TermTile', () => {
 		render(<TermTile term={snacks} onPress={jest.fn()} lifted />);
 		expect(screen.getByTestId('browse-term-8')).toHaveStyle({ opacity: 0 });
 	});
-	it.each([
-		['All products', { kind: 'all' as const }, 'browse-all-products'],
-		['a shortcut', breakfast, 'browse-shortcut-qf-1'],
-		['an image-less term', snacks, 'browse-term-8'],
-	])('mutes the whole card of %s and dims it on press', (_, term, testID) => {
-		render(<TermTile term={term} onPress={jest.fn()} />);
-		const classes = screen.getByTestId(testID).getAttribute('data-class-name')!.split(' ');
-		expect(classes).toEqual(expect.arrayContaining(['bg-muted', 'active:opacity-70']));
-		expect(classes).not.toContain('active:bg-muted');
-	});
-	it('presses a picture tile as a product tile does', () => {
-		render(<TermTile term={drinks} onPress={jest.fn()} />);
-		const classes = screen.getByTestId('browse-term-7').getAttribute('data-class-name')!.split(' ');
-		expect(classes).toEqual(expect.arrayContaining(['bg-card', 'active:bg-muted', 'flex-1']));
-	});
-	// Yoga lays a dealt cell out at most as tall as its row, and a growing child grows to that
-	// limit: a `grow` tile took the row's height beside a taller tile even with the cell
-	// top-aligned (Pixel, 2026-10-07: Jackets and Tanks at 476 px beside a two-line name). In a
-	// dealt cell a term tile has no flex at all; in a root row it shares the row with flex-1.
-	it('keeps its own height in a dealt cell, and shares the row with flex-1 elsewhere', () => {
+	it('grows to its cell in a dealt level, and shares the row with flex-1 elsewhere', () => {
 		const { rerender } = render(<TermTile term={snacks} onPress={jest.fn()} />);
 		const size = () =>
 			screen.getByTestId('browse-term-8').getAttribute('data-class-name')!.split(' ');
 		expect(size()).toContain('flex-1');
+		expect(size()).toContain('m-1');
 		rerender(<TermTile term={snacks} onPress={jest.fn()} dealt />);
-		expect(size().filter((name) => /^(flex-|grow|shrink|basis-|h-|self-)/.test(name))).toEqual([]);
+		expect(size()).toContain('grow');
+		expect(size()).not.toContain('flex-1');
 	});
-	// The copy lays its words out as the tile did: one words box, the same classes on both, and
-	// the back badge in its top gutter (an overlaid badge covered the first line's end, and the copy
-	// wrapped "Uncategorized" a letter earlier; Pixel, 2026-10-07).
-	it('lays out a picture-less tile’s words exactly as its copy does, the badge clear of them', () => {
+	it('reads on its copy as it reads on the tile, with the way back on the copy', () => {
 		const uncategorized = { kind: 'term' as const, id: 9, name: 'Uncategorized', count: 11 };
-		const words = () => screen.getByTestId('term-words');
 		const { unmount } = render(<TermTile term={uncategorized} onPress={jest.fn()} />);
-		const onTile = { className: words().dataset.className, style: words().dataset.style };
+		const onTile = screen.getByTestId('poster-words').textContent;
+		expect(screen.queryByTestId('browse-parent-badge')).toBeNull();
 		unmount();
 		render(<ParentTermTile term={uncategorized} onPress={jest.fn()} />);
-		expect({ className: words().dataset.className, style: words().dataset.style }).toEqual(onTile);
-		// The words span the tile's width (laid over the square, not beside it).
-		expect(onTile.className!.split(' ')).toContain('w-full');
-		expect(JSON.parse(onTile.style!)).toEqual({ marginLeft: '-100%' });
-		// The badge's corner is the words' top gutter: `top-N` + `size-M` within `pt-K`.
-		const step = (classes: string, prefix: string) =>
-			Number(
-				classes
-					.split(' ')
-					.find((name) => name.startsWith(prefix))!
-					.slice(prefix.length)
-			);
-		const badge = screen.getByTestId('browse-parent-badge').dataset.className!;
-		expect(step(badge, 'top-') + step(badge, 'size-')).toBeLessThanOrEqual(
-			step(onTile.className!, 'py-')
-		);
-		// Symmetric, so the words sit centred where no badge ever appears (the root's tiles).
-		expect(onTile.className!.split(' ').filter((name) => /^p[tb]-/.test(name))).toEqual([]);
-		expect(badge.split(' ')).toContain('absolute');
+		expect(screen.getByTestId('poster-words').textContent).toBe(onTile);
+		expect(screen.getByTestId('browse-parent-badge')).toBeTruthy();
 	});
-	it('lets its picture fade in, and falls back to the placeholder when it fails', () => {
+	it('lets its picture fade in, and falls back to its tint when it fails', () => {
 		render(<TermTile term={drinks} onPress={jest.fn()} />);
 		const image = screen.getByTestId('term-image');
 		expect(image.getAttribute('data-transition')).toBe('undefined');
 		expect(image.getAttribute('src')).toBe('https://x/d.jpg');
 		fireEvent.error(image);
-		expect(screen.getByTestId('term-image').getAttribute('src')).toBe('placeholder.png');
+		expect(screen.queryByTestId('term-image')).toBeNull();
+		// tintOf(7): 7 % 6 = 1.
+		expect(squareClasses('browse-term-7')).toContain('bg-tile-tint-1');
 	});
 });
 
 describe('ParentTermTile', () => {
+	it('holds the dealt copy only for a picture it shows: a tint deals at once', () => {
+		mockCopyPicture.mockClear();
+		const { unmount } = render(<ParentTermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
+		unmount();
+		render(<ParentTermTile term={snacks} onPress={jest.fn()} />);
+		expect(mockCopyPicture).not.toHaveBeenCalled();
+		render(<ParentTermTile term={drinks} onPress={jest.fn()} />);
+		expect(mockCopyPicture).toHaveBeenCalled();
+	});
 	it('is the way back', () => {
 		const back = jest.fn();
 		render(<ParentTermTile term={drinks} onPress={back} />);
@@ -211,7 +195,9 @@ describe('ParentTermTile', () => {
 		expect(screen.getByTestId('icon-grid')).toBeTruthy();
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 		const classes = screen.getByTestId('browse-parent').getAttribute('data-class-name')!.split(' ');
-		expect(classes).toEqual(expect.arrayContaining(['bg-muted', 'active:opacity-70', 'grow']));
+		expect(classes).toContain('grow');
+		// Nothing stacks but a variable product.
+		expect(screen.queryByTestId('poster-stack')).toBeNull();
 	});
 	it('moves its picture into slot 0 without fading it in again', () => {
 		render(<ParentTermTile term={drinks} onPress={jest.fn()} />);

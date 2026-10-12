@@ -691,11 +691,13 @@ export function DealCell({
 		>
 			{parent ? (
 				<CopyPictureContext.Provider value={holdPicture}>
-					{/* Laid out afresh at the pinned box: the copy mounts (unseen) in the level's column
+					<DealCardsContext.Provider value={count}>
+						{/* Laid out afresh at the pinned box: the copy mounts (unseen) in the level's column
 					    before the tapped tile is measured, and on Android its words kept the frames of
 					    that first layout when the box was pinned — the name broke a letter early
 					    ("Uncatego / rized" in a box that holds "Uncategor", Pixel, 2026-10-07). */}
-					<React.Fragment key={size ? 'pinned' : 'free'}>{children}</React.Fragment>
+						<React.Fragment key={size ? 'pinned' : 'free'}>{children}</React.Fragment>
+					</DealCardsContext.Provider>
 				</CopyPictureContext.Provider>
 			) : (
 				children
@@ -731,6 +733,44 @@ export function useCopyPicture(): (() => void) | undefined {
 	}, [hold]);
 	const painted = React.useCallback(() => release.current?.(), []);
 	return hold ? painted : undefined;
+}
+
+// The parent's copy, to its stack of cards: how many slots the dealt grid has.
+const DealCardsContext = React.createContext<number | null>(null);
+
+/**
+ * For a stacked tile in slot 0: its cards, as an opacity. They are the variations, so they
+ * leave the stack as they are dealt — gone over the first beat, as the first tile lands — and
+ * come back as the last one gathers under the parent, so the tile that walks home is the stack
+ * that left (spec 2026-10-12 § The stack and the Deal). Off the copy it is `null`.
+ *
+ * The clock lives with the stack, not the cell: only a tile that draws cards has one.
+ */
+export function useDealCards(): SharedValue<number> | null {
+	const count = React.useContext(DealCardsContext);
+	const { dealt, landed } = useDeal();
+	const atRest = dealt && landed;
+	// At rest in a dealt grid the cards are on the table.
+	const cards = useSharedValue(atRest ? 0 : 1);
+	const aimed = React.useRef(atRest);
+	React.useEffect(() => {
+		if (count === null || aimed.current === dealt) return;
+		aimed.current = dealt;
+		if (dealt) {
+			cards.value = withDelay(
+				FIRST_FRAME_DELAY,
+				withTiming(0, { duration: BEATS.newTiles.duration, easing: EASE, ...REDUCE })
+			);
+			return;
+		}
+		// Home with the last tile to gather: slot 1, last out and so last in (DealCell's turn).
+		const span = Math.min(Math.max(0, count - 2), BEATS.oldTiles.cap - 1) * BEATS.oldTiles.step;
+		cards.value = withDelay(
+			FIRST_FRAME_DELAY + span,
+			withTiming(1, { duration: BEATS.oldTiles.duration, easing: EASE, ...REDUCE })
+		);
+	}, [count, dealt, cards]);
+	return count === null ? null : cards;
 }
 
 /** The parent, and the row it sits in, stay above the tiles that come out from under it. */

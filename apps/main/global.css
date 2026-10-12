@@ -57,6 +57,14 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+
+  /* Poster tile tints: a tile with no picture (index = tintOf(key), spec 2026-10-12) */
+  --color-tile-tint-0: var(--tile-tint-0);
+  --color-tile-tint-1: var(--tile-tint-1);
+  --color-tile-tint-2: var(--tile-tint-2);
+  --color-tile-tint-3: var(--tile-tint-3);
+  --color-tile-tint-4: var(--tile-tint-4);
+  --color-tile-tint-5: var(--tile-tint-5);
   
   /* Rail, status, overlay and shared categorical colors */
   --color-rail: var(--rail);
@@ -342,6 +350,14 @@
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
       --c5: oklch(0.70 0.02 250);
+
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.93 0.035 250);
+      --tile-tint-1: oklch(0.94 0.035 160);
+      --tile-tint-2: oklch(0.94 0.04 40);
+      --tile-tint-3: oklch(0.93 0.035 300);
+      --tile-tint-4: oklch(0.95 0.045 90);
+      --tile-tint-5: oklch(0.94 0.035 200);
     }
 
     /* ========================================
@@ -442,6 +458,14 @@
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
       --c5: oklch(0.70 0.02 250);
+
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
     }
 
     /* ========================================
@@ -540,6 +564,14 @@
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
       --c5: oklch(0.70 0.02 250);
+
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
     }
 
     /* ========================================
@@ -638,6 +670,14 @@
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
       --c5: oklch(0.70 0.02 250);
+
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
     }
 
     /* ========================================
@@ -734,6 +774,14 @@
       --c3: oklch(0.72 0.15 70);
       --c4: oklch(0.58 0.16 320);
       --c5: oklch(0.70 0.02 250);
+
+      /* Poster tile tints, by index (never by category) */
+      --tile-tint-0: oklch(0.32 0.05 250);
+      --tile-tint-1: oklch(0.32 0.05 160);
+      --tile-tint-2: oklch(0.33 0.05 40);
+      --tile-tint-3: oklch(0.32 0.05 300);
+      --tile-tint-4: oklch(0.34 0.05 90);
+      --tile-tint-5: oklch(0.31 0.03 200);
     }
   }
 }

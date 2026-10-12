@@ -1,36 +1,39 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
-import { Icon } from '@wcpos/components/icon';
+import { useAnimatedStyle } from 'react-native-reanimated';
+
 import { Image } from '@wcpos/components/image';
-import { StatusBadge } from '@wcpos/components/status-badge';
+import { type PosterPicture, PosterTile, tintOf } from '@wcpos/components/poster-tile';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 
 import { useT } from '../../../../../../contexts/translations';
-import { PriceWithTax } from '../../../../components/product/price-with-tax';
 import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../../components/product/product-image-placeholder';
 import { resolveImageSrc } from '../../../../components/product/resolve-image-src';
 import { displayStockStatus } from '../../../../components/product/resolve-stock';
 import { resolveVariationName } from '../../../../components/product/resolve-variation-name';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import { useImageAttachment } from '../../../../hooks/use-image-attachment';
-import { useStockStatusLabel } from '../../../../hooks/use-stock-status-label';
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useAddVariation } from '../../../hooks/use-add-variation';
-import { TileImage } from '../../grid/tile-image';
+import { useDealCards } from '../deal-stack';
 import { InCartCount } from '../rows/in-cart-count';
-
-import type { GridFields } from './product-tile';
+import {
+	factsRow,
+	type GridFields,
+	moneyRow,
+	stockMark,
+	useProductPicture,
+	useProductWords,
+} from './tile-words';
 
 type Attributes = import('@wcpos/database').ProductVariationDocument['attributes'];
 
-// In a dealt cell the tile grows to its row's height; `flex-1` would give it no height of
-// its own inside the cell.
-const TILE = 'bg-card border-border active:bg-muted m-1 grow overflow-hidden rounded-lg border';
+// The Poster cover, as the product tile's picture.
+const COVER = { contentFit: 'cover' } as const;
 
 function useVariationCount(record: EngineRecord<'variations'>) {
 	const { currentOrderRecord } = useCurrentOrder();
@@ -45,29 +48,60 @@ function useVariationCount(record: EngineRecord<'variations'>) {
 	);
 }
 
-function VariationImageInner({ record, src }: { record: EngineRecord<'variations'>; src: string }) {
+function VariationImageInner({
+	record,
+	src,
+	onFailed,
+}: {
+	record: EngineRecord<'variations'>;
+	src: string;
+	onFailed: () => void;
+}) {
 	const { uri, error } = useImageAttachment(record, src);
+	const failed = !uri || !!error;
+	// Before the paint: the tile falls back to its tint without showing the placeholder.
+	React.useLayoutEffect(() => {
+		if (failed) onFailed();
+	}, [failed, uri, onFailed]);
 	return (
 		<Image
-			source={{ uri: !uri || error ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
+			source={{ uri: failed ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
 			recyclingKey={record.uuid}
 			className="h-full w-full"
+			onError={onFailed}
+			{...COVER}
 		/>
 	);
 }
 
-// The attachment hook suspends while the image loads; the rest of the tile must not wait.
-function VariationImage({ record }: { record: EngineRecord<'variations'> }) {
-	const src = useRecordField(record, (variation) => resolveImageSrc(variation.payload));
-	return (
-		<Suspense
-			fallback={
-				<Image source={{ uri: undefined }} recyclingKey={record.uuid} className="h-full w-full" />
-			}
-		>
-			<VariationImageInner record={record} src={src ?? ''} />
-		</Suspense>
+/**
+ * A variation's own picture, or its parent's tint when it has none or it fails. The
+ * attachment hook suspends while the image loads; the rest of the tile must not wait.
+ */
+function useVariationPicture(
+	record: EngineRecord<'variations'>,
+	parent: EngineRecord<'products'>
+): PosterPicture {
+	const src = useRecordField(record, (variation) => resolveImageSrc(variation.payload)) ?? '';
+	const key = useDocField(
+		parent,
+		({ payload }) => (payload.categories?.[0]?.id as number | undefined) ?? payload.name ?? ''
 	);
+	const [failed, setFailed] = React.useState<string | null>(null);
+	const onFailed = React.useCallback(() => setFailed(src), [src]);
+	if (!src || failed === src) return { kind: 'tint', tint: tintOf(key) };
+	return {
+		kind: 'slot',
+		children: (
+			<Suspense
+				fallback={
+					<Image source={{ uri: undefined }} recyclingKey={record.uuid} className="h-full w-full" />
+				}
+			>
+				<VariationImageInner record={record} src={src} onFailed={onFailed} />
+			</Suspense>
+		),
+	};
 }
 
 /** One variation as a tile: the tile is the add control, as a product tile is. */
@@ -82,171 +116,133 @@ export function VariationTile({
 }) {
 	const t = useT();
 	const count = useVariationCount(record);
-	const { getLabel } = useStockStatusLabel();
 	const { format } = useCurrencyFormat();
 	const { addVariation } = useAddVariation();
 	const payload = useDocField(record, (value) => value.payload);
+	const parentName = useDocField(parent, (value) => value.payload.name);
+	const picture = useVariationPicture(record, parent);
 	const stock = displayStockStatus(payload);
 	const name = resolveVariationName(payload);
 	const id = record.remoteId ?? record.uuid;
-
-	// The same reading of stock as the product tile: the pill counts what is left, nothing
-	// left is a status, and low is the record's own threshold.
-	const showStockPill =
-		gridFields.stock_quantity &&
-		payload.manage_stock === true &&
-		Number.isFinite(payload.stock_quantity) &&
-		(payload.stock_quantity as number) > 0;
-	const lowStock =
-		showStockPill &&
-		(stock === 'lowstock' ||
-			(typeof payload.low_stock_amount === 'number' &&
-				(payload.stock_quantity as number) <= payload.low_stock_amount));
-	const taxStatus = (payload.tax_status || 'none') as 'taxable' | 'shipping' | 'none';
-	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
-	const hasAnyField =
-		gridFields.name ||
-		gridFields.price ||
-		gridFields.sku ||
-		gridFields.barcode ||
-		gridFields.stock_quantity ||
-		gridFields.cost_of_goods_sold;
+	const attributes = (sanitizeVariationAttributesRead(payload.attributes) as Attributes) ?? [];
+	const options = attributes
+		.map((attribute) => (typeof attribute.option === 'string' ? attribute.option.trim() : ''))
+		.filter((option) => option !== '');
+	const out = stock === 'outofstock';
+	const mark = stockMark({
+		gridFields,
+		manageStock: payload.manage_stock,
+		stockQuantity: payload.stock_quantity,
+		lowStockAmount: payload.low_stock_amount,
+		status: stock,
+		t,
+	});
 
 	const add = () =>
 		addVariation(
 			record,
 			parent,
-			((sanitizeVariationAttributesRead(payload.attributes) as Attributes) ?? []).map(
-				(attribute) => ({
-					attr_id: attribute.id ?? 0,
-					display_key: attribute.name,
-					display_value: attribute.option,
-				})
-			)
+			attributes.map((attribute) => ({
+				attr_id: attribute.id ?? 0,
+				display_key: attribute.name,
+				display_value: attribute.option,
+			}))
 		);
 
 	return (
-		<Pressable
-			onPress={add}
-			accessibilityRole="button"
-			accessibilityLabel={name}
-			className={TILE}
-			testID="variation-tile"
-		>
-			<View className="aspect-square" testID={`variation-tile-${id}`}>
-				<VariationImage record={record} />
-				{showStockPill && (
-					<View
-						className={`absolute top-2 left-2 h-5 justify-center rounded-full px-2 ${lowStock ? 'bg-warning' : 'bg-foreground'}`}
-						testID={`variation-tile-stock-${id}`}
-					>
-						<Text
-							className={`text-xs font-bold ${lowStock ? 'text-warning-foreground' : 'text-background'}`}
-						>
-							{t('pos_products.n_left', { count: payload.stock_quantity as number })}
+		<PosterTile
+			picture={picture}
+			mark={mark?.mark}
+			markLabel={mark?.label}
+			markTestID={`variation-tile-stock-${id}`}
+			// Always mounted: the count has to be there before the first add to show it land.
+			corner={<InCartCount product={record.uuid} count={count} />}
+			title={
+				gridFields.name && (
+					<View className="gap-0.5">
+						<Text className="text-foreground/70 text-xs" numberOfLines={1} decodeHtml>
+							{parentName}
 						</Text>
+						<View className="flex-row flex-wrap gap-1">
+							{(options.length > 0 ? options : [name]).map((option, index) => (
+								<Text
+									key={index}
+									className="bg-foreground/12 rounded px-1.5 py-px text-xs font-bold"
+									numberOfLines={1}
+									decodeHtml
+								>
+									{option}
+								</Text>
+							))}
+						</View>
 					</View>
-				)}
-				{/* Always mounted: the count has to be there before the first add to show it land. */}
-				<View className="absolute top-2 right-2">
-					<InCartCount product={record.uuid} count={count} />
-				</View>
-			</View>
-			{hasAnyField && (
-				<VStack className="p-2" space="xs">
-					{gridFields.name && (
-						<Text className="font-bold" numberOfLines={2} decodeHtml>
-							{name}
-						</Text>
-					)}
-					{gridFields.price && (
-						<VStack space="xs">
-							{gridFields.on_sale && payload.on_sale && (
-								<View className="flex-row flex-wrap items-center gap-1">
-									<PriceWithTax
-										price={payload.regular_price ?? ''}
-										taxStatus={taxStatus}
-										taxClass={payload.tax_class ?? ''}
-										taxDisplay={taxDisplay}
-										strikethrough
-									/>
-								</View>
-							)}
-							<View className="flex-row flex-wrap items-center gap-1">
-								<PriceWithTax
-									price={payload.price ?? ''}
-									taxStatus={taxStatus}
-									taxClass={payload.tax_class ?? ''}
-									taxDisplay={taxDisplay}
-								/>
-							</View>
-						</VStack>
-					)}
-					{gridFields.sku && payload.sku ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('common.sku')}: {payload.sku}
-						</Text>
-					) : null}
-					{gridFields.barcode && payload.barcode ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('common.barcode')}: {payload.barcode}
-						</Text>
-					) : null}
-					{gridFields.stock_quantity && !showStockPill && (
-						<StatusBadge
-							label={getLabel(stock ?? 'instock')}
-							variant={
-								stock === 'lowstock' ? 'warning' : stock === 'outofstock' ? 'error' : 'success'
-							}
-						/>
-					)}
-					{gridFields.cost_of_goods_sold && payload.cost_of_goods_sold != null ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('common.cogs')}: {format(payload.cost_of_goods_sold?.total_value ?? 0)}
-						</Text>
-					) : null}
-				</VStack>
-			)}
-		</Pressable>
+				)
+			}
+			money={moneyRow({
+				price: payload.price,
+				regularPrice: payload.regular_price,
+				onSale: payload.on_sale,
+				taxStatus: payload.tax_status,
+				taxClass: payload.tax_class,
+				gridFields,
+				out,
+				t,
+			})}
+			facts={factsRow({
+				sku: payload.sku,
+				barcode: payload.barcode,
+				cost: payload.cost_of_goods_sold,
+				gridFields,
+				format,
+				t,
+			})}
+			out={out}
+			grow
+			onPress={add}
+			accessibilityLabel={name}
+			testID="variation-tile"
+			squareTestID={`variation-tile-${id}`}
+		/>
 	);
 }
 
 /**
  * The product whose variations are out on the grid. It is the tile that was tapped, moved to
- * the first slot, and tapping it is the way back.
+ * the first slot, and tapping it is the way back: the same words and picture as that tile, the
+ * back badge where its cart count was. On the Deal's copy its cards leave the stack as the
+ * variations are dealt and come back as they gather (`useDealCards`).
  */
 export function ParentTile({
 	record,
+	gridFields,
 	onPress,
 }: {
 	record: EngineRecord<'products'>;
+	gridFields: GridFields;
 	onPress: () => void;
 }) {
-	const t = useT();
-	const name = useDocField(record, (value) => value.payload.name);
-	const count = useDocField(record, (value) => value.payload.variations?.length ?? 0);
+	const { t, title, money, sub, facts } = useProductWords(record, gridFields, true);
+	// The same picture the tapped tile was showing: it moves, it does not arrive.
+	const picture = useProductPicture(record, true);
+	const cards = useDealCards();
+	const stackStyle = useAnimatedStyle(() => ({
+		opacity: cards ? Math.min(1, Math.max(0, cards.value)) : 1,
+	}));
 	return (
-		<Pressable
+		<PosterTile
+			picture={picture}
+			back
+			stacked
+			stackStyle={stackStyle}
+			title={title}
+			money={money}
+			sub={sub}
+			facts={facts}
+			grow
 			onPress={onPress}
-			accessibilityRole="button"
 			accessibilityLabel={t('common.back')}
-			className={TILE}
 			testID="variations-parent-tile"
-		>
-			<View className="aspect-square">
-				{/* The same picture the tapped tile was showing: it moves, it does not arrive. */}
-				<TileImage record={record} still />
-				<View className="bg-card absolute top-2 right-2 size-6 items-center justify-center rounded-full">
-					<Icon name="chevronLeft" size="sm" className="text-muted-foreground" />
-				</View>
-			</View>
-			<VStack className="p-2" space="xs">
-				<Text className="font-bold" numberOfLines={2} decodeHtml>
-					{name}
-				</Text>
-				<Text className="text-muted-foreground">{t('pos_products.n_variations', { count })}</Text>
-			</VStack>
-		</Pressable>
+		/>
 	);
 }
 

@@ -164,6 +164,7 @@ import {
 	useAirspace,
 	useCopyPicture,
 	useDeal,
+	useDealCards,
 } from './deal-stack';
 /* eslint-enable import/first */
 
@@ -200,6 +201,15 @@ function Picture() {
 		<button data-testid="paint" data-on-copy={String(!!painted)} onClick={() => painted?.()} />
 	);
 }
+// The parent's stack of cards, as its tile reads it.
+const cardsRef: { current: { value: number } | null } = { current: null };
+function Cards() {
+	const cards = useDealCards();
+	React.useLayoutEffect(() => {
+		cardsRef.current = cards;
+	});
+	return null;
+}
 // What the grid's scroller and the frame around it are given.
 function Air({ scroll }: { scroll: { value: number } }) {
 	return <output data-testid="air">{JSON.stringify(useAirspace(scroll as never))}</output>;
@@ -213,12 +223,14 @@ function Pane({
 	scroll,
 	rowTops,
 	picture,
+	cards,
 }: {
 	name: string;
 	count: number;
 	scroll?: { value: number };
 	rowTops?: Record<number, number>;
 	picture?: boolean;
+	cards?: boolean;
 }) {
 	const { origin, dealt, grid, placeGrid } = useDeal();
 	// The pane's breadcrumb takes focus when it mounts, in a passive effect, as the real one does.
@@ -255,6 +267,7 @@ function Pane({
 				>
 					<span data-testid={`cell-${index}`} />
 					{index === 0 && picture ? <Picture /> : null}
+					{index === 0 && cards ? <Cards /> : null}
 					{index === 0 ? <Body /> : null}
 				</DealCell>
 			))}
@@ -270,6 +283,7 @@ function Stage({
 	rowTops,
 	collapse,
 	picture,
+	cards,
 }: {
 	detail: string | null;
 	target?: Measurable;
@@ -278,6 +292,7 @@ function Stage({
 	rowTops?: Record<number, number>;
 	collapse?: boolean;
 	picture?: boolean;
+	cards?: boolean;
 }) {
 	return (
 		<DealStack
@@ -286,7 +301,14 @@ function Stage({
 			target={target}
 			collapse={collapse}
 			renderDetail={(name) => (
-				<Pane name={name} count={count} scroll={scroll} rowTops={rowTops} picture={picture} />
+				<Pane
+					name={name}
+					count={count}
+					scroll={scroll}
+					rowTops={rowTops}
+					picture={picture}
+					cards={cards}
+				/>
 			)}
 		>
 			<Lifted />
@@ -1194,4 +1216,37 @@ it('lays the copy’s body out afresh once its box is pinned to the tapped tile'
 	rerender(<Stage detail="Tee" target={null} />);
 	act(() => jest.advanceTimersByTime(120));
 	expect(mockBodyMounts).toBe(1);
+});
+
+it('the parent’s cards leave as the first tiles land and come home with the last one', () => {
+	const { rerender } = render(<Stage detail={null} cards />);
+	rerender(<Stage detail="Hoodie" cards />);
+	// On the tapped tile the copy is the stack that was tapped.
+	expect(cardsRef.current!.value).toBe(1);
+	mockTimings.length = 0;
+	mockDelays.length = 0;
+	layOut();
+	// Out over the first beat, from the first painted frame. The cards are slot 0's first child,
+	// so theirs is the first clock the cells start.
+	expect(cardsRef.current!.value).toBe(0);
+	const first = mockTimings.findIndex((call) => call.duration === PANE);
+	expect(mockTimings[first - 1]).toMatchObject({
+		toValue: 0,
+		duration: BEATS.newTiles.duration,
+		easing: EASE,
+	});
+	expect(mockDelays[0]).toBe(FIRST_FRAME_DELAY);
+
+	mockTimings.length = 0;
+	mockDelays.length = 0;
+	rerender(<Stage detail={null} cards />);
+	expect(cardsRef.current!.value).toBe(1);
+	// Home as slot 1 gathers: the last of five tiles to turn, landing on the old tiles' beat.
+	const { step, duration } = BEATS.oldTiles;
+	expect(mockDelays[0]).toBe(FIRST_FRAME_DELAY + 4 * step);
+	expect(mockTimings[0]).toMatchObject({ toValue: 1, duration, easing: EASE });
+
+	// Off a copy there are no cards to deal.
+	render(<Cards />);
+	expect(cardsRef.current).toBeNull();
 });

@@ -1,0 +1,20 @@
+# Behaviour ledger: `poster-tile`
+
+Seeded 2026-10-12 with the component, from the Poster spec (wcpos/roadmap `docs/specs/2026-10-12-pos-product-tile-poster-spec.md`, #424 + #425) and its prototype (`docs/prototypes/2026-10-12-pos-product-tile-poster/index.html`). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence.
+
+**Job:** The register's product grid tile: the picture is the whole square and the words sit on a card-colour scrim at its foot. It knows nothing about products: a picture, marks and words.
+
+**Base:** `react-native` Pressable and View, `react-native-reanimated` (the stack's style only), `react-native-svg` for the native scrim, a CSS gradient on web; `Image`, `Icon`, `Text`.
+
+## Lines
+
+1. The scrim is the card colour at 85 %, eased in over 48 px above the first line of words and flat under them, thirteen stops (`SCRIM_STOPS`); reach and strength are constants, not settings — evidence: owner decision 4, 2026-10-12 ("card colour, eased, 85, 48"), spec § The scrim.
+2. No scrim is drawn when every word slot is empty; the marks still show — evidence: spec § The scrim; test: `poster-tile.test.tsx`.
+3. A tint square carries its words directly, with no scrim; `picture.tint` is the token number `bg-tile-tint-N`, and `tintOf` is the one place the rule picking it lives — evidence: spec § No picture.
+4. The frame keeps `m-1`, `grow` / `flex-1`, `lifted` (opacity 0) and forwards its ref to the `Pressable`, so the Deal measures and lifts it as it did the old tiles — evidence: spec § Behaviour that must not move.
+5. A stack's two cards (3 px and 6 px down-right) are drawn inside the frame, behind the square, and only the square clips; they take an animated style so the Deal can fade them — evidence: spec § The stack and the Deal, rules 1–3.
+6. The press lays a `bg-foreground/10` veil over the square, under the words and marks, so a picture and a tint dim alike (a tint has no picture to fade); never a background change — evidence: spec § Geometry; review of monorepo#2485 (All products, shortcuts and photoless products showed nothing on tap).
+7. A count mark is the number alone in a card pill (warning when low); its words are its accessibility label — evidence: owner decision 5, spec § Marks.
+8. `picture.kind = 'slot'` lets the caller render the picture itself. DEVIATION from the spec's three picture kinds, recorded: a product's picture needs its own Suspense boundary, attachment hook, render probes and the Deal's `useCopyPicture`, which belong to the products screen, not to this component — evidence: plan `docs/superpowers/plans/2026-10-12-pos-poster-tile.md`, Task 2.
+9. `mark.kind = 'glyph'` (All products' grid, a shortcut's sliders) is a CLARIFICATION of the spec's marks; on a tint a folder or glyph sits in the tint without its circle, as the prototype draws it — evidence: plan Task 2; prototype `.fglyph`.
+10. The words' block is never taller than the square and clips at its bottom, so on a narrow tile (8 columns) the facts go first and the name, money and sub stay — evidence: review of monorepo#2485; test: `poster-tile.test.tsx`.

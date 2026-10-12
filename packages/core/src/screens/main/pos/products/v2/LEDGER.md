@@ -40,10 +40,10 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 4. preserved — grid/index.tsx, tile props added
 5. preserved — grid/grid-footer.tsx, untouched
 6. preserved — grid/index.tsx, tile props added
-7. preserved — v2/grid/product-tile.tsx; grid/variable-product-tile.tsx, untouched (inline)
-8. preserved — v2/grid/product-tile.tsx; grid/variable-product-tile.tsx, untouched (inline)
-9. preserved — v2/grid/product-tile.tsx; grid/variable-product-tile.tsx, untouched (inline)
-10. preserved — grid/tile-image.tsx, untouched
+7. preserved — v2/grid/tile-words.tsx (every word slot empty: no scrim, see Poster tile 1); grid/variable-product-tile.tsx, untouched (inline)
+8. preserved — v2/grid/tile-words.tsx (`from` + minimum, struck regular minimum); grid/variable-product-tile.tsx, untouched (inline)
+9. preserved — v2/grid/tile-words.tsx (`Cost` fact); grid/variable-product-tile.tsx, untouched (inline)
+10. preserved — grid/tile-image.tsx; on the Poster a missing or failed picture hands the tile its tint (`onFailed`) instead of the placeholder, as the spec rules; the legacy grid and the rows keep the placeholder
 11. preserved — v2/grid/variable-product-tile.tsx; grid/variable-product-tile.tsx, untouched (inline)
 
 ## pos/products/filter-bar
@@ -83,3 +83,22 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 1. An add lands on the product's in-cart count: the new number rolls in from below over the old one (`BEAT`), the badge swells to 1.3 in 90 ms and a loose spring settles it through a dip. There is no ring or glow: a ring splashing out of the badge was built and struck the same day (owner: "a bit too much"). A count that goes down rolls back the other way with no landing. Only `transform` and `opacity` animate; reduce-motion skips all of it — evidence: owner, 2026-10-01 ("an extra drop going into a bucket… fun, smooth, and joyful"); the badge previously appeared and changed with no motion; filmed frame by frame on web, including three adds 120 ms apart, which carry on from the bounce in flight; `rows/in-cart-count.test.tsx`. A spring asked to go from 1 to 1 with only a starting velocity did not move at all, hence the explicit swell.
 2. The count stays mounted while it is zero (rendering the row's `+`, or nothing on a tile) so that it sees the first add; a count that differs because the list recycled the row for another product, or because another open order came into view, moves nothing — evidence: tests "a different product or a different order is not an add" and "shows what stands in for it while the cart holds none, and moves nothing on mount".
+
+## Poster tile (added 2026-10-12)
+
+Evidence for every line: the spec, wcpos/roadmap `docs/specs/2026-10-12-pos-product-tile-poster-spec.md` (#424 + #425; owner decisions 1–5 of 2026-10-12), its prototype beside it, and the plan `docs/superpowers/plans/2026-10-12-pos-poster-tile.md`. The tile itself is `@wcpos/components/poster-tile` (its own ledger).
+
+### pos/products/grid
+
+1. The product, the drill variable product, the variation and the parent in slot 0 are one `PosterTile`: the picture is the whole square and the words sit on a card-colour scrim at its foot (85 %, eased over 48 px). The three old tiles' caption blocks, the "In stock" badge and the variable tile's chevron hint are gone: a stack of two cards behind the square says "tap to deal". Each of the nine `gridFields` has a fixed slot (`v2/grid/tile-words.tsx`: title, money, sub, facts, mark); a field switched off is not rendered, and with nothing to say there is no scrim — evidence: `grid/product-tile.test.tsx`, `variations-grid.test.tsx`.
+2. Stock is a number: the count when stock is managed and some is left (warning-coloured at the record's own threshold, or a `lowstock` status), a backorder clock when it sells at none, nothing otherwise; "Sold out" replaces the price and greys the picture, with no Sale pill. The drill variable product has no stock mark and is never out as a whole — evidence: owner decision 5; `grid/product-tile.test.tsx`.
+3. A product without a picture, or whose picture fails, is its tint: `tintOf` its first category id, else its name; a variation's is its parent's. The tile falls back before it paints (a layout effect), so the placeholder never shows on a Poster tile — evidence: spec § No picture; `grid/product-tile.test.tsx`.
+4. The stack is the Deal's metaphor at rest. Its cards are drawn inside the tile's measured frame (3 px and 6 px down-right, within the margins), so the frame the Deal measures and the column maths do not move. On the parent's copy they fade out over the first `newTiles` beat and back in as slot 1 gathers, on the Deal's easing, opacity only. The clock lives with the stack (`useDealCards` in `deal-stack.tsx`, driven from the copy's `dealt`), not in `DealCell`, so only a tile that draws cards runs one and every existing deal test stands unedited — evidence: spec § The stack and the Deal; `deal-stack.test.tsx` "the parent’s cards leave as the first tiles land and come home with the last one"; web run on dev-next 2026-10-12 (headless, Metro dev from the branch): the tapped Abominable Hoodie's cards gone by the first variation landing (stack opacity 0 on the copy), back at 1 on the tile after the gather. Not filmed on a device.
+5. The parent in slot 0 shows the same words as the tile that was tapped (it takes `gridFields`), with the back badge where the cart count was. DEVIATION from the plan, which gave the parent only its name and options: the spec's rule 2 asks for the copy's first frame to be the tile it stands on, and with price or facts on, a name-only copy changed under the cashier's finger — evidence: spec § The stack and the Deal, rule 2.
+6. The scrim on native is drawn with `react-native-svg` (`scrim.native.tsx`); the CSS gradient is the default `scrim.tsx`, so a runner with no platform (jest) never loads the native renderer — evidence: the web run's computed `background-image` on `poster-scrim` (13 stops, then flat to 100 %). The native gradient is not verified on a device in this change.
+
+### pos/products/v2/browse
+
+7. A term, All products, a shortcut and the parent term are the same `PosterTile`. A term with a picture carries the folder in a card circle; without one (or when it fails) it is `tintOf(term id)` with the folder bare in the tint; All products (grid) and a shortcut (sliders) keep their glyph on tint 5, the shortcut's conditions in the sub slot. CLARIFICATION of the spec's marks: `mark.kind = 'glyph'` carries those two glyphs. Nothing here stacks. The words-body machinery (`WordsBody`, `WORDS_PADDING`, `BADGE`) is gone: every tile is a square — evidence: `browse/term-tile.test.tsx`; gallery `browse-tiles` (same story ids).
+8. A child term in a dealt cell `grow`s to its cell and keeps its square beside product tiles: on the web run every tile in a Clothing level measured 172.25 × 172.25, so neither the old `own` size nor a wrapper is needed — evidence: the same web run, level tile boxes.
+
