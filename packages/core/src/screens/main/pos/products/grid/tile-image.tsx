@@ -44,14 +44,14 @@ function TileImageInner({
 			source={imageSource}
 			recyclingKey={record.uuid}
 			className="h-full w-full"
-			onLoadStart={() => probeEvent('image.loadStart', { id })}
-			onLoad={(event) => probeEvent('image.load', { id, cacheType: event?.cacheType ?? 'unknown' })}
+			onLoadStart={() => probeEvent('image.loadStart', {}, id)}
+			onLoad={(event) => probeEvent('image.load', { cacheType: event?.cacheType ?? 'unknown' }, id)}
 			onDisplay={() => {
-				probeEvent('image.display', { id });
+				probeEvent('image.display', {}, id);
 				painted?.();
 			}}
 			onError={() => {
-				probeEvent('image.error', { id });
+				probeEvent('image.error', {}, id);
 				painted?.();
 			}}
 			{...(still ? STILL : {})}

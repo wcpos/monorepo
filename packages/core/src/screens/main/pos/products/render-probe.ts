@@ -49,17 +49,27 @@ function stamp(): {
 export function markSyncActive(active: boolean): void {
 	if (!RENDER_PROBE_ENABLED) return;
 	if (active === phase.active && phase.flips > 0) return;
+	// Rows queued under the old phase are written under it, before the stamp moves.
+	flush();
 	phase.active = active;
 	phase.flippedAt = Date.now();
 	phase.flips += 1;
-	flush();
 	probe.debug(active ? 'sync became ACTIVE' : 'sync became IDLE', { context: stamp() });
 }
 
-/** Any one-off observation (an image load, a Suspense fallback, a binding flag flip). */
-export function probeEvent(event: string, context: Record<string, unknown> = {}): void {
+/**
+ * Any one-off observation (an image load, a Suspense fallback, a binding flag flip). Events
+ * batch by name AND context, so `pending: true` then `pending: false` in one tick are two rows;
+ * `id` names the subject and is collected per row rather than keyed.
+ */
+export function probeEvent(
+	event: string,
+	context: Record<string, unknown> = {},
+	id?: string
+): void {
 	if (!RENDER_PROBE_ENABLED) return;
-	enqueue(`event:${event}`, context);
+	const detail = Object.keys(context).length > 0 ? ` ${JSON.stringify(context)}` : '';
+	enqueue(`event:${event}${detail}`, context, id);
 }
 
 /**

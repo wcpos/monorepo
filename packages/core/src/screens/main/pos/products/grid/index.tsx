@@ -95,14 +95,19 @@ export function ProductGrid({
 		return () => subscription.unsubscribe();
 	}, [binding]);
 	const previousHits = React.useRef<typeof result.hits | null>(null);
+	// One row per RESULT: a deferred value catching up is the same result committing again.
 	React.useEffect(() => {
 		if (!RENDER_PROBE_ENABLED) return;
 		logResultEmission(previousHits.current, result.hits, {
-			count: result.count,
+			// `count` in the row is the loaded hits; `total` is the engine's count for the query.
+			total: result.count,
 			searchState: result.searchState ?? null,
-			deferredLag: deferredResult !== result,
 		});
 		previousHits.current = result.hits;
+	}, [result]);
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED || deferredResult === result) return;
+		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
 	}, [result, deferredResult]);
 	useRenderProbe('ProductGrid', 'grid', {
 		result,
