@@ -110,20 +110,29 @@ export function ProductGrid({
 
 	// One subscription, one object: rows, count, total, activity and the engine's paging
 	// opinion arrive together. A changed query keeps the current rows until it answers.
-	const { value: snapshot } = useQueryHandleView(handle);
-	const result = snapshot.result;
-	const deferredResult = React.useDeferredValue(result);
+	const { value: current, settling } = useQueryHandleView(handle);
+	// The WHOLE snapshot is deferred, gate included: an urgent commit of "ready" with the
+	// deferred rows still empty would draw the empty state for a frame on every cold open.
+	const snapshot = React.useDeferredValue(current);
+	const deferredResult = snapshot.result;
+	// A query that has not answered yet, or a deferred frame behind the answer, is in flight
+	// for paging: the guard must not extend on the previous query's opinion (#1221), and the
+	// footer must not call the previous page the end.
+	const engine = {
+		pending: snapshot.pending || settling || snapshot !== current,
+		exhausted: snapshot.exhausted,
+	};
 
 	// Troubleshooting probe (render-probe.ts): the sync phase and result rows come from the first
 	// child (EmissionProbe); here only the deferred catch-up and this component's own reasons.
 	React.useEffect(() => {
-		if (!RENDER_PROBE_ENABLED || deferredResult === result) return;
-		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
-	}, [result, deferredResult]);
+		if (!RENDER_PROBE_ENABLED || snapshot === current) return;
+		probeEvent('grid.deferred', { hits: snapshot.hits.length }, 'grid');
+	}, [current, snapshot]);
 	useRenderProbe('ProductGrid', 'grid', {
+		current,
 		snapshot,
-		result,
-		deferredResult,
+		settling,
 		hits: deferredResult.hits,
 		gridColumns,
 		gridFields,
@@ -142,7 +151,7 @@ export function ProductGrid({
 	const handleEndReached = useGuardedExtendLimitFor(
 		actions.extendLimit,
 		deferredResult.hits.length,
-		snapshot
+		engine
 	);
 
 	/**
@@ -183,13 +192,16 @@ export function ProductGrid({
 		}
 	}, [deferredResult.hits, skippedStaleHits]);
 
+	// A failed read reaches the screen's ErrorBoundary as it did through the Suspense resource;
+	// the boundary's remount is a new reader, which is the handle's retry.
+	if (current.error) throw current.error;
 	if (!snapshot.ready) return <>{loading}</>;
 
 	return (
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
-			<EmissionProbe snapshot={snapshot} />
+			<EmissionProbe snapshot={current} />
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
@@ -217,7 +229,7 @@ export function ProductGrid({
 					onEndReached={handleEndReached}
 					ListFooterComponent={
 						<ProductGridFooter
-							engine={snapshot}
+							engine={engine}
 							renderedCount={renderedCount}
 							hitCount={deferredResult.hits.length}
 						/>

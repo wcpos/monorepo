@@ -145,40 +145,38 @@ function ProductsView({
 	}
 	return (
 		<Suspense fallback={<SuspendedProbe event="products.suspended">{loading}</SuspendedProbe>}>
-			{
-				<DataTable<ProductRow>
-					id="pos-products"
-					collectionName="products"
-					binding={binding}
-					resource={binding.resource}
-					sort={sort}
-					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
-					renderItem={({ item, index, table }) => (
-						<VirtualizedList.Item>
-							{item.original.record.payload.type === 'variable' ? (
-								<VariableProductRow
-									item={item}
-									index={index}
-									table={table}
-									variationsStyle={variationsStyle}
-									onDrill={onDrill}
-								/>
-							) : (
-								<ProductRowView item={item} />
-							)}
-						</VirtualizedList.Item>
-					)}
-					cellsForRow={cellsForRow}
-					noDataMessage={noDataMessage}
-					estimatedItemSize={100}
-					TableFooterComponent={ProductsFooter}
-					getItemType={(row) => row.original.record.payload.type}
-					tableConfig={tableConfig}
-				/>
-			}
+			<DataTable<ProductRow>
+				id="pos-products"
+				collectionName="products"
+				binding={binding}
+				resource={binding.resource}
+				sort={sort}
+				actions={tableActions}
+				active$={binding.active$}
+				total$={binding.total$}
+				sync={binding.sync}
+				renderItem={({ item, index, table }) => (
+					<VirtualizedList.Item>
+						{item.original.record.payload.type === 'variable' ? (
+							<VariableProductRow
+								item={item}
+								index={index}
+								table={table}
+								variationsStyle={variationsStyle}
+								onDrill={onDrill}
+							/>
+						) : (
+							<ProductRowView item={item} />
+						)}
+					</VirtualizedList.Item>
+				)}
+				cellsForRow={cellsForRow}
+				noDataMessage={noDataMessage}
+				estimatedItemSize={100}
+				TableFooterComponent={ProductsFooter}
+				getItemType={(row) => row.original.record.payload.type}
+				tableConfig={tableConfig}
+			/>
 		</Suspense>
 	);
 }

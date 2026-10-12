@@ -320,11 +320,20 @@ export function useQueryHandleView<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>
 ): { value: Readonly<QuerySnapshot<R>>; settling: boolean } {
 	const current = useQueryHandleValue(handle);
-	const [drawn, setDrawn] = React.useState(current);
-	// Derived state, set during render (React's documented pattern): the answered snapshot
-	// becomes the one to draw in the same pass.
-	if (current.ready && current !== drawn) setDrawn(current);
-	const value = current.ready ? current : drawn;
+	// What the previous handle had answered when this one took over — kept per handle, so a
+	// snapshot change on the SAME handle never re-renders through state (a handle never goes
+	// from answered back to unanswered). Derived during render, React's documented pattern.
+	const [held, setHeld] = React.useState<{
+		handle: QueryHandle<R>;
+		last: Readonly<QuerySnapshot<R>> | null;
+	}>({ handle, last: null });
+	let last = held.last;
+	if (held.handle !== handle) {
+		last = held.handle.value.ready ? held.handle.value : held.last;
+		setHeld({ handle, last });
+	}
+	// An answer or a failure is always the current handle's; the grid rethrows the failure.
+	const value = current.ready || current.error ? current : (last ?? current);
 	return { value, settling: value !== current };
 }
 
@@ -349,24 +358,18 @@ export function useQueryBindingFor<R extends QueryResult<RxCollection>>(
 	const held = React.useRef<{ handle: QueryHandle<R>; resource: ObservableResource<R> } | null>(
 		null
 	);
-	const resourceFor = React.useCallback((target: QueryHandle<R>) => {
-		const current = held.current;
-		if (current?.handle === target) return current.resource;
-		if (current) {
-			// Reloading retains the current rows while the new query loads.
-			current.resource.reload(queryHandleResults$(target));
-			held.current = { handle: target, resource: current.resource };
-			return current.resource;
-		}
-		const resource = queryHandleResource(target);
-		held.current = { handle: target, resource };
-		return resource;
-	}, []);
 	React.useEffect(() => {
-		// A resource built for a previous handle must follow this one even if nobody reads it
-		// again (the view switched from table to grid), or it would retain that handle for good.
-		if (held.current && held.current.handle !== handle) resourceFor(handle);
-	}, [handle, resourceFor]);
+		// The resource follows the handle in an effect, never in a reader's render (a reload
+		// subscribes the new read on the spot, and a live shared handle would then emit into the
+		// table's Suspense state while another component renders). Until the effect runs, a
+		// reader gets the resource as it is — the previous rows, which is what `reload` keeps.
+		// It follows even if nobody reads it again (the view switched from table to grid), or it
+		// would retain that handle for good.
+		const current = held.current;
+		if (!current || current.handle === handle) return;
+		current.resource.reload(queryHandleResults$(handle));
+		held.current = { handle, resource: current.resource };
+	}, [handle]);
 	React.useEffect(
 		() => () => {
 			held.current?.resource.destroy();
@@ -377,11 +380,13 @@ export function useQueryBindingFor<R extends QueryResult<RxCollection>>(
 	return React.useMemo(
 		() => ({
 			get resource() {
-				return resourceFor(handle);
+				// Built on first access only; a reader that never asks (the grid) never subscribes.
+				if (!held.current) held.current = { handle, resource: queryHandleResource(handle) };
+				return held.current.resource;
 			},
 			...bindingObservablesFor(handle),
 		}),
-		[handle, resourceFor]
+		[handle]
 	);
 }
 

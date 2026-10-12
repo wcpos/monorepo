@@ -133,8 +133,5 @@ export function useGuardedExtendLimitFor(
 	{ pending, exhausted }: EngineOpinion
 ): () => void {
 	const limit = useQueryState(selectLimit);
-	// Two primitives, never an object per render: the handler's identity keys the virtualizer's
-	// end-reached subscription.
-	const engine = React.useMemo(() => ({ pending, exhausted }), [exhausted, pending]);
-	return useGuardedExtension(extendLimit, resultCount, limit, engine);
+	return useGuardedExtension(extendLimit, resultCount, limit, { pending, exhausted });
 }

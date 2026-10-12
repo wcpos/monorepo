@@ -3,7 +3,7 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { of, Subject } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 
 import { createQueryHandle, type QueryHandle, type QueryResult } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
@@ -63,6 +63,34 @@ describe('useQueryHandleView', () => {
 
 		act(() => second.next({ count: 2, hits: [] }));
 		expect(result.current.value.count).toBe(2);
+		expect(result.current.settling).toBe(false);
+	});
+});
+
+describe('useQueryHandleView (failures)', () => {
+	it('surfaces the current handle’s failure even while the previous rows are drawn', () => {
+		const first = new Subject<Result>();
+		const handles = {
+			a: handleOver('f', first),
+			b: createQueryHandle(
+				engine,
+				{
+					key: 'g',
+					result$: () => new Observable<Result>((s) => s.error(new Error('storage gone'))),
+					demands: [],
+					activeCollections: [],
+					censusScoped: false,
+					observeActive: () => of(false),
+				},
+				EMPTY
+			),
+		};
+		const { result, rerender } = renderHook(({ key }) => useQueryHandleView(handles[key]), {
+			initialProps: { key: 'a' as 'a' | 'b' },
+		});
+		act(() => first.next({ count: 1, hits: [] }));
+		rerender({ key: 'b' });
+		expect(result.current.value.error).toBeInstanceOf(Error);
 		expect(result.current.settling).toBe(false);
 	});
 });
