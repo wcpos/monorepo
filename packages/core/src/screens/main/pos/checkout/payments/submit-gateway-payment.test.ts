@@ -132,6 +132,31 @@ describe('submitGatewayPayment', () => {
 			meta_data: [{ key: LEDGER_META_KEY, value: { schema: 1, payments: [row()] } }],
 		});
 	});
+	it('settled: no row, the stale stamp is cleared and the summary status is mirrored', async () => {
+		const { post, mirror, order, deps } = harness([
+			{ key: AWAITING_CUSTOMER_META_KEY, value: stamp },
+		]);
+		post.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		const outcome = await submitGatewayPayment(order, 'bacs', input, deps);
+		expect(outcome).toEqual({ kind: 'settled', order: summary('pending') });
+		expect(mirror).toHaveBeenCalledWith({ status: 'pending', meta_data: [] });
+	});
+	it('a settled answer whose mirror fails keeps the settled outcome in the error', async () => {
+		const { post, mirror, order, deps } = harness();
+		post.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		mirror.mockRejectedValueOnce(new Error('disk'));
+		const error = await submitGatewayPayment(order, 'bacs', input, deps).catch((e) => e);
+		expect(error).toBeInstanceOf(GatewayMirrorError);
+		expect((error as GatewayMirrorError).outcome).toEqual({
+			kind: 'settled',
+			order: summary('pending'),
+		});
+		expect((error as GatewayMirrorError).cause).toEqual(new Error('disk'));
+	});
 	it('wcpos_fields_invalid lands per component; a missing map becomes the form line', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockRejectedValueOnce(

@@ -218,6 +218,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					methodId: resolvedGateway.id,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 					online,
+					settledOrderStatus: resolvedGateway.settled_order_status ?? null,
 				});
 				if (isActionRefusal(committed)) {
 					// A checkout closed while the dispatch waited has nothing to show.

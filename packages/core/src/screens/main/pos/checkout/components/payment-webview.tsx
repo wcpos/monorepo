@@ -278,12 +278,14 @@ export function PaymentWebview({
 			try {
 				// The pay page can complete the sale, so its tender commit is dispatched before the
 				// URL is exposed: the gates decide, the handler journals and stamps the provenance.
+				const paymentMethod = currentOrder.getLatest().payload.payment_method ?? null;
 				const committed = await commitGatewaySale(ctx, {
 					order: currentOrder,
 					source: 'gateway-snapshot',
-					methodId: currentOrder.getLatest().payload.payment_method ?? null,
+					methodId: paymentMethod,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 					online,
+					settledOrderStatus: storedStatusFor(paymentMethod),
 				});
 				if (!active) return;
 				if (isActionRefusal(committed)) {
@@ -331,6 +333,7 @@ export function PaymentWebview({
 		sessionRetry,
 		bindingStatus,
 		sessionsOn,
+		storedStatusFor,
 	]);
 
 	// Readiness follows the prepared row; only a session refusal observes reopening.

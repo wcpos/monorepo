@@ -133,6 +133,7 @@ jest.mock('uuid', () => ({ v4: () => `payment-${++mockUuid}` }));
 const mockRecordManualPayment = jest.fn();
 let mockUseRealManual = false;
 const mockManualPost = jest.fn();
+const mockGatewaysGet = jest.fn();
 const mockManualMirror = jest.fn();
 const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
@@ -219,8 +220,11 @@ let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
+// One client per test file, as the real hook memoises: a fresh object per render would re-arm
+// every fetch effect keyed on it.
+const mockHttp = { post: mockManualPost, get: mockGatewaysGet };
 jest.mock('../../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ post: mockManualPost }),
+	useRestHttpClient: () => mockHttp,
 }));
 jest.mock('../payments', () => ({
 	RecordManualPaymentMirrorError: jest.requireActual('../payments/record-manual-payment')
@@ -2550,6 +2554,131 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockLocalPatch.mockResolvedValue({ document: order });
 		mockManualMirror.mockResolvedValue(undefined);
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
+		mockGatewaysGet.mockResolvedValue({ data: [] });
+	});
+
+	it('a settled answer is the paid completion: no row, no stamp, the stored status journaled, the sale leaves the till', async () => {
+		// The gateway catalog names the status the merchant stored for the gateway.
+		mockGatewaysGet.mockResolvedValue({
+			data: [{ id: 'wcpos_email_invoice', settled_order_status: 'pending' }],
+		});
+		mockPayload.meta_data = [{ key: '_wcpos_awaiting_customer', value: stamp }];
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
+			mockPayload = { ...mockPayload, ...changes };
+		});
+		mockRequire.mockImplementation(() => ({ ready: Promise.resolve(), release: jest.fn() }));
+		enterCheckout(order.uuid);
+		mockUseRealCompletion = true;
+		mockAutoShowReceipt = true;
+		const view = renderHook(() => useTenderFlow(order));
+		try {
+			act(() => view.result.current.pickMethod('wcpos_email_invoice'));
+			// The catalog lands after mount; the press reads it.
+			await act(async () => {});
+			await act(async () => view.result.current.takeTender());
+			expect(mockManualPost).toHaveBeenCalledWith(
+				'orders/42/payment-methods/wcpos_email_invoice/submit',
+				expect.objectContaining({ attempt_id: expect.any(String) })
+			);
+			expect(recordCompletionAttempt).toHaveBeenCalledWith(undefined, {
+				orderUuid: order.uuid,
+				source: 'gateway',
+				actor: { id: '7', name: 'Pat' },
+				settledOrderStatus: 'pending',
+			});
+			// The stale stamp goes with the mirror; no row is minted.
+			expect(mockManualMirror).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: {
+						status: 'pending',
+						meta_data: expect.not.arrayContaining([
+							expect.objectContaining({ key: '_wcpos_awaiting_customer' }),
+							expect.objectContaining({ key: '_wcpos_payments' }),
+						]),
+					},
+				})
+			);
+			expect(order.getLatest().payload.status).toBe('pending');
+			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(true);
+			expect(
+				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
+			).toHaveLength(1);
+			expect(mockRequire).toHaveBeenCalledWith(
+				expect.objectContaining({ kind: 'targeted-records', remoteIds: ['42'], forceRefresh: true })
+			);
+			expect(mockRecordManualPayment).not.toHaveBeenCalled();
+			expect(mockError).not.toHaveBeenCalled();
+			expect(view.result.current.busy).toBe(false);
+		} finally {
+			view.unmount();
+			mockUseRealCompletion = false;
+			mockManualMirror.mockReset();
+			mockRequire.mockReset();
+		}
+	});
+
+	it('a settled answer without the receipt stage says the paid sentence, never the sent one', async () => {
+		mockAutoShowReceipt = false;
+		mockPayload.number = '1042';
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		try {
+			act(() => result.current.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.takeTender());
+			expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+				{ source: 'gateway-settled', order: summary('pending') },
+				expect.objectContaining({ dispatchToken: expect.any(Object) })
+			);
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.payment_completed_for_order',
+				expect.objectContaining({
+					showToast: true,
+					context: expect.objectContaining({
+						orderId: 42,
+						method: 'wcpos_email_invoice',
+						outcome: 'settled',
+						status: 'pending',
+					}),
+				})
+			);
+			expect(mockInfo).not.toHaveBeenCalledWith('pos_checkout.invoice_sent', expect.anything());
+			// Nothing stored for the gateway: the attempt journals no status.
+			expect(jest.mocked(provenance.recordSaleAttempt)).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ source: 'gateway', completing: true, settledOrderStatus: null })
+			);
+		} finally {
+			mockAutoShowReceipt = true;
+		}
+	});
+
+	it('a mirror failure after the store answered settled completes the sale and warns, never "try again"', async () => {
+		mockManualPost.mockResolvedValue({
+			data: { outcome: 'settled', payment: null, order: summary('pending') },
+		});
+		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.takeTender());
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.payment_recorded_not_synced',
+			expect.objectContaining({
+				code: 'PAYMENT111',
+				showToast: true,
+				context: expect.objectContaining({ type: 'payment.not-mirrored', outcome: 'settled' }),
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({
+			source: 'gateway-settled',
+			order: summary('pending'),
+		});
+		expect(result.current.busy).toBe(false);
 	});
 
 	it('prefills the declared components from the order and posts them under a fresh attempt id', async () => {

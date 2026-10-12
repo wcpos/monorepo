@@ -6,10 +6,10 @@ import { useRestHttpClient } from './use-rest-http-client';
 /**
  * @deprecated Payments contract v1 (wcpos/roadmap#97): read descriptors from usePaymentMethods(); this hook serves the legacy /payment-gateways checkout contract until the two-pane checkout lands (#143).
  */
-export function usePaymentGateways(selectedGatewayId?: string | null) {
+export function usePaymentGateways(selectedGatewayId?: string | null, enabled = true) {
 	const http = useRestHttpClient();
 	const [gateways, setGateways] = React.useState<PaymentGatewayContract[]>([]);
-	const [loading, setLoading] = React.useState(true);
+	const [loading, setLoading] = React.useState(enabled);
 	const [error, setError] = React.useState<string | null>(null);
 	const gatewaysRef = React.useRef<PaymentGatewayContract[]>([]);
 
@@ -18,6 +18,8 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	}, [gateways]);
 
 	const fetchGateways = React.useCallback(async () => {
+		// Not enabled: the caller has no gateway to look up and the request is spared.
+		if (!enabled) return gatewaysRef.current;
 		setLoading(true);
 		setError(null);
 		try {
@@ -32,7 +34,7 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 		} finally {
 			setLoading(false);
 		}
-	}, [http]);
+	}, [http, enabled]);
 
 	React.useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- fetchGateways is the mount/reload event for this external resource; state updates happen in the async fetch lifecycle.

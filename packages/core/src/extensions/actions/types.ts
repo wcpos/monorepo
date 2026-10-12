@@ -28,6 +28,7 @@ export type SaleCompletionSource =
 	| 'manual'
 	| 'terminal'
 	| 'gateway'
+	| 'gateway-settled'
 	| 'gateway-contract'
 	| 'gateway-snapshot'
 	| 'zero-balance'

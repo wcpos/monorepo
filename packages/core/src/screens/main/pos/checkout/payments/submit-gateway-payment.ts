@@ -14,10 +14,12 @@ import {
 /**
  * Submit a `gateway` capture-mode method (Payments Contract 1.2 §2, roadmap#415 R2/R4):
  * Free runs the gateway's own `process_payment()` with the declared values and answers
- * with what it did — `recorded` (a captured row, handled exactly like a manual record)
- * or `sent` (no row; the order stays the gateway's status under the awaiting-customer
- * stamp). The verb never decides the outcome; the response does. Pure apart from the
- * injected deps so the decision tree is testable.
+ * with what it did — `recorded` (a captured row, handled exactly like a manual record),
+ * `sent` (no row; the order stays the gateway's status under the awaiting-customer stamp)
+ * or `settled` (no row, no stamp: the gateway landed the order on the status the merchant
+ * stored as its POS Order Status, which finishes the sale — spec §3.1). The verb never
+ * decides the outcome; the response does. Pure apart from the injected deps so the
+ * decision tree is testable.
  */
 
 export interface GatewayOrder {
@@ -37,6 +39,7 @@ export interface SubmitGatewayPaymentDeps {
 export type SubmitGatewayPaymentOutcome =
 	| { kind: 'recorded'; row: PaymentRow; order: OrderPaymentSummary }
 	| { kind: 'sent'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
+	| { kind: 'settled'; order: OrderPaymentSummary }
 	/** `wcpos_fields_invalid`: a message per component id, `_form` for the gateway's own line. */
 	| { kind: 'fields_invalid'; errors: Record<string, string> }
 	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
@@ -45,7 +48,7 @@ export type SubmitGatewayPaymentOutcome =
 /** The server answered 2xx and the till's copy could not be written: the outcome stands. */
 export class GatewayMirrorError extends Error {
 	public constructor(
-		public outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' }>,
+		public outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' | 'settled' }>,
 		public cause: unknown
 	) {
 		super('Gateway outcome could not be mirrored locally.', { cause });
@@ -133,7 +136,7 @@ export async function submitGatewayPayment(
 	// Only the request is inside the try above: once the server has answered 2xx the outcome
 	// stands, and a failure writing the till's copy must surface as that, never as a retry.
 	const mirror = async (
-		outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' }>,
+		outcome: Extract<SubmitGatewayPaymentOutcome, { kind: 'recorded' | 'sent' | 'settled' }>,
 		meta_data: MetaDataEntry[]
 	) => {
 		try {
@@ -151,6 +154,14 @@ export async function submitGatewayPayment(
 				withLedger(order.meta_data, upsertPaymentRow(readLedger(order.meta_data), row)),
 				null
 			)
+		);
+	}
+	if (data.outcome === 'settled') {
+		// The store settled the sale on the merchant's stored status and cleared any stamp an
+		// earlier send left (§3.1); the till's copy follows, with the summary's status.
+		return mirror(
+			{ kind: 'settled', order: data.order },
+			withAwaitingCustomer(order.meta_data, null)
 		);
 	}
 	if (data.outcome === 'sent') {
