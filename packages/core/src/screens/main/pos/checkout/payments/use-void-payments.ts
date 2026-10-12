@@ -57,20 +57,25 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				}
 			);
 			// Reversing a cash leg reverses its rounding (#66, #84). A sweep of the latest ledger, not
-			// of this call's rows, so a drop that failed is finished by the next void. A synced fee
-			// leaves as a tombstone; the stored total moves by the fee money alone (ADR 0032).
+			// of this call's rows, so a drop that failed is finished by the next void. It drops a fee
+			// naming a voided or failed row (neither counts toward paid) or a row the ledger never got
+			// (a leg that failed outright and whose unround also failed); a null ref is a zero-balance
+			// sale's, and stays. A synced fee leaves as a tombstone; the stored total moves by the fee
+			// money alone (ADR 0032).
 			const after = latest();
-			const voided = new Set(
-				readLedger(after.meta_data ?? []).flatMap(({ id, status }) =>
-					status === 'voided' ? [id] : []
-				)
+			const ledger = readLedger(after.meta_data ?? []);
+			const known = new Set(ledger.map(({ id }) => id));
+			const dead = new Set(
+				ledger.flatMap(({ id, status }) => (status === 'voided' || status === 'failed' ? [id] : []))
 			);
 			let dropped = false;
 			let droppedMinor = 0;
 			const fees = after.fee_lines ?? [];
 			const fee_lines = fees.flatMap((fee) => {
-				const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-				if (fee.name == null || !voided.has(rounding?.payment_ref ?? '')) return [fee];
+				const ref = (parsePosData(fee)?.rounding as { payment_ref?: unknown } | undefined)
+					?.payment_ref;
+				const orphan = typeof ref === 'string' && ref !== '' && !known.has(ref);
+				if (fee.name == null || !(orphan || dead.has(String(ref)))) return [fee];
 				dropped = true;
 				droppedMinor += toMinor(fee.total, dp) + toMinor(fee.total_tax, dp);
 				return fee.id ? [{ ...fee, name: null }] : [];

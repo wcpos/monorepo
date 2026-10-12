@@ -67,11 +67,22 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 			rounding: { increment: '0.05', mode: 'nearest', payment_ref: paymentRef },
 		},
 	});
+	// payment-0 is an older leg that failed: nothing live to void, and a failed row never counts
+	// toward paid, so a fee naming it is swept like an orphan.
 	const ledger = (status: string) => [
-		{ key: '_wcpos_payments', value: { schema: 1, payments: [{ id: 'payment-1', status }] } },
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{ id: 'payment-0', status: 'failed' },
+					{ id: 'payment-1', status },
+				],
+			},
+		},
 	];
 	// The stored total is the store's (12.06), not what the lines add up to: the sweep moves it by
-	// the dropped fee alone. An older rounding names a row this void does not touch and stays.
+	// the dropped fee alone. A zero-balance sale's fee names no row by design (a null ref) and stays.
 	const fees = [
 		{
 			id: 7,
@@ -80,7 +91,12 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 			total_tax: '0.00',
 			meta_data: [posData('payment-1')],
 		},
-		{ name: 'Rounding', total: '0.01', total_tax: '0.00', meta_data: [posData('payment-0')] },
+		{
+			name: 'Rounding',
+			total: '0.01',
+			total_tax: '0.00',
+			meta_data: [posData(null as unknown as string)],
+		},
 	];
 	let payload: Record<string, unknown>;
 	const rounded = {
@@ -174,7 +190,25 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 		expect(payload.fee_lines).toBe(fees);
 	});
 
-	it('leaves the fees alone when no voided row is rounded', async () => {
+	it('sweeps a fee naming a row the ledger never got or a failed row, and keeps one naming a captured row', async () => {
+		// The leg failed outright (no row), or failed with a row, and its unround failed too: either
+		// fee is dead weight. The store refuses this void, so payment-1 stays captured with its fee.
+		const orphan = { ...fees[0], id: 9, meta_data: [posData('never-recorded')] };
+		const failed = { ...fees[1], total: '0.03', meta_data: [posData('payment-0')] };
+		payload = { ...payload, total: '12.11', fee_lines: [...fees, orphan, failed] };
+		mockStatus = 'online-website-available';
+		mockPost.mockRejectedValue({ response: { data: { message: 'no' } } });
+		const { result } = renderHook(() => useVoidPayments());
+		await act(async () => {
+			await result.current(rounded);
+		});
+		expect(sweep()).toEqual({
+			fee_lines: [...fees, { ...orphan, name: null }],
+			total: '12.06',
+		});
+	});
+
+	it('leaves a null-ref fee alone when no voided row is rounded', async () => {
 		payload = { ...payload, fee_lines: [fees[1]] };
 		const { result } = renderHook(() => useVoidPayments());
 		await act(async () => {
