@@ -29,7 +29,7 @@ interface Props {
 export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
-	const { handleStockRejection } = useCheckoutSession(order);
+	const { handleStockRejection, gateway } = useCheckoutSession(order);
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [loading, setLoading] = React.useState(false);
 	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
@@ -107,6 +107,8 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 				ref={webViewRef}
 				setLoading={setLoading}
 				setFrameStatus={reportFrameStatus}
+				settledOrderStatus={gateway?.settled_order_status ?? null}
+				settledGatewayId={gateway?.id ?? null}
 				onStockRejection={handleStockRejection}
 			/>
 			<HStack className="justify-end">

@@ -184,11 +184,63 @@ export type SaleOutcome =
 	 */
 	| { source: 'gateway'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
 	| { source: 'gateway-contract'; status: string }
-	| { source: 'gateway-snapshot'; snapshot: OrderPayload }
+	| {
+			source: 'gateway-snapshot';
+			snapshot: OrderPayload;
+			/**
+			 * The status the merchant stored for the snapshot's own gateway
+			 * (`settled_order_status` from the gateway catalog), or null/undefined when
+			 * none is stored, the store predates the field, or the order was paid through
+			 * another gateway. See isSettledOrderStatus.
+			 */
+			settledOrderStatus?: string | null;
+	  }
 	| { source: 'zero-balance' }
 	| { source: 'replay'; refreshed?: boolean };
 
 const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
+
+/**
+ * Statuses that never settle a sale whatever the merchant stored: the parked POS statuses
+ * are open carts, and `failed`/`cancelled` are a payment that did not happen. The settings
+ * picker offers every registered status, so a stored `failed` is reachable through the UI;
+ * honouring it would report a failed payment as a finished sale.
+ */
+const NEVER_SETTLED_STATUSES = ['pos-open', 'pos-partial', 'failed', 'cancelled'];
+
+/**
+ * Whether a gateway-snapshot status means the sale is settled at the till.
+ *
+ * Two things settle a sale: WooCommerce calling the order paid (any status outside the
+ * unpaid blocklist — on-hold and custom paid statuses included), or the order reaching the
+ * status the merchant explicitly configured for its gateway — `settledOrderStatus`, served
+ * by the store's gateway catalog. The second is what closes a "pay by invoice" sale: BACS
+ * configured to land on `pending` so the customer can still pay through the web pay link.
+ * WooCommerce never calls that order paid, and the blocklist alone left the cashier on a
+ * hung pay window with the order still in the cart.
+ *
+ * It is deliberately the merchant's stored choice and not the status alone: an async
+ * gateway configured for `completed` that redirects before its provider confirms arrives
+ * `pending` too, and that one must keep waiting. A store older than the catalog field
+ * sends no `settledOrderStatus`, and this reduces to the blocklist it always was.
+ */
+export function isSettledOrderStatus(
+	status: string,
+	settledOrderStatus: string | null | undefined
+): boolean {
+	if (NEVER_SETTLED_STATUSES.includes(status)) return false;
+	if (!UNPAID_STATUSES.includes(status)) return true;
+	return typeof settledOrderStatus === 'string' && settledOrderStatus === status;
+}
+
+/**
+ * A payable status that a stored gateway status could still settle: unpaid, but not one
+ * of the statuses that never settle. The pay window keeps polling such an order while the
+ * gateway catalog is still loading, so the catalog arriving later finds a poll to close it.
+ */
+export function awaitsStoredStatus(status: string): boolean {
+	return UNPAID_STATUSES.includes(status) && !NEVER_SETTLED_STATUSES.includes(status);
+}
 
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
@@ -211,8 +263,8 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			return false;
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
-		case 'gateway-snapshot': // Intentionally a blocklist: on-hold and custom paid statuses are accepted.
-			return !UNPAID_STATUSES.includes(outcome.snapshot.status ?? '');
+		case 'gateway-snapshot': // The blocklist, plus the status the merchant stored for the gateway.
+			return isSettledOrderStatus(outcome.snapshot.status ?? '', outcome.settledOrderStatus);
 		case 'zero-balance': // No payment row exists for this route.
 			return true;
 	}
