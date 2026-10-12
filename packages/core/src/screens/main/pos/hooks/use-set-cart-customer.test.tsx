@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
 	registerActionHook,
@@ -38,6 +39,7 @@ const billing = { first_name: 'Ada', email: 'ada@example.com' };
 const shipping = { first_name: 'Ada', country: 'AU' };
 
 beforeEach(() => {
+	resetOrderMutationQueues();
 	jest.clearAllMocks();
 	resetActionRegistry();
 	localPatch.mockResolvedValue({ uuid: 'order-uuid' });

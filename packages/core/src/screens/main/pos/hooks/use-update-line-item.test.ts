@@ -5,6 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
 import { useUpdateLineItem } from './use-update-line-item';
 
 // Mock uuid ESM module
@@ -185,6 +186,7 @@ jest.mock('./use-line-item-data', () => ({
 
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
+		resetOrderMutationQueues();
 		jest.clearAllMocks();
 		mockSwitchedOrder = null;
 		mockGetCurrentOrderCalls = 0;
@@ -196,6 +198,32 @@ describe('useUpdateLineItem', () => {
 			backorders: 'no',
 			name: 'Item 1',
 		});
+	});
+
+	it('lands on the saved order a first add left on the slot', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const lineItems = [
+			{ meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid }], product_id: 1, quantity: 2 },
+		];
+		const saved = {
+			uuid: 'order-uuid',
+			payload: { id: 18, line_items: lineItems },
+			getLatest: () => saved,
+			toMutableJSON: () => ({ payload: { line_items: lineItems } }),
+		} as never;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			queue.order = saved;
+		});
+		const { result } = renderHook(() => useUpdateLineItem());
+		const pending = act(async () => {
+			await result.current.updateLineItem(uuid, { quantity: 1 });
+		});
+		release();
+		await pending;
+		expect(mockLocalPatch).toHaveBeenCalledWith(expect.objectContaining({ document: saved }));
 	});
 
 	it('allows a quantity decrease without evaluating stock', async () => {

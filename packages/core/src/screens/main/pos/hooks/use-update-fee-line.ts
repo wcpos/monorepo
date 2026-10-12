@@ -46,8 +46,8 @@ export const useUpdateFeeLine = () => {
 
 	/** The one writer for a fee line edit: the engine's merge and tax maths, then the patch. */
 	const write = React.useCallback(
-		async (uuid: string, changes: Changes) => {
-			const order = currentOrderRecord.getLatest();
+		async (record: typeof currentOrderRecord, uuid: string, changes: Changes) => {
+			const order = record.getLatest();
 			const json = order.toMutableJSON().payload;
 			let updated = false;
 			let warnings: readonly EngineWarning[] = [];
@@ -93,7 +93,7 @@ export const useUpdateFeeLine = () => {
 			// The line left the cart between the dispatch and this write; nothing to patch.
 			return undefined;
 		},
-		[cartConfig, currentOrderRecord, localPatch, reportEngineWarnings]
+		[cartConfig, localPatch, reportEngineWarnings]
 	);
 
 	/**
@@ -104,8 +104,9 @@ export const useUpdateFeeLine = () => {
 			const recordId = currentOrderRecord.uuid;
 			const outcome = await enqueueOrderMutation(recordId, (queue) => {
 				// Read inside the slot, so the line and the cart a hook sees include every edit
-				// queued ahead of this one.
-				const order = currentOrderRecord.getLatest();
+				// queued ahead of this one; a first add queued ahead left the saved order on the slot.
+				const record = queue.order ?? currentOrderRecord;
+				const order = record.getLatest();
 				const json = order.toMutableJSON().payload;
 				const line = json.fee_lines?.find((item) => wooMetaCarrier.lineUuid(item) === uuid) ?? null;
 				if (!line) {
@@ -138,7 +139,7 @@ export const useUpdateFeeLine = () => {
 							options: {},
 						},
 					},
-					bottom: (e) => write(uuid, { ...e.payload.changes } as Changes),
+					bottom: (e) => write(record, uuid, { ...e.payload.changes } as Changes),
 				});
 			});
 			if (isActionRefusal(outcome)) {

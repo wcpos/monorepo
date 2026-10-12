@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
 	registerActionHook,
@@ -86,6 +87,7 @@ jest.mock('./use-action-context', () => ({
 
 describe('useRemoveLineItem', () => {
 	beforeEach(() => {
+		resetOrderMutationQueues();
 		jest.clearAllMocks();
 		resetActionRegistry();
 		mockLocalPatch.mockResolvedValue(true);
@@ -151,6 +153,46 @@ describe('useRemoveLineItem', () => {
 			expect.objectContaining({ id: line.id, [key]: null }),
 		]);
 		mockOrderLists[type] = undefined;
+	});
+
+	it('lands on the saved order a first add left on the slot', async () => {
+		const { enqueueOrderMutation } =
+			jest.requireActual<typeof import('./order-mutation-queue')>('./order-mutation-queue');
+		const saved = {
+			uuid: 'order-uuid',
+			payload: { id: 18, line_items: [coffee] },
+			getLatest: () => saved,
+		} as never;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			queue.order = saved;
+		});
+		const { result } = renderHook(() => useRemoveLineItem());
+		const pending = act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		release();
+		await pending;
+		expect(mockLocalPatch).toHaveBeenCalledWith(expect.objectContaining({ document: saved }));
+	});
+
+	it('Undo lands on the saved order the queue remembers for this order', async () => {
+		const { enqueueOrderMutation } =
+			jest.requireActual<typeof import('./order-mutation-queue')>('./order-mutation-queue');
+		mockLines = [coffee];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		const saved = {
+			uuid: 'order-uuid',
+			payload: { id: 18, line_items: [] },
+			getLatest: () => saved,
+		} as never;
+		// A birth that ran and drained: the queue keeps the saved record for this uuid.
+		await enqueueOrderMutation('order-uuid', async (queue) => {
+			queue.order = saved;
+		});
+		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+		expect(mockLocalPatch).toHaveBeenLastCalledWith(expect.objectContaining({ document: saved }));
 	});
 
 	it('a guard refusal leaves the line in the cart and presents the reason', async () => {

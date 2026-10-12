@@ -5,6 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
 
@@ -144,6 +145,7 @@ jest.mock('../contexts/current-order', () => ({
 
 describe('useAddItemToOrder', () => {
 	beforeEach(() => {
+		resetOrderMutationQueues();
 		resetActionHookStrikes();
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
