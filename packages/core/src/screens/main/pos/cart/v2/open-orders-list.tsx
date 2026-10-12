@@ -15,6 +15,7 @@ import { convertUTCStringToLocalDate } from '../../../../../hooks/use-local-date
 import { useNowMs, useRelativeTime } from '../../../../../hooks/use-relative-time';
 import { CartTabTitle } from '../tab-title';
 import { cartContents } from './cart-contents';
+import { cartRestartsOnAdd } from '../../hooks/cart-restart';
 import { TabChip } from './tab-chip';
 
 // The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows
@@ -169,7 +170,8 @@ function OrderRow({
 					<CartTabTitle order={order} amountOnly active />
 				</View>
 				<HStack space="sm">
-					{openedMs !== undefined && (
+					{/* A cart that will restart with its next line has no age to show (#2183). */}
+					{openedMs !== undefined && !cartRestartsOnAdd(payload) && (
 						<HStack space="xs">
 							<Icon
 								name="clock"

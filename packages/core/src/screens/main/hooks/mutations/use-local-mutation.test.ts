@@ -387,6 +387,9 @@ describe('useLocalMutation', () => {
 		expect(patchResult?.document).toBe(stored);
 		expect(mockFindOneExec).not.toHaveBeenCalled();
 		expect(mockWrite).not.toHaveBeenCalled();
+		// A customer does not START a cart (owner ruling 2026-10-12, #2183): the creation time
+		// is stamped by the first line (saveNewOrder), never by a patch on the template.
+		expect(stored.payload).not.toHaveProperty('date_created_gmt');
 	});
 
 	it('ignores undefined values in patch data', async () => {

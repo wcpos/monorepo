@@ -11,6 +11,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
 import { resolveStoreTimezone } from '../screens/main/receipt/utils/resolve-store-timezone';
+import { DEVICE_ZONE, inZone, zoneOptions } from './store-zone';
 import { convertLocalDateToUTCString } from './use-local-date';
 
 import type { RxDocument } from 'rxdb';
@@ -20,15 +21,9 @@ type DayRange = { from: Date; to: Date };
 type DayAddition = { weeks?: number; months?: number };
 type DayTimezone = { timezone: string; source: 'store' | 'site' | 'offset' | 'device' };
 
-export const DEVICE_ZONE = 'device' as const;
-
-export function zoneOptions(zone: string): { in?: ReturnType<typeof tz> } {
-	return zone === DEVICE_ZONE ? {} : { in: tz(zone) };
-}
-
-export function inZone(zone: string, date: Date): Date {
-	return zone === DEVICE_ZONE ? new Date(date.getTime()) : tz(zone)(date);
-}
+// Pure zone helpers live in ./store-zone (no app-state import) so a leaf module can format
+// in the store's zone without dragging the app context into its test; re-exported here.
+export { DEVICE_ZONE, inZone, zoneOptions } from './store-zone';
 
 const probe = new Date(0);
 

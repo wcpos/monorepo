@@ -120,7 +120,48 @@ it('a row says who, what, how long and its status; from three entries the line i
 				id: 'b',
 				record: {
 					uuid: 'b',
-					payload: { billing: {}, date_created_gmt: '2026-10-09T08:00:00', line_items: [] },
+					payload: {
+						status: 'pos-open',
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'c',
+				record: {
+					uuid: 'c',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [{ name: 'Beanie', quantity: 1 }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'e',
+				record: {
+					uuid: 'e',
+					// Emptied, but a payment row binds it to its money: it will not restart.
+					payload: {
+						status: 'pos-partial',
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
+			{
+				id: 'd',
+				record: {
+					uuid: 'd',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T10:26:00',
+						// A live shipping line with its title cleared: nothing to list, but a line.
+						shipping_lines: [{ method_id: 'flat_rate', method_title: '' }],
+					},
 				} as unknown as EngineRecord<'orders'>,
 			},
 		];
@@ -135,10 +176,18 @@ it('a row says who, what, how long and its status; from three entries the line i
 		expect(screen.getByTestId('open-orders-row-a-age').textContent).toBe(
 			'health.database.n_minutes'
 		);
-		// The guest's empty cart: a user mark, "Empty", and an age that has gone stale. The open
-		// cart is told by the row itself (aria-selected, the fill and the bar), not by a mark.
+		// The guest's empty cart: a user mark, "Empty" and NO age — its creation time restarts
+		// with the next line (#2183). The open cart is told by the row itself (aria-selected, the
+		// fill and the bar), not by a mark.
 		expect(screen.getByTestId('open-orders-row-b-items').textContent).toBe('pos_cart.cart_empty');
-		expect(screen.getByTestId('open-orders-row-b-age').className).toContain('text-warning');
+		expect(screen.queryByTestId('open-orders-row-b-age')).toBeNull();
+		// A cart with a line that has sat for hours shows its age gone stale.
+		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warning');
+		// The age follows the live-line test, not the summary text (Greptile/Codex on #2467).
+		expect(screen.getByTestId('open-orders-row-d-items').textContent).toBe('pos_cart.cart_empty');
+		expect(screen.getByTestId('open-orders-row-d-age')).toBeTruthy();
+		// An emptied cart that cannot restart (it holds a payment) keeps its age and warning.
+		expect(screen.getByTestId('open-orders-row-e-age').className).toContain('text-warning');
 		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {
