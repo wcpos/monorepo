@@ -120,14 +120,30 @@ function HeldRows({
 	children: BrowseTerm[];
 	onOpenTerm: (term: BrowseTerm) => void;
 }) {
+	// The same virtualized list the subcategories-only pane scrolls: a long child set stays
+	// reachable while the products are still on their way.
+	const rows = React.useMemo<LevelRow[]>(
+		() => [...children.map((child) => ({ id: `browse:${termKey(child)}`, term: child })), ...HELD],
+		[children]
+	);
 	return (
 		<TableSurface testID="browse-level-held-rows">
-			{children.map((child) => (
-				<TermRow key={termKey(child)} term={child} onPress={onOpenTerm} />
-			))}
-			{HELD.map((slot) => (
-				<RowPlaceholder key={slot.id} />
-			))}
+			<VirtualizedList.Root style={{ flex: 1 }}>
+				<VirtualizedList.List
+					data={rows}
+					keyExtractor={rowId}
+					renderItem={({ item }) => (
+						<VirtualizedList.Item>
+							{'term' in item ? (
+								<TermRow term={item.term} onPress={onOpenTerm} />
+							) : (
+								<RowPlaceholder />
+							)}
+						</VirtualizedList.Item>
+					)}
+					estimatedItemSize={60}
+				/>
+			</VirtualizedList.Root>
 		</TableSurface>
 	);
 }
