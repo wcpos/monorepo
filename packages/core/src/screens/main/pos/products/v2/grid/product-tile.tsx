@@ -16,6 +16,7 @@ import { PriceWithTax } from '../../../../components/product/price-with-tax';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import { useAddProduct } from '../../../hooks/use-add-product';
 import { TileImage } from '../../grid/tile-image';
+import { useRenderProbe } from '../../render-probe';
 
 import type { Measurable } from '../deal-stack';
 
@@ -71,6 +72,22 @@ export function ProductTile({ record, gridFields, onDrill, lifted, grow }: Produ
 		lowStockAmount: payload.low_stock_amount,
 		costOfGoodsSold: payload.cost_of_goods_sold,
 	}));
+
+	// Troubleshooting probe (render-probe.ts): which of these moved when the tile re-rendered.
+	useRenderProbe('ProductTile', record.uuid, {
+		record,
+		gridFields,
+		onDrill,
+		lifted,
+		grow,
+		count,
+		stock,
+		fields,
+		addProduct,
+		format,
+		getLabel,
+		t,
+	});
 
 	// The pill counts what is left; nothing left is a status (the badge under the name), not "0 left".
 	const showStockPill =

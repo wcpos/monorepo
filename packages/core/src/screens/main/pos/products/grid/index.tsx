@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
+import { type Observable, Subscription } from 'rxjs';
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -10,6 +11,13 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../../query';
+import {
+	logResultEmission,
+	markSyncActive,
+	probeEvent,
+	RENDER_PROBE_ENABLED,
+	useRenderProbe,
+} from '../render-probe';
 import { ProductGridFooter } from './grid-footer';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
@@ -62,6 +70,55 @@ export function ProductGrid({
 
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
+
+	// Troubleshooting probe (render-probe.ts): the sync phase, the binding's flags, every result
+	// emission's diff, and this component's own re-render reasons.
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED) return;
+		// Test doubles hand the grid a partial binding; only a real stream is tapped.
+		const tap = <T,>(stream: unknown, next: (value: T) => void) =>
+			typeof (stream as { subscribe?: unknown })?.subscribe === 'function'
+				? (stream as Observable<T>).subscribe(next)
+				: new Subscription();
+		const subscription = tap<boolean>(binding.active$, markSyncActive);
+		subscription.add(
+			tap<boolean>(binding.pending$, (pending) => probeEvent('binding.pending$', { pending }))
+		);
+		subscription.add(
+			tap<boolean | null>(binding.exhausted$, (exhausted) =>
+				probeEvent('binding.exhausted$', { exhausted })
+			)
+		);
+		subscription.add(
+			tap<number | null>(binding.total$, (total) => probeEvent('binding.total$', { total }))
+		);
+		return () => subscription.unsubscribe();
+	}, [binding]);
+	const previousHits = React.useRef<typeof result.hits | null>(null);
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED) return;
+		logResultEmission(previousHits.current, result.hits, {
+			count: result.count,
+			searchState: result.searchState ?? null,
+			deferredLag: deferredResult !== result,
+		});
+		previousHits.current = result.hits;
+	}, [result, deferredResult]);
+	useRenderProbe('ProductGrid', 'grid', {
+		result,
+		deferredResult,
+		hits: deferredResult.hits,
+		gridColumns,
+		gridFields,
+		binding,
+		actions,
+		uiSettings,
+		calcTaxes,
+		t,
+		Tile,
+		VariableTile,
+		noDataMessage,
+	});
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.

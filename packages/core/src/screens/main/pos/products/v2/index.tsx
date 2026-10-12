@@ -63,6 +63,7 @@ import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
 import { ProductVariationImage } from '../../../components/product/variation-image';
+import { useMountProbe, useRenderProbe } from '../render-probe';
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from '../../../components/data-table/v2';
@@ -71,6 +72,12 @@ import type { SlotContracts } from '../../../../../extensions/slots';
 export { cellsForRow };
 type ProductRow = { record: EngineRecord<'products'> };
 type DrillHandler = (record: EngineRecord<'products'> | null, target?: Measurable) => void;
+
+/** Troubleshooting probe (render-probe.ts): a Suspense fallback that logs when it is shown. */
+function SuspendedProbe({ event, children }: { event: string; children: React.ReactNode }) {
+	useMountProbe(event, 'products');
+	return <>{children}</>;
+}
 
 /** Today's products grid or table, drilling variable products through `onDrill`. */
 function ProductsView({
@@ -100,8 +107,19 @@ function ProductsView({
 		),
 		[variationsStyle, onDrill]
 	);
+	useRenderProbe('ProductsView', 'view', {
+		onDrill,
+		viewMode,
+		loading,
+		binding,
+		tableActions,
+		noDataMessage,
+		sort,
+		variationsStyle,
+		tableConfig,
+	});
 	return (
-		<Suspense fallback={loading}>
+		<Suspense fallback={<SuspendedProbe event="products.suspended">{loading}</SuspendedProbe>}>
 			{viewMode === 'grid' ? (
 				<ProductGrid
 					tile={ProductTile}
@@ -209,6 +227,20 @@ function POSProductsContent({
 	// no change to the source, search, filters or path, and the stage's drill, held answers and
 	// snapshots are the previous scope's records.
 	const scopeKey = useScopeKey('products');
+	// Troubleshooting probe (render-probe.ts): a scope or binding change here remounts everything.
+	useRenderProbe('POSProductsContent', 'content', {
+		scopeKey,
+		binding,
+		state,
+		actions,
+		uiSettings,
+		session,
+		sessionsOn,
+		side,
+		viewMode,
+		browseBy,
+		variationsStyle,
+	});
 	// A drill-in remembers the search it opened under: typing a new product search is a return
 	// to the products (the search writes to the outer query, which the pane does not show).
 	const [drill, setDrill] = React.useState<{
