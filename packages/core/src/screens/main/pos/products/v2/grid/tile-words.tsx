@@ -136,8 +136,10 @@ export function factsRow({
 		),
 	].filter(Boolean);
 	if (facts.length === 0) return null;
+	// Three lines at most: three lines of `text-xs` at the scale step's own line height, and the
+	// two 1 px gaps between them.
 	return (
-		<View className="max-h-[46px] flex-row flex-wrap gap-x-2.5 gap-y-px overflow-hidden">
+		<View className="max-h-[calc(3*var(--text-xs--line-height)+2px)] flex-row flex-wrap gap-x-2.5 gap-y-px overflow-hidden">
 			{facts}
 		</View>
 	);
