@@ -18,7 +18,14 @@ import { useRegisterSessionCollection } from '../../../../services/register-sess
 
 const ACTIONS_CATEGORY = ['wcpos', 'pos', 'actions'];
 
-export function useActionContext(): { ctx: ActionContext; actor: ActionActor } {
+/** The cashier as an audit row names them (the shape `checkout.complete`'s payload carries). */
+export type Cashier = { id: string; name: string };
+
+export function useActionContext(): {
+	ctx: ActionContext;
+	actor: ActionActor;
+	cashier: Cashier | null;
+} {
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { store, wpCredentials, userDB, site } = useStoreSession();
@@ -58,12 +65,21 @@ export function useActionContext(): { ctx: ActionContext; actor: ActionActor } {
 				},
 			}),
 			actor: { userId, registerId, sessionId: null }, // Stamped when the checkout slice lands.
+			cashier:
+				userId == null
+					? null
+					: {
+							id: String(userId),
+							name: wpCredentials.display_name || wpCredentials.username || '',
+						},
 		}),
 		[
 			runtime,
 			t,
 			preventOverselling,
 			userId,
+			wpCredentials.display_name,
+			wpCredentials.username,
 			registerId,
 			userDB,
 			site.uuid,

@@ -152,6 +152,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.maintenance_lane_error');
 		case 'maintenance.lane.tick':
 			return t('health.logs.event.maintenance_lane_tick');
+		case 'order.voided':
+			return t('health.logs.event.order_voided');
 		case 'payment.authorized-offline':
 			return t('health.logs.event.payment_authorized_offline');
 		case 'payment.cancelled':
@@ -369,6 +371,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.engine_scope_switched');
 		case 'maintenance.lane.error':
 			return t('health.logs.event_description.maintenance_lane_error');
+		case 'order.voided':
+			return t('health.logs.event_description.order_voided');
 		case 'payment.authorized-offline':
 			return t('health.logs.event_description.payment_authorized_offline');
 		case 'payment.captured':

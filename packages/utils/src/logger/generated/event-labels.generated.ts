@@ -74,6 +74,7 @@ export const SYNC_EVENT_TYPES = [
 	'engine.scope-switched',
 	'maintenance.lane.error',
 	'maintenance.lane.tick',
+	'order.voided',
 	'payment.authorized-offline',
 	'payment.cancelled',
 	'payment.captured',
@@ -707,6 +708,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.maintenance_lane_tick',
 		label: 'Background maintenance ran',
 		introducedIn: '1.10.0',
+	},
+	'order.voided': {
+		type: 'order.voided',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.order_voided',
+		label: 'Voided an order',
+		descriptionKey: 'health.logs.event_description.order_voided',
+		description:
+			'The order was removed from the till, or kept as pending when the store refused the delete.',
+		introducedIn: '2.0.0',
 	},
 	'payment.authorized-offline': {
 		type: 'payment.authorized-offline',
