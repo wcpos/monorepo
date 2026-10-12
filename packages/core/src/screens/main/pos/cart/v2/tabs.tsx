@@ -197,12 +197,20 @@ export function OpenOrderTabs({
 				testID="open-order-strip"
 				className="bg-card border-border h-13 flex-row items-stretch border-t"
 				// The arrow keys step from any tab, the + cell included: the handler sits on the
-				// strip, the one ancestor of them all.
+				// strip, the one ancestor of them all, and answers only a key struck on a tab (the
+				// tray and the arrows are buttons with keys of their own).
 				onKeyDown={
 					Platform.OS === 'web'
 						? (event) => {
 								const key = event.nativeEvent.key;
-								if ((key === 'ArrowLeft' || key === 'ArrowRight') && !event.defaultPrevented) {
+								const from = (
+									event.target as { getAttribute?: (n: string) => string | null }
+								)?.getAttribute?.('role');
+								if (
+									from === 'tab' &&
+									(key === 'ArrowLeft' || key === 'ArrowRight') &&
+									!event.defaultPrevented
+								) {
 									event.preventDefault();
 									step(key === 'ArrowLeft' ? -1 : 1);
 								}

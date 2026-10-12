@@ -30,6 +30,7 @@ jest.mock('react-native', () => {
 				onLayout?: (event: LayoutEvent) => void;
 				onKeyDown?: (event: {
 					nativeEvent: { key: string };
+					target: EventTarget;
 					defaultPrevented: boolean;
 					preventDefault: () => void;
 				}) => void;
@@ -71,6 +72,7 @@ jest.mock('react-native', () => {
 						? (event: React.KeyboardEvent) =>
 								onKeyDown({
 									nativeEvent: { key: event.key },
+									target: event.target,
 									defaultPrevented: event.defaultPrevented,
 									preventDefault: () => event.preventDefault(),
 								})
@@ -283,6 +285,11 @@ it('a step right from the last cart lands on the blank cart, and the row keeps t
 		expect(screen.queryAllByTestId(/^open-order-tab-/)).toHaveLength(0);
 		fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
 		expect(mockSetOrder).toHaveBeenLastCalledWith('h');
+		// An arrow key on a strip BUTTON (the tray, an arrow) is not a step.
+		mockSetOrder.mockClear();
+		fireEvent.keyDown(screen.getByTestId('scrollable-tabs-prev'), { key: 'ArrowLeft' });
+		fireEvent.keyDown(screen.getByTestId('open-orders-count'), { key: 'ArrowRight' });
+		expect(mockSetOrder).not.toHaveBeenCalled();
 	} finally {
 		mockOpen = open;
 	}
@@ -466,7 +473,7 @@ it('overflow shows whole columns around the open cart, and the arrows step to a 
 		expect(mockSetOrder).toHaveBeenLastCalledWith('f');
 		fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
 		expect(mockSetOrder).toHaveBeenLastCalledWith('d');
-		fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+		fireEvent.keyDown(screen.getByTestId('open-order-tab-e'), { key: 'ArrowRight' });
 		expect(mockSetOrder).toHaveBeenLastCalledWith('f');
 		// The selection lands and the window moves: the new open tab takes the focus a step
 		// asked for, even though it was not on the row when the key was pressed.
