@@ -5,13 +5,15 @@ import {
 	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
-import { gateSale } from '../sale-completion';
 
+/** The reasons the two gates refuse with; callers present them as the cashier's next step. */
+export const CHOOSE_REGISTER_REASON = 'pos_checkout.choose_register_first';
+export const SESSION_REQUIRED_REASON = 'pos_checkout.open_register_first';
+
+/** Only a completing sale needs a chosen register: a store with several and none picked cannot start one. */
 export const registerGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ctx, e, next) => {
-	if (!gateSale({ completing: e.payload.completing, bindingStatus: e.payload.bindingStatus }).ok)
-		return {
-			deny: { reasonKey: 'pos_checkout.choose_register_first', detail: { event: e.event } },
-		};
+	if (e.payload.completing && e.payload.bindingStatus === 'choose')
+		return { deny: { reasonKey: CHOOSE_REGISTER_REASON, detail: { event: e.event } } };
 	return next(e);
 };
 
@@ -21,9 +23,7 @@ export const sessionGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (ctx, e
 		return next({ ...e, payload: { ...e.payload, registerId, sessionId } });
 	} catch (error) {
 		if (error instanceof RegisterSessionRequiredError)
-			return {
-				deny: { reasonKey: 'pos_checkout.open_register_first', detail: { event: e.event } },
-			};
+			return { deny: { reasonKey: SESSION_REQUIRED_REASON, detail: { event: e.event } } };
 		throw error;
 	}
 };

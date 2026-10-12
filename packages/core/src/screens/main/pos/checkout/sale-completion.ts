@@ -24,8 +24,6 @@ import {
 } from '../../../../extensions/actions';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
 import './audit-hook';
-import { readBoundRegister } from '../../../../services/register/register-document';
-import { requireOpenSession } from '../../../../services/register-session/session-store';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
 import {
 	failCompletionAttempt,
@@ -57,16 +55,6 @@ export interface SaleContext {
 	stockAdjustment?: Parameters<typeof reconcileCompletedOrder>[3];
 }
 
-/** Pure binding gate; only completing sales require a chosen register. */
-export function gateSale(input: {
-	completing: boolean;
-	bindingStatus: 'bound' | 'choose' | 'none';
-}): { ok: false; reason: 'choose_register' } | { ok: true } {
-	return input.completing && input.bindingStatus === 'choose'
-		? { ok: false, reason: 'choose_register' }
-		: { ok: true };
-}
-
 export async function recordSaleAttempt(
 	ctx: SaleContext,
 	input: { order: EngineRecord<'orders'>; completing: boolean; source: SaleOutcome['source'] }
@@ -77,34 +65,6 @@ export async function recordSaleAttempt(
 			source: input.source,
 			...(ctx.actor ? { actor: ctx.actor } : {}),
 		});
-}
-
-/** Before money: require a session when the route requests it; gate completing sales on binding. */
-export async function prepareSale(
-	ctx: SaleContext,
-	input: {
-		order: EngineRecord<'orders'>;
-		completing: boolean;
-		source: SaleOutcome['source'];
-		bindingStatus: 'bound' | 'choose' | 'none';
-		sessionRule: 'require' | 'none';
-	}
-): Promise<
-	| { ok: true; registerId: string | null; sessionId: string | null }
-	| { ok: false; reason: 'choose_register' }
-> {
-	const gate = gateSale(input);
-	if (!gate.ok) return gate;
-	const registerId =
-		input.sessionRule === 'none'
-			? null
-			: ((await readBoundRegister(ctx.userDB, ctx.siteUuid, ctx.storeId))?.id ?? null);
-	const sessionId =
-		input.sessionRule === 'none'
-			? null
-			: await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
-	await recordSaleAttempt(ctx, input);
-	return { ok: true, registerId, sessionId };
 }
 
 /** Online provenance must reach the store BEFORE payment; offline only the split plan is saved. */

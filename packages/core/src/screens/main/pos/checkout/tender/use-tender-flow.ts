@@ -29,7 +29,6 @@ import {
 	type ActionEventInput,
 	dispatchAction,
 	isActionRefusal,
-	presentActionRefusal,
 	TENDER_COMMIT_EVENT,
 	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
@@ -45,6 +44,7 @@ import {
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
+import { presentTenderRefusal } from '../present-tender-refusal';
 import { returnToTill } from '../till-route';
 import { completionMetaFor, persistSaleProvenance, recordSaleAttempt } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
@@ -653,8 +653,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			queue: OrderMutationContext
 		) => {
 			// The gate only looked the session up (a guard has no effects before `next`); the
-			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
-			// where `prepareSale` made it. It also re-reads the id, so a session closed between
+			// pre-action write `requireOpenSession` makes belongs here, before the attempt record.
+			// It also re-reads the id, so a session closed between
 			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
 			const { registerId, sessionId } = e.payload;
 			const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
@@ -1006,15 +1006,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 			});
 			if (isActionRefusal(outcome)) {
-				if (outcome.deny.presented) return;
-				if (outcome.deny.reasonKey === 'pos_checkout.open_register_first') {
-					presentSessionRequired(logger, t, orderContext);
-				} else if (outcome.deny.reasonKey === 'pos_checkout.choose_register_first') {
-					logger.info(t('pos_checkout.choose_register_first'), {
-						showToast: true,
-						context: orderContext,
-					});
-				} else presentActionRefusal(actionCtx, outcome, orderContext);
+				presentTenderRefusal(actionCtx, outcome, logger, t, orderContext);
 				return;
 			}
 		} catch (error) {

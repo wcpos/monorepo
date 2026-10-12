@@ -17,12 +17,7 @@ import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import {
-	completionMetaFor,
-	persistSaleProvenance,
-	prepareSale,
-	refreshOrderRecord,
-} from '../sale-completion';
+import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
 
@@ -53,8 +48,8 @@ export function useRecordManualPayment(
 	order: EngineRecord<'orders'>,
 	method: PaymentMethodDescriptor,
 	input: RecordManualPaymentInput & {
-		/** Ids already resolved by the tender gates; given, the writer does not resolve again. */
-		session?: { registerId: string | null; sessionId: string | null };
+		/** The ids the tender gates stamped: every manual leg passes the gates before it is written. */
+		session: { registerId: string | null; sessionId: string | null };
 	}
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
@@ -68,20 +63,7 @@ export function useRecordManualPayment(
 
 	return React.useCallback(
 		async (order, method, input) => {
-			// A caller that already passed the tender gates hands the resolved ids over; the writer
-			// resolves for itself when a caller passes no session.
-			const { registerId, sessionId } = input.session ?? (await resolveForWriter());
-			async function resolveForWriter() {
-				const prepared = await prepareSale(ctx, {
-					order,
-					source: 'manual',
-					completing: false,
-					bindingStatus: 'none',
-					sessionRule: 'require',
-				});
-				if (!prepared.ok) throw new Error(prepared.reason);
-				return { registerId: prepared.registerId, sessionId: prepared.sessionId };
-			}
+			const { registerId, sessionId } = input.session;
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
 				uuid: order.uuid,

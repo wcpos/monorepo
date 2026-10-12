@@ -26,3 +26,15 @@ export async function readStockDocument(
 	const payload = (deletedDocument as { payload?: unknown } | undefined)?.payload;
 	return payload !== null && typeof payload === 'object' ? (payload as StockDocument) : null;
 }
+
+/** The record whose stock a line draws on: the variation when it manages its own, else the product. */
+export async function resolveStockOwnerId(
+	runtime: ReturnType<typeof useQueryRuntime>,
+	productId: number,
+	variationId = 0
+) {
+	if (!variationId) return productId;
+	const variation = await readStockDocument(runtime, 'variations', variationId);
+	if (!variation) return variationId;
+	return variation.manage_stock === true ? variationId : productId;
+}

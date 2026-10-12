@@ -31,7 +31,7 @@ unrelated queued writes.
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
 | `cart.line.update`       | `useUpdateLineItem` | `changes`                                                      | yes        |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `takeTender`        | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
+| `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
 completing, bindingStatus, registerId, sessionId }`. Amounts are minor units: `amountMinor`
@@ -44,7 +44,7 @@ the Logs event-label check scans `pos/checkout` for dotted literals and these ar
 refuses a completing sale that still needs a register chosen. The second resolves the bound
 register and its required open session through `ctx.register.resolveSession()`, a **read**
 (`findOpenSession`), refusing if no required session is open; the pre-action write that
-`requireOpenSession` makes stays in the bottom handler, where `prepareSale` made it. It is **a guard that stamps what it resolved**:
+`requireOpenSession` makes stays in the bottom handler. It is **a guard that stamps what it resolved**:
 `next({ ...e, payload: { ...e.payload, registerId, sessionId } })`. The bottom handler receives
 those ids, records the attempt, then keeps the existing provenance and leg sequence; the
 manual writer takes those same ids as its `session` input rather than resolving again.
@@ -54,7 +54,16 @@ Before the dispatch, inside its queue slot, `takeTender` recomputes the balance 
 latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
 it, since the keypad's facts were read at render.
 The caller presents the two gate refusals with the existing checkout toasts and any other
-refusal through `presentActionRefusal` (unless already presented).
+refusal through `presentActionRefusal` (unless already presented): `presentTenderRefusal` in
+`screens/main/pos/checkout` is that mapping, shared by every dispatcher of the event.
+
+Every sale dispatches this event. The tender pane's `takeTender` carries the keypad's amounts; a
+gateway sale takes the whole balance, so the gateway-contract checkout (`use-checkout-session.ts`)
+and the external pay page (`payment-webview.tsx`) dispatch through `commitGatewaySale`
+(`screens/main/pos/checkout/commit-gateway-sale.ts`) with `mode: 'gateway'`, `completing: true`
+and the outstanding balance as every amount. Its bottom handler makes the pre-action session
+write, journals the attempt and stamps the provenance, then the gateway runs. The two gates are
+therefore the only register and session rules in the app; there is no second gating path.
 
 First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),
 the prevent-overselling check moved onto the two cart events as guards. Ids are unique per event

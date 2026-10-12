@@ -10,7 +10,8 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { LegacyTab } from '../tender/legacy-tab';
-import { isSettledOrderStatus, persistSaleProvenance, prepareSale } from '../sale-completion';
+import { commitGatewaySale } from '../commit-gateway-sale';
+import { isSettledOrderStatus, persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
@@ -1813,22 +1814,52 @@ jest.mock('../sale-completion', () => {
 				if (input.online) await ctx.pushDocument(input.order);
 			}
 		),
-		prepareSale: jest.fn(actual.prepareSale),
 	};
 });
 
+jest.mock('../commit-gateway-sale', () => {
+	const actual =
+		jest.requireActual<typeof import('../commit-gateway-sale')>('../commit-gateway-sale');
+	return { ...actual, commitGatewaySale: jest.fn(actual.commitGatewaySale) };
+});
+
+const mockRegisterDB = {
+	getLocal: async () =>
+		mockRegisterId
+			? {
+					toJSON: () => ({
+						data: { sites: { site: { register_id: mockRegisterId, register_store_id: 1 } } },
+					}),
+				}
+			: null,
+};
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
-		userDB: {
-			getLocal: async () =>
-				mockRegisterId
-					? {
-							toJSON: () => ({
-								data: { sites: { site: { register_id: mockRegisterId, register_store_id: 1 } } },
-							}),
-						}
-					: null,
-		},
+		actionActor: { userId: 7, registerId: mockRegisterId, sessionId: null },
+		actionCtx: jest
+			.requireActual<typeof import('../../../../../extensions/actions')>(
+				'../../../../../extensions/actions'
+			)
+			.createActionContext({
+				log: () => undefined,
+				t: (key) => key,
+				readCatalog: async () => null,
+				preventOverselling: false,
+				// The session gate reads the bound register and its open session the way the app does.
+				resolveSession: async () => {
+					const { readBoundRegister } = jest.requireActual<
+						typeof import('../../../../../services/register/register-document')
+					>('../../../../../services/register/register-document');
+					const { findOpenSession } = jest.requireActual<
+						typeof import('../../../../../services/register-session/session-store')
+					>('../../../../../services/register-session/session-store');
+					const registerId =
+						(await readBoundRegister(mockRegisterDB as never, 'site', 1))?.id ?? null;
+					const session = await findOpenSession(mockSessions as never, registerId, mockSessionsOn);
+					return { registerId, sessionId: session?.id ?? null };
+				},
+			}),
+		userDB: mockRegisterDB,
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,
 		siteUuid: 'site',
@@ -1945,7 +1976,7 @@ describe('pay-page session gate', () => {
 		await act(async () =>
 			rows.next([...rows.value, { ...sessionA, id: 'session-B', sync_status: 'synced' }])
 		);
-		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(commitGatewaySale).toHaveBeenCalledTimes(2);
 		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
 			key: '_wcpos_session',
 			value: 'session-B',
@@ -2003,7 +2034,7 @@ describe('pay-page session gate', () => {
 			}
 			expect(webViewProps.src).toBeUndefined();
 			await act(async () => finish());
-			expect(prepareSale).toHaveBeenCalledTimes(open ? 2 : 3);
+			expect(commitGatewaySale).toHaveBeenCalledTimes(open ? 2 : 3);
 			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
 				key: '_wcpos_session',
 				value: 'session-B',
@@ -2070,7 +2101,7 @@ describe('pay-page session gate', () => {
 				preparedSession.next(sessionB);
 				mockOpenSession.next(sessionB);
 			});
-			expect(prepareSale).toHaveBeenCalledTimes(2);
+			expect(commitGatewaySale).toHaveBeenCalledTimes(2);
 			expect(persistSaleProvenance).toHaveBeenCalledTimes(1);
 			expect(mockSessions.findOne).toHaveBeenCalledWith({
 				selector: { id: 'session-B', status: 'open', sync_status: { $ne: 'failed' } },
@@ -2081,7 +2112,7 @@ describe('pay-page session gate', () => {
 				value: 'session-B',
 			});
 			await act(async () => mockOpenSession.next({ ...sessionB }));
-			expect(prepareSale).toHaveBeenCalledTimes(2);
+			expect(commitGatewaySale).toHaveBeenCalledTimes(2);
 			view.unmount();
 			expect(preparedSession.observed).toBe(false);
 		}
@@ -2123,7 +2154,7 @@ describe('pay-page session gate', () => {
 		expect(webViewProps.src).toBeUndefined();
 		act(() => button.click());
 		expect(mockPostMessage).not.toHaveBeenCalled();
-		expect(prepareSale).toHaveBeenCalledTimes(1);
+		expect(commitGatewaySale).toHaveBeenCalledTimes(1);
 	});
 	it('LegacyTab forwards receiptHost to PaymentWebview', async () => {
 		autoShowReceipt = false;
@@ -2195,11 +2226,11 @@ describe('pay-page session gate', () => {
 			expect.objectContaining({ showToast: true })
 		);
 		expect(webViewMounts).toBe(0);
-		expect(prepareSale).toHaveBeenCalledTimes(1);
+		expect(commitGatewaySale).toHaveBeenCalledTimes(1);
 		const session = { id: 'session-B', status: 'open', incrementalPatch: async () => undefined };
 		mockSessions.findOne.mockReturnValue({ exec: async () => session, $: mockOpenSession });
 		await act(async () => mockOpenSession.next(session));
-		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(commitGatewaySale).toHaveBeenCalledTimes(2);
 		expect(webViewMounts).toBe(1);
 		expect(webViewProps.src).toContain('/order-pay/42');
 		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
@@ -2207,7 +2238,7 @@ describe('pay-page session gate', () => {
 			value: 'session-B',
 		});
 		await act(async () => mockOpenSession.next({ ...session }));
-		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(commitGatewaySale).toHaveBeenCalledTimes(2);
 	});
 	it.each(['choose-register', 'provenance-push'])(
 		'opening a session does not retry %s failure',
@@ -2232,7 +2263,7 @@ describe('pay-page session gate', () => {
 			await act(async () => {});
 			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 			await act(async () => mockOpenSession.next({ id: 'session-B' }));
-			expect(prepareSale).toHaveBeenCalledTimes(1);
+			expect(commitGatewaySale).toHaveBeenCalledTimes(1);
 			expect(webViewMounts).toBe(0);
 			view.unmount();
 			mockBindingStatus = 'bound';

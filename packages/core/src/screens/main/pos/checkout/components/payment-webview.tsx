@@ -17,15 +17,14 @@ import {
 	RegisterSessionRequiredError,
 } from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
+import { presentTenderRefusal } from '../present-tender-refusal';
+import { SESSION_REQUIRED_REASON } from '../tender/tender-guards';
 import { leaveCheckout } from '../checkout-mode';
 import { returnToTill } from '../till-route';
 import { useTheme } from '../../../../../contexts/theme';
-import {
-	awaitsStoredStatus,
-	isSaleComplete,
-	persistSaleProvenance,
-	prepareSale,
-} from '../sale-completion';
+import { isActionRefusal } from '../../../../../extensions/actions';
+import { commitGatewaySale } from '../commit-gateway-sale';
+import { awaitsStoredStatus, isSaleComplete } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
@@ -277,28 +276,27 @@ export function PaymentWebview({
 		let active = true;
 		void (async () => {
 			try {
-				const prepared = await prepareSale(ctx, {
+				// The pay page can complete the sale, so its tender commit is dispatched before the
+				// URL is exposed: the gates decide, the handler journals and stamps the provenance.
+				const committed = await commitGatewaySale(ctx, {
 					order: currentOrder,
 					source: 'gateway-snapshot',
-					completing: true,
+					methodId: currentOrder.getLatest().payload.payment_method ?? null,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'require',
-				});
-				if (!active) return;
-				if (!prepared.ok) {
-					setPreparation({ key: preparationKey, status: 'failed' });
-					setFrameStatus('stalled');
-					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
-					return;
-				}
-				const { sessionId } = prepared;
-				await persistSaleProvenance(ctx, {
-					order: currentOrder,
-					source: 'gateway-snapshot',
-					sessionId,
 					online,
 				});
-				if (active) setPreparation({ key: preparationKey, status: 'ready', sessionId });
+				if (!active) return;
+				if (isActionRefusal(committed)) {
+					const reason = presentTenderRefusal(ctx.actionCtx, committed, orderLogger, t);
+					setPreparation({
+						key: preparationKey,
+						status: 'failed',
+						sessionRequired: reason === SESSION_REQUIRED_REASON,
+					});
+					setFrameStatus('stalled');
+					return;
+				}
+				setPreparation({ key: preparationKey, status: 'ready', sessionId: committed.sessionId });
 			} catch (error) {
 				if (!active) return;
 				setPreparation({

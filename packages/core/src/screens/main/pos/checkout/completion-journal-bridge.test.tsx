@@ -718,12 +718,10 @@ it('does not abandon the first missing lookup after two finish failures', async 
 });
 
 it('clears a cancelled contract attempt without completing, receipt, or audit', async () => {
-	await owner.prepareSale(mockContext, {
+	await owner.recordSaleAttempt(mockContext, {
 		order: resident('order', 'pos-open') as never,
 		completing: true,
 		source: 'gateway-contract',
-		bindingStatus: 'none',
-		sessionRule: 'none',
 	});
 	mockFind.mockResolvedValue(resident('order', 'cancelled'));
 	render(<SaleCompletionBridge />);
@@ -738,15 +736,9 @@ it('clears a cancelled contract attempt without completing, receipt, or audit', 
 it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
 	'replays the recorded actor %j, never the reopening cashier',
 	async (actor) => {
-		await owner.prepareSale(
+		await owner.recordSaleAttempt(
 			{ ...mockContext, actor },
-			{
-				order: resident() as never,
-				completing: true,
-				source: 'gateway-contract',
-				bindingStatus: 'none',
-				sessionRule: 'none',
-			}
+			{ order: resident() as never, completing: true, source: 'gateway-contract' }
 		);
 		mockContext = { ...mockContext, actor: { id: 'B', name: 'Cashier B' } };
 		render(<SaleCompletionBridge />);
