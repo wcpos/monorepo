@@ -40,3 +40,22 @@ it('a missing quantity reads as one; zero is left off; a negative line stays', (
 		{ kind: 'line', name: 'Returned mug', quantity: -2 },
 	]);
 });
+
+it('a removed line that kept its Woo id is a tombstone and stays off the line', () => {
+	expect(
+		cartContents({
+			line_items: [
+				{ product_id: null, name: 'Beanie', quantity: 1 },
+				{ product_id: 41, name: 'Cap', quantity: 1 },
+			],
+			fee_lines: [{ name: null }],
+			shipping_lines: [
+				{ method_id: null, method_title: 'Flat rate' },
+				{ method_id: 'free_shipping', method_title: 'Free shipping' },
+			],
+		})
+	).toEqual([
+		{ kind: 'line', name: 'Cap', quantity: 1 },
+		{ kind: 'shipping', method: 'Free shipping' },
+	]);
+});
