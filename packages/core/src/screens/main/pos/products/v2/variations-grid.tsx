@@ -137,7 +137,7 @@ export function VariationsGrid({
 											scroll={scroll}
 										>
 											{index === 0 ? (
-												<ParentTile record={parent} onPress={back} />
+												<ParentTile record={parent} gridFields={gridFields} onPress={back} />
 											) : variation ? (
 												<VariationTile record={variation} parent={parent} gridFields={gridFields} />
 											) : (

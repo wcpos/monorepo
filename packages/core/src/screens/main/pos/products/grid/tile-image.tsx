@@ -13,18 +13,29 @@ import { useCopyPicture } from '../v2/deal-stack';
 
 // An image that is already on screen and only changing place does not fade in again.
 const STILL = { transition: 0 };
+// The Poster tile's picture is the whole square.
+const COVER = { contentFit: 'cover' } as const;
 
 function TileImageInner({
 	record,
 	imageUrl,
 	still,
+	cover,
+	onFailed,
 }: {
 	record: EngineRecord<'products'>;
 	imageUrl: string;
 	still?: boolean;
+	cover?: boolean;
+	onFailed?: () => void;
 }) {
 	const { uri, error } = useImageAttachment(record, imageUrl);
-	const imageSource = !uri || error ? { uri: PRODUCT_IMAGE_PLACEHOLDER } : { uri };
+	const failed = !uri || !!error;
+	// Before the paint: a tile that falls back never shows the placeholder for a frame.
+	React.useLayoutEffect(() => {
+		if (failed) onFailed?.();
+	}, [failed, uri, onFailed]);
+	const imageSource = failed ? { uri: PRODUCT_IMAGE_PLACEHOLDER } : { uri };
 	// On a dealt parent's copy, the copy waits for this picture to paint (deal-stack.tsx).
 	const painted = useCopyPicture();
 	// Troubleshooting probe (render-probe.ts): a changed `uri` is a new <img> and a new fade.
@@ -53,8 +64,10 @@ function TileImageInner({
 			onError={() => {
 				probeEvent('image.error', {}, id);
 				painted?.();
+				onFailed?.();
 			}}
 			{...(still ? STILL : {})}
+			{...(cover ? COVER : {})}
 		/>
 	);
 }
@@ -73,9 +86,15 @@ function TileImageFallback({ record }: { record: EngineRecord<'products'> }) {
 export function TileImage({
 	record,
 	still,
+	cover,
+	onFailed,
 }: {
 	record: EngineRecord<'products'>;
 	still?: boolean;
+	/** Fill the square (the Poster tile) rather than fit inside it. */
+	cover?: boolean;
+	/** No picture, or it failed: the Poster tile shows a tint instead of the placeholder. */
+	onFailed?: () => void;
 }) {
 	const images = useRecordField(record, (productRecord) => productRecord.payload.images);
 	const imageUrl = get(images, [0, 'src'], '') as string;
@@ -83,7 +102,13 @@ export function TileImage({
 
 	return (
 		<Suspense fallback={<TileImageFallback record={record} />}>
-			<TileImageInner record={record} imageUrl={imageUrl} still={still} />
+			<TileImageInner
+				record={record}
+				imageUrl={imageUrl}
+				still={still}
+				cover={cover}
+				onFailed={onFailed}
+			/>
 		</Suspense>
 	);
 }

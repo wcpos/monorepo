@@ -17,6 +17,8 @@ interface Props {
 	taxClass: string;
 	taxDisplay: 'text' | 'tooltip' | 'none';
 	strikethrough?: boolean;
+	/** Classes for the amount. */
+	className?: string;
 }
 
 export function PriceWithTax({
@@ -25,6 +27,7 @@ export function PriceWithTax({
 	taxClass,
 	taxDisplay = 'tooltip',
 	strikethrough,
+	className,
 }: Props) {
 	const { format } = useCurrencyFormat();
 	const { calcTaxes } = useTaxSettings();
@@ -43,7 +46,13 @@ export function PriceWithTax({
 		return (
 			<Tooltip>
 				<TooltipTrigger>
-					<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
+					<Text
+						className={cn(
+							strikethrough && 'text-muted-foreground line-through',
+							'text-right',
+							className
+						)}
+					>
 						{format(displayValue)}
 					</Text>
 				</TooltipTrigger>
@@ -60,7 +69,13 @@ export function PriceWithTax({
 	if (taxDisplay === 'text' && taxable) {
 		return (
 			<VStack className="items-end gap-1">
-				<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
+				<Text
+					className={cn(
+						strikethrough && 'text-muted-foreground line-through',
+						'text-right',
+						className
+					)}
+				>
 					{format(displayValue)}
 				</Text>
 				<Text
@@ -75,8 +90,32 @@ export function PriceWithTax({
 
 	// default just show the displayPrice
 	return (
-		<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
+		<Text
+			className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right', className)}
+		>
 			{format(displayValue)}
 		</Text>
 	);
+}
+
+/**
+ * The tax line on its own ("incl. 0,86 € tax"), for a row that places it after other words:
+ * what `taxDisplay="text"` stacks under the amount. Nothing when the price is not taxed.
+ */
+export function TaxLine({
+	price,
+	taxStatus,
+	taxClass,
+	className,
+}: Pick<Props, 'price' | 'taxStatus' | 'taxClass' | 'className'>) {
+	const { format } = useCurrencyFormat();
+	const { calcTaxes } = useTaxSettings();
+	const { taxTotal, inclOrExcl } = useTaxDisplayValues({
+		amount: toNumber(price),
+		taxClass,
+		taxStatus,
+		context: 'shop',
+	});
+	if (taxStatus !== 'taxable' || !calcTaxes) return null;
+	return <Text className={className}>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>;
 }

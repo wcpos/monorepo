@@ -1,43 +1,26 @@
 import * as React from 'react';
-import { StyleSheet, View, type ViewProps } from 'react-native';
-
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useCSSVariable } from 'uniwind';
+import { View, type ViewProps } from 'react-native';
 
 import { SCRIM_REACH, SCRIM_STOPS, SCRIM_STRENGTH } from './scrim-stops';
 
 export { SCRIM_REACH, SCRIM_STOPS, SCRIM_STRENGTH };
 
+const card = (of: number) =>
+	`color-mix(in srgb, var(--card) ${(of * SCRIM_STRENGTH * 100).toFixed(2)}%, transparent)`;
+
+// One CSS gradient: the eased fade over the reach, then flat to the bottom.
+const GRADIENT = {
+	backgroundImage: `linear-gradient(to bottom, ${[
+		...SCRIM_STOPS.map(([at, of]) => `${card(of)} ${at * SCRIM_REACH}px`),
+		`${card(1)} 100%`,
+	].join(', ')})`,
+} as object;
+
 /**
- * The words' block with the card-colour fade behind it (native). The gradient is drawn at the
- * block's measured height, so the stops are fractions of it and the plateau starts exactly at
- * the words whatever the number of lines.
+ * The words' block with the card-colour fade behind it (web, and Electron). The native one is
+ * `scrim.native.tsx`, drawn with react-native-svg: this file is the default so that a runner with
+ * no platform (jest) never loads the native renderer.
  */
-export function Scrim({ children, ...props }: ViewProps & { className?: string }) {
-	const card = String(useCSSVariable('--color-card') ?? '');
-	const [height, setHeight] = React.useState(0);
-	const id = `poster-scrim-${React.useId().replace(/:/g, '')}`;
-	return (
-		<View {...props} onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-			{height > 0 && (
-				<Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
-					<Defs>
-						<LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-							{/* The fade, then the bottom edge: flat at full strength under the words. */}
-							{[...SCRIM_STOPS, [height / SCRIM_REACH, 1] as const].map(([at, of], index) => (
-								<Stop
-									key={index}
-									offset={Math.min(1, (at * SCRIM_REACH) / height)}
-									stopColor={card}
-									stopOpacity={of * SCRIM_STRENGTH}
-								/>
-							))}
-						</LinearGradient>
-					</Defs>
-					<Rect width="100%" height="100%" fill={`url(#${id})`} />
-				</Svg>
-			)}
-			{children}
-		</View>
-	);
+export function Scrim({ style, ...props }: ViewProps & { className?: string }) {
+	return <View {...props} style={[GRADIENT, style]} />;
 }

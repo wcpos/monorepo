@@ -29,6 +29,9 @@ jest.mock('observable-hooks', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
+		View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		ScrollView: ({
 			children,
 			contentContainerStyle,
@@ -39,6 +42,7 @@ jest.mock('react-native-reanimated', () => ({
 		),
 	},
 	useAnimatedRef: () => ({ current: null }),
+	useAnimatedStyle: (style: () => object) => style(),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
 const placeGrid = jest.fn();
@@ -47,6 +51,7 @@ jest.mock('./deal-stack', () => ({
 	useDeal: () => ({ placeGrid }),
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
+	useDealCards: () => null,
 	DealFade: ({ children }: React.PropsWithChildren) => children,
 	DealCell: ({
 		children,
@@ -232,7 +237,7 @@ it('filters displayed stock like the rows do and counts shown of the parent tota
 
 it('the parent tile is the way back', () => {
 	const back = jest.fn();
-	render(<ParentTile record={parent} onPress={back} />);
+	render(<ParentTile record={parent} gridFields={gridFields} onPress={back} />);
 	expect(screen.getByTestId('chevronLeft')).not.toBeNull();
 	expect(screen.getByTestId('variations-parent-tile').textContent).toContain('"count":4');
 	fireEvent.click(screen.getByTestId('variations-parent-tile'));
@@ -252,8 +257,8 @@ it('a variation tile is the add control, with exactly the row’s sanitised meta
 	// Named by its own attributes, priced with the sale struck through, counted by quantity.
 	expect(tile.getAttribute('aria-label')).toBe('Blue');
 	expect(screen.getAllByTestId('price').map((price) => price.textContent)).toEqual([
-		'5.00',
 		'4.50',
+		'5.00',
 	]);
 	expect(screen.getByTestId('in-cart').textContent).toBe('3');
 	fireEvent.click(tile);
@@ -271,6 +276,9 @@ it('shows managed stock as a pill and low stock from the variation’s own thres
 		attributes: [{ option: 'Green' }],
 	});
 	render(<VariationTile record={record} parent={parent} gridFields={gridFields} />);
-	expect(screen.getByTestId('variation-tile-stock-7').textContent).toContain('"count":2');
+	expect(screen.getByTestId('variation-tile-stock-7').textContent).toBe('2');
+	expect(screen.getByTestId('variation-tile-stock-7').getAttribute('aria-label')).toContain(
+		'"count":2'
+	);
 	expect(screen.queryByTestId('stock')).toBeNull();
 });

@@ -48,9 +48,6 @@ jest.mock('../../../hooks/use-add-product', () => ({ useAddProduct: () => ({ add
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../../../hooks/use-stock-status-label', () => ({
-	useStockStatusLabel: () => ({ getLabel: (value: string) => value }),
-}));
 jest.mock('../../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
@@ -64,11 +61,10 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={name} />,
 }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
-jest.mock('@wcpos/components/status-badge', () => ({
-	StatusBadge: ({ label, variant }: { label: string; variant: string }) => (
-		<span data-testid="stock" data-variant={variant}>
-			{label}
-		</span>
+jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+jest.mock('@wcpos/components/poster-tile/scrim', () => ({
+	Scrim: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
 	),
 }));
 jest.mock('../../../../components/product/price-with-tax', () => ({
@@ -77,9 +73,19 @@ jest.mock('../../../../components/product/price-with-tax', () => ({
 			{price}
 		</span>
 	),
+	TaxLine: ({ price }: { price: string }) => <span data-testid="tax">{price}</span>,
 }));
 jest.mock('../../../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
-jest.mock('../../grid/tile-image', () => ({ TileImage: () => null }));
+// A picture that fails to load says so, as `TileImage` does before it paints.
+let mockImageFails = false;
+jest.mock('../../grid/tile-image', () => ({
+	TileImage: ({ onFailed }: { onFailed?: () => void }) => {
+		jest.requireActual('react').useLayoutEffect(() => {
+			if (mockImageFails) onFailed?.();
+		}, [onFailed]);
+		return <span data-testid="tile-image" />;
+	},
+}));
 jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
@@ -113,20 +119,7 @@ it('shows the in-cart line count and adds through the existing hook', () => {
 	expect(addProduct).toHaveBeenCalledWith(record);
 });
 it.each([
-	['lowstock', 'warning'],
-	['outofstock', 'error'],
-	['onbackorder', 'success'],
-] as const)('maps %s to %s', (stock, variant) => {
-	render(
-		<ProductTile
-			record={{ ...record, payload: { ...record.payload, stock_status: stock } }}
-			gridFields={gridFields}
-		/>
-	);
-	expect(screen.getByTestId('stock').getAttribute('data-variant')).toBe(variant);
-});
-it.each([
-	['instock', 'bg-foreground'],
+	['instock', 'bg-card'],
 	['lowstock', 'bg-warning'],
 ] as const)('shows managed quantity in a %s pill', (stockStatus, color) => {
 	render(
@@ -144,7 +137,9 @@ it.each([
 		/>
 	);
 	const pill = screen.getByTestId('product-tile-stock-12');
-	expect(pill.textContent).toBe('3 left');
+	// The number is the whole message; its words are the label.
+	expect(pill.textContent).toBe('3');
+	expect(pill.getAttribute('aria-label')).toBe('3 left');
 	expect(pill.getAttribute('data-class-name')).toContain(color);
 });
 it('reads low stock from the product threshold, since Woo has no lowstock status', () => {
@@ -164,8 +159,8 @@ it('reads low stock from the product threshold, since Woo has no lowstock status
 			gridFields={gridFields}
 		/>
 	);
-	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).toContain(
-		'bg-foreground'
+	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).not.toContain(
+		'bg-warning'
 	);
 	rerender(
 		<ProductTile
@@ -173,13 +168,12 @@ it('reads low stock from the product threshold, since Woo has no lowstock status
 			gridFields={gridFields}
 		/>
 	);
-	expect(screen.getByTestId('product-tile-stock-12').textContent).toBe('1 left');
-	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).toContain(
-		'bg-foreground'
+	expect(screen.getByTestId('product-tile-stock-12').textContent).toBe('1');
+	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).not.toContain(
+		'bg-warning'
 	);
-	expect(screen.queryByTestId('stock')).toBeNull();
 });
-it('composes the existing tile under inline and the drill tile with a chevron under drill', () => {
+it('composes the existing tile under inline and the stacked drill tile under drill', () => {
 	const onDrill = jest.fn();
 	const { rerender } = render(
 		<VariableProductTile
@@ -190,7 +184,7 @@ it('composes the existing tile under inline and the drill tile with a chevron un
 		/>
 	);
 	expect(screen.getByTestId('inline-tile').textContent).toBe('product');
-	expect(screen.queryByTestId('chevronRight')).toBeNull();
+	expect(screen.queryByTestId('poster-stack')).toBeNull();
 	rerender(
 		<VariableProductTile
 			record={{ ...record, remoteId: null }}
@@ -200,7 +194,8 @@ it('composes the existing tile under inline and the drill tile with a chevron un
 		/>
 	);
 	expect(screen.queryByTestId('inline-tile')).toBeNull();
-	expect(screen.getByTestId('chevronRight')).not.toBeNull();
+	// The stack says "tap to deal": two cards behind the square.
+	expect(screen.getByTestId('poster-stack').children).toHaveLength(2);
 	expect(screen.getByTestId('variable-product-tile-product')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('variable-product-tile'));
 	// The tile hands itself over with the record: the deal starts from where it sits.
@@ -299,9 +294,128 @@ it('shows the minimum variable price with from and keeps sale strikethrough', ()
 			.getAllByTestId('price')
 			.map((node) => [node.textContent, node.getAttribute('data-strike')])
 	).toEqual([
-		['10', 'true'],
 		['4', 'false'],
+		['10', 'true'],
 	]);
 	expect(screen.getByText('from')).not.toBeNull();
-	expect(screen.queryByTestId('chevronRight')).toBeNull();
+	expect(screen.getByText('Sale')).not.toBeNull();
+});
+
+// The words: on the scrim over a picture, straight on the tint without one.
+const words = () =>
+	(screen.queryByTestId('poster-scrim') ?? screen.getByTestId('poster-words')).textContent;
+
+it('says Sold out in place of the price when out, with no Sale pill, and greys the picture', () => {
+	const fields = { ...gridFields, price: true, on_sale: true };
+	const payload = { ...record.payload, price: '4', regular_price: '5', on_sale: true };
+	const { rerender } = render(
+		<ProductTile
+			record={{ ...record, payload: { ...payload, stock_status: 'instock' } }}
+			gridFields={fields}
+		/>
+	);
+	expect(screen.queryByText('Sold out')).toBeNull();
+	expect(screen.getByTestId('poster-picture').getAttribute('data-class-name')).not.toContain(
+		'opacity-40'
+	);
+	rerender(
+		<ProductTile
+			record={{ ...record, payload: { ...payload, stock_status: 'outofstock' } }}
+			gridFields={fields}
+		/>
+	);
+	expect(screen.getByText('Sold out')).not.toBeNull();
+	expect(screen.queryByTestId('price')).toBeNull();
+	expect(screen.queryByText('Sale')).toBeNull();
+	expect(screen.getByTestId('poster-picture').getAttribute('data-class-name')).toContain(
+		'opacity-40'
+	);
+});
+
+it('shows the Sale pill and the struck price only when on sale and the field is on', () => {
+	const sale = {
+		...record,
+		payload: { ...record.payload, price: '4', regular_price: '5', on_sale: true },
+	};
+	const { rerender } = render(
+		<ProductTile record={sale} gridFields={{ ...gridFields, price: true, on_sale: false }} />
+	);
+	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4']);
+	expect(screen.queryByText('Sale')).toBeNull();
+	rerender(
+		<ProductTile record={sale} gridFields={{ ...gridFields, price: true, on_sale: true }} />
+	);
+	expect(screen.getAllByTestId('price').map((node) => node.textContent)).toEqual(['4', '5']);
+	expect(screen.getByText('Sale')).not.toBeNull();
+	rerender(
+		<ProductTile
+			record={{ ...sale, payload: { ...sale.payload, on_sale: false } }}
+			gridFields={{ ...gridFields, price: true, on_sale: true }}
+		/>
+	);
+	expect(screen.queryByText('Sale')).toBeNull();
+});
+
+it('lays the facts out Cost, SKU, barcode, categories, each only when on and set', () => {
+	const full = {
+		...record,
+		payload: {
+			...record.payload,
+			sku: 'T1',
+			barcode: '123',
+			categories: [{ id: 3, name: 'Hot' }, { name: 'Drinks' }],
+			cost_of_goods_sold: { total_value: 9 },
+		},
+	};
+	const all = { ...gridFields, sku: true, barcode: true, category: true, cost_of_goods_sold: true };
+	const { rerender } = render(<ProductTile record={full} gridFields={all} />);
+	expect(words()).toBe('TeaCost 9SKU T1123Hot, Drinks');
+	rerender(<ProductTile record={full} gridFields={{ ...all, sku: false, category: false }} />);
+	expect(words()).toBe('TeaCost 9123');
+	rerender(
+		<ProductTile record={{ ...full, payload: { ...full.payload, barcode: '' } }} gridFields={all} />
+	);
+	expect(words()).toBe('TeaCost 9SKU T1Hot, Drinks');
+});
+
+it('draws no scrim when every field it would show is off', () => {
+	render(<ProductTile record={record} gridFields={{ ...gridFields, name: false }} />);
+	expect(screen.queryByTestId('poster-scrim')).toBeNull();
+	expect(screen.queryByTestId('poster-words')).toBeNull();
+});
+
+it('counts a drill tile’s options, and stacks only a drill tile', () => {
+	const variable = { ...record, payload: { ...record.payload, variations: [1, 2, 3] } };
+	const { rerender } = render(<ProductTile record={variable} gridFields={gridFields} />);
+	expect(screen.queryByTestId('poster-stack')).toBeNull();
+	expect(screen.queryByText('3 options')).toBeNull();
+	rerender(<ProductTile record={variable} gridFields={gridFields} onDrill={jest.fn()} />);
+	expect(screen.getByTestId('poster-stack')).not.toBeNull();
+	expect(screen.getByText('3 options')).not.toBeNull();
+	// The stack has no stock of its own.
+	expect(screen.queryByTestId('product-tile-stock-12')).toBeNull();
+});
+
+it('falls back to the tint of its first category, or its name, when the picture fails', () => {
+	const square = () => screen.getByTestId('product-tile-12').getAttribute('data-class-name');
+	const pictured = { ...record, payload: { ...record.payload, images: [{ src: 'tea.jpg' }] } };
+	mockImageFails = false;
+	const first = render(<ProductTile record={pictured} gridFields={gridFields} />);
+	expect(screen.getByTestId('tile-image')).not.toBeNull();
+	expect(square()).not.toContain('bg-tile-tint');
+	first.unmount();
+	mockImageFails = true;
+	const { rerender } = render(<ProductTile record={pictured} gridFields={gridFields} />);
+	expect(screen.queryByTestId('tile-image')).toBeNull();
+	// T 84 + e 101 + a 97 = 282, and 282 % 6 = 0.
+	expect(square()).toContain('bg-tile-tint-0');
+	mockImageFails = false;
+	// No picture at all: the tint at once, keyed by the first category's id.
+	rerender(
+		<ProductTile
+			record={{ ...record, payload: { ...record.payload, categories: [{ id: 15 }] } }}
+			gridFields={gridFields}
+		/>
+	);
+	expect(square()).toContain('bg-tile-tint-3');
 });

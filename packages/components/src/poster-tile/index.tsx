@@ -1,12 +1,5 @@
 import * as React from 'react';
-import {
-	Pressable,
-	type StyleProp,
-	StyleSheet,
-	View,
-	type ViewInstance,
-	type ViewStyle,
-} from 'react-native';
+import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import Animated from 'react-native-reanimated';
 
@@ -65,7 +58,7 @@ export type PosterTileProps = {
 	/** The stack of cards behind the tile: a variable product, "tap to deal". */
 	stacked?: boolean;
 	/** The stack's style, for the Deal's fade (an animated style). */
-	stackStyle?: StyleProp<ViewStyle>;
+	stackStyle?: React.ComponentProps<typeof Animated.View>['style'];
 	/** Grows to its row (a dealt cell) rather than taking a share of it. */
 	grow?: boolean;
 	/** The Deal has its copy out on the stage. */
