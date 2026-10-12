@@ -54,8 +54,15 @@ export const useRemoveCoupon = () => {
 					couponCode
 				);
 			} catch (error) {
-				// The cart moved under the recalculation; the coupon is still on the order.
-				if (error instanceof CartChangedError) return;
+				// The cart moved under the recalculation; the coupon is still on the order, and the
+				// cashier hears why (a removal has no field to carry the reason).
+				if (error instanceof CartChangedError) {
+					orderLogger.info(t('pos_cart.cart_changed'), {
+						showToast: true,
+						context: { couponCode },
+					});
+					return;
+				}
 				throw error;
 			}
 			if (isActionRefusal(outcome)) {

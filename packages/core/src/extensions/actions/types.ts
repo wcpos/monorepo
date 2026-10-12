@@ -16,6 +16,9 @@ export const ACTION_EVENTS = [
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
 ] as const satisfies readonly ActionEvent[];
+// `satisfies readonly ActionEvent[]` admits a short list; this line refuses one.
+type MissingFromActionEvents = Exclude<ActionEvent, (typeof ACTION_EVENTS)[number]>;
+export const ACTION_EVENTS_COMPLETE: MissingFromActionEvents extends never ? true : never = true;
 /** The guards a tender commit must have registered; the dispatch refuses without them. */
 export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;
 export type ActionEvent = keyof ActionContracts;

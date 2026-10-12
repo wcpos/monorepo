@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -27,7 +26,12 @@ import {
 } from './engine-coupon-data';
 import { readQuickDiscountIntent } from './quick-discount';
 import { reportCartFailure } from './cart-failure';
-import { applyCouponLine, CartChangedError, isActionRefusal } from './coupon-line-actions';
+import {
+	applyCouponLine,
+	CartChangedError,
+	cartSnapshotOf,
+	isActionRefusal,
+} from './coupon-line-actions';
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
@@ -100,6 +104,8 @@ export const useAddCoupon = () => {
 				}
 
 				const order = currentOrderRecord.getLatest();
+				// The cart these rules are checked against; the writer refuses if it moved before the write.
+				const validated = cartSnapshotOf(order.payload);
 				const lineItems = (order.payload.line_items || []).filter(
 					(item: any) => item.product_id !== null
 				);
@@ -201,25 +207,13 @@ export const useAddCoupon = () => {
 				};
 				const newCouponLine = wooMetaCarrier.ensureLineUuid(newCouponLineData, uuidv4);
 
-				// The cart the coupon was validated against must be the cart it is applied to; the
-				// writer re-checks after its recalculation, inside the order's queue slot.
-				const validatedAgainst = currentOrderRecord.getLatest();
-				if (
-					!isEqual(
-						{ line_items: order.payload.line_items, coupon_lines: order.payload.coupon_lines },
-						{
-							line_items: validatedAgainst.payload.line_items,
-							coupon_lines: validatedAgainst.payload.coupon_lines,
-						}
-					)
-				) {
-					return { success: false, error: t('pos_cart.cart_changed') };
-				}
-
+				// The cart the coupon was validated against must be the cart it is applied to: the
+				// writer compares when its queue slot starts and again after its recalculation.
 				const outcome = await applyCouponLine(
 					{ ctx, actor, recalculate, localPatch },
 					currentOrderRecord,
-					newCouponLine
+					newCouponLine,
+					validated
 				);
 				// A hook's refusal is the coupon field's error line, where the cashier is looking.
 				if (isActionRefusal(outcome)) {
@@ -235,7 +229,7 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const appliedCouponLine = (currentOrderRecord.getLatest().payload.coupon_lines ?? []).find(
+				const appliedCouponLine = outcome.couponLines.find(
 					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied'), {

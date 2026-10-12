@@ -242,4 +242,20 @@ describe('useRemoveCoupon', () => {
 			context: { couponCode: 'save10' },
 		});
 	});
+
+	it('a cart that moved under the removal keeps the coupon and tells the cashier', async () => {
+		const { CartChangedError } =
+			jest.requireActual<typeof import('./coupon-line-actions')>('./coupon-line-actions');
+		recalculate.mockImplementation(async () => {
+			throw new CartChangedError();
+		});
+		const { result } = renderHook(() => useRemoveCoupon());
+		await result.current.removeCoupon('save10');
+		expect(localPatch).not.toHaveBeenCalled();
+		// This suite's `t` returns the English sentence for the key.
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Cart changed during coupon application. Please try again.',
+			expect.objectContaining({ showToast: true })
+		);
+	});
 });

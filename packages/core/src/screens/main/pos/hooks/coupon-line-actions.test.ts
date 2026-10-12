@@ -7,9 +7,11 @@ import {
 import {
 	applyCouponLine,
 	CartChangedError,
+	cartSnapshotOf,
 	isActionRefusal,
 	removeCouponLine,
 } from './coupon-line-actions';
+import { enqueueOrderMutation } from './order-mutation-queue';
 
 const log = jest.fn();
 const ctx = createActionContext({
@@ -26,10 +28,8 @@ const writer = { ctx, actor, recalculate, localPatch } as never;
 
 const lineItems = [{ product_id: 1, quantity: 1, total: '100' }];
 let couponLines: Record<string, unknown>[] = [];
-const order = {
-	uuid: 'order',
-	getLatest: () => ({ payload: { line_items: lineItems, coupon_lines: couponLines } }),
-} as never;
+const cart = () => ({ line_items: lineItems, coupon_lines: couponLines });
+const order = { uuid: 'order', getLatest: () => ({ payload: cart() }) } as never;
 const saved = { code: 'save10', discount: '0', discount_tax: '0', meta_data: [] } as never;
 
 beforeEach(() => {
@@ -55,7 +55,10 @@ it('apply: dispatches the entering line with the cart, then recalculates and pat
 		},
 		{ id: 'test.observer', tier: 'extension' }
 	);
-	await expect(applyCouponLine(writer, order, saved)).resolves.toEqual({ uuid: 'order' });
+	await expect(applyCouponLine(writer, order, saved, cartSnapshotOf(cart()))).resolves.toEqual({
+		patched: { uuid: 'order' },
+		couponLines: [{ code: 'existing' }, saved],
+	});
 	expect(seen).toEqual([
 		expect.objectContaining({
 			event: 'cart.coupon.apply',
@@ -80,7 +83,7 @@ it('apply: a guard refusal is returned and nothing is recalculated or written', 
 		async () => ({ deny: { reasonKey: 'loyalty.no_stacking' } }),
 		{ id: 'test.guard', tier: 'guard' }
 	);
-	const outcome = await applyCouponLine(writer, order, saved);
+	const outcome = await applyCouponLine(writer, order, saved, cartSnapshotOf(cart()));
 	expect(isActionRefusal(outcome)).toBe(true);
 	expect(recalculate).not.toHaveBeenCalled();
 	expect(localPatch).not.toHaveBeenCalled();
@@ -91,7 +94,9 @@ it('apply: a cart that moved under the recalculation is refused with CartChanged
 		couponLines = [{ code: 'slipped-in' }];
 		return { lineItems: lines, couponLines: coupons };
 	});
-	await expect(applyCouponLine(writer, order, saved)).rejects.toBeInstanceOf(CartChangedError);
+	await expect(
+		applyCouponLine(writer, order, saved, cartSnapshotOf(cart()))
+	).rejects.toBeInstanceOf(CartChangedError);
 	expect(localPatch).not.toHaveBeenCalled();
 });
 
@@ -109,7 +114,9 @@ it.each([
 		},
 		{ id: 'test.observer', tier: 'extension' }
 	);
-	await expect(removeCouponLine(writer, order, ' SAVE10 ')).resolves.toEqual({ uuid: 'order' });
+	await expect(removeCouponLine(writer, order, ' SAVE10 ')).resolves.toMatchObject({
+		patched: { uuid: 'order' },
+	});
 	expect(seen[0].payload).toEqual({
 		code: ' SAVE10 ',
 		couponLine: line,
@@ -139,4 +146,31 @@ it('remove: a guard refusal keeps the coupon on the order', async () => {
 	});
 	expect(isActionRefusal(await removeCouponLine(writer, order, 'save10'))).toBe(true);
 	expect(localPatch).not.toHaveBeenCalled();
+});
+
+it('apply: a write queued ahead that moves the cart refuses the apply at slot entry, before any hook', async () => {
+	const validated = cartSnapshotOf(cart());
+	const hook = jest.fn(async (_ctx: unknown, e: unknown, next: (e: unknown) => unknown) => next(e));
+	registerActionHook('cart.coupon.apply', hook as never, {
+		id: 'test.observer',
+		tier: 'extension',
+	});
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	void enqueueOrderMutation('order', async () => {
+		await gate;
+		couponLines = [{ code: 'pos-discount' }];
+	});
+	const pending = applyCouponLine(writer, order, saved, validated);
+	release();
+	await expect(pending).rejects.toBeInstanceOf(CartChangedError);
+	expect(hook).not.toHaveBeenCalled();
+	expect(recalculate).not.toHaveBeenCalled();
+	expect(localPatch).not.toHaveBeenCalled();
+});
+
+it('remove: every line carrying the code leaves, not only the first', async () => {
+	couponLines = [{ id: 1, code: 'save10' }, { code: 'keep' }, { code: 'SAVE10' }];
+	await removeCouponLine(writer, order, 'save10');
+	expect(recalculate).toHaveBeenCalledWith(lineItems, [{ id: 1, code: null }, { code: 'keep' }]);
 });

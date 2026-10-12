@@ -128,11 +128,9 @@ export function scanSource(text, path) {
 				)
 					construct = 'collection-write';
 			}
-			if (
-				LOCAL_WRITES.has(name) &&
-				(ts.isIdentifier(callee) ||
-					(member && ts.isIdentifier(callee.expression) && callee.expression.text === 'ctx'))
-			) {
+			// `localPatch({ document: order })` on any receiver: a writer object handed the function
+			// (`writer.localPatch`, `ctx.localPatch`) is still the write.
+			if (LOCAL_WRITES.has(name) && (ts.isIdentifier(callee) || member)) {
 				const document = propertyNamed(node.arguments[0], 'document');
 				if (document) {
 					const value = unwrap(document.initializer);
