@@ -8,7 +8,7 @@ import { Observable, of, Subject } from 'rxjs';
 import { createQueryHandle, type QueryHandle, type QueryResult } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { useQueryBindingFor, useQueryHandleView } from './query-handles';
+import { useQueryBindingFor, useQueryHandleFields, useQueryHandleView } from './query-handles';
 
 import type { RxCollection } from 'rxdb';
 
@@ -64,6 +64,42 @@ describe('useQueryHandleView', () => {
 		act(() => second.next({ count: 2, hits: [] }));
 		expect(result.current.value.count).toBe(2);
 		expect(result.current.settling).toBe(false);
+	});
+});
+
+describe('useQueryHandleFields', () => {
+	it('holds its snapshot while only an unwatched field moves, and follows a watched one', () => {
+		const results = new Subject<Result>();
+		const active = new Subject<boolean>();
+		const handle = createQueryHandle(
+			engine,
+			{
+				key: 'fields',
+				result$: () => results,
+				demands: [],
+				activeCollections: ['products'],
+				censusScoped: false,
+				observeActive: () => active,
+			},
+			EMPTY
+		);
+		let renders = 0;
+		const { result } = renderHook(() => {
+			renders += 1;
+			return useQueryHandleFields(handle, ['pending']);
+		});
+		act(() => results.next({ count: 1, hits: [] }));
+		const answered = result.current;
+		const rendersAfterAnswer = renders;
+		// The sync spinner flips `active`: this reader does not move.
+		act(() => active.next(true));
+		expect(result.current).toBe(answered);
+		expect(renders).toBe(rendersAfterAnswer);
+		expect(handle.value.active).toBe(true);
+		// A new answer always reaches it.
+		act(() => results.next({ count: 2, hits: [] }));
+		expect(result.current.count).toBe(2);
+		expect(result.current.active).toBe(true);
 	});
 });
 

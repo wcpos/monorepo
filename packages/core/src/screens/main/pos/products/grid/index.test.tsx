@@ -40,6 +40,7 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('../../../../../query', () => ({
 	useQueryHandleView: () => ({ value: mockSnapshot(), settling: mockSettling }),
+	useQueryHandleValue: () => mockSnapshot(),
 	useGuardedExtendLimitFor: (...args: unknown[]) => {
 		mockGuard(...args);
 		return jest.fn();

@@ -3,11 +3,15 @@ import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord, QueryHandle, QueryResult, QuerySnapshot } from '@wcpos/query';
+import type { EngineRecord, QueryHandle, QueryResult } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
-import { useGuardedExtendLimitFor, useQueryHandleView } from '../../../../../query';
+import {
+	useGuardedExtendLimitFor,
+	useQueryHandleValue,
+	useQueryHandleView,
+} from '../../../../../query';
 import {
 	logResultEmission,
 	markSyncActive,
@@ -25,7 +29,7 @@ import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { RxCollection } from 'rxdb';
-import type { QueryStateActions } from '../../../../../query';
+import type { QueryStateActions, SnapshotFields } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 
@@ -34,7 +38,6 @@ type ProductHit = {
 };
 
 type ProductsResult = QueryResult<RxCollection>;
-type ProductsSnapshot = Readonly<QuerySnapshot<ProductsResult>>;
 
 /**
  * Troubleshooting probe (render-probe.ts), hosted by the grid's FIRST child. Effects run
@@ -44,8 +47,9 @@ type ProductsSnapshot = Readonly<QuerySnapshot<ProductsResult>>;
  * already active. A deferred value catching up is the same result committing again: no second
  * row.
  */
-function EmissionProbe({ snapshot }: { snapshot: ProductsSnapshot }) {
-	const { active, pending, exhausted, total, result } = snapshot;
+function EmissionProbe({ handle }: { handle: QueryHandle<ProductsResult> }) {
+	// Every field: the probe is a leaf, its re-renders reach nothing.
+	const { active, pending, exhausted, total, result } = useQueryHandleValue(handle);
 	React.useEffect(() => {
 		if (RENDER_PROBE_ENABLED) markSyncActive(active);
 	}, [active]);
@@ -70,6 +74,36 @@ function EmissionProbe({ snapshot }: { snapshot: ProductsSnapshot }) {
 	}, [result]);
 	return null;
 }
+
+/**
+ * The status row under the grid, reading `active` and `total` itself so the grid body does not
+ * re-render when the sync spinner flips or the census lands.
+ */
+function GridStatusFooter({
+	handle,
+	count,
+	children,
+}: {
+	handle: QueryHandle<ProductsResult>;
+	count: number;
+	children?: React.ReactNode;
+}) {
+	const { value } = useQueryHandleView(handle, STATUS_FIELDS);
+	return (
+		<DataTableFooterFor
+			collectionName="products"
+			active={value.active}
+			total={value.total}
+			sync={handle.sync}
+			count={count}
+		>
+			{children}
+		</DataTableFooterFor>
+	);
+}
+const STATUS_FIELDS: SnapshotFields = ['active', 'total'];
+// The grid body re-renders for the answer and the engine's paging opinion, nothing else.
+const GRID_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
@@ -110,7 +144,7 @@ export function ProductGrid({
 
 	// One subscription, one object: rows, count, total, activity and the engine's paging
 	// opinion arrive together. A changed query keeps the current rows until it answers.
-	const { value: current, settling } = useQueryHandleView(handle);
+	const { value: current, settling } = useQueryHandleView(handle, GRID_FIELDS);
 	// The WHOLE snapshot is deferred, gate included: an urgent commit of "ready" with the
 	// deferred rows still empty would draw the empty state for a frame on every cold open.
 	const snapshot = React.useDeferredValue(current);
@@ -201,7 +235,7 @@ export function ProductGrid({
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
-			<EmissionProbe snapshot={current} />
+			<EmissionProbe handle={handle} />
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
@@ -251,23 +285,11 @@ export function ProductGrid({
 			</VirtualizedList.Root>
 			{/* The footer draws its own top line; a bordered wrapper here doubled it. */}
 			{calcTaxes ? (
-				<DataTableFooterFor
-					collectionName="products"
-					active={snapshot.active}
-					total={snapshot.total}
-					sync={handle.sync}
-					count={renderedCount}
-				>
+				<GridStatusFooter handle={handle} count={renderedCount}>
 					<TaxBasedOn />
-				</DataTableFooterFor>
+				</GridStatusFooter>
 			) : (
-				<DataTableFooterFor
-					collectionName="products"
-					active={snapshot.active}
-					total={snapshot.total}
-					sync={handle.sync}
-					count={renderedCount}
-				/>
+				<GridStatusFooter handle={handle} count={renderedCount} />
 			)}
 		</View>
 	);

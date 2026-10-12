@@ -308,6 +308,53 @@ export function useQueryHandleValue<R extends QueryResult<RxCollection>>(
 	return React.useSyncExternalStore(handle.subscribe, getSnapshot, getSnapshot);
 }
 
+/** The fields a reader re-renders for; the answer itself (`ready`, `error`, `result`) always. */
+const EVERY_FIELD: SnapshotFields = [
+	'active',
+	'pending',
+	'exhausted',
+	'total',
+	'laneProgress',
+	'count',
+	'searchActive',
+	'searchState',
+];
+export type SnapshotFields = readonly (keyof QuerySnapshot<QueryResult<RxCollection>>)[];
+const ANSWER_FIELDS: SnapshotFields = ['ready', 'error', 'result'];
+
+/**
+ * `useQueryHandleValue` for a reader that cares about SOME fields: the snapshot it holds moves
+ * only when the answer or one of `fields` does. One snapshot still carries everything, so the
+ * grid body can stay put while the sync spinner flips `active` and the footer, reading
+ * `['active', 'total']` itself, follows it.
+ */
+export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>,
+	fields: SnapshotFields
+): Readonly<QuerySnapshot<R>> {
+	const last = React.useRef<Readonly<QuerySnapshot<R>> | null>(null);
+	// A reader's list is a constant; its contents are the dependency, not its identity.
+	const watched = fields.join(',');
+	const getSnapshot = React.useCallback(() => {
+		const current = handle.value;
+		const held = last.current;
+		if (
+			held &&
+			ANSWER_FIELDS.every((field) => held[field] === current[field]) &&
+			watched
+				.split(',')
+				.every(
+					(field) => held[field as keyof typeof held] === current[field as keyof typeof current]
+				)
+		) {
+			return held;
+		}
+		last.current = current;
+		return current;
+	}, [handle, watched]);
+	return React.useSyncExternalStore(handle.subscribe, getSnapshot, getSnapshot);
+}
+
 /**
  * The snapshot a screen should DRAW: the handle's own once it has answered, and until then the
  * last answered snapshot this component drew — so a changed query (a keystroke, an extended
@@ -317,9 +364,11 @@ export function useQueryHandleValue<R extends QueryResult<RxCollection>>(
  * the screen shows its loading state: the gate that used to be a Suspense boundary.
  */
 export function useQueryHandleView<R extends QueryResult<RxCollection>>(
-	handle: QueryHandle<R>
+	handle: QueryHandle<R>,
+	/** Re-render for these fields beside the answer; every field when omitted. */
+	fields?: SnapshotFields
 ): { value: Readonly<QuerySnapshot<R>>; settling: boolean } {
-	const current = useQueryHandleValue(handle);
+	const current = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
 	// What the previous handle had answered when this one took over — kept per handle, so a
 	// snapshot change on the SAME handle never re-renders through state (a handle never goes
 	// from answered back to unanswered). Derived during render, React's documented pattern.

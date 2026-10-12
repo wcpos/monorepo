@@ -44,8 +44,10 @@ export type {
 export {
 	useProductsQueryHandle,
 	useQueryBindingFor,
+	useQueryHandleFields,
 	useQueryHandleResource,
 	useQueryHandleValue,
 	useQueryHandleView,
 } from './query-handles';
+export type { SnapshotFields } from './query-handles';
 export type { QueryHandle, QuerySnapshot } from '@wcpos/query';
