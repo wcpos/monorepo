@@ -197,7 +197,10 @@ export function TermLevelGrid({
 	// The query is windowed (#1221): the level asks for more as the cashier nears its end, as the
 	// products grid does. A level of subcategories alone has nothing to page, and a level a child
 	// is over does not own the query: neither may move it.
-	const paging = useQueryHandleFields(handle, PAGING_FIELDS);
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
+	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
+	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
 	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
 	// An end-reached while the demand is pending is armed and fired once it clears (the list
 	// will not fire again for the same rows). So is one before the slots measure a positive

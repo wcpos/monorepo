@@ -19,12 +19,12 @@ jest.mock('@wcpos/query', () => ({
 }));
 // The guard is the products grid's own (#1221); here it passes through.
 jest.mock('../../../../../../query', () => {
-	const { useSyncExternalStore } = jest.requireActual('react');
+	const React = jest.requireActual<typeof import('react')>('react');
 	return {
 		useGuardedExtendLimitFor: (extend: () => void) => () => extend(),
 		// The real reader, field selection aside: the level sees every snapshot change.
 		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
-			useSyncExternalStore(handle.subscribe, () => handle.value),
+			React.useSyncExternalStore(handle.subscribe, () => handle.value),
 	};
 });
 // The real export pulls in the whole products screen; the level only hands it on.

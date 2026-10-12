@@ -46,7 +46,8 @@ const mockActions = {
 };
 const queryActions = mockActions;
 jest.mock('../../../../../../query', () => {
-	const { useSyncExternalStore } = jest.requireActual('react');
+	const React = jest.requireActual<typeof import('react')>('react');
+	const { useSyncExternalStore } = React;
 	return {
 		useQueryState: () =>
 			useSyncExternalStore(
@@ -60,7 +61,7 @@ jest.mock('../../../../../../query', () => {
 		useGuardedExtendLimitFor: () => () => {},
 		// The real reader, field selection aside: the stage sees every snapshot change.
 		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
-			useSyncExternalStore(handle.subscribe, () => handle.value),
+			React.useSyncExternalStore(handle.subscribe, () => handle.value),
 	};
 });
 // Child terms synced under Drinks on the server while it is open (its set re-projects in place).
@@ -895,6 +896,30 @@ it('a table level already on stage keeps its place when the query changes to a h
 	expect(screen.getAllByTestId('browse-level').length).toBe(1);
 	act(() => extended.set({ ready: true }));
 	expect(screen.getAllByTestId('browse-level').length).toBe(2);
+});
+
+it('a level staged as a grid is still held when the view switches to a table under an unanswered handle', () => {
+	// A cold table would suspend the whole screen (it has no deferred answered handle); a grid
+	// staging must not excuse it.
+	const first = makeHandle();
+	const { rerender } = render(<BrowseStage {...stageProps({ viewMode: 'grid', handle: first })} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	const cold = makeHandle({ ready: false });
+	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: cold })} />);
+	expect(screen.queryByTestId('table')).toBeNull();
+	act(() => cold.set({ ready: true }));
+	expect(screen.getByTestId('table')).toBeTruthy();
+});
+
+it('a failed products read is thrown to the boundary above the stage, in grid mode too', () => {
+	const failing = makeHandle();
+	render(<BrowseStage {...stageProps({ viewMode: 'grid', handle: failing })} />);
+	const silence = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+	expect(() => act(() => failing.set({ error: new Error('storage gone') }))).toThrow(
+		'storage gone'
+	);
+	silence.mockRestore();
 });
 
 it('a table level is not pushed before the root products have answered once', () => {

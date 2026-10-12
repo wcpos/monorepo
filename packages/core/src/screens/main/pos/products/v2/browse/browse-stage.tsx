@@ -222,6 +222,10 @@ export function BrowseStage(props: BrowseStageProps) {
 	// the window (the till shows local products). Never the snapshot's `total` — its coverage
 	// verdict prefers the whole collection's census, which is the catalogue's size at every level.
 	const snapshot = useQueryHandleFields(handle, ANSWER_ONLY);
+	// A failed read reaches the screen's ErrorBoundary from here (the grid stage mounts no
+	// reader that would throw it; the boundary's reset asks the handle again). Thrown, never
+	// suspended on: the level stays where it is until the boundary takes over.
+	if (snapshot.error) throw snapshot.error;
 	const liveResult = snapshot.ready ? snapshot.result : undefined;
 	const answer = React.useMemo<LevelAnswer | undefined>(
 		() =>
@@ -238,7 +242,9 @@ export function BrowseStage(props: BrowseStageProps) {
 	// place over it (its table defers the handle and never suspends mid-deal).
 	const rootAnswered = snapshot.ready || snapshot.error !== null;
 	const levelsHeld = viewMode === 'table' && !rootAnswered;
-	// The details that have been on stage: a cache keyed by detail identity, as `childrenSeen` is.
+	// The details that have been on stage AS A TABLE: a cache keyed by detail identity, as
+	// `childrenSeen` is. A grid level needs no hold, and staging it must not excuse a table that
+	// mounts cold after a view-mode switch — that table would suspend the whole screen.
 	const [staged] = React.useState(() => new WeakSet<Detail>());
 
 	const t = useT();
@@ -346,7 +352,7 @@ export function BrowseStage(props: BrowseStageProps) {
 		const detail = path[depth] ?? (drilled && drilled.depth === depth ? drilled : null);
 		if (!detail) return null;
 		if (levelsHeld && !staged.has(detail)) return null;
-		staged.add(detail);
+		if (viewMode === 'table') staged.add(detail);
 		return detail;
 	};
 	// The crumb's ancestors above a level: the source, then the STAGED chain above it — the

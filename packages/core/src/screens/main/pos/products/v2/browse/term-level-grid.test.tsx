@@ -34,7 +34,7 @@ jest.mock('@wcpos/query', () => ({
 // The guard is the products grid's own (#1221); here it reports the loaded count it was given.
 const guarded = jest.fn();
 jest.mock('../../../../../../query', () => {
-	const { useSyncExternalStore } = jest.requireActual('react');
+	const React = jest.requireActual<typeof import('react')>('react');
 	return {
 		useGuardedExtendLimitFor: (extend: () => void, count: number) => () => {
 			guarded(count);
@@ -42,7 +42,7 @@ jest.mock('../../../../../../query', () => {
 		},
 		// The real reader, field selection aside: the level sees every snapshot change.
 		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
-			useSyncExternalStore(handle.subscribe, () => handle.value),
+			React.useSyncExternalStore(handle.subscribe, () => handle.value),
 	};
 });
 jest.mock('../grid/product-tile', () => ({
@@ -420,6 +420,20 @@ it('extends the query window when the cashier nears the end of the level', () =>
 
 // The list marks a content length notified even when the guard ignored it (pending): the end
 // reached then is fired once pending clears, or a short page could never page again.
+it('holds an armed end-reached while the handle has not answered, and fires it on the answer', () => {
+	// A return to a parent level is a fresh handle that opens unanswered (no demand declared
+	// yet, `pending: false`): the arm waits for its answer rather than spending itself on the
+	// opening snapshot, where `exhausted` is nobody's opinion yet.
+	const fresh = fakeQueryHandle({ ready: false, total: 220 });
+	const props = level({ handle: fresh });
+	render(<TermLevelGrid {...props} />);
+	layOut(600);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	act(() => fresh.set({ ready: true, exhausted: false }));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
 it('pages once when pending clears after an end-reached it ignored while pending', () => {
 	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
 	const props = level({ handle: pendingHandle });

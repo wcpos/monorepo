@@ -177,7 +177,10 @@ export function TermLevelTable({
 	// kept mounted but inactive (native small screens, Cart showing) lays out at zero size, and
 	// zero geometry reads as end-reached. A pane a child is over does not own the query: it may
 	// not move it.
-	const paging = useQueryHandleFields(handle, PAGING_FIELDS);
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
+	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
+	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
 	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
 	const { onEndReached, onViewport } = useArmedEndReached(extend, paging.pending, settled, {
 		measuresViewport: true,
