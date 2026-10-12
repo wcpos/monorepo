@@ -23,6 +23,12 @@ export type BindingDataTableFooterProps = CommonProps & {
 	active$: Observable<boolean>;
 	total$: Observable<number | null>;
 	sync: () => Promise<void>;
+	/**
+	 * The total as a value, when the caller holds it in the same commit as `count` (a query
+	 * handle's snapshot): a stream's value lands one commit later, and the footer would show the
+	 * new count over the old denominator for a frame. Wins over `total$` when given.
+	 */
+	total?: number | null;
 };
 
 /** The footer for a reader that holds the query-handle snapshot's `active` and `total`. */
@@ -34,7 +40,7 @@ export type ValuesDataTableFooterProps = CommonProps & {
 };
 
 type FooterContentProps = CommonProps &
-	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$'> & {
+	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$' | 'total'> & {
 		clearAndSync: () => Promise<void>;
 	};
 
@@ -44,10 +50,10 @@ type FooterRowProps = CommonProps &
 	};
 
 /** The streams read once, then the row. */
-function FooterContent({ active$, total$, ...props }: FooterContentProps) {
+function FooterContent({ active$, total$, total: held, ...props }: FooterContentProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, null);
-	return <FooterRow {...props} active={loading} total={total} />;
+	const streamed = useObservableState(total$, null);
+	return <FooterRow {...props} active={loading} total={held === undefined ? streamed : held} />;
 }
 
 /**

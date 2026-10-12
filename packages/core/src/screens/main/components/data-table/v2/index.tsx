@@ -174,6 +174,22 @@ const ACTIVE_FIELD = ['active'] as const;
 const TOTAL_FIELD = ['total'] as const;
 
 /**
+ * A custom footer on the handle source: the streams it still takes, plus the drawn handle's
+ * `total` as a value in the SAME commit as the rows it counts (`BindingDataTableFooterProps.total`).
+ */
+function CustomHandleFooter({
+	Footer,
+	shown,
+	...props
+}: Omit<BindingDataTableFooterProps, 'total'> & {
+	Footer: React.ComponentType<BindingDataTableFooterProps>;
+	shown: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+}) {
+	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
+	return <Footer {...props} total={total} />;
+}
+
+/**
  * The handle source's default footer: `total` from the drawn handle in the SAME commit as the
  * rows it counts (a stream's value lands one commit later), the spinner from the live one.
  */
@@ -505,7 +521,17 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 			</TableSurface>
 			{showFooter && (
 				<TableFooter>
-					{props.TableFooterComponent ? (
+					{props.TableFooterComponent && props.footerHandles ? (
+						<CustomHandleFooter
+							Footer={props.TableFooterComponent}
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							sync={props.sync}
+							shown={props.footerHandles.shown}
+							count={result.hits.length}
+						/>
+					) : props.TableFooterComponent ? (
 						<props.TableFooterComponent
 							collectionName={props.collectionName}
 							active$={props.active$}
