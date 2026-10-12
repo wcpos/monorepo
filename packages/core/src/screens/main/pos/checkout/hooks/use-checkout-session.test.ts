@@ -663,7 +663,11 @@ describe('useCheckoutSession register gate', () => {
 		const { result } = renderHook(() => useCheckoutSession(order));
 		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
 		await act(async () => result.current.startCheckout());
-		// No provenance write, no checkout post: the sale never started.
+		// The cashier is sent to the picker; no provenance write, no checkout post: the sale never started.
+		expect(mockCheckoutInfo).toHaveBeenCalledWith(
+			'pos_checkout.choose_register_first',
+			expect.objectContaining({ showToast: true })
+		);
 		expect(mockProvenancePatch).not.toHaveBeenCalled();
 		expect(mockProvenancePush).not.toHaveBeenCalled();
 		expect(mockPost).not.toHaveBeenCalled();
@@ -715,14 +719,18 @@ jest.mock('../hooks/use-sale-context', () => ({
 			preventOverselling: false,
 			// The session gate reads through the same store the handler then writes to.
 			resolveSession: async () => {
+				const { readBoundRegister } = jest.requireActual<
+					typeof import('../../../../../services/register/register-document')
+				>('../../../../../services/register/register-document');
 				const { findOpenSession } = jest.requireActual<
 					typeof import('../../../../../services/register-session/session-store')
 				>('../../../../../services/register-session/session-store');
-				const session = await findOpenSession(mockSessions as never, 'register', mockSessionsOn);
-				return { registerId: 'register', sessionId: session?.id ?? null };
+				const registerId = (await readBoundRegister(mockUserDB as never, 'site', 1))?.id ?? null;
+				const session = await findOpenSession(mockSessions as never, registerId, mockSessionsOn);
+				return { registerId, sessionId: session?.id ?? null };
 			},
 		}),
-		userDB: { getLocal: async () => null },
+		userDB: mockUserDB,
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,
 		siteUuid: 'site',
@@ -744,6 +752,17 @@ jest.mock('../completion-journal', () => ({
 
 let mockSessionsOn = false;
 const mockSessions = { findOne: jest.fn() };
+// A bound register whose sale counter the real provenance stamp can advance.
+const mockRegisterData = {
+	sites: { site: { register_id: 'register', register_store_id: 1, sale_counter: 0 } },
+};
+const mockUserDB = {
+	getLocal: async () => ({
+		toJSON: () => ({ data: mockRegisterData }),
+		incrementalModify: async (fn: (data: typeof mockRegisterData) => typeof mockRegisterData) =>
+			fn(mockRegisterData),
+	}),
+};
 describe('contract session gate', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();

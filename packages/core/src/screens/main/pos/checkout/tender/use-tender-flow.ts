@@ -653,8 +653,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			queue: OrderMutationContext
 		) => {
 			// The gate only looked the session up (a guard has no effects before `next`); the
-			// pre-action write `requireOpenSession` makes belongs here, before the attempt record,
-			// where `prepareSale` made it. It also re-reads the id, so a session closed between
+			// pre-action write `requireOpenSession` makes belongs here, before the attempt record.
+			// It also re-reads the id, so a session closed between
 			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
 			const { registerId, sessionId } = e.payload;
 			const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);

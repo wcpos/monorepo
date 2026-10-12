@@ -35,15 +35,16 @@ export async function commitGatewaySale(
 	}
 ): Promise<ActionRefusal | StampedSession> {
 	const { order, source, online } = input;
-	const latest = order.getLatest().payload;
-	const balanceMinor = toMinor(
-		derive(latest.total, readLedger(latest.meta_data), [], { dp: ctx.dp }).balance,
-		ctx.dp
-	);
 	// The contract leaves this event's result open; a dispatch that is not a refusal carries the
 	// handler's own return (a hook that answers without `next` is refused as `actions.hook_failed`).
-	const outcome: unknown = await enqueueOrderMutation(order.uuid, (queue) =>
-		dispatchAction({
+	const outcome: unknown = await enqueueOrderMutation(order.uuid, (queue) => {
+		// Read inside the slot, so a cart edit queued just ahead is already applied to the balance.
+		const latest = order.getLatest().payload;
+		const balanceMinor = toMinor(
+			derive(latest.total, readLedger(latest.meta_data), [], { dp: ctx.dp }).balance,
+			ctx.dp
+		);
+		return dispatchAction({
 			event: TENDER_COMMIT_EVENT,
 			// Money path: refuse rather than run unguarded if the registering import were ever lost.
 			requiredGuards: TENDER_GUARD_IDS,
@@ -74,7 +75,7 @@ export async function commitGatewaySale(
 				await persistSaleProvenance(ctx, { order, source, sessionId, online });
 				return { registerId, sessionId } satisfies StampedSession;
 			},
-		})
-	);
+		});
+	});
 	return isActionRefusal(outcome) ? outcome : (outcome as StampedSession);
 }

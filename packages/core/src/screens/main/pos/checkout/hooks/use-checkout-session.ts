@@ -220,7 +220,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					online,
 				});
 				if (isActionRefusal(committed)) {
-					presentTenderRefusal(ctx.actionCtx, committed, checkoutLogger, t);
+					// A checkout closed while the dispatch waited has nothing to show.
+					if (!signal.aborted) presentTenderRefusal(ctx.actionCtx, committed, checkoutLogger, t);
 					return;
 				}
 				registerId = committed.registerId;
@@ -254,7 +255,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			);
 			if (signal.aborted) return;
 
-			// Recheck after bootstrap without resetting the completion journal via prepareSale.
+			// Recheck after bootstrap without a second journal write (the commit made the first).
 			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
 				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
