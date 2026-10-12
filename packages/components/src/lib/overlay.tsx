@@ -111,19 +111,22 @@ export function useOverlayPresentation(): OverlayPresentation | undefined {
  * panel's percentages resolve against the wrapper and the wrapper's against the scrim.
  * The bottom cap lives here, not on the panel: a percentage cap on the panel would be a
  * share of the wrapper's own content height and cut a short sheet.
+ * A panel that asks for the whole scrim (`h-full` at the centre, `w-full` on a side — the
+ * legacy checkout modal, a `size="full"` dialog) gets a wrapper that fills it too (`:has`),
+ * which is what the flattening used to give it; the wrapper still never exceeds the panel's
+ * box, so the scrim outside the panel keeps taking the outside press.
  * The phone sheet mounts no wrapper (its own panel is the `role="dialog"`) and is marked out.
  * Full literals: the class scanner cannot see a composed string.
  */
+const WRAPPER_FILLS_WITH_PANEL =
+	'[&>[role=dialog]:not([data-sheet]):has(>.h-full)]:h-full [&>[role=dialog]:not([data-sheet]):has(>.w-full)]:w-full';
 export const SCRIM_WRAPPER: Record<OverlayPresentation, string> = {
 	anchored: '',
-	center:
-		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
-	left: '[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
-	right:
-		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
-	page: '[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full [&>[role=dialog]:not([data-sheet])]:w-full',
-	bottom:
-		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-[92%] [&>[role=dialog]:not([data-sheet])]:max-w-full',
+	center: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
+	left: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
+	right: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
+	page: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full [&>[role=dialog]:not([data-sheet])]:w-full ${WRAPPER_FILLS_WITH_PANEL}`,
+	bottom: `[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-[92%] [&>[role=dialog]:not([data-sheet])]:max-w-full ${WRAPPER_FILLS_WITH_PANEL}`,
 };
 const SHEET_MARK = { dataSet: { sheet: '' } } as object;
 /** Web: marks a scrim or panel whose Radix wrapper must wait for its exit (`overlay-hold` in global.css). */
