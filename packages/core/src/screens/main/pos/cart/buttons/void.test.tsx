@@ -657,6 +657,33 @@ describe('VoidButton', () => {
 		}
 	});
 
+	it('Undo restores the order as a write queued ahead of the void left it, not the press-time snapshot', async () => {
+		const { enqueueOrderMutation } = jest.requireActual<
+			typeof import('../../hooks/order-mutation-queue')
+		>('../../hooks/order-mutation-queue');
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-1', async () => {
+			await gate;
+			mockOrderJson.customer_note = 'added while the void waited';
+		});
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			release();
+			await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
+			mockCartLogger.success.mock.calls[0][1].toast.action.onClick();
+			await waitFor(() => expect(mockPatchEngineResident).toHaveBeenCalled());
+			expect(mockPatchEngineResident).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: expect.objectContaining({ customer_note: 'added while the void waited' }),
+				})
+			);
+		} finally {
+			delete mockOrderJson.customer_note;
+		}
+	});
+
 	it('refuses to void at all when the payments gate is not registered', async () => {
 		const { resetActionRegistry } = jest.requireActual<
 			typeof import('../../../../../extensions/actions')

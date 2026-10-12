@@ -75,7 +75,8 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 			return;
 		}
 
-		const orderPayload = currentOrder.getLatest().toMutableJSON().payload;
+		// The Undo snapshot is taken inside the queue slot, below, so an edit queued ahead is kept.
+		let orderPayload: Record<string, unknown> = currentOrder.getLatest().toMutableJSON().payload;
 		const recordId = currentOrder.uuid;
 		let undone = false;
 		const showSuccess = (message: string) => {
@@ -112,7 +113,8 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 			const dispatched = await enqueueOrderMutation(recordId, async (queue) => {
 				// Counted inside the slot: a tender commit queued ahead has landed its leg by now, so
 				// the gate judges the order as it is, and never reads a document itself.
-				const latest = currentOrder.getLatest().toMutableJSON().payload;
+				const latest = (queue.order ?? currentOrder).getLatest().toMutableJSON().payload;
+				orderPayload = latest;
 				const ledger = readLedger(latest.meta_data as Parameters<typeof readLedger>[0]);
 				const live = (row: { status: string }) =>
 					row.status === 'pending' || row.status === 'authorized';
