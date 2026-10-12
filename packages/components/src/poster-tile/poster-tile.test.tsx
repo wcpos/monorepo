@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { PosterTile, type PosterTileProps } from './index';
 
+let mockPressed = false;
 // Keep RNW's Pressable (press, ref); expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
@@ -35,12 +36,22 @@ jest.mock('react-native', () => {
 		...actual,
 		View,
 		Pressable: ReactActual.forwardRef(function Pressable(
-			{ className, ...props }: { className?: string },
+			{ className, children, ...props }: { className?: string; children?: unknown },
 			ref: React.Ref<unknown>
 		) {
+			// The pressed state is the test's to set: jsdom has no press gesture to hold.
+			const render =
+				typeof children === 'function'
+					? (state: { pressed: boolean }) =>
+							(children as (state: { pressed: boolean }) => React.ReactNode)({
+								...state,
+								pressed: state.pressed || mockPressed,
+							})
+					: children;
 			return ReactActual.createElement(actual.Pressable, {
 				...props,
 				ref,
+				children: render,
 				dataSet: { classes: className },
 			});
 		}),
@@ -171,4 +182,28 @@ it('steps aside when lifted, and grows or shares the row', () => {
 	expect(screen.getByTestId('tile').style.opacity).toBe('0');
 	expect(classes('tile').split(' ')).toContain('grow');
 	expect(classes('tile').split(' ')).not.toContain('flex-1');
+});
+
+it('keeps the name when the words outgrow the square: the block clips at its foot', () => {
+	const facts = <span data-testid="facts">{'SKU '.repeat(80)}</span>;
+	render(tile({ title: 'Tea', facts }));
+	const words = classes('poster-scrim').split(' ');
+	expect(words).toEqual(expect.arrayContaining(['bottom-0', 'max-h-full', 'overflow-hidden']));
+	// The name comes first in the block, so a clip at the foot takes the facts, not the name.
+	const block = screen.getByTestId('poster-scrim');
+	expect(block.firstChild?.textContent).toBe('Tea');
+	expect(block.lastChild).toBe(screen.getByTestId('facts'));
+});
+
+it('veils a tint as it veils a picture while pressed, and only then', () => {
+	const { rerender } = render(tile({ picture: { kind: 'tint', tint: 2 }, title: 'Tea' }));
+	expect(screen.queryByTestId('poster-pressed')).toBeNull();
+	mockPressed = true;
+	rerender(tile({ picture: { kind: 'tint', tint: 2 }, title: 'Tea' }));
+	expect(classes('poster-pressed')).toContain('bg-foreground/10');
+	rerender(tile({ title: 'Tea' }));
+	expect(classes('poster-pressed')).toContain('bg-foreground/10');
+	mockPressed = false;
+	rerender(tile({ title: 'Tea' }));
+	expect(screen.queryByTestId('poster-pressed')).toBeNull();
 });

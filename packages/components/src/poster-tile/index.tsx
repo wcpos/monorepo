@@ -80,6 +80,9 @@ const TINTS = [
 	'bg-tile-tint-4',
 	'bg-tile-tint-5',
 ] as const;
+// The words' block, at the foot of the square. Never taller than the square: on a narrow tile
+// what overflows is clipped at the bottom (the facts), so the name, money and sub stay.
+const WORDS = 'absolute right-0 bottom-0 left-0 max-h-full gap-0.5 overflow-hidden';
 // The words sit the scrim's reach below its top edge, where the fade has reached full strength.
 const REACH = { paddingTop: SCRIM_REACH };
 // A tile the Deal has lifted off the grid: its copy is out on the stage.
@@ -261,16 +264,21 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						}`}
 						testID={squareTestID}
 					>
-						<View
-							className={`h-full w-full ${out ? (pressed ? 'opacity-30' : 'opacity-40') : pressed ? 'opacity-90' : ''}`}
-							testID="poster-picture"
-						>
+						<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
 							<Picture picture={picture} />
 						</View>
+						{/* The press dims the picture or the tint alike, under the words and marks. */}
+						{pressed && (
+							<View
+								className="bg-foreground/10 absolute inset-0"
+								pointerEvents="none"
+								testID="poster-pressed"
+							/>
+						)}
 						{words &&
 							(tint === null ? (
 								<Scrim
-									className="absolute right-0 bottom-0 left-0 gap-0.5 px-2.5 pb-2.5"
+									className={`${WORDS} px-2.5 pb-2.5`}
 									// The reach is the scrim's top padding: one constant for both.
 									style={REACH}
 									testID="poster-scrim"
@@ -278,10 +286,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									{words}
 								</Scrim>
 							) : (
-								<View
-									className="absolute right-0 bottom-0 left-0 gap-0.5 p-2.5"
-									testID="poster-words"
-								>
+								<View className={`${WORDS} p-2.5`} testID="poster-words">
 									{words}
 								</View>
 							))}

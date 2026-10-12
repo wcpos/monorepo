@@ -48,8 +48,8 @@ export function moneyRow({
 	out,
 	t,
 }: {
-	price?: string;
-	regularPrice?: string;
+	price?: string | null;
+	regularPrice?: string | null;
 	onSale?: boolean;
 	taxStatus?: string;
 	taxClass?: string;
@@ -64,19 +64,23 @@ export function moneyRow({
 			<Text className="font-bold">{t('pos_products.sold_out')}</Text>
 		) : null;
 	}
-	if (!gridFields.price) return null;
+	// A variable product's range may lack a sub-range: what is not there is not shown (never 0).
+	const struck = gridFields.on_sale && onSale && regularPrice != null;
+	if (!gridFields.price || (price == null && !struck)) return null;
 	const tax = { taxStatus: (taxStatus || 'none') as TaxStatus, taxClass: taxClass ?? '' };
 	return (
 		<View className="flex-row flex-wrap items-baseline gap-x-1.5">
 			{from && <Text className="text-foreground/70 text-xs">{t('common.from')}</Text>}
-			<PriceWithTax price={price ?? ''} {...tax} taxDisplay="none" className="font-bold" />
-			{gridFields.on_sale && onSale && (
+			{price != null && (
+				<PriceWithTax price={price} {...tax} taxDisplay="none" className="font-bold" />
+			)}
+			{struck && (
 				<>
 					<View className="bg-foreground self-center rounded-full px-1.5 py-px">
 						<Text className="text-card text-xs font-bold uppercase">{t('common.sale')}</Text>
 					</View>
 					<PriceWithTax
-						price={regularPrice ?? ''}
+						price={regularPrice}
 						{...tax}
 						taxDisplay="none"
 						className="text-foreground/70 text-xs"
@@ -84,8 +88,8 @@ export function moneyRow({
 					/>
 				</>
 			)}
-			{gridFields.tax && (
-				<TaxLine price={price ?? ''} {...tax} className="text-foreground/70 text-xs" />
+			{gridFields.tax && price != null && (
+				<TaxLine price={price} {...tax} className="text-foreground/70 text-xs" />
 			)}
 		</View>
 	);
@@ -265,8 +269,10 @@ export function useProductWords(
 			</Text>
 		),
 		money: moneyRow({
-			price: variablePrices?.price?.min ?? fields.price,
-			regularPrice: variablePrices?.regular_price?.min ?? fields.regularPrice,
+			// A drill tile reads only its ranges: a missing sub-range is omitted, as before (ledger
+			// `pos/products/grid` 8), never the parent's cleared price.
+			price: variablePrices ? variablePrices.price?.min : fields.price,
+			regularPrice: variablePrices ? variablePrices.regular_price?.min : fields.regularPrice,
 			onSale: fields.onSale,
 			taxStatus: fields.taxStatus,
 			taxClass: fields.taxClass,

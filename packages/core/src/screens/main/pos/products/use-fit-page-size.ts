@@ -8,19 +8,21 @@ type Layout = { width: number; height: number };
 export function useFitPageSize(
 	setPageSize: (pageSize: number) => void,
 	viewMode: 'grid' | 'table',
-	gridColumns: number | undefined
+	gridColumns: number | undefined,
+	/** What a grid row adds to its square tile (`fitPageSize`); the legacy grid's by default. */
+	tileExtraPx?: number
 ): (event: LayoutChangeEvent) => void {
 	const layoutRef = React.useRef<Layout | null>(null);
 	const lastPageSizeRef = React.useRef<number | null>(null);
 
 	const applyFit = React.useCallback(
 		(layout: Layout) => {
-			const pageSize = fitPageSize({ ...layout, viewMode, gridColumns });
+			const pageSize = fitPageSize({ ...layout, viewMode, gridColumns, tileExtraPx });
 			if (pageSize === lastPageSizeRef.current) return;
 			lastPageSizeRef.current = pageSize;
 			setPageSize(pageSize);
 		},
-		[gridColumns, setPageSize, viewMode]
+		[gridColumns, setPageSize, tileExtraPx, viewMode]
 	);
 
 	const handleLayout = React.useCallback(

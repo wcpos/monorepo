@@ -419,3 +419,39 @@ it('falls back to the tint of its first category, or its name, when the picture 
 	);
 	expect(square()).toContain('bg-tile-tint-3');
 });
+
+it('omits a variable range the server did not send, never printing the parent’s cleared price', () => {
+	const ranges = (value: object) => ({
+		...record,
+		payload: {
+			...record.payload,
+			price: '',
+			regular_price: '',
+			on_sale: true,
+			meta_data: [{ key: '_woocommerce_pos_variable_prices', value: JSON.stringify(value) }],
+		},
+	});
+	const fields = { ...gridFields, price: true, on_sale: true };
+	const { rerender } = render(
+		<ProductTile
+			record={ranges({ regular_price: { min: '10', max: '12' } })}
+			gridFields={fields}
+			onDrill={jest.fn()}
+		/>
+	);
+	// No price sub-range: only the struck regular price, nothing at 0.
+	expect(
+		screen
+			.getAllByTestId('price')
+			.map((node) => [node.textContent, node.getAttribute('data-strike')])
+	).toEqual([['10', 'true']]);
+	rerender(
+		<ProductTile
+			record={ranges({ sale_price: { min: '8', max: '8' } })}
+			gridFields={fields}
+			onDrill={jest.fn()}
+		/>
+	);
+	expect(screen.queryByTestId('price')).toBeNull();
+	expect(screen.queryByText('Sale')).toBeNull();
+});

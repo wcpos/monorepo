@@ -23,7 +23,7 @@ import { CameraScanButton } from '../camera-scan-button';
 import { CameraScannerPanel } from '../camera-scanner-panel';
 import { StorageOutageBanner } from '../storage-outage-banner';
 import { ProductGrid } from '../grid';
-import { POS_PRODUCTS_MIN_PAGE_SIZE, TABLE_ROW_PX, TILE_TEXT_BLOCK_PX } from '../fit-page-size';
+import { POS_PRODUCTS_MIN_PAGE_SIZE, TABLE_ROW_PX } from '../fit-page-size';
 import { usePanelSide } from '../../contexts/overlay-side/v2';
 import { UISettingsForm } from '../ui-settings-form';
 import { POSFilterBar } from './filter-bar';
@@ -167,6 +167,9 @@ function ProductsView({
 }
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
+// A Poster tile is its square and nothing under it: a grid row is the square plus the tile's two
+// 4 px `m-1` margins (the legacy grid adds a 120 px text block instead, `TILE_TEXT_BLOCK_PX`).
+const POSTER_ROW_MARGIN_PX = 8;
 function POSProductsContent({
 	showOutOfStock,
 	initialFilters,
@@ -289,7 +292,12 @@ function POSProductsContent({
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const [scannerOpen, setScannerOpen] = React.useState(false);
 	const t = useT();
-	const handleProductsLayout = useFitPageSize(actions.setPageSize, viewMode, gridColumns);
+	const handleProductsLayout = useFitPageSize(
+		actions.setPageSize,
+		viewMode,
+		gridColumns,
+		POSTER_ROW_MARGIN_PX
+	);
 	const [body, setBody] = React.useState({ width: 0, height: 0 });
 	// "No products yet" only when nothing narrows the baseline: no search and no filter beyond the
 	// initial ones (published, and in stock unless the setting shows out-of-stock). Any other zero
@@ -327,7 +335,7 @@ function POSProductsContent({
 					{
 						length: skeletonCount(
 							body.height,
-							viewMode === 'grid' ? body.width / gridColumns + TILE_TEXT_BLOCK_PX : TABLE_ROW_PX
+							viewMode === 'grid' ? body.width / gridColumns + POSTER_ROW_MARGIN_PX : TABLE_ROW_PX
 						),
 					},
 					(_, row) => (

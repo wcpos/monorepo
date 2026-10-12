@@ -22,7 +22,8 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 // Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
-jest.mock('../deal-stack', () => ({ useCopyPicture: () => undefined }));
+const mockCopyPicture = jest.fn(() => undefined);
+jest.mock('../deal-stack', () => ({ useCopyPicture: () => mockCopyPicture() }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));
@@ -173,6 +174,15 @@ describe('TermTile', () => {
 });
 
 describe('ParentTermTile', () => {
+	it('holds the dealt copy only for a picture it shows: a tint deals at once', () => {
+		mockCopyPicture.mockClear();
+		const { unmount } = render(<ParentTermTile term={{ kind: 'all' }} onPress={jest.fn()} />);
+		unmount();
+		render(<ParentTermTile term={snacks} onPress={jest.fn()} />);
+		expect(mockCopyPicture).not.toHaveBeenCalled();
+		render(<ParentTermTile term={drinks} onPress={jest.fn()} />);
+		expect(mockCopyPicture).toHaveBeenCalled();
+	});
 	it('is the way back', () => {
 		const back = jest.fn();
 		render(<ParentTermTile term={drinks} onPress={back} />);

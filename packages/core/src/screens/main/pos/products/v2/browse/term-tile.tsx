@@ -7,6 +7,7 @@ import {
 	PosterTile,
 	tintOf,
 } from '@wcpos/components/poster-tile';
+import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -21,27 +22,59 @@ export function termTestId(term: BrowseTerm): string {
 	return `browse-${termKey(term)}`;
 }
 
+// An image that is already on screen and only changing place does not fade in again.
+const STILL = { transition: 0 };
+
 /**
- * A term's picture: its image, or its tint when it has none or the image fails. On a dealt
- * parent's copy the copy waits for the image to paint (`useCopyPicture`).
+ * A term's image. On a dealt parent's copy the copy waits for it to paint (`useCopyPicture`):
+ * only a term that shows an image holds the copy, so a tint deals at once.
  */
-function useTermPicture(term: BrowseTerm, still?: boolean): PosterPicture {
+function TermImage({
+	src,
+	recyclingKey,
+	still,
+	onFailed,
+}: {
+	src: string;
+	recyclingKey: string;
+	still?: boolean;
+	onFailed: () => void;
+}) {
 	const painted = useCopyPicture();
+	return (
+		<Image
+			source={{ uri: src }}
+			recyclingKey={recyclingKey}
+			contentFit="cover"
+			className="h-full w-full"
+			onDisplay={painted}
+			onError={() => {
+				onFailed();
+				painted?.();
+			}}
+			{...(still ? STILL : {})}
+		/>
+	);
+}
+
+/** A term's picture: its image, or its tint when it has none or the image fails. */
+function useTermPicture(term: BrowseTerm, still?: boolean): PosterPicture {
 	const src = term.kind === 'term' ? (term.imageSrc ?? '') : '';
 	// Keyed by the source: a new picture gets its own chance to load.
 	const [failed, setFailed] = React.useState<string | null>(null);
 	if (term.kind !== 'term') return OTHER;
 	if (!src || failed === src) return { kind: 'tint', tint: tintOf(term.id) };
 	return {
-		kind: 'image',
-		source: { uri: src },
-		still,
-		recyclingKey: termKey(term),
-		onDisplay: painted,
-		onError: () => {
-			setFailed(src);
-			painted?.();
-		},
+		kind: 'slot',
+		children: (
+			<TermImage
+				key={src}
+				src={src}
+				recyclingKey={termKey(term)}
+				still={still}
+				onFailed={() => setFailed(src)}
+			/>
+		),
 	};
 }
 
@@ -106,7 +139,7 @@ export function TermTile({
 			accessibilityLabel={label}
 			testID={termTestId(term)}
 			// The square is the term's picture only while it shows one.
-			squareTestID={picture.kind === 'image' ? `${termTestId(term)}-image` : undefined}
+			squareTestID={picture.kind === 'slot' ? `${termTestId(term)}-image` : undefined}
 		/>
 	);
 }
