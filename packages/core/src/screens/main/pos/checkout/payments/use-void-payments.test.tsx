@@ -9,6 +9,10 @@ const mockLocalPatch = jest.fn();
 const mockPost = jest.fn();
 const mockMirror = jest.fn();
 let mockStatus = 'offline';
+const mockWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
+}));
 
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost }),
@@ -124,6 +128,28 @@ describe('the rounding fee of a voided cash leg (#66, #84)', () => {
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
 		expect(sweep()).toMatchObject({ total: '12.04' });
+	});
+
+	it('a sweep that cannot write after the store voided returns the void and logs its own row', async () => {
+		mockStatus = 'online-website-available';
+		mockPost.mockResolvedValue({ data: { payment: { id: 'payment-1', status: 'voided' } } });
+		mockLocalPatch.mockResolvedValue(undefined);
+		const { result } = renderHook(() => useVoidPayments());
+		let outcome: unknown;
+		await act(async () => {
+			outcome = await result.current(rounded);
+		});
+		expect(outcome).toMatchObject({
+			kind: 'voided',
+			via: 'online',
+			rows: [{ id: 'payment-1', status: 'voided' }],
+			failed: [],
+		});
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'Rounding fee not removed after the void; the next void removes it',
+			{ context: { orderId: 42, orderUUID: 'order-1', error: 'offline_void_local_patch_failed' } }
+		);
 	});
 
 	it('a later void with no live rows still sweeps a fee an earlier drop left behind', async () => {

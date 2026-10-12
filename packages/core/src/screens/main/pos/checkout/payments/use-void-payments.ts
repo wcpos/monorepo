@@ -6,6 +6,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
 import { useQueryRuntime } from '@wcpos/query';
 import type { EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -14,6 +15,8 @@ import { parsePosData } from '../../hooks/utils';
 import { voidPayments } from './void-payments';
 
 import type { VoidPaymentsOutcome } from './void-payments';
+
+const logger = getLogger(['wcpos', 'pos', 'checkout', 'payments']);
 
 /** Wire payment voiding to REST and the engine's offline/resident write seams. */
 export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<VoidPaymentsOutcome> {
@@ -72,11 +75,21 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 				droppedMinor += toMinor(fee.total, dp) + toMinor(fee.total_tax, dp);
 				return fee.id ? [{ ...fee, name: null }] : [];
 			});
+			// The store has already answered for the legs: a failed drop must not read as a failed
+			// void, which would hide the legs it did void. The next void's sweep finishes it.
 			if (dropped)
 				await enqueue({
 					fee_lines,
 					total: fromMinor(toMinor(after.total, dp) - droppedMinor, dp),
-				});
+				}).catch((error: unknown) =>
+					logger.warn('Rounding fee not removed after the void; the next void removes it', {
+						context: {
+							orderId: after.id ?? null,
+							orderUUID: order.uuid,
+							error: error instanceof Error ? error.message : String(error),
+						},
+					})
+				);
 			return outcome;
 		},
 		[http, onlineStatus.status, localPatch, manager, dp]

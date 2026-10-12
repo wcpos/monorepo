@@ -138,6 +138,7 @@ let mockUuid = 0;
 jest.mock('uuid', () => ({ v4: () => `payment-${++mockUuid}` }));
 const mockRecordManualPayment = jest.fn();
 let mockUseRealManual = false;
+let mockUseRealVoid = false;
 const mockManualPost = jest.fn();
 const mockGatewaysGet = jest.fn();
 const mockManualMirror = jest.fn();
@@ -243,7 +244,10 @@ jest.mock('../payments', () => ({
 				.useRecordManualPayment(options);
 		return mockRecordManualPayment;
 	},
-	useVoidPayments: () => mockVoidPayments,
+	useVoidPayments: () =>
+		mockUseRealVoid
+			? jest.requireActual('../payments/use-void-payments').useVoidPayments()
+			: mockVoidPayments,
 }));
 jest.mock('../../hooks/use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
@@ -3502,6 +3506,7 @@ describe('cash rounding (#66, #84)', () => {
 	});
 	afterEach(() => {
 		mockUseRealManual = false;
+		mockUseRealVoid = false;
 		mockManualMirror.mockReset();
 		mockManualPost.mockReset();
 	});
@@ -3647,6 +3652,75 @@ describe('cash rounding (#66, #84)', () => {
 		expect(fee.total).toBe('10.05');
 		expect(unround).toEqual({ fee_lines: [], total: '10.03' });
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	});
+
+	it('a synced fee comes back off as a tombstone that no longer counts in the total', async () => {
+		mockPayload = sale('10.03');
+		// The provenance push came back with the fee's server id.
+		mockLocalPatch.mockImplementation(async ({ data }: Patch) => {
+			const fees = data.fee_lines as { id?: number }[] | undefined;
+			mockPayload = {
+				...mockPayload,
+				...data,
+				...(fees ? { fee_lines: fees.map((fee) => ({ id: 7, ...fee })) } : {}),
+			};
+			return order;
+		});
+		mockRecordManualPayment.mockResolvedValueOnce({
+			kind: 'failed',
+			reason: 'provenance_save_failed',
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		const [, unround] = patches();
+		expect(unround).toEqual({
+			fee_lines: [expect.objectContaining({ id: 7, name: null, total: '0.02' })],
+			total: '10.03',
+		});
+	});
+
+	it('a void whose fee sweep cannot write still reports the legs the store voided', async () => {
+		mockUseRealVoid = true;
+		mockOnlineStatus = 'online-website-available';
+		const fee = {
+			id: 7,
+			name: 'Rounding',
+			total: '0.02',
+			total_tax: '0.00',
+			meta_data: [
+				{
+					key: '_woocommerce_pos_data',
+					value: { rounding: { increment: '0.05', mode: 'nearest', payment_ref: 'payment-1' } },
+				},
+			],
+		};
+		mockPayload = {
+			...sale('10.05'),
+			fee_lines: [fee],
+			meta_data: withLedger([], [payment({ amount: '10.05' })]),
+		} as typeof mockPayload;
+		mockManualPost.mockResolvedValue({ data: { payment: payment({ status: 'voided' }) } });
+		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
+			mockPayload = { ...mockPayload, ...changes };
+		});
+		mockLocalPatch.mockResolvedValue(undefined);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockInfo).toHaveBeenCalledWith(
+			'Payment voided',
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'payment.voided', paymentId: 'payment-1' }),
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(mockWarn).toHaveBeenCalledWith(
+			'Rounding fee not removed after the void; the next void removes it',
+			expect.anything()
+		);
 	});
 
 	it('a cash due rounded to nothing writes the fee and the completion in one patch', async () => {
