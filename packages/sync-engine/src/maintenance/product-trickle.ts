@@ -56,7 +56,7 @@ import {
 	productBrowseWindowQueryParams,
 	productBrowseWindowViewKey,
 } from '../scheduler';
-import { withoutLocallyProtected } from '../write-path/local-work-guard';
+import { partitionPulledRows } from '../write-path/local-work-guard';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -259,13 +259,15 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 		materializeTargeted('products', payload, selectors)
 	);
 	const documents = materialized.map(({ storedDocument }) => storedDocument);
-	const applicable = await withoutLocallyProtected(
+	// A re-downloaded page of already-local products lands through the same boundary as every
+	// other pull: rows the server's stamp says are unchanged are applied without a write.
+	const { applicable, changed } = await partitionPulledRows(
 		deps.database.collections.products as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await deps.database.collections.products.bulkUpsert(applicable as never[]),
+			await deps.database.collections.products.bulkUpsert(changed as never[]),
 			'product-trickle upsert'
 		);
 	}
