@@ -1,4 +1,11 @@
-import { ARROW_WIDTH, PLUS_WIDTH, TAB_MIN, tabWindow, TRAY_WIDTH } from './tab-window';
+import {
+	ARROW_WIDTH,
+	NEW_TAB_WIDTH,
+	PLUS_WIDTH,
+	TAB_MIN,
+	tabWindow,
+	TRAY_WIDTH,
+} from './tab-window';
 
 // A 560 column: 512 for tabs once the + has its cell.
 const WIDTH = 560;
@@ -100,4 +107,28 @@ it('always shows the open cart, whole, and reports the arrows from what is hidde
 			}
 		}
 	}
+});
+
+it('beside the unfolded New tab the row may show no cart rather than a cut one', () => {
+	// 273 wide: tray 56 + left arrow 44 + New 112 leave 61, under the 96 minimum.
+	const narrow = tabWindow({
+		width: 273,
+		widths: [96, 96],
+		active: 1,
+		plus: NEW_TAB_WIDTH,
+		anchored: false,
+	});
+	expect(narrow).toEqual({ fits: false, start: 2, end: 2, tray: true, left: true, right: false });
+	// Anchored (a cart is the open tab) the open cart is always on the row.
+	const anchored = tabWindow({ width: 273, widths: [96, 96], active: 1, plus: NEW_TAB_WIDTH });
+	expect(anchored).toMatchObject({ start: 1, end: 2 });
+	// With room, the last carts sit beside the New tab as before.
+	const wide = tabWindow({
+		width: 560,
+		widths: [96, 96, 96],
+		active: 2,
+		plus: NEW_TAB_WIDTH,
+		anchored: false,
+	});
+	expect(wide).toEqual({ fits: true, start: 0, end: 3, tray: false, left: false, right: false });
 });

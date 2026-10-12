@@ -18,6 +18,9 @@ export const TRAY_WIDTH = 56;
 // The touch rule's 44 pt minimum (CODING_STANDARDS § Design, rule 2).
 export const ARROW_WIDTH = 44;
 export const PLUS_WIDTH = 48;
+// The + cell unfolded into the blank cart's tab, "+ New" (Paul, 2026-10-12): the blank cart
+// is not a cart, so it borrows no cart tab; the + itself is its tab and changes shape.
+export const NEW_TAB_WIDTH = 112;
 
 export type TabWindow = {
 	/** Every cart fits: no tray, no arrows. */
@@ -37,6 +40,8 @@ export function tabWindow({
 	width,
 	widths,
 	active,
+	plus = PLUS_WIDTH,
+	anchored = true,
 }: {
 	/** The strip's measured width. */
 	width: number;
@@ -44,9 +49,17 @@ export function tabWindow({
 	widths: readonly number[];
 	/** Index of the open cart. */
 	active: number;
+	/** The + cell's width: PLUS_WIDTH folded, NEW_TAB_WIDTH while it is the open tab. */
+	plus?: number;
+	/**
+	 * The open tab is a cart on the row (default): it is always shown, even alone. On the
+	 * blank cart the open tab is the + cell itself, so `active` is only the neighbour to keep
+	 * beside it, and the row may show no cart at all when none fits whole.
+	 */
+	anchored?: boolean;
 }): TabWindow {
 	const count = widths.length;
-	const row = width - PLUS_WIDTH;
+	const row = width - plus;
 	if (count === 0) return { fits: true, start: 0, end: 0, tray: false, left: false, right: false };
 	if (widths.reduce((sum, w) => sum + w, 0) <= row) {
 		return { fits: true, start: 0, end: count, tray: false, left: false, right: false };
@@ -77,6 +90,12 @@ export function tabWindow({
 				start -= 1;
 				grew = true;
 			}
+		}
+		// Not anchored and the neighbour itself does not fit whole: show no cart rather
+		// than a cut one; the arrow says the carts are there.
+		if (!anchored && widths[index] > available) {
+			start = index + 1;
+			end = index + 1;
 		}
 		const nextLeft = start > 0;
 		const nextRight = end < count;

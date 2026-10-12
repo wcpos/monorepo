@@ -44,6 +44,7 @@
 	"pos_cart.previous_cart": "Previous cart",
 	"pos_cart.next_cart": "Next cart",
 	"pos_cart.new_order": "New order",
+	"pos_cart.new_cart_tab": "New",
 	"pos_cart.edit_line": "Edit",
 	"pos_cart.remove_line": "Remove",
 	"pos_cart.sort_items": "Sort items",

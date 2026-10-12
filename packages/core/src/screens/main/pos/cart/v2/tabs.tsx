@@ -9,6 +9,7 @@ import { Icon } from '@wcpos/components/icon';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { CROSSFADE, EASE } from '@wcpos/components/lib/motion';
 import { SlideOver } from '@wcpos/components/slide-over';
+import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
@@ -19,15 +20,19 @@ import { useCurrentOrder } from '../../contexts/current-order';
 import { CartTabTitle } from '../tab-title';
 import { OpenOrdersList } from './open-orders-list';
 import { TabChip } from './tab-chip';
-import { TAB_MIN, tabWindow } from './tab-window';
+import { NEW_TAB_WIDTH, PLUS_WIDTH, TAB_MIN, tabWindow } from './tab-window';
 
 // Every control in the strip is a full-height cell: the hover and the press fill the
 // rectangle (Paul, 2026-10-09), never a round button inside it.
 const CELL = 'web:hover:bg-muted active:bg-muted h-full items-center justify-center';
 // A tab is as wide as its text (Paul, 2026-10-09): the same classes measure it and show it.
 const TAB = 'h-full min-w-0 justify-center border-b-2 px-3';
-// A step slides the row by the width of the tab that left it.
+// A step slides the row by the width of the tab that left it. The + cell's fold and unfold
+// ride the same layout transition: the one place the strip animates a layout, not a
+// transform (CODING_STANDARDS § Design 6; stated in #2460 and #2481).
 const SHIFT = LinearTransition.duration(CROSSFADE).easing(EASE).reduceMotion(ReduceMotion.System);
+// The DOM id the tablist owns the + cell by (web).
+const NEW_TAB_ID = 'new-order-tab';
 
 export function OpenOrderTabs({
 	position = 'bottom',
@@ -64,12 +69,9 @@ export function OpenOrderTabs({
 	const activeValue =
 		selectedReceiptOrder ??
 		((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid);
-	// A fresh cart is not an open order until its first line, but the cashier is on it: the
-	// board shows the current cart as a tab, so it is the last one here, before the +.
-	const freshCart =
-		activeValue === 'new'
-			? [{ id: 'new', record: currentOrderRecord as EngineRecord<'orders'> }]
-			: [];
+	// The blank cart is not an order until its first line, so it has no cart tab: the + cell
+	// is its tab and unfolds into "+ New" while the cashier is on it (Paul, 2026-10-12).
+	const fresh = activeValue === 'new';
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
 			if (receiptOrders.has(orderId)) {
@@ -95,12 +97,12 @@ export function OpenOrderTabs({
 		if (tab) focusTab(tab);
 		else focusPending.current = true;
 	};
-	// Every tab in strip order: open orders, the fresh cart, then receipts of orders that
-	// have left the open list.
+	// Every tab in strip order: open orders, then receipts of orders that have left the open
+	// list. The blank cart is the + cell after them.
 	// `measure` is the same content without its testIDs, for the off-stage measuring row:
 	// a testID must point at one element.
 	const entries: { id: string; content: React.ReactNode; measure: React.ReactNode }[] = [
-		...[...openOrders, ...freshCart].map(({ id, record }) => ({
+		...openOrders.map(({ id, record }) => ({
 			id,
 			content: <TabContent order={record} active={id === activeValue} phone={phone} />,
 			measure: <TabContent order={record} active={id === activeValue} phone={phone} measuring />,
@@ -120,15 +122,19 @@ export function OpenOrderTabs({
 			),
 		})),
 	];
-	const activeIndex = Math.max(
-		entries.findIndex(({ id }) => id === activeValue),
-		0
-	);
+	// On the blank cart the open position is just past the last tab: a step left lands on
+	// the last cart, and a step right from the last cart lands on the blank one.
+	const activeIndex = fresh
+		? entries.length
+		: Math.max(
+				entries.findIndex(({ id }) => id === activeValue),
+				0
+			);
 	const step = (delta: number) => {
-		const next = entries[activeIndex + delta];
-		if (!next) return;
+		const at = activeIndex + delta;
+		if (at < 0 || at > entries.length) return;
 		focusPending.current = true;
-		handleTabPress(next.id);
+		handleTabPress(at === entries.length ? 'new' : entries[at].id);
 	};
 	// Each tab's own width, measured off stage (below) for the carts around the open one;
 	// an unmeasured tab counts as the minimum until its layout lands. Bounded: carts that
@@ -141,15 +147,19 @@ export function OpenOrderTabs({
 			? tabWindow({
 					width: strip.width,
 					widths: entries.map(({ id }) => widths.get(id) ?? TAB_MIN),
-					active: activeIndex,
+					// On the blank cart the row keeps the carts beside the New tab: the last ones.
+					active: Math.min(activeIndex, entries.length - 1),
+					plus: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH,
+					anchored: !fresh,
 				})
 			: { fits: true, start: 0, end: entries.length, tray: false, left: false, right: false };
 	// Only carts that could reach the row are measured: the row holds at most this many
 	// minimum-width tabs either side of the open one.
 	const reach = Math.ceil((strip.width || 800) / TAB_MIN) + 1;
 	const toMeasure = entries.slice(Math.max(activeIndex - reach, 0), activeIndex + reach + 1);
-	// A sole cart has nothing to be selected against: no underline (board, "One cart").
-	const solo = entries.length === 1;
+	// A sole tab has nothing to be selected against: no underline (board, "One cart"). The
+	// unfolded New tab counts: with no carts it is the only tab.
+	const solo = entries.length + (fresh ? 1 : 0) === 1;
 	const renderTab = ({ id, content }: (typeof entries)[number]) => {
 		const active = id === activeValue;
 		return (
@@ -186,6 +196,27 @@ export function OpenOrderTabs({
 			<View
 				testID="open-order-strip"
 				className="bg-card border-border h-13 flex-row items-stretch border-t"
+				// The arrow keys step from any tab, the + cell included: the handler sits on the
+				// strip, the one ancestor of them all, and answers only a key struck on a tab (the
+				// tray and the arrows are buttons with keys of their own).
+				onKeyDown={
+					Platform.OS === 'web'
+						? (event) => {
+								const key = event.nativeEvent.key;
+								const from = (
+									event.target as { getAttribute?: (n: string) => string | null }
+								)?.getAttribute?.('role');
+								if (
+									from === 'tab' &&
+									(key === 'ArrowLeft' || key === 'ArrowRight') &&
+									!event.defaultPrevented
+								) {
+									event.preventDefault();
+									step(key === 'ArrowLeft' ? -1 : 1);
+								}
+							}
+						: undefined
+				}
 				onLayout={({ nativeEvent: { layout } }) => {
 					setStrip((was) =>
 						was.y === layout.y && was.height === layout.height && was.width === layout.width
@@ -231,20 +262,12 @@ export function OpenOrderTabs({
 						<Icon name="chevronLeft" className="text-muted-foreground" />
 					</Pressable>
 				)}
+				{/* The + cell sits after the right arrow, outside this view, but it is one of the
+				    tabs: the tablist owns it so a reader finds the selected New tab among them. */}
 				<View
 					role="tablist"
+					aria-owns={NEW_TAB_ID}
 					className="min-w-0 flex-1 flex-row overflow-hidden"
-					onKeyDown={
-						Platform.OS === 'web'
-							? (event) => {
-									const key = event.nativeEvent.key;
-									if ((key === 'ArrowLeft' || key === 'ArrowRight') && !event.defaultPrevented) {
-										event.preventDefault();
-										step(key === 'ArrowLeft' ? -1 : 1);
-									}
-								}
-							: undefined
-					}
 				>
 					{entries.slice(window.start, window.end).map(renderTab)}
 					{/* The measuring row: the same tabs at their own width, off stage. It is never
@@ -285,24 +308,47 @@ export function OpenOrderTabs({
 						<Icon name="chevronRight" className="text-muted-foreground" />
 					</Pressable>
 				)}
-				<Pressable
-					role="button"
-					className={`${CELL} w-12`}
-					testID="new-order-tab"
-					accessibilityLabel={t('pos_cart.new_order')}
-					ref={(node) => {
-						if (node) tabs.current.set('new', node);
-						else tabs.current.delete('new');
-					}}
-					onPress={() => {
-						handleTabPress('new');
-						// The strip stays pressable beside the open list: the fresh cart must not
-						// be left covered by it.
-						setListOpen(false);
-					}}
-				>
-					<Icon name="plus" />
-				</Pressable>
+				{/* The + cell is the blank cart's tab: folded it is the 48 pt + at the end of the
+				    row; while the cashier is on the blank cart it unfolds (the same width motion as
+				    a step) into the selected "+ New" tab, and folds back when they leave. Nothing
+				    is added to or removed from the row. */}
+				<Animated.View layout={SHIFT} className="h-full">
+					<Pressable
+						role="tab"
+						nativeID={NEW_TAB_ID}
+						aria-selected={fresh}
+						style={{ width: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH }}
+						className={`${CELL} ${fresh ? `flex-row gap-1.5 border-b-2 ${solo ? 'border-transparent' : 'border-primary'}` : ''}`}
+						testID="new-order-tab"
+						accessibilityLabel={t('pos_cart.new_order')}
+						ref={(node) => {
+							if (!node) {
+								tabs.current.delete('new');
+								return;
+							}
+							tabs.current.set('new', node);
+							// A step onto the blank cart settles its focus here, as a cart tab's does.
+							if (fresh && focusPending.current) {
+								focusPending.current = false;
+								focusTab(node);
+							}
+						}}
+						onPress={() => {
+							// Already there: + is a place, not an action.
+							if (!fresh) handleTabPress('new');
+							// The strip stays pressable beside the open list: the blank cart must not
+							// be left covered by it.
+							setListOpen(false);
+						}}
+					>
+						<Icon name="plus" className={fresh ? 'text-primary' : undefined} />
+						{fresh && (
+							<Text testID="new-order-tab-label" className="font-semibold">
+								{t('pos_cart.new_cart_tab')}
+							</Text>
+						)}
+					</Pressable>
+				</Animated.View>
 			</View>
 			{/* The list comes out of the strip and covers the cart beside it; the strip stays put. */}
 			<SlideOver
