@@ -34,11 +34,12 @@ import {
 	useSearchFields,
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RemoteId } from '@wcpos/sync-core';
 
 import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
 import { useScopeKey } from './scope-key';
 
-import type { QueryStateOf } from './query-state-types';
+import type { CollectionKey, QueryStateOf } from './query-state-types';
 import type { RxCollection } from 'rxdb';
 
 type CompiledQuery = ReturnType<typeof compileQuery>;
@@ -239,6 +240,108 @@ export function canonicalQueryKey(value: unknown): string {
 }
 
 const noop = () => undefined;
+
+type CollectionHandleKey = Exclude<CollectionKey, 'logs'>;
+
+export type CollectionHandleInput<C extends CollectionHandleKey> = {
+	collection: C;
+	state: QueryStateOf<C>;
+	remoteIds?: readonly RemoteId[];
+	storeScope: 'pos' | 'sales';
+	searchFields: string[] | undefined;
+};
+
+/**
+ * The plain collection read as a handle — what `useCollectionBinding` compiled per render: one
+ * descriptor, one demand, the collection's own activity and census. Orders, customers, coupons,
+ * tax rates, refunds, variations: every table screen's query.
+ */
+export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
+	engine: RxdbSyncEngine,
+	key: string,
+	input: CollectionHandleInput<C>
+): QueryHandle<QueryResult<RxCollection>> {
+	return acquireQueryHandle(engine, key, (registry) => {
+		const id = `qh${nextHandleId++}`;
+		const { collection, state, remoteIds, storeScope, searchFields } = input;
+		const compiled = compileQuery(collection, state, {
+			id,
+			targeted: remoteIds,
+			storeScope,
+			searchFields,
+		});
+		const descriptor: EngineQueryDescriptor = {
+			collection: compiled.collection,
+			searchFields,
+			read: { ...compiled.read, searchFields },
+		};
+		const engineCollection = engineCollectionNameFor(compiled.collection);
+		const search = compiled.read.search?.trim();
+		return createQueryHandle(
+			engine,
+			{
+				key,
+				result$: (target) =>
+					observeEngineQuery(target, descriptor).pipe(
+						map((result) => ({ ...result, searchActive: Boolean(search) }))
+					),
+				demands: [createDemand(engine, id, demandPlanFor(compiled))],
+				activeCollections: [engineCollection],
+				censusScoped: compiled.censusScoped,
+				coverage: compiled.coverage,
+				observeActive: observeCollectionActive,
+			},
+			emptyResult(),
+			registry
+		);
+	});
+}
+
+/**
+ * The handle for a collection's query state, retained while the caller is mounted: the shape
+ * `useCollectionBinding` has always taken, keyed by scope, state, targeted ids, store scope and
+ * search fields, so two screens asking the same question share one read and one demand.
+ */
+export function useCollectionQueryHandle<C extends CollectionHandleKey>(
+	collection: C,
+	state: QueryStateOf<C>,
+	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
+): QueryHandle<QueryResult<RxCollection>> {
+	const { engine } = useQueryRuntime();
+	const legacy = (collection === 'tax-rates' ? 'taxes' : collection) as Parameters<
+		typeof useScopeKey
+	>[0];
+	const scope = useScopeKey(legacy);
+	const searchFields = useSearchFields(legacy) as string[] | undefined;
+	const storeScope = options.storeScope ?? 'pos';
+	const key = canonicalQueryKey([
+		collection,
+		scope,
+		storeScope,
+		{ ...state, search: (state as { search?: string }).search?.trim() },
+		options.remoteIds ?? null,
+		searchFields ?? null,
+	]);
+	const handle = React.useMemo(() => {
+		const [, , , canonical, remoteIds, fields] = JSON.parse(key) as [
+			string,
+			string,
+			string,
+			QueryStateOf<C>,
+			RemoteId[] | null,
+			string[] | null,
+		];
+		return acquireCollectionQueryHandle(engine, key, {
+			collection,
+			state: canonical,
+			remoteIds: remoteIds ?? undefined,
+			storeScope,
+			searchFields: fields ?? undefined,
+		});
+	}, [collection, engine, key, storeScope]);
+	React.useEffect(() => handle.subscribe(noop), [handle]);
+	return handle;
+}
 
 function idSet(ids: readonly number[] | undefined): number[] {
 	return [...new Set(ids ?? [])].sort((a, b) => a - b);

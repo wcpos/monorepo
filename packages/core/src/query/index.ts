@@ -42,6 +42,7 @@ export type {
 	SearchSelectCollection,
 } from './query-bindings';
 export {
+	useCollectionQueryHandle,
 	useProductsQueryHandle,
 	useQueryBindingFor,
 	useQueryHandleFields,

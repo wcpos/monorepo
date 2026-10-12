@@ -1617,7 +1617,12 @@ describe('query bindings', () => {
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
 		).resolves.toBeNull();
 		expect(engine.searchRequireCalls).toHaveLength(1);
-		expect(engine.coverageSubscribeCalls).toEqual([]);
+		// The handle's one snapshot reads the search lane's EXHAUSTION verdict eagerly (the paging
+		// guard's signal; it was a lazy stream before). That is the only coverage it asks for: the
+		// total path has no target for a search, so the lane's total 9 never reaches `total$`.
+		expect(engine.coverageSubscribeCalls).toEqual([
+			{ collection: 'customers', queryKey: 'customers:search=ada:limit=10' },
+		]);
 	});
 
 	it('reports the parent search lane exhaustion verdict and no opinion for browse', async () => {
@@ -1993,6 +1998,9 @@ describe('query bindings', () => {
 		expect(engine.searchRequireCalls[0]?.released).toBe(false);
 
 		unmount();
+		// The handle releases one microtask after its last reader leaves (DECLARE BEFORE RELEASE:
+		// a successor subscribing in the same commit keeps the engine entry alive).
+		await act(async () => undefined);
 
 		expect(engine.searchRequireCalls[0]?.released).toBe(true);
 	});
