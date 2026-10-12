@@ -2,7 +2,6 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { isQuickFilterActive } from '../../filter-bar/apply-quick-filter';
 import { BrowseStage } from './browse-stage';
@@ -58,14 +57,14 @@ jest.mock('../../../../../../query', () => {
 				() => mockState
 			),
 		useQueryStateActions: () => mockActions,
-		useGuardedExtendLimit: () => () => {},
+		useGuardedExtendLimitFor: () => () => {},
+		// The real reader, field selection aside: the stage sees every snapshot change.
+		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
+			useSyncExternalStore(handle.subscribe, () => handle.value),
 	};
 });
-// Whether the root products binding has answered once (a cold open has not).
-let mockAnswered = true;
 // Child terms synced under Drinks on the server while it is open (its set re-projects in place).
 let mockAddedUnderDrinks: number[] = [];
-jest.mock('../../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => mockAnswered }));
 jest.mock('./use-browse-terms', () => {
 	const drinks = { kind: 'term', id: 1, name: 'Drinks', count: 12 };
 	const hot = { kind: 'term', id: 2, name: 'Hot', count: 6, parent: 1 };
@@ -264,7 +263,9 @@ jest.mock('../grid/variable-product-tile', () => ({
 		onDrill: (record: unknown) => void;
 	}) => <button data-testid="variable-product-drill" onClick={() => onDrill(record)} />,
 }));
+// The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
 jest.mock('../footer', () => ({ ProductsFooter: () => null }));
+jest.mock('../handle-footer', () => ({ HandleProductsFooter: () => null }));
 // As the real DataTable: rows are `tableConfig.data`, drawn through `renderItem`; a header sort
 // is the `setSort` it was handed.
 jest.mock('../../../../components/data-table/v2', () => ({
@@ -383,16 +384,17 @@ const HITS = [
 	{ id: 'hit-v', record: variable },
 	{ id: 'hit-s', record: simple },
 ];
-const makeBinding = () => ({
-	resource: { valueRef$$: new BehaviorSubject({ current: { hits: HITS } }), read: jest.fn() },
-	// `count`: the local rows matching the query before the window. `total$` is the coverage
-	// verdict, which prefers the whole collection's census — the catalogue size, never a level's.
-	result$: new BehaviorSubject({ hits: HITS, count: 80 }),
-	total$: new BehaviorSubject<number | null>(220),
-	active$: of(false),
-	pending$: of(false),
-	sync: jest.fn(),
-});
+// The root products handle as a reader sees it (one snapshot, driven with `set`). `count`: the
+// local rows matching the query before the window. `total` is the coverage verdict, which prefers
+// the whole collection's census — the catalogue size, never a level's.
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+const makeHandle = (initial: Record<string, unknown> = {}) =>
+	fakeQueryHandle({ result: { hits: HITS, count: 80 }, total: 220, ...initial });
 type Props = React.ComponentProps<typeof BrowseStage>;
 const stageProps = (overrides: Record<string, unknown> = {}) =>
 	({
@@ -403,7 +405,7 @@ const stageProps = (overrides: Record<string, unknown> = {}) =>
 		),
 		empty: <span data-testid="no-data-message" />,
 		variationsStyle: 'drill',
-		binding: makeBinding(),
+		handle: makeHandle(),
 		state: { sort: { field: 'name', direction: 'asc' } },
 		actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 		tableConfig: { getRowCanExpand: () => false },
@@ -415,7 +417,6 @@ beforeEach(() => {
 	mockState = { search: '', filters: baseline(), sort: { field: 'name', direction: 'asc' } };
 	mockListeners.clear();
 	mockHoldGathers = false;
-	mockAnswered = true;
 	mockAddedUnderDrinks = [];
 	mockUISettings = settingsAtRest();
 	jest.clearAllMocks();
@@ -858,21 +859,16 @@ it('one Escape goes back exactly one level when levels are nested', () => {
 });
 
 it('a new projection shows held slots until ITS query answers, never the last query’s rows or total', () => {
-	const first = makeBinding();
-	const { rerender } = render(<BrowseStage {...stageProps({ binding: first })} />);
-	// The query re-projects: a new result$ (and total$ derived from it) that has not emitted.
-	const result$ = new Subject<{ hits: typeof HITS; count: number }>();
-	const total$ = new Subject<number | null>();
-	const second = { ...first, result$, total$ };
-	rerender(<BrowseStage {...stageProps({ binding: second })} />);
+	const first = makeHandle();
+	const { rerender } = render(<BrowseStage {...stageProps({ handle: first })} />);
+	// The query re-projects: a new handle that has not answered.
+	const second = makeHandle({ ready: false });
+	rerender(<BrowseStage {...stageProps({ handle: second })} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	expect(screen.getAllByTestId('product-placeholder').length).toBeGreaterThan(0);
 	expect(screen.queryByTestId('variable-product-drill')).toBeNull();
 	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe('');
-	act(() => {
-		result$.next({ hits: [HITS[1]], count: 12 });
-		total$.next(220);
-	});
+	act(() => second.set({ result: { hits: [HITS[1]], count: 12 }, total: 220, ready: true }));
 	expect(screen.queryByTestId('product-placeholder')).toBeNull();
 	expect(screen.getByTestId('product-s')).toBeTruthy();
 	expect(screen.getByTestId('products-breadcrumb-detail').textContent).toBe(
@@ -881,39 +877,36 @@ it('a new projection shows held slots until ITS query answers, never the last qu
 });
 
 it('a table level is not pushed before the root products have answered once', () => {
-	mockAnswered = false;
-	const props = stageProps({ viewMode: 'table' });
-	const { rerender } = render(<BrowseStage {...props} />);
+	const cold = makeHandle({ ready: false });
+	const props = stageProps({ viewMode: 'table', handle: cold });
+	render(<BrowseStage {...props} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	expect(screen.queryByTestId('browse-level')).toBeNull();
 	expect(screen.queryByTestId('table')).toBeNull();
-	mockAnswered = true;
-	rerender(<BrowseStage {...props} />);
+	act(() => cold.set({ ready: true }));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('table')).toBeTruthy();
 });
 
 it('a second tap while the first level is held opens the term tapped, never one nested under it', () => {
-	mockAnswered = false;
-	const props = stageProps({ viewMode: 'table' });
-	const { rerender } = render(<BrowseStage {...props} />);
+	const cold = makeHandle({ ready: false });
+	const props = stageProps({ viewMode: 'table', handle: cold });
+	render(<BrowseStage {...props} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	fireEvent.click(screen.getByTestId('browse-term-1'));
-	mockAnswered = true;
-	rerender(<BrowseStage {...props} />);
+	act(() => cold.set({ ready: true }));
 	expect(screen.getAllByTestId('browse-level').length).toBe(1);
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Drinks');
 	expect(mockState.filters.categories).toEqual([1, 2]);
 });
 
 it('tapping another root term while one is held opens that term alone', () => {
-	mockAnswered = false;
-	const props = stageProps({ viewMode: 'table' });
-	const { rerender } = render(<BrowseStage {...props} />);
+	const cold = makeHandle({ ready: false });
+	const props = stageProps({ viewMode: 'table', handle: cold });
+	render(<BrowseStage {...props} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	fireEvent.click(screen.getByTestId('browse-term-3'));
-	mockAnswered = true;
-	rerender(<BrowseStage {...props} />);
+	act(() => cold.set({ ready: true }));
 	expect(screen.getAllByTestId('browse-level').length).toBe(1);
 	expect(screen.getByTestId('products-breadcrumb-here').textContent).toBe('Food');
 	expect(mockState.filters.categories).toEqual([3]);

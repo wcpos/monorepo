@@ -66,6 +66,7 @@ module.exports = {
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
 		'^@wcpos/core-test/mock-use-doc-field$': '<rootDir>/jest/mock-use-doc-field.js',
+		'^@wcpos/core-test/fake-query-handle$': '<rootDir>/jest/fake-query-handle.js',
 		// Mock logger modules (must come before generic @wcpos/utils matcher)
 		'^@wcpos/utils/logger$': '<rootDir>/jest/__mocks__/@wcpos/utils/logger.js',
 		// Other mocks

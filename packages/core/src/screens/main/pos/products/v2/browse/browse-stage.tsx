@@ -3,11 +3,10 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 
 import { PaneStack } from '@wcpos/components/pane-stack';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useQueryState } from '../../../../../../query';
-import { useFirstAnswer } from '../../../../hooks/use-first-answer';
+import { useQueryHandleFields, useQueryState } from '../../../../../../query';
 import { DealStack, type Measurable } from '../deal-stack';
 import { DrillIn } from '../drill-in';
 import { inOneBatch } from '../one-batch';
@@ -15,7 +14,6 @@ import { type BrowseBy, type BrowseTerm, termKey } from './browse-source';
 import { BrowseRootGrid, TermLevelGrid } from './term-grid';
 import { BrowseRootTable, TermLevelTable } from './term-table';
 import { displayTypeOf } from './term-tree';
-import { useAnswerOf } from './use-answer-of';
 import {
 	isBlankSearch,
 	type PathEntry,
@@ -28,14 +26,12 @@ import { useBrowseTerms } from './use-browse-terms';
 import { useSystemBack } from './use-system-back';
 
 import type { LevelPlace } from './level-place';
-import type {
-	QueryStateActions,
-	QueryStateOf,
-	useRelationalCollectionBinding,
-} from '../../../../../../query';
+import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../../../../query';
 import type { LevelAnswer } from './level-snapshot';
 
-type Binding = ReturnType<typeof useRelationalCollectionBinding>;
+// The stage reads the answer only (`ready`, `error`, `result`): a level's rows and total come
+// from it as state; the paging opinion and the spinner are read where they are used.
+const ANSWER_ONLY: SnapshotFields = [];
 type DrillHandler = (record: EngineRecord<'products'> | null, target?: Measurable) => void;
 type TableConfig = React.ComponentProps<typeof TermLevelTable>['tableConfig'];
 /**
@@ -71,8 +67,8 @@ export type BrowseStageProps = {
 	empty: React.ReactNode;
 	variationsStyle: string;
 	stockStatus?: string;
-	/** The root products binding, state, actions and table config, as index.tsx hands its own. */
-	binding: Binding;
+	/** The root products handle, state, actions and table config, as index.tsx hands its own. */
+	handle: QueryHandle;
 	state: { sort: QueryStateOf<'products'>['sort'] };
 	actions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
 	tableConfig: TableConfig;
@@ -136,7 +132,7 @@ function useSourceLabel(source: Exclude<BrowseBy, 'all'>): string {
  * away when the query moves (search, a pill, Clear filters) — see use-browse-path.
  */
 export function BrowseStage(props: BrowseStageProps) {
-	const { source, viewMode, binding, onDrilledChange, onLevelChange, persistKey } = props;
+	const { source, viewMode, handle, onDrilledChange, onLevelChange, persistKey } = props;
 	const terms = useBrowseTerms(source);
 	const { path, enter, backTo } = useBrowsePath(source, terms, persistKey);
 	const state = useQueryState<'products'>();
@@ -218,13 +214,15 @@ export function BrowseStage(props: BrowseStageProps) {
 	const closeDrill = React.useCallback(() => drillProduct(null), [drillProduct]);
 
 	// The products answer as state: a level never suspends (a tile swapped for a skeleton
-	// mid-deal would lose its place). Attributed to its query: `binding.result$` is a new
-	// observable per compiled query, and useAnswerOf pairs each emission with the observable it
-	// came from — `undefined` while the projection on stage has no answer of its own.
+	// mid-deal would lose its place), so the snapshot is read, not suspended on. Attributed to
+	// its query by construction: a snapshot belongs to its handle, and the handle is one query's
+	// — `undefined` while the projection on stage has no answer of its own (`ready` is false on
+	// a handle that has not answered; a changed query is a new handle).
 	// A level's total is that same answer's `count`: the local rows matching its query before
-	// the window (the till shows local products). Never `binding.total$` — its coverage verdict
-	// prefers the whole collection's census, which is the catalogue's size at every level.
-	const liveResult = useAnswerOf(binding.result$);
+	// the window (the till shows local products). Never the snapshot's `total` — its coverage
+	// verdict prefers the whole collection's census, which is the catalogue's size at every level.
+	const snapshot = useQueryHandleFields(handle, ANSWER_ONLY);
+	const liveResult = snapshot.ready ? snapshot.result : undefined;
 	const answer = React.useMemo<LevelAnswer | undefined>(
 		() =>
 			liveResult
@@ -232,10 +230,10 @@ export function BrowseStage(props: BrowseStageProps) {
 				: undefined,
 		[liveResult]
 	);
-	// A table level's DataTable reads the root resource and suspends until it has answered
-	// once; after that the resource keeps its answer across every re-projection. So a level is
-	// not pushed before the root products' first answer (a cold open): the pane follows it.
-	const rootAnswered = useFirstAnswer(binding.resource);
+	// A table level's DataTable suspends on the root handle until it has answered once (a failed
+	// read counts: the table rethrows it to the boundary). So a level is not pushed before the
+	// root products' first answer (a cold open): the pane follows it.
+	const rootAnswered = snapshot.ready || snapshot.error !== null;
 	const levelsHeld = viewMode === 'table' && !rootAnswered;
 
 	const t = useT();
@@ -369,14 +367,14 @@ export function BrowseStage(props: BrowseStageProps) {
 			<BrowseRootGrid
 				terms={roots}
 				onOpen={openRootTerm}
-				binding={binding}
+				handle={handle}
 				settled={path.length === 0}
 			/>
 		) : (
 			<BrowseRootTable
 				terms={roots}
 				onOpen={openRootTerm}
-				binding={binding}
+				handle={handle}
 				settled={path.length === 0}
 			/>
 		);
@@ -412,7 +410,7 @@ export function BrowseStage(props: BrowseStageProps) {
 			onOpenTerm: (child: BrowseTerm, target?: Measurable) => openTerm(child, target, depth),
 			onDrillProduct: drillProduct,
 			variationsStyle: props.variationsStyle,
-			binding,
+			handle,
 			empty: props.empty,
 		};
 		// Keyed by the term: a stack whose detail jumps from one term to another at the same depth

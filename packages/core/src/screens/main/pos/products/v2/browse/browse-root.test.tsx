@@ -3,7 +3,6 @@ import '@testing-library/jest-dom';
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { DealStagedContext } from '../deal-stack';
 import { BrowseRootGrid } from './term-grid';
@@ -39,37 +38,45 @@ jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
 jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
-jest.mock('../../../../../../query', () => ({ useGuardedExtendLimit: () => () => {} }));
-// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
-// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
-// one commit after the swap). Every render's pair is logged, so a test can see what each
-// commit would have painted, not only where the DOM settled.
+jest.mock('../../../../../../query', () => {
+	const { useSyncExternalStore } = jest.requireActual('react');
+	return {
+		useGuardedExtendLimitFor: () => () => {},
+		// The real reader, field selection aside: the root footer sees every snapshot change.
+		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
+			useSyncExternalStore(handle.subscribe, () => handle.value),
+	};
+});
+// The footer takes its denominator as a value, in the same commit as the count. Every render's
+// pair is logged, so a test can see what each commit would have painted, not only where the DOM
+// settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
-jest.mock('../footer', () => ({
-	ProductsFooter: ({
-		count,
-		collectionName,
-		total$,
-		total: heldTotal,
-	}: {
-		count: number;
-		collectionName: string;
-		total$: import('rxjs').Observable<number | null>;
-		total?: number | null;
-	}) => {
-		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
-		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+// The pane footer (own-footer → ProductsFooter) pulls in native-only modules; not under test here.
+jest.mock('../footer', () => ({ ProductsFooter: () => null }));
+jest.mock('../handle-footer', () => ({
+	HandleProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
 		mockFooterRenders.push({ count, total });
 		return (
 			<footer
 				data-testid="products-footer"
 				data-count={count}
 				data-total={String(total)}
-				data-collection={collectionName}
+				data-collection="products"
 			/>
 		);
 	},
 }));
+// The handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+// A query's handle: answered with three rows and the given total, or not yet answered.
+const answered = (total: number | null) =>
+	fakeQueryHandle({ result: { hits: [{}, {}, {}], count: 3 }, total });
+const unanswered = () => fakeQueryHandle({ ready: false });
 // The list renders every row it is handed, in order: the root's order is what is tested.
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -142,79 +149,54 @@ it('the root grid fills a short last row with spacers', () => {
 it('the root grid carries the till’s footer: the catalogue total, not the loaded window', () => {
 	const { rerender } = render(<BrowseRootGrid terms={terms} onOpen={jest.fn()} />);
 	expect(screen.queryByTestId('products-footer')).toBeNull();
-	const result$ = new BehaviorSubject({ hits: [{}, {}, {}] });
-	const binding = (total: number | null) =>
-		({ total$: of(total), result$, active$: of(false), sync: jest.fn() }) as unknown as NonNullable<
-			React.ComponentProps<typeof BrowseRootGrid>['binding']
-		>;
-	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding(80)} />);
+	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={answered(80)} />);
 	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
 		count: '80',
 		collection: 'products',
 	});
 	// Nothing vouches for a total: the loaded rows are the only number there is.
-	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding(null)} />);
+	rerender(<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={answered(null)} />);
 	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });
 
 it('the root footer holds the root’s numbers while a level covers it and while the root is re-asked', () => {
-	type Binding = NonNullable<React.ComponentProps<typeof BrowseRootGrid>['binding']>;
-	const query = (total$: unknown, result$: unknown) =>
-		({ total$, result$, active$: of(false), sync: jest.fn() }) as unknown as Binding;
-	const grid = (binding: Binding, settled: boolean) => (
-		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding} settled={settled} />
+	const grid = (handle: FakeHandle, settled: boolean) => (
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={handle} settled={settled} />
 	);
 	const footer = () => screen.getByTestId('products-footer').dataset;
-	const { rerender } = render(
-		grid(query(of(220), new BehaviorSubject({ hits: [{}, {}, {}] })), true)
-	);
+	const { rerender } = render(grid(answered(220), true));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
 
-	// A level covers the root: the shared query is the level's, re-asked, then answered.
-	const levelTotal$ = new Subject<number | null>();
-	const levelResult$ = new Subject<{ hits: object[] }>();
-	rerender(grid(query(levelTotal$, levelResult$), false));
+	// A level covers the root: the shared query is the level's (a new handle), re-asked, then
+	// answered.
+	const level = unanswered();
+	rerender(grid(level, false));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
-	act(() => {
-		levelResult$.next({ hits: [{}] });
-		levelTotal$.next(12);
-	});
+	act(() => level.set({ result: { hits: [{}], count: 1 }, total: 12, ready: true }));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
 
 	// Back at the root, its query not answered yet: still the root's numbers, never "Showing 0".
-	const total$ = new Subject<number | null>();
-	const result$ = new Subject<{ hits: object[] }>();
-	rerender(grid(query(total$, result$), true));
+	const root = unanswered();
+	rerender(grid(root, true));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
-	act(() => {
-		result$.next({ hits: [{}, {}] });
-		total$.next(218);
-	});
+	act(() => root.set({ result: { hits: [{}, {}], count: 2 }, total: 218, ready: true }));
 	expect(footer()).toMatchObject({ count: '218', total: '218' });
 });
 
 it('the root footer shows a replaced total in the same commit as its new count, never the old denominator for a frame', () => {
-	type Binding = NonNullable<React.ComponentProps<typeof BrowseRootGrid>['binding']>;
-	const query = (total$: unknown, result$: unknown) =>
-		({ total$, result$, active$: of(false), sync: jest.fn() }) as unknown as Binding;
-	const grid = (binding: Binding, settled: boolean) => (
-		<BrowseRootGrid terms={terms} onOpen={jest.fn()} binding={binding} settled={settled} />
+	const grid = (handle: FakeHandle, settled: boolean) => (
+		<BrowseRootGrid terms={terms} onOpen={jest.fn()} handle={handle} settled={settled} />
 	);
 	const footer = () => screen.getByTestId('products-footer').dataset;
-	const { rerender } = render(
-		grid(query(of(220), new BehaviorSubject({ hits: [{}, {}, {}] })), true)
-	);
+	const { rerender } = render(grid(answered(220), true));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
 	// Back at the root, its query re-asked over a catalogue that shrank under a level.
-	const total$ = new Subject<number | null>();
-	const result$ = new Subject<{ hits: object[] }>();
-	rerender(grid(query(total$, result$), true));
+	const root = unanswered();
+	rerender(grid(root, true));
 	expect(footer()).toMatchObject({ count: '220', total: '220' });
 	mockFooterRenders.length = 0;
-	act(() => {
-		result$.next({ hits: [{}, {}] });
-		total$.next(218);
-	});
+	// One snapshot: the rows and the total land together, as a handle's answer does.
+	act(() => root.set({ result: { hits: [{}, {}], count: 2 }, total: 218, ready: true }));
 	// Both referents of the one act, together: the loaded count and the total.
 	expect(footer()).toMatchObject({ count: '218', total: '218' });
 	// …and no commit of that act painted the new count over the old denominator ("218 of 220").
@@ -248,12 +230,7 @@ it('the root table shows All products first, then the terms in order', () => {
 it('the root table carries the till’s footer under its card: the catalogue total, not the loaded window', () => {
 	const { rerender } = render(<BrowseRootTable terms={terms} onOpen={jest.fn()} />);
 	expect(screen.queryByTestId('products-footer')).toBeNull();
-	const result$ = new BehaviorSubject({ hits: [{}, {}, {}] });
-	const binding = (total: number | null) =>
-		({ total$: of(total), result$, active$: of(false), sync: jest.fn() }) as unknown as NonNullable<
-			React.ComponentProps<typeof BrowseRootTable>['binding']
-		>;
-	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} binding={binding(80)} />);
+	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} handle={answered(80)} />);
 	const footer = screen.getByTestId('products-footer');
 	expect(footer.dataset).toMatchObject({ count: '80', collection: 'products' });
 	// On the ground beneath the rows' card, as the products table's footer is: never on the card.
@@ -263,6 +240,6 @@ it('the root table carries the till’s footer under its card: the catalogue tot
 		Node.DOCUMENT_POSITION_FOLLOWING
 	);
 	// Nothing vouches for a total: the loaded rows are the only number there is.
-	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} binding={binding(null)} />);
+	rerender(<BrowseRootTable terms={terms} onOpen={jest.fn()} handle={answered(null)} />);
 	expect(screen.getByTestId('products-footer').dataset.count).toBe('3');
 });

@@ -3,10 +3,10 @@ import { View } from 'react-native';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useGuardedExtendLimit } from '../../../../../../query';
+import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
 import { DataTable } from '../../../../components/data-table/v2';
 import { TableSurface } from '../../../../components/data-table/surface';
 import { cellsForRow } from '../../index';
@@ -20,13 +20,11 @@ import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
 
-import type {
-	QueryStateActions,
-	QueryStateOf,
-	useRelationalCollectionBinding,
-} from '../../../../../../query';
+import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../../../../query';
 
-type Binding = ReturnType<typeof useRelationalCollectionBinding>;
+// A level re-renders for the engine's paging opinion (its guard and arm), nothing else of the
+// snapshot: the table reads the rows from the stage's answer, the footer the spinner itself.
+const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
 const ALL: BrowseTerm = { kind: 'all' };
@@ -35,13 +33,13 @@ const ALL: BrowseTerm = { kind: 'all' };
 export function BrowseRootTable({
 	terms,
 	onOpen,
-	binding,
+	handle,
 	settled,
 }: {
 	terms: BrowseTerm[];
 	onOpen: (term: BrowseTerm) => void;
-	/** The root products binding: the till's footer under the term set. */
-	binding?: Binding;
+	/** The root products handle: the till's footer under the term set. */
+	handle?: QueryHandle;
 	/** No level is over the root: the shared query is the root's (its footer's numbers). */
 	settled?: boolean;
 }) {
@@ -64,7 +62,7 @@ export function BrowseRootTable({
 					/>
 				</VirtualizedList.Root>
 			</TableSurface>
-			{binding && <BrowseRootFooter binding={binding} settled={settled} />}
+			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
 		</View>
 	);
 }
@@ -125,7 +123,7 @@ export function TermLevelTable({
 	onOpenTerm,
 	onDrillProduct,
 	variationsStyle,
-	binding,
+	handle,
 	state,
 	actions,
 	tableConfig,
@@ -148,8 +146,8 @@ export function TermLevelTable({
 	onOpenTerm: (term: BrowseTerm) => void;
 	onDrillProduct: (record: EngineRecord<'products'>) => void;
 	variationsStyle: string;
-	/** The root products binding, state and actions, as index.tsx hands its DataTable. */
-	binding: Binding;
+	/** The root products handle, state and actions, as index.tsx hands its DataTable. */
+	handle: QueryHandle;
 	state: { sort: QueryStateOf<'products'>['sort'] };
 	actions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
 	/** index.tsx's products `tableConfig`: inline variations read its `meta` (expanded rows). */
@@ -179,8 +177,9 @@ export function TermLevelTable({
 	// kept mounted but inactive (native small screens, Cart showing) lays out at zero size, and
 	// zero geometry reads as end-reached. A pane a child is over does not own the query: it may
 	// not move it.
-	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
-	const { onEndReached, onViewport } = useArmedEndReached(extend, binding.pending$, settled, {
+	const paging = useQueryHandleFields(handle, PAGING_FIELDS);
+	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
+	const { onEndReached, onViewport } = useArmedEndReached(extend, paging.pending, settled, {
 		measuresViewport: true,
 	});
 	// The child terms lead the table's rows, so they scroll with the products under them.
@@ -233,15 +232,11 @@ export function TermLevelTable({
 						<DataTable<ProductHit>
 							id="pos-products"
 							collectionName="products"
-							binding={binding}
-							resource={binding.resource}
+							handle={handle}
 							tableConfig={config}
 							sort={state.sort}
 							actions={actions}
 							onEndReached={onEndReached}
-							active$={binding.active$}
-							total$={binding.total$}
-							sync={binding.sync}
 							cellsForRow={cellsForRow}
 							// The rows are never empty under child terms; with neither, the empty state (and
 							// its Clear filters) sits in the table under the crumb.

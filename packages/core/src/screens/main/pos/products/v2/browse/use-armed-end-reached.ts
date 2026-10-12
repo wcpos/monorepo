@@ -1,9 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
-import type { Observable } from 'rxjs';
-
 /**
  * A browse level's end-reached handler: `extend` (the guarded extension, #1221) when the level
  * owns the query, nothing when it does not (a level a child is over, or one showing only its
@@ -30,11 +26,11 @@ import type { Observable } from 'rxjs';
  */
 export function useArmedEndReached(
 	extend: () => void,
-	pending$: Observable<boolean>,
+	/** The handle snapshot's `pending`: the standing demand has not settled. */
+	pending: boolean,
 	owned: boolean,
 	{ measuresViewport = false }: { measuresViewport?: boolean } = {}
 ): { onEndReached: () => void; onViewport: (height: number) => void } {
-	const pending = useObservableEagerState(pending$);
 	const armed = React.useRef(false);
 	const inViewport = React.useRef(!measuresViewport);
 	const onEndReached = React.useCallback(() => {
