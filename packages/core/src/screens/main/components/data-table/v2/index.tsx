@@ -156,8 +156,11 @@ type BodySource = {
 	active$: import('rxjs').Observable<boolean>;
 	total$: import('rxjs').Observable<number | null>;
 	sync: () => Promise<void>;
-	/** The default footer; the handle source supplies one that reads values in the same commit. */
-	footer?: React.ComponentType<{ count: number }>;
+	/** The handle source's default footer reads values from these in the same commit as the rows. */
+	footerHandles?: {
+		handle: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+		shown: QueryHandle<QueryResult<import('rxdb').RxCollection>>;
+	};
 };
 
 type BodyProps<TData extends RowData, TSortField extends string> = CommonProps<TData> &
@@ -243,17 +246,9 @@ function HandleDataTable<TData extends RowData, TSortField extends string>(
 	// the spinner's from the live handle, the total's from the drawn one, like the values.
 	const live = React.useMemo(() => bindingObservablesFor(handle), [handle]);
 	const drawn = React.useMemo(() => bindingObservablesFor(shown), [shown]);
-	const footer = React.useCallback(
-		({ count }: { count: number }) => (
-			<HandleFooter
-				collectionName={props.collectionName}
-				handle={handle}
-				shown={shown}
-				count={count}
-			/>
-		),
-		[handle, props.collectionName, shown]
-	);
+	// Handles as data, not a component per handle: the footer (and its sync button's state)
+	// stays mounted across a query change.
+	const footerHandles = React.useMemo(() => ({ handle, shown }), [handle, shown]);
 	return (
 		<DataTableBody<TData, TSortField>
 			{...rest}
@@ -264,7 +259,7 @@ function HandleDataTable<TData extends RowData, TSortField extends string>(
 			active$={live.active$}
 			total$={drawn.total$}
 			sync={handle.sync}
-			footer={footer}
+			footerHandles={footerHandles}
 		/>
 	);
 }
@@ -518,8 +513,13 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 							sync={props.sync}
 							count={result.hits.length}
 						/>
-					) : props.footer ? (
-						<props.footer count={result.hits.length} />
+					) : props.footerHandles ? (
+						<HandleFooter
+							collectionName={props.collectionName}
+							handle={props.footerHandles.handle}
+							shown={props.footerHandles.shown}
+							count={result.hits.length}
+						/>
 					) : (
 						<DataTableFooter
 							collectionName={props.collectionName}
