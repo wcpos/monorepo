@@ -212,18 +212,29 @@ export function logResultEmission(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Batched render rows: one line per (component, kind, reasons) per tick.
+// Batched render rows: one line per (component, kind, reasons) per tick AND per stamp — a row is
+// stamped when it is queued, so two commits landing before the zero-delay flush (a throttled
+// background tab) never share a row or borrow the later commit's emission number.
 
-type Bucket = { count: number; ids: string[]; context: Record<string, unknown> };
+type Stamp = ReturnType<typeof stamp>;
+type Bucket = {
+	key: string;
+	count: number;
+	ids: string[];
+	context: Record<string, unknown>;
+	at: Stamp;
+};
 const pending = new Map<string, Bucket>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const IDS_PER_ROW = 5;
 
 function enqueue(key: string, context: Record<string, unknown>, id?: string): void {
-	const bucket = pending.get(key) ?? { count: 0, ids: [], context };
+	const at = stamp();
+	const bucketKey = `${key}|${at.syncFlips}|${at.emission}`;
+	const bucket = pending.get(bucketKey) ?? { key, count: 0, ids: [], context, at };
 	bucket.count += 1;
 	if (id && bucket.ids.length < IDS_PER_ROW) bucket.ids.push(id);
-	pending.set(key, bucket);
+	pending.set(bucketKey, bucket);
 	if (flushTimer === null) flushTimer = setTimeout(flush, 0);
 }
 
@@ -233,12 +244,11 @@ function flush(): void {
 		flushTimer = null;
 	}
 	if (pending.size === 0) return;
-	const rows = [...pending.entries()];
+	const rows = [...pending.values()];
 	pending.clear();
-	const at = stamp();
-	for (const [key, bucket] of rows) {
-		probe.debug(`${key} ×${bucket.count}`, {
-			context: { ...at, ...bucket.context, ids: bucket.ids },
+	for (const bucket of rows) {
+		probe.debug(`${bucket.key} ×${bucket.count}`, {
+			context: { ...bucket.at, ...bucket.context, ids: bucket.ids },
 		});
 	}
 }

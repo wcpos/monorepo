@@ -6,7 +6,7 @@ import { type Observable, Subscription } from 'rxjs';
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryResult } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
@@ -27,6 +27,7 @@ import { DataTableFooter } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
+import type { RxCollection } from 'rxdb';
 import type { QueryStateActions } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
@@ -34,6 +35,26 @@ const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 type ProductHit = {
 	record: EngineRecord<'products'>;
 };
+
+/**
+ * Troubleshooting probe (render-probe.ts): one row per RESULT, logged from the grid's FIRST child.
+ * Effects run children-first, so a leaf placed before the list advances the emission counter
+ * before any tile's render row is stamped in the same commit; a deferred value catching up is the
+ * same result committing again and writes no second row.
+ */
+function EmissionProbe({ result }: { result: QueryResult<RxCollection> }) {
+	const previousHits = React.useRef<QueryResult<RxCollection>['hits'] | null>(null);
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED) return;
+		logResultEmission(previousHits.current, result.hits, {
+			// `count` in the row is the loaded hits; `total` is the engine's count for the query.
+			total: result.count,
+			searchState: result.searchState ?? null,
+		});
+		previousHits.current = result.hits;
+	}, [result]);
+	return null;
+}
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
@@ -94,17 +115,6 @@ export function ProductGrid({
 		);
 		return () => subscription.unsubscribe();
 	}, [binding]);
-	const previousHits = React.useRef<typeof result.hits | null>(null);
-	// One row per RESULT: a deferred value catching up is the same result committing again.
-	React.useEffect(() => {
-		if (!RENDER_PROBE_ENABLED) return;
-		logResultEmission(previousHits.current, result.hits, {
-			// `count` in the row is the loaded hits; `total` is the engine's count for the query.
-			total: result.count,
-			searchState: result.searchState ?? null,
-		});
-		previousHits.current = result.hits;
-	}, [result]);
 	React.useEffect(() => {
 		if (!RENDER_PROBE_ENABLED || deferredResult === result) return;
 		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
@@ -175,6 +185,7 @@ export function ProductGrid({
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
+			<EmissionProbe result={result} />
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
