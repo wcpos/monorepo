@@ -242,10 +242,16 @@ export function BrowseStage(props: BrowseStageProps) {
 	// place over it (its table defers the handle and never suspends mid-deal).
 	const rootAnswered = snapshot.ready || snapshot.error !== null;
 	const levelsHeld = viewMode === 'table' && !rootAnswered;
-	// The details that have been on stage AS A TABLE: a cache keyed by detail identity, as
-	// `childrenSeen` is. A grid level needs no hold, and staging it must not excuse a table that
-	// mounts cold after a view-mode switch — that table would suspend the whole screen.
-	const [staged] = React.useState(() => new WeakSet<Detail>());
+	// The details on stage as a table in THIS table view: a cache keyed by detail identity, as
+	// `childrenSeen` is, started afresh on every view-mode change. A grid level needs no hold,
+	// and neither a grid staging nor an earlier table view may excuse a table that mounts cold
+	// after a switch — that table has no deferred answered handle and would suspend the screen.
+	const [staged, setStaged] = React.useState(() => new WeakSet<Detail>());
+	const [stagedMode, setStagedMode] = React.useState(viewMode);
+	if (stagedMode !== viewMode) {
+		setStagedMode(viewMode);
+		setStaged(new WeakSet<Detail>());
+	}
 
 	const t = useT();
 	const rootLabel = useSourceLabel(source);

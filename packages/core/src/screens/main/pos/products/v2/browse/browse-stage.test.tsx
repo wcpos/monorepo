@@ -47,10 +47,9 @@ const mockActions = {
 const queryActions = mockActions;
 jest.mock('../../../../../../query', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
-	const { useSyncExternalStore } = React;
 	return {
 		useQueryState: () =>
-			useSyncExternalStore(
+			React.useSyncExternalStore(
 				(listener: () => void) => {
 					mockListeners.add(listener);
 					return () => mockListeners.delete(listener);
@@ -905,6 +904,24 @@ it('a level staged as a grid is still held when the view switches to a table und
 	const { rerender } = render(<BrowseStage {...stageProps({ viewMode: 'grid', handle: first })} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	const cold = makeHandle({ ready: false });
+	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: cold })} />);
+	expect(screen.queryByTestId('table')).toBeNull();
+	act(() => cold.set({ ready: true }));
+	expect(screen.getByTestId('table')).toBeTruthy();
+});
+
+it('a table view entered again after a grid interlude holds a level the earlier table had staged', () => {
+	// Table → grid → (query moves) → table: the first table's staging must not excuse the second,
+	// which mounts cold and would suspend the screen.
+	const first = makeHandle();
+	const { rerender } = render(
+		<BrowseStage {...stageProps({ viewMode: 'table', handle: first })} />
+	);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	expect(screen.getByTestId('table')).toBeTruthy();
+	rerender(<BrowseStage {...stageProps({ viewMode: 'grid', handle: first })} />);
+	expect(screen.queryByTestId('table')).toBeNull();
 	const cold = makeHandle({ ready: false });
 	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: cold })} />);
 	expect(screen.queryByTestId('table')).toBeNull();
