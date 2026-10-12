@@ -2,7 +2,6 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
 
 import { TermLevelTable } from './term-table';
 
@@ -19,9 +18,15 @@ jest.mock('@wcpos/query', () => ({
 		read(doc),
 }));
 // The guard is the products grid's own (#1221); here it passes through.
-jest.mock('../../../../../../query', () => ({
-	useGuardedExtendLimit: (extend: () => void) => () => extend(),
-}));
+jest.mock('../../../../../../query', () => {
+	const React = jest.requireActual<typeof import('react')>('react');
+	return {
+		useGuardedExtendLimitFor: (extend: () => void) => () => extend(),
+		// The real reader, field selection aside: the level sees every snapshot change.
+		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
+			React.useSyncExternalStore(handle.subscribe, () => handle.value),
+	};
+});
 // The real export pulls in the whole products screen; the level only hands it on.
 jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
 // The way back is the variations pane's own (level-back.test.tsx): Escape here.
@@ -46,42 +51,47 @@ const mockPatchUI = jest.fn();
 // loaded rows); an end-reached is a scroll and calls the `onEndReached` it was handed, which
 // replaces the extend behind its own guard; a header sort persists as the real one does.
 jest.mock('../../../../components/data-table/v2', () => ({
-	DataTable: ({
-		id,
-		persistSort = true,
-		tableConfig,
-		renderItem,
-		noDataMessage,
-		getItemType,
-		actions,
-		TableFooterComponent,
-		total$,
-		active$,
-		sync,
-		cellsForRow: cells,
-		ListFooterComponent,
-		onEndReached,
-	}: {
-		id: string;
-		persistSort?: boolean;
-		tableConfig: {
-			data: Row[];
-			getRowId?: (row: Row) => string;
-			getRowCanExpand?: (row: { original: Row }) => boolean;
-			meta?: { marker?: string };
-		};
-		renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
-		noDataMessage?: React.ReactNode;
-		getItemType: (row: { original: Row }) => string;
-		actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
-		TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
-		total$: unknown;
-		active$: unknown;
-		sync: unknown;
-		cellsForRow: unknown;
-		ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
-		onEndReached?: () => void;
-	}) => (
+	DataTable: (props: Record<string, unknown>) => {
+		// As the real handle source: a table mounted on an unanswered handle suspends.
+		const handle = props.handle as { value: { ready: boolean }; whenAnswered(): Promise<void> };
+		if (!handle.value.ready) throw handle.whenAnswered();
+		return <MockTableBody {...(props as React.ComponentProps<typeof MockTableBody>)} />;
+	},
+}));
+function MockTableBody({
+	id,
+	persistSort = true,
+	tableConfig,
+	renderItem,
+	noDataMessage,
+	getItemType,
+	actions,
+	TableFooterComponent,
+	handle,
+	cellsForRow: cells,
+	ListFooterComponent,
+	onEndReached,
+}: {
+	id: string;
+	persistSort?: boolean;
+	tableConfig: {
+		data: Row[];
+		getRowId?: (row: Row) => string;
+		getRowCanExpand?: (row: { original: Row }) => boolean;
+		meta?: { marker?: string };
+	};
+	renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
+	noDataMessage?: React.ReactNode;
+	getItemType: (row: { original: Row }) => string;
+	actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
+	handle: { value: { total: number | null }; sync: () => Promise<void> };
+	TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
+	sync: unknown;
+	cellsForRow: unknown;
+	ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
+	onEndReached?: () => void;
+}) {
+	return (
 		<div
 			data-testid="table"
 			data-meta={tableConfig.meta?.marker}
@@ -120,22 +130,24 @@ jest.mock('../../../../components/data-table/v2', () => ({
 			)}
 			{/* Undefined falls back to the list's loading strip, as the real DataTable does. */}
 			{ListFooterComponent ? (
-				<ListFooterComponent active$={active$} />
+				<ListFooterComponent active$={undefined} />
 			) : (
 				<span data-testid="list-loading-strip" />
 			)}
+			{/* As the real handle-source DataTable: the custom footer gets the drawn total as a value. */}
 			{TableFooterComponent && (
 				<TableFooterComponent
 					collectionName="products"
-					total$={total$}
-					active$={active$}
-					sync={sync}
+					total$={undefined}
+					active$={undefined}
+					total={handle.value.total}
+					sync={handle.sync}
 					count={999}
 				/>
 			)}
 		</div>
-	),
-}));
+	);
+}
 jest.mock('../rows/product-row', () => ({
 	ProductRow: ({ item }: { item: { original: { record: { uuid: string } } } }) => (
 		<div data-testid={`row-${item.original.record.uuid}`} />
@@ -158,27 +170,25 @@ jest.mock('../rows/variable-product-row', () => ({
 		/>
 	),
 }));
-// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
-// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
-// one commit after the swap). Every render's pair is logged, so a test can see what each commit
+// The footer (OwnFooter over ProductsFooter) takes the pane's own numbers from its context as
+// values, never a stream. Every render's pair is logged, so a test can see what each commit
 // would have painted, not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
-	ProductsFooter: ({
-		count,
-		total$,
-		total: heldTotal,
-	}: {
-		count: number;
-		total$: import('rxjs').Observable<number | null>;
-		total?: number | null;
-	}) => {
-		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
-		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+	ProductsFooter: ({ count, total: heldTotal }: { count: number; total?: number | null }) => {
+		const total = heldTotal ?? null;
 		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},
 }));
+// The handle as a reader sees it (one snapshot, driven with `set`): the level reads the paging
+// opinion from it; the footer reads the spinner; the answer comes down from the stage as state.
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
 // The leaf components pull in native-only modules; the level's structure is what is tested.
 jest.mock('@wcpos/components/button', () => ({
 	Button: React.forwardRef<
@@ -252,14 +262,8 @@ const base = () => ({
 	onOpenTerm: jest.fn(),
 	onDrillProduct: jest.fn(),
 	variationsStyle: 'drill',
-	// `total$` is the live binding's census — never a pane's denominator (the pane hands its own).
-	binding: {
-		resource: {},
-		active$: {},
-		pending$: new BehaviorSubject(false),
-		total$: of(220),
-		sync: jest.fn(),
-	},
+	// `total` is the live snapshot's census — never a pane's denominator (the pane hands its own).
+	handle: fakeQueryHandle({ total: 220 }),
 	state: { sort: { field: 'name', direction: 'asc' } },
 	actions: { extendLimit: jest.fn(), setSort: jest.fn(), setFilter: jest.fn() },
 	tableConfig: {
@@ -335,6 +339,17 @@ it('keys the rows apart: a term row never expands, products keep the table’s o
 		type: 'simple',
 		expands: 'false',
 	});
+});
+
+it('a level mounted on an unanswered handle shows its child terms and held rows, inside the level', () => {
+	// The table suspends on the handle; the level's own boundary draws the held shape, and the
+	// level (crumb, back) stays on stage. Nothing above the level is suspended.
+	const cold = fakeQueryHandle({ ready: false, total: 220 });
+	render(<TermLevelTable {...level({ handle: cold, answer: undefined })} />);
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('browse-level-held-rows')).toBeTruthy();
+	expect(screen.getAllByTestId('row-placeholder').length).toBeGreaterThan(0);
+	expect(screen.queryByTestId('table')).toBeNull();
 });
 
 it('footers the level’s own loaded rows and total, not the live binding’s', () => {
@@ -500,28 +515,28 @@ it('persists a header sort to the products table settings, as the products table
 // On native, FlashList's first end-reached can land while the demand is pending; the guard
 // ignores it, and the list will not fire again for the same content length.
 it('pages once when pending clears after an end-reached it ignored while pending', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...base().binding, pending$ } });
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
 	render(<TermLevelTable {...props} />);
 	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
 	// Armed once, fired once: a later pending round-trip with no end-reached does not page.
-	act(() => pending$.next(true));
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: true }));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
 });
 
 it('drops an armed end-reached when a child pane covers the level before pending clears', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...base().binding, pending$ } });
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
 	const { rerender } = render(<TermLevelTable {...props} />);
 	layOut(600);
 	fireEvent.scroll(screen.getByTestId('table'));
 	rerender(<TermLevelTable {...props} settled={false} />);
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 
@@ -547,13 +562,13 @@ it('ignores an end-reached on a zero-size viewport, and pages once when the view
 });
 
 it('holds an end-reached armed while pending until the viewport is back too', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...base().binding, pending$ } });
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
 	render(<TermLevelTable {...props} />);
 	layOut(0);
 	fireEvent.scroll(screen.getByTestId('table'));
 	// Pending clears while the screen is still hidden: nothing moves yet.
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 	layOut(600);
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);

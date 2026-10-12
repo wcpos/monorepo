@@ -40,7 +40,6 @@ import { createReadonlyView, Slot } from '../../../../../extensions/slots';
 import {
 	QueryStateProvider,
 	useProductsQueryHandle,
-	useQueryBindingFor,
 	useQueryState,
 	useQueryStateActions,
 	useQueryStateStore,
@@ -183,7 +182,6 @@ function POSProductsContent({
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const handle = useProductsQueryHandle(state);
-	const binding = useQueryBindingFor(handle);
 	const stockStatusFilter = state.filters.stock_status;
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
@@ -231,11 +229,10 @@ function POSProductsContent({
 	// no change to the source, search, filters or path, and the stage's drill, held answers and
 	// snapshots are the previous scope's records.
 	const scopeKey = useScopeKey('products');
-	// Troubleshooting probe (render-probe.ts): a scope or binding change here remounts everything.
+	// Troubleshooting probe (render-probe.ts): a scope or handle change here remounts everything.
 	useRenderProbe('POSProductsContent', 'content', {
 		scopeKey,
 		handle,
-		binding,
 		state,
 		actions,
 		uiSettings,
@@ -582,7 +579,7 @@ function POSProductsContent({
 									empty={noDataMessage}
 									variationsStyle={variationsStyle}
 									stockStatus={stockStatusFilter}
-									binding={binding}
+									handle={handle}
 									state={state}
 									actions={tableActions}
 									tableConfig={tableConfig}

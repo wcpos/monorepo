@@ -13,13 +13,7 @@ import { VariableProductImage } from '../../../components/product/variable-image
 
 import type { QueryStateOf } from '../../../../../query';
 
-const mockBinding = {
-	resource: { kind: 'pos-products-resource' },
-	active$: of(false),
-	total$: of(40),
-	sync: jest.fn(async () => undefined),
-};
-const mockHandle = { key: 'pos-products-handle', sync: mockBinding.sync };
+const mockHandle = { key: 'pos-products-handle', sync: jest.fn(async () => undefined) };
 const mockUseProductsQueryHandle = jest.fn((_state: unknown) => mockHandle);
 const mockUseBarcode = jest.fn(
 	(_setSearch: (search: string) => void, _clearSearch: () => void) => ({
@@ -72,7 +66,6 @@ jest.mock('../../../../../query', () => {
 	return {
 		...actual,
 		useProductsQueryHandle: (state: unknown) => mockUseProductsQueryHandle(state),
-		useQueryBindingFor: () => mockBinding,
 		useScopeKey: () => mockScopeKey,
 	};
 });
@@ -456,7 +449,7 @@ describe('POSProducts query-state wiring', () => {
 		mockBrowseBy = 'categories';
 		render(<POSProducts />);
 		expect(mockBrowseStageProps).toMatchObject({
-			binding: mockBinding,
+			handle: mockHandle,
 			variationsStyle: 'drill',
 			stockStatus: 'instock',
 			state: expect.objectContaining({ sort: { field: 'name', direction: 'asc' } }),

@@ -1,17 +1,29 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
 
 import { useArmedEndReached } from './use-armed-end-reached';
 
+// `pending` is the handle snapshot's, a value the level re-renders with; the test drives it
+// as a prop, which is what a snapshot change does. `pending$.next` keeps the cases readable.
 const mount = (owned = true, options: { measuresViewport?: boolean } = {}) => {
 	const extend = jest.fn();
-	const pending$ = new BehaviorSubject(false);
+	const latest = { owned, pending: false };
 	const hook = renderHook(
-		({ owned: isOwned }) => useArmedEndReached(extend, pending$, isOwned, options),
-		{ initialProps: { owned } }
+		({ owned: isOwned, pending }: { owned: boolean; pending: boolean }) =>
+			useArmedEndReached(extend, pending, isOwned, options),
+		{ initialProps: { owned, pending: false } }
 	);
-	return { extend, pending$, ...hook };
+	const rerender = (props: { owned: boolean }) => {
+		latest.owned = props.owned;
+		hook.rerender({ ...latest });
+	};
+	const pending$ = {
+		next: (pending: boolean) => {
+			latest.pending = pending;
+			hook.rerender({ ...latest });
+		},
+	};
+	return { extend, pending$, result: hook.result, rerender };
 };
 
 it('an end-reached while the level owns a clear query extends at once', () => {

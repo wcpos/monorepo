@@ -26,18 +26,44 @@ type ProductsFooterProps = BindingDataTableFooterProps & {
 	total?: number | null;
 };
 
+/** The streams read once, then the row. The browse stage hands the row values straight. */
 export function ProductsFooter({
-	collectionName,
 	active$,
 	total$,
-	sync,
-	count,
-	children,
 	total: heldTotal,
+	...props
 }: ProductsFooterProps) {
 	const loading = useObservableEagerState(active$);
 	const streamTotal = useObservableState(total$, null);
-	const total = heldTotal !== undefined ? heldTotal : streamTotal;
+	return (
+		<ProductsFooterRow
+			{...props}
+			active={loading}
+			total={heldTotal !== undefined ? heldTotal : streamTotal}
+		/>
+	);
+}
+
+export type ProductsFooterRowProps = {
+	collectionName: BindingDataTableFooterProps['collectionName'];
+	/** The engine is pulling the collection: the sync button turns. */
+	active: boolean;
+	/** The denominator, or null for none ("Showing N"). */
+	total: number | null;
+	sync: () => Promise<void>;
+	count: number;
+	children?: React.ReactNode;
+};
+
+/** The products caption row, values in: a reader of a query-handle snapshot hands them over. */
+export function ProductsFooterRow({
+	collectionName,
+	active: loading,
+	total,
+	sync,
+	count,
+	children,
+}: ProductsFooterRowProps) {
 	const { calcTaxes } = useTaxSettings();
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();
@@ -50,7 +76,7 @@ export function ProductsFooter({
 				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}
 			</HStack>
 			<HStack className="shrink-0 gap-0">
-				{/* No denominator unless binding.total$ vouches for one; hidden markers stay raw. */}
+				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null
 						? t('common.showing_n', { shown: count.toLocaleString() })

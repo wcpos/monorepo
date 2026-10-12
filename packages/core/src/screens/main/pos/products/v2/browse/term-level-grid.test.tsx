@@ -2,7 +2,6 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
 
 import { TermLevelGrid } from './term-grid';
 
@@ -34,12 +33,18 @@ jest.mock('@wcpos/query', () => ({
 }));
 // The guard is the products grid's own (#1221); here it reports the loaded count it was given.
 const guarded = jest.fn();
-jest.mock('../../../../../../query', () => ({
-	useGuardedExtendLimit: (extend: () => void, count: number) => () => {
-		guarded(count);
-		extend();
-	},
-}));
+jest.mock('../../../../../../query', () => {
+	const React = jest.requireActual<typeof import('react')>('react');
+	return {
+		useGuardedExtendLimitFor: (extend: () => void, count: number) => () => {
+			guarded(count);
+			extend();
+		},
+		// The real reader, field selection aside: the level sees every snapshot change.
+		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
+			React.useSyncExternalStore(handle.subscribe, () => handle.value),
+	};
+});
 jest.mock('../grid/product-tile', () => ({
 	ProductTile: ({ record, grow }: { record: { uuid: string }; grow?: boolean }) => (
 		<div data-testid={`product-${record.uuid}`} data-grow={!!grow} />
@@ -77,23 +82,12 @@ jest.mock('./term-tile', () => {
 		),
 	};
 });
-// The footer reads its denominator as the real one does: `total` when handed one, else `total$`
-// through `useObservableState` (a replaced stream keeps its last value until the new one emits,
-// one commit after the swap). Every render's pair is logged, so a test can see what each commit
-// would have painted, not only where the DOM settled.
+// The footer takes its denominator as a value (the level's own, never the live snapshot's
+// census). Every render's pair is logged, so a test can see what each commit would have painted,
+// not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
-jest.mock('../footer', () => ({
-	ProductsFooter: ({
-		count,
-		total$,
-		total: heldTotal,
-	}: {
-		count: number;
-		total$: import('rxjs').Observable<number | null>;
-		total?: number | null;
-	}) => {
-		const streamTotal = jest.requireActual('observable-hooks').useObservableState(total$, null);
-		const total = heldTotal !== undefined ? heldTotal : streamTotal;
+jest.mock('../handle-footer', () => ({
+	HandleProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
 		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},
@@ -229,13 +223,16 @@ const drinks = { kind: 'term' as const, id: 1, name: 'Drinks', count: 12 };
 const hot = { kind: 'term' as const, id: 2, name: 'Hot', count: 6, parent: 1 };
 const latte = { uuid: 'l', payload: { type: 'variable', name: 'Latte' } };
 const flat = { uuid: 'f', payload: { type: 'simple', name: 'Flat White' } };
-// `total$` is the live binding's census — never a level's denominator (the level hands its own).
-const binding = {
-	active$: {},
-	pending$: new BehaviorSubject(false),
-	total$: of(220),
-	sync: jest.fn(),
+// The handle as a reader sees it (one snapshot, driven with `set`): the level reads the paging
+// opinion from it; the footer reads the spinner; the answer comes down from the stage as state.
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+// `total` is the live snapshot's census — never a level's denominator (the level hands its own).
+const handle = fakeQueryHandle({ total: 220 });
 const base = () => ({
 	term: drinks,
 	children: [hot],
@@ -247,7 +244,7 @@ const base = () => ({
 	onOpenTerm: jest.fn(),
 	onDrillProduct: jest.fn(),
 	variationsStyle: 'drill',
-	binding,
+	handle,
 	actions: { extendLimit: jest.fn() },
 	empty: <span data-testid="no-data-message">nothing</span>,
 });
@@ -423,29 +420,43 @@ it('extends the query window when the cashier nears the end of the level', () =>
 
 // The list marks a content length notified even when the guard ignored it (pending): the end
 // reached then is fired once pending clears, or a short page could never page again.
-it('pages once when pending clears after an end-reached it ignored while pending', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...binding, pending$ } });
+it('holds an armed end-reached while the handle has not answered, and fires it on the answer', () => {
+	// A return to a parent level is a fresh handle that opens unanswered (no demand declared
+	// yet, `pending: false`): the arm waits for its answer rather than spending itself on the
+	// opening snapshot, where `exhausted` is nobody's opinion yet.
+	const fresh = fakeQueryHandle({ ready: false, total: 220 });
+	const props = level({ handle: fresh });
 	render(<TermLevelGrid {...props} />);
 	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
-	act(() => pending$.next(false));
+	act(() => fresh.set({ ready: true, exhausted: false }));
+	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('pages once when pending clears after an end-reached it ignored while pending', () => {
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
+	render(<TermLevelGrid {...props} />);
+	layOut(600);
+	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
+	expect(props.actions.extendLimit).not.toHaveBeenCalled();
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
 	// Armed once, fired once: a later pending round-trip with no end-reached does not page.
-	act(() => pending$.next(true));
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: true }));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);
 });
 
 it('drops an armed end-reached when the level is covered before pending clears', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...binding, pending$ } });
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
 	const { rerender } = render(<TermLevelGrid {...props} />);
 	layOut(600);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	rerender(<TermLevelGrid {...props} settled={false} />);
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 });
 
@@ -470,13 +481,13 @@ it('ignores an end-reached on a zero-size viewport, and pages once when the view
 });
 
 it('holds an end-reached armed while pending until the viewport is back too', () => {
-	const pending$ = new BehaviorSubject(true);
-	const props = level({ binding: { ...binding, pending$ } });
+	const pendingHandle = fakeQueryHandle({ total: 220, pending: true });
+	const props = level({ handle: pendingHandle });
 	render(<TermLevelGrid {...props} />);
 	layOut(0);
 	fireEvent.scroll(screen.getByTestId('browse-level-scroller'));
 	// Pending clears while the screen is still hidden: nothing moves yet.
-	act(() => pending$.next(false));
+	act(() => pendingHandle.set({ pending: false }));
 	expect(props.actions.extendLimit).not.toHaveBeenCalled();
 	layOut(600);
 	expect(props.actions.extendLimit).toHaveBeenCalledTimes(1);

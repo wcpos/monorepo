@@ -5,10 +5,10 @@ import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-rean
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import { type EngineRecord, useDocField } from '@wcpos/query';
+import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useGuardedExtendLimit } from '../../../../../../query';
+import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import {
 	DealCell,
@@ -19,7 +19,7 @@ import {
 	useAirspace,
 	useDeal,
 } from '../deal-stack';
-import { ProductsFooter } from '../footer';
+import { HandleProductsFooter } from '../handle-footer';
 import { ProductTile } from '../grid/product-tile';
 import { VariableProductTile } from '../grid/variable-product-tile';
 import { LevelBack } from '../level-back';
@@ -29,10 +29,12 @@ import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { ParentTermTile, TermTile } from './term-tile';
 import { useArmedEndReached } from './use-armed-end-reached';
 
-import type { useRelationalCollectionBinding } from '../../../../../../query';
+import type { SnapshotFields } from '../../../../../../query';
 import type { GridFields } from '../grid/product-tile';
 
-type Binding = ReturnType<typeof useRelationalCollectionBinding>;
+// Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
+// the footer reads the spinner itself, the stage hands the answer down as state.
+const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
 const ALL: BrowseTerm = { kind: 'all' };
@@ -41,13 +43,13 @@ const ALL: BrowseTerm = { kind: 'all' };
 export function BrowseRootGrid({
 	terms,
 	onOpen,
-	binding,
+	handle,
 	settled,
 }: {
 	terms: BrowseTerm[];
 	onOpen: (term: BrowseTerm, target?: Measurable) => void;
-	/** The root products binding: the till's footer under the term set. */
-	binding?: Binding;
+	/** The root products handle: the till's footer under the term set. */
+	handle?: QueryHandle;
 	/** No level is over the root: the shared query is the root's (its footer's numbers). */
 	settled?: boolean;
 }) {
@@ -96,7 +98,7 @@ export function BrowseRootGrid({
 					estimatedItemSize={200}
 				/>
 			</VirtualizedList.Root>
-			{binding && <BrowseRootFooter binding={binding} settled={settled} />}
+			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
 		</View>
 	);
 }
@@ -136,7 +138,7 @@ export function TermLevelGrid({
 	onOpenTerm,
 	onDrillProduct,
 	variationsStyle,
-	binding,
+	handle,
 	actions,
 	empty,
 }: {
@@ -156,7 +158,8 @@ export function TermLevelGrid({
 	onOpenTerm: (term: BrowseTerm, target?: Measurable) => void;
 	onDrillProduct: (record: EngineRecord<'products'>, target?: Measurable) => void;
 	variationsStyle: string;
-	binding: Binding;
+	/** The root products handle (the live query's): paging opinion and the footer's spinner. */
+	handle: QueryHandle;
 	/** The root query's actions: the level extends the window as the cashier scrolls. */
 	actions: { extendLimit: () => void };
 	/** Shown under slot 0 when the level answered with no products and no child terms. */
@@ -186,7 +189,7 @@ export function TermLevelGrid({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this level's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's. Handed as a value (the
+	// not the live handle's, which may already be another level's. Handed as a value (the
 	// footer's `total`), never wrapped as a stream: a stream lands one commit after the count,
 	// and a changed answer (a sync, the query settling on a return) would paint the new count
 	// over the old denominator for a frame. `null` while the level has no answer: no denominator.
@@ -194,13 +197,17 @@ export function TermLevelGrid({
 	// The query is windowed (#1221): the level asks for more as the cashier nears its end, as the
 	// products grid does. A level of subcategories alone has nothing to page, and a level a child
 	// is over does not own the query: neither may move it.
-	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
+	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
+	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
+	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
 	// An end-reached while the demand is pending is armed and fired once it clears (the list
 	// will not fire again for the same rows). So is one before the slots measure a positive
 	// height: a products screen kept mounted but inactive lays out at zero size, and zero
 	// geometry reads as end-reached. use-armed-end-reached.
 	const owned = showProducts && settled;
-	const { onEndReached, onViewport } = useArmedEndReached(extend, binding.pending$, owned, {
+	const { onEndReached, onViewport } = useArmedEndReached(extend, paging.pending, owned, {
 		measuresViewport: true,
 	});
 
@@ -352,14 +359,7 @@ export function TermLevelGrid({
 				{/* No products footer under a level that shows only its subcategories. */}
 				{showProducts && (
 					<DealFade>
-						<ProductsFooter
-							collectionName="products"
-							active$={binding.active$}
-							total$={binding.total$}
-							total={total}
-							sync={binding.sync}
-							count={loaded}
-						/>
+						<HandleProductsFooter handle={handle} total={total} count={loaded} />
 					</DealFade>
 				)}
 			</View>

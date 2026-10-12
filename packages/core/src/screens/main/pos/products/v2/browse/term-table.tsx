@@ -3,10 +3,11 @@ import { View } from 'react-native';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import { Suspense } from '@wcpos/components/suspense';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useGuardedExtendLimit } from '../../../../../../query';
+import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
 import { DataTable } from '../../../../components/data-table/v2';
 import { TableSurface } from '../../../../components/data-table/surface';
 import { cellsForRow } from '../../index';
@@ -20,13 +21,11 @@ import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
 import { TermRow } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
 
-import type {
-	QueryStateActions,
-	QueryStateOf,
-	useRelationalCollectionBinding,
-} from '../../../../../../query';
+import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../../../../query';
 
-type Binding = ReturnType<typeof useRelationalCollectionBinding>;
+// Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
+// the table reads the rows from the stage's answer, the footer the spinner itself.
+const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
 const ALL: BrowseTerm = { kind: 'all' };
@@ -35,13 +34,13 @@ const ALL: BrowseTerm = { kind: 'all' };
 export function BrowseRootTable({
 	terms,
 	onOpen,
-	binding,
+	handle,
 	settled,
 }: {
 	terms: BrowseTerm[];
 	onOpen: (term: BrowseTerm) => void;
-	/** The root products binding: the till's footer under the term set. */
-	binding?: Binding;
+	/** The root products handle: the till's footer under the term set. */
+	handle?: QueryHandle;
 	/** No level is over the root: the shared query is the root's (its footer's numbers). */
 	settled?: boolean;
 }) {
@@ -64,7 +63,7 @@ export function BrowseRootTable({
 					/>
 				</VirtualizedList.Root>
 			</TableSurface>
-			{binding && <BrowseRootFooter binding={binding} settled={settled} />}
+			{handle && <BrowseRootFooter handle={handle} settled={settled} />}
 		</View>
 	);
 }
@@ -109,6 +108,47 @@ function RowPlaceholder() {
 }
 
 /**
+ * The pane's rows while its table waits for the handle's first answer: the child terms, then a
+ * pane's worth of held slots — the same shape the table draws from `HELD`, so the rows that
+ * land do not reflow it. A level is pushed the moment it is tapped; a cold table suspends here,
+ * inside the level, never the screen (the stage holds nothing back).
+ */
+function HeldRows({
+	children,
+	onOpenTerm,
+}: {
+	children: BrowseTerm[];
+	onOpenTerm: (term: BrowseTerm) => void;
+}) {
+	// The same virtualized list the subcategories-only pane scrolls: a long child set stays
+	// reachable while the products are still on their way.
+	const rows = React.useMemo<LevelRow[]>(
+		() => [...children.map((child) => ({ id: `browse:${termKey(child)}`, term: child })), ...HELD],
+		[children]
+	);
+	return (
+		<TableSurface testID="browse-level-held-rows">
+			<VirtualizedList.Root style={{ flex: 1 }}>
+				<VirtualizedList.List
+					data={rows}
+					keyExtractor={rowId}
+					renderItem={({ item }) => (
+						<VirtualizedList.Item>
+							{'term' in item ? (
+								<TermRow term={item.term} onPress={onOpenTerm} />
+							) : (
+								<RowPlaceholder />
+							)}
+						</VirtualizedList.Item>
+					)}
+					estimatedItemSize={60}
+				/>
+			</VirtualizedList.Root>
+		</TableSurface>
+	);
+}
+
+/**
  * One term's contents as a pane: the crumb above, its child terms as the first rows of the
  * products table, then its products. The pane shows its own answer (`useLevelSnapshot`), held
  * while a child pane is pushed over it and while the query gathers its set on the way back, so
@@ -125,7 +165,7 @@ export function TermLevelTable({
 	onOpenTerm,
 	onDrillProduct,
 	variationsStyle,
-	binding,
+	handle,
 	state,
 	actions,
 	tableConfig,
@@ -148,8 +188,8 @@ export function TermLevelTable({
 	onOpenTerm: (term: BrowseTerm) => void;
 	onDrillProduct: (record: EngineRecord<'products'>) => void;
 	variationsStyle: string;
-	/** The root products binding, state and actions, as index.tsx hands its DataTable. */
-	binding: Binding;
+	/** The root products handle, state and actions, as index.tsx hands its DataTable. */
+	handle: QueryHandle;
 	state: { sort: QueryStateOf<'products'>['sort'] };
 	actions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
 	/** index.tsx's products `tableConfig`: inline variations read its `meta` (expanded rows). */
@@ -164,12 +204,12 @@ export function TermLevelTable({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this pane's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's; `null` (no denominator)
+	// not the live handle's, which may already be another level's; `null` (no denominator)
 	// until it has one. Handed as a value (the footer's `total`), never wrapped as a stream: a
 	// stream lands one commit after the count, and a changed answer would paint the new count over
 	// the old denominator for a frame.
 	const total = shown?.total ?? null;
-	// The table's footer counts the pane's own rows, never the live binding's window — through
+	// The table's footer counts the pane's own rows, never the live handle's window — through
 	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
 	const footer = React.useMemo(() => ({ total, count: loaded }), [total, loaded]);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on
@@ -179,8 +219,12 @@ export function TermLevelTable({
 	// kept mounted but inactive (native small screens, Cart showing) lays out at zero size, and
 	// zero geometry reads as end-reached. A pane a child is over does not own the query: it may
 	// not move it.
-	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, binding);
-	const { onEndReached, onViewport } = useArmedEndReached(extend, binding.pending$, settled, {
+	const snapshot = useQueryHandleFields(handle, PAGING_FIELDS);
+	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
+	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
+	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
+	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
+	const { onEndReached, onViewport } = useArmedEndReached(extend, paging.pending, settled, {
 		measuresViewport: true,
 	});
 	// The child terms lead the table's rows, so they scroll with the products under them.
@@ -230,49 +274,47 @@ export function TermLevelTable({
 					// persists as it does there (`persistSort` is off only for a table that borrows the id
 					// for another collection, as the variations pane does).
 					<OwnFooterContext.Provider value={footer}>
-						<DataTable<ProductHit>
-							id="pos-products"
-							collectionName="products"
-							binding={binding}
-							resource={binding.resource}
-							tableConfig={config}
-							sort={state.sort}
-							actions={actions}
-							onEndReached={onEndReached}
-							active$={binding.active$}
-							total$={binding.total$}
-							sync={binding.sync}
-							cellsForRow={cellsForRow}
-							// The rows are never empty under child terms; with neither, the empty state (and
-							// its Clear filters) sits in the table under the crumb.
-							noDataMessage={empty as React.ReactElement}
-							renderItem={({ item, index, table }) => {
-								const row = item.original as LevelRow;
-								return (
-									<VirtualizedList.Item>
-										{'term' in row ? (
-											<TermRow term={row.term} onPress={onOpenTerm} />
-										) : 'held' in row ? (
-											<RowPlaceholder />
-										) : row.record.payload.type === 'variable' ? (
-											<VariableProductRow
-												item={item}
-												index={index}
-												table={table}
-												variationsStyle={variationsStyle}
-												onDrill={onDrillProduct}
-											/>
-										) : (
-											<ProductRow item={item} />
-										)}
-									</VirtualizedList.Item>
-								);
-							}}
-							estimatedItemSize={100}
-							ListFooterComponent={NoListFooter}
-							TableFooterComponent={OwnFooter}
-							getItemType={itemType}
-						/>
+						<Suspense fallback={<HeldRows onOpenTerm={onOpenTerm}>{children}</HeldRows>}>
+							<DataTable<ProductHit>
+								id="pos-products"
+								collectionName="products"
+								handle={handle}
+								tableConfig={config}
+								sort={state.sort}
+								actions={actions}
+								onEndReached={onEndReached}
+								cellsForRow={cellsForRow}
+								// The rows are never empty under child terms; with neither, the empty state (and
+								// its Clear filters) sits in the table under the crumb.
+								noDataMessage={empty as React.ReactElement}
+								renderItem={({ item, index, table }) => {
+									const row = item.original as LevelRow;
+									return (
+										<VirtualizedList.Item>
+											{'term' in row ? (
+												<TermRow term={row.term} onPress={onOpenTerm} />
+											) : 'held' in row ? (
+												<RowPlaceholder />
+											) : row.record.payload.type === 'variable' ? (
+												<VariableProductRow
+													item={item}
+													index={index}
+													table={table}
+													variationsStyle={variationsStyle}
+													onDrill={onDrillProduct}
+												/>
+											) : (
+												<ProductRow item={item} />
+											)}
+										</VirtualizedList.Item>
+									);
+								}}
+								estimatedItemSize={100}
+								ListFooterComponent={NoListFooter}
+								TableFooterComponent={OwnFooter}
+								getItemType={itemType}
+							/>
+						</Suspense>
 					</OwnFooterContext.Provider>
 				) : (
 					// Subcategories only: the child terms as the root's rows are, no product columns,
