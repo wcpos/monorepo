@@ -88,6 +88,13 @@ it.each([
 	// The cashier may hand exactly the rounded-down due, below the balance: that settles it.
 	['a round-down', { amountMinor: 1000, tenderedMinor: 1000, balanceMinor: 1002 }, 1000, -2],
 	['a due rounded to nothing', { amountMinor: 0, tenderedMinor: 0, balanceMinor: 2 }, 0, -2],
+	// A split share within the rounding of the balance, paid with a big note, settles the sale.
+	[
+		'a share that settles',
+		{ amountMinor: 1001, tenderedMinor: 2000, balanceMinor: 1002 },
+		1000,
+		-2,
+	],
 ])(
 	'rewrites a settling cash tender to the rounded due: %s',
 	async (_name, facts, due, rounding) => {
@@ -107,6 +114,7 @@ it.each([
 	['a balance already on the increment', { amountMinor: 1005, balanceMinor: 1005 }],
 	// Short of the rounded due: an exact unrounded payment, legitimate (and the writer refuses change below zero).
 	['notes short of the rounded due', { tenderedMinor: 1004 }],
+	['an exact unrounded payment', { amountMinor: 1003, tenderedMinor: 1003 }],
 	// A split share is not the sale: the cashier hands what they hand.
 	['a partial split leg', { amountMinor: 500, tenderedMinor: 2000 }],
 ])('passes through %s', async (_name, facts) => {

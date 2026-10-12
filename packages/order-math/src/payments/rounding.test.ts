@@ -1,4 +1,4 @@
-import { roundedDue, roundToIncrement } from './rounding';
+import { roundedDue, roundToIncrement, settlesAtRoundedDue } from './rounding';
 
 describe('roundToIncrement', () => {
 	it.each([
@@ -51,4 +51,34 @@ describe('roundedDue', () => {
 			roundingMinor: -2,
 		});
 	});
+});
+
+describe('an increment the store decimals cannot hold', () => {
+	it.each([
+		['0.25', 1],
+		['0.025', 2],
+	])('%s at %i decimals rounds nothing', (increment, dp) => {
+		expect(roundedDue(1003, { increment, mode: 'nearest' }, dp)).toEqual({
+			dueMinor: 1003,
+			roundingMinor: 0,
+		});
+	});
+});
+
+describe('settlesAtRoundedDue', () => {
+	it.each([
+		// amount, tendered, balance, due, settles
+		[1003, 1005, 1003, 1005, true], // round-up, the notes cover it
+		[1003, 1003, 1003, 1005, false], // exact unrounded: a legitimate payment, not rounded
+		[1000, 1000, 1002, 1000, true], // round-down: the leg reaches the due below the balance
+		[1001, 2000, 1002, 1000, true], // a split share within the rounding of the balance
+		[500, 2000, 1003, 1005, false], // a split share: the cashier hands what they hand
+	])(
+		'amount %i, tendered %i on %i due %i: %s',
+		(amountMinor, tenderedMinor, balanceMinor, dueMinor, settles) => {
+			expect(settlesAtRoundedDue({ amountMinor, tenderedMinor, balanceMinor, dueMinor })).toBe(
+				settles
+			);
+		}
+	);
 });

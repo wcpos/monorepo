@@ -31,7 +31,7 @@ export type {
 	MintServerPaymentResult,
 } from './ledger';
 export { toMinor, fromMinor } from './money';
-export { roundToIncrement, roundedDue } from './rounding';
+export { roundToIncrement, roundedDue, settlesAtRoundedDue } from './rounding';
 export type { PaymentRounding } from './rounding';
 export type { PaymentMoney } from './money';
 export { FIELDS_SCHEMA, KNOWN_CAPTURE_MODES, KNOWN_KINDS, KNOWN_PREFILLS } from './types';

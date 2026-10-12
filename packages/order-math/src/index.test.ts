@@ -40,6 +40,7 @@ test('public value surface is exactly the spec', () => {
 		// entry point rather than a flag that changes what settleCart returns.
 		'settleAggregate',
 		'settleCart',
+		'settlesAtRoundedDue',
 		'snapshotFromOrderJSON',
 		'splitPlanMeta',
 		'toMinor',

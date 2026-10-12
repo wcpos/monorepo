@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
+import { settleAggregate, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useRecordField } from '@wcpos/query';
@@ -11,7 +11,6 @@ import { useRecordField } from '@wcpos/query';
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { useCartConfig } from './use-cart-config';
 import { readQuickDiscountIntent } from './quick-discount';
-import { settleOrderMoney } from './settle-order-money';
 import { useCouponContext } from './use-coupon-context';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
@@ -267,7 +266,10 @@ export const useCartSettlement = () => {
 
 	const settleMoney = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
-			const result = settleOrderMoney(freshOrder.toMutableJSON().payload, cartConfig);
+			const result = settleAggregate(
+				snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
+				cartConfig
+			);
 			// Before the `changed` bail, not after: a cart whose money is already
 			// correct can still be resting on a tax rate the store has dropped, and
 			// that is precisely the order the cashier must be told about.
@@ -279,7 +281,7 @@ export const useCartSettlement = () => {
 			const write = moneyWriteChain.current.then(() =>
 				localPatch({
 					document: freshOrder,
-					data: result.patch,
+					data: result.patch as Partial<OrderDocument>,
 				})
 			);
 			// The chain must survive a failed write, or one rejection would strand every

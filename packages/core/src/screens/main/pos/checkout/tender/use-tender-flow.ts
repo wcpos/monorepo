@@ -19,6 +19,7 @@ import {
 	type PaymentTransport,
 	readLedger,
 	roundedDue,
+	settlesAtRoundedDue,
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	toMinor,
@@ -40,7 +41,6 @@ import '../cash-rounding-hook';
 import { enqueueOrderMutation, type OrderMutationContext } from '../../hooks/order-mutation-queue';
 import { useActionContext } from '../../hooks/use-action-context';
 import { useCartConfig } from '../../hooks/use-cart-config';
-import { settleOrderMoney } from '../../hooks/settle-order-money';
 import {
 	RegisterSessionRequiredError,
 	requireOpenSession,
@@ -179,7 +179,7 @@ export interface TenderFlow {
 	entryAppliedMinor: number;
 	/** What the current entry would hand back, zero for a method that gives no change. */
 	entryChangeMinor: number;
-	/** The selected cash method's due with its rounding (#66, #84); the balance when it has none. */
+	/** The balance rounded for the selected manual method (#66, #84); the balance when it has none. */
 	roundedDueMinor: number;
 	/** `roundedDueMinor - balanceMinor` when the current entry settles at the rounded due, else 0. */
 	roundingMinor: number;
@@ -475,12 +475,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const plannedLegMinor = figures?.thisPaymentMinor ?? balanceMinor;
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
 	// Cash rounding (#66, #84) previews what the cash.rounding hook decides at commit, with the
-	// same function: a manual method's leg that is the whole balance is due the rounded amount.
+	// same functions on the same facts the commit dispatches.
 	const { dueMinor: roundedDueMinor } = roundedDue(
 		balanceMinor,
-		method?.capture.mode === 'manual' && plannedLegMinor === balanceMinor
-			? method.defaults.rounding
-			: null,
+		method?.capture.mode === 'manual' ? method.defaults.rounding : null,
 		dp
 	);
 	// An untouched prefill of the balance is the due, so under rounding it is the rounded due.
@@ -489,10 +487,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// A gateway that takes no part payment runs the whole order (§4.1): the entry is the balance
 	// whatever another pill or a plan left typed, so the leg completes and is journaled as such.
 	const enteredLegMinor = fixedAmount ? balanceMinor : appliedMinor(entryMinor, legCapMinor);
-	const roundingMinor =
-		entryMinor >= roundedDueMinor && enteredLegMinor >= Math.min(balanceMinor, roundedDueMinor)
-			? roundedDueMinor - balanceMinor
-			: 0;
+	const roundingMinor = settlesAtRoundedDue({
+		amountMinor: enteredLegMinor,
+		tenderedMinor: entryMinor,
+		balanceMinor,
+		dueMinor: roundedDueMinor,
+	})
+		? roundedDueMinor - balanceMinor
+		: 0;
 	const entryAppliedMinor = roundingMinor !== 0 ? roundedDueMinor : enteredLegMinor;
 	const entryChangeMinor = changeMinor(
 		entryMinor,
@@ -713,20 +715,25 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? [{ key: SPLIT_META_KEY, value: null }]
 					: undefined;
 			// The rounding fee (#66, #84) lands before the leg, so the writer's total, the provenance
-			// push and the store's ledger all see the rounded due. The fee names the row it rounds,
-			// and the order's money fields move in the same patch.
+			// push and the store's ledger all see the rounded due; it names the row it rounds. A fee
+			// edit moves the stored total by the fee money alone (the rounding fee has no tax) and
+			// recomputes nothing: the store may own the order's money (ADR 0032).
 			type FeeLines = NonNullable<typeof payload.fee_lines>;
-			const patchFees = async (
-				edit: (fees: FeeLines, lineItems: typeof payload.line_items) => FeeLines
-			) => {
-				const target = queue.order ?? order;
-				const latest = target.getLatest().payload;
-				const fee_lines = edit(latest.fee_lines ?? [], latest.line_items);
-				const data = { fee_lines, ...settleOrderMoney({ ...latest, fee_lines }, cartConfig).patch };
-				if (!(await localPatch({ document: target, data }))) throw new Error('rounding_fee_failed');
+			const target = queue.order ?? order;
+			const feeMinor = (fees: FeeLines) =>
+				fees.reduce(
+					(sum, fee) =>
+						fee.name == null ? sum : sum + toMinor(fee.total, dp) + toMinor(fee.total_tax, dp),
+					0
+				);
+			const withFees = (latest: typeof payload, edit: (fees: FeeLines) => FeeLines) => {
+				const fees = latest.fee_lines ?? [];
+				const fee_lines = edit(fees);
+				const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines) - feeMinor(fees);
+				return { fee_lines, total: fromMinor(totalMinor, dp) };
 			};
-			const writeRoundingFee = (paymentRef: string | null) =>
-				patchFees((fees, lineItems) => {
+			const roundingFee = (latest: typeof payload, paymentRef: string | null) =>
+				withFees(latest, (fees) => {
 					const posData = {
 						amount: fromMinor(roundingMinor, dp),
 						percent: false,
@@ -743,11 +750,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						uuidv4
 					);
 					const fee = calculateCartLine(
-						{ kind: 'fee', line, cartLineItems: lineItems ?? [] },
+						{ kind: 'fee', line, cartLineItems: latest.line_items ?? [] },
 						cartConfig
 					);
 					return [...fees, fee.line] as FeeLines;
 				});
+			const patchFees = async (data: ReturnType<typeof withFees>) => {
+				if (!(await localPatch({ document: target, data }))) throw new Error('rounding_fee_failed');
+			};
 			// The gate only looked the session up (a guard has no effects before `next`); the
 			// pre-action write `requireOpenSession` makes belongs here, before the attempt record.
 			// It also re-reads the id, so a session closed between
@@ -780,17 +790,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				savingProvenance = false;
 			};
-			// A cash due rounded to nothing completes here too, after its fee.
+			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-				if (roundingMinor !== 0) await writeRoundingFee(null);
+				const latest = order.getLatest().payload;
 				const result = await localPatch({
 					document: order,
 					data: {
+						...(roundingMinor !== 0 ? roundingFee(latest, null) : {}),
 						status: 'completed',
-						meta_data: await completionMetaFor(ctx, order.getLatest().payload.meta_data, {
-							sessionId,
-						}),
+						meta_data: await completionMetaFor(ctx, latest.meta_data, { sessionId }),
 					},
 				});
 				if (!result) throw new Error('zero_balance_completion_failed');
@@ -1045,15 +1054,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 			const tendered = method.capabilities.change ? fromMinor(e.payload.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
-			if (paymentId) await writeRoundingFee(paymentId);
+			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
 			const unround = () =>
-				patchFees((fees) =>
-					fees.flatMap((fee) => {
-						const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
-						if (!paymentId || rounding?.payment_ref !== paymentId) return [fee];
-						return fee.id ? [{ ...fee, name: null }] : [];
-					})
+				patchFees(
+					withFees(target.getLatest().payload, (fees) =>
+						fees.flatMap((fee) => {
+							const rounding = parsePosData(fee)?.rounding as { payment_ref?: string } | undefined;
+							if (!paymentId || rounding?.payment_ref !== paymentId) return [fee];
+							return fee.id ? [{ ...fee, name: null }] : [];
+						})
+					)
 				);
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(amountMinor, dp),

@@ -76,6 +76,7 @@ export {
 	fromMinor,
 	roundToIncrement,
 	roundedDue,
+	settlesAtRoundedDue,
 	LEDGER_META_KEY,
 	LEDGER_SCHEMA,
 	KNOWN_CAPTURE_MODES,

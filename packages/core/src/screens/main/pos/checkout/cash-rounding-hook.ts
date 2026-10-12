@@ -1,4 +1,4 @@
-import { roundedDue } from '@wcpos/order-math';
+import { roundedDue, settlesAtRoundedDue } from '@wcpos/order-math';
 
 import {
 	type ActionHook,
@@ -20,10 +20,11 @@ export const cashRounding: ActionHook<typeof TENDER_COMMIT_EVENT> = async (ctx, 
 		method?.defaults.rounding ?? null,
 		ctx.store.priceDecimals
 	);
-	// Settles the order: the leg reaches the rounded due (a round-down due sits below the balance),
-	// and the notes handed over cover it, or the writer would record change below zero.
-	const settles = amountMinor >= Math.min(balanceMinor, dueMinor) && tenderedMinor >= dueMinor;
-	if (roundingMinor === 0 || !settles) return next(e);
+	if (
+		roundingMinor === 0 ||
+		!settlesAtRoundedDue({ amountMinor, tenderedMinor, balanceMinor, dueMinor })
+	)
+		return next(e);
 	return next({
 		...e,
 		payload: { ...e.payload, amountMinor: dueMinor, balanceMinor: dueMinor, roundingMinor },

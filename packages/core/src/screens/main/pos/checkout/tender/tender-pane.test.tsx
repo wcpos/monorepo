@@ -441,6 +441,46 @@ it('a partial cash entry is not rounded, but the exact chip still offers the rou
 	expect(screen.getByTestId('checkout-quick-exact').textContent).toBe('Exact 1005');
 });
 
+it('an exact unrounded cash entry pays it off, as the hook lets it', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		balanceMinor: 1003,
+		thisPaymentMinor: 1003,
+		roundedDueMinor: 1005,
+		roundingMinor: 0,
+		entryAppliedMinor: 1003,
+		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 1003 },
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 1003 in Cash · pays it off');
+	expect(screen.queryByTestId('checkout-rounded-from')).toBeNull();
+});
+
+it('a split share the hook will settle previews the rounded due', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		plan: { kind: 'fixed', firstMinor: 1001, title: null, from: 0 },
+		planLegs: [
+			{ minor: 1001, state: 'now' },
+			{ minor: 1, state: 'rest' },
+		],
+		balanceMinor: 1002,
+		thisPaymentMinor: 1001,
+		roundedDueMinor: 1000,
+		roundingMinor: -2,
+		entryAppliedMinor: 1000,
+		entryChangeMinor: 1000,
+		state: { ...initialTenderState, view: 'amount', methodId: method.id, entryMinor: 2000 },
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('Change 1000');
+	expect(screen.getByTestId('checkout-rounded-from').textContent).toBe('Rounded from 1002');
+	expect(screen.getByTestId('checkout-commit').textContent).toMatch(/^Take 1000 in Cash/);
+});
+
 it('blocks no-change over-tender and restores full balance from a partial entry', () => {
 	const card = {
 		...method,
