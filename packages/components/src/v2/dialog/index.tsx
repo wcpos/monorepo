@@ -43,7 +43,8 @@ const byPresentation: Record<DialogPresentation, string> = {
 	left: 'h-full rounded-none border-r',
 	right: 'h-full rounded-none border-l',
 	page: 'h-full w-full rounded-none border-0',
-	bottom: 'w-full max-h-[92%] rounded-t-2xl border-t',
+	// The 92% cap sits on the Radix wrapper (SCRIM_WRAPPER.bottom); the panel fills it.
+	bottom: 'w-full rounded-t-2xl border-t',
 };
 const sizes: Record<DialogSize, string> = {
 	xs: 'w-64',

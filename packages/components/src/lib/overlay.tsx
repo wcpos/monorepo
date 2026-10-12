@@ -100,8 +100,31 @@ export function useOverlay(): OverlayContextValue {
 export function useOverlayPresentation(): OverlayPresentation | undefined {
 	return React.useContext(OverlayContext)?.presentation;
 }
-/** The web scrim flattens Radix's wrapper; a panel carrying the mark keeps its box. */
-export const SCRIM_FLATTENS_WRAPPER = '[&>[role=dialog]:not([data-sheet])]:contents';
+/**
+ * Web: Radix mounts an auto-sized `role="dialog"` wrapper between the scrim and the panel.
+ * The panel's `h-full` / `max-h-full` must resolve against the scrim, which the wrapper
+ * used to be flattened out of (`display: contents`). But a `display: contents` wrapper
+ * under the scrim kills native HTML5 drag for everything inside it (Chromium: no
+ * `dragstart` for any descendant — the column reorder in every settings panel,
+ * 2026-10-12), so the wrapper is a real box: a row flex box, stretched on the scrim's
+ * cross axis and capped at the scrim, whose one child is stretched to its height, so the
+ * panel's percentages resolve against the wrapper and the wrapper's against the scrim.
+ * The bottom cap lives here, not on the panel: a percentage cap on the panel would be a
+ * share of the wrapper's own content height and cut a short sheet.
+ * The phone sheet mounts no wrapper (its own panel is the `role="dialog"`) and is marked out.
+ * Full literals: the class scanner cannot see a composed string.
+ */
+export const SCRIM_WRAPPER: Record<OverlayPresentation, string> = {
+	anchored: '',
+	center:
+		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
+	left: '[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
+	right:
+		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full',
+	page: '[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-full [&>[role=dialog]:not([data-sheet])]:max-w-full [&>[role=dialog]:not([data-sheet])]:w-full',
+	bottom:
+		'[&>[role=dialog]:not([data-sheet])]:flex [&>[role=dialog]:not([data-sheet])]:max-h-[92%] [&>[role=dialog]:not([data-sheet])]:max-w-full',
+};
 const SHEET_MARK = { dataSet: { sheet: '' } } as object;
 /** Web: marks a scrim or panel whose Radix wrapper must wait for its exit (`overlay-hold` in global.css). */
 export const EXIT_MARK = { dataSet: { exit: '' } } as object;
@@ -195,8 +218,8 @@ export function OverlaySheetPanel({
 			ref={setNode}
 			role="dialog"
 			aria-modal
-			// The shell's scrim flattens its Radix `role="dialog"` wrapper to `display: contents`
-			// (see OverlayShell); this panel IS the box, so it marks itself out of that rule.
+			// The shell's scrim sizes its Radix `role="dialog"` wrapper as the panel's box
+			// (`SCRIM_WRAPPER`); this panel IS the box, so it marks itself out of that rule.
 			{...SHEET_MARK}
 			// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
 			tabIndex={-1}
@@ -416,9 +439,10 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				align[presentation],
 				// A leaving overlay takes no presses: the next tap goes to what is under it.
 				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out pointer-events-none',
-				// Radix inserts an auto-height [role=dialog] wrapper; flatten it on every presentation so the panel's h-full / max-h-[92%] / max-w-full resolve against the overlay (dialog ledger line 5).
-				// The phone sheet mounts no Radix wrapper: its own [role=dialog] panel sits right under the scrim and is the box, so it is marked out of the rule.
-				SCRIM_FLATTENS_WRAPPER
+				// Radix inserts an auto-height [role=dialog] wrapper; give it the panel's box on every
+				// presentation so h-full / max-h-full / max-w-full resolve (see SCRIM_WRAPPER — never
+				// `display: contents`, which kills native drag inside the panel).
+				SCRIM_WRAPPER[presentation]
 			)}
 			// The scrim is a Pressable, so RN-web would give it tabIndex=0 and the click that
 			// opened the dialog can land on it and focus it. A focus during a side panel's

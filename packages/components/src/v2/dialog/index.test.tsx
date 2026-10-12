@@ -390,7 +390,8 @@ it.each([
 	['center', 'rounded-lg', 'w-160'],
 	['right', 'border-l', 'h-full'],
 	['left', 'border-r', 'h-full'],
-	['bottom', 'rounded-t-2xl', 'max-h-[92%]'],
+	// The sheet's 92% cap sits on the Radix wrapper (SCRIM_WRAPPER.bottom); the panel fills it.
+	['bottom', 'rounded-t-2xl', 'w-full'],
 ] as const)(
 	'5. %s has its presentation classes and honours only applicable sizes',
 	(side, edge, sizing) => {

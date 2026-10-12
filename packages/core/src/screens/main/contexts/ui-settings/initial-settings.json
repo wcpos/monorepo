@@ -148,7 +148,7 @@
     "metaDataKeys": ""
   },
   "pos-cart": {
-    "sortLines": "newest_bottom",
+    "sortLines": "newest_top",
     "openOrdersPosition": "bottom",
     "sortBy": "id",
     "sortDirection": "asc",

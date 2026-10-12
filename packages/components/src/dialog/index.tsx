@@ -21,7 +21,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT } from '../lib/motion';
-import { EXIT_MARK, OVERLAY_MOTION } from '../lib/overlay';
+import { EXIT_MARK, OVERLAY_MOTION, SCRIM_WRAPPER } from '../lib/overlay';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -74,9 +74,10 @@ function DialogOverlayWeb({
 				// made the panel see-through while it slid in. Leaving, it takes no presses.
 				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out pointer-events-none',
 				overlayAlignment[side],
-				// Radix inserts an auto-height [role=dialog] wrapper; flatten it so the panel's
-				// h-full / max-h-[85%] resolve against the overlay (same as ModalOverlayWeb).
-				side !== 'center' && '[&>[role=dialog]]:contents',
+				// Radix inserts an auto-height [role=dialog] wrapper; give it the panel's box so
+				// h-full / max-h-full resolve against the overlay (see SCRIM_WRAPPER — never
+				// `display: contents`, which kills native drag inside the panel: column reorder).
+				SCRIM_WRAPPER[side],
 				className
 			)}
 			// The scrim is a Pressable, so RN-web would give it tabIndex=0 and the click that
@@ -200,7 +201,7 @@ const dialogContentVariants = cva(
 				center: '',
 				right: 'h-full max-h-full max-w-full rounded-none border-r-0',
 				left: 'h-full max-h-full max-w-full rounded-none border-l-0',
-				bottom: 'max-h-[85%] w-full max-w-full rounded-none border-b-0',
+				bottom: 'max-h-full w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {

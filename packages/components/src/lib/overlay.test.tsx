@@ -10,6 +10,7 @@ import {
 	type OverlayPresentation,
 	OverlaySheetPanel,
 	OverlayShell,
+	SCRIM_WRAPPER,
 	useOverlay,
 	useOverlayPresentation,
 } from './overlay';
@@ -105,7 +106,10 @@ it.each([
 	expect(classes).toContain('web:animate-overlay-in');
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-presentation', presentation);
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', String(deferred));
-	expect(classes).toContain('[&>[role=dialog]:not([data-sheet])]:contents');
+	// The Radix wrapper is a real box, never `display: contents`: flattened, no descendant
+	// of the panel can start a native HTML5 drag (column reorder in every settings panel).
+	expect(classes).toEqual(expect.arrayContaining(SCRIM_WRAPPER[presentation].split(' ')));
+	expect(classes?.join(' ')).not.toMatch(/:contents\b/);
 	expect(mockScrimProps.at(-1)).toMatchObject({ focusable: false });
 	expect(mockScrimProps.at(-1)?.onPress).toBeUndefined();
 });
