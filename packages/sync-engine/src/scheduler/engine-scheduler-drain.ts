@@ -48,11 +48,7 @@ import {
 	createOrderHeldRowDiscarder,
 	createOrderPendingMutationIds,
 } from '../write-path/order-pull-guard';
-import {
-	hasPendingLocalWork,
-	withoutLocallyProtected,
-	withoutUnchanged,
-} from '../write-path/local-work-guard';
+import { hasPendingLocalWork, partitionPulledRows } from '../write-path/local-work-guard';
 import {
 	type ManifestCollection,
 	upsertManifestRows,
@@ -203,9 +199,7 @@ export function collectionSchedulerRepository<T extends { uuid: string }>(
 	return {
 		async upsertMany(documents: T[]): Promise<T[]> {
 			if (documents.length === 0) return [];
-			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();
-			const applicable = await withoutLocallyProtected(collection, documents, stored);
-			const changed = withoutUnchanged(collection, stored, applicable);
+			const { applicable, changed } = await partitionPulledRows(collection, documents);
 			if (changed.length > 0)
 				assertBulkSuccess(await collection.bulkUpsert(changed), 'engine-scheduler-drain upsert');
 			// Applied means server truth is resident, including rows that needed no write.

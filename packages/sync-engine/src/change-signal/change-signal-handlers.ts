@@ -41,7 +41,7 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
-import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+import { hasPendingLocalWork, partitionPulledRows } from '../write-path/local-work-guard';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -190,15 +190,18 @@ async function pullByIds(
 			d.projectMaterialized(payload, ctx.barcodeSelectors?.())
 		);
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
-		const applicable = await withoutLocallyProtected(
+		// The same boundary as the scheduler drain: an unchanged row (the server's stamp agrees)
+		// is applied without a write, so a journal entry for a record whose content did not move
+		// never mints a new revision — and never re-renders what shows it.
+		const { applicable, changed } = await partitionPulledRows(
 			collection as never,
 			documents as { uuid: string }[]
 		);
 		if (persist) await persist(applicable);
 		else {
-			if (applicable.length > 0)
+			if (changed.length > 0)
 				assertBulkSuccess(
-					await collection.bulkUpsert(applicable as never[]),
+					await collection.bulkUpsert(changed as never[]),
 					'change-signal-handlers upsert'
 				);
 			const rows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
@@ -280,13 +283,13 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
 		d.project(payload, ctx.barcodeSelectors?.())
 	);
-	const applicable = await withoutLocallyProtected(
+	const { changed } = await partitionPulledRows(
 		collection as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
@@ -320,13 +323,13 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 		throw new Error(`${d.collection} refresh: incomplete-snapshot; repeated record in page walk`);
 	}
 	const documents = [...documentsByUuid.values()];
-	const applicable = await withoutLocallyProtected(
+	const { changed } = await partitionPulledRows(
 		collection as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}

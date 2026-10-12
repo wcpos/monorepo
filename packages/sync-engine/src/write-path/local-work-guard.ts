@@ -96,6 +96,22 @@ export function withoutUnchanged<T extends { uuid: string }>(
 	});
 }
 
+/**
+ * THE pull-apply boundary, shared by every lane that lands server rows (the scheduler drain and
+ * the change-signal handlers): `applicable` are the rows no resident local work protects — server
+ * truth is resident for all of them, written or not — and `changed` are the ones among them whose
+ * bytes actually move. One `findByIds` serves both filters.
+ */
+export async function partitionPulledRows<T extends { uuid: string }>(
+	collection: LocalWorkCollection,
+	documents: T[]
+): Promise<{ applicable: T[]; changed: T[] }> {
+	if (documents.length === 0) return { applicable: documents, changed: documents };
+	const stored = await collection.findByIds(documents.map((document) => document.uuid)).exec();
+	const applicable = await withoutLocallyProtected(collection, documents, stored);
+	return { applicable, changed: withoutUnchanged(collection, stored, applicable) };
+}
+
 /** The incoming document as RxDB would store it, or null when that cannot be known. */
 function filledWithDefaults(
 	collection: LocalWorkCollection,
