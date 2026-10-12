@@ -12,7 +12,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged, map, Observable, of, switchMap } from 'rxjs';
+import { combineLatest, distinctUntilChanged, filter, map, Observable, of, switchMap } from 'rxjs';
 
 import {
 	acquireQueryHandle,
@@ -113,7 +113,7 @@ export function acquireProductsQueryHandle(
 	key: string,
 	input: ProductsHandleInput
 ): QueryHandle<ProductsResult> {
-	return acquireQueryHandle(engine, key, (onStop) => {
+	return acquireQueryHandle(engine, key, (registry) => {
 		const id = `qh${nextHandleId++}`;
 		const { state, parentSearchFields, childSearchFields } = input;
 		const compiled = compileQuery('products', state, {
@@ -213,8 +213,28 @@ export function acquireProductsQueryHandle(
 				observeActive: observeCollectionActive,
 			},
 			emptyResult(),
-			onStop
+			registry
 		);
+	});
+}
+
+/**
+ * One string per query, whatever order a caller built the state in: keys sorted at every
+ * level, `undefined` dropped, the search trimmed. Two components describing the same query
+ * (the grid seeds `{ status, stock_status }`, the quick-filter preview patches filters one by
+ * one) then share one handle instead of running two reads and two demands.
+ */
+export function canonicalQueryKey(value: unknown): string {
+	return JSON.stringify(value, (_key, entry: unknown) => {
+		if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+			const sorted: Record<string, unknown> = {};
+			for (const name of Object.keys(entry as Record<string, unknown>).sort()) {
+				const field = (entry as Record<string, unknown>)[name];
+				if (field !== undefined) sorted[name] = field;
+			}
+			return sorted;
+		}
+		return entry;
 	});
 }
 
@@ -237,11 +257,11 @@ export function useProductsQueryHandle(
 	const variationsScope = useScopeKey('variations');
 	const parentSearchFields = useSearchFields('products') as string[] | undefined;
 	const childSearchFields = useSearchFields('variations') as string[] | undefined;
-	const key = JSON.stringify([
+	const key = canonicalQueryKey([
 		'products',
 		productsScope,
 		variationsScope,
-		state,
+		{ ...state, search: state.search.trim() },
 		parentSearchFields ?? null,
 		childSearchFields ?? null,
 	]);
@@ -300,18 +320,22 @@ export function useQueryHandleResource<R extends QueryResult<RxCollection>>(
  */
 export function bindingObservablesFor<R extends QueryResult<RxCollection>>(handle: QueryHandle<R>) {
 	const snapshot$ = handle.observe();
-	const field = <K extends keyof QuerySnapshot<R>>(name: K) =>
-		snapshot$.pipe(
+	// The projections say nothing until the read has answered: a footer holding the previous
+	// query's total keeps it while the next loads (as the old per-binding streams did, which
+	// emitted nothing before their read), instead of blanking to "Showing 20" per keystroke.
+	const answered$ = snapshot$.pipe(filter((snapshot) => snapshot.ready));
+	const field = <K extends keyof QuerySnapshot<R>>(source: Observable<QuerySnapshot<R>>, name: K) =>
+		source.pipe(
 			map((snapshot) => snapshot[name]),
 			distinctUntilChanged()
 		);
 	return {
 		result$: queryHandleResults$(handle),
-		active$: field('active'),
-		pending$: field('pending'),
-		exhausted$: field('exhausted'),
-		total$: field('total'),
-		laneProgress$: snapshot$.pipe(
+		active$: field(snapshot$, 'active'),
+		pending$: field(snapshot$, 'pending'),
+		exhausted$: field(answered$, 'exhausted'),
+		total$: field(answered$, 'total'),
+		laneProgress$: answered$.pipe(
 			map((snapshot) => snapshot.laneProgress),
 			distinctUntilChanged(
 				(previous, current) =>

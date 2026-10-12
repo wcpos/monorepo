@@ -47,11 +47,7 @@ import {
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type {
-	CoverageTarget,
-	RequirementHandle,
-	RxdbSyncEngine,
-} from '@wcpos/sync-engine';
+import type { CoverageTarget, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
 import {

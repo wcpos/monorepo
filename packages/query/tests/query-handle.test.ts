@@ -1,4 +1,4 @@
-import { firstValueFrom, Observable, of, Subject } from 'rxjs';
+import { defer, firstValueFrom, Observable, of, Subject, throwError } from 'rxjs';
 
 import type { EngineRequirement } from '@wcpos/sync-engine';
 
@@ -167,6 +167,71 @@ describe('query handle', () => {
 		expect(result.hits.map((hit) => hit.id)).toEqual(['p1']);
 		expect(resource.read().hits.map((hit) => hit.id)).toEqual(['p1']);
 		resource.destroy();
+	});
+
+	it('rethrows a failed read through the resource and retries it for the next reader', async () => {
+		let attempts = 0;
+		const handle = acquireQueryHandle(engine, 'f', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('f', of(EMPTY)),
+					// Like `observeEngineQuery`, the read runs again on every subscription.
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return attempts === 1 ? throwError(() => new Error('storage gone')) : of(EMPTY);
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		const resource = queryHandleResource(handle);
+		expect(() => resource.read()).toThrow('storage gone');
+		expect(handle.value.error).toBeInstanceOf(Error);
+		resource.destroy();
+		await settle();
+		// A new reader asks the engine again and gets an answer.
+		const again = queryHandleResource(handle);
+		expect(again.read()).toEqual(EMPTY);
+		expect(attempts).toBe(2);
+		again.destroy();
+	});
+
+	it('carries rows and total in one frame, and keeps the last rows across a restart', async () => {
+		const results = new Subject<Result>();
+		const key = 'g';
+		const plan = searchPlan('ada');
+		const handle = acquireQueryHandle(engine, key, (registry) =>
+			createQueryHandle(
+				engine,
+				{ ...spec(key, results, [plan]), censusScoped: true },
+				EMPTY,
+				registry
+			)
+		);
+		engine.setCensusTotal('products', 7);
+		const frames: { count: number; total: number | null }[] = [];
+		let leave = handle.subscribe(() =>
+			frames.push({ count: handle.value.count, total: handle.value.total })
+		);
+		results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] });
+		await settle();
+		// Never a frame pairing the new rows with a stale total.
+		expect(frames.filter((frame) => frame.count === 1).every((frame) => frame.total === 7)).toBe(
+			true
+		);
+
+		leave();
+		await settle();
+		expect(queryHandleCount(engine)).toBe(0);
+		// The object was kept by a reader and retained again: it re-enters the registry and
+		// opens on the rows it last had, not on empty ones.
+		leave = handle.subscribe(() => undefined);
+		expect(handle.value.count).toBe(1);
+		expect(acquire(key, results)).toBe(handle);
+		leave();
 	});
 
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {

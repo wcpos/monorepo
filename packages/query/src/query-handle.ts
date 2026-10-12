@@ -30,6 +30,7 @@ import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
+	defer,
 	distinctUntilChanged,
 	filter,
 	map,
@@ -39,6 +40,7 @@ import {
 	startWith,
 	Subscription,
 	switchMap,
+	throwError,
 } from 'rxjs';
 
 import type {
@@ -258,6 +260,30 @@ export function coverageProjection$(
 	census$: Observable<number | null>,
 	coverage: 'exact' | 'superset' | undefined = 'exact'
 ): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
+	return coverageProjectionWithResult$(engine, result$, coverageTarget$, census$, coverage).pipe(
+		map(({ total, laneProgress }) => ({ total, laneProgress })),
+		distinctUntilChanged(
+			(previous, current) =>
+				previous.total === current.total &&
+				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
+				previous.laneProgress?.total === current.laneProgress?.total
+		),
+		shareReplay({ bufferSize: 1, refCount: true })
+	);
+}
+
+/**
+ * `coverageProjection$` carrying the result it was computed for, so a snapshot can take rows
+ * and total from ONE emission: fed separately, a new result would first pair with the old
+ * total and the reader would see two frames, one of them inconsistent.
+ */
+export function coverageProjectionWithResult$<R extends QueryResult<RxCollection>>(
+	engine: RxdbSyncEngine,
+	result$: Observable<R>,
+	coverageTarget$: Observable<CoverageTarget | null>,
+	census$: Observable<number | null>,
+	coverage: 'exact' | 'superset' | undefined = 'exact'
+): Observable<{ result: R; total: number | null; laneProgress: QueryLaneProgress | null }> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
@@ -268,18 +294,19 @@ export function coverageProjection$(
 			)
 		)
 	);
-	return combineLatest([
-		result$.pipe(map((result) => result.count ?? result.hits.length)),
-		verdict$,
-		census$,
-	]).pipe(
-		map(([localCount, { verdict, superset }, censusTotal]) => {
+	return combineLatest([result$, verdict$, census$]).pipe(
+		map(([result, { verdict, superset }, censusTotal]) => {
+			const localCount = result.count ?? result.hits.length;
 			// `censusTotal` is non-null only where the census honestly stands for this screen
 			// (see `censusScoped`) and has landed.
 			// A superset lane may prove completeness, never supply a count.
 			const serverTotal = superset ? null : (censusTotal ?? verdict.total);
 			if (serverTotal !== null) {
-				return { total: Math.max(serverTotal, localCount), laneProgress: verdict.progress };
+				return {
+					result,
+					total: Math.max(serverTotal, localCount),
+					laneProgress: verdict.progress,
+				};
 			}
 			// No server count anywhere. The resident count is a truthful TOTAL only when the
 			// engine claims to hold the whole matching set — `complete` is exactly that claim,
@@ -287,17 +314,11 @@ export function coverageProjection$(
 			// Otherwise the resident count is just "what has loaded so far", and passing it off
 			// as the size of the set is the "Showing 20 of 20" lie.
 			return {
+				result,
 				total: verdict.complete ? localCount : null,
 				laneProgress: verdict.progress,
 			};
-		}),
-		distinctUntilChanged(
-			(previous, current) =>
-				previous.total === current.total &&
-				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
-				previous.laneProgress?.total === current.laneProgress?.total
-		),
-		shareReplay({ bufferSize: 1, refCount: true })
+		})
 	);
 }
 
@@ -358,11 +379,13 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
 	let started = false;
 	let handles: RequirementHandle[] = [];
 	let retryTimer: ReturnType<typeof setTimeout> | undefined;
-	let cancelled = false;
+	// One epoch per start(): a rejection's retry or a timer from a stopped cycle must not
+	// declare into the next one (it would overwrite its handles unreleased).
+	let epoch = 0;
 	let settleOnCancel: (() => void) | undefined;
 
-	const declare = (retryOnReject: boolean, cancelBarrier: Promise<void>) => {
-		if (cancelled) return;
+	const declare = (cycle: number, retryOnReject: boolean, cancelBarrier: Promise<void>) => {
+		if (cycle !== epoch) return;
 		pending$.next(true);
 		fetched$.next(false);
 		const requirements = plan.requirementsFor({ id });
@@ -393,14 +416,18 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
 			? settled.catch(
 					() =>
 						new Promise<DemandReadiness>((resolve) => {
+							if (cycle !== epoch) {
+								resolve(NOT_ATTEMPTED);
+								return;
+							}
 							const retried = handles;
 							retryTimer = setTimeout(() => {
-								if (cancelled) {
+								if (cycle !== epoch) {
 									resolve(NOT_ATTEMPTED);
 									return;
 								}
 								releaseHandles(retried);
-								declare(false, cancelBarrier);
+								declare(cycle, false, cancelBarrier);
 								// declare(false) reassigned `ready` to the retried declaration;
 								// chain this barrier to it.
 								resolve(ready);
@@ -431,23 +458,24 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
 		start() {
 			if (started) return;
 			started = true;
-			cancelled = false;
+			epoch += 1;
 			const cancelBarrier = new Promise<void>((resolve) => {
 				settleOnCancel = resolve;
 			});
-			declare(true, cancelBarrier);
+			declare(epoch, true, cancelBarrier);
 		},
 		stop() {
 			if (!started) return;
 			started = false;
-			cancelled = true;
+			epoch += 1;
 			settleOnCancel?.();
 			pending$.next(false);
 			fetched$.next(false);
 			searchLane$.next(null);
 			coverageTarget$.next(null);
 			if (retryTimer !== undefined) clearTimeout(retryTimer);
-			ready = Promise.resolve(ATTEMPTED);
+			// An abandoned declaration proved nothing (the old cleanup's barrier said the same).
+			ready = Promise.resolve(NOT_ATTEMPTED);
 			const outstanding = handles;
 			handles = [];
 			releaseHandles(outstanding);
@@ -507,6 +535,12 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
  */
 export type QuerySnapshot<R extends QueryResult<RxCollection> = QueryResult<RxCollection>> = {
 	ready: boolean;
+	/**
+	 * The read failed (storage recovery gave up, a selector the adapter cannot run). The
+	 * Suspense resource rethrows it into the screen's ErrorBoundary, as the old
+	 * `ObservableResource(result$)` did; the handle stops its read so the next reader restarts it.
+	 */
+	error: unknown;
 	result: R;
 	hits: R['hits'];
 	count: number;
@@ -558,6 +592,7 @@ export type QueryHandleSpec<R extends QueryResult<RxCollection>> = {
 function emptySnapshot<R extends QueryResult<RxCollection>>(result: R): QuerySnapshot<R> {
 	return {
 		ready: false,
+		error: null,
 		result,
 		hits: result.hits,
 		count: result.count ?? result.hits.length,
@@ -577,6 +612,7 @@ function sameSnapshot<R extends QueryResult<RxCollection>>(
 ): boolean {
 	return (
 		previous.ready === current.ready &&
+		previous.error === current.error &&
 		previous.result === current.result &&
 		previous.active === current.active &&
 		previous.pending === current.pending &&
@@ -592,11 +628,12 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	spec: QueryHandleSpec<R>,
 	/** The read's value before the engine answers; `ready: false` until it does. */
 	initial: R,
-	onStop?: () => void
+	registry?: { onStart(): void; onStop(): void }
 ): QueryHandle<R> {
 	const listeners = new Set<() => void>();
 	const snapshot$ = new BehaviorSubject<QuerySnapshot<R>>(emptySnapshot(initial));
 	let subscribers = 0;
+	let started = false;
 	let read: Subscription | null = null;
 	let stopScheduled = false;
 
@@ -623,69 +660,100 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				);
 	const census$ =
 		spec.censusScoped && primary ? censusTotal$(engine, primary.collection) : NO_CENSUS_TOTAL$;
-	const noProjection = { total: null, laneProgress: null } as const;
-	const projection$ = primary
-		? coverageProjection$(engine, result$, primary.coverageTarget$, census$, spec.coverage).pipe(
-				startWith(noProjection)
+	// Rows and total in ONE emission (the projection carries the result it was computed for),
+	// so a reader never sees new rows against the previous total.
+	const projected$ = primary
+		? coverageProjectionWithResult$(
+				engine,
+				result$,
+				primary.coverageTarget$,
+				census$,
+				spec.coverage
 			)
-		: of(noProjection);
+		: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
 	const exhausted$ = primary
 		? exhaustedFromCoverage$(engine, primary.searchLane$, primary.fetched$).pipe(startWith(null))
 		: UNKNOWN_EXHAUSTED$;
-	const composed$ = combineLatest([
-		result$.pipe(
-			map((result) => ({ ready: true, result })),
-			startWith({ ready: false, result: initial })
-		),
-		active$,
-		pending$,
-		exhausted$,
-		projection$,
-	]).pipe(
-		map(
-			([
-				{ ready, result },
-				active,
-				pending,
-				exhausted,
-				{ total, laneProgress },
-			]): QuerySnapshot<R> => ({
-				ready,
-				result,
-				hits: result.hits,
-				count: result.count ?? result.hits.length,
-				searchActive: Boolean(result.searchActive),
-				searchState: result.searchState,
-				active,
-				pending,
-				exhausted,
-				total,
-				laneProgress,
-			})
-		),
-		distinctUntilChanged(sameSnapshot)
-	);
+	// Deferred so a restart opens on the LAST snapshot's rows and total, not the initial ones.
+	const composed$ = defer(() => {
+		const last = snapshot$.getValue();
+		return combineLatest([
+			projected$.pipe(
+				map((projected) => ({ ready: true, ...projected })),
+				startWith({
+					ready: last.ready,
+					result: last.result,
+					total: last.total,
+					laneProgress: last.laneProgress,
+				})
+			),
+			active$,
+			pending$,
+			exhausted$,
+		]).pipe(
+			map(
+				([
+					{ ready, result, total, laneProgress },
+					active,
+					pending,
+					exhausted,
+				]): QuerySnapshot<R> => ({
+					ready,
+					error: null,
+					result,
+					hits: result.hits,
+					count: result.count ?? result.hits.length,
+					searchActive: Boolean(result.searchActive),
+					searchState: result.searchState,
+					active,
+					pending,
+					exhausted,
+					total,
+					laneProgress,
+				})
+			),
+			distinctUntilChanged(sameSnapshot)
+		);
+	});
 
+	const publish = (snapshot: QuerySnapshot<R>) => {
+		if (sameSnapshot(snapshot$.getValue(), snapshot)) return;
+		snapshot$.next(snapshot);
+		for (const listener of [...listeners]) listener();
+	};
+	const onReadError = (error: unknown) => {
+		// The read is over; the demand stays until the readers leave. Publish the error so the
+		// resource rethrows it into the screen's ErrorBoundary; the next reader retries the read.
+		read = null;
+		publish({ ...snapshot$.getValue(), error });
+	};
 	const start = () => {
-		if (read) return;
+		if (started) return;
+		started = true;
+		registry?.onStart();
 		// Demand first, so the first snapshot already carries `pending` and the coverage target.
 		for (const demand of spec.demands) demand.start();
-		read = composed$.subscribe((snapshot) => {
-			// The first composed value restates the initial snapshot; nobody is told twice.
-			if (sameSnapshot(snapshot$.getValue(), snapshot)) return;
-			snapshot$.next(snapshot);
-			for (const listener of [...listeners]) listener();
-		});
+		// The first composed value restates the current snapshot; nobody is told twice.
+		read = composed$.subscribe({ next: publish, error: onReadError });
 	};
 	const stop = () => {
-		if (!read) return;
-		for (const demand of spec.demands) demand.stop();
-		read.unsubscribe();
+		if (!started) return;
+		started = false;
+		// The read first: the demand's reset values must not land in the stored snapshot.
+		read?.unsubscribe();
 		read = null;
-		onStop?.();
+		for (const demand of spec.demands) demand.stop();
+		// A reader still holding the object sees the rows it had and no demand in flight.
+		publish({ ...snapshot$.getValue(), pending: false });
+		registry?.onStop();
 	};
 	const retain = () => {
 		subscribers += 1;
+		if (started && read === null) {
+			// The read failed earlier; a new reader asks the engine again.
+			read = composed$.subscribe({ next: publish, error: onReadError });
+			return;
+		}
 		start();
 	};
 	const release = () => {
@@ -700,6 +768,8 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		});
 	};
 
+	// Every method is a closure over this scope, never `this`: readers pass them around unbound
+	// (`useSyncExternalStore(handle.subscribe, …)`, `sync={handle.sync}`).
 	return {
 		key: spec.key,
 		get value() {
@@ -744,7 +814,7 @@ const registries = new WeakMap<
 export function acquireQueryHandle<R extends QueryResult<RxCollection>>(
 	engine: RxdbSyncEngine,
 	key: string,
-	create: (onStop: () => void) => QueryHandle<R>
+	create: (registry: { onStart(): void; onStop(): void }) => QueryHandle<R>
 ): QueryHandle<R> {
 	let registry = registries.get(engine);
 	if (!registry) {
@@ -753,8 +823,15 @@ export function acquireQueryHandle<R extends QueryResult<RxCollection>>(
 	}
 	const existing = registry.get(key);
 	if (existing) return existing as QueryHandle<R>;
-	const handle = create(() => {
-		if (registry.get(key) === handle) registry.delete(key);
+	const handle = create({
+		// A handle that stopped and is retained again (a reader kept the object) re-enters
+		// the registry, so a later acquire of the key shares it instead of doubling the read.
+		onStart() {
+			if (!registry.has(key)) registry.set(key, handle as QueryHandle<QueryResult<RxCollection>>);
+		},
+		onStop() {
+			if (registry.get(key) === handle) registry.delete(key);
+		},
 	});
 	registry.set(key, handle as QueryHandle<QueryResult<RxCollection>>);
 	return handle;
@@ -774,6 +851,7 @@ export function queryHandleResults$<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>
 ): Observable<R> {
 	return handle.observe().pipe(
+		switchMap((snapshot) => (snapshot.error ? throwError(() => snapshot.error) : of(snapshot))),
 		// `ready: false` is "no answer yet"; a Suspense resource stays pending on it.
 		filter((snapshot) => snapshot.ready),
 		map((snapshot) => snapshot.result),
