@@ -630,7 +630,8 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	initial: R,
 	registry?: QueryHandleRegistration<R>
 ): QueryHandle<R> {
-	const listeners = new Set<() => void>();
+	// One entry per subscription, not per callback: two readers may pass the same function.
+	const listeners = new Set<{ notify: () => void }>();
 	const snapshot$ = new BehaviorSubject<QuerySnapshot<R>>(emptySnapshot(initial));
 	let subscribers = 0;
 	let started = false;
@@ -719,7 +720,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	const publish = (snapshot: QuerySnapshot<R>) => {
 		if (sameSnapshot(snapshot$.getValue(), snapshot)) return;
 		snapshot$.next(snapshot);
-		for (const listener of [...listeners]) listener();
+		for (const { notify } of [...listeners]) notify();
 	};
 	const onReadError = (error: unknown) => {
 		// The read is over; the demand stays until the readers leave. Publish the error so the
@@ -728,6 +729,9 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		publish({ ...snapshot$.getValue(), error });
 	};
 	const subscribeRead = () => {
+		// A retry withdraws the previous error first: a reader arriving now must wait on the
+		// new read, not fail on the old answer replayed through `observe()`.
+		if (snapshot$.getValue().error) publish({ ...snapshot$.getValue(), error: null });
 		// The first composed value restates the current snapshot; nobody is told twice. A read
 		// that errors synchronously has already cleared `read`; a closed subscription must not
 		// take its place, or the next reader could never retry.
@@ -800,13 +804,14 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 			return snapshot$.getValue();
 		},
 		subscribe(listener) {
-			listeners.add(listener);
+			const entry = { notify: listener };
+			listeners.add(entry);
 			retain();
 			let released = false;
 			return () => {
 				if (released) return;
 				released = true;
-				listeners.delete(listener);
+				listeners.delete(entry);
 				release();
 			};
 		},

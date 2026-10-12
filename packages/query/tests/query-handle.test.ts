@@ -322,6 +322,47 @@ describe('query handle', () => {
 		expect(handle.value.ready).toBe(true);
 	});
 
+	it('withdraws the previous error when a retry starts, so the new reader waits on the new read', async () => {
+		let attempts = 0;
+		const late = new Subject<Result>();
+		const handle = acquireQueryHandle(engine, 'k', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('k', of(EMPTY)),
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return attempts === 1 ? throwError(() => new Error('storage gone')) : late;
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		handle.subscribe(() => undefined);
+		expect(handle.value.error).toBeInstanceOf(Error);
+		const resource = queryHandleResource(handle);
+		expect(handle.value.error).toBeNull();
+		expect(() => resource.read()).toThrow(); // a pending Suspense promise, not the old error
+		late.next({ count: 2, hits: [] });
+		expect(resource.read().count).toBe(2);
+		resource.destroy();
+	});
+
+	it('keeps notifying a subscription whose callback another subscription shared and released', () => {
+		const results = new Subject<Result>();
+		const handle = acquire('l', results);
+		let notified = 0;
+		const shared = () => (notified += 1);
+		const leaveA = handle.subscribe(shared);
+		handle.subscribe(shared);
+		leaveA();
+		results.next({ count: 1, hits: [] });
+		// The subscription that stayed is still told, once.
+		expect(notified).toBe(1);
+	});
+
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
 		const handle = acquire('e', of(EMPTY), [searchPlan('ada')]);
 		handle.subscribe(() => undefined);
