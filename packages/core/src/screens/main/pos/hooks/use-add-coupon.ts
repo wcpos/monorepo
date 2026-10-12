@@ -215,11 +215,14 @@ export const useAddCoupon = () => {
 					newCouponLine,
 					validated
 				);
-				// A hook's refusal is the coupon field's error line, where the cashier is looking.
+				// A hook's refusal is the coupon field's error line, where the cashier is looking;
+				// a hook that already presented its reason is not echoed.
 				if (isActionRefusal(outcome)) {
 					return {
 						success: false,
-						error: ctx.t(outcome.deny.reasonKey, outcome.deny.params),
+						error: outcome.deny.presented
+							? undefined
+							: ctx.t(outcome.deny.reasonKey, outcome.deny.params),
 					};
 				}
 				if (!outcome) {

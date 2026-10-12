@@ -237,3 +237,15 @@ it('a hook refusing cart.coupon.apply becomes the discount field error, and noth
 	expect(recalculate).not.toHaveBeenCalled();
 	expect(localPatch).not.toHaveBeenCalled();
 });
+it('a refusal the hook already presented is not echoed into the field', async () => {
+	registerActionHook(
+		'cart.coupon.apply',
+		async () => ({ deny: { reasonKey: 'loyalty.no_stacking', presented: true } }),
+		{ id: 'test.loyalty', tier: 'guard' }
+	);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: undefined });
+	expect(localPatch).not.toHaveBeenCalled();
+});

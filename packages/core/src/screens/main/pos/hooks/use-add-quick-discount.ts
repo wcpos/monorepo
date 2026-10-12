@@ -118,8 +118,14 @@ export const useAddQuickDiscount = () => {
 					newLine,
 					validated
 				);
+				// The refusal is the field's error line; a hook that already presented it is not echoed.
 				if (isActionRefusal(outcome))
-					return { success: false, error: ctx.t(outcome.deny.reasonKey, outcome.deny.params) };
+					return {
+						success: false,
+						error: outcome.deny.presented
+							? undefined
+							: ctx.t(outcome.deny.reasonKey, outcome.deny.params),
+					};
 				if (!outcome) return { success: false, error: t('pos_cart.coupon_apply_failed') };
 				orderLogger.info('Quick discount added', {
 					context: {
