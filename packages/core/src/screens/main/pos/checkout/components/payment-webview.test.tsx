@@ -1559,6 +1559,45 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockGet).not.toHaveBeenCalled();
 	});
 
+	it("stage host: the fallback poll's pending read on the gateway's stored status reaches finishSale as completed", async () => {
+		// The message case above covers the outcome handed over by
+		// handlePaymentReceived; pollServerTruth builds its own outcome from server
+		// truth, and that one has to carry the stored status too. No received
+		// message here: the second frame load arms the poll, the poll reads the
+		// order at the stored status, and the same downstream facts must follow.
+		jest.useFakeTimers();
+		autoShowReceipt = true;
+		const serverOrder = { ...pendingPayload, total: '75.00' };
+		mockGet.mockResolvedValue({ data: [serverOrder] });
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+
+		// The poll was the completion path.
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+		await waitFor(() => expect(mockStockAdjustment).toHaveBeenCalledTimes(1));
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
 	it('never settles a parked status even when it is the stored status', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 		mockGet.mockResolvedValue({
