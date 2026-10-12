@@ -34,6 +34,11 @@ export async function commitGatewaySale(
 		online: boolean;
 		/** The gateway's stored POS Order Status, journaled for the attempt's replay. */
 		settledOrderStatus?: string | null;
+		/**
+		 * Every gateway's stored status, keyed by id — journaled instead of one status when
+		 * the pay page can settle through a gateway other than the one the sale opened with.
+		 */
+		settledOrderStatuses?: Record<string, string | null>;
 	}
 ): Promise<ActionRefusal | StampedSession> {
 	const { order, source, online } = input;
@@ -78,6 +83,7 @@ export async function commitGatewaySale(
 					completing: true,
 					source,
 					settledOrderStatus: input.settledOrderStatus,
+					settledOrderStatuses: input.settledOrderStatuses,
 				});
 				await persistSaleProvenance(ctx, { order, source, sessionId, online });
 				return { registerId, sessionId } satisfies StampedSession;

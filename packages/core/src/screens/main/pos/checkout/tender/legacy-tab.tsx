@@ -29,7 +29,7 @@ interface Props {
 export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
-	const { handleStockRejection, gateway } = useCheckoutSession(order);
+	const { handleStockRejection, settledOrderStatuses, gatewayResolved } = useCheckoutSession(order);
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [loading, setLoading] = React.useState(false);
 	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
@@ -79,7 +79,12 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	// against stale totals while the edited order is still saving — and a save
 	// queued offline is the same stale copy waiting on reconnect, so the webview
 	// stays blocked until the write actually lands (it needs the server anyway).
-	if (flow.saveState) {
+	//
+	// The frame also waits for the gateway catalog, as the modal checkout does: mounting it
+	// commits the sale and journals every gateway's stored status for replay, once. A frame
+	// mounted before the catalog loads journals none, and a sale settled at a stored unpaid
+	// status (BACS at pending) would never replay to completion.
+	if (flow.saveState || !gatewayResolved) {
 		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
 	}
 	if (!paymentURL) {
@@ -107,8 +112,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 				ref={webViewRef}
 				setLoading={setLoading}
 				setFrameStatus={reportFrameStatus}
-				settledOrderStatus={gateway?.settled_order_status ?? null}
-				settledGatewayId={gateway?.id ?? null}
+				settledOrderStatuses={settledOrderStatuses}
 				onStockRejection={handleStockRejection}
 			/>
 			<HStack className="justify-end">

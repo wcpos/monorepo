@@ -63,6 +63,8 @@ export async function recordSaleAttempt(
 		source: SaleOutcome['source'];
 		/** A gateway sale's stored POS Order Status (see isSettledOrderStatus), for its replay. */
 		settledOrderStatus?: string | null;
+		/** Every gateway's stored status, keyed by id, for a pay-page sale's replay. */
+		settledOrderStatuses?: Record<string, string | null>;
 	}
 ): Promise<void> {
 	if (input.completing)
@@ -71,6 +73,7 @@ export async function recordSaleAttempt(
 			source: input.source,
 			...(ctx.actor ? { actor: ctx.actor } : {}),
 			...(input.settledOrderStatus != null ? { settledOrderStatus: input.settledOrderStatus } : {}),
+			...(input.settledOrderStatuses ? { settledOrderStatuses: input.settledOrderStatuses } : {}),
 		});
 }
 
@@ -174,6 +177,11 @@ export type SaleOutcome =
 			refreshed?: boolean;
 			/** The status journaled with a gateway attempt (recordSaleAttempt); see isSettledOrderStatus. */
 			settledOrderStatus?: string | null;
+			/**
+			 * The catalog a pay-page attempt journaled, keyed by gateway id. When present it wins:
+			 * the status is looked up for the gateway the judged order carries (see replayStoredStatus).
+			 */
+			settledOrderStatuses?: Record<string, string | null>;
 	  };
 
 const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
@@ -220,6 +228,22 @@ export function awaitsStoredStatus(status: string): boolean {
 	return UNPAID_STATUSES.includes(status) && !NEVER_SETTLED_STATUSES.includes(status);
 }
 
+/**
+ * The stored status a replay judges an order against. A pay-page attempt journals the whole
+ * catalog, and the entry is read for the gateway the order being judged carries — the pay page
+ * can settle through another gateway than the one the sale was opened with, and the resident
+ * copy can still carry the opened one until a refresh brings the store's. A contract attempt
+ * journals its single gateway's status.
+ */
+function replayStoredStatus(
+	outcome: Extract<SaleOutcome, { source: 'replay' }>,
+	payload: OrderPayload
+): string | null | undefined {
+	if (!outcome.settledOrderStatuses) return outcome.settledOrderStatus;
+	const method = payload.payment_method;
+	return typeof method === 'string' ? (outcome.settledOrderStatuses[method] ?? null) : null;
+}
+
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
@@ -228,7 +252,7 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			// with none stored this is the blocklist it always was.
 			return (
 				!!payload?.status &&
-				isSettledOrderStatus(payload.status, outcome.settledOrderStatus) &&
+				isSettledOrderStatus(payload.status, replayStoredStatus(outcome, payload)) &&
 				activeAwaitingCustomer(payload.meta_data) === null
 			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.

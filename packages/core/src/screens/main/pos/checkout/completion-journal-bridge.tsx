@@ -197,6 +197,10 @@ export function SaleCompletionBridge(): null {
 						...(attempt.settledOrderStatus != null
 							? { settledOrderStatus: attempt.settledOrderStatus }
 							: {}),
+						// A pay-page attempt's catalog: judged by the gateway the resident order carries.
+						...(attempt.settledOrderStatuses
+							? { settledOrderStatuses: attempt.settledOrderStatuses }
+							: {}),
 					};
 					if (
 						payload.status !== 'cancelled' &&
