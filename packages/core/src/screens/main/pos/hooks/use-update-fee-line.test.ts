@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
 	registerActionHook,
@@ -107,6 +108,7 @@ jest.mock('./use-cart-config', () => {
 
 describe('useUpdateFeeLine', () => {
 	beforeEach(() => {
+		resetOrderMutationQueues();
 		jest.clearAllMocks();
 		resetActionRegistry();
 		mockFeeLines = [];
@@ -151,6 +153,35 @@ describe('useUpdateFeeLine', () => {
 				data: { fee_lines: [expect.objectContaining({ total: '5' })] },
 			})
 		);
+	});
+
+	it('lands on the saved order a first add left on the slot', async () => {
+		const { enqueueOrderMutation } =
+			jest.requireActual<typeof import('./order-mutation-queue')>('./order-mutation-queue');
+		const saved = {
+			uuid: 'order-uuid',
+			payload: { id: 18 },
+			getLatest: () => saved,
+			toMutableJSON: () => ({
+				payload: {
+					fee_lines: [
+						{ name: 'Handling', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },
+					],
+					line_items: [],
+				},
+			}),
+		} as never;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			queue.order = saved;
+		});
+		const { result } = renderHook(() => useUpdateFeeLine());
+		const pending = act(async () => result.current.updateFeeLine('fee-1', { amount: '3' }));
+		release();
+		await pending;
+		expect(mockLocalPatch).toHaveBeenCalledWith(expect.objectContaining({ document: saved }));
 	});
 
 	it('a guard refusal writes nothing and presents the reason', async () => {

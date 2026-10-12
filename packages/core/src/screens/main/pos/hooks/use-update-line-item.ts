@@ -136,7 +136,9 @@ export const useUpdateLineItem = () => {
 			context: OrderMutationContext,
 			options?: UpdateLineItemOptions
 		) => {
-			const order = capturedOrder.getLatest();
+			// A first add queued ahead left the saved order on the slot; the edit lands on it.
+			const target = context.order ?? capturedOrder;
+			const order = target.getLatest();
 			const lineItems = order.toMutableJSON().payload.line_items ?? [];
 			const result = await dispatchAction({
 				event: 'cart.line.update',
@@ -155,8 +157,7 @@ export const useUpdateLineItem = () => {
 						options: { skipStockGuard: options?.skipStockGuard },
 					},
 				},
-				bottom: (e) =>
-					writeLineItemChanges(capturedOrder, uuid, { ...e.payload.changes } as Changes),
+				bottom: (e) => writeLineItemChanges(target, uuid, { ...e.payload.changes } as Changes),
 			});
 			if (isActionRefusal(result)) {
 				presentActionRefusal(ctx, result, { orderId: documentRecordId(order) });
@@ -212,8 +213,8 @@ export const useUpdateLineItem = () => {
 			const capturedOrder = getCurrentOrderRecord();
 			const recordId = documentRecordId(capturedOrder.getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, async () => {
-				const order = capturedOrder.getLatest();
+			return enqueueOrderMutation(recordId, async (context) => {
+				const order = (context.order ?? capturedOrder).getLatest();
 				const lineItemIndex = (order.payload.line_items ?? []).findIndex(
 					(item) => wooMetaCarrier.lineUuid(item) === uuid
 				);

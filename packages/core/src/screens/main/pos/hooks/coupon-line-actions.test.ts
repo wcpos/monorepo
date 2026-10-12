@@ -11,7 +11,7 @@ import {
 	isActionRefusal,
 	removeCouponLine,
 } from './coupon-line-actions';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
 
 const log = jest.fn();
 const ctx = createActionContext({
@@ -33,6 +33,7 @@ const order = { uuid: 'order', getLatest: () => ({ payload: cart() }) } as never
 const saved = { code: 'save10', discount: '0', discount_tax: '0', meta_data: [] } as never;
 
 beforeEach(() => {
+	resetOrderMutationQueues();
 	jest.clearAllMocks();
 	resetActionRegistry();
 	couponLines = [];
@@ -173,4 +174,36 @@ it('remove: every line carrying the code leaves, not only the first', async () =
 	couponLines = [{ id: 1, code: 'save10' }, { code: 'keep' }, { code: 'SAVE10' }];
 	await removeCouponLine(writer, order, 'save10');
 	expect(recalculate).toHaveBeenCalledWith(lineItems, [{ id: 1, code: null }, { code: 'keep' }]);
+});
+
+it('apply: lands on the saved order a first add left on the slot, not the record it was called with', async () => {
+	const savedLines: Record<string, unknown>[] = [];
+	const savedOrder = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { line_items: lineItems, coupon_lines: savedLines } }),
+	} as never;
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	void enqueueOrderMutation('order', async (queue) => {
+		await gate;
+		queue.order = savedOrder;
+	});
+	// Validated against the temporary record's cart, which the saved order still matches.
+	const pending = applyCouponLine(writer, order, saved, cartSnapshotOf(cart()));
+	release();
+	await expect(pending).resolves.toMatchObject({ patched: { uuid: 'order' } });
+	expect(localPatch).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
+});
+
+it('remove: lands on the saved order the queue remembers for this order', async () => {
+	couponLines = [{ code: 'save10' }];
+	const savedOrder = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { line_items: lineItems, coupon_lines: [{ code: 'save10' }] } }),
+	} as never;
+	await enqueueOrderMutation('order', async (queue) => {
+		queue.order = savedOrder;
+	});
+	await removeCouponLine(writer, order, 'save10');
+	expect(localPatch).toHaveBeenCalledWith(expect.objectContaining({ document: savedOrder }));
 });

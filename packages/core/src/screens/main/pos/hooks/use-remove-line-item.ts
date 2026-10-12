@@ -43,7 +43,9 @@ export const useRemoveLineItem = () => {
 		async (uuid: string, type: Line, itemToRestore: LineItem) => {
 			const orderContext = { orderId: currentOrderRecord.payload.id };
 			const outcome = await enqueueOrderMutation(currentOrderRecord.uuid, (queue) => {
-				const order = currentOrderRecord.getLatest();
+				// A first add queued ahead replaced the temporary record with the saved order it
+				// left on the slot; that is the order every queued writer lands on.
+				const order = (queue.order ?? currentOrderRecord).getLatest();
 				const items = (order.payload[type] ?? []) as LineItem[];
 				// A confirmed deletion retired this Woo id; Undo must append a new line.
 				if (itemToRestore.id && !items.some((item) => item.id === itemToRestore.id)) {
@@ -90,7 +92,8 @@ export const useRemoveLineItem = () => {
 		async (uuid: string, type: Line) => {
 			let itemToRestore: LineItem | undefined;
 			const outcome = await enqueueOrderMutation(currentOrderRecord.uuid, (queue) => {
-				const order = currentOrderRecord.getLatest();
+				// The saved order a first add left on the slot, else the record the cashier acted on.
+				const order = (queue.order ?? currentOrderRecord).getLatest();
 				const items = (order.payload[type] ?? []) as LineItem[];
 				itemToRestore = items.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 				return dispatchAction({

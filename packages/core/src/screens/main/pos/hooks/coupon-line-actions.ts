@@ -82,16 +82,18 @@ export function applyCouponLine(
 	validated: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
 	return enqueueOrderMutation(order.uuid, (queue) => {
-		const before = cartSnapshot(order);
+		// A first add queued ahead left the saved order on the slot; the coupon lands on it.
+		const target = queue.order ?? order;
+		const before = cartSnapshot(target);
 		if (before !== validated) throw new CartChangedError();
-		const latest = order.getLatest().payload;
+		const latest = target.getLatest().payload;
 		const couponLines = latest.coupon_lines ?? [];
 		return dispatchAction({
 			event: 'cart.coupon.apply',
 			token: queue.dispatchToken,
 			ctx: writer.ctx,
 			input: {
-				orderId: order.uuid,
+				orderId: target.uuid,
 				actor: writer.actor,
 				source: 'user',
 				payload: {
@@ -100,7 +102,7 @@ export function applyCouponLine(
 					couponLines: couponLines as Plain[],
 				},
 			},
-			bottom: () => writeCouponLines(writer, order, before, [...couponLines, couponLine]),
+			bottom: () => writeCouponLines(writer, target, before, [...couponLines, couponLine]),
 		}) as Promise<ActionRefusal | CouponWriteResult | false>;
 	});
 }
@@ -112,8 +114,9 @@ export function removeCouponLine(
 	code: string
 ): Promise<ActionRefusal | CouponWriteResult | false> {
 	return enqueueOrderMutation(order.uuid, (queue) => {
-		const before = cartSnapshot(order);
-		const latest = order.getLatest().payload;
+		const target = queue.order ?? order;
+		const before = cartSnapshot(target);
+		const latest = target.getLatest().payload;
 		const couponLines = latest.coupon_lines ?? [];
 		const normalized = code.toLowerCase().trim();
 		const matches = (line: CouponLine) => (line.code ?? '').toLowerCase() === normalized;
@@ -129,7 +132,7 @@ export function removeCouponLine(
 			token: queue.dispatchToken,
 			ctx: writer.ctx,
 			input: {
-				orderId: order.uuid,
+				orderId: target.uuid,
 				actor: writer.actor,
 				source: 'user',
 				payload: {
@@ -139,7 +142,7 @@ export function removeCouponLine(
 					couponLines: couponLines as Plain[],
 				},
 			},
-			bottom: () => writeCouponLines(writer, order, before, remaining),
+			bottom: () => writeCouponLines(writer, target, before, remaining),
 		}) as Promise<ActionRefusal | CouponWriteResult | false>;
 	});
 }
