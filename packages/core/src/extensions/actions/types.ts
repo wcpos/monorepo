@@ -6,6 +6,9 @@ export const ACTION_API_VERSION = 1;
  */
 export const TENDER_COMMIT_EVENT = 'checkout.tender.commit' as const satisfies ActionEvent;
 export const CHECKOUT_COMPLETE_EVENT = 'checkout.complete' as const satisfies ActionEvent;
+export const ORDER_VOID_EVENT = 'cart.order.void' as const satisfies ActionEvent;
+/** The guard a void must have registered; the dispatch refuses without it. */
+export const ORDER_VOID_GUARD_IDS = ['payments.gate'] as const;
 /** Closed list for v1. */
 export const ACTION_EVENTS = [
 	'cart.line.add',
@@ -14,6 +17,7 @@ export const ACTION_EVENTS = [
 	'cart.coupon.apply',
 	'cart.coupon.remove',
 	'cart.customer.set',
+	ORDER_VOID_EVENT,
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
 ] as const satisfies readonly ActionEvent[];
@@ -130,6 +134,25 @@ export interface ActionContracts {
 		};
 		result: unknown;
 	};
+	'cart.order.void': {
+		payload: {
+			orderId: number | null;
+			orderNumber: string | null;
+			status: string;
+			registerId: string | null;
+			sessionId: string | null;
+			/** The cashier, for the audit row (as `checkout.complete` carries it). */
+			actor: { id: string; name: string } | null;
+			/**
+			 * The payments ledger as counted once by the dispatcher inside its queue slot; a guard
+			 * never reads a document. `live` = pending or authorized rows, `captured` = captured rows,
+			 * `device` = how many of those were taken on a card reader (Cancel settles them through it).
+			 */
+			paymentLegs: { live: number; captured: number; device: number };
+		};
+		/** The writer's answer; a `removed` may still be converted by a late store refusal. */
+		result: { kind: 'removed' | 'kept-pending' };
+	};
 }
 /** Every other payload key is restored by the dispatcher. */
 export const REWRITABLE_PAYLOAD_KEYS = {
@@ -142,6 +165,7 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.coupon.apply': [],
 	'cart.coupon.remove': [],
 	'cart.customer.set': ['billing', 'shipping', 'taxIds'],
+	[ORDER_VOID_EVENT]: [],
 	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
 	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
 	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the

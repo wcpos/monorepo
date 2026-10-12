@@ -42,6 +42,20 @@ const mockLogger = getLogger(['test']) as unknown as {
 	success: jest.Mock;
 };
 
+jest.mock('../../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: jest.fn(),
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));

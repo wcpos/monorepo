@@ -34,6 +34,7 @@ unrelated queued writes.
 | `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
 | `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit) | `billing`, `shipping`, `taxIds` | yes |
+| `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale` | `registerId`, `sessionId` (amounts: not in v1, see `types.ts`) | yes        |
 
@@ -83,7 +84,7 @@ tender path), and enqueues for callers outside it (the terminal service and repl
 **Admission test** for a new event, all three: (a) one writer function already exists for the
 action, (b) the event has a typed result, (c) a named consumer is waiting. Candidates that fail
 (a) today: receipt
-print, register open/close, refund, void (its writes sit in a component). Admitted by the spec's
+print, register open/close, refund. Admitted by the spec's
 2026-10-12 amendment and landing in order: `cart.line.remove` and the fee/shipping edits on
 `cart.line.update`, `cart.coupon.apply` / `cart.coupon.remove` (one writer in
 `screens/main/pos/hooks/coupon-line-actions.ts`: a quick discount is a coupon line carrying its
@@ -93,6 +94,12 @@ the address edit dispatches with the customer unchanged). A coupon refusal reach
 through the coupon field's own error line, not a toast. With it the cart domain is complete: every
 price-affecting cart write goes through the chain, and the fence allowlist holds only the void (its
 own ruling), the payments mirrors, settlement, the order-meta form and the customer note.
+`cart.order.void` (ruled 2026-10-12): the button counts the payments ledger once into
+`paymentLegs`, dispatches inside the order's queue with `requiredGuards: ORDER_VOID_GUARD_IDS`, and
+the writer's first bounded outcome watch is the bottom handler; the 120 s late watch runs after
+the slot. `payments.gate` refuses while the order has a live or captured leg
+(`pos_cart.void_payments_first`: the tender pane's Cancel reverses them first); there is no session
+gate, a void moves no money. `audit.order-voided` writes the `order.voided` row with the outcome.
 
 ## The hook
 

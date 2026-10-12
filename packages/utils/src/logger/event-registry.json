@@ -436,6 +436,13 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "order.voided",
+		"domain": "CHECKOUT",
+		"label": "Voided an order",
+		"description": "The order was removed from the till, or kept as pending when the store refused the delete.",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "payment.authorized-offline",
 		"domain": "CHECKOUT",
 		"label": "Card approved while offline",

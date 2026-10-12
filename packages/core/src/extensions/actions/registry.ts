@@ -1,4 +1,4 @@
-import { CHECKOUT_COMPLETE_EVENT } from './types';
+import { CHECKOUT_COMPLETE_EVENT, ORDER_VOID_EVENT } from './types';
 
 import type { ActionEvent, ActionHook, ActionHookRegistration, ActionHookState } from './types';
 
@@ -11,6 +11,7 @@ export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	'cart.coupon.apply': 1500,
 	'cart.coupon.remove': 1500,
 	'cart.customer.set': 1500,
+	[ORDER_VOID_EVENT]: 1500, // the gate reads counts the dispatcher already took
 	'checkout.tender.commit': 5_000, // a card leg already waits longer
 };
 /** Three failures switch off a repeatedly broken hook for this session. */

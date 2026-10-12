@@ -33,7 +33,7 @@ const mockEngine = {
 	status: jest.fn(() => ({ connectivity: mockConnectivity })),
 };
 const mockManager = { engine: mockEngine };
-const mockOrderJson = {
+const mockOrderJson: Record<string, unknown> = {
 	uuid: 'order-1',
 	id: 42,
 	number: '42',
@@ -119,6 +119,34 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrderRecord: () => mockCurrentOrder,
+}));
+
+let mockHeldLeg: {
+	phase: string;
+	row: { id: string; capture_mode: string; status?: string };
+} | null = null;
+let mockResolveSession: () => Promise<{
+	registerId: string | null;
+	sessionId: string | null;
+}> = async () => ({ registerId: 'till', sessionId: 'session-1' });
+jest.mock('../../../../../services/terminal-payments', () => ({
+	getTerminalPaymentsService: () => ({ get: () => mockHeldLeg }),
+}));
+
+const mockActionLog = jest.fn();
+jest.mock('../../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: () => mockResolveSession() },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+		cashier: { id: '9', name: 'Demo Cashier' },
+	}),
 }));
 
 describe('VoidButton', () => {
@@ -342,6 +370,358 @@ describe('VoidButton', () => {
 		expect(mockPatchEngineResident).not.toHaveBeenCalled();
 	});
 
+	it('dispatches cart.order.void with the counted ledger, and the audit row records the outcome', async () => {
+		const { registerActionHook } = jest.requireActual<
+			typeof import('../../../../../extensions/actions')
+		>('../../../../../extensions/actions');
+		const seen: unknown[] = [];
+		registerActionHook(
+			'cart.order.void',
+			async (_ctx, e, next) => {
+				seen.push(e);
+				return next(e);
+			},
+			{ id: 'test.observer', tier: 'extension', order: 1 }
+		);
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_removed',
+				expect.any(Object)
+			)
+		);
+		expect(seen).toEqual([
+			expect.objectContaining({
+				event: 'cart.order.void',
+				orderId: 'order-1',
+				source: 'user',
+				actor: { userId: 7, registerId: 'till', sessionId: null },
+				payload: {
+					orderId: 42,
+					orderNumber: '42',
+					status: 'pos-open',
+					registerId: null,
+					sessionId: 'session-1',
+					actor: { id: '9', name: 'Demo Cashier' },
+					paymentLegs: { live: 0, captured: 0, device: 0 },
+				},
+			}),
+		]);
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'info',
+			'Order order-1 voided',
+			expect.objectContaining({
+				category: ['wcpos', 'pos', 'cart', 'void'],
+				actor: { id: '9', name: 'Demo Cashier' },
+				context: expect.objectContaining({
+					type: 'order.voided',
+					orderId: 42,
+					orderUUID: 'order-1',
+					outcome: 'removed',
+					sessionId: 'session-1',
+				}),
+			})
+		);
+	});
+
+	it('refuses a void while the order carries a captured payment leg: nothing is deleted', async () => {
+		const { withLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		mockOrderJson.meta_data = withLedger(
+			[],
+			[
+				{
+					id: 'leg',
+					source: 'app',
+					order_id: 42,
+					method_id: 'pos_cash',
+					provider: 'manual',
+					kind: 'cash',
+					capture_mode: 'manual',
+					transport: null,
+					recorded_offline: false,
+					amount: '10.00',
+					currency: 'AUD',
+					tendered: null,
+					status: 'captured',
+					captured_at_gmt: '2026-10-12T00:00:00Z',
+					session_id: null,
+					register_id: null,
+				} as never,
+			]
+		);
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({
+						showToast: true,
+						context: expect.objectContaining({ captured: 1 }),
+					})
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+			expect(mockCartLogger.success).not.toHaveBeenCalled();
+			expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+			// A refused void is no void: no audit row.
+			expect(mockActionLog).not.toHaveBeenCalledWith('info', expect.anything(), expect.anything());
+		} finally {
+			delete mockOrderJson.meta_data;
+		}
+	});
+
+	it('counts the ledger inside the queue slot: a leg landed by a write queued ahead refuses the void', async () => {
+		const { withLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		const { enqueueOrderMutation } = jest.requireActual<
+			typeof import('../../hooks/order-mutation-queue')
+		>('../../hooks/order-mutation-queue');
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-1', async () => {
+			await gate;
+			mockOrderJson.meta_data = withLedger(
+				[],
+				[
+					{
+						id: 'leg',
+						source: 'app',
+						order_id: 42,
+						method_id: 'pos_cash',
+						provider: 'manual',
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '10.00',
+						currency: 'AUD',
+						tendered: null,
+						status: 'captured',
+						captured_at_gmt: '2026-10-12T00:00:00Z',
+						session_id: null,
+						register_id: null,
+					} as never,
+				]
+			);
+		});
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			release();
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({ showToast: true })
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+		} finally {
+			delete mockOrderJson.meta_data;
+		}
+	});
+
+	it('a card leg the terminal service still holds counts as live and refuses the void', async () => {
+		mockHeldLeg = { phase: 'polling', row: { id: 'held-leg', capture_mode: 'device' } };
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({ context: expect.objectContaining({ live: 1 }) })
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+		} finally {
+			mockHeldLeg = null;
+		}
+	});
+
+	it('a settled card leg the service holds with a captured row the ledger never got counts as captured', async () => {
+		mockHeldLeg = {
+			phase: 'final',
+			row: { id: 'held-leg', capture_mode: 'device', status: 'captured' },
+		};
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({ context: expect.objectContaining({ live: 0, captured: 1 }) })
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+		} finally {
+			mockHeldLeg = null;
+		}
+	});
+
+	it('a held leg the ledger already shows is counted once', async () => {
+		const { withLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		mockHeldLeg = { phase: 'polling', row: { id: 'held-leg', capture_mode: 'device' } };
+		mockOrderJson.meta_data = withLedger(
+			[],
+			[
+				{
+					id: 'held-leg',
+					source: 'app',
+					order_id: 42,
+					method_id: 'stripe_terminal',
+					provider: 'stripe',
+					kind: 'card',
+					capture_mode: 'device',
+					transport: 'bluetooth',
+					recorded_offline: false,
+					amount: '10.00',
+					currency: 'AUD',
+					tendered: null,
+					status: 'pending',
+					captured_at_gmt: null,
+					session_id: null,
+					register_id: null,
+				} as never,
+			]
+		);
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'pos_cart.void_payments_first',
+					expect.objectContaining({ context: expect.objectContaining({ live: 1, captured: 0 }) })
+				)
+			);
+		} finally {
+			mockHeldLeg = null;
+			delete mockOrderJson.meta_data;
+		}
+	});
+
+	it('a late refusal that keeps the order writes a correcting audit row', async () => {
+		mockOutcomes = ['timeout', 'rejected'];
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_voided_kept_pending',
+				expect.any(Object)
+			)
+		);
+		const rows = mockActionLog.mock.calls.filter(
+			([level, , options]) => level === 'info' && options?.context?.type === 'order.voided'
+		);
+		expect(rows.map(([, , options]) => options.context.outcome)).toEqual([
+			'removed',
+			'kept-pending',
+		]);
+		expect(rows[1][2].context).toEqual(
+			expect.objectContaining({ late: true, status: 'pending', sessionId: 'session-1' })
+		);
+		expect(rows[1][2].actor).toEqual({ id: '9', name: 'Demo Cashier' });
+	});
+
+	it('voids an unpaid order with sessions on and none open: the row carries no session', async () => {
+		const { RegisterSessionRequiredError } = jest.requireActual<
+			typeof import('../../../../../services/register-session/session-store')
+		>('../../../../../services/register-session/session-store');
+		mockResolveSession = async () => {
+			throw new RegisterSessionRequiredError();
+		};
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockCartLogger.success).toHaveBeenCalledWith(
+					'pos_cart.order_removed',
+					expect.any(Object)
+				)
+			);
+			expect(mockCartLogger.error).not.toHaveBeenCalled();
+			expect(mockActionLog).toHaveBeenCalledWith(
+				'info',
+				expect.stringContaining('voided'),
+				expect.objectContaining({ context: expect.objectContaining({ sessionId: null }) })
+			);
+		} finally {
+			mockResolveSession = async () => ({ registerId: 'till', sessionId: 'session-1' });
+		}
+	});
+
+	it('Undo restores the order as a write queued ahead of the void left it, not the press-time snapshot', async () => {
+		const { enqueueOrderMutation } = jest.requireActual<
+			typeof import('../../hooks/order-mutation-queue')
+		>('../../hooks/order-mutation-queue');
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-1', async () => {
+			await gate;
+			mockOrderJson.customer_note = 'added while the void waited';
+		});
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			release();
+			await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
+			mockCartLogger.success.mock.calls[0][1].toast.action.onClick();
+			await waitFor(() => expect(mockPatchEngineResident).toHaveBeenCalled());
+			expect(mockPatchEngineResident).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: expect.objectContaining({ customer_note: 'added while the void waited' }),
+				})
+			);
+		} finally {
+			delete mockOrderJson.customer_note;
+		}
+	});
+
+	it('refuses to void at all when the payments gate is not registered', async () => {
+		const { resetActionRegistry } = jest.requireActual<
+			typeof import('../../../../../extensions/actions')
+		>('../../../../../extensions/actions');
+		resetActionRegistry();
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+			await waitFor(() =>
+				expect(mockActionLog).toHaveBeenCalledWith(
+					'warn',
+					'actions.guard_missing',
+					expect.objectContaining({ showToast: true })
+				)
+			);
+			expect(mockEngine.write).not.toHaveBeenCalled();
+		} finally {
+			// Re-register the gate and the audit hook, on the real registry, for the cases after this.
+			const { registerActionHook, ORDER_VOID_EVENT } = jest.requireActual<
+				typeof import('../../../../../extensions/actions')
+			>('../../../../../extensions/actions');
+			const { paymentsGate } =
+				jest.requireActual<typeof import('../void-guards')>('../void-guards');
+			const { auditOrderVoided } =
+				jest.requireActual<typeof import('../void-audit-hook')>('../void-audit-hook');
+			registerActionHook(ORDER_VOID_EVENT, paymentsGate, {
+				id: 'payments.gate',
+				tier: 'guard',
+				order: 0,
+			});
+			registerActionHook(ORDER_VOID_EVENT, auditOrderVoided, {
+				id: 'audit.order-voided',
+				tier: 'extension',
+				order: 0,
+			});
+		}
+	});
+
 	it('undo after fallback restores pos-open and enqueues an update', async () => {
 		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
@@ -467,11 +847,12 @@ jest.mock('../../contexts/current-order/temporary-order', () => ({}));
 
 jest.mock('../../../../../hooks/use-local-date', () => ({}));
 
-it('closes the sheet synchronously before starting the existing void flow', () => {
+it('closes the sheet synchronously before starting the existing void flow', async () => {
 	const before = jest.fn(() => expect(mockEngine.write).not.toHaveBeenCalled());
 	mockEngine.write.mockClear();
 	render(<VoidButton onBeforeVoid={before} />);
 	fireEvent.click(screen.getByTestId('void-button'));
 	expect(before).toHaveBeenCalledTimes(1);
-	expect(mockEngine.write).toHaveBeenCalled();
+	// The delete follows the order's queue slot and the gate, so it lands a tick later.
+	await waitFor(() => expect(mockEngine.write).toHaveBeenCalled());
 });
