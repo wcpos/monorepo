@@ -37,3 +37,26 @@ it('a slot that throws still leaves its saved record for the next', async () => 
 	});
 	expect(next).toBe(saved);
 });
+
+it('forgets a remembered record whose collection has closed, so a later slot falls back to its own record', async () => {
+	const collection = { closed: false };
+	const record = { uuid: 'reopened', collection } as never;
+	await enqueueOrderMutation('reopened', async (queue) => {
+		queue.order = record;
+	});
+	let seen: unknown = 'unset';
+	await enqueueOrderMutation('reopened', async (queue) => {
+		seen = queue.order;
+	});
+	expect(seen).toBe(record);
+	collection.closed = true;
+	await enqueueOrderMutation('reopened', async (queue) => {
+		seen = queue.order;
+	});
+	expect(seen).toBeUndefined();
+	// Forgotten for good, not just skipped once.
+	await enqueueOrderMutation('reopened', async (queue) => {
+		seen = queue.order;
+	});
+	expect(seen).toBeUndefined();
+});
