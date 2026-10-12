@@ -37,6 +37,7 @@ jest.mock('react-native', () => {
 				accessibilityLabel?: string;
 				'aria-selected'?: boolean;
 				'aria-expanded'?: boolean;
+				style?: React.CSSProperties;
 			}
 		>(function Host(
 			{
@@ -50,6 +51,7 @@ jest.mock('react-native', () => {
 				accessibilityLabel,
 				'aria-selected': selected,
 				'aria-expanded': expanded,
+				style,
 			},
 			ref
 		) {
@@ -73,6 +75,7 @@ jest.mock('react-native', () => {
 					'aria-label': accessibilityLabel,
 					'aria-selected': selected,
 					'aria-expanded': expanded,
+					style,
 				},
 				children
 			);
@@ -186,35 +189,86 @@ beforeEach(() => {
 	resetCheckoutMode();
 	jest.clearAllMocks();
 });
-it('shows a fresh cart as the active last tab, and only while the current order is new', () => {
+const freshRecord = () => ({
+	...mockRecord('fresh', '2026-09-07T15:00:00'),
+	isNew: true,
+	payload: { date_created_gmt: '2026-09-07T15:00:00', total: '0.00', refunds: [], meta_data: [] },
+});
+it("the + cell is the blank cart's tab: it unfolds while the current order is new, folds on leaving", () => {
+	// On a cart: the + is a folded 48 pt button, no cart tab for the blank cart.
 	const { unmount } = render(<OpenOrderTabs />);
 	expect(screen.queryByTestId('open-order-tab-new')).toBeNull();
+	const plus = screen.getByTestId('new-order-tab');
+	expect(plus.getAttribute('aria-selected')).toBe('false');
+	expect(plus.style.width).toBe('48px');
+	expect(screen.queryByTestId('new-order-tab-label')).toBeNull();
+	fireEvent.click(plus);
+	expect(mockSetOrder).toHaveBeenCalledWith('');
 	unmount();
-	mockCurrent = {
-		...mockRecord('fresh', '2026-09-07T15:00:00'),
-		isNew: true,
-		payload: { date_created_gmt: '2026-09-07T15:00:00', total: '0.00', refunds: [], meta_data: [] },
-	};
+	// On the blank cart: the same cell is the selected "+ New" tab; the open cart's tab is
+	// not selected; the row still holds exactly the open carts (nothing was added).
+	mockCurrent = freshRecord();
 	render(<OpenOrderTabs />);
-	const fresh = screen.getByTestId('open-order-tab-new');
+	layout(560);
+	const fresh = screen.getByTestId('new-order-tab');
 	const open = screen.getByTestId('open-order-tab-open');
 	expect(fresh.getAttribute('aria-selected')).toBe('true');
+	expect(fresh.style.width).toBe('112px');
 	expect(fresh.className).toContain('border-primary');
+	expect(screen.getByTestId('new-order-tab-label').textContent).toBe('New');
 	expect(open.className).toContain('border-transparent');
-	expect(fresh.firstElementChild?.firstElementChild?.textContent).toBe('$0.00');
-	expect(screen.getByTestId('open-order-status-fresh').textContent).toBe('Cart');
-	// After the open orders, before the +; it is not an open order, so the count stays.
-	expect(open.compareDocumentPosition(fresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-	fireEvent.click(open);
-	expect(mockSetOrder).toHaveBeenCalledWith('open');
-	// Too narrow for both: the tray appears with the open-order count (the fresh cart is not
-	// one), the fresh cart keeps its column, and the arrow steps to the hidden one.
-	layout(200);
-	expect(screen.getByTestId('open-orders-count').textContent).toBe('1');
-	expect(screen.queryByTestId('open-order-tab-open')).toBeNull();
-	expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
-	fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
+	expect(screen.getAllByTestId(/^open-order-tab-/)).toHaveLength(1);
+	expect(screen.queryByTestId('open-orders-count')).toBeNull();
+	// + while already on the blank cart is a place, not an action.
+	mockSetOrder.mockClear();
+	fireEvent.click(fresh);
+	expect(mockSetOrder).not.toHaveBeenCalled();
+	// A step left from the blank cart lands on the last cart.
+	fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
 	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
+	fireEvent.click(open);
+	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
+});
+it('with no carts the unfolded New tab is the only tab: no underline, no tray, no arrows', () => {
+	const open = mockOpen;
+	try {
+		mockOpen = [];
+		mockCurrent = freshRecord();
+		render(<OpenOrderTabs />);
+		layout(560);
+		const fresh = screen.getByTestId('new-order-tab');
+		expect(fresh.getAttribute('aria-selected')).toBe('true');
+		expect(fresh.className).toContain('border-transparent');
+		expect(fresh.className).not.toContain('border-primary');
+		expect(screen.queryByTestId('open-orders-count')).toBeNull();
+		expect(screen.queryByTestId('scrollable-tabs-prev')).toBeNull();
+	} finally {
+		mockOpen = open;
+	}
+});
+it('a step right from the last cart lands on the blank cart, and the row keeps the last carts beside it', () => {
+	const open = mockOpen;
+	try {
+		mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id, index) => ({
+			id,
+			record: mockRecord(id, `2026-09-07T1${index}:00:00`),
+		}));
+		mockCurrent = mockOpen[7].record;
+		const { rerender } = render(<OpenOrderTabs />);
+		layout(560);
+		fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+		expect(mockSetOrder).toHaveBeenLastCalledWith('');
+		mockCurrent = freshRecord();
+		rerender(<OpenOrderTabs />);
+		// The New tab is wider than the folded +, so one less cart fits; the window ends at h.
+		const shown = screen.getAllByTestId(/^open-order-tab-/).map((el) => el.dataset.testid);
+		expect(shown[shown.length - 1]).toBe('open-order-tab-h');
+		expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
+		expect(screen.getByTestId('scrollable-tabs-prev')).not.toBeNull();
+		expect(screen.getByTestId('open-orders-count').textContent).toBe('8');
+	} finally {
+		mockOpen = open;
+	}
 });
 it('appends receipt-only tabs after open orders, avoids duplicates, and selects each kind', () => {
 	enterReceipt('late');
