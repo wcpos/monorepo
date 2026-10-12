@@ -768,7 +768,12 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	};
 	const retain = () => {
 		subscribers += 1;
-		if (started && read === null && !mirrored) {
+		if (started && mirrored) {
+			// A new reader of a mirror is a new reader of the owner: its retry path runs there.
+			mirrored.subscribe(() => undefined)();
+			return;
+		}
+		if (started && read === null) {
 			// The read failed earlier; a new reader asks the engine again.
 			subscribeRead();
 			return;
@@ -815,8 +820,13 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				};
 			});
 		},
-		sync: () => Promise.all(spec.demands.map((demand) => demand.sync())).then(() => undefined),
-		whenReady: () => (primary ? primary.whenReady() : Promise.resolve(ATTEMPTED)),
+		// A mirror answers for its owner: the demand in flight is the owner's.
+		sync: () =>
+			mirrored
+				? mirrored.sync()
+				: Promise.all(spec.demands.map((demand) => demand.sync())).then(() => undefined),
+		whenReady: () =>
+			mirrored ? mirrored.whenReady() : primary ? primary.whenReady() : Promise.resolve(ATTEMPTED),
 	};
 }
 

@@ -254,6 +254,47 @@ describe('query handle', () => {
 		expect(first.value.count).toBe(1);
 		expect(first.value.result).toBe(second.value.result);
 		expect(queryHandleCount(engine)).toBe(1);
+		// The mirror answers for its owner: readiness and sync are the owner's.
+		await expect(first.whenReady()).resolves.toEqual(await second.whenReady());
+		await first.sync();
+		expect(engine.requireCalls.some((call) => call.id?.startsWith('h:0:sync'))).toBe(true);
+	});
+
+	it("lets a new reader of a mirror retry the owner's failed read", async () => {
+		let attempts = 0;
+		const failing = (key: string) =>
+			acquireQueryHandle(engine, key, (registry) =>
+				createQueryHandle(
+					engine,
+					{
+						...spec(key, of(EMPTY)),
+						result$: () =>
+							defer(() => {
+								attempts += 1;
+								// The kept handle's own read (1) and the owner's first read (2) fail.
+								return attempts <= 2 ? throwError(() => new Error('storage gone')) : of(EMPTY);
+							}),
+					},
+					EMPTY,
+					registry
+				)
+			);
+		const kept = failing('j');
+		kept.subscribe(() => undefined)();
+		await settle();
+		const owner = failing('j');
+		owner.subscribe(() => undefined);
+		expect(owner.value.error).toBeInstanceOf(Error);
+		// `kept` mirrors `owner`: a reader of the mirror is a reader of the owner, so the owner's
+		// retry path runs and both answer.
+		kept.subscribe(() => undefined);
+		expect(attempts).toBe(3);
+		expect(kept.value.error).toBeNull();
+		expect(kept.value.ready).toBe(true);
+		expect(owner.value.ready).toBe(true);
+		// And again for a later reader, should the owner fail once more.
+		kept.subscribe(() => undefined);
+		expect(attempts).toBe(3);
 	});
 
 	it('retries a read that failed synchronously while another reader stayed subscribed', () => {
