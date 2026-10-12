@@ -401,14 +401,13 @@ function POSProductsContent({
 							setBody(event.nativeEvent.layout);
 						}}
 					>
-						<ErrorBoundary>
+						<ErrorBoundary onReset={() => handle.retry()}>
 							<Suspense fallback={loading}>
 								{viewMode === 'grid' ? (
 									<ProductGrid
 										handle={handle}
 										actions={tableActions}
 										noDataMessage={noDataMessage}
-										loading={loading}
 									/>
 								) : (
 									<DataTable<ProductRow>

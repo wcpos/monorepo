@@ -154,7 +154,7 @@ export function renderTable(overrides: Record<string, unknown> = {}) {
 			<DataTable
 				id="pos-products"
 				collectionName="products"
-				resource={{} as React.ComponentProps<typeof DataTable>['resource']}
+				resource={{} as never}
 				sort={{ field: 'name', direction: 'asc' }}
 				actions={{ setSort, extendLimit: jest.fn(), setFilter: jest.fn() }}
 				active$={of(false)}

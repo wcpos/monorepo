@@ -68,12 +68,7 @@ import { useMountProbe, useRenderProbe } from '../render-probe';
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from '../../../components/data-table/v2';
-import type {
-	QueryBinding,
-	QueryHandle,
-	QueryStateActions,
-	QueryStateOf,
-} from '../../../../../query';
+import type { QueryHandle, QueryStateActions, QueryStateOf } from '../../../../../query';
 import type { SlotContracts } from '../../../../../extensions/slots';
 export { cellsForRow };
 type ProductRow = { record: EngineRecord<'products'> };
@@ -91,7 +86,6 @@ function ProductsView({
 	viewMode,
 	loading,
 	handle,
-	binding,
 	tableActions,
 	noDataMessage,
 	sort,
@@ -101,10 +95,8 @@ function ProductsView({
 	onDrill: DrillHandler;
 	viewMode: 'grid' | 'table';
 	loading: React.ReactNode;
-	/** The products query handle: the grid reads its snapshot (roadmap#423). */
+	/** The products query handle: the grid and the table read its snapshot (roadmap#423). */
 	handle: QueryHandle;
-	/** The eight-observable shape over the same handle, for the data table until it migrates. */
-	binding: QueryBinding;
 	tableActions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
 	noDataMessage: React.ReactElement;
 	sort: QueryStateOf<'products'>['sort'];
@@ -122,61 +114,54 @@ function ProductsView({
 		viewMode,
 		loading,
 		handle,
-		binding,
 		tableActions,
 		noDataMessage,
 		sort,
 		variationsStyle,
 		tableConfig,
 	});
-	// The grid reads the handle's snapshot and draws `loading` until the first answer: no
-	// Suspense on that path. The table still suspends on the binding's resource.
-	if (viewMode === 'grid') {
-		return (
-			<ProductGrid
-				tile={ProductTile}
-				variableTile={VariableTile}
-				handle={handle}
-				actions={tableActions}
-				noDataMessage={noDataMessage}
-				loading={<SuspendedProbe event="products.loading">{loading}</SuspendedProbe>}
-			/>
-		);
-	}
+	// Both views suspend on the products handle until its first answer (the grid directly, the
+	// table through its handle source); the boundary's fallback is the skeleton either way.
 	return (
 		<Suspense fallback={<SuspendedProbe event="products.suspended">{loading}</SuspendedProbe>}>
-			<DataTable<ProductRow>
-				id="pos-products"
-				collectionName="products"
-				binding={binding}
-				resource={binding.resource}
-				sort={sort}
-				actions={tableActions}
-				active$={binding.active$}
-				total$={binding.total$}
-				sync={binding.sync}
-				renderItem={({ item, index, table }) => (
-					<VirtualizedList.Item>
-						{item.original.record.payload.type === 'variable' ? (
-							<VariableProductRow
-								item={item}
-								index={index}
-								table={table}
-								variationsStyle={variationsStyle}
-								onDrill={onDrill}
-							/>
-						) : (
-							<ProductRowView item={item} />
-						)}
-					</VirtualizedList.Item>
-				)}
-				cellsForRow={cellsForRow}
-				noDataMessage={noDataMessage}
-				estimatedItemSize={100}
-				TableFooterComponent={ProductsFooter}
-				getItemType={(row) => row.original.record.payload.type}
-				tableConfig={tableConfig}
-			/>
+			{viewMode === 'grid' ? (
+				<ProductGrid
+					tile={ProductTile}
+					variableTile={VariableTile}
+					handle={handle}
+					actions={tableActions}
+					noDataMessage={noDataMessage}
+				/>
+			) : (
+				<DataTable<ProductRow>
+					id="pos-products"
+					collectionName="products"
+					handle={handle}
+					sort={sort}
+					actions={tableActions}
+					renderItem={({ item, index, table }) => (
+						<VirtualizedList.Item>
+							{item.original.record.payload.type === 'variable' ? (
+								<VariableProductRow
+									item={item}
+									index={index}
+									table={table}
+									variationsStyle={variationsStyle}
+									onDrill={onDrill}
+								/>
+							) : (
+								<ProductRowView item={item} />
+							)}
+						</VirtualizedList.Item>
+					)}
+					cellsForRow={cellsForRow}
+					noDataMessage={noDataMessage}
+					estimatedItemSize={100}
+					TableFooterComponent={ProductsFooter}
+					getItemType={(row) => row.original.record.payload.type}
+					tableConfig={tableConfig}
+				/>
+			)}
 		</Suspense>
 	);
 }
@@ -486,7 +471,6 @@ function POSProductsContent({
 			viewMode={viewMode}
 			loading={loading}
 			handle={handle}
-			binding={binding}
 			tableActions={tableActions}
 			noDataMessage={noDataMessage}
 			sort={state.sort}
@@ -582,7 +566,8 @@ function POSProductsContent({
 							setBody(event.nativeEvent.layout);
 						}}
 					>
-						<ErrorBoundary>
+						{/* A failed products read is thrown here; the fallback's reset asks the handle again. */}
+						<ErrorBoundary onReset={() => handle.retry()}>
 							{/* Tiles are dealt out of the tile that was tapped; rows slide in as a pane. With
 							    a browse source on, the stage owns search too: a search drops the path and
 							    shows the catalogue-wide products at its root, drilling into the stage's

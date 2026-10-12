@@ -16,8 +16,9 @@
  * registry (`acquireQueryHandle`), so a parent's render, a clock tick or a store subscription
  * firing cannot hand the screen a "new" query that is the same query.
  *
- * Lifecycle. `subscribe` retains; the first retain starts the read and declares demand; the
- * last release stops both — one microtask later. The deferral is DECLARE BEFORE RELEASE
+ * Lifecycle. `retain` is the owner's: it declares demand while held. `subscribe` and `observe`
+ * are readers': they keep the read alive and never declare. The last owner's release stops the
+ * demand, and the last reader's release stops the read — one microtask later. The deferral is DECLARE BEFORE RELEASE
  * (monorepo#1614): React runs an effect's cleanup before the next effect's setup, so a reader
  * that moves from handle A to handle B releases A and then subscribes B inside one commit. A
  * release that ran synchronously would let the engine see a zero-subscriber window for the
@@ -561,8 +562,19 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	/** The canonical query key; the registry's identity. Two handles with one key never coexist. */
 	readonly key: string;
 	readonly value: Readonly<QuerySnapshot<R>>;
-	/** Retains the handle: the first subscriber starts the read and declares demand. */
+	/**
+	 * Read: keeps the engine read alive and is told of every snapshot change; never declares
+	 * demand. A reader that outlives the owner (a deferred handle drawn while the next loads)
+	 * keeps its rows and nothing else.
+	 */
 	subscribe(listener: () => void): () => void;
+	/**
+	 * Own: declares the handle's demand while held, and keeps the read. The screen that acquires
+	 * a handle holds it from an effect above its Suspense boundary; the last owner's release
+	 * stops the demand one microtask later (DECLARE BEFORE RELEASE), and the read too once no
+	 * reader is left.
+	 */
+	retain(): () => void;
 	/** Declares with top priority and a forced refresh, drains the scheduler, releases. */
 	sync(): Promise<void>;
 	/** Readiness of the standing declaration (the first demand's, for a relational handle). */
@@ -574,6 +586,13 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	 */
 	retry(): void;
 	/**
+	 * Settles when the handle has an answer (`value.ready`) and rejects when its read fails:
+	 * what a reader throws to suspend on, one stable promise per handle until it settles, then a
+	 * fresh one after a failure so a retry can be waited on. Never starts the read itself — the
+	 * owner's retain does, from an effect above the Suspense boundary.
+	 */
+	whenAnswered(): Promise<void>;
+	/**
 	 * The snapshot stream, one subscription per subscriber, retaining like `subscribe`. For the
 	 * React edge and the compatibility bindings; readers take `value` + `subscribe`.
 	 */
@@ -582,8 +601,13 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 
 export type QueryHandleSpec<R extends QueryResult<RxCollection>> = {
 	key: string;
-	/** The read, built once per handle. Subscribed while the handle is retained. */
-	result$: (engine: RxdbSyncEngine) => Observable<R>;
+	/**
+	 * The read, built once per handle, subscribed while any reader or owner holds it. `owned$`
+	 * is true while an owner holds the handle: a read that must ask the engine for something as
+	 * part of reading (the relational products lookup) declares only while owned, so a reader
+	 * outliving the owner keeps rows and nothing else.
+	 */
+	result$: (engine: RxdbSyncEngine, owned$: Observable<boolean>) => Observable<R>;
 	/** The demands this read needs; the first one's coverage names the total. */
 	demands: Demand[];
 	/** The collections whose pull activity the snapshot's `active` reflects. */
@@ -639,13 +663,18 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	// One entry per subscription, not per callback: two readers may pass the same function.
 	const listeners = new Set<{ notify: () => void }>();
 	const snapshot$ = new BehaviorSubject<QuerySnapshot<R>>(emptySnapshot(initial));
-	let subscribers = 0;
+	let owners = 0;
+	let readers = 0;
 	let started = false;
+	let demandLive = false;
+	const owned$ = new BehaviorSubject(false);
 	let read: Subscription | null = null;
 	let stopScheduled = false;
 
 	const [primary] = spec.demands;
-	const result$ = spec.result$(engine).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+	const result$ = spec
+		.result$(engine, owned$.pipe(distinctUntilChanged()))
+		.pipe(shareReplay({ bufferSize: 1, refCount: true }));
 	const active$ =
 		spec.activeCollections.length === 0
 			? of(false)
@@ -723,9 +752,35 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		);
 	});
 
+	// The answer promise: settled by the first ready snapshot, rejected by a read failure, and
+	// replaced after a failure so the next wait is for the retry.
+	let answered: {
+		promise: Promise<void>;
+		resolve: () => void;
+		reject: (e: unknown) => void;
+	} | null = null;
+	const answer = () => {
+		if (answered) return answered;
+		let resolve!: () => void;
+		let reject!: (error: unknown) => void;
+		const promise = new Promise<void>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		// A rejection nobody awaited yet must not surface as unhandled; readers attach later.
+		promise.catch(() => undefined);
+		answered = { promise, resolve, reject };
+		return answered;
+	};
 	const publish = (snapshot: QuerySnapshot<R>) => {
 		if (sameSnapshot(snapshot$.getValue(), snapshot)) return;
 		snapshot$.next(snapshot);
+		if (snapshot.error) {
+			answer().reject(snapshot.error);
+			answered = null;
+		} else if (snapshot.ready) {
+			answer().resolve();
+		}
 		for (const { notify } of [...listeners]) notify();
 	};
 	const onReadError = (error: unknown) => {
@@ -748,6 +803,21 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	// registry handed its key to a successor: it mirrors that owner rather than running the
 	// same query beside it (two reads, two demands, two answers for one key).
 	let mirrored: QueryHandle<R> | null = null;
+	let mirrorHold: (() => void) | null = null;
+	const demandOn = () => {
+		if (demandLive || mirrored) return;
+		demandLive = true;
+		for (const demand of spec.demands) demand.start();
+		owned$.next(true);
+	};
+	const demandOff = () => {
+		if (!demandLive) return;
+		demandLive = false;
+		owned$.next(false);
+		for (const demand of spec.demands) demand.stop();
+		// A reader still holding the object sees the rows it had and no demand in flight.
+		publish({ ...snapshot$.getValue(), pending: false });
+	};
 	const start = () => {
 		if (started) return;
 		started = true;
@@ -757,8 +827,9 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 			read = owner.observe().subscribe(publish);
 			return;
 		}
-		// Demand first, so the first snapshot already carries `pending` and the coverage target.
-		for (const demand of spec.demands) demand.start();
+		// Demand first (when an owner holds it), so the first snapshot already carries
+		// `pending` and the coverage target.
+		if (owners > 0) demandOn();
 		subscribeRead();
 	};
 	const stop = () => {
@@ -768,16 +839,15 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		read?.unsubscribe();
 		read = null;
 		if (mirrored) {
+			mirrorHold?.();
+			mirrorHold = null;
 			mirrored = null;
 			return;
 		}
-		for (const demand of spec.demands) demand.stop();
-		// A reader still holding the object sees the rows it had and no demand in flight.
-		publish({ ...snapshot$.getValue(), pending: false });
+		demandOff();
 		registry?.release();
 	};
-	const retain = () => {
-		subscribers += 1;
+	const wake = () => {
 		if (started && mirrored) {
 			// A new reader of a mirror is a new reader of the owner: its retry path runs there.
 			mirrored.subscribe(() => undefined)();
@@ -790,16 +860,45 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		}
 		start();
 	};
-	const release = () => {
-		subscribers -= 1;
-		if (subscribers > 0 || stopScheduled) return;
+	// DECLARE BEFORE RELEASE: see the module comment. The settle runs one microtask after a
+	// release; an owner or reader arriving inside this task keeps what it needs alive, and a
+	// successor handle's owner has declared before this one's demand stops.
+	const settle = () => {
+		if (stopScheduled) return;
 		stopScheduled = true;
-		// DECLARE BEFORE RELEASE: see the module comment. A successor that subscribes inside
-		// this task keeps the handle alive and its requirement entry never reaches zero.
 		void Promise.resolve().then(() => {
 			stopScheduled = false;
-			if (subscribers === 0) stop();
+			if (owners === 0) {
+				if (mirrored) {
+					mirrorHold?.();
+					mirrorHold = null;
+				} else {
+					demandOff();
+				}
+			}
+			if (owners === 0 && readers === 0) stop();
 		});
+	};
+	const retainReader = () => {
+		readers += 1;
+		wake();
+	};
+	const releaseReader = () => {
+		readers -= 1;
+		settle();
+	};
+	const retainOwner = () => {
+		owners += 1;
+		wake();
+		if (mirrored) {
+			if (!mirrorHold) mirrorHold = mirrored.retain();
+		} else {
+			demandOn();
+		}
+	};
+	const releaseOwner = () => {
+		owners -= 1;
+		settle();
 	};
 
 	// Every method is a closure over this scope, never `this`: readers pass them around unbound
@@ -812,22 +911,31 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		subscribe(listener) {
 			const entry = { notify: listener };
 			listeners.add(entry);
-			retain();
+			retainReader();
 			let released = false;
 			return () => {
 				if (released) return;
 				released = true;
 				listeners.delete(entry);
-				release();
+				releaseReader();
+			};
+		},
+		retain() {
+			retainOwner();
+			let released = false;
+			return () => {
+				if (released) return;
+				released = true;
+				releaseOwner();
 			};
 		},
 		observe() {
 			return new Observable<Readonly<QuerySnapshot<R>>>((subscriber) => {
-				retain();
+				retainReader();
 				const inner = snapshot$.subscribe(subscriber);
 				return () => {
 					inner.unsubscribe();
-					release();
+					releaseReader();
 				};
 			});
 		},
@@ -844,6 +952,18 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				return;
 			}
 			if (started && read === null) subscribeRead();
+		},
+		whenAnswered: () => {
+			if (mirrored) return mirrored.whenAnswered();
+			const current = snapshot$.getValue();
+			if (current.error) {
+				const failed = Promise.reject(current.error);
+				// A thrown rejection is handled by the boundary; nobody else need catch it.
+				failed.catch(() => undefined);
+				return failed;
+			}
+			if (current.ready) return Promise.resolve();
+			return answer().promise;
 		},
 	};
 }

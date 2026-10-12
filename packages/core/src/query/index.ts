@@ -42,12 +42,14 @@ export type {
 	SearchSelectCollection,
 } from './query-bindings';
 export {
+	bindingObservablesFor,
+	useCollectionQueryHandle,
 	useProductsQueryHandle,
 	useQueryBindingFor,
 	useQueryHandleFields,
 	useQueryHandleResource,
 	useQueryHandleValue,
-	useQueryHandleView,
+	useQuerySnapshot,
 } from './query-handles';
 export type { SnapshotFields } from './query-handles';
 export type { QueryHandle, QuerySnapshot } from '@wcpos/query';

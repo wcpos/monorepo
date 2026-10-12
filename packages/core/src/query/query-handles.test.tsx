@@ -2,13 +2,21 @@
  * @jest-environment jsdom
  */
 
-import { act, renderHook } from '@testing-library/react';
+import * as React from 'react';
+
+import { act, render, renderHook, screen } from '@testing-library/react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Observable, of, Subject } from 'rxjs';
 
-import { createQueryHandle, type QueryHandle, type QueryResult } from '@wcpos/query';
+import {
+	createQueryHandle,
+	type QueryHandle,
+	type QueryResult,
+	type QuerySnapshot,
+} from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { useQueryBindingFor, useQueryHandleFields, useQueryHandleView } from './query-handles';
+import { useQueryBindingFor, useQueryHandleFields, useQuerySnapshot } from './query-handles';
 
 import type { RxCollection } from 'rxdb';
 
@@ -34,36 +42,158 @@ function handleOver(key: string, results: Subject<Result>): QueryHandle<Result> 
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-describe('useQueryHandleView', () => {
-	it('draws the loading state before the first answer, then the answer', () => {
+describe('useQuerySnapshot', () => {
+	function Reader({
+		handle,
+		onRender,
+	}: {
+		handle: QueryHandle<Result>;
+		onRender: (snapshot: QuerySnapshot<Result>) => void;
+	}) {
+		const snapshot = useQuerySnapshot(handle);
+		onRender(snapshot);
+		return <span data-testid="count">{snapshot.count}</span>;
+	}
+
+	it('suspends until the handle answers, then renders the answer', async () => {
 		const results = new Subject<Result>();
 		const handle = handleOver('a', results);
-		const { result } = renderHook(() => useQueryHandleView(handle));
-		expect(result.current.value.ready).toBe(false);
-		act(() => results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] }));
-		expect(result.current.value.ready).toBe(true);
-		expect(result.current.value.count).toBe(1);
-		expect(result.current.settling).toBe(false);
+		const seen: QuerySnapshot<Result>[] = [];
+		render(
+			<React.Suspense fallback={<span data-testid="fallback" />}>
+				<Reader handle={handle} onRender={(snapshot) => seen.push(snapshot)} />
+			</React.Suspense>
+		);
+		expect(screen.getByTestId('fallback')).toBeTruthy();
+		expect(seen).toHaveLength(0);
+		// The owner retains; the reader cannot (it never committed).
+		const leave = handle.subscribe(() => undefined);
+		// The answer settles the thrown promise; React retries the reader on the next tick.
+		await act(async () => results.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] }));
+		expect(screen.getByTestId('count').textContent).toBe('1');
+		expect(seen.at(-1)?.ready).toBe(true);
+		leave();
 	});
 
-	it('keeps the drawn rows while a changed query loads, then swaps to its answer', () => {
+	it('throws a failed read to the boundary, and a reset retries through the owner', async () => {
+		let attempts = 0;
+		const late = new Subject<Result>();
+		const handle = createQueryHandle(
+			engine,
+			{
+				key: 'fail',
+				result$: () =>
+					new Observable<Result>((subscriber) => {
+						attempts += 1;
+						if (attempts === 1) subscriber.error(new Error('storage gone'));
+						else late.subscribe(subscriber);
+					}),
+				demands: [],
+				activeCollections: [],
+				censusScoped: false,
+				observeActive: () => of(false),
+			},
+			EMPTY
+		);
+		const leave = handle.subscribe(() => undefined);
+		expect(handle.value.error).toBeInstanceOf(Error);
+		const silence = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		// The production wiring: the screen's boundary resets by asking the handle again.
+		render(
+			<ErrorBoundary
+				fallbackRender={({ resetErrorBoundary }) => (
+					<button data-testid="reset" onClick={resetErrorBoundary} />
+				)}
+				onReset={() => handle.retry()}
+			>
+				<React.Suspense fallback={<span data-testid="fallback" />}>
+					<Reader handle={handle} onRender={() => undefined} />
+				</React.Suspense>
+			</ErrorBoundary>
+		);
+		expect(screen.getByTestId('reset')).toBeTruthy();
+		act(() => screen.getByTestId('reset').click());
+		// The retry is in flight: the reader suspends on it rather than rethrowing the failure.
+		expect(screen.getByTestId('fallback')).toBeTruthy();
+		expect(attempts).toBe(2);
+		await act(async () => late.next({ count: 4, hits: [] }));
+		expect(screen.getByTestId('count').textContent).toBe('4');
+		silence.mockRestore();
+		leave();
+	});
+});
+
+describe('useQuerySnapshot with useDeferredValue(handle)', () => {
+	it('keeps the previous handle’s rows while the new one suspends, and only its read', async () => {
 		const first = new Subject<Result>();
 		const second = new Subject<Result>();
-		const handles = { a: handleOver('a', first), b: handleOver('b', second) };
-		const { result, rerender } = renderHook(({ key }) => useQueryHandleView(handles[key]), {
-			initialProps: { key: 'a' as 'a' | 'b' },
-		});
-		act(() => first.next({ count: 1, hits: [{ id: 'p1', record: {} as never }] }));
-		const drawn = result.current.value;
+		let demandA = 0;
+		let demandB = 0;
+		const withDemand = (key: string, results: Subject<Result>, count: () => void) =>
+			createQueryHandle(
+				engine,
+				{
+					key,
+					result$: () => results,
+					demands: [
+						{
+							collection: 'products',
+							coverageTarget$: of(null),
+							searchLane$: of(null),
+							pending$: of(false),
+							fetched$: of(false),
+							whenReady: async () => ({ attempted: true, fetched: false }),
+							declareOnce: async () => ({ attempted: true, fetched: false }),
+							sync: async () => undefined,
+							start: count,
+							stop: () => undefined,
+						},
+					],
+					activeCollections: [],
+					censusScoped: false,
+					observeActive: () => of(false),
+				},
+				EMPTY
+			);
+		const handles = {
+			a: withDemand('switch-a', first, () => (demandA += 1)),
+			b: withDemand('switch-b', second, () => (demandB += 1)),
+		};
+		// The owner: retains the live handle from an effect above the boundary, as the screens do.
+		function Owner({ which }: { which: 'a' | 'b' }) {
+			const handle = handles[which];
+			React.useEffect(() => handle.retain(), [handle]);
+			return (
+				<React.Suspense fallback={<span data-testid="fallback" />}>
+					<Reader handle={handle} />
+				</React.Suspense>
+			);
+		}
+		function Reader({ handle }: { handle: QueryHandle<Result> }) {
+			const shown = React.useDeferredValue(handle);
+			const snapshot = useQuerySnapshot(shown);
+			return (
+				<span data-testid="rows">
+					{snapshot.count}:{shown === handle ? 'settled' : 'settling'}
+				</span>
+			);
+		}
+		const { rerender } = render(<Owner which="a" />);
+		expect(screen.getByTestId('fallback')).toBeTruthy();
+		await act(async () => first.next({ count: 1, hits: [] }));
+		expect(screen.getByTestId('rows').textContent).toBe('1:settled');
+		expect(demandA).toBe(1);
 
-		rerender({ key: 'b' });
-		// The new handle has not answered: the previous rows stay on screen, flagged as settling.
-		expect(result.current.value).toBe(drawn);
-		expect(result.current.settling).toBe(true);
+		rerender(<Owner which="b" />);
+		await act(async () => undefined);
+		// B suspends; A's rows stay on screen, flagged as settling. A's demand is gone with its
+		// owner (B declared first), A's read stays for the reader.
+		expect(screen.getByTestId('rows').textContent).toBe('1:settling');
+		expect(demandB).toBe(1);
+		expect(handles.a.value.pending).toBe(false);
 
-		act(() => second.next({ count: 2, hits: [] }));
-		expect(result.current.value.count).toBe(2);
-		expect(result.current.settling).toBe(false);
+		await act(async () => second.next({ count: 2, hits: [] }));
+		expect(screen.getByTestId('rows').textContent).toBe('2:settled');
 	});
 });
 
@@ -100,71 +230,6 @@ describe('useQueryHandleFields', () => {
 		act(() => results.next({ count: 2, hits: [] }));
 		expect(result.current.count).toBe(2);
 		expect(result.current.active).toBe(true);
-	});
-});
-
-describe('useQueryHandleView (failures)', () => {
-	it('surfaces the current handle’s failure even while the previous rows are drawn', () => {
-		const first = new Subject<Result>();
-		const handles = {
-			a: handleOver('f', first),
-			b: createQueryHandle(
-				engine,
-				{
-					key: 'g',
-					result$: () => new Observable<Result>((s) => s.error(new Error('storage gone'))),
-					demands: [],
-					activeCollections: [],
-					censusScoped: false,
-					observeActive: () => of(false),
-				},
-				EMPTY
-			),
-		};
-		const { result, rerender } = renderHook(({ key }) => useQueryHandleView(handles[key]), {
-			initialProps: { key: 'a' as 'a' | 'b' },
-		});
-		act(() => first.next({ count: 1, hits: [] }));
-		rerender({ key: 'b' });
-		expect(result.current.value.error).toBeInstanceOf(Error);
-		expect(result.current.settling).toBe(false);
-	});
-});
-
-describe('useQueryHandleView (reset over a failure)', () => {
-	it('a reader mounted over a failed handle asks it again and draws loading, not the error', () => {
-		let attempts = 0;
-		const late = new Subject<Result>();
-		const handle = createQueryHandle(
-			engine,
-			{
-				key: 'reset',
-				result$: () =>
-					new Observable<Result>((subscriber) => {
-						attempts += 1;
-						if (attempts === 1) subscriber.error(new Error('storage gone'));
-						else late.subscribe(subscriber);
-					}),
-				demands: [],
-				activeCollections: [],
-				censusScoped: false,
-				observeActive: () => of(false),
-			},
-			EMPTY
-		);
-		// The owner keeps the handle alive; its read failed.
-		const leave = handle.subscribe(() => undefined);
-		expect(handle.value.error).toBeInstanceOf(Error);
-
-		// The boundary's reset mounts a fresh reader over the failure.
-		const { result } = renderHook(() => useQueryHandleView(handle));
-		expect(result.current.error).toBeNull();
-		expect(result.current.value.ready).toBe(false);
-		expect(attempts).toBe(2);
-		act(() => late.next({ count: 4, hits: [] }));
-		expect(result.current.value.ready).toBe(true);
-		expect(result.current.value.count).toBe(4);
-		leave();
 	});
 });
 

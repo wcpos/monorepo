@@ -27,18 +27,20 @@ import {
 	type QueryHandle,
 	queryHandleResource,
 	queryHandleResults$,
+	type QueryHandleSpec,
 	type QueryResult,
 	type QuerySnapshot,
 	releaseHandles,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RemoteId } from '@wcpos/sync-core';
 
 import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
 import { useScopeKey } from './scope-key';
 
-import type { QueryStateOf } from './query-state-types';
+import type { CollectionKey, QueryStateOf } from './query-state-types';
 import type { RxCollection } from 'rxdb';
 
 type CompiledQuery = ReturnType<typeof compileQuery>;
@@ -65,11 +67,18 @@ export function demandPlanFor(compiled: CompiledQuery): DemandPlan {
 // Demand ids are the handle's own: two components sharing a handle share one declaration.
 let nextHandleId = 0;
 
+/**
+ * The parents of the variations a search matched: a read that must ask the engine for the
+ * parent records it may not hold. The ask (a targeted requirement) is made only while the
+ * handle is OWNED; a reader that outlives the owner (a deferred handle drawn while the next
+ * query loads) keeps the local read and declares nothing (roadmap#423: readers never declare).
+ */
 function observeParentLookup(
 	engine: RxdbSyncEngine,
 	id: string,
 	parentIds: number[],
-	searchFields: string[] | undefined
+	searchFields: string[] | undefined,
+	owned$: Observable<boolean>
 ): Observable<ProductsResult> {
 	if (parentIds.length === 0) return of(emptyResult());
 	return new Observable<ProductsResult>((subscriber) => {
@@ -88,10 +97,19 @@ function observeParentLookup(
 			{ id, targeted: parentIds, searchFields }
 		);
 		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
-		const handles = declareRequirements(engine, requirements);
+		let handles: RequirementHandle[] = [];
+		const ownership = owned$.subscribe((owned) => {
+			if (owned && handles.length === 0) {
+				handles = declareRequirements(engine, requirements);
+			} else if (!owned && handles.length > 0) {
+				releaseHandles(handles);
+				handles = [];
+			}
+		});
 		const subscription = observeEngineQuery(engine, descriptor).subscribe(subscriber);
 		return () => {
 			subscription.unsubscribe();
+			ownership.unsubscribe();
 			releaseHandles(handles);
 		};
 	});
@@ -127,7 +145,7 @@ export function acquireProductsQueryHandle(
 		};
 		const search = compiled.read.search;
 		const demands = [createDemand(engine, `${id}:parent`, demandPlanFor(compiled))];
-		let result$: (engine: RxdbSyncEngine) => Observable<ProductsResult>;
+		let result$: QueryHandleSpec<ProductsResult>['result$'];
 		if (!search) {
 			result$ = (target) => observeEngineQuery(target, descriptor);
 		} else {
@@ -151,7 +169,7 @@ export function acquireProductsQueryHandle(
 				{ id: `${id}:child`, searchFields: childSearchFields }
 			);
 			demands.push(createDemand(engine, `${id}:child`, demandPlanFor(childCompiled)));
-			result$ = (target) => {
+			result$ = (target, owned$) => {
 				const direct$ = observeEngineQuery(target, {
 					...descriptor,
 					read: { ...compiled.read, limit: undefined },
@@ -173,7 +191,8 @@ export function acquireProductsQueryHandle(
 							target,
 							`${id}:lookup`,
 							parentIds,
-							descriptor.searchFields
+							descriptor.searchFields,
+							owned$
 						).pipe(map((lookup) => ({ direct, lookup, counts, searchAnswered })));
 					}),
 					switchMap(({ direct, lookup, counts, searchAnswered }) => {
@@ -238,7 +257,107 @@ export function canonicalQueryKey(value: unknown): string {
 	});
 }
 
-const noop = () => undefined;
+type CollectionHandleKey = Exclude<CollectionKey, 'logs'>;
+
+export type CollectionHandleInput<C extends CollectionHandleKey> = {
+	collection: C;
+	state: QueryStateOf<C>;
+	remoteIds?: readonly RemoteId[];
+	storeScope: 'pos' | 'sales';
+	searchFields: string[] | undefined;
+};
+
+/**
+ * The plain collection read as a handle — what `useCollectionBinding` compiled per render: one
+ * descriptor, one demand, the collection's own activity and census. Orders, customers, coupons,
+ * tax rates, refunds, variations: every table screen's query.
+ */
+export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
+	engine: RxdbSyncEngine,
+	key: string,
+	input: CollectionHandleInput<C>
+): QueryHandle<QueryResult<RxCollection>> {
+	return acquireQueryHandle(engine, key, (registry) => {
+		const id = `qh${nextHandleId++}`;
+		const { collection, state, remoteIds, storeScope, searchFields } = input;
+		const compiled = compileQuery(collection, state, {
+			id,
+			targeted: remoteIds,
+			storeScope,
+			searchFields,
+		});
+		const descriptor: EngineQueryDescriptor = {
+			collection: compiled.collection,
+			searchFields,
+			read: { ...compiled.read, searchFields },
+		};
+		const engineCollection = engineCollectionNameFor(compiled.collection);
+		const search = compiled.read.search?.trim();
+		return createQueryHandle(
+			engine,
+			{
+				key,
+				result$: (target) =>
+					observeEngineQuery(target, descriptor).pipe(
+						map((result) => ({ ...result, searchActive: Boolean(search) }))
+					),
+				demands: [createDemand(engine, id, demandPlanFor(compiled))],
+				activeCollections: [engineCollection],
+				censusScoped: compiled.censusScoped,
+				coverage: compiled.coverage,
+				observeActive: observeCollectionActive,
+			},
+			emptyResult(),
+			registry
+		);
+	});
+}
+
+/**
+ * The handle for a collection's query state, retained while the caller is mounted: the shape
+ * `useCollectionBinding` has always taken, keyed by scope, state, targeted ids, store scope and
+ * search fields, so two screens asking the same question share one read and one demand.
+ */
+export function useCollectionQueryHandle<C extends CollectionHandleKey>(
+	collection: C,
+	state: QueryStateOf<C>,
+	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
+): QueryHandle<QueryResult<RxCollection>> {
+	const { engine } = useQueryRuntime();
+	const legacy = (collection === 'tax-rates' ? 'taxes' : collection) as Parameters<
+		typeof useScopeKey
+	>[0];
+	const scope = useScopeKey(legacy);
+	const searchFields = useSearchFields(legacy) as string[] | undefined;
+	const storeScope = options.storeScope ?? 'pos';
+	const key = canonicalQueryKey([
+		collection,
+		scope,
+		storeScope,
+		{ ...state, search: (state as { search?: string }).search?.trim() },
+		options.remoteIds ?? null,
+		searchFields ?? null,
+	]);
+	const handle = React.useMemo(() => {
+		const [, , , canonical, remoteIds, fields] = JSON.parse(key) as [
+			string,
+			string,
+			string,
+			QueryStateOf<C>,
+			RemoteId[] | null,
+			string[] | null,
+		];
+		return acquireCollectionQueryHandle(engine, key, {
+			collection,
+			state: canonical,
+			remoteIds: remoteIds ?? undefined,
+			storeScope,
+			searchFields: fields ?? undefined,
+		});
+	}, [collection, engine, key, storeScope]);
+	React.useEffect(() => handle.retain(), [handle]);
+	return handle;
+}
 
 function idSet(ids: readonly number[] | undefined): number[] {
 	return [...new Set(ids ?? [])].sort((a, b) => a - b);
@@ -295,8 +414,9 @@ export function useProductsQueryHandle(
 			childSearchFields: child ?? undefined,
 		});
 	}, [engine, key]);
-	// The owner retains: readers come and go (a footer, a count badge), the declaration stays.
-	React.useEffect(() => handle.subscribe(noop), [handle]);
+	// The owner retains: the demand is declared while this screen holds the handle; readers
+	// (the grid, a footer, a count badge) come and go and only keep the read.
+	React.useEffect(() => handle.retain(), [handle]);
 	return handle;
 }
 
@@ -356,51 +476,35 @@ export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
 }
 
 /**
- * The snapshot a screen should DRAW: the handle's own once it has answered, and until then the
- * last answered snapshot this component drew — so a changed query (a keystroke, an extended
- * limit) keeps the current rows on screen while the next read loads instead of flashing the
- * loading state, which is what the Suspense resource's `reload` did. `settling` says the drawn
- * snapshot is not yet the current handle's answer. Before any answer, `value.ready` is false and
- * the screen shows its loading state: the gate that used to be a Suspense boundary.
+ * A ready snapshot, or a suspension: the reader's one hook (roadmap#423).
+ *
+ * Suspense-native. While the handle has no answer the reader throws `handle.whenAnswered()`,
+ * one stable promise per handle, and the nearest boundary draws its fallback; the owner's
+ * retain (an effect above the boundary) is what starts the read, so nothing subscribes during
+ * render. A failed read is thrown to the boundary. Stale-while-loading is React's own: a reader
+ * that renders `useDeferredValue(handle)` keeps the previous handle's rows on screen while the
+ * new one suspends (`deferred !== handle` is "settling", and is pending for paging).
+ *
+ * A boundary reset remounts the reader over the same failure; the owner's boundary wires
+ * `onReset={() => handle.retry()}` so the reset asks the engine again and the reader suspends
+ * on the retry instead of throwing the old failure back.
+ *
+ * One constraint: the owner must COMMIT for the promise to settle, since its retain effect is
+ * what starts the read. Every handle input today (the query-state store, the scope key) arrives
+ * through `useSyncExternalStore`, whose updates are synchronous, so the owner always commits.
+ * A handle input delivered inside a transition would suspend the reader within that transition
+ * on an already-revealed boundary, and the owner's effect would wait on a commit that waits on
+ * the reader: do not feed a handle from a transition.
  */
-export function useQueryHandleView<R extends QueryResult<RxCollection>>(
+export function useQuerySnapshot<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>,
 	/** Re-render for these fields beside the answer; every field when omitted. */
 	fields?: SnapshotFields
-): {
-	/** The snapshot to draw: the current one once answered, else the last one drawn. */
-	value: Readonly<QuerySnapshot<R>>;
-	/** The current handle's snapshot, answered or not — status fields read from here. */
-	current: Readonly<QuerySnapshot<R>>;
-	settling: boolean;
-	/**
-	 * The current handle's failure, for the reader to throw to its boundary — unless the failure
-	 * was already there when this reader mounted: then the reader is the boundary's reset, the
-	 * handle is asked again (`retry`) and the reader draws its loading state meanwhile.
-	 */
-	error: unknown;
-} {
-	const current = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
-	const [inherited] = React.useState(() => current.error);
-	React.useEffect(() => {
-		if (inherited && handle.value.error === inherited) handle.retry();
-	}, [handle, inherited]);
-	const error = current.error === inherited ? null : current.error;
-	// What the previous handle had answered when this one took over — kept per handle, so a
-	// snapshot change on the SAME handle never re-renders through state (a handle never goes
-	// from answered back to unanswered). Derived during render, React's documented pattern.
-	const [held, setHeld] = React.useState<{
-		handle: QueryHandle<R>;
-		last: Readonly<QuerySnapshot<R>> | null;
-	}>({ handle, last: null });
-	let last = held.last;
-	if (held.handle !== handle) {
-		last = held.handle.value.ready ? held.handle.value : held.last;
-		setHeld({ handle, last });
-	}
-	// An answer or a failure is always the current handle's; the reader rethrows the failure.
-	const value = current.ready || error ? current : (last ?? current);
-	return { value, current, settling: value !== current, error };
+): Readonly<QuerySnapshot<R>> {
+	const snapshot = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
+	if (snapshot.error) throw snapshot.error;
+	if (!snapshot.ready) throw handle.whenAnswered();
+	return snapshot;
 }
 
 /**

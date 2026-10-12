@@ -50,7 +50,11 @@ import {
 import type { CoverageTarget, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
-import { useProductsQueryHandle, useQueryBindingFor } from './query-handles';
+import {
+	useCollectionQueryHandle,
+	useProductsQueryHandle,
+	useQueryBindingFor,
+} from './query-handles';
 import {
 	compileQuery,
 	requirementsForCompiledQuery,
@@ -569,36 +573,17 @@ function useEngineBinding(
 	);
 }
 
+/**
+ * A collection's binding, over its query handle (roadmap#423): identity moves only when the
+ * query (or its scope) does. The shape is the eight observables the shared consumers take;
+ * the handle itself is for readers of the snapshot (`useCollectionQueryHandle`).
+ */
 export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
 	state: QueryStateOf<C>,
 	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
 ): QueryBinding {
-	const bindingId = React.useId();
-	const searchFields = useSearchFieldsFor(
-		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
-	);
-	const storeScope = options.storeScope ?? 'pos';
-	const remoteIdsKey = JSON.stringify(options.remoteIds ?? null);
-	const remoteIds = React.useMemo(
-		() => (remoteIdsKey === 'null' ? undefined : (JSON.parse(remoteIdsKey) as readonly RemoteId[])),
-		[remoteIdsKey]
-	);
-	const compiled = React.useMemo(
-		() =>
-			compileQuery(collection, state, {
-				id: bindingId,
-				targeted: remoteIds,
-				storeScope,
-				searchFields,
-			}),
-		[collection, state, remoteIds, storeScope, searchFields, bindingId]
-	);
-	const engineDescriptor: EngineQueryDescriptor = {
-		collection: compiled.collection,
-		read: compiled.read,
-	};
-	return useEngineBinding(engineDescriptor, compiled, true, bindingId);
+	return useQueryBindingFor(useCollectionQueryHandle(collection, state, options));
 }
 
 /**
