@@ -56,8 +56,24 @@ jest.mock('../../hooks/use-guest-customer', () => ({
 
 const currentOrderRecord = {
 	uuid: 'order-uuid',
-	payload: { id: 99, number: '99' },
+	payload: { id: 99, number: '99', customer_id: 0 },
+	getLatest: () => currentOrderRecord,
 };
+
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),

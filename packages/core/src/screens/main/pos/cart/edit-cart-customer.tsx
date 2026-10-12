@@ -27,7 +27,7 @@ import { BillingAddressForm, billingAddressSchema } from '../../components/billi
 import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
@@ -74,7 +74,7 @@ export function EditCartCustomerForm() {
 		() => (Array.isArray(taxIdsProxy) ? JSON.parse(JSON.stringify(taxIdsProxy)) : []),
 		[taxIdsProxy]
 	);
-	const { localPatch } = useLocalMutation();
+	const setCartCustomer = useSetCartCustomer();
 	const { patch } = useMutation({ collectionName: 'customers' });
 	const runtime = useQueryRuntime();
 	const { onOpenChange } = useRootContext();
@@ -97,13 +97,12 @@ export function EditCartCustomerForm() {
 	 *
 	 */
 	const handleSaveToOrder = async (data: FormValues) => {
-		await localPatch({
-			document: currentOrderRecord,
-			data: {
-				billing: data.billing,
-				shipping: data.shipping,
-				tax_ids: data.tax_ids ?? [],
-			},
+		// The customer stays who it is; the order's copy of the addresses and tax ids changes.
+		await setCartCustomer(currentOrderRecord, {
+			customerId: Number(customerID ?? 0),
+			billing: data.billing,
+			shipping: data.shipping,
+			taxIds: data.tax_ids ?? [],
 		});
 		onOpenChange(false);
 	};

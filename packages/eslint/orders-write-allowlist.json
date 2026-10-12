@@ -1,12 +1,6 @@
 {
-	"packages/core/src/screens/main/pos/cart/add-customer.tsx": {
-		"local-write": 1
-	},
 	"packages/core/src/screens/main/pos/cart/buttons/edit-order-meta/form.tsx": {
 		"local-write": 3
-	},
-	"packages/core/src/screens/main/pos/cart/edit-cart-customer.tsx": {
-		"local-write": 1
 	},
 	"packages/core/src/screens/main/pos/cart/totals/customer-note.tsx": {
 		"local-write": 1
@@ -20,9 +14,6 @@
 	},
 	"packages/core/src/screens/main/pos/contexts/current-order/temporary-order.ts": {
 		"collection-write": 1
-	},
-	"packages/core/src/screens/main/pos/hooks/use-add-customer.ts": {
-		"local-write": 1
 	},
 	"packages/core/src/screens/main/pos/hooks/use-cart-settlement.ts": {
 		"local-write": 1

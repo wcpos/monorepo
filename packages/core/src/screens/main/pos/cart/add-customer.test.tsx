@@ -20,7 +20,11 @@ const mockRecordCustomerLink = jest.fn();
 const mockStoreDB = { name: 'store-db' };
 let mockSubmitCustomer: SubmitCustomer | undefined;
 
-const currentOrderRecord = { uuid: 'order-1' };
+const currentOrderRecord = {
+	uuid: 'order-1',
+	payload: { customer_id: 7 },
+	getLatest: () => currentOrderRecord,
+};
 
 // No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
 jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
@@ -98,6 +102,21 @@ jest.mock('../../hooks/mutations/use-mutation', () => ({
 
 jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: mockFormat }),
+}));
+
+const mockActionLog = jest.fn();
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string) => key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({
