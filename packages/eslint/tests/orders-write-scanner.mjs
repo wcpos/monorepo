@@ -60,6 +60,8 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/checkout/payments/use-record-manual-payment.ts',
 	// checkout.tender.commit delegates terminal leg persistence and mirroring here.
 	'packages/core/src/screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts',
+	// cart.order.void (reserved; spec §2, ruled 2026-10-12): the void and its Undo restore.
+	'packages/core/src/screens/main/pos/cart/void-order.ts',
 	// checkout.tender.commit / checkout.complete delegate the order's provenance stamp here.
 	'packages/core/src/screens/main/pos/checkout/provenance/persist-provenance.ts',
 ]);
