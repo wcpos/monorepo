@@ -32,8 +32,8 @@ import { useArmedEndReached } from './use-armed-end-reached';
 import type { SnapshotFields } from '../../../../../../query';
 import type { GridFields } from '../grid/product-tile';
 
-// A level re-renders for the engine's paging opinion (its guard and arm), nothing else of the
-// snapshot: the footer reads the spinner itself, the stage hands the answer down as state.
+// Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
+// the footer reads the spinner itself, the stage hands the answer down as state.
 const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
@@ -189,7 +189,7 @@ export function TermLevelGrid({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this level's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's. Handed as a value (the
+	// not the live handle's, which may already be another level's. Handed as a value (the
 	// footer's `total`), never wrapped as a stream: a stream lands one commit after the count,
 	// and a changed answer (a sync, the query settling on a return) would paint the new count
 	// over the old denominator for a frame. `null` while the level has no answer: no denominator.

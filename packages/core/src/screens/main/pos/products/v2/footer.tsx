@@ -76,7 +76,7 @@ export function ProductsFooterRow({
 				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}
 			</HStack>
 			<HStack className="shrink-0 gap-0">
-				{/* No denominator unless binding.total$ vouches for one; hidden markers stay raw. */}
+				{/* No denominator unless the snapshot's total vouches for one; hidden markers stay raw. */}
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null
 						? t('common.showing_n', { shown: count.toLocaleString() })

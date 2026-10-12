@@ -22,8 +22,8 @@ import { useArmedEndReached } from './use-armed-end-reached';
 
 import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../../../../query';
 
-// A level re-renders for the engine's paging opinion (its guard and arm), nothing else of the
-// snapshot: the table reads the rows from the stage's answer, the footer the spinner itself.
+// Beside the answer, a level re-renders for the engine's paging opinion (its guard and arm):
+// the table reads the rows from the stage's answer, the footer the spinner itself.
 const PAGING_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 type Crumb = { label: string; onPress: () => void; testID?: string };
 
@@ -162,12 +162,12 @@ export function TermLevelTable({
 	const detail =
 		shown?.total === undefined ? undefined : t('pos_products.n_products', { count: shown.total });
 	// The footer's total is this pane's too (as the variations footer takes its parent's count),
-	// not the live binding's, which may already be another level's; `null` (no denominator)
+	// not the live handle's, which may already be another level's; `null` (no denominator)
 	// until it has one. Handed as a value (the footer's `total`), never wrapped as a stream: a
 	// stream lands one commit after the count, and a changed answer would paint the new count over
 	// the old denominator for a frame.
 	const total = shown?.total ?? null;
-	// The table's footer counts the pane's own rows, never the live binding's window — through
+	// The table's footer counts the pane's own rows, never the live handle's window — through
 	// OwnFooterContext, so the footer component DataTable mounts is one identity (own-footer.tsx).
 	const footer = React.useMemo(() => ({ total, count: loaded }), [total, loaded]);
 	// The query is windowed (#1221): the level extends it as the cashier nears the end, guarded on

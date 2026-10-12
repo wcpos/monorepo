@@ -230,11 +230,16 @@ export function BrowseStage(props: BrowseStageProps) {
 				: undefined,
 		[liveResult]
 	);
-	// A table level's DataTable suspends on the root handle until it has answered once (a failed
-	// read counts: the table rethrows it to the boundary). So a level is not pushed before the
-	// root products' first answer (a cold open): the pane follows it.
+	// A table level's DataTable suspends on the products handle until it has answered once (a
+	// failed read counts: the table rethrows it to the boundary). So a level is not pushed before
+	// its query's first answer (a cold open): the pane follows it. Only a level that has never
+	// been on stage is held — every change of the query (a limit extension, a sort, a term opened
+	// or closed) is a new handle that opens unanswered, and a level already on stage keeps its
+	// place over it (its table defers the handle and never suspends mid-deal).
 	const rootAnswered = snapshot.ready || snapshot.error !== null;
 	const levelsHeld = viewMode === 'table' && !rootAnswered;
+	// The details that have been on stage: a cache keyed by detail identity, as `childrenSeen` is.
+	const [staged] = React.useState(() => new WeakSet<Detail>());
 
 	const t = useT();
 	const rootLabel = useSourceLabel(source);
@@ -337,8 +342,13 @@ export function BrowseStage(props: BrowseStageProps) {
 
 	// What is on stage at `depth`: the next path entry, or the product drilled here — the stored
 	// objects themselves (identity, see Detail).
-	const detailAt = (depth: number): Detail | null =>
-		levelsHeld ? null : (path[depth] ?? (drilled && drilled.depth === depth ? drilled : null));
+	const detailAt = (depth: number): Detail | null => {
+		const detail = path[depth] ?? (drilled && drilled.depth === depth ? drilled : null);
+		if (!detail) return null;
+		if (levelsHeld && !staged.has(detail)) return null;
+		staged.add(detail);
+		return detail;
+	};
 	// The crumb's ancestors above a level: the source, then the STAGED chain above it — the
 	// entries each stack has on stage, handed down the recursion, never `path.slice(…)`: while a
 	// level gathers after the path was cut, the live path is already shorter than the crumb.

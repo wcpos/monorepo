@@ -876,6 +876,27 @@ it('a new projection shows held slots until ITS query answers, never the last qu
 	);
 });
 
+it('a table level already on stage keeps its place when the query changes to a handle that has not answered', () => {
+	// Every change of the query (an extended limit, a sort) is a new handle that opens
+	// unanswered; only a level that has never been on stage waits for the first answer.
+	const first = makeHandle();
+	const props = stageProps({ viewMode: 'table', handle: first });
+	const { rerender } = render(<BrowseStage {...props} />);
+	fireEvent.click(screen.getByTestId('browse-term-1'));
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+
+	const extended = makeHandle({ ready: false });
+	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: extended })} />);
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('table')).toBeTruthy();
+
+	// A level opened under the unanswered handle waits; the one on stage does not.
+	fireEvent.click(screen.getAllByTestId('browse-term-2')[0]);
+	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	act(() => extended.set({ ready: true }));
+	expect(screen.getAllByTestId('browse-level').length).toBe(2);
+});
+
 it('a table level is not pushed before the root products have answered once', () => {
 	const cold = makeHandle({ ready: false });
 	const props = stageProps({ viewMode: 'table', handle: cold });

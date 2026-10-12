@@ -38,15 +38,13 @@ jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
 jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../grid/variable-product-tile', () => ({ VariableProductTile: () => null }));
-jest.mock('../../../../../../query', () => {
-	const { useSyncExternalStore } = jest.requireActual('react');
-	return {
-		useGuardedExtendLimitFor: () => () => {},
-		// The real reader, field selection aside: the root footer sees every snapshot change.
-		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
-			useSyncExternalStore(handle.subscribe, () => handle.value),
-	};
-});
+jest.mock('../../../../../../query', () => ({
+	useGuardedExtendLimitFor: () => () => {},
+	// The REAL reader, field selection included: the root footer names `['total']`, and this
+	// suite drives the fake handle's `total` and `result` through it.
+	useQueryHandleFields: jest.requireActual('../../../../../../query/query-handles')
+		.useQueryHandleFields,
+}));
 // The footer takes its denominator as a value, in the same commit as the count. Every render's
 // pair is logged, so a test can see what each commit would have painted, not only where the DOM
 // settled.

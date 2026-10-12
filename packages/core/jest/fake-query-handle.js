@@ -19,6 +19,7 @@ function snapshotFrom(previous, partial) {
 
 function fakeQueryHandle(initial = {}, key = 'fake') {
 	const listeners = new Set();
+	let answer = null;
 	let value = snapshotFrom(
 		{
 			ready: true,
@@ -63,13 +64,37 @@ function fakeQueryHandle(initial = {}, key = 'fake') {
 				return () => listeners.delete(listener);
 			});
 		},
-		sync: jest.fn(async () => undefined),
+		sync: async () => undefined,
 		whenReady: async () => ({ attempted: true, fetched: false }),
-		retry: jest.fn(),
-		whenAnswered: () => (value.ready ? Promise.resolve() : new Promise(() => undefined)),
-		/** Drive the snapshot. */
+		retry: () => undefined,
+		// As the real handle: one promise per unanswered period, settled by `set`.
+		whenAnswered: () => {
+			if (value.error) return Promise.reject(value.error);
+			if (value.ready) return Promise.resolve();
+			if (!answer) {
+				let resolve;
+				let reject;
+				const promise = new Promise((res, rej) => {
+					resolve = res;
+					reject = rej;
+				});
+				promise.catch(() => undefined);
+				answer = { promise, resolve, reject };
+			}
+			return answer.promise;
+		},
+		/** Drive the snapshot. A `set` that changes nothing notifies nobody, as the real handle. */
 		set(partial) {
-			value = snapshotFrom(value, partial);
+			const next = snapshotFrom(value, partial);
+			if (Object.keys(next).every((field) => Object.is(next[field], value[field]))) return;
+			value = next;
+			if (answer && value.error) {
+				answer.reject(value.error);
+				answer = null;
+			} else if (answer && value.ready) {
+				answer.resolve();
+				answer = null;
+			}
 			notify();
 		},
 	};
