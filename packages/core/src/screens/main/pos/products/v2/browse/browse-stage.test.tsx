@@ -890,43 +890,11 @@ it('a table level already on stage keeps its place when the query changes to a h
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('table')).toBeTruthy();
 
-	// A level opened under the unanswered handle waits; the one on stage does not.
+	// A level opened under the unanswered handle is pushed too: its table suspends inside it.
 	fireEvent.click(screen.getAllByTestId('browse-term-2')[0]);
-	expect(screen.getAllByTestId('browse-level').length).toBe(1);
+	expect(screen.getAllByTestId('browse-level').length).toBe(2);
 	act(() => extended.set({ ready: true }));
 	expect(screen.getAllByTestId('browse-level').length).toBe(2);
-});
-
-it('a level staged as a grid is still held when the view switches to a table under an unanswered handle', () => {
-	// A cold table would suspend the whole screen (it has no deferred answered handle); a grid
-	// staging must not excuse it.
-	const first = makeHandle();
-	const { rerender } = render(<BrowseStage {...stageProps({ viewMode: 'grid', handle: first })} />);
-	fireEvent.click(screen.getByTestId('browse-term-1'));
-	expect(screen.getByTestId('browse-level')).toBeTruthy();
-	const cold = makeHandle({ ready: false });
-	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: cold })} />);
-	expect(screen.queryByTestId('table')).toBeNull();
-	act(() => cold.set({ ready: true }));
-	expect(screen.getByTestId('table')).toBeTruthy();
-});
-
-it('a table view entered again after a grid interlude holds a level the earlier table had staged', () => {
-	// Table → grid → (query moves) → table: the first table's staging must not excuse the second,
-	// which mounts cold and would suspend the screen.
-	const first = makeHandle();
-	const { rerender } = render(
-		<BrowseStage {...stageProps({ viewMode: 'table', handle: first })} />
-	);
-	fireEvent.click(screen.getByTestId('browse-term-1'));
-	expect(screen.getByTestId('table')).toBeTruthy();
-	rerender(<BrowseStage {...stageProps({ viewMode: 'grid', handle: first })} />);
-	expect(screen.queryByTestId('table')).toBeNull();
-	const cold = makeHandle({ ready: false });
-	rerender(<BrowseStage {...stageProps({ viewMode: 'table', handle: cold })} />);
-	expect(screen.queryByTestId('table')).toBeNull();
-	act(() => cold.set({ ready: true }));
-	expect(screen.getByTestId('table')).toBeTruthy();
 });
 
 it('a failed products read is thrown to the boundary above the stage, in grid mode too', () => {
@@ -939,19 +907,18 @@ it('a failed products read is thrown to the boundary above the stage, in grid mo
 	silence.mockRestore();
 });
 
-it('a table level is not pushed before the root products have answered once', () => {
+it('a table level is pushed before the products have answered (its table suspends inside the level)', () => {
 	const cold = makeHandle({ ready: false });
 	const props = stageProps({ viewMode: 'table', handle: cold });
 	render(<BrowseStage {...props} />);
 	fireEvent.click(screen.getByTestId('browse-term-1'));
-	expect(screen.queryByTestId('browse-level')).toBeNull();
-	expect(screen.queryByTestId('table')).toBeNull();
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	act(() => cold.set({ ready: true }));
 	expect(screen.getByTestId('browse-level')).toBeTruthy();
 	expect(screen.getByTestId('table')).toBeTruthy();
 });
 
-it('a second tap while the first level is held opens the term tapped, never one nested under it', () => {
+it('a second tap while the first level’s query has not answered opens the term tapped, never one nested under it', () => {
 	const cold = makeHandle({ ready: false });
 	const props = stageProps({ viewMode: 'table', handle: cold });
 	render(<BrowseStage {...props} />);
@@ -963,7 +930,7 @@ it('a second tap while the first level is held opens the term tapped, never one 
 	expect(mockState.filters.categories).toEqual([1, 2]);
 });
 
-it('tapping another root term while one is held opens that term alone', () => {
+it('tapping another root term while one’s query has not answered opens that term alone', () => {
 	const cold = makeHandle({ ready: false });
 	const props = stageProps({ viewMode: 'table', handle: cold });
 	render(<BrowseStage {...props} />);

@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
+import { Suspense } from '@wcpos/components/suspense';
 
 import { useT } from '../../../../../../contexts/translations';
 import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
@@ -104,6 +105,31 @@ const itemType = ({ original: row }: { original: LevelRow }): string =>
 /** A product that has not arrived yet: its row is held, in a row's own height. */
 function RowPlaceholder() {
 	return <View className="min-h-row border-border border-b" aria-busy testID="row-placeholder" />;
+}
+
+/**
+ * The pane's rows while its table waits for the handle's first answer: the child terms, then a
+ * pane's worth of held slots — the same shape the table draws from `HELD`, so the rows that
+ * land do not reflow it. A level is pushed the moment it is tapped; a cold table suspends here,
+ * inside the level, never the screen (the stage holds nothing back).
+ */
+function HeldRows({
+	children,
+	onOpenTerm,
+}: {
+	children: BrowseTerm[];
+	onOpenTerm: (term: BrowseTerm) => void;
+}) {
+	return (
+		<TableSurface testID="browse-level-held-rows">
+			{children.map((child) => (
+				<TermRow key={termKey(child)} term={child} onPress={onOpenTerm} />
+			))}
+			{HELD.map((slot) => (
+				<RowPlaceholder key={slot.id} />
+			))}
+		</TableSurface>
+	);
 }
 
 /**
@@ -232,45 +258,47 @@ export function TermLevelTable({
 					// persists as it does there (`persistSort` is off only for a table that borrows the id
 					// for another collection, as the variations pane does).
 					<OwnFooterContext.Provider value={footer}>
-						<DataTable<ProductHit>
-							id="pos-products"
-							collectionName="products"
-							handle={handle}
-							tableConfig={config}
-							sort={state.sort}
-							actions={actions}
-							onEndReached={onEndReached}
-							cellsForRow={cellsForRow}
-							// The rows are never empty under child terms; with neither, the empty state (and
-							// its Clear filters) sits in the table under the crumb.
-							noDataMessage={empty as React.ReactElement}
-							renderItem={({ item, index, table }) => {
-								const row = item.original as LevelRow;
-								return (
-									<VirtualizedList.Item>
-										{'term' in row ? (
-											<TermRow term={row.term} onPress={onOpenTerm} />
-										) : 'held' in row ? (
-											<RowPlaceholder />
-										) : row.record.payload.type === 'variable' ? (
-											<VariableProductRow
-												item={item}
-												index={index}
-												table={table}
-												variationsStyle={variationsStyle}
-												onDrill={onDrillProduct}
-											/>
-										) : (
-											<ProductRow item={item} />
-										)}
-									</VirtualizedList.Item>
-								);
-							}}
-							estimatedItemSize={100}
-							ListFooterComponent={NoListFooter}
-							TableFooterComponent={OwnFooter}
-							getItemType={itemType}
-						/>
+						<Suspense fallback={<HeldRows onOpenTerm={onOpenTerm}>{children}</HeldRows>}>
+							<DataTable<ProductHit>
+								id="pos-products"
+								collectionName="products"
+								handle={handle}
+								tableConfig={config}
+								sort={state.sort}
+								actions={actions}
+								onEndReached={onEndReached}
+								cellsForRow={cellsForRow}
+								// The rows are never empty under child terms; with neither, the empty state (and
+								// its Clear filters) sits in the table under the crumb.
+								noDataMessage={empty as React.ReactElement}
+								renderItem={({ item, index, table }) => {
+									const row = item.original as LevelRow;
+									return (
+										<VirtualizedList.Item>
+											{'term' in row ? (
+												<TermRow term={row.term} onPress={onOpenTerm} />
+											) : 'held' in row ? (
+												<RowPlaceholder />
+											) : row.record.payload.type === 'variable' ? (
+												<VariableProductRow
+													item={item}
+													index={index}
+													table={table}
+													variationsStyle={variationsStyle}
+													onDrill={onDrillProduct}
+												/>
+											) : (
+												<ProductRow item={item} />
+											)}
+										</VirtualizedList.Item>
+									);
+								}}
+								estimatedItemSize={100}
+								ListFooterComponent={NoListFooter}
+								TableFooterComponent={OwnFooter}
+								getItemType={itemType}
+							/>
+						</Suspense>
 					</OwnFooterContext.Provider>
 				) : (
 					// Subcategories only: the child terms as the root's rows are, no product columns,

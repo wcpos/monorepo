@@ -51,39 +51,47 @@ const mockPatchUI = jest.fn();
 // loaded rows); an end-reached is a scroll and calls the `onEndReached` it was handed, which
 // replaces the extend behind its own guard; a header sort persists as the real one does.
 jest.mock('../../../../components/data-table/v2', () => ({
-	DataTable: ({
-		id,
-		persistSort = true,
-		tableConfig,
-		renderItem,
-		noDataMessage,
-		getItemType,
-		actions,
-		TableFooterComponent,
-		handle,
-		cellsForRow: cells,
-		ListFooterComponent,
-		onEndReached,
-	}: {
-		id: string;
-		persistSort?: boolean;
-		tableConfig: {
-			data: Row[];
-			getRowId?: (row: Row) => string;
-			getRowCanExpand?: (row: { original: Row }) => boolean;
-			meta?: { marker?: string };
-		};
-		renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
-		noDataMessage?: React.ReactNode;
-		getItemType: (row: { original: Row }) => string;
-		actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
-		handle: { value: { total: number | null }; sync: () => Promise<void> };
-		TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
-		sync: unknown;
-		cellsForRow: unknown;
-		ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
-		onEndReached?: () => void;
-	}) => (
+	DataTable: (props: Record<string, unknown>) => {
+		// As the real handle source: a table mounted on an unanswered handle suspends.
+		const handle = props.handle as { value: { ready: boolean }; whenAnswered(): Promise<void> };
+		if (!handle.value.ready) throw handle.whenAnswered();
+		return <MockTableBody {...(props as React.ComponentProps<typeof MockTableBody>)} />;
+	},
+}));
+function MockTableBody({
+	id,
+	persistSort = true,
+	tableConfig,
+	renderItem,
+	noDataMessage,
+	getItemType,
+	actions,
+	TableFooterComponent,
+	handle,
+	cellsForRow: cells,
+	ListFooterComponent,
+	onEndReached,
+}: {
+	id: string;
+	persistSort?: boolean;
+	tableConfig: {
+		data: Row[];
+		getRowId?: (row: Row) => string;
+		getRowCanExpand?: (row: { original: Row }) => boolean;
+		meta?: { marker?: string };
+	};
+	renderItem: (input: { item: unknown; index: number; table: unknown }) => React.ReactNode;
+	noDataMessage?: React.ReactNode;
+	getItemType: (row: { original: Row }) => string;
+	actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
+	handle: { value: { total: number | null }; sync: () => Promise<void> };
+	TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
+	sync: unknown;
+	cellsForRow: unknown;
+	ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
+	onEndReached?: () => void;
+}) {
+	return (
 		<div
 			data-testid="table"
 			data-meta={tableConfig.meta?.marker}
@@ -138,8 +146,8 @@ jest.mock('../../../../components/data-table/v2', () => ({
 				/>
 			)}
 		</div>
-	),
-}));
+	);
+}
 jest.mock('../rows/product-row', () => ({
 	ProductRow: ({ item }: { item: { original: { record: { uuid: string } } } }) => (
 		<div data-testid={`row-${item.original.record.uuid}`} />
@@ -331,6 +339,17 @@ it('keys the rows apart: a term row never expands, products keep the table’s o
 		type: 'simple',
 		expands: 'false',
 	});
+});
+
+it('a level mounted on an unanswered handle shows its child terms and held rows, inside the level', () => {
+	// The table suspends on the handle; the level's own boundary draws the held shape, and the
+	// level (crumb, back) stays on stage. Nothing above the level is suspended.
+	const cold = fakeQueryHandle({ ready: false, total: 220 });
+	render(<TermLevelTable {...level({ handle: cold, answer: undefined })} />);
+	expect(screen.getByTestId('browse-level')).toBeTruthy();
+	expect(screen.getByTestId('browse-level-held-rows')).toBeTruthy();
+	expect(screen.getAllByTestId('row-placeholder').length).toBeGreaterThan(0);
+	expect(screen.queryByTestId('table')).toBeNull();
 });
 
 it('footers the level’s own loaded rows and total, not the live binding’s', () => {
