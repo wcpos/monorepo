@@ -57,6 +57,11 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 	useRegisterSessionCollection: () => 'sessions',
 }));
 jest.mock('./read-stock-document', () => ({ readStockDocument: jest.fn() }));
+jest.mock('../../hooks/use-payment-methods', () => {
+	// One map, as the real hook memoises it: the context's memo keys on it.
+	const byId = new Map([['pos_cash', { id: 'pos_cash', title: 'Cash' }]]);
+	return { usePaymentMethods: () => ({ byId }) };
+});
 
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -93,4 +98,14 @@ it('keeps the same context object across renders', () => {
 	rerender();
 	expect(result.current.ctx).toBe(first);
 	expect(result.current.actor).toEqual({ userId: 7, registerId: 'till', sessionId: null });
+});
+
+it('reads a payment method descriptor from the till, null for one it does not offer', () => {
+	const { result } = renderHook(() => useActionContext());
+	expect(result.current.ctx.read.paymentMethod('pos_cash')).toEqual({
+		id: 'pos_cash',
+		title: 'Cash',
+	});
+	expect(result.current.ctx.read.paymentMethod('stripe')).toBeNull();
+	expect(result.current.ctx.store.priceDecimals).toBe(2);
 });

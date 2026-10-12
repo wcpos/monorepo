@@ -4,6 +4,7 @@ import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { readStockDocument } from './read-stock-document';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -32,8 +33,10 @@ export function useActionContext(): {
 	const sessions = useRegisterSessionCollection();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const preventOverselling = useDocField(store, (value) => value.prevent_overselling) === true;
+	const priceDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const userId = wpCredentials.id ?? null;
 	const registerId = useRegister()?.id ?? null;
+	const { byId: paymentMethods } = usePaymentMethods();
 	return React.useMemo(
 		() => ({
 			ctx: createActionContext({
@@ -55,7 +58,9 @@ export function useActionContext(): {
 						kind === 'product' ? 'products' : 'variations',
 						id
 					)) as Record<string, unknown> | null,
+				readPaymentMethod: (id) => paymentMethods.get(id) ?? null,
 				preventOverselling,
+				priceDecimals,
 				// A read, so a guard may call it before `next`: the pre-action write that
 				// `requireOpenSession` makes stays with the writer (the tender's bottom handler).
 				resolveSession: async () => {
@@ -76,7 +81,9 @@ export function useActionContext(): {
 		[
 			runtime,
 			t,
+			paymentMethods,
 			preventOverselling,
+			priceDecimals,
 			userId,
 			wpCredentials.display_name,
 			wpCredentials.username,

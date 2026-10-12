@@ -23,7 +23,9 @@ const ctx = createActionContext({
 	log,
 	t: (key) => key,
 	readCatalog: async () => null,
+	readPaymentMethod: () => null,
 	preventOverselling: true,
+	priceDecimals: 2,
 	resolveSession: async () => ({ registerId: null, sessionId: null }),
 });
 const dispatch = () =>
@@ -640,6 +642,7 @@ it('passes tender register and session rewrites to bottom', async () => {
 				amountMinor: 100,
 				tenderedMinor: 100,
 				balanceMinor: 100,
+				roundingMinor: 0,
 				completing: true,
 				bindingStatus: 'bound',
 				registerId: null,

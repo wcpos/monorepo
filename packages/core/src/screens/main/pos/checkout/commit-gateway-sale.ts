@@ -62,6 +62,7 @@ export async function commitGatewaySale(
 					amountMinor: balanceMinor,
 					tenderedMinor: balanceMinor,
 					balanceMinor,
+					roundingMinor: 0,
 					completing: true,
 					bindingStatus: input.bindingStatus,
 					registerId: null,

@@ -16,7 +16,9 @@ const ctx = createActionContext({
 	t: (key) => key,
 	now: () => Date.now(),
 	readCatalog: async () => null,
+	readPaymentMethod: () => null,
 	preventOverselling: false,
+	priceDecimals: 2,
 	resolveSession,
 });
 const e: ActionEventInput<'checkout.tender.commit'> = {
@@ -30,6 +32,7 @@ const e: ActionEventInput<'checkout.tender.commit'> = {
 		amountMinor: 100,
 		tenderedMinor: 100,
 		balanceMinor: 100,
+		roundingMinor: 0,
 		completing: true,
 		bindingStatus: 'bound',
 		registerId: null,
@@ -48,7 +51,12 @@ it.each(['bound', 'choose', 'none'] as const)(
 	async (bindingStatus) => {
 		for (const completing of [false, true]) {
 			bottom.mockClear();
-			const event = { ...e, payload: { ...e.payload, completing, bindingStatus } };
+			// Completing is judged on the amounts the writer will write, not the caller's flag.
+			const amountMinor = completing ? 100 : 40;
+			const event = {
+				...e,
+				payload: { ...e.payload, amountMinor, completing: true, bindingStatus },
+			};
 			const result = await registerGate(ctx, event, bottom);
 			if (completing && bindingStatus === 'choose') {
 				expect(result).toEqual({

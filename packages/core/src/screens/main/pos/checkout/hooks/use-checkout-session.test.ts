@@ -716,7 +716,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 			},
 			t: (key) => key,
 			readCatalog: async () => null,
+			readPaymentMethod: () => null,
 			preventOverselling: false,
+			priceDecimals: 2,
 			// The session gate reads through the same store the handler then writes to.
 			resolveSession: async () => {
 				const { readBoundRegister } = jest.requireActual<

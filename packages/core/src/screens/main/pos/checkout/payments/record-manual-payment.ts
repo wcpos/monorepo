@@ -36,6 +36,8 @@ export interface RecordManualPaymentInput {
 	extraMeta?: MetaDataEntry[];
 	amount: string | number;
 	tendered?: string | number | null;
+	/** The row's id when the caller has already named it (a rounding fee line points at it). */
+	paymentId?: string;
 }
 export interface RecordManualPaymentDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
@@ -144,7 +146,7 @@ export async function recordManualPayment(
 		sessionId: deps.sessionId,
 		recordedOffline: !online,
 		now: deps.now ?? (() => new Date().toISOString()),
-		uuid: deps.uuid ?? uuidv4,
+		uuid: input.paymentId ? () => input.paymentId as string : (deps.uuid ?? uuidv4),
 		dp: deps.dp,
 	});
 	if (!minted.ok) return { kind: 'invalid', reason: minted.reason };

@@ -6,10 +6,10 @@ import * as React from 'react';
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
-import { withLedger } from '@wcpos/order-math';
+import { readLedger, withLedger } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
-import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
+import type { MetaDataEntry, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { createActionContext, resetActionHookStrikes } from '../../../../../extensions/actions';
 import { recordCompletionAttempt } from '../completion-journal';
@@ -239,6 +239,21 @@ jest.mock('../payments', () => ({
 	},
 	useVoidPayments: () => mockVoidPayments,
 }));
+jest.mock('../../hooks/use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		taxClassSlugs: ['standard'],
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 jest.mock('../hooks/use-complete-order-flow', () => ({
 	useCompleteOrderFlow: (order: EngineRecord<'orders'>) =>
 		mockUseRealCompletion
@@ -2467,7 +2482,9 @@ jest.mock('../hooks/use-sale-context', () => ({
 			},
 			t: (key) => key,
 			readCatalog: async () => null,
+			readPaymentMethod: () => null,
 			preventOverselling: false,
+			priceDecimals: 2,
 			resolveSession: async () => ({ registerId: null, sessionId: null }),
 		}),
 
@@ -3171,8 +3188,11 @@ jest.mock('../../hooks/use-action-context', () => ({
 			log: mockActionLog,
 			t: (key: string) => key,
 			now: () => Date.now(),
-			read: { catalog: async () => null },
-			store: { preventOverselling: false },
+			read: {
+				catalog: async () => null,
+				paymentMethod: (id: string) => mockMethods.find((method) => method.id === id) ?? null,
+			},
+			store: { preventOverselling: false, priceDecimals: 2 },
 			register: { resolveSession: mockResolveSession },
 		},
 		actor: { userId: 7, registerId: mockBoundRegisterId, sessionId: null },
@@ -3398,4 +3418,160 @@ it('a session replaced between the gate and the write refuses with the open-regi
 	expect(jest.mocked(recordCompletionAttempt)).not.toHaveBeenCalled();
 	expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	expect(result.current.busy).toBe(false);
+});
+
+describe('cash rounding (#66, #84)', () => {
+	const roundingCash = {
+		...cash,
+		defaults: { ...cash.defaults, rounding: { increment: '0.05', mode: 'nearest' as const } },
+	};
+	type Patch = { data: Record<string, unknown> };
+	// One product line: the settled total is its total plus the fee.
+	const sale = (total: string) => ({
+		total,
+		meta_data: [],
+		line_items: [{ name: 'Item', quantity: 1, total, total_tax: '0.00' }],
+	});
+	const patches = () => mockLocalPatch.mock.calls.map(([call]) => (call as Patch).data);
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockLeg = null;
+		mockRealService = null;
+		mockSessionsOn = false;
+		mockBindingStatus = 'bound';
+		mockMethods = [roundingCash, card];
+		mockOnlineStatus = 'offline';
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockCompleteOrderFlow.mockResolvedValue(undefined);
+		mockRecordManualPayment.mockResolvedValue(recorded);
+		// The resident record takes each patch, so the writer reads what the handler wrote.
+		mockLocalPatch.mockImplementation(async ({ data }: Patch) => {
+			mockPayload = { ...mockPayload, ...data };
+			return order;
+		});
+	});
+	afterEach(() => {
+		mockUseRealManual = false;
+	});
+
+	it('previews the rounded due: the prefill, the change and the rounding for the cash tile only', async () => {
+		mockPayload = sale('10.03');
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current).toMatchObject({
+			balanceMinor: 1003,
+			roundedDueMinor: 1005,
+			roundingMinor: 2,
+			entryAppliedMinor: 1005,
+			entryChangeMinor: 0,
+			state: { entryMinor: 1005, entryDirty: false },
+		});
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
+		expect(result.current).toMatchObject({ roundingMinor: 2, entryChangeMinor: 995 });
+		// A partial tender is never rounded.
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 500 }));
+		expect(result.current).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 500 });
+		act(() => result.current.pickMethod('pos_card'));
+		expect(result.current).toMatchObject({ roundedDueMinor: 1003, roundingMinor: 0 });
+		await act(async () => {});
+	});
+
+	it('writes the rounding fee before the cash row, which records the due and names it', async () => {
+		mockUseRealManual = true;
+		mockPayload = sale('10.03');
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
+		await act(async () => result.current.takeTender());
+
+		const [fee, leg] = patches();
+		const [line] = fee.fee_lines as {
+			name: string;
+			tax_status: string;
+			total: string;
+			meta_data: { key: string; value: Record<string, unknown> }[];
+		}[];
+		expect(line).toMatchObject({
+			name: 'pos_checkout.rounding',
+			tax_status: 'none',
+			total: '0.02',
+		});
+		// The money fields move in the same patch: the writer reads the total before the leg.
+		expect(fee.total).toBe('10.05');
+		const rounding = line.meta_data.find(({ key }) => key === '_woocommerce_pos_data')?.value
+			.rounding as Record<string, unknown>;
+		const [row] = readLedger(leg.meta_data as MetaDataEntry[]);
+		expect(rounding).toEqual({ increment: '0.05', mode: 'nearest', payment_ref: row.id });
+		expect(row).toMatchObject({ amount: '10.05', tendered: '20.00', change: '9.95' });
+		expect(leg.status).toBe('completed');
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				preparedCompleting: true,
+				preLegBalanceMinor: 1005,
+				amountMinor: 1005,
+			}),
+			expect.anything()
+		);
+	});
+
+	it.each([
+		[
+			'a leg that failed to save',
+			async () => ({ kind: 'failed', reason: 'provenance_save_failed' }),
+		],
+		[
+			'a leg the store refused',
+			async () => {
+				throw Object.assign(new Error('refused'), { code: 'wcpos_invalid' });
+			},
+		],
+	])('%s takes its rounding fee back off the order', async (_name, outcome) => {
+		mockPayload = sale('10.03');
+		mockRecordManualPayment.mockImplementationOnce(outcome);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		const [fee, unround] = patches();
+		expect(fee.total).toBe('10.05');
+		expect(unround).toMatchObject({ fee_lines: [], total: '10.03' });
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	});
+
+	it('a cash due rounded to nothing writes the fee and completes as a zero-balance sale', async () => {
+		mockPayload = sale('0.02');
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
+		await act(async () => result.current.takeTender());
+
+		const [fee, completion] = patches();
+		expect(fee).toMatchObject({ fee_lines: [{ total: '-0.02', tax_status: 'none' }] });
+		expect(Number(fee.total)).toBe(0);
+		expect(completion).toMatchObject({ status: 'completed' });
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			{ source: 'zero-balance' },
+			expect.anything()
+		);
+	});
+
+	it('a guard refusing after the rewrite writes nothing: the register gate judges the rounded amounts', async () => {
+		// 10.02 rounds down to 10.00: the entry is short of the balance until the hook settles it.
+		mockPayload = sale('10.02');
+		mockBindingStatus = 'choose';
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.entryMinor).toBe(1000);
+		await act(async () => result.current.takeTender());
+
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.choose_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
 });

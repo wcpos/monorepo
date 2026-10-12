@@ -18,7 +18,9 @@ const ctx = createActionContext({
 	log,
 	t: (key) => key,
 	readCatalog: async () => null,
+	readPaymentMethod: () => null,
 	preventOverselling: false,
+	priceDecimals: 2,
 	resolveSession: async () => ({ registerId: null, sessionId: null }),
 });
 const actor = { userId: 7, registerId: 'till', sessionId: null };
