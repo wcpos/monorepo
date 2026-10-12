@@ -105,25 +105,28 @@ export const useUpdateShippingLine = () => {
 	 */
 	const updateShippingLine = React.useCallback(
 		async (uuid: string, changes: Changes) => {
-			const order = currentOrderRecord.getLatest();
-			const json = order.toMutableJSON().payload;
-			const line =
-				json.shipping_lines?.find((item) => wooMetaCarrier.lineUuid(item) === uuid) ?? null;
-			if (!line) {
-				// The uuid isn't in the order document — the cashier edited a stale row
-				// (multi-tab is first-class). Cashier-full-information ruling: say so.
-				reportStaleCartLine(
-					cartLogger,
-					'Shipping line update targeted a line that is no longer in the cart',
-					{
-						toastTitle: t('pos_cart.update_shipping_not_found'),
-						context: { uuid, orderId: order.payload.id },
-					}
-				);
-				return;
-			}
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
-				dispatchAction({
+			const recordId = currentOrderRecord.uuid;
+			const outcome = await enqueueOrderMutation(recordId, (queue) => {
+				// Read inside the slot, so the line and the cart a hook sees include every edit
+				// queued ahead of this one.
+				const order = currentOrderRecord.getLatest();
+				const json = order.toMutableJSON().payload;
+				const line =
+					json.shipping_lines?.find((item) => wooMetaCarrier.lineUuid(item) === uuid) ?? null;
+				if (!line) {
+					// The uuid isn't in the order document — the cashier edited a stale row
+					// (multi-tab is first-class). Cashier-full-information ruling: say so.
+					reportStaleCartLine(
+						cartLogger,
+						'Shipping line update targeted a line that is no longer in the cart',
+						{
+							toastTitle: t('pos_cart.update_shipping_not_found'),
+							context: { uuid, orderId: order.payload.id },
+						}
+					);
+					return Promise.resolve(undefined);
+				}
+				return dispatchAction({
 					event: 'cart.line.update',
 					token: queue.dispatchToken,
 					ctx,
@@ -141,10 +144,10 @@ export const useUpdateShippingLine = () => {
 						},
 					},
 					bottom: (e) => write(uuid, { ...e.payload.changes } as Changes),
-				})
-			);
+				});
+			});
 			if (isActionRefusal(outcome)) {
-				presentActionRefusal(ctx, outcome, { orderId: order.payload.id, uuid });
+				presentActionRefusal(ctx, outcome, { orderId: currentOrderRecord.payload.id, uuid });
 				return false;
 			}
 			return outcome as Awaited<ReturnType<typeof localPatch>> | undefined;

@@ -5,6 +5,8 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { reportStaleCartLine } from './cart-failure';
 import { enqueueOrderMutation } from './order-mutation-queue';
+// Undo re-enters through cart.line.add; the guard must be registered whoever imported first.
+import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { useT } from '../../../../contexts/translations';
 import {

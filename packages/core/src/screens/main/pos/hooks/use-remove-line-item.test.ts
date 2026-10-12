@@ -17,10 +17,15 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 let mockLines: object[] = [];
+const mockOrderLists: Partial<Record<'fee_lines' | 'shipping_lines' | 'coupon_lines', object[]>> =
+	{};
 const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 17 },
-	getLatest: () => ({ uuid: 'order-uuid', payload: { id: 17, line_items: mockLines } }),
+	getLatest: () => ({
+		uuid: 'order-uuid',
+		payload: { id: 17, line_items: mockLines, ...mockOrderLists },
+	}),
 };
 
 jest.mock('@wcpos/utils/logger', () => {
@@ -117,6 +122,35 @@ describe('useRemoveLineItem', () => {
 			}),
 		]);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('drops a local line (no Woo id) instead of tombstoning it', async () => {
+		const { id: _id, ...local } = coffee;
+		mockLines = [
+			local,
+			{ ...coffee, id: 12, meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-2' }] },
+		];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toEqual([
+			expect.objectContaining({ id: 12 }),
+		]);
+	});
+
+	it.each([
+		['fee_lines', { id: 21, name: 'Handling' }, 'name'],
+		['shipping_lines', { id: 22, method_id: 'flat_rate', method_title: 'Flat' }, 'method_id'],
+		['coupon_lines', { id: 23, code: 'save10' }, 'code'],
+	] as const)('retires a synced %s line by nulling its key field', async (type, line, key) => {
+		mockOrderLists[type] = [
+			{ ...line, meta_data: [{ key: '_woocommerce_pos_uuid', value: 'x-1' }] },
+		];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('x-1', type));
+		expect(mockLocalPatch.mock.calls[0][0].data[type]).toEqual([
+			expect.objectContaining({ id: line.id, [key]: null }),
+		]);
+		mockOrderLists[type] = undefined;
 	});
 
 	it('a guard refusal leaves the line in the cart and presents the reason', async () => {
