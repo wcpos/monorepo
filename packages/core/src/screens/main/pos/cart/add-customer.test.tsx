@@ -185,6 +185,23 @@ describe.each([
 		expect(toJSON).not.toHaveBeenCalled();
 	});
 
+	it('a new customer with no shipping address leaves the order shipping alone', async () => {
+		const payload = { first_name: 'Ada', billing: { first_name: 'Ada', email: 'ada@example.com' } };
+		mockCreate.mockResolvedValue({
+			uuid: 'customer-1',
+			payload,
+			getLatest: () => ({ uuid: 'customer-1', payload }),
+			toJSON: () => ({ payload }),
+		});
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: currentOrderRecord });
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+		const { data } = mockLocalPatch.mock.calls[0][0];
+		expect(data).toEqual({ customer_id: 0, billing: payload.billing, shipping: undefined });
+	});
+
 	it('keeps the form open and records no link when the create could not be queued', async () => {
 		// create() reports its own failure and resolves undefined.
 		mockCreate.mockResolvedValue(undefined);

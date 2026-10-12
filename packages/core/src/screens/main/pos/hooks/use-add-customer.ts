@@ -58,8 +58,9 @@ export const useAddCustomer = () => {
 				country as string
 			);
 			const result = await setCartCustomer(currentOrderRecord, {
-				// A selected customer always carries its Woo id; the guest defaults carry 0.
-				customerId: customer_id as number,
+				// A born-local customer picked before its create is acknowledged has no id yet; the
+				// order keeps its customer and takes the addresses, as it always did.
+				customerId: customer_id,
 				billing,
 				shipping,
 				taxIds: tax_ids,

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { useActionContext } from './use-action-context';
 import {
@@ -14,8 +16,13 @@ import type { CurrentOrderRecord } from '../contexts/current-order';
 type Plain = Record<string, unknown>;
 
 export interface CartCustomerFields {
-	/** The Woo customer id the order now belongs to; the guest id for a walk-in or a born-local customer. */
-	customerId: number;
+	/**
+	 * The Woo customer id the order now belongs to; the guest id for a walk-in or a born-local
+	 * customer. Absent, the order keeps whoever it is for (an address edit, or a picked customer
+	 * whose create is not yet acknowledged and so has no id): the field is not written, and the
+	 * event carries the id the order has as its queue slot starts.
+	 */
+	customerId?: number;
 	/** An absent address is written as absent, as the forms always did. */
 	billing: Plain | undefined;
 	shipping: Plain | undefined;
@@ -34,8 +41,12 @@ export const useSetCartCustomer = () => {
 
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
-				dispatchAction({
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
+				// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
+				// customer this write keeps, not the one the form last rendered.
+				const current = order.getLatest().payload.customer_id ?? null;
+				const setsCustomer = fields.customerId !== undefined;
+				return dispatchAction({
 					event: 'cart.customer.set',
 					token: queue.dispatchToken,
 					ctx,
@@ -44,8 +55,8 @@ export const useSetCartCustomer = () => {
 						actor,
 						source: 'user',
 						payload: {
-							customerId: fields.customerId,
-							previousCustomerId: order.getLatest().payload.customer_id ?? null,
+							customerId: setsCustomer ? fields.customerId! : (current ?? GUEST_CUSTOMER_ID),
+							previousCustomerId: current,
 							// The dispatcher's clone drops `undefined`; the write puts it back as absent.
 							billing: fields.billing ?? null,
 							shipping: fields.shipping ?? null,
@@ -56,16 +67,19 @@ export const useSetCartCustomer = () => {
 						localPatch({
 							document: order,
 							data: {
-								customer_id: e.payload.customerId,
+								...(setsCustomer ? { customer_id: e.payload.customerId } : {}),
 								billing: e.payload.billing ?? undefined,
 								shipping: e.payload.shipping ?? undefined,
 								...(e.payload.taxIds ? { tax_ids: e.payload.taxIds } : {}),
 							},
 						}),
-				})
-			);
+				});
+			});
 			if (isActionRefusal(outcome)) {
-				presentActionRefusal(ctx, outcome, { orderId: order.uuid, customerId: fields.customerId });
+				presentActionRefusal(ctx, outcome, {
+					orderId: order.uuid,
+					customerId: fields.customerId ?? null,
+				});
 				return false;
 			}
 			return outcome as Awaited<ReturnType<typeof localPatch>>;

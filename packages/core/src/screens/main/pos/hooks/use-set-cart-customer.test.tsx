@@ -127,3 +127,29 @@ it('a guard refusal writes nothing, presents the reason and resolves false', asy
 		expect.objectContaining({ showToast: true })
 	);
 });
+
+it('without a customer id the write keeps whoever the order is for, read inside the slot, and the event carries that id', async () => {
+	const seen: ActionEventInput<'cart.customer.set'>[] = [];
+	registerActionHook(
+		'cart.customer.set',
+		async (_ctx, e, next) => {
+			seen.push(e);
+			return next(e);
+		},
+		{ id: 'test.observer', tier: 'extension' }
+	);
+	const { result } = renderHook(() => useSetCartCustomer());
+	await act(async () => {
+		await result.current(order, { billing, shipping, taxIds: [] });
+	});
+	expect(seen[0].payload).toEqual({
+		customerId: 3,
+		previousCustomerId: 3,
+		billing,
+		shipping,
+		taxIds: [],
+	});
+	const { data } = localPatch.mock.calls[0][0];
+	expect('customer_id' in data).toBe(false);
+	expect(data).toEqual({ billing, shipping, tax_ids: [] });
+});

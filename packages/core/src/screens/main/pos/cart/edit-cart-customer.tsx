@@ -98,13 +98,15 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrder = async (data: FormValues) => {
 		// The customer stays who it is; the order's copy of the addresses and tax ids changes.
-		await setCartCustomer(currentOrderRecord, {
-			customerId: Number(customerID ?? 0),
+		const written = await setCartCustomer(currentOrderRecord, {
 			billing: data.billing,
 			shipping: data.shipping,
 			taxIds: data.tax_ids ?? [],
 		});
+		// A refused edit keeps the dialog and the cashier's input; the reason was presented.
+		if (written === false) return false;
 		onOpenChange(false);
+		return true;
 	};
 
 	/**
@@ -112,7 +114,7 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
 		const wooCustomerId = Number(customerID ?? 0);
-		await handleSaveToOrder(data);
+		if (!(await handleSaveToOrder(data))) return;
 		setLoading(true);
 		try {
 			const customer = await findCustomerByWooId(runtime, wooCustomerId);

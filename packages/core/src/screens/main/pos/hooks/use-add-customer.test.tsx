@@ -166,8 +166,19 @@ describe('useAddCustomer', () => {
 					email: 'ada@example.com',
 					country: 'ES',
 				}),
+				// The order's own snapshot, overriding any prior one when the cashier swaps customers.
+				tax_ids: [],
 			}),
 		});
+	});
+
+	it('a picked customer whose create is not yet acknowledged keeps the order customer and takes the addresses', async () => {
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCustomer());
+		await result.current.addCustomer({ first_name: 'New', email: 'new@example.com' } as never);
+		const { data } = localPatch.mock.calls[0][0];
+		expect('customer_id' in data).toBe(false);
+		expect(data.billing).toEqual(expect.objectContaining({ email: 'new@example.com' }));
 	});
 
 	it('does not log assignment success when the local write returns no result', async () => {

@@ -172,6 +172,9 @@ describe('EditCartCustomerForm', () => {
 		fireEvent.click(screen.getByTestId('pos_cart.save_to_order_customer'));
 
 		await waitFor(() => expect(localPatch).toHaveBeenCalled());
+		// The customer stays who it is: the edit writes the addresses and tax ids, never the id.
+		const written = (localPatch as jest.Mock).mock.calls[0][0] as { data: Record<string, unknown> };
+		expect('customer_id' in written.data).toBe(false);
 		expect(customerFindOne).toHaveBeenCalledWith({
 			selector: { remoteId: '42' },
 		});

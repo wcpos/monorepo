@@ -87,8 +87,8 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 						const scopeId = runtime.engine.status().activeScopeId;
 						const attached = await setCartCustomer(currentOrderRecord, {
 							customerId: GUEST_CUSTOMER_ID,
-							billing: saved?.billing ?? {},
-							shipping: saved?.shipping ?? {},
+							billing: saved?.billing,
+							shipping: saved?.shipping,
 							taxIds: null,
 						});
 						// After the attach, never before: a link whose order does not yet
@@ -98,7 +98,10 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 								await recordCustomerLink(storeDB, orderUuid, {
 									customerUuid: record.uuid,
 									scopeId,
-									identity: customerLinkIdentity(saved?.billing),
+									// From what was written: a hook may have completed the address.
+									identity: customerLinkIdentity(
+										(attached.changes?.billing as typeof saved.billing) ?? saved?.billing
+									),
 									at: new Date().toISOString(),
 								});
 							} catch (error) {
