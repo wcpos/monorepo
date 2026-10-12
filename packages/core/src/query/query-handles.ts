@@ -309,6 +309,83 @@ export function useQueryHandleValue<R extends QueryResult<RxCollection>>(
 }
 
 /**
+ * The snapshot a screen should DRAW: the handle's own once it has answered, and until then the
+ * last answered snapshot this component drew — so a changed query (a keystroke, an extended
+ * limit) keeps the current rows on screen while the next read loads instead of flashing the
+ * loading state, which is what the Suspense resource's `reload` did. `settling` says the drawn
+ * snapshot is not yet the current handle's answer. Before any answer, `value.ready` is false and
+ * the screen shows its loading state: the gate that used to be a Suspense boundary.
+ */
+export function useQueryHandleView<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>
+): { value: Readonly<QuerySnapshot<R>>; settling: boolean } {
+	const current = useQueryHandleValue(handle);
+	const [drawn, setDrawn] = React.useState(current);
+	// Derived state, set during render (React's documented pattern): the answered snapshot
+	// becomes the one to draw in the same pass.
+	if (current.ready && current !== drawn) setDrawn(current);
+	const value = current.ready ? current : drawn;
+	return { value, settling: value !== current };
+}
+
+/**
+ * The eight-observable `QueryBinding` shape over a handle, for the shared consumers that still
+ * take it (the data table, the browse stage's footers). The Suspense resource is created on
+ * first access, not on mount — a grid that reads the snapshot never builds one, so nothing
+ * subscribes during render on that path — and it reloads (keeps its rows) when the handle moves.
+ */
+export function useQueryBindingFor<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>
+): {
+	resource: ObservableResource<R>;
+	result$: Observable<R>;
+	active$: Observable<boolean>;
+	pending$: Observable<boolean>;
+	exhausted$: Observable<boolean | null>;
+	total$: Observable<number | null>;
+	laneProgress$: Observable<QuerySnapshot<R>['laneProgress']>;
+	sync: () => Promise<void>;
+} {
+	const held = React.useRef<{ handle: QueryHandle<R>; resource: ObservableResource<R> } | null>(
+		null
+	);
+	const resourceFor = React.useCallback((target: QueryHandle<R>) => {
+		const current = held.current;
+		if (current?.handle === target) return current.resource;
+		if (current) {
+			// Reloading retains the current rows while the new query loads.
+			current.resource.reload(queryHandleResults$(target));
+			held.current = { handle: target, resource: current.resource };
+			return current.resource;
+		}
+		const resource = queryHandleResource(target);
+		held.current = { handle: target, resource };
+		return resource;
+	}, []);
+	React.useEffect(() => {
+		// A resource built for a previous handle must follow this one even if nobody reads it
+		// again (the view switched from table to grid), or it would retain that handle for good.
+		if (held.current && held.current.handle !== handle) resourceFor(handle);
+	}, [handle, resourceFor]);
+	React.useEffect(
+		() => () => {
+			held.current?.resource.destroy();
+			held.current = null;
+		},
+		[]
+	);
+	return React.useMemo(
+		() => ({
+			get resource() {
+				return resourceFor(handle);
+			},
+			...bindingObservablesFor(handle),
+		}),
+		[handle, resourceFor]
+	);
+}
+
+/**
  * A Suspense resource over a handle, owned by the calling component: it suspends until the
  * engine's first answer, and when the handle changes it RELOADS rather than re-suspends, so
  * the current rows stay rendered while the next query loads (the extended-limit case).

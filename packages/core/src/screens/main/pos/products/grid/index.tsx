@@ -1,16 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
-import { type Observable, Subscription } from 'rxjs';
-
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord, QueryResult } from '@wcpos/query';
+import type { EngineRecord, QueryHandle, QueryResult, QuerySnapshot } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
-import { useGuardedExtendLimit } from '../../../../../query';
+import { useGuardedExtendLimitFor, useQueryHandleView } from '../../../../../query';
 import {
 	logResultEmission,
 	markSyncActive,
@@ -23,7 +20,7 @@ import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { DataTableFooter } from '../../../components/data-table/footer';
+import { DataTableFooterFor } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
@@ -36,42 +33,32 @@ type ProductHit = {
 	record: EngineRecord<'products'>;
 };
 
+type ProductsResult = QueryResult<RxCollection>;
+type ProductsSnapshot = Readonly<QuerySnapshot<ProductsResult>>;
+
 /**
  * Troubleshooting probe (render-probe.ts), hosted by the grid's FIRST child. Effects run
  * children-first and in tree order, so a leaf placed before the list (1) seeds the sync phase
- * from `binding.active$` and (2) advances the emission counter — both BEFORE any tile's render
- * row in the same commit is stamped, including the first commit of a grid whose sync is already
- * active. A deferred value catching up is the same result committing again: no second row.
+ * from the snapshot's `active` and (2) advances the emission counter — both BEFORE any tile's
+ * render row in the same commit is stamped, including the first commit of a grid whose sync is
+ * already active. A deferred value catching up is the same result committing again: no second
+ * row.
  */
-function EmissionProbe({
-	result,
-	binding,
-}: {
-	result: QueryResult<RxCollection>;
-	binding: ProductGridProps['binding'];
-}) {
+function EmissionProbe({ snapshot }: { snapshot: ProductsSnapshot }) {
+	const { active, pending, exhausted, total, result } = snapshot;
 	React.useEffect(() => {
-		if (!RENDER_PROBE_ENABLED) return;
-		// Test doubles hand the grid a partial binding; only a real stream is tapped.
-		const tap = <T,>(stream: unknown, next: (value: T) => void) =>
-			typeof (stream as { subscribe?: unknown })?.subscribe === 'function'
-				? (stream as Observable<T>).subscribe(next)
-				: new Subscription();
-		const subscription = tap<boolean>(binding.active$, markSyncActive);
-		subscription.add(
-			tap<boolean>(binding.pending$, (pending) => probeEvent('binding.pending$', { pending }))
-		);
-		subscription.add(
-			tap<boolean | null>(binding.exhausted$, (exhausted) =>
-				probeEvent('binding.exhausted$', { exhausted })
-			)
-		);
-		subscription.add(
-			tap<number | null>(binding.total$, (total) => probeEvent('binding.total$', { total }))
-		);
-		return () => subscription.unsubscribe();
-	}, [binding]);
-	const previousHits = React.useRef<QueryResult<RxCollection>['hits'] | null>(null);
+		if (RENDER_PROBE_ENABLED) markSyncActive(active);
+	}, [active]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.pending', { pending });
+	}, [pending]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.exhausted', { exhausted });
+	}, [exhausted]);
+	React.useEffect(() => {
+		if (RENDER_PROBE_ENABLED) probeEvent('handle.total', { total });
+	}, [total]);
+	const previousHits = React.useRef<ProductsResult['hits'] | null>(null);
 	React.useEffect(() => {
 		if (!RENDER_PROBE_ENABLED) return;
 		logResultEmission(previousHits.current, result.hits, {
@@ -88,8 +75,11 @@ interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
 	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
 	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
-	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
+	/** The products query handle (roadmap#423): one snapshot, read here, nowhere else. */
+	handle: QueryHandle<ProductsResult>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
+	/** Drawn until the handle's first answer — the gate that used to be a Suspense boundary. */
+	loading?: React.ReactNode;
 }
 
 interface GridFields {
@@ -105,9 +95,10 @@ interface GridFields {
 }
 
 export function ProductGrid({
-	binding,
+	handle,
 	actions,
 	noDataMessage,
+	loading = null,
 	tile: Tile = ProductTile,
 	variableTile: VariableTile = VariableProductTile,
 }: ProductGridProps) {
@@ -117,7 +108,10 @@ export function ProductGrid({
 	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 
-	const result = useObservableSuspense(binding.resource);
+	// One subscription, one object: rows, count, total, activity and the engine's paging
+	// opinion arrive together. A changed query keeps the current rows until it answers.
+	const { value: snapshot } = useQueryHandleView(handle);
+	const result = snapshot.result;
 	const deferredResult = React.useDeferredValue(result);
 
 	// Troubleshooting probe (render-probe.ts): the sync phase and result rows come from the first
@@ -127,12 +121,13 @@ export function ProductGrid({
 		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
 	}, [result, deferredResult]);
 	useRenderProbe('ProductGrid', 'grid', {
+		snapshot,
 		result,
 		deferredResult,
 		hits: deferredResult.hits,
 		gridColumns,
 		gridFields,
-		binding,
+		handle,
 		actions,
 		uiSettings,
 		calcTaxes,
@@ -144,10 +139,10 @@ export function ProductGrid({
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.
-	const handleEndReached = useGuardedExtendLimit(
+	const handleEndReached = useGuardedExtendLimitFor(
 		actions.extendLimit,
 		deferredResult.hits.length,
-		binding
+		snapshot
 	);
 
 	/**
@@ -188,11 +183,13 @@ export function ProductGrid({
 		}
 	}, [deferredResult.hits, skippedStaleHits]);
 
+	if (!snapshot.ready) return <>{loading}</>;
+
 	return (
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
-			<EmissionProbe result={result} binding={binding} />
+			<EmissionProbe snapshot={snapshot} />
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
@@ -220,7 +217,7 @@ export function ProductGrid({
 					onEndReached={handleEndReached}
 					ListFooterComponent={
 						<ProductGridFooter
-							binding={binding}
+							engine={snapshot}
 							renderedCount={renderedCount}
 							hitCount={deferredResult.hits.length}
 						/>
@@ -242,21 +239,21 @@ export function ProductGrid({
 			</VirtualizedList.Root>
 			{/* The footer draws its own top line; a bordered wrapper here doubled it. */}
 			{calcTaxes ? (
-				<DataTableFooter
+				<DataTableFooterFor
 					collectionName="products"
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
+					active={snapshot.active}
+					total={snapshot.total}
+					sync={handle.sync}
 					count={renderedCount}
 				>
 					<TaxBasedOn />
-				</DataTableFooter>
+				</DataTableFooterFor>
 			) : (
-				<DataTableFooter
+				<DataTableFooterFor
 					collectionName="products"
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
+					active={snapshot.active}
+					total={snapshot.total}
+					sync={handle.sync}
 					count={renderedCount}
 				/>
 			)}

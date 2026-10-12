@@ -39,10 +39,11 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { createReadonlyView, Slot } from '../../../../../extensions/slots';
 import {
 	QueryStateProvider,
+	useProductsQueryHandle,
+	useQueryBindingFor,
 	useQueryState,
 	useQueryStateActions,
 	useQueryStateStore,
-	useRelationalCollectionBinding,
 	useScopeKey,
 } from '../../../../../query';
 import { cellsForRow } from '../index';
@@ -67,7 +68,12 @@ import { useMountProbe, useRenderProbe } from '../render-probe';
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from '../../../components/data-table/v2';
-import type { QueryBinding, QueryStateActions, QueryStateOf } from '../../../../../query';
+import type {
+	QueryBinding,
+	QueryHandle,
+	QueryStateActions,
+	QueryStateOf,
+} from '../../../../../query';
 import type { SlotContracts } from '../../../../../extensions/slots';
 export { cellsForRow };
 type ProductRow = { record: EngineRecord<'products'> };
@@ -84,6 +90,7 @@ function ProductsView({
 	onDrill,
 	viewMode,
 	loading,
+	handle,
 	binding,
 	tableActions,
 	noDataMessage,
@@ -94,6 +101,9 @@ function ProductsView({
 	onDrill: DrillHandler;
 	viewMode: 'grid' | 'table';
 	loading: React.ReactNode;
+	/** The products query handle: the grid reads its snapshot (roadmap#423). */
+	handle: QueryHandle;
+	/** The eight-observable shape over the same handle, for the data table until it migrates. */
 	binding: QueryBinding;
 	tableActions: Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>;
 	noDataMessage: React.ReactElement;
@@ -111,6 +121,7 @@ function ProductsView({
 		onDrill,
 		viewMode,
 		loading,
+		handle,
 		binding,
 		tableActions,
 		noDataMessage,
@@ -118,17 +129,23 @@ function ProductsView({
 		variationsStyle,
 		tableConfig,
 	});
+	// The grid reads the handle's snapshot and draws `loading` until the first answer: no
+	// Suspense on that path. The table still suspends on the binding's resource.
+	if (viewMode === 'grid') {
+		return (
+			<ProductGrid
+				tile={ProductTile}
+				variableTile={VariableTile}
+				handle={handle}
+				actions={tableActions}
+				noDataMessage={noDataMessage}
+				loading={<SuspendedProbe event="products.loading">{loading}</SuspendedProbe>}
+			/>
+		);
+	}
 	return (
 		<Suspense fallback={<SuspendedProbe event="products.suspended">{loading}</SuspendedProbe>}>
-			{viewMode === 'grid' ? (
-				<ProductGrid
-					tile={ProductTile}
-					variableTile={VariableTile}
-					binding={binding}
-					actions={tableActions}
-					noDataMessage={noDataMessage}
-				/>
-			) : (
+			{
 				<DataTable<ProductRow>
 					id="pos-products"
 					collectionName="products"
@@ -161,7 +178,7 @@ function ProductsView({
 					getItemType={(row) => row.original.record.payload.type}
 					tableConfig={tableConfig}
 				/>
-			)}
+			}
 		</Suspense>
 	);
 }
@@ -179,7 +196,8 @@ function POSProductsContent({
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	const binding = useRelationalCollectionBinding(state);
+	const handle = useProductsQueryHandle(state);
+	const binding = useQueryBindingFor(handle);
 	const stockStatusFilter = state.filters.stock_status;
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
@@ -230,6 +248,7 @@ function POSProductsContent({
 	// Troubleshooting probe (render-probe.ts): a scope or binding change here remounts everything.
 	useRenderProbe('POSProductsContent', 'content', {
 		scopeKey,
+		handle,
 		binding,
 		state,
 		actions,
@@ -460,6 +479,7 @@ function POSProductsContent({
 			onDrill={onDrill}
 			viewMode={viewMode}
 			loading={loading}
+			handle={handle}
 			binding={binding}
 			tableActions={tableActions}
 			noDataMessage={noDataMessage}

@@ -62,6 +62,18 @@ export function usePagingVerdict(
 	};
 }
 
+/** The engine's opinion as a reader of a query-handle snapshot already holds it. */
+export type EngineOpinion = { pending: boolean; exhausted: boolean | null };
+
+/** {@link usePagingVerdict} for a reader that holds the snapshot's `pending` and `exhausted`. */
+export function usePagingVerdictFor(
+	hitCount: number,
+	{ pending, exhausted }: EngineOpinion
+): { verdict: PagingVerdict; limit: number } {
+	const limit = useQueryState(selectLimit);
+	return { verdict: getPagingVerdict({ hitCount, limit, pending, exhausted }), limit };
+}
+
 /**
  * End-reached → extendLimit, guarded (#1221).
  *
@@ -111,5 +123,18 @@ export function useGuardedExtendLimit(
 		() => (binding ? { pending, exhausted } : undefined),
 		[binding, exhausted, pending]
 	);
+	return useGuardedExtension(extendLimit, resultCount, limit, engine);
+}
+
+/** {@link useGuardedExtendLimit} for a reader that holds the snapshot's `pending` and `exhausted`. */
+export function useGuardedExtendLimitFor(
+	extendLimit: () => void,
+	resultCount: number,
+	{ pending, exhausted }: EngineOpinion
+): () => void {
+	const limit = useQueryState(selectLimit);
+	// Two primitives, never an object per render: the handler's identity keys the virtualizer's
+	// end-reached subscription.
+	const engine = React.useMemo(() => ({ pending, exhausted }), [exhausted, pending]);
 	return useGuardedExtension(extendLimit, resultCount, limit, engine);
 }

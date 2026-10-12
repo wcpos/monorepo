@@ -55,10 +55,11 @@ import { COGS } from './cells/cogs';
 import { createReadonlyView, Slot } from '../../../../extensions/slots';
 import {
 	QueryStateProvider,
+	useProductsQueryHandle,
+	useQueryBindingFor,
 	useQueryState,
 	useQueryStateActions,
 	useQueryStateStore,
-	useRelationalCollectionBinding,
 } from '../../../../query';
 
 import type { SlotContracts } from '../../../../extensions/slots';
@@ -161,7 +162,8 @@ function POSProductsContent({
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	const binding = useRelationalCollectionBinding(state);
+	const handle = useProductsQueryHandle(state);
+	const binding = useQueryBindingFor(handle);
 	const stockStatusFilter = state.filters.stock_status;
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
@@ -403,9 +405,10 @@ function POSProductsContent({
 							<Suspense fallback={loading}>
 								{viewMode === 'grid' ? (
 									<ProductGrid
-										binding={binding}
+										handle={handle}
 										actions={tableActions}
 										noDataMessage={noDataMessage}
+										loading={loading}
 									/>
 								) : (
 									<DataTable<ProductRow>
