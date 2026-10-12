@@ -52,6 +52,8 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/hooks/use-update-shipping-line.ts',
 	// cart.line.remove, and Undo's cart.line.add restore (actions ledger 27).
 	'packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts',
+	// cart.coupon.apply / cart.coupon.remove: the one coupon-line writer (actions ledger 28).
+	'packages/core/src/screens/main/pos/hooks/coupon-line-actions.ts',
 	// checkout.tender.commit: the tender sequence, including zero-balance completion.
 	'packages/core/src/screens/main/pos/checkout/tender/use-tender-flow.ts',
 	// checkout.complete: finishSale is the completion writer (actions ledger 23).
@@ -126,11 +128,9 @@ export function scanSource(text, path) {
 				)
 					construct = 'collection-write';
 			}
-			if (
-				LOCAL_WRITES.has(name) &&
-				(ts.isIdentifier(callee) ||
-					(member && ts.isIdentifier(callee.expression) && callee.expression.text === 'ctx'))
-			) {
+			// `localPatch({ document: order })` on any receiver: a writer object handed the function
+			// (`writer.localPatch`, `ctx.localPatch`) is still the write.
+			if (LOCAL_WRITES.has(name) && (ts.isIdentifier(callee) || member)) {
 				const document = propertyNamed(node.arguments[0], 'document');
 				if (document) {
 					const value = unwrap(document.initializer);

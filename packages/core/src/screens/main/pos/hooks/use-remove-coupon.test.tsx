@@ -5,6 +5,7 @@ import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useRemoveCoupon } from './use-remove-coupon';
 
 const localPatch = jest.fn();
@@ -63,6 +64,22 @@ const currentOrderRecord = {
 	getLatest: () => currentOrderRecord,
 };
 
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string, params?: Record<string, unknown>) =>
+				params ? `${key} ${JSON.stringify(params)}` : key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
@@ -77,6 +94,7 @@ const couponLine = (code: string, id?: number): CouponLine => ({
 
 describe('useRemoveCoupon', () => {
 	beforeEach(() => {
+		resetActionRegistry();
 		localPatch.mockReset();
 		recalculate.mockReset();
 		mockLoggerInfo.mockReset();
@@ -223,5 +241,21 @@ describe('useRemoveCoupon', () => {
 			showToast: true,
 			context: { couponCode: 'save10' },
 		});
+	});
+
+	it('a cart that moved under the removal keeps the coupon and tells the cashier', async () => {
+		const { CartChangedError } =
+			jest.requireActual<typeof import('./coupon-line-actions')>('./coupon-line-actions');
+		recalculate.mockImplementation(async () => {
+			throw new CartChangedError();
+		});
+		const { result } = renderHook(() => useRemoveCoupon());
+		await result.current.removeCoupon('save10');
+		expect(localPatch).not.toHaveBeenCalled();
+		// This suite's `t` returns the English sentence for the key.
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Cart changed during coupon application. Please try again.',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 });

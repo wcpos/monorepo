@@ -8,6 +8,8 @@ export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	'cart.line.add': 1500,
 	'cart.line.update': 1500,
 	'cart.line.remove': 1500,
+	'cart.coupon.apply': 1500,
+	'cart.coupon.remove': 1500,
 	'checkout.tender.commit': 5_000, // a card leg already waits longer
 };
 /** Three failures switch off a repeatedly broken hook for this session. */

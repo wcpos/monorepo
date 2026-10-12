@@ -11,9 +11,14 @@ export const ACTION_EVENTS = [
 	'cart.line.add',
 	'cart.line.update',
 	'cart.line.remove',
+	'cart.coupon.apply',
+	'cart.coupon.remove',
 	TENDER_COMMIT_EVENT,
 	CHECKOUT_COMPLETE_EVENT,
 ] as const satisfies readonly ActionEvent[];
+// `satisfies readonly ActionEvent[]` admits a short list; this line refuses one.
+type MissingFromActionEvents = Exclude<ActionEvent, (typeof ACTION_EVENTS)[number]>;
+export const ACTION_EVENTS_COMPLETE: MissingFromActionEvents extends never ? true : never = true;
 /** The guards a tender commit must have registered; the dispatch refuses without them. */
 export const TENDER_GUARD_IDS = ['register.gate', 'session.gate'] as const;
 export type ActionEvent = keyof ActionContracts;
@@ -92,6 +97,25 @@ export interface ActionContracts {
 		};
 		result: unknown;
 	};
+	'cart.coupon.apply': {
+		payload: {
+			/** The entering line: a catalog coupon, or a quick discount carrying its intent meta. */
+			couponLine: PlainLine;
+			lineItems: PlainLine[];
+			/** The coupon lines already on the order. */
+			couponLines: PlainLine[];
+		};
+		result: unknown;
+	};
+	'cart.coupon.remove': {
+		payload: {
+			code: string;
+			couponLine: PlainLine;
+			lineItems: PlainLine[];
+			couponLines: PlainLine[];
+		};
+		result: unknown;
+	};
 }
 /** Every other payload key is restored by the dispatcher. */
 export const REWRITABLE_PAYLOAD_KEYS = {
@@ -99,6 +123,10 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
 	'cart.line.remove': [],
+	// The discount is recalculated by the writer from the line it is handed; a consumer that wants
+	// to rewrite a coupon line first makes the recalculation read the payload.
+	'cart.coupon.apply': [],
+	'cart.coupon.remove': [],
 	// Amounts are not rewritable in v1: the tender's split plan, provenance and completion facts
 	// are computed from the cashier's entry before the dispatch, so a rewritten amount would be
 	// honoured by some steps and not others. A rounding consumer (#66, #84) refactors the

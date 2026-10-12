@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
+import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useAddQuickDiscount } from './use-add-quick-discount';
 
 const localPatch = jest.fn();
@@ -29,6 +30,22 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
 jest.mock('./use-recalculate-coupons', () => ({ useRecalculateCoupons: () => ({ recalculate }) }));
+const mockActionLog = jest.fn();
+jest.mock('./use-action-context', () => ({
+	useActionContext: () => ({
+		ctx: {
+			log: mockActionLog,
+			t: (key: string, params?: Record<string, unknown>) =>
+				params ? `${key} ${JSON.stringify(params)}` : key,
+			now: Date.now,
+			read: { catalog: async () => null },
+			register: { resolveSession: async () => ({ registerId: null, sessionId: null }) },
+			store: { preventOverselling: false },
+		},
+		actor: { userId: 7, registerId: 'till', sessionId: null },
+	}),
+}));
+
 jest.mock('../contexts/current-order', () => ({ useCurrentOrder: () => ({ currentOrderRecord }) }));
 const readEngineCoupons = jest.fn();
 const whenSettled = jest.fn(async () => true);
@@ -56,6 +73,7 @@ jest.mock('./coupon-rejection-message', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	resetActionRegistry();
 	couponLines = [];
 	readEngineCoupons.mockResolvedValue([]);
 	currentOrderRecord.getLatest.mockImplementation(() => ({ payload: currentOrderRecord.payload }));
@@ -205,4 +223,29 @@ it('does not read the catalog when the only applied coupons are quick discounts'
 		lineItems,
 		expect.arrayContaining([expect.objectContaining({ code: 'pos-discount-2' })])
 	);
+});
+it('a hook refusing cart.coupon.apply becomes the discount field error, and nothing is written', async () => {
+	registerActionHook(
+		'cart.coupon.apply',
+		async () => ({ deny: { reasonKey: 'loyalty.no_stacking', params: { code: 'VIP' } } }),
+		{ id: 'test.loyalty', tier: 'guard' }
+	);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: 'loyalty.no_stacking {"code":"VIP"}' });
+	expect(recalculate).not.toHaveBeenCalled();
+	expect(localPatch).not.toHaveBeenCalled();
+});
+it('a refusal the hook already presented is not echoed into the field', async () => {
+	registerActionHook(
+		'cart.coupon.apply',
+		async () => ({ deny: { reasonKey: 'loyalty.no_stacking', presented: true } }),
+		{ id: 'test.loyalty', tier: 'guard' }
+	);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: undefined });
+	expect(localPatch).not.toHaveBeenCalled();
 });
