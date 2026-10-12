@@ -240,7 +240,8 @@ const modalContentVariants = cva(
 				center: '',
 				right: 'h-full max-h-full max-w-full rounded-none border-r-0',
 				left: 'h-full max-h-full max-w-full rounded-none border-l-0',
-				bottom: 'max-h-full w-full max-w-full rounded-none border-b-0',
+				// Native keeps its own cap; on web the cap sits on the Radix wrapper (SCRIM_WRAPPER).
+				bottom: 'web:max-h-full max-h-[85%] w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {

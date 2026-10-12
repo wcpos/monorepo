@@ -43,8 +43,9 @@ const byPresentation: Record<DialogPresentation, string> = {
 	left: 'h-full rounded-none border-r',
 	right: 'h-full rounded-none border-l',
 	page: 'h-full w-full rounded-none border-0',
-	// The 92% cap sits on the Radix wrapper (SCRIM_WRAPPER.bottom); the panel fills it.
-	bottom: 'w-full rounded-t-2xl border-t',
+	// Native keeps the cap on the panel; on web it sits on the Radix wrapper (SCRIM_WRAPPER.bottom)
+	// and the panel fills it.
+	bottom: 'w-full max-h-[92%] web:max-h-full rounded-t-2xl border-t',
 };
 const sizes: Record<DialogSize, string> = {
 	xs: 'w-64',
