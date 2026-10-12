@@ -74,7 +74,7 @@ export const stories = [
 		),
 	},
 	{
-		// Three lines at most on a plain tile (ledger: the name is the picture).
+		// Two lines at most on the tint, as on every Poster tile.
 		id: 'tile-long',
 		render: () => (
 			<Cell>
