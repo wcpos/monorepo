@@ -568,6 +568,12 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	/** Readiness of the standing declaration (the first demand's, for a relational handle). */
 	whenReady(): Promise<DemandReadiness>;
 	/**
+	 * Ask the engine again after a failed read (`value.error`), withdrawing the error first; a
+	 * no-op while the read is live. A reader that remounts over a failure (an ErrorBoundary
+	 * reset) calls this instead of subscribing anew.
+	 */
+	retry(): void;
+	/**
 	 * The snapshot stream, one subscription per subscriber, retaining like `subscribe`. For the
 	 * React edge and the compatibility bindings; readers take `value` + `subscribe`.
 	 */
@@ -832,6 +838,13 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				: Promise.all(spec.demands.map((demand) => demand.sync())).then(() => undefined),
 		whenReady: () =>
 			mirrored ? mirrored.whenReady() : primary ? primary.whenReady() : Promise.resolve(ATTEMPTED),
+		retry: () => {
+			if (mirrored) {
+				mirrored.retry();
+				return;
+			}
+			if (started && read === null) subscribeRead();
+		},
 	};
 }
 

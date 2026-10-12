@@ -39,7 +39,12 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 }));
 jest.mock('../../../../../query', () => ({
-	useQueryHandleView: () => ({ value: mockSnapshot(), settling: mockSettling }),
+	useQueryHandleView: () => ({
+		value: mockSnapshot(),
+		current: mockSnapshot(),
+		settling: mockSettling,
+		error: mockError,
+	}),
 	useQueryHandleValue: () => mockSnapshot(),
 	useGuardedExtendLimitFor: (...args: unknown[]) => {
 		mockGuard(...args);

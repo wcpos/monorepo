@@ -367,8 +367,25 @@ export function useQueryHandleView<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>,
 	/** Re-render for these fields beside the answer; every field when omitted. */
 	fields?: SnapshotFields
-): { value: Readonly<QuerySnapshot<R>>; settling: boolean } {
+): {
+	/** The snapshot to draw: the current one once answered, else the last one drawn. */
+	value: Readonly<QuerySnapshot<R>>;
+	/** The current handle's snapshot, answered or not — status fields read from here. */
+	current: Readonly<QuerySnapshot<R>>;
+	settling: boolean;
+	/**
+	 * The current handle's failure, for the reader to throw to its boundary — unless the failure
+	 * was already there when this reader mounted: then the reader is the boundary's reset, the
+	 * handle is asked again (`retry`) and the reader draws its loading state meanwhile.
+	 */
+	error: unknown;
+} {
 	const current = useQueryHandleFields(handle, fields ?? EVERY_FIELD);
+	const [inherited] = React.useState(() => current.error);
+	React.useEffect(() => {
+		if (inherited && handle.value.error === inherited) handle.retry();
+	}, [handle, inherited]);
+	const error = current.error === inherited ? null : current.error;
 	// What the previous handle had answered when this one took over — kept per handle, so a
 	// snapshot change on the SAME handle never re-renders through state (a handle never goes
 	// from answered back to unanswered). Derived during render, React's documented pattern.
@@ -381,9 +398,9 @@ export function useQueryHandleView<R extends QueryResult<RxCollection>>(
 		last = held.handle.value.ready ? held.handle.value : held.last;
 		setHeld({ handle, last });
 	}
-	// An answer or a failure is always the current handle's; the grid rethrows the failure.
-	const value = current.ready || current.error ? current : (last ?? current);
-	return { value, settling: value !== current };
+	// An answer or a failure is always the current handle's; the reader rethrows the failure.
+	const value = current.ready || error ? current : (last ?? current);
+	return { value, current, settling: value !== current, error };
 }
 
 /**

@@ -88,11 +88,13 @@ function GridStatusFooter({
 	count: number;
 	children?: React.ReactNode;
 }) {
-	const { value } = useQueryHandleView(handle, STATUS_FIELDS);
+	// The total rides with the drawn rows (a changed query keeps "of N" until it answers); the
+	// spinner is the engine's now, whichever query is drawn.
+	const { value, current } = useQueryHandleView(handle, STATUS_FIELDS);
 	return (
 		<DataTableFooterFor
 			collectionName="products"
-			active={value.active}
+			active={current.active}
 			total={value.total}
 			sync={handle.sync}
 			count={count}
@@ -144,7 +146,7 @@ export function ProductGrid({
 
 	// One subscription, one object: rows, count, total, activity and the engine's paging
 	// opinion arrive together. A changed query keeps the current rows until it answers.
-	const { value: current, settling } = useQueryHandleView(handle, GRID_FIELDS);
+	const { value: current, settling, error } = useQueryHandleView(handle, GRID_FIELDS);
 	// The WHOLE snapshot is deferred, gate included: an urgent commit of "ready" with the
 	// deferred rows still empty would draw the empty state for a frame on every cold open.
 	const snapshot = React.useDeferredValue(current);
@@ -227,15 +229,16 @@ export function ProductGrid({
 	}, [deferredResult.hits, skippedStaleHits]);
 
 	// A failed read reaches the screen's ErrorBoundary as it did through the Suspense resource;
-	// the boundary's remount is a new reader, which is the handle's retry.
-	if (current.error) throw current.error;
+	// a reader mounted over the failure (the boundary's reset) has asked the handle again and
+	// draws the loading state until it answers.
+	if (error) throw error;
 	if (!snapshot.ready) return <>{loading}</>;
 
 	return (
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
-			<EmissionProbe handle={handle} />
+			{RENDER_PROBE_ENABLED ? <EmissionProbe handle={handle} /> : null}
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}

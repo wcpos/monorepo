@@ -363,6 +363,36 @@ describe('query handle', () => {
 		expect(notified).toBe(1);
 	});
 
+	it('retry asks the engine again after a failed read, withdrawing the error first', () => {
+		let attempts = 0;
+		const late = new Subject<Result>();
+		const handle = acquireQueryHandle(engine, 'n', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('n', of(EMPTY)),
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return attempts === 1 ? throwError(() => new Error('storage gone')) : late;
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		handle.subscribe(() => undefined);
+		expect(handle.value.error).toBeInstanceOf(Error);
+		handle.retry();
+		expect(attempts).toBe(2);
+		expect(handle.value.error).toBeNull();
+		late.next({ count: 3, hits: [] });
+		expect(handle.value.count).toBe(3);
+		// Live read: a retry is a no-op.
+		handle.retry();
+		expect(attempts).toBe(2);
+	});
+
 	it('sync declares a forced, top-priority copy of the demand and drains the scheduler', async () => {
 		const handle = acquire('e', of(EMPTY), [searchPlan('ada')]);
 		handle.subscribe(() => undefined);

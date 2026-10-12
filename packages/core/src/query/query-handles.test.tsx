@@ -131,6 +131,43 @@ describe('useQueryHandleView (failures)', () => {
 	});
 });
 
+describe('useQueryHandleView (reset over a failure)', () => {
+	it('a reader mounted over a failed handle asks it again and draws loading, not the error', () => {
+		let attempts = 0;
+		const late = new Subject<Result>();
+		const handle = createQueryHandle(
+			engine,
+			{
+				key: 'reset',
+				result$: () =>
+					new Observable<Result>((subscriber) => {
+						attempts += 1;
+						if (attempts === 1) subscriber.error(new Error('storage gone'));
+						else late.subscribe(subscriber);
+					}),
+				demands: [],
+				activeCollections: [],
+				censusScoped: false,
+				observeActive: () => of(false),
+			},
+			EMPTY
+		);
+		// The owner keeps the handle alive; its read failed.
+		const leave = handle.subscribe(() => undefined);
+		expect(handle.value.error).toBeInstanceOf(Error);
+
+		// The boundary's reset mounts a fresh reader over the failure.
+		const { result } = renderHook(() => useQueryHandleView(handle));
+		expect(result.current.error).toBeNull();
+		expect(result.current.value.ready).toBe(false);
+		expect(attempts).toBe(2);
+		act(() => late.next({ count: 4, hits: [] }));
+		expect(result.current.value.ready).toBe(true);
+		expect(result.current.value.count).toBe(4);
+		leave();
+	});
+});
+
 describe('useQueryBindingFor', () => {
 	it('builds the resource on first access only, and its identity is the handle’s', () => {
 		const results = new Subject<Result>();
