@@ -21,10 +21,8 @@ import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,
 	completionMetaFor,
-	gateSale,
 	isSaleComplete,
 	persistSaleProvenance,
-	prepareSale,
 	recordSaleAttempt,
 } from './sale-completion';
 
@@ -189,40 +187,6 @@ it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'])(
 			isSaleComplete({ source: 'gateway-snapshot', snapshot: { ...payload, status } as never }, 2)
 		).toBe(false)
 );
-it.each(['choose', 'bound', 'none'] as const)('prepares %s truth table', async (bindingStatus) => {
-	for (const completing of [false, true])
-		for (const sessionRule of ['require', 'none'] as const) {
-			mockSession.mockClear();
-			mockBound.mockClear();
-			const result = await prepareSale(ctx, {
-				order,
-				completing,
-				bindingStatus,
-				sessionRule,
-				source: 'manual',
-			});
-			expect(!!(await pendingCompletions(ctx.storeDB)).order).toBe(
-				completing && bindingStatus !== 'choose'
-			);
-			const blocked = bindingStatus === 'choose' && completing;
-			expect(result.ok).toBe(!blocked);
-			expect(mockSession).toHaveBeenCalledTimes(!blocked && sessionRule === 'require' ? 1 : 0);
-			if (blocked) expect(mockBound).not.toHaveBeenCalled();
-		}
-});
-it('propagates session refusal before writes', async () => {
-	mockSession.mockRejectedValueOnce(new Error('register_session_not_open'));
-	await expect(
-		prepareSale(ctx, {
-			order,
-			completing: false,
-			bindingStatus: 'none',
-			sessionRule: 'require',
-			source: 'manual',
-		})
-	).rejects.toThrow('register_session_not_open');
-	expect(ctx.localPatch).not.toHaveBeenCalled();
-});
 it('online provenance stamps, patches, then awaits push', async () => {
 	let release!: () => void;
 	jest.mocked(ctx.pushDocument).mockImplementationOnce(
@@ -408,31 +372,19 @@ it('offline provenance without a split does not write or allocate metadata', asy
 	expect(ctx.pushDocument).not.toHaveBeenCalled();
 });
 
-it('awaits the journal before returning preparation to the money caller', async () => {
+it('awaits the journal before returning the attempt to the money caller', async () => {
 	const insert = jest.spyOn(ctx.storeDB, 'insertLocal');
-	await prepareSale(ctx, {
-		order,
-		completing: true,
-		source: 'manual',
-		bindingStatus: 'none',
-		sessionRule: 'require',
-	});
+	await recordSaleAttempt(ctx, { order, completing: true, source: 'manual' });
 	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
 		source: 'manual',
 		attempts: 0,
 	});
 	expect(insert).toHaveBeenCalled();
 });
-it('refuses preparation if the journal cannot be written', async () => {
+it('refuses the attempt if the journal cannot be written', async () => {
 	jest.spyOn(ctx.storeDB, 'insertLocal').mockRejectedValueOnce(new Error('disk full'));
 	await expect(
-		prepareSale(ctx, {
-			order,
-			completing: true,
-			source: 'manual',
-			bindingStatus: 'none',
-			sessionRule: 'none',
-		})
+		recordSaleAttempt(ctx, { order, completing: true, source: 'manual' })
 	).rejects.toThrow('disk full');
 });
 it.each([
@@ -496,13 +448,7 @@ it.each([
 it('recreates a concurrently cleared attempt when finishing throws, with source and actor', async () => {
 	const actor = { id: 'A', name: 'Cashier A' };
 	const context = { ...ctx, actor };
-	await prepareSale(context, {
-		order,
-		completing: true,
-		source: 'manual',
-		bindingStatus: 'none',
-		sessionRule: 'none',
-	});
+	await recordSaleAttempt(context, { order, completing: true, source: 'manual' });
 	const error = new Error('finish failed after another tab cleared');
 	mockReconcile.mockImplementationOnce(async () => {
 		await resolveCompletionAttempt(ctx.storeDB, 'order');
@@ -617,13 +563,7 @@ it.each([false, true])(
 		const record = jest.spyOn(journal, 'recordCompletionAttempt');
 		try {
 			if (preparedCompleting)
-				await prepareSale(context, {
-					order,
-					completing: true,
-					source: 'manual',
-					bindingStatus: 'none',
-					sessionRule: 'none',
-				});
+				await recordSaleAttempt(context, { order, completing: true, source: 'manual' });
 			let atReceipt: ReturnType<typeof pendingCompletions> | undefined;
 			mockReceipt.mockImplementationOnce(() => {
 				atReceipt = pendingCompletions(ctx.storeDB);
@@ -718,20 +658,6 @@ describe('gateway session attribution on retry', () => {
 	});
 });
 
-it.each(['bound', 'choose', 'none'] as const)(
-	'gateSale checks only completing and binding: %s',
-	(bindingStatus) => {
-		for (const completing of [false, true]) {
-			expect(gateSale({ completing, bindingStatus })).toEqual(
-				completing && bindingStatus === 'choose'
-					? { ok: false, reason: 'choose_register' }
-					: { ok: true }
-			);
-		}
-		expect(mockBound).not.toHaveBeenCalled();
-		expect(mockSession).not.toHaveBeenCalled();
-	}
-);
 it.each([false, true])(
 	'recordSaleAttempt journals only completing sales: %s',
 	async (completing) => {
