@@ -30,7 +30,12 @@ export interface VoidOrderInput {
 export type VoidOrderResult =
 	| {
 			kind: 'removed';
-			/** False when the store has not answered yet (offline, or the first watch ran out). */
+			/**
+			 * True when the removal is settled from this device's point of view: the store
+			 * acknowledged the delete, or the write plane annihilated a never-pushed local chain.
+			 * False when the store has not answered (offline, the first watch ran out) or answered
+			 * with something other than a refusal, which the engine's conflict surfaces own.
+			 */
 			confirmed: boolean;
 			/**
 			 * Set only when the first watch was non-terminal: resolves `kept-pending` if a late

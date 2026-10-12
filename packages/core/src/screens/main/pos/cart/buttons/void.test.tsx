@@ -293,6 +293,55 @@ describe('VoidButton', () => {
 		expect(mockCartLogger.success).not.toHaveBeenCalled();
 	});
 
+	it('reports a failed late conversion as a failed void, after the optimistic toast', async () => {
+		mockOutcomes = ['timeout', 'rejected'];
+		mockPatchAndEnqueueEngineResident.mockRejectedValueOnce(new Error('resident patch failed'));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.error).toHaveBeenCalledWith(
+				'Failed to void order',
+				expect.objectContaining({
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					context: expect.objectContaining({ orderId: 'order-1', error: 'resident patch failed' }),
+				})
+			)
+		);
+		expect(mockCartLogger.success).toHaveBeenCalledTimes(1);
+		expect(mockCartLogger.success).toHaveBeenCalledWith(
+			'pos_cart.order_removed',
+			expect.any(Object)
+		);
+	});
+
+	it('undo of a removed order re-inserts it as a new local order and sends a create', async () => {
+		mockFindEngineResident.mockResolvedValue(null);
+		mockInsertEngineResident.mockResolvedValue({
+			toMutableJSON: () => ({ payload: { ...mockOrderJson, id: 0 } }),
+		});
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
+		mockCartLogger.success.mock.calls[0][1].toast.action.onClick();
+		await waitFor(() => expect(mockEngine.write).toHaveBeenCalledTimes(2));
+
+		expect(mockInsertEngineResident).toHaveBeenCalledWith({
+			manager: mockManager,
+			collection: 'orders',
+			recordId: 'order-1',
+			payload: { ...mockOrderJson, id: 0 },
+		});
+		expect(mockEngine.write).toHaveBeenLastCalledWith({
+			collection: 'orders',
+			operation: 'create',
+			recordId: 'order-1',
+			payload: { ...mockOrderJson, id: 0 },
+		});
+		expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	});
+
 	it('undo after fallback restores pos-open and enqueues an update', async () => {
 		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
