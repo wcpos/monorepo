@@ -2,14 +2,22 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
+import { type Observable, Subscription } from 'rxjs';
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryResult } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../../query';
+import {
+	logResultEmission,
+	markSyncActive,
+	probeEvent,
+	RENDER_PROBE_ENABLED,
+	useRenderProbe,
+} from '../render-probe';
 import { ProductGridFooter } from './grid-footer';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
@@ -19,6 +27,7 @@ import { DataTableFooter } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
+import type { RxCollection } from 'rxdb';
 import type { QueryStateActions } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
@@ -26,6 +35,54 @@ const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 type ProductHit = {
 	record: EngineRecord<'products'>;
 };
+
+/**
+ * Troubleshooting probe (render-probe.ts), hosted by the grid's FIRST child. Effects run
+ * children-first and in tree order, so a leaf placed before the list (1) seeds the sync phase
+ * from `binding.active$` and (2) advances the emission counter — both BEFORE any tile's render
+ * row in the same commit is stamped, including the first commit of a grid whose sync is already
+ * active. A deferred value catching up is the same result committing again: no second row.
+ */
+function EmissionProbe({
+	result,
+	binding,
+}: {
+	result: QueryResult<RxCollection>;
+	binding: ProductGridProps['binding'];
+}) {
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED) return;
+		// Test doubles hand the grid a partial binding; only a real stream is tapped.
+		const tap = <T,>(stream: unknown, next: (value: T) => void) =>
+			typeof (stream as { subscribe?: unknown })?.subscribe === 'function'
+				? (stream as Observable<T>).subscribe(next)
+				: new Subscription();
+		const subscription = tap<boolean>(binding.active$, markSyncActive);
+		subscription.add(
+			tap<boolean>(binding.pending$, (pending) => probeEvent('binding.pending$', { pending }))
+		);
+		subscription.add(
+			tap<boolean | null>(binding.exhausted$, (exhausted) =>
+				probeEvent('binding.exhausted$', { exhausted })
+			)
+		);
+		subscription.add(
+			tap<number | null>(binding.total$, (total) => probeEvent('binding.total$', { total }))
+		);
+		return () => subscription.unsubscribe();
+	}, [binding]);
+	const previousHits = React.useRef<QueryResult<RxCollection>['hits'] | null>(null);
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED) return;
+		logResultEmission(previousHits.current, result.hits, {
+			// `count` in the row is the loaded hits; `total` is the engine's count for the query.
+			total: result.count,
+			searchState: result.searchState ?? null,
+		});
+		previousHits.current = result.hits;
+	}, [result]);
+	return null;
+}
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
@@ -62,6 +119,28 @@ export function ProductGrid({
 
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
+
+	// Troubleshooting probe (render-probe.ts): the sync phase and result rows come from the first
+	// child (EmissionProbe); here only the deferred catch-up and this component's own reasons.
+	React.useEffect(() => {
+		if (!RENDER_PROBE_ENABLED || deferredResult === result) return;
+		probeEvent('grid.deferred', { hits: deferredResult.hits.length }, 'grid');
+	}, [result, deferredResult]);
+	useRenderProbe('ProductGrid', 'grid', {
+		result,
+		deferredResult,
+		hits: deferredResult.hits,
+		gridColumns,
+		gridFields,
+		binding,
+		actions,
+		uiSettings,
+		calcTaxes,
+		t,
+		Tile,
+		VariableTile,
+		noDataMessage,
+	});
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.
@@ -113,6 +192,7 @@ export function ProductGrid({
 		// Tiles are cards already: they sit straight on the ground (a card of cards framed the
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
+			<EmissionProbe result={result} binding={binding} />
 			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
