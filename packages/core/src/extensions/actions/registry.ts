@@ -7,6 +7,7 @@ export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	[CHECKOUT_COMPLETE_EVENT]: 5_000, // an observer has no business being slow, but a replay runs many
 	'cart.line.add': 1500,
 	'cart.line.update': 1500,
+	'cart.line.remove': 1500,
 	'checkout.tender.commit': 5_000, // a card leg already waits longer
 };
 /** Three failures switch off a repeatedly broken hook for this session. */

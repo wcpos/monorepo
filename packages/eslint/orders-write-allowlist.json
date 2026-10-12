@@ -38,14 +38,5 @@
 	},
 	"packages/core/src/screens/main/pos/hooks/use-remove-coupon.ts": {
 		"local-write": 1
-	},
-	"packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts": {
-		"local-write": 2
-	},
-	"packages/core/src/screens/main/pos/hooks/use-update-fee-line.ts": {
-		"local-write": 1
-	},
-	"packages/core/src/screens/main/pos/hooks/use-update-shipping-line.ts": {
-		"local-write": 1
 	}
 }

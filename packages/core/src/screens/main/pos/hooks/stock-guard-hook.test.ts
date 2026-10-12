@@ -101,7 +101,14 @@ it.each([{ quantity: 1 }, { quantity: 2 }, { name: 'New' }])(
 			{
 				...e,
 				event: 'cart.line.update',
-				payload: { lineUuid: 'line', line: e.payload.line, lineItems: [], changes, options: {} },
+				payload: {
+					type: 'line_items',
+					lineUuid: 'line',
+					line: e.payload.line,
+					lineItems: [],
+					changes,
+					options: {},
+				},
 			},
 			next
 		);
@@ -116,11 +123,32 @@ it('honours skipStockGuard for a quantity increase', async () => {
 			...e,
 			event: 'cart.line.update',
 			payload: {
+				type: 'line_items',
 				lineUuid: 'line',
 				line: e.payload.line,
 				lineItems: [],
 				changes: { quantity: 20 },
 				options: { skipStockGuard: true },
+			},
+		},
+		next
+	);
+	expect(readCatalog).not.toHaveBeenCalled();
+	expect(next).toHaveBeenCalledTimes(1);
+});
+it('passes a fee or shipping line edit straight through', async () => {
+	await stockGuardOnUpdate(
+		ctx,
+		{
+			...e,
+			event: 'cart.line.update',
+			payload: {
+				type: 'fee_lines',
+				lineUuid: 'fee',
+				line: { name: 'Handling', quantity: 1 },
+				lineItems: [],
+				changes: { quantity: 20 },
+				options: {},
 			},
 		},
 		next
@@ -138,6 +166,7 @@ it('evaluates a quantity increase excluding the target line from the stock total
 				...e,
 				event: 'cart.line.update',
 				payload: {
+					type: 'line_items',
 					lineUuid: 'line',
 					line,
 					lineItems: [line],
@@ -158,6 +187,7 @@ it('guards a numeric-string quantity should a caller pass one, and leaves non-nu
 		actor: { userId: 7, registerId: null, sessionId: null },
 		source: 'user' as const,
 		payload: {
+			type: 'line_items' as const,
 			lineUuid: 'line',
 			changes: { quantity: '5' },
 			line: { product_id: 1, quantity: 1, name: 'Item' },

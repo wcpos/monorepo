@@ -5,8 +5,15 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
+import { enqueueOrderMutation } from './order-mutation-queue';
+import { useActionContext } from './use-action-context';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
+import {
+	dispatchAction,
+	isActionRefusal,
+	presentActionRefusal,
+} from '../../../../extensions/actions';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -36,14 +43,11 @@ export const useUpdateShippingLine = () => {
 	const { localPatch } = useLocalMutation();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
+	const { ctx, actor } = useActionContext();
 	const t = useT();
 
-	/**
-	 * Update shipping line
-	 *
-	 * @TODO - what if more than one property is changed at once?
-	 */
-	const updateShippingLine = React.useCallback(
+	/** The one writer for a shipping line edit: the engine's merge and tax maths, then the patch. */
+	const write = React.useCallback(
 		async (uuid: string, changes: Changes) => {
 			const order = currentOrderRecord.getLatest();
 			const json = order.toMutableJSON().payload;
@@ -88,18 +92,67 @@ export const useUpdateShippingLine = () => {
 					data: { shipping_lines: updatedShippingLines },
 				});
 			}
-			// The uuid isn't in the order document — the cashier edited a stale row
-			// (multi-tab is first-class). Cashier-full-information ruling: say so.
-			reportStaleCartLine(
-				cartLogger,
-				'Shipping line update targeted a line that is no longer in the cart',
-				{
-					toastTitle: t('pos_cart.update_shipping_not_found'),
-					context: { uuid, orderId: order.payload.id },
-				}
-			);
+			// The line left the cart between the dispatch and this write; nothing to patch.
+			return undefined;
 		},
-		[cartConfig, currentOrderRecord, localPatch, reportEngineWarnings, t]
+		[cartConfig, currentOrderRecord, localPatch, reportEngineWarnings]
+	);
+
+	/**
+	 * Update shipping line
+	 *
+	 * @TODO - what if more than one property is changed at once?
+	 */
+	const updateShippingLine = React.useCallback(
+		async (uuid: string, changes: Changes) => {
+			const recordId = currentOrderRecord.uuid;
+			const outcome = await enqueueOrderMutation(recordId, (queue) => {
+				// Read inside the slot, so the line and the cart a hook sees include every edit
+				// queued ahead of this one.
+				const order = currentOrderRecord.getLatest();
+				const json = order.toMutableJSON().payload;
+				const line =
+					json.shipping_lines?.find((item) => wooMetaCarrier.lineUuid(item) === uuid) ?? null;
+				if (!line) {
+					// The uuid isn't in the order document — the cashier edited a stale row
+					// (multi-tab is first-class). Cashier-full-information ruling: say so.
+					reportStaleCartLine(
+						cartLogger,
+						'Shipping line update targeted a line that is no longer in the cart',
+						{
+							toastTitle: t('pos_cart.update_shipping_not_found'),
+							context: { uuid, orderId: order.payload.id },
+						}
+					);
+					return Promise.resolve(undefined);
+				}
+				return dispatchAction({
+					event: 'cart.line.update',
+					token: queue.dispatchToken,
+					ctx,
+					input: {
+						orderId: order.uuid,
+						actor,
+						source: 'user',
+						payload: {
+							type: 'shipping_lines',
+							lineUuid: uuid,
+							changes: { ...changes } as Record<string, unknown>,
+							line: line as Record<string, unknown>,
+							lineItems: (json.line_items ?? []) as Record<string, unknown>[],
+							options: {},
+						},
+					},
+					bottom: (e) => write(uuid, { ...e.payload.changes } as Changes),
+				});
+			});
+			if (isActionRefusal(outcome)) {
+				presentActionRefusal(ctx, outcome, { orderId: currentOrderRecord.payload.id, uuid });
+				return false;
+			}
+			return outcome as Awaited<ReturnType<typeof localPatch>> | undefined;
+		},
+		[currentOrderRecord, ctx, actor, t, write]
 	);
 
 	return { updateShippingLine };

@@ -117,7 +117,7 @@ export const stockGuardOnAdd: ActionHook<'cart.line.add'> = async (ctx, e, next)
 };
 
 export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e, next) => {
-	const { lineUuid, changes, lineItems, options } = e.payload;
+	const { type, lineUuid, changes, lineItems, options } = e.payload;
 	const line = e.payload.line as LineItem | null;
 	// Both quantity cells hand the hook a number today. Should a caller ever pass the typed
 	// text instead, the guard judges its number rather than skipping the check (the old
@@ -125,6 +125,7 @@ export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e,
 	const requested = numericQuantity(changes.quantity);
 	if (
 		!ctx.store.preventOverselling ||
+		type !== 'line_items' ||
 		options.skipStockGuard ||
 		!line ||
 		isMiscProductLine(line) ||
