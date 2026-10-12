@@ -1530,6 +1530,35 @@ describe('PaymentWebview settled order status', () => {
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 
+	it("stage host: a pending sale on the gateway's stored status reaches finishSale as completed", async () => {
+		// next re-gates the outcome inside completeSale → finishSale with the same
+		// isSaleComplete the webview just used, so the stored status has to travel
+		// on the outcome itself. Without it the webview would route the cashier off
+		// the pay window while finishSale returned not-completed: no receipt entered
+		// on the stage host, and no stock adjustment for the paid snapshot.
+		autoShowReceipt = true;
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				receiptHost="stage"
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+				settledOrderStatus="pending"
+				settledGatewayId="bacs"
+			/>
+		);
+
+		await postReceived(pendingPayload);
+
+		await waitFor(() => expect(mockStockAdjustment).toHaveBeenCalledTimes(1));
+		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
 	it('never settles a parked status even when it is the stored status', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 		mockGet.mockResolvedValue({
