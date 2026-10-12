@@ -1,13 +1,11 @@
 /**
  * @jest-environment jsdom
  */
-import { act, renderHook } from '@testing-library/react';
+import { useQueryRuntime } from '@wcpos/query';
+import { catalogDocumentId, remoteIdOrNull } from '@wcpos/sync-core';
 
-import { getLogger } from '@wcpos/utils/logger';
-import { catalogDocumentId } from '@wcpos/sync-core';
-
+import { readStockDocument, resolveStockOwnerId } from './read-stock-document';
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
-import { useCartStockGuard } from './use-cart-stock-guard';
 
 const mockFindOneExec = jest.fn();
 const mockFindDocumentsById = jest.fn();
@@ -202,7 +200,8 @@ describe('aggregateExistingCartQuantity', () => {
 	});
 });
 
-describe('useCartStockGuard', () => {
+describe('readStockDocument and resolveStockOwnerId', () => {
+	const runtime = useQueryRuntime();
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockFindOneExec.mockResolvedValue(null);
@@ -219,93 +218,27 @@ describe('useCartStockGuard', () => {
 			mockFindDocumentsById.mockResolvedValue(
 				manageStock === null ? [] : [{ payload: { manage_stock: manageStock } }]
 			);
-			const { result } = renderHook(() => useCartStockGuard());
-
-			await expect(result.current.resolveStockOwnerId(10, 11)).resolves.toBe(ownerId);
+			await expect(resolveStockOwnerId(runtime, 10, 11)).resolves.toBe(ownerId);
 		}
 	);
-
-	it('fails closed when the enabled guard cannot load the product record', async () => {
-		const { result } = renderHook(() => useCartStockGuard());
-		const stockLogger = getLogger(['wcpos', 'pos', 'cart', 'stock']);
-		let stockResult;
-
-		await act(async () => {
-			stockResult = await result.current.checkCartStock({
-				lineItems: [],
-				productId: 10,
-				requestedQuantity: 1,
-				name: 'Deleted product',
-			});
-		});
-
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: null,
-			name: 'Deleted product',
-		});
-		expect(stockLogger.warn).toHaveBeenCalled();
+	it('a simple product owns its own stock without a read', async () => {
+		await expect(resolveStockOwnerId(runtime, 10)).resolves.toBe(10);
+		expect(mockFindDocumentsById).not.toHaveBeenCalled();
 	});
-
-	it('evaluates a soft-deleted product tombstone', async () => {
+	it('reads a soft-deleted product tombstone by its catalog id', async () => {
 		mockFindDocumentsById.mockResolvedValue([
-			{
-				payload: {
-					id: 10,
-					name: 'Deleted product',
-					manage_stock: true,
-					stock_quantity: 0,
-					stock_status: 'outofstock',
-					backorders: 'no',
-				},
-			},
+			{ payload: { id: 1, name: 'Deleted', manage_stock: true, stock_quantity: 0 } },
 		]);
-		const { result } = renderHook(() => useCartStockGuard());
-
-		const stockResult = await result.current.checkCartStock({
-			lineItems: [],
-			productId: 10,
-			requestedQuantity: 1,
+		await expect(readStockDocument(runtime, 'products', 1)).resolves.toMatchObject({
+			name: 'Deleted',
+			stock_quantity: 0,
 		});
-
 		expect(mockFindDocumentsById).toHaveBeenCalledWith(
-			[catalogDocumentId('product', '10' as never)],
+			[catalogDocumentId('product', remoteIdOrNull(1)!)],
 			true
 		);
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: 0,
-			name: 'Deleted product',
-		});
 	});
-
-	it('fails closed when the enabled guard cannot load the variation record', async () => {
-		const { result } = renderHook(() => useCartStockGuard());
-		let stockResult;
-
-		await act(async () => {
-			stockResult = await result.current.checkCartStock({
-				lineItems: [],
-				productId: 10,
-				variationId: 11,
-				requestedQuantity: 1,
-				product: {
-					manage_stock: true,
-					stock_quantity: 5,
-					stock_status: 'instock',
-					backorders: 'no',
-				},
-				name: 'Deleted variation',
-			});
-		});
-
-		expect(stockResult).toEqual({
-			allowed: false,
-			warning: null,
-			available: null,
-			name: 'Deleted variation',
-		});
+	it('returns null when neither a live record nor a tombstone exists', async () => {
+		await expect(readStockDocument(runtime, 'variations', 11)).resolves.toBeNull();
 	});
 });

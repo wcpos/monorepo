@@ -197,7 +197,7 @@ export function Variations({
  *
  * The button refuses an unsellable variation ONLY while the store's "Avoid
  * overselling" setting is on — the same gate the cart applies to every line
- * (`useCartStockGuard` bypasses its check when `prevent_overselling` is off).
+ * (the stock guard on `cart.line.add` skips when `prevent_overselling` is off).
  * A simple product's Add to Cart never disables on stock, so with the setting
  * off a cashier could sell an out-of-stock simple product but not an
  * out-of-stock variation (reported by two stores, 2026-09-16). The badge still

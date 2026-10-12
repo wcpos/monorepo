@@ -101,7 +101,9 @@ beforeEach(() => {
 it('routes an offline row through localPatch on the supplied order document', async () => {
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() => result.current(order, method, { amount: 40, tendered: 50 }));
+	await act(() =>
+		result.current(order, method, { session: gateSession(), amount: 40, tendered: 50 })
+	);
 
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: order,
@@ -130,7 +132,7 @@ it('refreshes the order over REST when a refusal omits the server summary', asyn
 	mockGet.mockResolvedValue({ data: { id: 1042, status: 'completed' } });
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() => result.current(order, method, { amount: 40 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 
 	expect(mockGet).toHaveBeenCalledWith('orders/1042');
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
@@ -142,7 +144,9 @@ it('rejects the payment when localPatch reports a failed write', async () => {
 	mockLocalPatch.mockResolvedValue(undefined);
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await expect(result.current(order, method, { amount: 40 })).rejects.toThrow();
+	await expect(
+		result.current(order, method, { session: gateSession(), amount: 40 })
+	).rejects.toThrow();
 });
 
 it('logs a refused online payment as a failed sync record needing attention', async () => {
@@ -159,7 +163,7 @@ it('logs a refused online payment as a failed sync record needing attention', as
 	});
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() => result.current(order, method, { amount: 40 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
 		expect.objectContaining({ manager, collection: 'orders', recordId: order.uuid })
@@ -201,7 +205,7 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	});
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() => result.current(order, method, { amount: 40 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 
 	expect(mockT).toHaveBeenCalledWith('payments.refusal.exceeds_balance_with_balance', {
 		number: '1042',
@@ -224,6 +228,11 @@ let mockBoundRegisterId: string | null = 'register';
 beforeEach(() => {
 	mockBoundRegisterId = 'register';
 });
+/** The ids the tender gates stamp before any manual leg reaches the writer. */
+const gateSession = () => ({
+	registerId: mockBoundRegisterId,
+	sessionId: mockSessionsOn ? mockSessionId : null,
+});
 
 it.each([null, 'register'])(
 	'queues one provenance patch and stamps only the bound register (%s)',
@@ -236,7 +245,9 @@ it.each([null, 'register'])(
 			key: '_wcpos_split',
 			value: '{"kind":"even","ways":2,"shares":["50.00","50.00"]}',
 		};
-		await act(() => result.current(order, method, { amount: 100, extraMeta: [split] }));
+		await act(() =>
+			result.current(order, method, { session: gateSession(), amount: 100, extraMeta: [split] })
+		);
 		expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		// The split summary rides with the leg that completes the sale.
@@ -264,7 +275,9 @@ it('logs the cart-safe error without enqueueing a payment when the provenance pa
 	const original = JSON.stringify(order.payload);
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+	await expect(
+		result.current(order, method, { session: gateSession(), amount: 100 })
+	).resolves.toEqual({
 		kind: 'failed',
 		reason: 'provenance_save_failed',
 	});
@@ -305,7 +318,7 @@ it('awaits the provenance push before posting and preserves the tuple in the mir
 	});
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await act(() => result.current(order, method, { amount: 100 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 100 }));
 
 	expect(calls).toEqual(['patched', 'pushed', 'post']);
 	expect(mockPushDocument).toHaveBeenCalledWith(order);
@@ -324,7 +337,9 @@ it('does not post or enqueue a payment when the provenance push rejects', async 
 	mockPushDocument.mockRejectedValueOnce(new Error('push failed'));
 	const { result } = renderHook(() => useRecordManualPayment());
 
-	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+	await expect(
+		result.current(order, method, { session: gateSession(), amount: 100 })
+	).resolves.toEqual({
 		kind: 'failed',
 		reason: 'provenance_save_failed',
 	});
@@ -351,7 +366,9 @@ it('mirrors a refused server status without allocating or patching provenance', 
 		},
 	});
 	const { result } = renderHook(() => useRecordManualPayment());
-	await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+	await expect(
+		result.current(order, method, { session: gateSession(), amount: 40 })
+	).resolves.toMatchObject({
 		kind: 'refused',
 	});
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
@@ -373,7 +390,9 @@ it.each([false, true])(
 		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
 		else mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useRecordManualPayment());
-		await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+		await expect(
+			result.current(order, method, { session: gateSession(), amount: 40 })
+		).rejects.toMatchObject({
 			name: 'RecordManualPaymentMirrorError',
 			outcome: expect.objectContaining({ kind: 'recorded' }),
 		});
@@ -406,7 +425,7 @@ it.each(['offline', 'online-website-available'])(
 		onlineStatus = status;
 		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
 		const { result } = renderHook(() => useRecordManualPayment());
-		await act(() => result.current(order, method, { amount: 40 }));
+		await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 		if (status === 'offline') {
 			const { readLedger } =
 				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
@@ -416,16 +435,6 @@ it.each(['offline', 'online-website-available'])(
 		} else expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
 	}
 );
-it('refuses manual payment without an open session', async () => {
-	mockSessionsOn = true;
-	mockSessionId = null;
-	const { result } = renderHook(() => useRecordManualPayment());
-	await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
-		name: 'RegisterSessionRequiredError',
-	});
-	expect(mockPost).not.toHaveBeenCalled();
-	expect(mockLocalPatch).not.toHaveBeenCalled();
-});
 
 jest.mock('../sale-completion', () => {
 	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
@@ -455,24 +464,6 @@ jest.mock('../sale-completion', () => {
 				if (input.online) await ctx.pushDocument(input.order);
 			}
 		),
-		prepareSale: jest.fn(
-			async (
-				_ctx: import('../sale-completion').SaleContext,
-				input: Parameters<typeof actual.prepareSale>[1]
-			) => {
-				if (input.completing && input.bindingStatus === 'choose')
-					return { ok: false, reason: 'choose_register' };
-				if (mockSessionsOn && !mockSessionId)
-					throw new (jest.requireActual(
-						'../../../../../services/register-session/session-store'
-					).RegisterSessionRequiredError)();
-				return {
-					ok: true,
-					registerId: mockBoundRegisterId,
-					sessionId: mockSessionsOn ? mockSessionId : null,
-				};
-			}
-		),
 	};
 });
 
@@ -490,7 +481,7 @@ jest.mock('../hooks/use-sale-context', () => ({
 
 it('includes completion metadata, ledger and status in one offline local write', async () => {
 	const { result } = renderHook(() => useRecordManualPayment());
-	await act(() => result.current(order, method, { amount: 100 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 100 }));
 	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: order,
@@ -509,19 +500,14 @@ it('does not fallback-stamp an accepted response whose status is still partial',
 	onlineStatus = 'online-website-available';
 	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
 	const { result } = renderHook(() => useRecordManualPayment());
-	await act(() => result.current(order, method, { amount: 40 }));
+	await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
 	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
 	expect(mockLocalPatch).not.toHaveBeenCalled();
 	expect(jest.requireMock('../sale-completion').completionMetaFor).not.toHaveBeenCalled();
 });
 
-it('uses the ids the tender gates handed over and does not resolve the session again', async () => {
+it('stamps the ids the tender gates handed over', async () => {
 	const { result } = renderHook(() => useRecordManualPayment());
-	const { prepareSale } = jest.requireMock('../sale-completion') as {
-		prepareSale: jest.Mock;
-	};
-	prepareSale.mockClear();
-
 	await act(() =>
 		result.current(order, method, {
 			amount: 40,
@@ -530,7 +516,6 @@ it('uses the ids the tender gates handed over and does not resolve the session a
 		})
 	);
 
-	expect(prepareSale).not.toHaveBeenCalled();
 	const { readLedger } =
 		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
 	const row = readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0];

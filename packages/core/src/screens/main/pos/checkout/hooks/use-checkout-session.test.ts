@@ -60,8 +60,9 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
-jest.mock('../../hooks/use-cart-stock-guard', () => ({
-	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
+jest.mock('../../hooks/read-stock-document', () => ({
+	resolveStockOwnerId: (_runtime: unknown, productId: number, variationId: number) =>
+		mockResolveStockOwnerId(productId, variationId),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
@@ -698,7 +699,6 @@ jest.mock('../sale-completion', () => {
 				if (input.online) await ctx.pushDocument(input.order);
 			}
 		),
-		prepareSale: jest.fn(actual.prepareSale),
 	};
 });
 
@@ -713,7 +713,14 @@ jest.mock('../hooks/use-sale-context', () => ({
 			t: (key) => key,
 			readCatalog: async () => null,
 			preventOverselling: false,
-			resolveSession: async () => ({ registerId: null, sessionId: null }),
+			// The session gate reads through the same store the handler then writes to.
+			resolveSession: async () => {
+				const { findOpenSession } = jest.requireActual<
+					typeof import('../../../../../services/register-session/session-store')
+				>('../../../../../services/register-session/session-store');
+				const session = await findOpenSession(mockSessions as never, 'register', mockSessionsOn);
+				return { registerId: 'register', sessionId: session?.id ?? null };
+			},
 		}),
 		userDB: { getLocal: async () => null },
 		sessionsOn: mockSessionsOn,

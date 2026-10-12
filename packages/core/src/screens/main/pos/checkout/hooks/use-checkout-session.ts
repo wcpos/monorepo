@@ -13,7 +13,8 @@ import {
 	requireOpenSession,
 } from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
-import { persistSaleProvenance, prepareSale } from '../sale-completion';
+import { presentTenderRefusal } from '../present-tender-refusal';
+import { commitGatewaySale } from '../commit-gateway-sale';
 import { useSaleContext } from './use-sale-context';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useT } from '../../../../../contexts/translations';
@@ -30,7 +31,8 @@ import {
 	setStockRejection,
 	stockRejection$,
 } from '../../hooks/stock-rejection';
-import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
+import { resolveStockOwnerId } from '../../hooks/read-stock-document';
+import { isActionRefusal } from '../../../../../extensions/actions';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
@@ -90,7 +92,6 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const online = useOnlineStatus().status === 'online-website-available';
 	const runtime = useQueryRuntime();
 	const t = useT();
-	const { resolveStockOwnerId } = useCartStockGuard();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
@@ -169,7 +170,11 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					Promise.all(
 						rejectedItems.map(async (item) => ({
 							...item,
-							stock_owner_id: await resolveStockOwnerId(item.product_id, item.variation_id),
+							stock_owner_id: await resolveStockOwnerId(
+								runtime,
+								item.product_id,
+								item.variation_id
+							),
 						}))
 					)
 				)
@@ -181,7 +186,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				.catch(() => undefined);
 			return true;
 		},
-		[runtime, orderId, order.uuid, resolveStockOwnerId]
+		[runtime, orderId, order.uuid]
 	);
 
 	const startCheckout = React.useCallback(async () => {
@@ -205,28 +210,21 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			let registerId: string | null = null;
 			let sessionId: string | null = null;
 			try {
-				// A gateway sale completes the whole balance, so a store with several registers
-				// and none chosen cannot start one; the picker is on the cart.
-				const prepared = await prepareSale(ctx, {
+				// The tender commit's gates decide whether this sale may start; its handler journals
+				// the attempt and, online, puts the provenance on the store before the gateway runs.
+				const committed = await commitGatewaySale(ctx, {
 					order,
 					source: 'gateway-contract',
-					completing: true,
+					methodId: resolvedGateway.id,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'require',
+					online,
 				});
-				if (!prepared.ok) {
-					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
+				if (isActionRefusal(committed)) {
+					presentTenderRefusal(ctx.actionCtx, committed, checkoutLogger, t);
 					return;
 				}
-				registerId = prepared.registerId;
-				sessionId = prepared.sessionId;
-				if (online)
-					await persistSaleProvenance(ctx, {
-						order,
-						source: 'gateway-contract',
-						sessionId: prepared.sessionId,
-						online: true,
-					});
+				registerId = committed.registerId;
+				sessionId = committed.sessionId;
 			} catch (error) {
 				if (signal.aborted) return;
 				if (error instanceof LiveTabNotOwnedError) throw error;
