@@ -21,9 +21,12 @@ import { getLogger } from '@wcpos/utils/logger';
  * `sinceSyncMs` (ms since the sync state last flipped) and `emission` (the grid's result
  * emission counter) so renders can be tied to the sync phase that caused them.
  *
- * Flip `RENDER_PROBE_ENABLED` to false to silence every call site without removing them.
+ * On in development bundles only: the rows are `debug`, which the logger also records into the
+ * shared 100-event flight recorder in production, where a scrolled catalogue's image events would
+ * evict the operational trail the recorder exists to keep. Set this to `true` to probe a
+ * production bundle deliberately; set it to `false` to silence every call site.
  */
-export const RENDER_PROBE_ENABLED = true;
+export const RENDER_PROBE_ENABLED: boolean = __DEV__;
 
 const probe = getLogger(['wcpos', 'pos', 'products', 'render-probe']);
 
@@ -227,6 +230,13 @@ type Bucket = {
 const pending = new Map<string, Bucket>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const IDS_PER_ROW = 5;
+/**
+ * Rows queued within this window share a line. A commit's render rows land in one tick, but an
+ * image's native load/display callbacks arrive in separate ticks per picture, so the window is
+ * wide enough to fold a screen of pictures into one row per event, not one per picture. A sync
+ * phase flip flushes first, so a window never straddles two phases.
+ */
+const BATCH_WINDOW_MS = 250;
 
 function enqueue(key: string, context: Record<string, unknown>, id?: string): void {
 	const at = stamp();
@@ -235,7 +245,7 @@ function enqueue(key: string, context: Record<string, unknown>, id?: string): vo
 	bucket.count += 1;
 	if (id && bucket.ids.length < IDS_PER_ROW) bucket.ids.push(id);
 	pending.set(bucketKey, bucket);
-	if (flushTimer === null) flushTimer = setTimeout(flush, 0);
+	if (flushTimer === null) flushTimer = setTimeout(flush, BATCH_WINDOW_MS);
 }
 
 function flush(): void {
