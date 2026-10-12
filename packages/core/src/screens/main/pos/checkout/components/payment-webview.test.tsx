@@ -76,8 +76,15 @@ jest.mock('@wcpos/components/webview', () => {
 		},
 	};
 });
+// Resolved, with an empty catalog, unless a test says otherwise.
+const MOCK_CHECKOUT_SESSION = {
+	handleStockRejection: () => false,
+	gatewayResolved: true,
+	settledOrderStatuses: {} as Record<string, string | null>,
+};
+let mockCheckoutSession = MOCK_CHECKOUT_SESSION;
 jest.mock('../hooks/use-checkout-session', () => ({
-	useCheckoutSession: () => ({ handleStockRejection: () => false }),
+	useCheckoutSession: () => mockCheckoutSession,
 }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -2313,6 +2320,48 @@ describe('pay-page session gate', () => {
 		act(() => button.click());
 		expect(mockPostMessage).not.toHaveBeenCalled();
 		expect(commitGatewaySale).toHaveBeenCalledTimes(1);
+	});
+	it('LegacyTab waits for the gateway catalog, so the commit journals the LOADED catalog', async () => {
+		// The tender pane mounts LegacyTab before useCheckoutSession has loaded the catalog. The
+		// commit journals the catalog once, at mount, for replay: a frame mounted early would
+		// journal {} and a BACS-at-pending sale would never replay (#2482 review).
+		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+		const preparedSession = new BehaviorSubject(session);
+		mockOpenSession.next(session);
+		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+			typeof query === 'string' || query.selector.id
+				? {
+						$: preparedSession.pipe(
+							map((session) => (session?.status === 'open' ? session : null))
+						),
+					}
+				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+		);
+		const order = makeOrder();
+		const flow = {
+			hasLiveLeg: false,
+			legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
+			saveState: null,
+		} as never;
+		const catalog = { pos_cash: null, bacs: 'pending' };
+		try {
+			mockCheckoutSession = { ...MOCK_CHECKOUT_SESSION, gatewayResolved: false };
+			const view = render(<LegacyTab order={order} flow={flow} />);
+			await act(async () => {});
+			expect(recordCompletionAttempt).not.toHaveBeenCalled();
+			expect(view.getByTestId('checkout-legacy-skeleton')).toBeTruthy();
+
+			mockCheckoutSession = { ...MOCK_CHECKOUT_SESSION, settledOrderStatuses: catalog };
+			view.rerender(<LegacyTab order={order} flow={flow} />);
+
+			await waitFor(() => expect(recordCompletionAttempt).toHaveBeenCalledTimes(1));
+			expect(jest.mocked(recordCompletionAttempt).mock.calls[0][1]).toMatchObject({
+				source: 'gateway-snapshot',
+				settledOrderStatuses: catalog,
+			});
+		} finally {
+			mockCheckoutSession = MOCK_CHECKOUT_SESSION;
+		}
 	});
 	it('LegacyTab forwards receiptHost to PaymentWebview', async () => {
 		autoShowReceipt = false;
