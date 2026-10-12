@@ -19,6 +19,7 @@ import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './v2/table';
+import { EmptyCart } from './v2/empty-cart';
 import { CartFoot } from './v2/foot';
 import { OrderSheet } from './v2/order-sheet';
 import { Totals } from './totals';
@@ -187,7 +188,7 @@ export function OpenOrders({
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
-							<View className="flex-1" />
+							<EmptyCart />
 							{overdue && (
 								<Button
 									testID="checkout-close-register"

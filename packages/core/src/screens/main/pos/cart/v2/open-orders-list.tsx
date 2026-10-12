@@ -169,7 +169,8 @@ function OrderRow({
 					<CartTabTitle order={order} amountOnly active />
 				</View>
 				<HStack space="sm">
-					{openedMs !== undefined && (
+					{/* An empty cart has no age: its creation time restarts with the next line (#2183). */}
+					{openedMs !== undefined && entries.length > 0 && (
 						<HStack space="xs">
 							<Icon
 								name="clock"

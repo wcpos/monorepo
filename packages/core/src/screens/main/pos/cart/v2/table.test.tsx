@@ -119,6 +119,12 @@ jest.mock('./cells/line-strip', () => ({
 jest.mock('../cells/fee-and-shipping-total', () => ({ FeeAndShippingTotal: () => null }));
 let mockIsPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
+jest.mock('./empty-cart', () => ({
+	EmptyCart: () => {
+		const { createElement } = jest.requireActual<typeof import('react')>('react');
+		return createElement('div', { 'data-testid': 'cart-empty' });
+	},
+}));
 jest.mock('./cells/fee-name', () => ({ FeeName: () => null }));
 jest.mock('../cells/fee-price', () => ({ FeePrice: () => null }));
 jest.mock('../cells/image', () => ({ LineItemImage: () => null }));
@@ -207,6 +213,17 @@ it.each([
 		'shipping',
 	]);
 });
+it('shows the empty-cart state with no lines and drops it with the first', () => {
+	mockCartLines.line_items = [];
+	mockCartLines.fee_lines = [];
+	mockCartLines.shipping_lines = [];
+	const { rerender } = render(<CartTable />);
+	expect(screen.getByTestId('cart-empty')).toBeTruthy();
+	mockCartLines.line_items = [line('line-a')];
+	rerender(<CartTable />);
+	expect(screen.queryByTestId('cart-empty')).toBeNull();
+});
+
 it('renders the four cart header labels', () => {
 	render(<CartTable />);
 	for (const label of ['Qty', 'Item', 'Price', 'Total'])

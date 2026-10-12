@@ -123,6 +123,17 @@ it('a row says who, what, how long and its status; from three entries the line i
 					payload: { billing: {}, date_created_gmt: '2026-10-09T08:00:00', line_items: [] },
 				} as unknown as EngineRecord<'orders'>,
 			},
+			{
+				id: 'c',
+				record: {
+					uuid: 'c',
+					payload: {
+						billing: {},
+						date_created_gmt: '2026-10-09T08:00:00',
+						line_items: [{ name: 'Beanie', quantity: 1 }],
+					},
+				} as unknown as EngineRecord<'orders'>,
+			},
 		];
 		render(
 			<OpenOrdersList orders={orders} activeValue="b" onSelect={jest.fn()} onClose={jest.fn()} />
@@ -135,10 +146,13 @@ it('a row says who, what, how long and its status; from three entries the line i
 		expect(screen.getByTestId('open-orders-row-a-age').textContent).toBe(
 			'health.database.n_minutes'
 		);
-		// The guest's empty cart: a user mark, "Empty", and an age that has gone stale. The open
-		// cart is told by the row itself (aria-selected, the fill and the bar), not by a mark.
+		// The guest's empty cart: a user mark, "Empty" and NO age — its creation time restarts
+		// with the next line (#2183). The open cart is told by the row itself (aria-selected, the
+		// fill and the bar), not by a mark.
 		expect(screen.getByTestId('open-orders-row-b-items').textContent).toBe('pos_cart.cart_empty');
-		expect(screen.getByTestId('open-orders-row-b-age').className).toContain('text-warning');
+		expect(screen.queryByTestId('open-orders-row-b-age')).toBeNull();
+		// A cart with a line that has sat for hours shows its age gone stale.
+		expect(screen.getByTestId('open-orders-row-c-age').className).toContain('text-warning');
 		expect(screen.getByTestId('open-orders-row-b').getAttribute('aria-selected')).toBe('true');
 		expect(screen.getByTestId('open-orders-row-b').textContent).not.toContain('pos_cart.selected');
 	} finally {

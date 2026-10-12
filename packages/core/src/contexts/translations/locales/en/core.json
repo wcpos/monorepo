@@ -54,6 +54,7 @@
 	"pos_cart.sort_fees_shipping_last": "Fees and shipping always stay last",
 	"pos_cart.guest": "Guest",
 	"pos_cart.cart_empty": "Empty",
+	"pos_cart.empty_cart_hint": "Tap a product to start a sale",
 	"pos_cart.n_items_one": "{n} item",
 	"pos_cart.n_items_other": "{n} items",
 	"pos_cart.shipping_item": "{method} shipping",

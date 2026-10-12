@@ -44,6 +44,7 @@ import { Subtotal } from '../cells/subtotal';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { type CurrentOrderRecord, useCurrentOrder } from '../../contexts/current-order';
 import { useCartLines } from '../../hooks/use-cart-lines';
+import { EmptyCart } from './empty-cart';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../../hooks/utils';
 import { SKU } from '../cells/sku';
 
@@ -336,7 +337,12 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 					</TableRow>
 				))}
 			</TableHeader>
-			<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
+			<ScrollView
+				ref={scrollViewRef}
+				testID="cart-table-scroll"
+				contentContainerClassName={data.length === 0 ? 'flex-1' : undefined}
+			>
+				{data.length === 0 && <EmptyCart />}
 				<TableBody>
 					{table.getRowModel().rows.map((row, index) => (
 						<PulseTableRow

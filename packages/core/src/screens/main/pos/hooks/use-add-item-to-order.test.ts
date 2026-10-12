@@ -155,6 +155,8 @@ describe('useAddItemToOrder', () => {
 			name: '',
 		});
 		order.payload.line_items = [];
+		delete (order.payload as { status?: string }).status;
+		delete (order.payload as { date_created_gmt?: string }).date_created_gmt;
 		order.isNew = false;
 		order.toJSON = () => ({ payload: { ...order.payload } });
 		order.toMutableJSON = () => ({ payload: { ...order.payload } });
@@ -928,6 +930,58 @@ describe('useAddItemToOrder', () => {
 
 		expect(mockReadCatalog).toHaveBeenCalledTimes(2);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	});
+
+	const scan = () =>
+		({
+			product_id: 1,
+			quantity: 1,
+			price: 5,
+			total: '5',
+			subtotal: '5',
+			meta_data: [posPrice(5)],
+		}) as never;
+
+	it('restarts an emptied open cart: the first line back in restamps the creation time', async () => {
+		// The cart was started, emptied (the removed line left a tombstone the server still
+		// holds) and is now getting its first line again — the sale begins now (#2183).
+		Object.assign(order.payload, {
+			status: 'pos-open',
+			date_created_gmt: '2026-07-01T00:00:00',
+			line_items: [{ id: 7, product_id: null, quantity: 1 }],
+		});
+		mockLocalPatch.mockResolvedValue({ document: order });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', scan());
+		});
+
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].data).toMatchObject({
+			date_created_gmt: '2026-07-14T00:00:00',
+		});
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toHaveLength(2);
+	});
+
+	it('does not restamp a cart that still holds a line, or one that is not pos-open', async () => {
+		Object.assign(order.payload, {
+			status: 'pos-open',
+			date_created_gmt: '2026-07-01T00:00:00',
+			line_items: [{ product_id: 2, quantity: 1, meta_data: [posPrice(5)] }],
+		});
+		mockLocalPatch.mockResolvedValue({ document: order });
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', scan());
+		});
+		expect(mockLocalPatch.mock.calls[0][0].data).not.toHaveProperty('date_created_gmt');
+
+		Object.assign(order.payload, { status: 'pos-partial', line_items: [] });
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', scan());
+		});
+		expect(mockLocalPatch.mock.calls[1][0].data).not.toHaveProperty('date_created_gmt');
 	});
 });
 

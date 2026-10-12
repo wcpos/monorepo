@@ -15,6 +15,7 @@ import {
 	isActionRefusal,
 	presentActionRefusal,
 } from '../../../../extensions/actions';
+import { cartRestartsOnAdd } from './cart-restart';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -292,9 +293,16 @@ export const useAddItemToOrder = () => {
 							context.order = savedOrder;
 							result = savedOrder;
 						} else {
+							// A line going into an emptied cart RESTARTS it: the creation time is
+							// the start of the sale in front of the cashier, not of the abandoned
+							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
+							const restart = cartRestartsOnAdd(latest.payload)
+								? { date_created_gmt: convertLocalDateToUTCString(new Date()) }
+								: {};
 							result = await localPatch({
 								document: latest,
 								data: {
+									...restart,
 									[type]: buildCartLines(
 										latest.uuid,
 										(latest.payload[type] as CartLine[] | undefined) ?? [],
