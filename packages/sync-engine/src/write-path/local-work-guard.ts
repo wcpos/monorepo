@@ -53,9 +53,29 @@ function stampedRevision(document: unknown): string | null {
 	return typeof revision === 'string' && revision.startsWith('sha256:') ? revision : null;
 }
 
-function withoutPayload(document: Record<string, unknown>): Record<string, unknown> {
-	const { payload: _payload, ...rest } = document;
-	return rest;
+/**
+ * Promoted membership columns are SETS (`$in` filters), and the server's stamp treats the
+ * taxonomy arrays they derive from as sets too; a wire reorder must not read as a change.
+ */
+const SET_COLUMNS = ['categoryIds', 'tagIds', 'brandIds'] as const;
+
+/**
+ * What the CLIENT owns on a stored document, under a server stamp that already vouches for the
+ * payload: every top-level field but `payload`, plus `payload.barcode` — materialized from the
+ * scope's barcode selectors (record-materialization.ts), so a changed selector re-derives it
+ * under the same stamp and must still write.
+ */
+function clientOwnedView(document: Record<string, unknown>): Record<string, unknown> {
+	const { payload, ...rest } = document;
+	const view: Record<string, unknown> = {
+		...rest,
+		barcode: (payload as { barcode?: unknown } | undefined)?.barcode,
+	};
+	for (const column of SET_COLUMNS) {
+		const ids = view[column];
+		if (Array.isArray(ids)) view[column] = [...ids].sort();
+	}
+	return view;
 }
 
 /**
@@ -86,7 +106,7 @@ export function withoutUnchanged<T extends { uuid: string }>(
 			if (incoming === null) return true;
 			const storedStamp = stampedRevision(json);
 			if (storedStamp !== null && storedStamp === stampedRevision(incoming)) {
-				return !deepEqual(withoutPayload(json), withoutPayload(incoming));
+				return !deepEqual(clientOwnedView(json), clientOwnedView(incoming));
 			}
 			// Full equality also rejects stored extra keys when there is no schema.
 			return !deepEqual(json, incoming);

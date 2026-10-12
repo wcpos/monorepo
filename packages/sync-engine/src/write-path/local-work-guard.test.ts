@@ -112,11 +112,22 @@ describe('withoutUnchanged', () => {
 			['a different stamp', { sync: { ...reshuffled.sync, revision: 'sha256:fedcba' } }],
 			['a skeleton filling in', { sync: { ...reshuffled.sync, partial: true } }],
 			['a client-derived column', { price: 12 }],
-			['a barcode from new selectors', { barcode: '0123' }],
+			// The barcode is materialized INTO the payload from the scope's selectors; a changed
+			// selector re-derives it under the same server stamp.
+			['a barcode from new selectors', { payload: { ...reshuffled.payload, barcode: '0123' } }],
 			['a new remote id', { remoteId: '8' }],
 		])('still writes on %s', (_label, delta) => {
 			const incoming = { ...reshuffled, ...delta };
 			expect(withoutUnchanged(collectionWith({}), stored(), [incoming])).toEqual([incoming]);
+		});
+
+		it('reads the promoted membership columns as sets, like the stamp reads their taxonomies', () => {
+			const residentSets = { ...resident, categoryIds: [9, 4], tagIds: [2, 1], brandIds: [] };
+			const reordered = { ...reshuffled, categoryIds: [4, 9], tagIds: [1, 2], brandIds: [] };
+			const residentMap = new Map([['a', { toJSON: () => residentSets }]]);
+			expect(withoutUnchanged(collectionWith({}), residentMap, [reordered])).toEqual([]);
+			const grown = { ...reordered, categoryIds: [4, 9, 11] };
+			expect(withoutUnchanged(collectionWith({}), residentMap, [grown])).toEqual([grown]);
 		});
 
 		it('compares the whole document when either side carries a legacy synthesized revision', () => {
