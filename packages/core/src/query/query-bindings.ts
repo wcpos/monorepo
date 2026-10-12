@@ -20,61 +20,56 @@ import {
 	filter,
 	map,
 	shareReplay,
-	startWith,
 	switchMap,
 	take,
 } from 'rxjs/operators';
 
 import {
+	ATTEMPTED,
+	censusTotal$,
+	coverageProjection$,
+	coverageTargetFor,
 	declareRequirements,
+	type DemandReadiness,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
+	exhaustedFromCoverage$,
+	NO_CENSUS_TOTAL$,
+	NOT_ATTEMPTED,
 	observeCollectionActive,
-	observeCoverage,
 	observeEngineDatabases,
 	observeEngineQuery,
+	type QueryLaneProgress,
 	type QueryResult,
+	readinessFrom,
+	releaseHandles,
 	useLocalQuery,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type {
-	CensusTotals,
-	CoverageOutcome,
-	CoverageTarget,
-	CoverageVerdict,
-	RequirementHandle,
-	RxdbSyncEngine,
-	SyncCollectionName,
-} from '@wcpos/sync-engine';
+import type { CoverageTarget, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
+import {
+	bindingObservablesFor,
+	useProductsQueryHandle,
+	useQueryHandleResource,
+} from './query-handles';
 import {
 	compileQuery,
 	requirementsForCompiledQuery,
 	translateLogsQueryState,
 } from './query-state-translator';
+import { useCoverageGeneration } from './scope-key';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
 import type { RxCollection } from 'rxdb';
 
+export { useScopeKey } from './scope-key';
+export type { QueryLaneProgress } from '@wcpos/query';
+
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type CompiledQuery = ReturnType<typeof compileQuery>;
-
-/**
- * How much of a fetch-to-completion lane has landed locally, while it is still landing (#954).
- *
- * Only a ranged `limit=all` lane — Reports — reports this: it is the one screen that declares
- * "give me every result", so it is the one screen where a partially downloaded window is a
- * silent lie rather than a deliberately small page. `null` once the lane is complete (or was
- * never fetch-to-completion), which is what makes the progress surface self-dismissing.
- */
-export type QueryLaneProgress = {
-	/** Records the walk has covered so far. */
-	downloaded: number;
-	/** The range's size per the server's `X-WP-Total`, or null if it never sent one. */
-	total: number | null;
-};
 
 export interface QueryBinding {
 	resource: ObservableResource<QueryResult<RxCollection>>;
@@ -99,7 +94,6 @@ export interface QueryBinding {
 }
 
 const DEMAND_RETRY_BACKOFF_MS = 250;
-const NO_CENSUS_TOTAL$ = of(null as number | null);
 const INACTIVE$ = of(false);
 const NOT_PENDING$ = of(false);
 const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
@@ -129,63 +123,6 @@ function useObservableResource<T>(observable$: Observable<T>): ObservableResourc
 	return resource;
 }
 
-/**
- * What a settled demand declaration proves about the collection behind it.
- *
- * `attempted: false` is the `released` case of the CoverageOutcome contract: the requirement
- * was handed back without being met, because another engine instance (another tab) owns the
- * scheduler row or the claim was lost mid-drain. That other owner's pull is invisible to this
- * tab's activity counters, so a release must never be read as "the references landed" — the
- * caller has to keep waiting and re-declare rather than act on it.
- */
-type DemandReadiness = {
-	attempted: boolean;
-	/** At least one requirement was met by a WIRE walk (`fetched`), not served from local rows. */
-	fetched: boolean;
-};
-
-const ATTEMPTED: DemandReadiness = { attempted: true, fetched: false };
-const NOT_ATTEMPTED: DemandReadiness = { attempted: false, fetched: false };
-
-function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
-	return {
-		attempted: outcomes.every((outcome) => outcome.action !== 'released'),
-		fetched: outcomes.some((outcome) => outcome.action === 'fetched'),
-	};
-}
-
-/**
- * Which coverage key this binding's totals may be read from, or null when nothing the engine
- * tracks stands for this query.
- *
- * `handle.queryKey` is the engine's own answer for a browse/refresh lane, so it wins whenever
- * there is one. A collection seeded by a boot lane (tax rates) declares no requirement at all,
- * so there is no handle to carry a key — the `{lane:'reference'}` arm asks the ENGINE to
- * resolve its own lane key rather than having this layer spell one out (CONTEXT.md: callers
- * never construct lane keys).
- *
- * The `represented || isUnfiltered` gate is what keeps a lane from standing in for a query it
- * only partly covers: a descriptor carrying a condition the wire key cannot express names a
- * DELIBERATE superset, right for demand and wrong for a total. `isUnfiltered` re-admits the
- * reference collections, whose branch reports `represented: false` unconditionally even though
- * an unfiltered view of them maps exactly onto their `<collection>:all` lane.
- * Only the explicitly marked Sales superset bypasses this gate for progress/completeness:
- * a superset lane may prove completeness, never supply a count.
- */
-function coverageTargetFor(input: {
-	collection: SyncCollectionName;
-	handleQueryKey: string | null;
-	represented: boolean;
-	coverage: CompiledQuery['coverage'];
-	isUnfiltered: boolean;
-}): CoverageTarget | null {
-	if (!input.represented && !input.isUnfiltered && input.coverage !== 'superset') return null;
-	if (input.handleQueryKey !== null) {
-		return { collection: input.collection, queryKey: input.handleQueryKey };
-	}
-	return input.isUnfiltered ? { collection: input.collection, lane: 'reference' } : null;
-}
-
 type DemandProjection = {
 	coverageTarget$: Observable<CoverageTarget | null>;
 	/** The `kind: 'search'` requirement's coverage lane, or null when the demand has none. */
@@ -202,44 +139,6 @@ type DemandProjection = {
 	generation: number;
 	sync(): Promise<void>;
 };
-
-function useCoverageGeneration(engine: RxdbSyncEngine, collection: SyncCollectionName): number {
-	const subscribe = React.useCallback(
-		(notify: () => void) => engine.statusChanges(() => notify()),
-		[engine]
-	);
-	const getSnapshot = React.useCallback(
-		() => engine.status().collections[collection].coverageGeneration,
-		[collection, engine]
-	);
-	return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-// A number per engine, so a scope key can carry the engine's identity in a string.
-const engineKeys = new WeakMap<RxdbSyncEngine, number>();
-let nextEngineKey = 0;
-function engineKeyOf(engine: RxdbSyncEngine): number {
-	let key = engineKeys.get(engine);
-	if (key === undefined) {
-		key = nextEngineKey++;
-		engineKeys.set(engine, key);
-	}
-	return key;
-}
-
-/**
- * The scope a collection is read from now, as a string: the engine (a cross-site change brings a
- * new one) and the collection's coverage generation (a same-site `scope.switch()` keeps the engine
- * and changes its database in place, and bumps every collection's generation; a reset of the
- * collection bumps it too, and leaves it empty). The same identity `useAllTermsBinding` keys its
- * one-shot refresh to. A surface holding records across renders keys itself to this, so a scope
- * switch starts it afresh instead of showing the previous scope's records.
- */
-export function useScopeKey(collection: LegacyCollectionName): string {
-	const { engine } = useQueryRuntime();
-	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
-	return `${engineKeyOf(engine)}:${generation}`;
-}
 
 function useDemand(
 	engine: RxdbSyncEngine,
@@ -478,177 +377,30 @@ function useDemand(
 	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
-	return {
-		coverageTarget$,
-		searchLane$,
-		pending$,
-		fetched$,
-		sync,
-		whenReady,
-		declareOnce,
-		generation: coverageGeneration,
-	};
-}
-
-/** The engine declining to vouch — what a binding with no coverage target reports. */
-const UNKNOWN_COVERAGE: CoverageVerdict = {
-	total: null,
-	source: 'unknown',
-	complete: false,
-	fresh: false,
-	progress: null,
-};
-const UNKNOWN_COVERAGE$ = of(UNKNOWN_COVERAGE);
-
-/**
- * Identity of a coverage target, so that a RE-declaration naming the same target does not
- * resubscribe the verdict. Every declare pushes a freshly built object; without this the
- * switchMap below would tear the subscription down and republish `unknown`, blinking the
- * footer back to the resident count on every re-declare.
- */
-function coverageTargetKey(target: CoverageTarget | null): string {
-	if (target === null) return '';
-	return 'queryKey' in target
-		? `${target.collection}::${target.queryKey}`
-		: `${target.collection}::@reference`;
-}
-
-/**
- * The engine's opinion on whether the server has more rows for a SEARCH demand — the signal
- * the grids page on instead of "was the local page short" (`useGuardedExtension`).
- *
- *  - `true`: the walk ended on a short page inside its limit and the lane is still fresh
- *    (`fetchSearch` records `exhausted` as the lane's `complete`). Stale-complete reads as
- *    `false` on purpose: the next end-reached re-declares, the require-plane re-walks (it only
- *    serves local for complete AND fresh), and the verdict settles back to `true`.
- *  - `false`: a walk landed (the standing declaration settled `fetched`) and filled its limit —
- *    more may exist.
- *  - `null`: no opinion. No search lane (browse windows never complete, by design), or the
- *    last declaration did not walk: a failed walk leaves no lane, and a `serve-local` for a
- *    fully resident catalogue leaves none either — in both the local rows ARE the answer, and
- *    reading "no lane" as "more may exist" would grow the limit on every end-reached fire
- *    (offline, or on every render once resident): the #1221 storm by another door. The
- *    verdict cannot tell those apart on its own — an incomplete lane and no lane both report
- *    `source: 'unknown'` — which is why the settle outcome is consulted.
- */
-function exhaustedFromCoverage$(
-	engine: RxdbSyncEngine,
-	searchLane$: Observable<CoverageTarget | null>,
-	fetched$: Observable<boolean>
-): Observable<boolean | null> {
-	return searchLane$.pipe(
-		distinctUntilChanged(
-			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
-		),
-		switchMap((target) =>
-			target === null
-				? UNKNOWN_EXHAUSTED$
-				: combineLatest([observeCoverage(engine, target), fetched$]).pipe(
-						map(([verdict, fetched]) => {
-							if (verdict.complete && verdict.fresh) return true;
-							return fetched ? false : null;
-						})
-					)
-		),
-		distinctUntilChanged(),
-		shareReplay({ bufferSize: 1, refCount: true })
-	);
-}
-
-/**
- * The engine's whole-collection census total — the same number the Store Health › Database
- * page shows. `null` until the engine has recorded a census answer for the collection.
- */
-function censusTotal$(
-	engine: RxdbSyncEngine,
-	collection: SyncCollectionName
-): Observable<number | null> {
-	return new Observable<CensusTotals>((subscriber) =>
-		engine.censusChanges((totals) => subscriber.next(totals))
-	).pipe(
-		map((totals) => totals[collection]?.total ?? null),
-		// The census snapshot arrives async (a cache read); nothing may hold the footer's
-		// combineLatest hostage to it, so open with "no answer yet".
-		startWith(null as number | null),
-		distinctUntilChanged()
-	);
-}
-
-/**
- * The footer's numbers, composed from the engine's verdict, the collection census, and this
- * binding's own resident count — one source of truth, so the footer and the Store Health ›
- * Database page can never disagree about a total.
- *
- * Wherever a census stands for the screen's scope it wins OUTRIGHT — it is the very number the
- * Database page prints in its "on server" column, and it does not move when the cashier filters
- * or types (owner ruling 2026-08-22: one total, all the time). "Showing 3 of 203" says this
- * till knows about 203 products and three of them match; the old per-query denominator made
- * that second number move with every keystroke, and turned a failed search into "Showing 0 of
- * 0" — which reads like an empty till rather than a product the shop does not stock.
- *
- * Preferring the census was also not a tie-break between equivalent counts. The census probe
- * used to hit `wc/v3` while the browse walk counted `wcpos/v2`, so the two deliberately counted
- * different populations (#1400) — which is how the footer and the Database page came to disagree
- * by a handful of records on the same catalogue, wc/v3 being blind to POS visibility. Both read
- * the same wcpos/v2 lane now; the preference order below stands on its own merits.
- *
- * `census$` is `NO_CENSUS_TOTAL$` only where the census cannot honestly stand for the screen at
- * all — a `targeted` subset, addressed by id (the variations under ONE product). Everything
- * else, however it is filtered, reports the collection's census. Those exceptions keep the
- * engine's per-query answer, and name no total at all when there is no answer (below).
- *
- * The local resident count stays the floor in every branch: more residents than the server's
- * last count proves that count outdated, so the larger number wins — stated plainly, never
- * dressed up with a `N+` suffix (owner ruling 2026-08-20: the `+` read as noise, and every
- * locale translated it differently).
- */
-function coverageProjection$(
-	engine: RxdbSyncEngine,
-	result$: Observable<QueryResult<RxCollection>>,
-	coverageTarget$: Observable<CoverageTarget | null>,
-	census$: Observable<number | null>,
-	coverage: CompiledQuery['coverage'] = 'exact'
-): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
-	const verdict$ = coverageTarget$.pipe(
-		distinctUntilChanged(
-			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
-		),
-		switchMap((target) =>
-			(target === null ? UNKNOWN_COVERAGE$ : observeCoverage(engine, target)).pipe(
-				map((verdict) => ({ verdict, superset: target !== null && coverage === 'superset' }))
-			)
-		)
-	);
-	return combineLatest([
-		result$.pipe(map((result) => result.count ?? result.hits.length)),
-		verdict$,
-		census$,
-	]).pipe(
-		map(([localCount, { verdict, superset }, censusTotal]) => {
-			// `censusTotal` is non-null only where the census honestly stands for this screen
-			// (see `censusScoped`) and has landed.
-			// A superset lane may prove completeness, never supply a count.
-			const serverTotal = superset ? null : (censusTotal ?? verdict.total);
-			if (serverTotal !== null) {
-				return { total: Math.max(serverTotal, localCount), laneProgress: verdict.progress };
-			}
-			// No server count anywhere. The resident count is a truthful TOTAL only when the
-			// engine claims to hold the whole matching set — `complete` is exactly that claim,
-			// and a windowed browse lane deliberately never makes it (coverage-verdicts.ts).
-			// Otherwise the resident count is just "what has loaded so far", and passing it off
-			// as the size of the set is the "Showing 20 of 20" lie.
-			return {
-				total: verdict.complete ? localCount : null,
-				laneProgress: verdict.progress,
-			};
+	// Memoised: the bindings list this projection (and its `sync`) in their own memos, so a
+	// fresh object per render re-issued every binding on every render of its owner — the
+	// per-minute churn measured on roadmap#423 (the register session's clock woke the screen).
+	return React.useMemo(
+		() => ({
+			coverageTarget$,
+			searchLane$,
+			pending$,
+			fetched$,
+			sync,
+			whenReady,
+			declareOnce,
+			generation: coverageGeneration,
 		}),
-		distinctUntilChanged(
-			(previous, current) =>
-				previous.total === current.total &&
-				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
-				previous.laneProgress?.total === current.laneProgress?.total
-		),
-		shareReplay({ bufferSize: 1, refCount: true })
+		[
+			coverageGeneration,
+			coverageTarget$,
+			declareOnce,
+			fetched$,
+			pending$,
+			searchLane$,
+			sync,
+			whenReady,
+		]
 	);
 }
 
@@ -853,209 +605,19 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	return useEngineBinding(engineDescriptor, compiled, true, bindingId);
 }
 
-function releaseHandles(handles: RequirementHandle[]): void {
-	for (const handle of handles) handle.release();
-}
-
-function observeParentLookup(
-	engine: RxdbSyncEngine,
-	id: string,
-	parentIds: number[],
-	searchFields: string[] | undefined
-): Observable<QueryResult<RxCollection>> {
-	if (parentIds.length === 0) return of(emptyResult());
-	return new Observable<QueryResult<RxCollection>>((subscriber) => {
-		const descriptor: EngineQueryDescriptor = {
-			collection: 'products',
-			selector: { id: { $in: parentIds } },
-			searchFields,
-		};
-		const compiled = compileQuery(
-			'products',
-			{
-				search: '',
-				filters: { categories: [], brands: [], tags: [] },
-				sort: { field: 'id', direction: 'asc' },
-			},
-			{ id, targeted: parentIds, searchFields }
-		);
-		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
-		const handles = declareRequirements(engine, requirements);
-		const subscription = observeEngineQuery(engine, descriptor).subscribe(subscriber);
-		return () => {
-			subscription.unsubscribe();
-			releaseHandles(handles);
-		};
-	});
-}
-
+/**
+ * The POS products panel's binding, over the relational products query handle (roadmap#423).
+ *
+ * The handle is one object per query key, so this binding's identity moves only when the
+ * query (or its scope) does: a parent's render, a store tick or the register session's clock
+ * cannot hand the panel a new binding for the same query. Shared consumers (the data table,
+ * the footers, the paging verdict) still take the eight-observable shape; the grid reads the
+ * handle's snapshot directly.
+ */
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
-	const runtime = useQueryRuntime();
-	const bindingId = React.useId();
-	const parentSearchFields = useSearchFieldsFor('products');
-	const compiled = React.useMemo(
-		() =>
-			compileQuery('products', state, {
-				id: `${bindingId}:parent`,
-				searchFields: parentSearchFields,
-			}),
-		[bindingId, state, parentSearchFields]
-	);
-	const descriptor = useStableDescriptor({
-		collection: 'products',
-		read: compiled.read,
-		searchFields: parentSearchFields,
-	});
-	const childDescriptor = useStableDescriptor({
-		collection: 'variations',
-		selector: state.filters.status ? { status: state.filters.status } : {},
-		sort: [{ id: 'asc' }],
-		search: compiled.read.search,
-		searchFields: useSearchFieldsFor('variations'),
-	});
-	const childCompiled = React.useMemo(
-		() =>
-			compileQuery(
-				'variations',
-				{
-					search: compiled.read.search,
-					filters: {
-						attributeMatches: [],
-						...(state.filters.status ? { status: state.filters.status } : {}),
-					},
-					sort: { field: 'id', direction: 'asc' },
-				},
-				{ id: `${bindingId}:child`, searchFields: childDescriptor.searchFields }
-			),
-		[bindingId, childDescriptor.searchFields, compiled.read.search, state.filters.status]
-	);
-	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true, compiled);
-	const childDemand = useDemand(
-		runtime.engine,
-		`${bindingId}:child`,
-		childDescriptor,
-		Boolean(compiled.read.search),
-		childCompiled
-	);
-	const result$ = React.useMemo(() => {
-		if (!compiled.read.search) {
-			return observeEngineQuery(runtime.engine, descriptor).pipe(
-				shareReplay({ bufferSize: 1, refCount: true })
-			);
-		}
-		const direct$ = observeEngineQuery(runtime.engine, {
-			...descriptor,
-			read: { ...compiled.read, limit: undefined },
-		});
-		const children$ = observeEngineQuery(runtime.engine, childDescriptor);
-		return combineLatest([direct$, children$]).pipe(
-			switchMap(([direct, children]) => {
-				const counts = new Map<number, number>();
-				for (const hit of children.hits) {
-					const parentId = Number(hit.record.payload.parent_id);
-					if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
-				}
-				const parentIds = [...counts.keys()];
-				// The union is an ANSWER only once both search legs have answered —
-				// a pending leg means the merged rows are still provisional (#1733).
-				const searchAnswered =
-					direct.searchState === 'answered' && children.searchState === 'answered';
-				return observeParentLookup(
-					runtime.engine,
-					`${bindingId}:lookup`,
-					parentIds,
-					descriptor.searchFields
-				).pipe(map((lookup) => ({ direct, lookup, counts, searchAnswered })));
-			}),
-			switchMap(({ direct, lookup, counts, searchAnswered }) => {
-				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
-				return observeEngineQuery(runtime.engine, {
-					...descriptor,
-					read: { ...compiled.read, search: '' },
-					selector: { uuid: { $in: uuids } },
-				}).pipe(
-					map((result) => ({
-						...result,
-						searchActive: Boolean(compiled.read.search),
-						searchState: searchAnswered ? ('answered' as const) : ('pending' as const),
-						hits: result.hits.map((hit) => {
-							const wooId = Number(hit.record.payload.id);
-							return {
-								...hit,
-								childrenSearchCount: counts.get(wooId) ?? 0,
-								parentSearchTerm: compiled.read.search,
-							};
-						}),
-					}))
-				);
-			}),
-			shareReplay({ bufferSize: 1, refCount: true })
-		);
-	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine]);
-	const resource = useObservableResource(result$);
-	const census$ = React.useMemo(
-		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
-		[compiled.censusScoped, runtime.engine]
-	);
-	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$, census$),
-		[census$, parentDemand.coverageTarget$, result$, runtime.engine]
-	);
-	const active$ = React.useMemo(
-		() =>
-			combineLatest([
-				observeCollectionActive(runtime.engine, 'products'),
-				observeCollectionActive(runtime.engine, 'variations'),
-			]).pipe(
-				map((values) => values.some(Boolean)),
-				distinctUntilChanged(),
-				shareReplay({ bufferSize: 1, refCount: true })
-			),
-		[runtime.engine]
-	);
-	const sync = React.useCallback(
-		() => Promise.all([parentDemand.sync(), childDemand.sync()]).then(() => undefined),
-		[childDemand, parentDemand]
-	);
-
-	/**
-	 * Memoised, like `resource` and `active$` above and like every projection in
-	 * `useEngineBinding`. These three were piped inline in the return, so each render handed
-	 * consumers three NEW observables.
-	 *
-	 * That is not merely wasteful. `useObservableState` keys its subscription on observable
-	 * identity, so the footer resubscribed on every render; `projection$` carries
-	 * `shareReplay({ bufferSize: 1 })`, so each resubscribe immediately replayed its buffered
-	 * value and set state again. A single cart write therefore rang through the products
-	 * panel several times over before settling — measured at `POSProductsContent` ×4,
-	 * `ProductTile` ×80 per add or remove.
-	 *
-	 * `useEngineBinding` already memoises the same three projections; this hook is the one
-	 * the POS products panel uses, and it did not.
-	 */
-	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
-	const laneProgress$ = React.useMemo(
-		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
-		[projection$]
-	);
-	const pending$ = React.useMemo(
-		() =>
-			combineLatest([parentDemand.pending$, childDemand.pending$]).pipe(
-				map((values) => values.some(Boolean)),
-				distinctUntilChanged(),
-				shareReplay({ bufferSize: 1, refCount: true })
-			),
-		[childDemand.pending$, parentDemand.pending$]
-	);
-	const exhausted$ = React.useMemo(
-		() => exhaustedFromCoverage$(runtime.engine, parentDemand.searchLane$, parentDemand.fetched$),
-		[parentDemand.fetched$, parentDemand.searchLane$, runtime.engine]
-	);
-
-	return React.useMemo(
-		() => ({ resource, result$, active$, pending$, exhausted$, total$, laneProgress$, sync }),
-		[resource, result$, active$, pending$, exhausted$, total$, laneProgress$, sync]
-	);
+	const handle = useProductsQueryHandle(state);
+	const resource = useQueryHandleResource(handle);
+	return React.useMemo(() => ({ resource, ...bindingObservablesFor(handle) }), [handle, resource]);
 }
 
 export type SearchSelectCollection =
