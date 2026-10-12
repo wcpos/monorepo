@@ -130,6 +130,8 @@ describe.each([
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockSubmitCustomer = undefined;
+		// The attach mocks write into this record; start each case from the same order.
+		currentOrderRecord.payload = { customer_id: 7 };
 	});
 
 	// #1523: a born-local customer (no Woo id yet, as offline) is attached at once.

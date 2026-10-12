@@ -98,10 +98,14 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 								await recordCustomerLink(storeDB, orderUuid, {
 									customerUuid: record.uuid,
 									scopeId,
-									// From the order as it now stands: a hook may have completed or kept
-									// an address, and the bridge compares against what the order carries.
+									// From the order the write landed on (a first add queued ahead may have
+									// replaced the temporary record), as it now stands: a hook may have
+									// completed or kept an address, and the bridge compares against that.
 									identity: customerLinkIdentity(
-										currentOrderRecord.getLatest().payload.billing as typeof saved.billing
+										(
+											(attached as { document?: typeof currentOrderRecord }).document ??
+											currentOrderRecord
+										).getLatest().payload.billing as typeof saved.billing
 									),
 									at: new Date().toISOString(),
 								});
