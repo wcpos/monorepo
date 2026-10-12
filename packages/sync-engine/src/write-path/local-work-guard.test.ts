@@ -77,6 +77,72 @@ describe('withoutUnchanged', () => {
 		);
 	});
 
+	describe('under the server’s stamped revision', () => {
+		const stamp = 'sha256:0123456789abcdef';
+		const resident = {
+			uuid: 'a',
+			remoteId: '7',
+			payload: { id: 7, name: 'Belt', related_ids: [3, 1, 2], categories: [{ id: 9 }] },
+			sync: { revision: stamp, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+			sortName: 'belt',
+			price: 10,
+			_rev: '3-x',
+			_meta: { lwt: 1 },
+			_attachments: {},
+			_deleted: false,
+		};
+		const reshuffled = {
+			uuid: 'a',
+			remoteId: '7',
+			// What every pull serves: the same product, related_ids in a fresh random order.
+			payload: { id: 7, name: 'Belt', related_ids: [2, 3, 1], categories: [{ id: 9 }] },
+			sync: { revision: stamp, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+			sortName: 'belt',
+			price: 10,
+		};
+		const stored = () => new Map([['a', { toJSON: () => resident }]]);
+
+		it('is unchanged when the stamps agree, whatever order the payload’s bytes arrive in', () => {
+			expect(withoutUnchanged(collectionWith({}), stored(), [reshuffled])).toEqual([]);
+		});
+
+		it.each([
+			['a different stamp', { sync: { ...reshuffled.sync, revision: 'sha256:fedcba' } }],
+			['a skeleton filling in', { sync: { ...reshuffled.sync, partial: true } }],
+			['a client-derived column', { price: 12 }],
+			// The barcode is materialized INTO the payload from the scope's selectors; a changed
+			// selector re-derives it under the same server stamp.
+			['a barcode from new selectors', { payload: { ...reshuffled.payload, barcode: '0123' } }],
+			['a new remote id', { remoteId: '8' }],
+		])('still writes on %s', (_label, delta) => {
+			const incoming = { ...reshuffled, ...delta };
+			expect(withoutUnchanged(collectionWith({}), stored(), [incoming])).toEqual([incoming]);
+		});
+
+		it('reads the promoted membership columns as sets, like the stamp reads their taxonomies', () => {
+			const residentSets = { ...resident, categoryIds: [9, 4], tagIds: [2, 1], brandIds: [] };
+			const reordered = { ...reshuffled, categoryIds: [4, 9], tagIds: [1, 2], brandIds: [] };
+			const residentMap = new Map([['a', { toJSON: () => residentSets }]]);
+			expect(withoutUnchanged(collectionWith({}), residentMap, [reordered])).toEqual([]);
+			const grown = { ...reordered, categoryIds: [4, 9, 11] };
+			expect(withoutUnchanged(collectionWith({}), residentMap, [grown])).toEqual([grown]);
+		});
+
+		it('compares the whole document when either side carries a legacy synthesized revision', () => {
+			const legacy = { revision: '2026-10-12T00:00:00', partial: false, source: 'woo-rest' };
+			const legacyResident = new Map([['a', { toJSON: () => ({ ...resident, sync: legacy }) }]]);
+			expect(withoutUnchanged(collectionWith({}), legacyResident, [reshuffled])).toEqual([
+				reshuffled,
+			]);
+			const legacyIncoming = { ...reshuffled, sync: legacy };
+			expect(withoutUnchanged(collectionWith({}), stored(), [legacyIncoming])).toEqual([
+				legacyIncoming,
+			]);
+		});
+	});
+
 	it('applies schema fill methods and writes on uncertain comparisons', () => {
 		const incoming = { uuid: 'a' };
 		const stored = new Map([['a', { toJSON: () => ({ uuid: 'a', enabled: false }) }]]);

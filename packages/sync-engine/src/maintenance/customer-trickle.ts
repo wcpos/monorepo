@@ -46,7 +46,7 @@ import {
 	customerBrowseWindowViewKey,
 	parseCustomerBrowseWindowDescriptor,
 } from '../scheduler';
-import { withoutLocallyProtected } from '../write-path/local-work-guard';
+import { partitionPulledRows } from '../write-path/local-work-guard';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -268,13 +268,14 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	const payloads = descriptor.parse((await response.json()) as unknown);
 	const materialized = payloads.map((payload) => materializeTargeted('customers', payload));
 	const documents = materialized.map(({ storedDocument }) => storedDocument);
-	const applicable = await withoutLocallyProtected(
+	// Same boundary as every other pull: unchanged rows (by the server's stamp) apply without a write.
+	const { applicable, changed } = await partitionPulledRows(
 		deps.database.collections.customers as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await deps.database.collections.customers.bulkUpsert(applicable as never[]),
+			await deps.database.collections.customers.bulkUpsert(changed as never[]),
 			'customer-trickle upsert'
 		);
 	}
