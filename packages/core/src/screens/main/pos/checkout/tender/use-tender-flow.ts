@@ -68,6 +68,7 @@ import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
+import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
@@ -327,6 +328,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
 	useDriverStatus(driver);
+	// The gateway catalog's stored POS Order Status for the chosen gateway, journaled with the
+	// attempt so a replay settles the order as the pay window would (spec §4.2). Fetched only
+	// while the till offers a gateway-mode method; still loading at the press journals null,
+	// which reduces the replay to the blocklist it always was.
+	const { gateway: gatewayEntry } = usePaymentGateways(
+		method?.id ?? null,
+		methods.some((candidate) => candidate.capture.mode === 'gateway')
+	);
+	const settledOrderStatus =
+		method?.capture.mode === 'gateway' ? (gatewayEntry?.settled_order_status ?? null) : null;
 	// Typed values live per method so switching pills and back keeps what was entered; the
 	// first look at a method is its prefill. Errors are the last refusal's and clear on edit.
 	const [valuesByMethod, setValuesByMethod] = React.useState({} as Record<string, DeclaredValues>);
@@ -671,6 +682,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								? 'gateway'
 								: 'terminal',
 				completing: e.payload.completing,
+				settledOrderStatus,
 			});
 			const saveProvenance = async () => {
 				if (entryAppliedMinor !== balanceMinor) return;
@@ -904,6 +916,28 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					).finally(() => tenderRecorded(outcome.row, 'online'));
 					return;
 				}
+				if (outcome.kind === 'settled') {
+					// No money, no stamp: the gateway landed the order on the status the merchant
+					// stored for it, which is the sale finishing (§3.1) — the paid completion, as is.
+					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order }, queue);
+					if (!uiSettings.autoShowReceipt) {
+						logger.info(
+							t('pos_checkout.payment_completed_for_order', {
+								orderNumber: payload.number ?? String(payload.id),
+							}),
+							{
+								showToast: true,
+								context: {
+									...orderContext,
+									method: method.id,
+									outcome: 'settled',
+									status: outcome.order.status,
+								},
+							}
+						);
+					}
+					return;
+				}
 				await completeOrderFlow(
 					{ source: 'gateway', order: outcome.order, stamp: outcome.stamp },
 					queue
@@ -1050,6 +1084,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						preLegBalanceMinor: balanceMinor,
 						amountMinor: entryAppliedMinor,
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
+				} else if (outcome.kind === 'settled') {
+					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
 				} else {
 					await completeOrderFlow({
 						source: 'gateway',
@@ -1147,6 +1183,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		order,
 		recordManualPayment,
 		gateway,
+		settledOrderStatus,
 		fields,
 		fieldValues,
 		uiSettings.autoShowReceipt,

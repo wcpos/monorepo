@@ -208,10 +208,11 @@ export interface PaymentRouteResponse {
 /**
  * `POST orders/{id}/payment-methods/{method}/submit` (contract 1.2): `recorded` carries the
  * captured row the gateway's own `process_payment()` produced; `sent` carries no row and the
- * order stays the gateway's status with the awaiting-customer stamp.
+ * order stays the gateway's status with the awaiting-customer stamp; `settled` carries no row
+ * and no stamp: the gateway landed the order on the status the merchant stored for it (§3.1).
  */
 export interface GatewaySubmitResponse {
-	outcome: 'recorded' | 'sent';
+	outcome: 'recorded' | 'sent' | 'settled';
 	payment: PaymentRow | null;
 	order: OrderPaymentSummary;
 }

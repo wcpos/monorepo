@@ -10,6 +10,11 @@ type Attempt = {
 	missingStarts?: number;
 	unpaidStarts?: number;
 	actor?: SaleContext['actor'];
+	/**
+	 * The POS Order Status the merchant stored for a gateway attempt's gateway, so replay
+	 * settles the order as the pay window would (sale-completion isSettledOrderStatus).
+	 */
+	settledOrderStatus?: string | null;
 	lastError?: string;
 };
 type Journal = { pending: Record<string, Attempt> };
@@ -30,7 +35,10 @@ async function journal(storeDB: StoreDatabase) {
 
 export async function recordCompletionAttempt(
 	storeDB: StoreDatabase,
-	{ orderUuid, ...facts }: { orderUuid: string } & Pick<Attempt, 'source' | 'paymentId' | 'actor'>
+	{
+		orderUuid,
+		...facts
+	}: { orderUuid: string } & Pick<Attempt, 'source' | 'paymentId' | 'actor' | 'settledOrderStatus'>
 ) {
 	const doc = await journal(storeDB);
 	await doc.incrementalModify((data) => {

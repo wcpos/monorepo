@@ -57,13 +57,20 @@ export interface SaleContext {
 
 export async function recordSaleAttempt(
 	ctx: SaleContext,
-	input: { order: EngineRecord<'orders'>; completing: boolean; source: SaleOutcome['source'] }
+	input: {
+		order: EngineRecord<'orders'>;
+		completing: boolean;
+		source: SaleOutcome['source'];
+		/** A gateway sale's stored POS Order Status (see isSettledOrderStatus), for its replay. */
+		settledOrderStatus?: string | null;
+	}
 ): Promise<void> {
 	if (input.completing)
 		await recordCompletionAttempt(ctx.storeDB, {
 			orderUuid: input.order.uuid,
 			source: input.source,
 			...(ctx.actor ? { actor: ctx.actor } : {}),
+			...(input.settledOrderStatus != null ? { settledOrderStatus: input.settledOrderStatus } : {}),
 		});
 }
 
@@ -143,6 +150,12 @@ export type SaleOutcome =
 	 * `manual` outcome with the returned row, exactly as a manual record (spec §4.2).
 	 */
 	| { source: 'gateway'; order: OrderPaymentSummary; stamp: AwaitingCustomerStamp }
+	/**
+	 * Contract 1.2 `settled`: no money and no stamp, but the gateway landed the order on the
+	 * status the merchant stored for it (spec §3.1) — a finished sale, completed with the
+	 * ledger as it is (the receipt prints the balance due, no row is minted).
+	 */
+	| { source: 'gateway-settled'; order: OrderPaymentSummary }
 	| { source: 'gateway-contract'; status: string }
 	| {
 			source: 'gateway-snapshot';
@@ -156,7 +169,12 @@ export type SaleOutcome =
 			settledOrderStatus?: string | null;
 	  }
 	| { source: 'zero-balance' }
-	| { source: 'replay'; refreshed?: boolean };
+	| {
+			source: 'replay';
+			refreshed?: boolean;
+			/** The status journaled with a gateway attempt (recordSaleAttempt); see isSettledOrderStatus. */
+			settledOrderStatus?: string | null;
+	  };
 
 const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
 
@@ -205,10 +223,12 @@ export function awaitsStoredStatus(status: string): boolean {
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money — and a sent order
-			// waits for its customer whatever status its gateway chose (on-hold included).
+			// waits for its customer whatever status its gateway chose (on-hold included). The
+			// status the attempt journaled for its gateway settles it as the pay window would;
+			// with none stored this is the blocklist it always was.
 			return (
 				!!payload?.status &&
-				!UNPAID_STATUSES.includes(payload.status) &&
+				isSettledOrderStatus(payload.status, outcome.settledOrderStatus) &&
 				activeAwaitingCustomer(payload.meta_data) === null
 			);
 		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
@@ -221,6 +241,8 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway': // Sent is never paid: the customer still holds the link.
 			return false;
+		case 'gateway-settled': // The store judged the stored status reached (§3.1); the till does not re-judge.
+			return true;
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
 		case 'gateway-snapshot': // The blocklist, plus the status the merchant stored for the gateway.
@@ -325,7 +347,7 @@ async function finishSale(
 				? !outcome.row.recorded_offline
 				: outcome.source === 'replay'
 					? !!latest.id && !outcome.refreshed
-					: outcome.source === 'gateway-contract';
+					: outcome.source === 'gateway-contract' || outcome.source === 'gateway-settled';
 	if (outcome.source === 'gateway-snapshot') {
 		const reduced = (latest.line_items ?? []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(

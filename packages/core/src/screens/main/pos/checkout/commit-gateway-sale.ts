@@ -32,6 +32,8 @@ export async function commitGatewaySale(
 		methodId: string | null;
 		bindingStatus: 'bound' | 'choose' | 'none';
 		online: boolean;
+		/** The gateway's stored POS Order Status, journaled for the attempt's replay. */
+		settledOrderStatus?: string | null;
 	}
 ): Promise<ActionRefusal | StampedSession> {
 	const { order, source, online } = input;
@@ -71,7 +73,12 @@ export async function commitGatewaySale(
 				const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
 				// A replacement session invalidates the facts the gate approved; its stamped id is binding.
 				if (writtenSessionId !== sessionId) throw new RegisterSessionRequiredError();
-				await recordSaleAttempt(ctx, { order, completing: true, source });
+				await recordSaleAttempt(ctx, {
+					order,
+					completing: true,
+					source,
+					settledOrderStatus: input.settledOrderStatus,
+				});
 				await persistSaleProvenance(ctx, { order, source, sessionId, online });
 				return { registerId, sessionId } satisfies StampedSession;
 			},

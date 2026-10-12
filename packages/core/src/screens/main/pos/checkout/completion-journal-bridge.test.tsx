@@ -733,6 +733,67 @@ it('clears a cancelled contract attempt without completing, receipt, or audit', 
 	expect(mockCatchUp).not.toHaveBeenCalled();
 });
 
+it.each([
+	['at its stored status completes', 'pending', [], true],
+	['with no stored status stays unpaid', null, [], false],
+	[
+		'at its stored status but still stamped stays unpaid',
+		'pending',
+		[{ method_id: 'wcpos_email_invoice', attempt_id: 'a' }],
+		false,
+	],
+] as const)(
+	'a gateway attempt found pending %s',
+	async (_, settledOrderStatus, stamps, completes) => {
+		await owner.recordSaleAttempt(mockContext, {
+			order: resident('order', 'pending') as never,
+			completing: true,
+			source: 'gateway',
+			settledOrderStatus,
+		});
+		mockFind.mockResolvedValue({
+			uuid: 'order',
+			getLatest: () => ({
+				payload: {
+					id: 42,
+					status: 'pending',
+					meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+					line_items: [],
+				},
+			}),
+		});
+		render(<SaleCompletionBridge />);
+		if (completes) {
+			await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+			expect(owner.completeSale).toHaveBeenCalledWith(
+				mockContext,
+				expect.objectContaining({ uuid: 'order' }),
+				{ source: 'replay', settledOrderStatus: 'pending' },
+				{ host: 'background' }
+			);
+			// Judged settled before any catch-up: the finish refreshes once, from the store.
+			expect(mockCatchUp).not.toHaveBeenCalled();
+			expect(mockRefresh).toHaveBeenCalledWith(mockManager, expect.anything(), true, undefined);
+			expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+			expect(mockInfo).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
+				})
+			);
+		} else {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					unpaidStarts: 1,
+				})
+			);
+			expect(owner.completeSale).not.toHaveBeenCalled();
+			expect(mockCatchUp).toHaveBeenCalledTimes(1);
+			expect(mockReceipt).not.toHaveBeenCalled();
+		}
+	}
+);
+
 it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
 	'replays the recorded actor %j, never the reopening cashier',
 	async (actor) => {

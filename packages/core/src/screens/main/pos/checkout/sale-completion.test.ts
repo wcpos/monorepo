@@ -177,9 +177,35 @@ it.each([
 		{ source: 'gateway', order: sent.order, stamp: sent.stamp },
 		false,
 	],
+	// The store judged the stored status reached (§3.1); the summary's balance is still due.
+	['gateway settled is a finished sale', { source: 'gateway-settled', order: sent.order }, true],
 ] as [string, SaleOutcome, boolean][])('%s', (_, outcome, expected) =>
 	expect(isSaleComplete(outcome, 2)).toBe(expected)
 );
+it.each([
+	['pending at the stored status settles', 'pending', 'pending', [], true],
+	['pending with no stored status is unpaid', 'pending', undefined, [], false],
+	['pending with another stored status is unpaid', 'pending', 'on-hold', [], false],
+	['a stored status never settles a stamped order', 'pending', 'pending', [sent.stamp], false],
+	['on-hold settles whatever is stored', 'on-hold', 'pending', [], true],
+	['pos-open never settles, even stored', 'pos-open', 'pos-open', [], false],
+	['pos-partial never settles, even stored', 'pos-partial', 'pos-partial', [], false],
+	['failed never settles, even stored', 'failed', 'failed', [], false],
+	['cancelled never settles, even stored', 'cancelled', 'cancelled', [], false],
+] as const)('replay: %s', (_, status, settledOrderStatus, stamps, expected) => {
+	const resident = {
+		...payload,
+		status,
+		meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
+	};
+	expect(
+		isSaleComplete(
+			{ source: 'replay', ...(settledOrderStatus ? { settledOrderStatus } : {}) },
+			2,
+			resident as never
+		)
+	).toBe(expected);
+});
 it.each(['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'])(
 	'snapshot excludes %s',
 	(status) =>
@@ -235,6 +261,7 @@ it.each([
 	[{ source: 'terminal', row, order: { balance: '0' } }, !row.recorded_offline],
 	[{ source: 'terminal', row: { ...row, recorded_offline: true }, order: { balance: '0' } }, false],
 	[{ source: 'gateway-contract', status: 'completed' }, true],
+	[{ source: 'gateway-settled', order: sent.order }, true],
 	[{ source: 'gateway-snapshot', snapshot: payload }, false],
 	[{ source: 'zero-balance' }, false],
 ] as [SaleOutcome, boolean][])('refresh and gap rule %j', async (outcome, refresh) => {
@@ -303,6 +330,60 @@ it('a sent sale leaves the till: sent moment, store refresh, checkout.sent row, 
 		})
 	);
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+it('a settled sale is the paid completion: receipt, refresh, checkout.completed row, attempt resolved', async () => {
+	await recordCompletionAttempt(ctx.storeDB, {
+		orderUuid: 'order',
+		source: 'gateway',
+		settledOrderStatus: 'pending',
+	});
+	const pending = { ...payload, status: 'pending', number: '1042', total: '92.95' };
+	const resident = { uuid: 'order', getLatest: () => ({ payload: pending }) } as never;
+	expect(
+		await completeSale(
+			{ ...ctx, actor: { id: '7', name: 'Pat' } },
+			resident,
+			{ source: 'gateway-settled', order: sent.order },
+			{ host: 'stage', autoShowReceipt: true }
+		)
+	).toBe('completed');
+	expect(mockReceipt).toHaveBeenCalledWith('order');
+	expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, resident, true, ctx.stockAdjustment);
+	expect(mockRefresh).not.toHaveBeenCalled();
+	expect(mockActionLog).toHaveBeenCalledWith(
+		'info',
+		'Sale order completed',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: expect.objectContaining({
+				type: 'checkout.completed',
+				orderId: 42,
+				orderNumber: '1042',
+				total: '92.95',
+				paymentLegs: 0,
+			}),
+		})
+	);
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+it('journals the stored status with a gateway attempt, and nothing when none is stored', async () => {
+	await recordSaleAttempt(ctx, {
+		order,
+		completing: true,
+		source: 'gateway',
+		settledOrderStatus: 'pending',
+	});
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+		source: 'gateway',
+		settledOrderStatus: 'pending',
+	});
+	await recordSaleAttempt(ctx, {
+		order,
+		completing: true,
+		source: 'gateway',
+		settledOrderStatus: null,
+	});
+	expect((await pendingCompletions(ctx.storeDB)).order).not.toHaveProperty('settledOrderStatus');
 });
 it('replay never completes a sent order, whatever status its gateway chose', () => {
 	const onHold = {

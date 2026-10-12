@@ -191,9 +191,16 @@ export function SaleCompletionBridge(): null {
 					}
 					let refreshed = false;
 					const payload = resident.getLatest().payload;
+					// The stored status the attempt journaled settles the replay as the pay window would.
+					const replay = {
+						source: 'replay' as const,
+						...(attempt.settledOrderStatus != null
+							? { settledOrderStatus: attempt.settledOrderStatus }
+							: {}),
+					};
 					if (
 						payload.status !== 'cancelled' &&
-						!isSaleComplete({ source: 'replay' }, current.ctx.dp, payload) &&
+						!isSaleComplete(replay, current.ctx.dp, payload) &&
 						payload.id
 					) {
 						// One bounded targeted GET per pending unpaid order at start; no second GET in the owner.
@@ -207,7 +214,7 @@ export function SaleCompletionBridge(): null {
 						}
 						if (current.stopped) return;
 					}
-					if (!isSaleComplete({ source: 'replay' }, current.ctx.dp, resident.getLatest().payload)) {
+					if (!isSaleComplete(replay, current.ctx.dp, resident.getLatest().payload)) {
 						const cancelled = resident.getLatest().payload.status === 'cancelled';
 						const count = cancelled ? 0 : (attempt.unpaidStarts ?? 0) + 1;
 						// A resident refresh can report success after HTTP failure. Give the normal
@@ -225,7 +232,7 @@ export function SaleCompletionBridge(): null {
 						await completeSale(
 							{ ...current.ctx, actor: attempt.actor },
 							resident,
-							{ source: 'replay', ...(refreshed ? { refreshed } : {}) },
+							{ ...replay, ...(refreshed ? { refreshed } : {}) },
 							{ host: 'background' }
 						);
 					}
