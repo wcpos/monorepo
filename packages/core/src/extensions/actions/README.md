@@ -36,18 +36,19 @@ unrelated queued writes.
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit) | `billing`, `shipping`, `taxIds` | yes |
 | `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`; extension `cash.rounding` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
+| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`; extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
-roundingMinor, completing, bindingStatus, registerId, sessionId }`; the handler and `register.gate`
+roundingMinor, completing, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`
 judge completion as `amountMinor === balanceMinor` on the payload the chain hands them, and
 `cash.rounding` (#66, #84) rewrites a settling cash tender to the rounded due, the handler
 writing the difference as a fee line before the leg. Amounts are minor units: `amountMinor`
 is applied to the balance, `tenderedMinor` is what the cashier handed over. `mode` includes
 `zero-balance`; `bindingStatus` is `bound | choose | none`; the two ids begin as `null`.
 
-Tender guards run as `register.gate` (order 0), then `session.gate` (order 1); the event name and
-the two ids are the constants `TENDER_COMMIT_EVENT` and `TENDER_GUARD_IDS` in `types.ts`, because
+Tender guards run as `register.gate` (order 0), then `session.gate` (order 1), then
+`conditions.gate` (order 2); the event name and
+the three ids are the constants `TENDER_COMMIT_EVENT` and `TENDER_GUARD_IDS` in `types.ts`, because
 the Logs event-label check scans `pos/checkout` for dotted literals and these are not log rows. The first
 refuses a completing sale that still needs a register chosen. The second resolves the bound
 register and its required open session through `ctx.register.resolveSession()`, a **read**
@@ -61,6 +62,10 @@ the gate's stamped id, the commit refuses through the open-register path before 
 Before the dispatch, inside its queue slot, `takeTender` recomputes the balance from the
 latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
 it, since the keypad's facts were read at render.
+In the same slot every dispatcher counts the checkout conditions (roadmap#62, the first feature
+consumer: the stock condition, on `prevent_overselling`) with `countConditionsInSlot` into
+`conditions: { unmet }`, and `conditions.gate` refuses with the first unmet line's reason; the cart
+shows the same count live, through the same evaluator (`screens/main/pos/conditions`).
 The caller presents the two gate refusals with the existing checkout toasts and any other
 refusal through `presentActionRefusal` (unless already presented): `presentTenderRefusal` in
 `screens/main/pos/checkout` is that mapping, shared by every dispatcher of the event.

@@ -31,7 +31,15 @@ export const sessionGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (ctx, e
 	}
 };
 
-const [REGISTER_GATE_ID, SESSION_GATE_ID] = TENDER_GUARD_IDS;
+/** An unmet checkout condition, as counted in the dispatcher's slot (roadmap#62), refuses. */
+export const conditionsGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ctx, e, next) => {
+	const [first] = e.payload.conditions.unmet;
+	if (!first) return next(e);
+	const { reasonKey, params, lineUuid } = first;
+	return { deny: { reasonKey, params, detail: { event: e.event, lineUuid } } };
+};
+
+const [REGISTER_GATE_ID, SESSION_GATE_ID, CONDITIONS_GATE_ID] = TENDER_GUARD_IDS;
 registerActionHook(TENDER_COMMIT_EVENT, registerGate, {
 	id: REGISTER_GATE_ID,
 	tier: 'guard',
@@ -41,4 +49,9 @@ registerActionHook(TENDER_COMMIT_EVENT, sessionGate, {
 	id: SESSION_GATE_ID,
 	tier: 'guard',
 	order: 1,
+});
+registerActionHook(TENDER_COMMIT_EVENT, conditionsGate, {
+	id: CONDITIONS_GATE_ID,
+	tier: 'guard',
+	order: 2,
 });

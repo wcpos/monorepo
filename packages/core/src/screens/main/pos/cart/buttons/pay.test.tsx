@@ -20,6 +20,21 @@ const mockClearSaving = jest.fn();
 const mockReplace = jest.fn();
 const mockDismissTo = jest.fn();
 const mockOrder = { isNew: false, uuid: 'order-1', payload: { total: '10.00', line_items: [] } };
+let mockUnmet: { id: string; lineUuid: string }[] = [];
+const mockScrollToLine = jest.fn();
+const mockInfo = jest.fn();
+jest.mock('../../conditions/use-cart-conditions', () => ({
+	useCartUnmet: () => mockUnmet,
+	scrollToLine: (uuid: string) => mockScrollToLine(uuid),
+}));
+jest.mock('@wcpos/utils/logger', () => {
+	const logger = {
+		info: (...args: unknown[]) => mockInfo(...args),
+		error: jest.fn(),
+		with: () => logger,
+	};
+	return { ...jest.requireActual('@wcpos/utils/logger'), getLogger: () => logger };
+});
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, replace: mockReplace, dismissTo: mockDismissTo }),
 }));
@@ -70,6 +85,7 @@ jest.mock('../../checkout/refusal-toast', () => ({
 }));
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockUnmet = [];
 	mockSaveState = null;
 	mockOrder.isNew = false;
 	mockSize = 'lg';
@@ -188,3 +204,50 @@ it.each(['lg', 'sm'])(
 		expect(mockReplace).not.toHaveBeenCalled();
 	}
 );
+
+describe('a checkout condition is unmet (roadmap#62)', () => {
+	const unmet = [
+		{ id: 'stock', lineUuid: 'belt' },
+		{ id: 'stock', lineUuid: 'beanie' },
+	];
+	it.each(['lg', 'sm'])(
+		'the press shows the first line and never saves or enters checkout (%s)',
+		(size) => {
+			mockSize = size;
+			mockUnmet = unmet;
+			render(<PayButton />);
+			fireEvent.click(screen.getByTestId('checkout-button'));
+			expect(mockScrollToLine).toHaveBeenCalledWith('belt');
+			expect(mockMarkSaving).not.toHaveBeenCalled();
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockLegacySave).not.toHaveBeenCalled();
+			expect(mockEnter).not.toHaveBeenCalled();
+			expect(mockPush).not.toHaveBeenCalled();
+			expect(mockRefusal).not.toHaveBeenCalled();
+			// One info row, no toast: the notice is already on screen.
+			expect(mockInfo).toHaveBeenCalledTimes(1);
+			expect(mockInfo).toHaveBeenCalledWith('pos_cart.checkout_blocked', {
+				context: {
+					orderId: 'order-1',
+					unmet: [
+						['stock', 'belt'],
+						['stock', 'beanie'],
+					],
+				},
+			});
+		}
+	);
+
+	it('keeps its label, dims, and returns to full when the last condition clears', async () => {
+		mockUnmet = unmet;
+		const { rerender } = render(<PayButton />);
+		expect(screen.getByTestId('checkout-button').textContent).toBe('pos_cart.checkout');
+		expect(screen.getByTestId('checkout-button-frame').style.opacity).toBe('0.38');
+		mockUnmet = [];
+		rerender(<PayButton />);
+		expect(screen.getByTestId('checkout-button-frame').style.opacity).toBe('1');
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockEnter).toHaveBeenCalledWith('order-1'));
+		expect(mockScrollToLine).not.toHaveBeenCalled();
+	});
+});

@@ -39,6 +39,8 @@ import {
 import './tender-guards';
 import '../cash-rounding-hook';
 import { enqueueOrderMutation, type OrderMutationContext } from '../../hooks/order-mutation-queue';
+import { conditionRules } from '../../conditions/evaluate';
+import { countConditionsInSlot } from '../../conditions/snapshot';
 import { useActionContext } from '../../hooks/use-action-context';
 import { useCartConfig } from '../../hooks/use-cart-config';
 import {
@@ -1109,7 +1111,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 		};
 		try {
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
+			const outcome = await enqueueOrderMutation(order.uuid, async (queue) => {
 				// The keypad's facts were read at render; a cart edit queued just before Pay has
 				// now been applied. If it moved the balance, the entry no longer describes this
 				// order: refuse here, before any gate or leg, and let the cashier look again.
@@ -1119,12 +1121,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					dp
 				);
 				if (latestBalanceMinor !== balanceMinor)
-					return Promise.resolve({
+					return {
 						deny: {
 							reasonKey: 'pos_checkout.order_changed_retry',
 							detail: { balanceMinor, latestBalanceMinor },
 						},
-					});
+					};
+				// The conditions are counted here too, not at the press: the gate judges the lines
+				// this commit will settle, after any write queued ahead (roadmap#62).
+				const rules = conditionRules(actionCtx.store.preventOverselling);
+				const unmet = await countConditionsInSlot(queue.order ?? order, actionCtx, rules);
 				return dispatchAction({
 					event: TENDER_COMMIT_EVENT,
 					// Money path: refuse rather than run unguarded if the registering import were ever lost.
@@ -1146,6 +1152,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 							registerId: null,
 							sessionId: null,
+							conditions: { unmet },
 						},
 					},
 					bottom: (e) => commitTender(e, queue),

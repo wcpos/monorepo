@@ -3,12 +3,19 @@ import {
 	dispatchAction,
 	getActionHooks,
 	resetActionHookStrikes,
+	TENDER_GUARD_IDS,
 } from '../../../../../extensions/actions';
-import { createDispatchToken } from '../../../../../extensions/actions/registry';
+import {
+	createDispatchToken,
+	registerActionHook,
+	resetActionRegistry,
+} from '../../../../../extensions/actions/registry';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
-import { registerGate, sessionGate } from './tender-guards';
+import { conditionsGate, registerGate, sessionGate } from './tender-guards';
 
 import type { ActionEventInput } from '../../../../../extensions/actions';
+
+type Payload = ActionEventInput<'checkout.tender.commit'>['payload'];
 
 const resolveSession = jest.fn();
 const ctx = createActionContext({
@@ -37,6 +44,7 @@ const e: ActionEventInput<'checkout.tender.commit'> = {
 		bindingStatus: 'bound',
 		registerId: null,
 		sessionId: null,
+		conditions: { unmet: [] },
 	},
 };
 const bottom = jest.fn();
@@ -92,9 +100,81 @@ it('session gate rethrows other errors', async () => {
 	await expect(sessionGate(ctx, e, bottom)).rejects.toBe(error);
 	expect(bottom).not.toHaveBeenCalled();
 });
-it('registers both gates in order as guards', () => {
+it('registers the three gates in order as guards', () => {
 	expect(getActionHooks(e.event)).toEqual([
 		{ id: 'register.gate', tier: 'guard', order: 0, hook: registerGate },
 		{ id: 'session.gate', tier: 'guard', order: 1, hook: sessionGate },
+		{ id: 'conditions.gate', tier: 'guard', order: 2, hook: conditionsGate },
 	]);
+});
+
+describe('conditions gate (roadmap#62)', () => {
+	const over = {
+		id: 'stock',
+		reasonKey: 'pos_cart.only_n_available',
+		params: { quantity: 2, name: 'Belt' },
+		lineUuid: 'belt',
+	};
+	const out = {
+		id: 'stock',
+		reasonKey: 'pos_products.out_of_stock',
+		params: { name: 'Beanie' },
+		lineUuid: 'beanie',
+	};
+	const withUnmet = (unmet: Payload['conditions']['unmet']) => ({
+		...e,
+		payload: { ...e.payload, conditions: { unmet } },
+	});
+	const gates = [registerGate, sessionGate, conditionsGate] as const;
+	const registerTenderGuards = (count: number) =>
+		TENDER_GUARD_IDS.slice(0, count).forEach((id, order) =>
+			registerActionHook(e.event, gates[order], { id, tier: 'guard', order })
+		);
+	beforeEach(() => {
+		resetActionRegistry();
+		registerTenderGuards(3);
+	});
+	afterAll(() => {
+		resetActionRegistry();
+		registerTenderGuards(3);
+	});
+
+	it('refuses with the first unmet line’s reason, and the writer never runs', async () => {
+		const result = await dispatchAction({
+			event: e.event,
+			input: withUnmet([over, out]),
+			ctx,
+			token: createDispatchToken(),
+			requiredGuards: TENDER_GUARD_IDS,
+			bottom,
+		});
+		expect(result).toEqual({
+			deny: {
+				reasonKey: 'pos_cart.only_n_available',
+				params: { quantity: 2, name: 'Belt' },
+				detail: { event: e.event, lineUuid: 'belt' },
+			},
+		});
+		expect(bottom).not.toHaveBeenCalled();
+	});
+
+	it('passes with nothing unmet (a backorder warning is never counted)', async () => {
+		expect(await conditionsGate(ctx, withUnmet([]), bottom)).toBe('saved');
+		expect(bottom).toHaveBeenCalledWith(withUnmet([]));
+	});
+
+	it('a dispatch without it registered refuses as guard_missing, unguarded never', async () => {
+		resetActionRegistry();
+		registerTenderGuards(2);
+		const result = await dispatchAction({
+			event: e.event,
+			input: withUnmet([]),
+			ctx,
+			token: createDispatchToken(),
+			requiredGuards: TENDER_GUARD_IDS,
+			bottom,
+		});
+		expect(result).toMatchObject({ deny: { reasonKey: 'actions.guard_missing' } });
+		expect(bottom).not.toHaveBeenCalled();
+	});
 });

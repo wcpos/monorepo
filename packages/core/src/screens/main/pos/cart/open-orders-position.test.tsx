@@ -42,6 +42,10 @@ jest.mock('../hooks/use-cart-settlement', () => ({ useCartSettlement: () => unde
 jest.mock('./v2/table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
+jest.mock('./conditions-notice', () => ({ CartConditionsNotice: () => null }));
+jest.mock('../conditions/use-cart-conditions', () => ({
+	CartConditionsProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
 jest.mock('./v2/empty-cart', () => ({ EmptyCart: () => <div data-testid="cart-empty" /> }));
 jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));

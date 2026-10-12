@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../../contexts/translations';
 import { NumberInput } from '../../../../components/number-input';
+import { lineFocusRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -13,14 +15,21 @@ interface Props {
 	item: LineItem;
 	type: 'line_items';
 }
-export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
+export function Quantity({ row, column, table }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	const { updateLineItem, splitLineItem } = useUpdateLineItem();
 	const t = useT();
+	const overStock = useCartUnmet().some((condition) => condition.lineUuid === uuid);
+	// How the conditions notice and a blocked Pay reach this line.
+	const focusRef = React.useMemo(
+		() => lineFocusRef(uuid, () => table.options.meta?.scrollToRow?.(uuid)),
+		[uuid, table]
+	);
 	return (
 		<VStack className="min-h-row items-center justify-center gap-1">
 			<NumberInput
 				testID="cart-quantity-input"
+				ref={focusRef}
 				// The column is 56 wide and the input box 41; the shared input's 12-point
 				// horizontal padding left ~17 points for the digits, so "19" fit and "20"
 				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
@@ -28,7 +37,10 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 				inputClassName="border-0 px-1 text-center tabular-nums"
 				// `web:px-2` only: the native Input already pads its field (px-1 above), and a
 				// second padding on the 36-point box clipped two-digit quantities.
-				className="web:px-2 h-9 min-w-9 items-center justify-center tabular-nums"
+				className={cn(
+					'web:px-2 h-9 min-w-9 items-center justify-center tabular-nums',
+					overStock && 'border-attention bg-attention/15'
+				)}
 				textClassName="font-semibold"
 				// A tap on the field lands the caret wherever the finger was, often before
 				// the digits, so typing appends instead of replacing ("1" → "31"). A

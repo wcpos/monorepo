@@ -3,6 +3,8 @@ import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -10,6 +12,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
 import { useT } from '../../../../../../contexts/translations';
 import { EditableField } from '../../../../components/editable-field';
+import { useCartUnmet } from '../../../conditions/use-cart-conditions';
 import { getStockRejectionForLine, stockRejection$ } from '../../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 import { useCurrentOrder } from '../../../contexts/current-order';
@@ -25,6 +28,8 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	const { updateLineItem } = useUpdateLineItem();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
+	// The cart's own judgement (checkout conditions), or the server's refusal below.
+	const unmet = useCartUnmet().find((condition) => condition.lineUuid === uuid);
 	/**
 	 * Highlight lines the server rejected at checkout, until the quantity no
 	 * longer exceeds what the server said was available (self-clearing).
@@ -41,6 +46,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			}),
 		[stockRejection, currentOrderRecord.uuid, table.options.data, item]
 	);
+	const stockMark = unmet ?? rejectedItem;
 	/**
 	 * filter out the private meta data
 	 */
@@ -68,12 +74,19 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					onChangeText={(name) => updateLineItem(uuid, { name })}
 				/>
 			</View>
-			{rejectedItem && (
-				<Text className="text-destructive text-xs font-semibold">
-					{rejectedItem.available === null
-						? t('common.out_of_stock')
-						: t('pos_cart.n_available', { quantity: rejectedItem.available })}
-				</Text>
+			{stockMark && (
+				// Attention, not destructive (rule 7); dark words on the amber tint (the amber is ~2.5:1 as text).
+				<HStack
+					className="bg-attention/15 items-center gap-1 self-start rounded px-1"
+					testID="cart-line-stock-mark"
+				>
+					<Icon name="box" size="xs" variant="attention" />
+					<Text className="text-attention-foreground text-xs font-semibold">
+						{stockMark.available === null
+							? t('common.out_of_stock')
+							: t('pos_cart.n_available', { quantity: stockMark.available })}
+					</Text>
+				</HStack>
 			)}
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 			{metaData.length > 0 && (

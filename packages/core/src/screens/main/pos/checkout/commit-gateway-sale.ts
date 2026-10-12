@@ -9,6 +9,8 @@ import {
 	TENDER_GUARD_IDS,
 } from '../../../../extensions/actions';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
+import { conditionRules } from '../conditions/evaluate';
+import { countConditionsInSlot } from '../conditions/snapshot';
 import './tender/tender-guards';
 import {
 	RegisterSessionRequiredError,
@@ -44,13 +46,16 @@ export async function commitGatewaySale(
 	const { order, source, online } = input;
 	// The contract leaves this event's result open; a dispatch that is not a refusal carries the
 	// handler's own return (a hook that answers without `next` is refused as `actions.hook_failed`).
-	const outcome: unknown = await enqueueOrderMutation(order.uuid, (queue) => {
+	const outcome: unknown = await enqueueOrderMutation(order.uuid, async (queue) => {
 		// Read inside the slot, so a cart edit queued just ahead is already applied to the balance.
 		const latest = order.getLatest().payload;
 		const balanceMinor = toMinor(
 			derive(latest.total, readLedger(latest.meta_data), [], { dp: ctx.dp }).balance,
 			ctx.dp
 		);
+		// The same count the tender pane makes in its slot, so `conditions.gate` judges every sale.
+		const rules = conditionRules(ctx.actionCtx.store.preventOverselling);
+		const unmet = await countConditionsInSlot(queue.order ?? order, ctx.actionCtx, rules);
 		return dispatchAction({
 			event: TENDER_COMMIT_EVENT,
 			// Money path: refuse rather than run unguarded if the registering import were ever lost.
@@ -72,6 +77,7 @@ export async function commitGatewaySale(
 					bindingStatus: input.bindingStatus,
 					registerId: null,
 					sessionId: null,
+					conditions: { unmet },
 				},
 			},
 			bottom: async (e) => {

@@ -135,3 +135,32 @@ it('dispatches the whole outstanding balance as a completing gateway tender', as
 		expect.objectContaining({ online: false })
 	);
 });
+it('an over-stock line refuses a gateway sale before any write (the gate counts here too)', async () => {
+	const overselling = {
+		...ctx,
+		actionCtx: createActionContext({
+			log,
+			t: (key) => key,
+			readCatalog: async () => ({ manage_stock: true, stock_quantity: 1, backorders: 'no' }),
+			readPaymentMethod: () => null,
+			preventOverselling: true,
+			priceDecimals: 2,
+			resolveSession,
+		}),
+	} as SaleContext;
+	const lines = [{ product_id: 5, quantity: 2, name: 'Belt', meta_data: [] }];
+	const withLines = {
+		...input,
+		order: {
+			uuid: 'order',
+			getLatest: () => ({ payload: { ...payload, line_items: lines } }),
+		} as never,
+	};
+	const outcome = await commitGatewaySale(overselling, withLines);
+	expect(outcome).toMatchObject({
+		deny: { reasonKey: 'pos_cart.only_n_available', params: { quantity: 1, name: 'Belt' } },
+	});
+	expect(mockRequireOpenSession).not.toHaveBeenCalled();
+	expect(recordSaleAttempt).not.toHaveBeenCalled();
+	expect(persistSaleProvenance).not.toHaveBeenCalled();
+});

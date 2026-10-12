@@ -56,6 +56,11 @@ jest.mock('../../hooks/use-action-context', () => ({
 	}),
 }));
 
+// The cart's checkout conditions are not under test: every condition is met.
+jest.mock('../../conditions/use-cart-conditions', () => ({
+	useCartUnmet: () => [],
+	scrollToLine: jest.fn(),
+}));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
