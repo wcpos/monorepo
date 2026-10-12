@@ -146,6 +146,7 @@ export function OpenOrderTabs({
 					// On the blank cart the row keeps the carts beside the New tab: the last ones.
 					active: Math.min(activeIndex, entries.length - 1),
 					plus: fresh ? NEW_TAB_WIDTH : PLUS_WIDTH,
+					anchored: !fresh,
 				})
 			: { fits: true, start: 0, end: entries.length, tray: false, left: false, right: false };
 	// Only carts that could reach the row are measured: the row holds at most this many
@@ -191,6 +192,19 @@ export function OpenOrderTabs({
 			<View
 				testID="open-order-strip"
 				className="bg-card border-border h-13 flex-row items-stretch border-t"
+				// The arrow keys step from any tab, the + cell included: the handler sits on the
+				// strip, the one ancestor of them all.
+				onKeyDown={
+					Platform.OS === 'web'
+						? (event) => {
+								const key = event.nativeEvent.key;
+								if ((key === 'ArrowLeft' || key === 'ArrowRight') && !event.defaultPrevented) {
+									event.preventDefault();
+									step(key === 'ArrowLeft' ? -1 : 1);
+								}
+							}
+						: undefined
+				}
 				onLayout={({ nativeEvent: { layout } }) => {
 					setStrip((was) =>
 						was.y === layout.y && was.height === layout.height && was.width === layout.width
@@ -236,21 +250,7 @@ export function OpenOrderTabs({
 						<Icon name="chevronLeft" className="text-muted-foreground" />
 					</Pressable>
 				)}
-				<View
-					role="tablist"
-					className="min-w-0 flex-1 flex-row overflow-hidden"
-					onKeyDown={
-						Platform.OS === 'web'
-							? (event) => {
-									const key = event.nativeEvent.key;
-									if ((key === 'ArrowLeft' || key === 'ArrowRight') && !event.defaultPrevented) {
-										event.preventDefault();
-										step(key === 'ArrowLeft' ? -1 : 1);
-									}
-								}
-							: undefined
-					}
-				>
+				<View role="tablist" className="min-w-0 flex-1 flex-row overflow-hidden">
 					{entries.slice(window.start, window.end).map(renderTab)}
 					{/* The measuring row: the same tabs at their own width, off stage. It is never
 					    read by a cashier or a screen reader, only by the layout pass. */}
@@ -303,8 +303,16 @@ export function OpenOrderTabs({
 						testID="new-order-tab"
 						accessibilityLabel={t('pos_cart.new_order')}
 						ref={(node) => {
-							if (node) tabs.current.set('new', node);
-							else tabs.current.delete('new');
+							if (!node) {
+								tabs.current.delete('new');
+								return;
+							}
+							tabs.current.set('new', node);
+							// A step onto the blank cart settles its focus here, as a cart tab's does.
+							if (fresh && focusPending.current) {
+								focusPending.current = false;
+								focusTab(node);
+							}
 						}}
 						onPress={() => {
 							// Already there: + is a place, not an action.

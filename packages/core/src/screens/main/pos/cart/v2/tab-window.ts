@@ -41,6 +41,7 @@ export function tabWindow({
 	widths,
 	active,
 	plus = PLUS_WIDTH,
+	anchored = true,
 }: {
 	/** The strip's measured width. */
 	width: number;
@@ -50,6 +51,12 @@ export function tabWindow({
 	active: number;
 	/** The + cell's width: PLUS_WIDTH folded, NEW_TAB_WIDTH while it is the open tab. */
 	plus?: number;
+	/**
+	 * The open tab is a cart on the row (default): it is always shown, even alone. On the
+	 * blank cart the open tab is the + cell itself, so `active` is only the neighbour to keep
+	 * beside it, and the row may show no cart at all when none fits whole.
+	 */
+	anchored?: boolean;
 }): TabWindow {
 	const count = widths.length;
 	const row = width - plus;
@@ -83,6 +90,12 @@ export function tabWindow({
 				start -= 1;
 				grew = true;
 			}
+		}
+		// Not anchored and the neighbour itself does not fit whole: show no cart rather
+		// than a cut one; the arrow says the carts are there.
+		if (!anchored && widths[index] > available) {
+			start = index + 1;
+			end = index + 1;
 		}
 		const nextLeft = start > 0;
 		const nextRight = end < count;

@@ -223,8 +223,9 @@ it("the + cell is the blank cart's tab: it unfolds while the current order is ne
 	mockSetOrder.mockClear();
 	fireEvent.click(fresh);
 	expect(mockSetOrder).not.toHaveBeenCalled();
-	// A step left from the blank cart lands on the last cart.
-	fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+	// A step left from the blank cart lands on the last cart: the key fires on the New cell
+	// itself and reaches the strip's handler.
+	fireEvent.keyDown(fresh, { key: 'ArrowLeft' });
 	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
 	fireEvent.click(open);
 	expect(mockSetOrder).toHaveBeenLastCalledWith('open');
@@ -256,16 +257,24 @@ it('a step right from the last cart lands on the blank cart, and the row keeps t
 		mockCurrent = mockOpen[7].record;
 		const { rerender } = render(<OpenOrderTabs />);
 		layout(560);
-		fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+		fireEvent.keyDown(screen.getByTestId('open-order-tab-h'), { key: 'ArrowRight' });
 		expect(mockSetOrder).toHaveBeenLastCalledWith('');
 		mockCurrent = freshRecord();
 		rerender(<OpenOrderTabs />);
+		// The step's focus settles on the New cell once it is the open tab.
+		expect(document.activeElement).toBe(screen.getByTestId('new-order-tab'));
 		// The New tab is wider than the folded +, so one less cart fits; the window ends at h.
 		const shown = screen.getAllByTestId(/^open-order-tab-/).map((el) => el.dataset.testid);
 		expect(shown[shown.length - 1]).toBe('open-order-tab-h');
 		expect(screen.queryByTestId('scrollable-tabs-next')).toBeNull();
 		expect(screen.getByTestId('scrollable-tabs-prev')).not.toBeNull();
 		expect(screen.getByTestId('open-orders-count').textContent).toBe('8');
+		// Too narrow for even one whole cart beside the tray, the arrow and the New tab: the
+		// row shows no cart rather than a cut one; the arrow still steps back to h.
+		layout(273);
+		expect(screen.queryAllByTestId(/^open-order-tab-/)).toHaveLength(0);
+		fireEvent.click(screen.getByTestId('scrollable-tabs-prev'));
+		expect(mockSetOrder).toHaveBeenLastCalledWith('h');
 	} finally {
 		mockOpen = open;
 	}
