@@ -72,8 +72,8 @@ export function moneyRow({
 			<PriceWithTax price={price ?? ''} {...tax} taxDisplay="none" className="font-bold" />
 			{gridFields.on_sale && onSale && (
 				<>
-					<View className="bg-foreground h-[17px] justify-center self-center rounded-full px-1.5">
-						<Text className="text-card text-[11px] font-bold uppercase">{t('common.sale')}</Text>
+					<View className="bg-foreground self-center rounded-full px-1.5 py-px">
+						<Text className="text-card text-xs font-bold uppercase">{t('common.sale')}</Text>
 					</View>
 					<PriceWithTax
 						price={regularPrice ?? ''}
@@ -137,9 +137,9 @@ export function factsRow({
 	].filter(Boolean);
 	if (facts.length === 0) return null;
 	// Three lines at most: three lines of `text-xs` at the scale step's own line height, and the
-	// two 1 px gaps between them.
+	// two 1 px gaps between them (0.125 rem).
 	return (
-		<View className="max-h-[calc(3*var(--text-xs--line-height)+2px)] flex-row flex-wrap gap-x-2.5 gap-y-px overflow-hidden">
+		<View className="max-h-[calc(3*var(--text-xs--line-height)+0.125rem)] flex-row flex-wrap gap-x-2.5 gap-y-px overflow-hidden">
 			{facts}
 		</View>
 	);

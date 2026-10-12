@@ -7,6 +7,7 @@ import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
 import { Text } from '../text';
 import { Scrim } from './scrim';
+import { SCRIM_REACH } from './scrim-stops';
 import { type Tint, tintOf } from './tint-of';
 
 import type { ImageSource } from 'expo-image';
@@ -79,6 +80,8 @@ const TINTS = [
 	'bg-tile-tint-4',
 	'bg-tile-tint-5',
 ] as const;
+// The words sit the scrim's reach below its top edge, where the fade has reached full strength.
+const REACH = { paddingTop: SCRIM_REACH };
 // A tile the Deal has lifted off the grid: its copy is out on the stage.
 const LIFTED = { opacity: 0 };
 // An image that is already on screen and only changing place does not fade in again.
@@ -88,7 +91,7 @@ const NEAR = { top: 3, left: 3, right: -3, bottom: -3 };
 const FAR = { top: 6, left: 6, right: -6, bottom: -6, opacity: 0.6 };
 const CARD = 'bg-card border-border absolute rounded-lg border';
 const CIRCLE = 'bg-card border-border size-6 items-center justify-center rounded-full border';
-const PILL = 'h-[22px] flex-row items-center gap-1 rounded-full px-[7px]';
+const PILL = 'h-5.5 flex-row items-center gap-1 rounded-full px-2';
 
 function hasWords(...slots: React.ReactNode[]) {
 	return slots.some((slot) => slot != null && slot !== false && slot !== '');
@@ -267,14 +270,16 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						{words &&
 							(tint === null ? (
 								<Scrim
-									className="absolute right-0 bottom-0 left-0 gap-[2px] px-[10px] pt-[48px] pb-[10px]"
+									className="absolute right-0 bottom-0 left-0 gap-0.5 px-2.5 pb-2.5"
+									// The reach is the scrim's top padding: one constant for both.
+									style={REACH}
 									testID="poster-scrim"
 								>
 									{words}
 								</Scrim>
 							) : (
 								<View
-									className="absolute right-0 bottom-0 left-0 gap-[2px] p-[10px]"
+									className="absolute right-0 bottom-0 left-0 gap-0.5 p-2.5"
 									testID="poster-words"
 								>
 									{words}
