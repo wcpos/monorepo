@@ -103,6 +103,7 @@ export function NavigationAreaLayout({
 	screenTestID,
 	barTestID,
 	barNotice,
+	leafPagesCarryTitle = false,
 	children,
 }: {
 	items: NavigationAreaItem[];
@@ -112,6 +113,12 @@ export function NavigationAreaLayout({
 	screenTestID?: string;
 	barTestID?: string;
 	barNotice?: React.ReactNode;
+	/**
+	 * The area's leaf pages render their own large heading (`SettingsPage`), so on a phone the
+	 * bar shows only the way back: one title, the bigger one in the page (owner, 2026-10-13).
+	 * An area whose pages carry no heading yet (Health) keeps the bar title until they do.
+	 */
+	leafPagesCarryTitle?: boolean;
 	children: React.ReactNode;
 }) {
 	const { screenSize } = useTheme();
@@ -123,7 +130,7 @@ export function NavigationAreaLayout({
 		<>
 			<ManagementBar
 				testID={barTestID}
-				title={phoneLeaf ? current.label : areaLabel}
+				title={phoneLeaf ? (leafPagesCarryTitle ? undefined : current.label) : areaLabel}
 				back={
 					phoneLeaf
 						? {

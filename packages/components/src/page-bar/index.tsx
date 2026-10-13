@@ -12,7 +12,8 @@ import { StatusBadge, type StatusBadgeProps } from '../status-badge';
 import { Text } from '../text';
 
 export type PageBarProps = ViewProps & {
-	title: string;
+	/** Absent on a phone leaf page that carries its own heading (one title, not two). */
+	title?: string;
 	subtitle?: string;
 	status?: { label: string; variant?: StatusBadgeProps['variant']; testID?: string };
 	// A label, not a bare handler: an icon-only control carries no accessible name of
@@ -55,7 +56,9 @@ export function PageBar({
 			>
 				{(phone || onMenu) &&
 					(phone && back ? (
-						<Breadcrumb parents={[back]} testID={id('back')} />
+						// Flush with the bar's edge like the menu button: the crumb's own hit area is
+						// the inset (owner, 2026-10-13: "padding left of the back button").
+						<Breadcrumb parents={[back]} testID={id('back')} className="-ml-2" />
 					) : onMenu ? (
 						<IconButton
 							name="bars"
@@ -65,16 +68,18 @@ export function PageBar({
 							className="h-ctl w-ctl -ml-2 items-center justify-center"
 						/>
 					) : null)}
-				<View className="min-w-0 shrink">
-					<Text
-						testID={id('title')}
-						className="text-foreground font-semibold"
-						numberOfLines={1}
-						ellipsizeMode="tail"
-					>
-						{title}
-					</Text>
-				</View>
+				{title !== undefined && (
+					<View className="min-w-0 shrink">
+						<Text
+							testID={id('title')}
+							className="text-foreground font-semibold"
+							numberOfLines={1}
+							ellipsizeMode="tail"
+						>
+							{title}
+						</Text>
+					</View>
+				)}
 				{subtitle !== undefined && (
 					<Text
 						testID={id('subtitle')}

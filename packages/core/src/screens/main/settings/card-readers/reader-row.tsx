@@ -144,8 +144,9 @@ export function ReaderRow({
 	} else if (connecting) line = t('settings.card_readers.connecting_to', { name });
 	else if (!connected && sdkUi && reader)
 		line = t('settings.card_readers.saved_in_app', { title: method.title });
-	// Connected says so in the status chip, and a plain Connect button already means "not
-	// connected": neither state earns a third line (the Printers row has two).
+	// The state line is never blank (owner, 2026-10-13: a Connect button beside a Disconnect
+	// menu item read as "so is it connected or not?"): a remembered reader says it is not.
+	else if (!connected && reader) line = t('settings.card_readers.not_connected');
 
 	if (found)
 		below = (
@@ -371,19 +372,21 @@ export function ReaderRow({
 								name="ellipsisVertical"
 								variant="outline"
 								// The menu stays in place; with nothing to release or forget it is disabled.
-								disabled={sdkUi && !connected && !remembered}
+								disabled={!connected && !status.reader && !remembered}
 								testID={`reader-row-${method.id}-menu`}
 							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							{!connected && !sdkUi ? (
-								// The recovery for an SDK still holding a reader the app thinks is gone.
+							{!connected && !sdkUi && status.reader ? (
+								// The recovery for an SDK still holding a reader the app thinks is gone:
+								// offered only while the driver reports one held, and named for what it
+								// does, so it never contradicts the Connect button beside it.
 								<DropdownMenuItem
 									onPress={() => void actions.disconnect(method)}
 									testID={`reader-row-${method.id}-release`}
 								>
 									<Icon name="circleInfo" />
-									<Text>{t('settings.card_readers.disconnect')}</Text>
+									<Text>{t('settings.card_readers.release_reader')}</Text>
 								</DropdownMenuItem>
 							) : null}
 							{remembered || connected ? (

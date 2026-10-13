@@ -1320,6 +1320,8 @@
 	"settings.card_readers.tap_to_pay_body_android": "Take contactless payments with this phone",
 	"settings.card_readers.tap_to_pay_admin_only": "Ask an administrator to set this up",
 	"settings.card_readers.not_set_up": "Not set up",
+	"settings.card_readers.not_connected": "Not connected",
+	"settings.card_readers.release_reader": "Release the reader",
 	"settings.card_readers.set_up": "Set up",
 	"settings.card_readers.ready": "Ready",
 	"settings.card_readers.description": "Readers this phone can take card payments with.",

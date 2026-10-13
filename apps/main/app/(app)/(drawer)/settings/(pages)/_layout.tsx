@@ -24,6 +24,7 @@ export default function SettingsLayout() {
 			testID="settings-navigation"
 			screenTestID="settings-screen"
 			barTestID="settings-bar"
+			leafPagesCarryTitle
 			barNotice={
 				showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />
 			}
