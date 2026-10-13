@@ -188,6 +188,18 @@ export function useRecordManualPayment(
 			}
 			return outcome;
 		},
-		[ctx, http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[
+			ctx,
+			http,
+			forceOffline,
+			onlineStatus.status,
+			wpCredentials.id,
+			store,
+			storeCurrency,
+			storeDecimals,
+			localPatch,
+			manager,
+			t,
+		]
 	);
 }

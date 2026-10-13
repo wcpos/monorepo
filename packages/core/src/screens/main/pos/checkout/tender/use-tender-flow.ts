@@ -1325,6 +1325,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		payload.number,
 		service,
 		store,
+		currency,
 		wpCredentials,
 		t,
 		tiles,
