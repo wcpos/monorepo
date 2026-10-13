@@ -4,22 +4,25 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of, Subject } from 'rxjs';
-import { ObservableResource } from 'observable-hooks';
 
 import { OrdersScreen } from './index';
 
 import type { QueryStateOf } from '../../../../query';
 
-const mockBinding = {
-	resource: new ObservableResource(
-		new BehaviorSubject({ hits: [], searchActive: false, searchState: 'answered' })
-	),
-	active$: of(false),
-	total$: of(27),
-	sync: jest.fn(async () => undefined),
+// The orders query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+const answered = (hits: unknown[] = [], extra: Record<string, unknown> = {}) =>
+	fakeQueryHandle({
+		result: { hits, searchActive: false, searchState: 'answered', ...extra },
+		total: 27,
+	});
+let mockHandle: FakeHandle = answered();
+const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
 let mockPointer = 'fine';
 let mockSelected: string | undefined;
 let mockPhone = false;
@@ -34,8 +37,8 @@ jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
 
@@ -44,6 +47,7 @@ jest.mock('@wcpos/query', () => ({
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
+	queryHandleResults$: (handle: { observe(): unknown }) => handle.observe(),
 }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -156,7 +160,7 @@ jest.mock('../../hooks/use-referenced-customer-demand', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
+	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
 	if (!call) throw new Error('orders binding was not called');
 	return call[1] as QueryStateOf<'orders'>;
 }
@@ -183,12 +187,10 @@ describe('OrdersScreen query-state wiring', () => {
 			limit: 10,
 		});
 		expect(mockDataTableProps).toMatchObject({
-			resource: mockBinding.resource,
+			handle: mockHandle,
 			sort: { field: 'date_created_gmt', direction: 'desc' },
-			active$: mockBinding.active$,
-			total$: mockBinding.total$,
-			sync: mockBinding.sync,
 		});
+		expect(mockDataTableProps).not.toHaveProperty('resource');
 		expect(mockDataTableProps).not.toHaveProperty('query');
 	});
 
@@ -295,7 +297,7 @@ it('distinguishes empty baseline from no results and clears filters and search',
 	expect(latestState().filters).toEqual({ cashier: '7', store: '9' });
 });
 it('interleaves store-day headings only on date-created sort', () => {
-	const subject = new BehaviorSubject({
+	const subject = {
 		hits: [
 			{ id: 'one', record: { uuid: 'one', payload: { date_created_gmt: '2026-09-17T01:00:00' } } },
 			{ id: 'two', record: { uuid: 'two', payload: { date_created_gmt: '2026-09-16T23:00:00' } } },
@@ -306,9 +308,9 @@ it('interleaves store-day headings only on date-created sort', () => {
 		],
 		searchActive: false,
 		searchState: 'answered',
-	});
-	const original = mockBinding.resource;
-	mockBinding.resource = new ObservableResource(subject) as typeof original;
+	};
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({ result: subject, total: 27 });
 	try {
 		const { unmount } = render(<OrdersScreen />);
 		expect(screen.getAllByTestId(/^orders-day-heading-/).map((n) => n.dataset.testid)).toEqual([
@@ -331,50 +333,92 @@ it('interleaves store-day headings only on date-created sort', () => {
 		expect(screen.queryAllByTestId(/^orders-day-heading-/)).toHaveLength(0);
 		unmount();
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 it('uses the orders skeleton while the binding resource is unresolved', () => {
-	const original = mockBinding.resource;
-	mockBinding.resource = new ObservableResource(new Subject()) as typeof original;
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({ ready: false });
 	try {
 		const { unmount } = render(<OrdersScreen />);
 		expect(screen.getByTestId('skeleton-orders')).toBeTruthy();
 		expect(screen.queryByTestId('orders-table')).toBeNull();
 		unmount();
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
+it('keeps the current rows, not the skeleton, while a changed query’s handle answers, then shows its rows', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	const row = (id: string) => ({
+		id,
+		record: { uuid: id, payload: { number: id, date_created_gmt: '2026-09-17T01:00:00' } },
+	});
+	mockHandle = fakeQueryHandle({
+		result: { hits: [row('one')], searchActive: false, searchState: 'answered' },
+		total: 27,
+	});
+	try {
+		render(<OrdersScreen />);
+		expect(screen.getByTestId('orders-row-one')).toBeTruthy();
+		// The query changes (a header sort): the screen asks for a new handle, unanswered.
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		act(() =>
+			(
+				mockDataTableProps.actions as { setSort: (field: string, direction: string) => void }
+			).setSort('total', 'asc')
+		);
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith(
+			'orders',
+			expect.objectContaining({ sort: { field: 'total', direction: 'asc' } })
+		);
+		// The old rows stay; no skeleton.
+		expect(screen.getByTestId('orders-row-one')).toBeTruthy();
+		expect(screen.queryByTestId('skeleton-orders')).toBeNull();
+		await act(async () =>
+			next.set({
+				ready: true,
+				result: { hits: [row('two')], searchActive: false, searchState: 'answered' },
+			})
+		);
+		expect(screen.getByTestId('orders-row-two')).toBeTruthy();
+		expect(screen.queryByTestId('orders-row-one')).toBeNull();
+	} finally {
+		mockHandle = original;
+	}
+});
+
 it('keeps rows and shows the searching line only for pending results with rows', () => {
-	const original = mockBinding.resource;
-	const source = new BehaviorSubject({
+	const original = mockHandle;
+	const source = {
 		hits: [
 			{ id: 'one', record: { uuid: 'one', payload: { date_created_gmt: '2026-09-17T01:00:00' } } },
 		],
 		searchActive: true,
 		searchState: 'pending',
-	});
-	mockBinding.resource = new ObservableResource(source) as typeof original;
+	};
+	mockHandle = fakeQueryHandle({ result: source, total: 27 });
 	try {
 		const { unmount } = render(<OrdersScreen />);
 		expect(screen.getByTestId('orders-searching-line')).toBeTruthy();
 		expect(screen.getByTestId('orders-table')).toBeTruthy();
-		act(() => source.next({ ...source.value, hits: [] }));
+		act(() => mockHandle.set({ result: { ...source, hits: [] } }));
 		expect(screen.queryByTestId('orders-searching-line')).toBeNull();
 		unmount();
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
 
 it('navigates from the actual focused coarse row, skipping headings, then opens and escapes', () => {
 	mockPointer = 'coarse';
-	const original = mockBinding.resource;
-	const source = new BehaviorSubject({
+	const original = mockHandle;
+	const source = {
 		hits: ['one', 'two', 'three'].map((id, index) => ({
 			id,
 			record: {
@@ -384,8 +428,8 @@ it('navigates from the actual focused coarse row, skipping headings, then opens 
 		})),
 		searchActive: false,
 		searchState: 'answered',
-	});
-	mockBinding.resource = new ObservableResource(source) as typeof original;
+	};
+	mockHandle = fakeQueryHandle({ result: source, total: 27 });
 	try {
 		const { unmount } = render(<OrdersScreen />);
 		const row = screen.getByTestId('orders-row-two');
@@ -398,7 +442,7 @@ it('navigates from the actual focused coarse row, skipping headings, then opens 
 		expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
 		unmount();
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
 
@@ -494,14 +538,15 @@ it('slides the pane out of the right edge, and a closing pane keeps its order un
 it('ignores reselecting the same row and returns focus there when the pane closes', () => {
 	mockPointer = 'coarse';
 	mockSelected = 'one';
-	const original = mockBinding.resource;
-	mockBinding.resource = new ObservableResource(
-		new BehaviorSubject({
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({
+		result: {
 			hits: [{ id: 'one', record: { uuid: 'one', payload: { number: '1' } } }],
 			searchActive: false,
 			searchState: 'answered',
-		})
-	) as unknown as typeof original;
+		},
+		total: 27,
+	});
 	try {
 		render(<OrdersScreen />);
 		fireEvent.click(screen.getByTestId('orders-row-one'));
@@ -510,7 +555,7 @@ it('ignores reselecting the same row and returns focus there when the pane close
 		expect(mockSetParams).toHaveBeenCalledWith({ order: undefined });
 		expect(document.activeElement?.getAttribute('aria-selected')).toBe('true');
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
 
