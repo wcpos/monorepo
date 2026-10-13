@@ -8,13 +8,19 @@ import { Image } from '../image';
 import { Text } from '../text';
 import { PosterBand } from './band';
 import { Scrim } from './scrim';
-import { POSTER_BAND, SCRIM_REACH } from './scrim-stops';
+import { POSTER_BAND, SCRIM_BLUR_RADIUS, SCRIM_REACH } from './scrim-stops';
 import { type Tint, tintOf } from './tint-of';
 
 import type { ImageSource } from 'expo-image';
 
 export { POSTER_BAND, PosterBand, tintOf, type Tint };
-export { SCRIM_REACH, SCRIM_STOPS, SCRIM_STRENGTH } from './scrim-stops';
+export {
+	SCRIM_BLUR_RADIUS,
+	SCRIM_REACH,
+	SCRIM_STOPS,
+	SCRIM_STRENGTH,
+	scrimStopsFor,
+} from './scrim-stops';
 
 export type PosterPicture =
 	| {
@@ -27,7 +33,15 @@ export type PosterPicture =
 			onError?: () => void;
 	  }
 	/** The caller renders the picture itself (a product's attachment handling, its probes). */
-	| { kind: 'slot'; children: React.ReactNode }
+	| {
+			kind: 'slot';
+			children: React.ReactNode;
+			/**
+			 * The same picture, blurred (`blurRadius={SCRIM_BLUR_RADIUS}`), for the native scrim's
+			 * frosted fade; web never mounts it. Without one, native draws the tint alone.
+			 */
+			blurred?: React.ReactNode;
+	  }
 	| { kind: 'tint'; tint: Tint }
 	| { kind: 'mosaic'; sources: ImageSource[] };
 
@@ -91,6 +105,8 @@ const REACH = { paddingTop: SCRIM_REACH };
 const LIFTED = { opacity: 0 };
 // An image that is already on screen and only changing place does not fade in again.
 const STILL = { transition: 0 };
+// The native scrim's blurred copy of the picture: blurred at decode, and never fading in on its own.
+const BLURRED = { blurRadius: SCRIM_BLUR_RADIUS, transition: 0 };
 // The two cards under a stacked tile, inside the 8 px the two `m-1` margins leave between tiles.
 const NEAR = { top: 3, left: 3, right: -3, bottom: -3 };
 const FAR = { top: 6, left: 6, right: -6, bottom: -6, opacity: 0.6 };
@@ -114,6 +130,27 @@ const MOSAIC: number[][][] = [
 	],
 ];
 
+function Mosaic({ sources, blurred }: { sources: ImageSource[]; blurred?: boolean }) {
+	const four = sources.slice(0, 4);
+	return (
+		<View className="bg-border h-full w-full flex-row gap-0.5">
+			{MOSAIC[four.length].map((column, index) => (
+				<View key={index} className="flex-1 gap-0.5">
+					{column.map((at) => (
+						<Image
+							key={at}
+							source={four[at]}
+							contentFit="cover"
+							className="w-full flex-1"
+							{...(blurred ? BLURRED : {})}
+						/>
+					))}
+				</View>
+			))}
+		</View>
+	);
+}
+
 function Picture({ picture }: { picture: PosterPicture }) {
 	switch (picture.kind) {
 		case 'image':
@@ -130,20 +167,35 @@ function Picture({ picture }: { picture: PosterPicture }) {
 			);
 		case 'slot':
 			return <>{picture.children}</>;
-		case 'mosaic': {
-			const sources = picture.sources.slice(0, 4);
+		case 'mosaic':
+			return <Mosaic sources={picture.sources} />;
+		default:
+			return null;
+	}
+}
+
+/** Whether the picture has a blurred twin for the native scrim: a tint has nothing to blur. */
+function hasTwin(picture: PosterPicture) {
+	return picture.kind === 'slot' ? picture.blurred != null : picture.kind !== 'tint';
+}
+
+/** The picture's blurred twin: the slot owner's, or the same image or mosaic built blurred. */
+function BlurredPicture({ picture }: { picture: PosterPicture }) {
+	switch (picture.kind) {
+		case 'image':
 			return (
-				<View className="bg-border h-full w-full flex-row gap-0.5">
-					{MOSAIC[sources.length].map((column, index) => (
-						<View key={index} className="flex-1 gap-0.5">
-							{column.map((at) => (
-								<Image key={at} source={sources[at]} contentFit="cover" className="w-full flex-1" />
-							))}
-						</View>
-					))}
-				</View>
+				<Image
+					source={picture.source}
+					recyclingKey={picture.recyclingKey && `${picture.recyclingKey}:blur`}
+					contentFit="cover"
+					className="h-full w-full"
+					{...BLURRED}
+				/>
 			);
-		}
+		case 'slot':
+			return <>{picture.blurred}</>;
+		case 'mosaic':
+			return <Mosaic sources={picture.sources} blurred />;
 		default:
 			return null;
 	}
@@ -285,6 +337,18 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									// The reach is the scrim's top padding: one constant for both.
 									style={REACH}
 									testID="poster-scrim"
+									// Native only: the square's own layers again, blurred, on the card (what web's
+									// backdrop-filter sees), so an out tile and a press read the same through it.
+									blur={
+										hasTwin(picture) ? (
+											<View className="bg-card h-full w-full">
+												<View className={`h-full w-full ${out ? 'opacity-40' : ''}`}>
+													<BlurredPicture picture={picture} />
+												</View>
+												{pressed && <View className={VEIL} />}
+											</View>
+										) : null
+									}
 								>
 									{words}
 								</Scrim>

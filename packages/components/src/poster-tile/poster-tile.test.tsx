@@ -8,6 +8,7 @@ import {
 	type PosterTileProps,
 	SCRIM_REACH,
 	SCRIM_STOPS,
+	scrimStopsFor,
 } from './index';
 
 let mockPressed = false;
@@ -137,6 +138,41 @@ it('blurs the picture under the words on web, masked by the same fade, and not o
 	);
 	rerender(tile({ picture: { kind: 'tint', tint: 1 }, title: 'Tea' }));
 	expect(screen.queryByTestId('poster-scrim-blur')).toBeNull();
+});
+
+it('never mounts the blurred twin on web: backdrop-filter already blurs the picture', () => {
+	const { container, rerender } = render(
+		tile({
+			picture: {
+				kind: 'slot',
+				children: <span data-testid="sharp" />,
+				blurred: <span data-testid="twin" />,
+			},
+			title: 'Tea',
+		})
+	);
+	expect(screen.getByTestId('sharp')).toBeTruthy();
+	expect(screen.queryByTestId('twin')).toBeNull();
+	expect(screen.getByTestId('poster-scrim-blur')).toBeTruthy();
+	// The twin the tile builds for an image is not mounted either: one picture, the sharp one.
+	rerender(tile({ title: 'Tea' }));
+	expect(container.querySelectorAll('[data-image="tea.jpg"]')).toHaveLength(1);
+});
+
+it('gives native one list of scrim stops: thirteen and the plateau, clamped to the block', () => {
+	const tall = scrimStopsFor(SCRIM_REACH * 2);
+	expect(tall).toHaveLength(14);
+	// The fade ends halfway down a block twice the reach; the plateau is the bottom edge.
+	expect(tall[12]).toEqual({ offset: 0.5, of: 1 });
+	expect(tall[13]).toEqual({ offset: 1, of: 1 });
+	expect(scrimStopsFor(SCRIM_REACH)[13]).toEqual({ offset: 1, of: 1 });
+	// A block shorter than the reach: the fade's tail is clamped to its foot, never past it.
+	const short = scrimStopsFor(SCRIM_REACH / 2);
+	expect(short).toHaveLength(14);
+	expect(short.every(({ offset }) => offset >= 0 && offset <= 1)).toBe(true);
+	expect(short[12].offset).toBe(1);
+	expect(short.map(({ of }) => of)).toEqual([...SCRIM_STOPS.map(([, of]) => of), 1]);
+	expect(scrimStopsFor(0)).toEqual([]);
 });
 
 it('puts the words straight on a tint, with the tint’s class and no scrim', () => {
