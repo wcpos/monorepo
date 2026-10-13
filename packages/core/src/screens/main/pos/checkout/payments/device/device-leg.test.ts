@@ -549,6 +549,16 @@ it('a resumed pending row the store has captured is paid, not lost', async () =>
 	});
 	expect(c.leg.getState().outcome).toBe('captured');
 });
+it('a resumed pending row recorded offline asks no store and ends lost', async () => {
+	const c = setup(false, true, undefined, { ...row, recorded_offline: true });
+	await c.leg.start();
+	expect(c.get).not.toHaveBeenCalled();
+	expect(c.post).not.toHaveBeenCalled();
+	expect(c.mirror).toHaveBeenCalledWith({
+		payment: expect.objectContaining({ status: 'failed', failure_reason: 'reader_session_lost' }),
+	});
+	expect(c.leg.getState().outcome).toBe('failed');
+});
 it('lost pending sessions fail locally without restarting the driver', async () => {
 	const c = setup(false, true);
 	await c.leg.start();

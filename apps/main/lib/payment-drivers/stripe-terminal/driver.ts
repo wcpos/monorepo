@@ -326,8 +326,11 @@ export function createStripeTerminalDriver({
 				// held across a JS reload, Pixel 10, 2026-10-13): the status then says connected
 				// with no reader, and the pay sheet re-discovers (drops and re-pairs) it. Adopt
 				// the reader as soon as the hook carries it.
-				if (status.connection === 'connected' && !status.reader && api.connectedReader)
+				if (status.connection === 'connected' && !status.reader && api.connectedReader) {
+					// The reader carries its own transport; the module's may still be the default.
+					transport = api.connectedReader.deviceType === 'tapToPay' ? 'tap_to_pay' : 'bluetooth';
 					connected(api.connectedReader);
+				}
 				bindings.forEach((bind) => bind(api));
 			} else lastMethodId = undefined;
 		},

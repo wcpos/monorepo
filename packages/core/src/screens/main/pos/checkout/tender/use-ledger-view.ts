@@ -10,7 +10,7 @@ import {
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
 import { buildTenderTiles, type TenderTile } from './tiles';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -33,7 +33,8 @@ export function useLedgerView(
 ): LedgerView & { format: (minor: number) => string } {
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store } = useStoreSession();
-	const dp = store.price_num_decimals ?? 2;
+	// The latest store document, not the session's snapshot (see use-tender-flow).
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const rows = readLedger(payload.meta_data);

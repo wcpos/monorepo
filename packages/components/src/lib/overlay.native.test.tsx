@@ -4,7 +4,14 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 import { render, screen } from '@testing-library/react';
 
 import { EASE, EASE_EXIT } from './motion';
-import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
+import {
+	OVERLAY_MOTION,
+	OVERLAY_PANEL,
+	type OverlayPresentation,
+	OverlayShell,
+	useOverlay,
+	useSheetInset,
+} from './overlay';
 
 const mockViews: ViewProps[] = [];
 const mockScrimProps: PressableProps[] = [];
@@ -139,6 +146,8 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 			accessibilityElementsHidden: true,
 		});
 		expect(scrim.onPress).toBeUndefined();
+		// Not blocking: the primitives' Overlay dismisses on a press, so the scrim keeps its touches.
+		expect(scrim.pointerEvents).toBeUndefined();
 		expect(scrim.style).toBe(StyleSheet.absoluteFill);
 		// A bottom sheet paints its own bottom inset (OverlaySheetPanel), so the shell leaves
 		// that strip unpadded: no scrim bar under the sheet.
@@ -188,6 +197,37 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
 	}
 );
+
+it('takes no touches on a blocking scrim (a confirmation)', () => {
+	render(
+		<OverlayShell presentation="center" open Scrim={Pressable} blocking testID="c">
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.pointerEvents).toBe('none');
+});
+
+it.each([
+	['bottom', { paddingBottom: 34 + 16 }],
+	['center', undefined],
+] as const)('pads only a native bottom sheet with the inset (%s)', (presentation, expected) => {
+	const seen: unknown[] = [];
+	function InsetProbe() {
+		seen.push(useSheetInset(16));
+		return null;
+	}
+	render(
+		<OverlayShell presentation={presentation} open Scrim={Pressable}>
+			<InsetProbe />
+		</OverlayShell>
+	);
+	expect(seen.at(-1)).toEqual(expected);
+});
+
+it('caps the native sheet on the wrappers, so its panel only fills them', () => {
+	expect(OVERLAY_PANEL.bottom).toContain('max-h-full');
+	expect(OVERLAY_PANEL.bottom).not.toContain('max-h-[92%]');
+});
 
 it('keeps anchored native content full-bleed and reachable without keyboard or inset layout', () => {
 	render(

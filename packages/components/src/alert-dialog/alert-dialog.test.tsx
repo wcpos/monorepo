@@ -7,6 +7,7 @@ import { View, type ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DeviceScope } from '../lib/device';
+import * as overlay from '../lib/overlay';
 import * as C from './index';
 jest.mock('@rn-primitives/alert-dialog', () => {
 	const Context = React.createContext({ open: false, onOpenChange: (_open: boolean) => {} });
@@ -75,6 +76,29 @@ it('renders the phone confirm and footer hairline', () => {
 	render(<Confirm phone />);
 	expect(screen.getByTestId('panel')).toHaveClass('w-full rounded-t-2xl web:animate-sheet-in');
 	expect(screen.getByTestId('footer')).toHaveClass('border-t');
+});
+it('is a blocking confirmation whose phone sheet pads the bottom inset', () => {
+	// The native answers live in the shell (`lib/overlay.native.test.tsx`); this pins the wiring.
+	const Shell = overlay.OverlayShell;
+	const shell = jest
+		.spyOn(overlay, 'OverlayShell')
+		.mockImplementation((props) => <Shell {...props} />);
+	const inset = jest.spyOn(overlay, 'useSheetInset').mockReturnValue({ paddingBottom: 50 });
+	// This harness's View drops `style`, so read it where the primitive Content receives it.
+	const content = jest.spyOn(jest.requireMock('@rn-primitives/alert-dialog'), 'Content');
+	try {
+		render(<Confirm phone />);
+		expect(shell).toHaveBeenLastCalledWith(expect.objectContaining({ blocking: true }), undefined);
+		expect(inset).toHaveBeenLastCalledWith(16, 'bottom');
+		expect(content).toHaveBeenLastCalledWith(
+			expect.objectContaining({ style: { paddingBottom: 50 } }),
+			undefined
+		);
+	} finally {
+		shell.mockRestore();
+		inset.mockRestore();
+		content.mockRestore();
+	}
 });
 it('calls the user cancel handler before dismissing', () => {
 	const onCancel = jest.fn(() => expect(screen.getByTestId('panel')).toBeInTheDocument());

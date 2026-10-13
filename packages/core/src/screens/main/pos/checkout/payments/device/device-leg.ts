@@ -161,8 +161,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			} else if (input.resume) {
 				// A pending row the till minted online may already be settled on the store: the
 				// provider's webhook can land before the till's own capture. Ask the store before
-				// calling the session lost; an unreachable store leaves the answer below.
-				if (!input.offline && (await settledOnStore())) return;
+				// calling the session lost; an unreachable store leaves the answer below. A row
+				// recorded offline has no store row to ask (a resume is never `input.offline`).
+				if (!state.row.recorded_offline && (await settledOnStore())) return;
 				const lost = {
 					t: new Date(deps.now()).toISOString(),
 					level: 'error' as const,

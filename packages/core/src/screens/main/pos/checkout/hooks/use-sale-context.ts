@@ -16,6 +16,8 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 	const sessions = useRegisterSessionCollection();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
+	// The latest store document, not the session's snapshot (see use-tender-flow).
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
@@ -36,7 +38,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			sessions,
 			sessionsOn,
 			runtime,
-			dp: store.price_num_decimals ?? 2,
+			dp,
 			actor,
 			actionCtx,
 			actionActor,
@@ -49,7 +51,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			storeDB,
 			site.uuid,
 			store.id,
-			store.price_num_decimals,
+			dp,
 			sessions,
 			sessionsOn,
 			runtime,

@@ -55,7 +55,7 @@ export type OverlayScrimProps = {
 	accessible?: boolean;
 	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
 	accessibilityElementsHidden?: boolean;
-	/** Native: a scrim that cannot dismiss takes no touches (see OverlayShell). */
+	/** Native: a blocking scrim takes no touches (see `OverlayShellProps.blocking`). */
 	pointerEvents?: 'auto' | 'none';
 	onPress?: (event: GestureResponderEvent) => void;
 };
@@ -83,6 +83,11 @@ export type OverlayShellProps = {
 	 * whose target went with the layer; a touch it leaves to the click, which lands here.
 	 */
 	onOutsidePress?: () => void;
+	/**
+	 * A confirmation: the scrim takes no touches on native; on web the panel sits inside the
+	 * scrim, so it keeps taking clicks.
+	 */
+	blocking?: boolean;
 	pinned?: boolean;
 	testID?: string;
 	children: React.ReactNode;
@@ -101,6 +106,21 @@ export function useOverlay(): OverlayContextValue {
 }
 export function useOverlayPresentation(): OverlayPresentation | undefined {
 	return React.useContext(OverlayContext)?.presentation;
+}
+/**
+ * The bottom inset a native phone sheet paints itself, in card colour: the shell leaves that
+ * strip unpadded so the scrim never shows as a bar under the sheet (owner, 2026-10-13).
+ * `padding` is the panel's own bottom padding on top of the inset. A panel that renders the
+ * shell itself (the alert) is outside the shell's context and names its presentation.
+ */
+export function useSheetInset(
+	padding: number,
+	presentation?: OverlayPresentation
+): { paddingBottom: number } | undefined {
+	const insets = useSafeAreaInsets();
+	const current = useOverlayPresentation();
+	if (isWeb || (presentation ?? current) !== 'bottom') return undefined;
+	return { paddingBottom: insets.bottom + padding };
 }
 /**
  * Web: Radix mounts an auto-sized `role="dialog"` wrapper between the scrim and the panel.
@@ -142,7 +162,9 @@ export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
 	// `max-w-full`: the phone sheet is the phone's width, whatever cap an anchored caller set
 	// (`max-w-80` on the variations popover left a 280 dp sheet, Pixel 2026-10-06).
-	bottom: 'bg-card border-border w-full max-w-full max-h-full rounded-t-2xl border-t p-2',
+	// Native caps the sheet on the shell's wrappers (a percentage on the panel resolved against
+	// its own content); web has no such wrapper for a `[data-sheet]`, so the panel keeps the cap.
+	bottom: `bg-card border-border w-full max-w-full ${isWeb ? 'max-h-[92%]' : 'max-h-full'} rounded-t-2xl border-t p-2`,
 };
 export const OVERLAY_MOTION: Record<
 	OverlayPresentation,
@@ -208,9 +230,7 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
-	// The phone sheet paints the bottom inset itself, in card colour: the shell leaves that
-	// strip unpadded so the scrim never shows as a grey bar under the sheet (owner, 2026-10-13).
-	const insets = useSafeAreaInsets();
+	const inset = useSheetInset(8);
 	const setNode = React.useCallback(
 		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);
@@ -238,7 +258,7 @@ export function OverlaySheetPanel({
 				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
 				'z-50'
 			)}
-			style={[isWeb ? null : { paddingBottom: insets.bottom + 8 }, style]}
+			style={[inset, style]}
 		>
 			{children}
 		</View>
@@ -270,8 +290,18 @@ const keyOwners: object[] = [];
  * keyed on `open` runs, and that effect would never re-run.
  */
 export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
-	const { ref, presentation, open, Scrim, onDismiss, onOutsidePress, pinned, testID, children } =
-		props;
+	const {
+		ref,
+		presentation,
+		open,
+		Scrim,
+		onDismiss,
+		onOutsidePress,
+		blocking,
+		pinned,
+		testID,
+		children,
+	} = props;
 	const insets = useSafeAreaInsets();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -482,12 +512,12 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				accessible={false}
 				importantForAccessibility="no"
 				accessibilityElementsHidden
-				// A scrim that cannot dismiss (a confirmation) must never take a touch: on
-				// Android a plain full-screen View above the panel swallows every tap, and a
+				// A confirmation's scrim (`blocking`) must never take a touch: on Android a
 				// scrim given its own z-index (the alert's `z-70`) ends up above the panel's
-				// wrapper. Measured on a Pixel 10, 2026-10-13 (Restore server settings: Cancel
-				// and Confirm dead).
-				pointerEvents={onDismiss || onOutsidePress ? 'auto' : 'none'}
+				// wrapper and swallows every tap. Measured on a Pixel 10, 2026-10-13 (Restore
+				// server settings: Cancel and Confirm dead). Every other scrim dismisses on a
+				// press (the primitives' Overlay), so it keeps its touches.
+				pointerEvents={blocking && !isWeb ? 'none' : undefined}
 				testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 			/>
 			<KeyboardAvoidingView

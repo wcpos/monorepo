@@ -94,7 +94,8 @@ export function useRecordManualPayment(
 					});
 					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
 				},
-				currency: storeCurrency,
+				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
+				currency: payload.currency || storeCurrency,
 				dp: storeDecimals,
 				patchAndEnqueue: async (changes) => {
 					const result = await localPatch({ document: order, data: changes });

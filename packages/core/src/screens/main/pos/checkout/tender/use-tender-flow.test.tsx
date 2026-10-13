@@ -210,6 +210,7 @@ const methods: PaymentMethodDescriptor[] = [cash, card, noDriver];
 let mockPayload: {
 	id?: number;
 	number?: string;
+	currency?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
 	billing?: { email?: string; phone?: string };
@@ -1222,6 +1223,22 @@ describe('server tender', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(result.current.state.view).toBe('amount');
 	});
+	it.each([
+		['USD', 'USD'],
+		[undefined, 'EUR'],
+	])(
+		'mints in the order currency (%s), the store currency only when it has none',
+		async (orderCurrency, minted) => {
+			// The store document says EUR; a saved cart opened in USD keeps USD.
+			mockPayload = { ...mockPayload, currency: orderCurrency };
+			const { result } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('terminal'));
+			await act(async () => result.current.takeTender());
+			expect(mockBegin).toHaveBeenCalledWith(
+				expect.objectContaining({ row: expect.objectContaining({ currency: minted }) })
+			);
+		}
+	);
 	it.each(['reader', 'order'] as const)('refuses Take without %s', async (missing) => {
 		if (missing === 'order') delete mockPayload.id;
 		const { result } = renderHook(() => useTenderFlow(order));

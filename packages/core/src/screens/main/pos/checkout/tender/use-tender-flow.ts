@@ -240,8 +240,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// an RxDB document instance is immutable, so after Settings → General changes the currency
 	// (or Restore server settings does) the snapshot still says the old one and a payment is
 	// minted in a currency the order no longer has ("Payment currency must match the order",
-	// Pixel 10, 2026-10-13).
-	const currency = useDocField(store, (value) => value.currency) ?? '';
+	// Pixel 10, 2026-10-13). The order's own currency wins: the store refuses a payment in any
+	// other, and a saved cart keeps the currency it was opened in.
+	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
+	const currency = payload.currency || storeCurrency;
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();

@@ -4,7 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -25,7 +25,8 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
 	const { store } = useStoreSession();
-	const dp = store.price_num_decimals ?? 2;
+	// The latest store document, not the session's snapshot (see use-tender-flow).
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 
 	return React.useCallback(
 		async (order) => {

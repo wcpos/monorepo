@@ -15,7 +15,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useFinishSale } from './use-finish-sale';
@@ -125,12 +125,12 @@ function ReceiptStageDocument({
 	const payload = useRecordField(order, (record) => record.payload);
 	const { methods } = usePaymentMethods();
 	const { store } = useStoreSession();
+	// The latest store document, not the session's snapshot (see use-tender-flow).
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const t = useT();
 	const rows = readLedger(payload.meta_data);
-	const derived = derive(payload.total, rows, methods, {
-		dp: store.price_num_decimals ?? 2,
-	});
+	const derived = derive(payload.total, rows, methods, { dp });
 	// A split sale names every method that took money, in ledger order; `derive` only
 	// reports the primary one.
 	const settledRows = rows.filter(

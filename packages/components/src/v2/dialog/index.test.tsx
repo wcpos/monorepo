@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import { Input } from '../../input';
 import { DeviceScope } from '../../lib/device';
 import { PANEL_SLIDE } from '../../lib/motion';
+import * as overlay from '../../lib/overlay';
 import { registerPortalContainer } from '../../lib/portal-container';
 import {
 	Dialog,
@@ -140,6 +141,7 @@ jest.mock('@rn-primitives/dialog', () => {
 	function Content({
 		testID,
 		className,
+		style,
 		children,
 		onOpenAutoFocus,
 		onInteractOutside,
@@ -160,7 +162,13 @@ jest.mock('@rn-primitives/dialog', () => {
 			autofocus.current?.(event as unknown as Event);
 		}, [open]);
 		return open ? (
-			<div role="dialog" data-testid={testID} className={className} ref={ref}>
+			<div
+				role="dialog"
+				data-testid={testID}
+				className={className}
+				style={style as React.CSSProperties}
+				ref={ref}
+			>
 				{children}
 			</div>
 		) : null;
@@ -390,8 +398,8 @@ it.each([
 	['center', 'rounded-lg', 'w-160'],
 	['right', 'border-l', 'h-full'],
 	['left', 'border-r', 'h-full'],
-	// The sheet keeps its native cap; on web the Radix wrapper carries it and the panel fills it.
-	['bottom', 'rounded-t-2xl', 'max-h-[92%] web:max-h-full'],
+	// The wrappers carry the sheet's cap (web: the Radix wrapper; native: the shell's); the panel fills it.
+	['bottom', 'rounded-t-2xl', 'max-h-full'],
 ] as const)(
 	'5. %s has its presentation classes and honours only applicable sizes',
 	(side, edge, sizing) => {
@@ -638,4 +646,22 @@ it('13. a press on a toast does not dismiss the dialog under it; any other outsi
 	expect(onToast.preventDefault).toHaveBeenCalled();
 	expect(elsewhere.preventDefault).not.toHaveBeenCalled();
 	expect(onInteractOutside).toHaveBeenCalledTimes(2);
+});
+
+it('14. a bottom sheet pads the bottom inset the shell leaves (native answer: lib/overlay.native.test)', () => {
+	const inset = jest.spyOn(overlay, 'useSheetInset').mockReturnValue({ paddingBottom: 50 });
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" side="bottom">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(inset).toHaveBeenLastCalledWith(16);
+		expect(screen.getByTestId('d')).toHaveStyle({ paddingBottom: '50px' });
+		expect(screen.getByTestId('d')).not.toHaveClass('max-h-[92%]');
+	} finally {
+		inset.mockRestore();
+	}
 });
