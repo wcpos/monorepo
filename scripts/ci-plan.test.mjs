@@ -430,3 +430,18 @@ test('missing base and non-PR events return the everything-plan', () => {
 		);
 	}
 });
+
+for (const file of [
+	'apps/template-studio/src/template-loader.ts',
+	'apps/template-studio/src/__tests__/studio-paths.test.ts',
+	'apps/template-studio/package.json',
+	'apps/template-studio/vite.config.ts',
+]) {
+	test(`template studio selects its unit lane: ${file}`, () => {
+		const plan = planFor([file], { commentOnly: false });
+		assert.equal(plan.unit, 'template-studio');
+		assert.equal(plan.lint, true);
+		assert.equal(plan.web, 'none');
+		assert.equal(plan.native, 'none');
+	});
+}
