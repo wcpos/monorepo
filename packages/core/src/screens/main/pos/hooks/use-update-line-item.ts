@@ -285,8 +285,12 @@ export const useUpdateLineItem = () => {
 
 				// The server restores stock per item from `_reduced_stock` on a cancel or refund, so the
 				// new lines share it in whole units, in order, the rest riding on the last: the sum holds.
+				// A value that reads as nothing (zero, negative, unreadable) is dropped from every half.
 				let reduced = reducedStockQuantity(lineItemToSplit);
-				const splitLineItems = !reduced
+				const hasReducedMeta = (lineItemToSplit.meta_data ?? []).some(
+					(meta) => meta.key === '_reduced_stock'
+				);
+				const splitLineItems = !hasReducedMeta
 					? newLineItems // never reduced: split as before
 					: newLineItems.map((line, index) => {
 							const last = index === newLineItems.length - 1;

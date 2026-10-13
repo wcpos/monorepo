@@ -628,6 +628,8 @@ describe('useUpdateLineItem', () => {
 		{ quantity: 2, reduced: '5', expected: ['1', '4'] },
 		{ quantity: 2, reduced: 5, expected: [1, 4] },
 		{ quantity: 2.5, reduced: '2', expected: ['1', '1', undefined] },
+		{ quantity: 2, reduced: '-2', expected: [undefined, undefined] },
+		{ quantity: 2, reduced: 'abc', expected: [undefined, undefined] },
 		{ quantity: 3, reduced: undefined, expected: [undefined, undefined, undefined] },
 	])(
 		'splits a line of $quantity sharing _reduced_stock $reduced as $expected',
