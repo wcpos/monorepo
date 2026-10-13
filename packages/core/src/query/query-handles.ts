@@ -28,7 +28,7 @@ import {
 	acquireQueryHandle,
 	createDemand,
 	createQueryHandle,
-	declareRequirements,
+	type Demand,
 	type DemandPlan,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
@@ -39,12 +39,11 @@ import {
 	type QueryHandleSpec,
 	type QueryResult,
 	type QuerySnapshot,
-	releaseHandles,
 	useLocalQuery$,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
 import {
@@ -86,8 +85,10 @@ let nextHandleId = 0;
  * (`relatedIds`), which may not be resident. A READ declares nothing (roadmap#423 R3), so the
  * targeted requirement is held only while the handle is OWNED; a reader that outlives the owner
  * (a deferred handle drawn while the next query loads) keeps the local read and asks nothing.
- * When the named set changes the new set is declared BEFORE the old is released, so the engine
- * never sees a moment with neither. Results pass through unchanged.
+ * Each named set is one `createDemand` (started before the previous is stopped, so the engine
+ * never sees a moment with neither; a refused declaration gets the demand's own one retry, so a
+ * transient failure cannot leave a parent missing until the set changes). Results pass through
+ * unchanged.
  */
 function declareRelatedWhileOwned(
 	engine: RxdbSyncEngine,
@@ -100,16 +101,17 @@ function declareRelatedWhileOwned(
 			let owned = false;
 			let ids: number[] = [];
 			let declaredKey = '';
-			let handles: RequirementHandle[] = [];
+			let demand: Demand | null = null;
 			const sync = () => {
 				const wanted = owned ? [...ids].sort((a, b) => a - b) : [];
 				const key = wanted.join(',');
 				if (key === declaredKey) return;
-				const previous = handles;
-				handles = key
-					? declareRequirements(
+				const previous = demand;
+				demand = key
+					? createDemand(
 							engine,
-							requirementsForCompiledQuery(
+							id,
+							demandPlanFor(
 								compileQuery(
 									'products',
 									{
@@ -118,13 +120,13 @@ function declareRelatedWhileOwned(
 										sort: { field: 'id', direction: 'asc' },
 									},
 									{ id, targeted: wanted, searchFields }
-								).demand,
-								{ id }
+								)
 							)
 						)
-					: [];
+					: null;
 				declaredKey = key;
-				releaseHandles(previous);
+				demand?.start();
+				previous?.stop();
 			};
 			const ownership = owned$.subscribe((next) => {
 				owned = next;
@@ -143,8 +145,8 @@ function declareRelatedWhileOwned(
 			return () => {
 				subscription.unsubscribe();
 				ownership.unsubscribe();
-				releaseHandles(handles);
-				handles = [];
+				demand?.stop();
+				demand = null;
 			};
 		});
 }

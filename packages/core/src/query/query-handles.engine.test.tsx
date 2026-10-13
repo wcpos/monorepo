@@ -2571,6 +2571,48 @@ describe('query handles over the engine', () => {
 		expect(targetedEvents(0).filter((event) => event.startsWith('release:'))).toHaveLength(2);
 	});
 
+	it('asks again for the parents a refused targeted fetch left missing', async () => {
+		await engineDB.collections.variations.insert(
+			engineVariation({ uuid: 'orphan-1', id: 991, parent_id: 99, sku: 'blue-orphan' })
+		);
+		// The first targeted ask is refused (a transient wire failure); the engine never retries
+		// a refused requirement on its own.
+		const require = engine.require.bind(engine);
+		let refused = 0;
+		engine.require = (requirement) => {
+			const handle = require(requirement);
+			if (requirement.kind !== 'targeted-records' || refused > 0) return handle;
+			refused += 1;
+			const ready = Promise.reject(new Error('offline'));
+			ready.catch(() => undefined);
+			return { ...handle, ready };
+		};
+		const targetedEvents = () =>
+			engine.demandEvents.filter((event) => event.endsWith(':targeted-records'));
+		renderHook(
+			() =>
+				useProductsQueryHandle({
+					search: 'blue',
+					filters: { categories: [], tags: [], brands: [] },
+					sort: { field: 'name', direction: 'asc' },
+					limit: 20,
+				}),
+			{ wrapper: Provider }
+		);
+		await waitFor(() => expect(targetedEvents()).toEqual(['require:targeted-records']));
+		// Catches: a declared set remembered past its refusal (Greptile on #2510) — the same ids
+		// are asked for again, after the demand's one retry backoff, with the refused ask released.
+		await waitFor(
+			() =>
+				expect(targetedEvents()).toEqual([
+					'require:targeted-records',
+					'release:targeted-records',
+					'require:targeted-records',
+				]),
+			{ timeout: 2000 }
+		);
+	});
+
 	it('a reader outliving the owner keeps the rows and asks for no parents', async () => {
 		await engineDB.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
 		await engineDB.collections.variations.bulkInsert([
