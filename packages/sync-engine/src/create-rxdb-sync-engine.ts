@@ -908,6 +908,7 @@ export function createRxdbSyncEngine(
 		})();
 		response = await hydrateResponse(response, {
 			envelopeRequested: !requestRoute.split('/').includes('push'),
+			signal: init?.signal,
 			transportState: responseEnvelopeTransport,
 			onDiagnostic: (kind) =>
 				diagnostics({

@@ -15,6 +15,8 @@ export type HydrateResponseOptions = {
 	envelopeRequested: boolean;
 	transportState?: ResponseEnvelopeTransportState;
 	onDiagnostic?: (kind: 'divergent' | 'unreadable') => void;
+	/** The request's own signal: a body that fails to parse after it aborted was cut short by the abort. */
+	signal?: AbortSignal | null;
 };
 type Envelope = { data: unknown; _wcpos: ResponseEnvelopeMetadata };
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -83,6 +85,11 @@ function wrapResponse(
 		},
 	});
 }
+const abortReason = (signal: AbortSignal): unknown =>
+	signal.reason instanceof Error
+		? signal.reason
+		: new DOMException('The operation was aborted.', 'AbortError');
+
 /** Unwrap opted-in metadata; unrequested traffic returns untouched without reading its body. */
 export async function hydrateResponse(
 	response: Response,
@@ -98,8 +105,14 @@ export async function hydrateResponse(
 	try {
 		parsed = JSON.parse(rawText) as unknown;
 	} catch (error) {
+		// expo's Android fetch (57.0.14) completes the body after a cancel, so an
+		// abort that lands once the headers are in leaves text() resolving with
+		// whatever had arrived — usually nothing — where WHATWG fetch rejects with
+		// the abort. Report it as the abort it was, so a superseded search reads
+		// as released rather than as a failed load (SYNC321).
+		const failure = options.signal?.aborted === true ? abortReason(options.signal) : error;
 		return wrapResponse(response, {
-			json: () => Promise.reject(error),
+			json: () => Promise.reject(failure),
 			text: rawText,
 		});
 	}
