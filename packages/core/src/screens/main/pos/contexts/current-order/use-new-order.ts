@@ -36,8 +36,8 @@ export type DefaultCustomerResource = ReturnType<
  * load-bearing. Its only caller, `CurrentOrderProvider`, renders inside the `Suspense` that
  * `(pos)/_layout.tsx` puts around it — so a resource built here would be discarded with the
  * aborted render and rebuilt by every retry, which never ends (#1707). Built in the layout,
- * which commits alongside the fallback, the retry reads back the same resource. This is the
- * shape `useOpenOrdersResource` already uses, for the same reason.
+ * which commits alongside the fallback, the retry reads back the same resource. The layout
+ * owns the open-orders handle (`useOpenOrdersHandle`) above the same boundary, for the same reason.
  */
 export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) => {
 	const { store, wpCredentials, site } = useStoreSession();

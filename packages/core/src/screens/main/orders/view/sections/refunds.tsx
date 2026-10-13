@@ -3,16 +3,16 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import toNumber from 'lodash/toNumber';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { refundValue } from '@wcpos/order-math';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { Section } from './_section';
 import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
+import { useQuerySnapshot } from '../../../../../query/query-handles';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 import { WCRefund } from '../use-order-refunds';
@@ -194,15 +194,19 @@ export function RefundsFallback({
 function RefundsDetail({
 	order,
 	orderUuid,
-	resource,
+	handle,
 }: {
 	order: OrderPayload;
 	orderUuid: string;
-	resource: ObservableResource<WCRefund[]>;
+	handle: QueryHandle;
 }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
-	const refunds = useObservableSuspense(resource);
+	// Suspends on this section's own boundary while the order's handle has no answer: an order
+	// switch is a new handle, so the previous order's refunds are never drawn under it.
+	const { hits } = useQuerySnapshot(handle, ['hits']);
+	// Already newest first: the read sorts on `date_created_gmt`.
+	const refunds = hits.map(({ record }) => record.payload as WCRefund);
 
 	if (!refunds.length) return null;
 
@@ -234,14 +238,14 @@ function RefundsDetail({
 export function RefundsSection({
 	order,
 	orderUuid,
-	resource,
+	handle,
 }: {
 	order: OrderPayload;
 	orderUuid: string;
-	resource?: ObservableResource<WCRefund[]>;
+	handle?: QueryHandle;
 }) {
-	if (!order.id || !resource) {
+	if (!order.id || !handle) {
 		return null;
 	}
-	return <RefundsDetail order={order} orderUuid={orderUuid} resource={resource} />;
+	return <RefundsDetail order={order} orderUuid={orderUuid} handle={handle} />;
 }

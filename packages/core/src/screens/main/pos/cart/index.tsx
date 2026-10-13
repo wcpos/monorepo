@@ -11,6 +11,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
 import { Text } from '@wcpos/components/text';
 
+import { useRegisterSurface } from '../../../../extensions/commands/use-register-surface';
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useEngineRecord } from '../../hooks/use-engine-document';
@@ -18,6 +19,7 @@ import { CheckoutLedger } from './checkout-ledger';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
+import { useVoidOrder } from '../hooks/use-void-order';
 import { CartTable } from './v2/table';
 import { EmptyCart } from './v2/empty-cart';
 import { CartFoot } from './v2/foot';
@@ -98,6 +100,10 @@ function CartColumn({
 	const { currentOrderRecord } = useCurrentOrder();
 	// Keep the sheet mounted on its original order while a send changes the open-order list.
 	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
+	// `pos.cart.void` runs the void path while the cart column is mounted, sheet open or not; a
+	// void from a key closes the sheet first, as the sheet's own Void button does (roadmap#428).
+	const { voidOrder } = useVoidOrder({ onBeforeVoid: () => setEditingOrder(null) });
+	useRegisterSurface('void', voidOrder);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);

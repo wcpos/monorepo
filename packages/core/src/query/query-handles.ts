@@ -13,7 +13,6 @@ import * as React from 'react';
 
 import {
 	auditTime,
-	combineLatest,
 	defer,
 	distinctUntilChanged,
 	exhaustMap,
@@ -29,7 +28,7 @@ import {
 	acquireQueryHandle,
 	createDemand,
 	createQueryHandle,
-	declareRequirements,
+	type Demand,
 	type DemandPlan,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
@@ -40,12 +39,11 @@ import {
 	type QueryHandleSpec,
 	type QueryResult,
 	type QuerySnapshot,
-	releaseHandles,
 	useLocalQuery$,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
-import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
 import {
@@ -83,51 +81,74 @@ export function demandPlanFor(compiled: CompiledQuery): DemandPlan {
 let nextHandleId = 0;
 
 /**
- * The parents of the variations a search matched: a read that must ask the engine for the
- * parent records it may not hold. The ask (a targeted requirement) is made only while the
- * handle is OWNED; a reader that outlives the owner (a deferred handle drawn while the next
- * query loads) keeps the local read and declares nothing (roadmap#423: readers never declare).
+ * The one demand the relational read makes: the parents its matching children named
+ * (`relatedIds`), which may not be resident. A READ declares nothing (roadmap#423 R3), so the
+ * targeted requirement is held only while the handle is OWNED; a reader that outlives the owner
+ * (a deferred handle drawn while the next query loads) keeps the local read and asks nothing.
+ * Each named set is one `createDemand` (started before the previous is stopped, so the engine
+ * never sees a moment with neither; a refused declaration gets the demand's own one retry, so a
+ * transient failure cannot leave a parent missing until the set changes). Results pass through
+ * unchanged.
  */
-function observeParentLookup(
+function declareRelatedWhileOwned(
 	engine: RxdbSyncEngine,
 	id: string,
-	parentIds: number[],
 	searchFields: string[] | undefined,
 	owned$: Observable<boolean>
-): Observable<ProductsResult> {
-	if (parentIds.length === 0) return of(emptyResult());
-	return new Observable<ProductsResult>((subscriber) => {
-		const descriptor: EngineQueryDescriptor = {
-			collection: 'products',
-			selector: { id: { $in: parentIds } },
-			searchFields,
-		};
-		const compiled = compileQuery(
-			'products',
-			{
-				search: '',
-				filters: { categories: [], brands: [], tags: [] },
-				sort: { field: 'id', direction: 'asc' },
-			},
-			{ id, targeted: parentIds, searchFields }
-		);
-		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
-		let handles: RequirementHandle[] = [];
-		const ownership = owned$.subscribe((owned) => {
-			if (owned && handles.length === 0) {
-				handles = declareRequirements(engine, requirements);
-			} else if (!owned && handles.length > 0) {
-				releaseHandles(handles);
-				handles = [];
-			}
+): (source: Observable<ProductsResult>) => Observable<ProductsResult> {
+	return (source) =>
+		new Observable<ProductsResult>((subscriber) => {
+			let owned = false;
+			let ids: number[] = [];
+			let declaredKey = '';
+			let demand: Demand | null = null;
+			const sync = () => {
+				const wanted = owned ? [...ids].sort((a, b) => a - b) : [];
+				const key = wanted.join(',');
+				if (key === declaredKey) return;
+				const previous = demand;
+				demand = key
+					? createDemand(
+							engine,
+							id,
+							demandPlanFor(
+								compileQuery(
+									'products',
+									{
+										search: '',
+										filters: { categories: [], brands: [], tags: [] },
+										sort: { field: 'id', direction: 'asc' },
+									},
+									{ id, targeted: wanted, searchFields }
+								)
+							)
+						)
+					: null;
+				declaredKey = key;
+				demand?.start();
+				previous?.stop();
+			};
+			const ownership = owned$.subscribe((next) => {
+				owned = next;
+				sync();
+			});
+			const subscription = source.subscribe({
+				next: (result) => {
+					// Rows first: a declaration the engine refuses (torn down) must not swallow them.
+					subscriber.next(result);
+					ids = result.relatedIds ?? [];
+					sync();
+				},
+				error: (error) => subscriber.error(error),
+				complete: () => subscriber.complete(),
+			});
+			return () => {
+				subscription.unsubscribe();
+				ownership.unsubscribe();
+				demand?.stop();
+				demand = null;
+			};
 		});
-		const subscription = observeEngineQuery(engine, descriptor).subscribe(subscriber);
-		return () => {
-			subscription.unsubscribe();
-			ownership.unsubscribe();
-			releaseHandles(handles);
-		};
-	});
 }
 
 export type ProductsHandleInput = {
@@ -153,88 +174,37 @@ export function acquireProductsQueryHandle(
 			id: `${id}:parent`,
 			searchFields: parentSearchFields,
 		});
+		const search = compiled.read.search;
+		const statusSelector = state.filters.status ? { status: state.filters.status } : {};
+		// The relation is always present; the engine ignores it without a term.
 		const descriptor: EngineQueryDescriptor = {
 			collection: 'products',
 			read: compiled.read,
 			searchFields: parentSearchFields,
-		};
-		const search = compiled.read.search;
-		const demands = [createDemand(engine, `${id}:parent`, demandPlanFor(compiled))];
-		let result$: QueryHandleSpec<ProductsResult>['result$'];
-		if (!search) {
-			result$ = (target) => observeEngineQuery(target, descriptor);
-		} else {
-			const childDescriptor: EngineQueryDescriptor = {
+			relation: {
 				collection: 'variations',
-				selector: state.filters.status ? { status: state.filters.status } : {},
-				sort: [{ id: 'asc' }],
-				search,
+				parentKey: 'parent_id',
+				selector: statusSelector,
 				searchFields: childSearchFields,
-			};
+			},
+		};
+		const demands = [createDemand(engine, `${id}:parent`, demandPlanFor(compiled))];
+		if (search) {
 			const childCompiled = compileQuery(
 				'variations',
 				{
 					search,
-					filters: {
-						attributeMatches: [],
-						...(state.filters.status ? { status: state.filters.status } : {}),
-					},
+					filters: { attributeMatches: [], ...statusSelector },
 					sort: { field: 'id', direction: 'asc' },
 				},
 				{ id: `${id}:child`, searchFields: childSearchFields }
 			);
 			demands.push(createDemand(engine, `${id}:child`, demandPlanFor(childCompiled)));
-			result$ = (target, owned$) => {
-				const direct$ = observeEngineQuery(target, {
-					...descriptor,
-					read: { ...compiled.read, limit: undefined },
-				});
-				const children$ = observeEngineQuery(target, childDescriptor);
-				return combineLatest([direct$, children$]).pipe(
-					switchMap(([direct, children]) => {
-						const counts = new Map<number, number>();
-						for (const hit of children.hits) {
-							const parentId = Number(hit.record.payload.parent_id);
-							if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
-						}
-						const parentIds = [...counts.keys()];
-						// The union is an ANSWER only once both search legs have answered —
-						// a pending leg means the merged rows are still provisional (#1733).
-						const searchAnswered =
-							direct.searchState === 'answered' && children.searchState === 'answered';
-						return observeParentLookup(
-							target,
-							`${id}:lookup`,
-							parentIds,
-							descriptor.searchFields,
-							owned$
-						).pipe(map((lookup) => ({ direct, lookup, counts, searchAnswered })));
-					}),
-					switchMap(({ direct, lookup, counts, searchAnswered }) => {
-						const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
-						return observeEngineQuery(target, {
-							...descriptor,
-							read: { ...compiled.read, search: '' },
-							selector: { uuid: { $in: uuids } },
-						}).pipe(
-							map((result) => ({
-								...result,
-								searchActive: true,
-								searchState: searchAnswered ? ('answered' as const) : ('pending' as const),
-								hits: result.hits.map((hit) => {
-									const wooId = Number(hit.record.payload.id);
-									return {
-										...hit,
-										childrenSearchCount: counts.get(wooId) ?? 0,
-										parentSearchTerm: search,
-									};
-								}),
-							}))
-						);
-					})
-				);
-			};
 		}
+		const result$: QueryHandleSpec<ProductsResult>['result$'] = (target, owned$) =>
+			observeEngineQuery(target, descriptor).pipe(
+				declareRelatedWhileOwned(target, `${id}:lookup`, parentSearchFields, owned$)
+			);
 		return createQueryHandle(
 			engine,
 			{

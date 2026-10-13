@@ -43,6 +43,19 @@ const logger = getLogger(['wcpos', 'registerSession']);
 // still close; the closure then carries the fallback and the parent arrives later.
 const REFUND_PARENT_WAIT_MS = 15_000;
 
+/** Whether now is past today's `HH:MM` close time; no or unreadable close time is never past. */
+function isPastClose(closeTime: string | null | undefined) {
+	const [hour, minute] = String(closeTime ?? '')
+		.split(':')
+		.map(Number);
+	if (!closeTime || !Number.isFinite(hour) || !Number.isFinite(minute)) return false;
+	const now = new Date();
+	return (
+		now.getTime() >
+		new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute).getTime()
+	);
+}
+
 export function useRegisterSession() {
 	const missingParentKey = React.useRef('');
 	const anchorInvalidationPending = React.useRef(false);
@@ -216,10 +229,9 @@ export function useRegisterSession() {
 			closed$,
 			movements.find().$,
 			accounting$,
-			timer(0, 60_000),
 			closures.find({ selector: { register_id: binding.registerId } }).$,
 		]).pipe(
-			map(([active, closed, entries, accounting, , closureRows]) => ({
+			map(([active, closed, entries, accounting, closureRows]) => ({
 				sessions,
 				registerId: binding.registerId,
 				active,
@@ -240,6 +252,20 @@ export function useRegisterSession() {
 		accountingChanges,
 	]);
 	const observed = useObservableState(source, null);
+	// The clock is not in the data stream: there it re-rendered every consumer once a minute
+	// with nothing changed (roadmap#423). This stream emits only when the verdict flips.
+	const pastClose$ = React.useMemo(
+		() =>
+			timer(0, 60_000).pipe(
+				map(() => isPastClose(closeTime)),
+				distinctUntilChanged()
+			),
+		[closeTime]
+	);
+	// The subscription only schedules the render at the flip; the verdict is read fresh below,
+	// so a close time changed mid-session never renders the previous close time's verdict for
+	// the tick before the new stream emits.
+	useObservableState(pastClose$, () => isPastClose(closeTime));
 	const data =
 		observed?.sessions === sessions && observed?.registerId === binding.registerId && sessionsOn
 			? observed
@@ -305,16 +331,7 @@ export function useRegisterSession() {
 			? session.server_expected
 			: deriveExpected(drawerInput!)
 		: {};
-	const now = new Date();
-	const [hour, minute] = String(closeTime ?? '')
-		.split(':')
-		.map(Number);
-	const overdue =
-		!!session &&
-		session.status === 'open' &&
-		!!closeTime &&
-		now.getTime() >
-			new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute).getTime();
+	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
 		/**

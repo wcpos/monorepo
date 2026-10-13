@@ -21,6 +21,7 @@ import { AddFee } from './add-fee';
 import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
 import { useT } from '../../../../contexts/translations';
+import { useRegisterSurface } from '../../../../extensions/commands/use-register-surface';
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
@@ -35,6 +36,8 @@ export function AddCartItemsMenu() {
 	const isPro = license?.isPro ?? false;
 	const { caps } = useUserCapabilities();
 	const [openDialog, setOpenDialog] = React.useState<DialogType>(null);
+	// `pos.cart.discount` opens the same dialog while the menu is mounted (roadmap#428).
+	useRegisterSurface('discount', () => setOpenDialog('discount'));
 
 	return (
 		<>

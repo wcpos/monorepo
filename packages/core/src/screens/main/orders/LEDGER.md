@@ -66,3 +66,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 ## v1 screen deleted (added 2026-10-13)
 
 `index.tsx` (the v1 `OrdersScreen`), `filter-bar.tsx`, `ui-settings-form.tsx` and their tests are deleted: the route mounts `v2/` (roadmap#423, R8). The lines stand on `v2/`; no line is struck.
+
+## Refunds read is a query handle (added 2026-10-13)
+
+The order detail's refunds read (`view/use-order-refunds.ts`) is a query handle (roadmap#423): one read of the refunds whose parent is the order, sorted newest first by the read itself, with a forced `refunds-by-parent` pull standing while `RefundsBoundary` owns it. The key carries BOTH scope keys (`useScopeKey('refunds')`, `useScopeKey('orders')`) and the order id, so an order switch or a reset of either collection is a new handle, declared before the old one releases. Retry is `handle.retry()` + `handle.declareOnce()` on the boundary's `onReset` (`resetKeys={[handle]}`); the `refundsRetryKey` remount is gone. Lines 37–39 stand on the handle; line 38's resource-replacement mechanism is superseded by the key (same guarantee) — evidence: `view/use-order-refunds.suspense.test.tsx` over the real handle and a fake engine.
+
+One owner component, `view/refunds-boundary.tsx` (`RefundsBoundary`), serves the modal and the pane; its `onReset` acts only on the fallback's Retry (`details.reason === 'imperative-api'`), since a keys-driven reset already holds a new handle with its own forced pull.

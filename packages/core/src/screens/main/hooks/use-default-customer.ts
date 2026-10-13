@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { useObservable } from 'observable-hooks';
 import { map, switchMap } from 'rxjs/operators';
 
@@ -44,7 +46,15 @@ export const useDefaultCustomer = () => {
 
 	// The resource the readers suspend on, owned here: its read (a reader of the customers
 	// handle) starts when this commits and is destroyed on unmount, Strict Mode replay included.
-	const defaultCustomerResource = useOwnedResource(defaultCustomer$);
+	const { resource: defaultCustomerResource, retry: retryResource } =
+		useOwnedResource(defaultCustomer$);
 
-	return { defaultCustomer$, defaultCustomerResource };
+	// The owner's ErrorBoundary reset: ask the customers handle again (withdrawing its failure
+	// first), then read the resource again, so the remounted readers suspend on the new answer.
+	const retry = React.useCallback(() => {
+		handle.retry();
+		retryResource();
+	}, [handle, retryResource]);
+
+	return { defaultCustomer$, defaultCustomerResource, retry };
 };

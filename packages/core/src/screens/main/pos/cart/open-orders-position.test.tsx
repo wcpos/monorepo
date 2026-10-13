@@ -3,9 +3,10 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrders } from './index';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../extensions/commands/surfaces';
 
 let mockPosition = 'bottom';
 let mockIsNew = false;
@@ -48,8 +49,24 @@ jest.mock('../conditions/use-cart-conditions', () => ({
 }));
 jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
 jest.mock('./v2/empty-cart', () => ({ EmptyCart: () => <div data-testid="cart-empty" /> }));
-jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));
-jest.mock('./v2/order-sheet', () => ({ OrderSheet: () => null }));
+jest.mock('./v2/foot', () => ({
+	CartFoot: ({ onOpenSheet }: { onOpenSheet: () => void }) => (
+		<div data-testid="checkout-button" onClick={onOpenSheet} />
+	),
+}));
+jest.mock('./v2/order-sheet', () => ({
+	OrderSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="order-sheet" /> : null),
+}));
+const mockVoidOrder = jest.fn();
+jest.mock('../hooks/use-void-order', () => ({
+	useVoidOrder: ({ onBeforeVoid }: { onBeforeVoid?: () => void }) => ({
+		voidOrder: async () => {
+			onBeforeVoid?.();
+			mockVoidOrder();
+		},
+		storageDegraded: false,
+	}),
+}));
 jest.mock('./v2/tabs', () => ({
 	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => Promise<void> }) => (
 		<button data-testid="open-orders" onClick={() => void onCoverChange(true)} />
@@ -171,4 +188,21 @@ it('takes the covered cart out of the tab order and the accessibility tree while
 	expect(body.hasAttribute('inert')).toBe(true);
 	// The strip itself stays reachable: it is how the list is closed.
 	expect(body.contains(screen.getByTestId('open-orders'))).toBe(false);
+});
+
+it('registers the void path as the void surface while the column is mounted, sheet closed or open (roadmap#428)', async () => {
+	mockIsNew = false;
+	mockStage = 'cart';
+	mockVoidOrder.mockClear();
+	const { unmount } = render(<OpenOrders isColumn />);
+	await act(() => invokeSurface('void'));
+	expect(mockVoidOrder).toHaveBeenCalledTimes(1);
+	// With the sheet open, the surface closes it before the void, as the sheet's button does.
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(screen.getByTestId('order-sheet')).toBeTruthy();
+	await act(() => invokeSurface('void'));
+	expect(screen.queryByTestId('order-sheet')).toBeNull();
+	expect(mockVoidOrder).toHaveBeenCalledTimes(2);
+	unmount();
+	await expect(invokeSurface('void')).rejects.toBeInstanceOf(SurfaceNotMountedError);
 });

@@ -1,9 +1,10 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { PayButton } from './pay';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
 let mockSize = 'lg';
 let mockLoaded = true;
@@ -250,4 +251,13 @@ describe('a checkout condition is unmet (roadmap#62)', () => {
 		await waitFor(() => expect(mockEnter).toHaveBeenCalledWith('order-1'));
 		expect(mockScrollToLine).not.toHaveBeenCalled();
 	});
+});
+
+it('registers its pay path as the checkout surface while mounted (roadmap#428)', async () => {
+	const { unmount } = render(<PayButton />);
+	await act(() => invokeSurface('pay'));
+	expect(mockMarkSaving).toHaveBeenCalledWith('order-1');
+	expect(mockEnter).toHaveBeenCalledWith('order-1');
+	unmount();
+	await expect(invokeSurface('pay')).rejects.toBeInstanceOf(SurfaceNotMountedError);
 });
