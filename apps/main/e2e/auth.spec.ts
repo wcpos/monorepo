@@ -10,17 +10,13 @@ test.describe('Connect Screen', () => {
 		});
 	});
 
-	test('should display the URL input and connect button', async ({ page }) => {
+	test('connect form controls and URL enablement', async ({ page }) => {
 		await expect(page.getByTestId('store-url-input')).toBeVisible();
 		await expect(page.getByTestId('connect-store-button')).toBeVisible();
 		await expect(page.getByTestId('enter-demo-store-button')).toBeVisible();
-	});
 
-	test('should have the connect button disabled when URL is empty', async ({ page }) => {
 		await expect(page.getByTestId('connect-store-button')).toBeDisabled();
-	});
 
-	test('should enable the connect button when a URL is entered', async ({ page }) => {
 		await page.getByTestId('store-url-input').fill('https://example.com');
 		await expect(page.getByTestId('connect-store-button')).toBeEnabled();
 	});
@@ -34,7 +30,7 @@ test.describe('Connect Screen', () => {
 		});
 	});
 
-	test('should connect to store and show site card', async ({ page }, testInfo) => {
+	test('discover store and show add-user action', async ({ page }, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
 		const urlInput = page.getByTestId('store-url-input');
 		await urlInput.click();
@@ -48,19 +44,7 @@ test.describe('Connect Screen', () => {
 		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
 			timeout: 60_000,
 		});
-	});
 
-	test('should show add user button after store discovery', async ({ page }, testInfo) => {
-		const storeUrl = getStoreUrl(testInfo);
-		const urlInput = page.getByTestId('store-url-input');
-		await urlInput.click();
-		await urlInput.fill(storeUrl);
-		await page.waitForTimeout(1_000);
-
-		await page.getByTestId('connect-store-button').click();
-		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-			timeout: 60_000,
-		});
 		await expect(page.getByTestId('add-user-button')).toBeVisible();
 	});
 });

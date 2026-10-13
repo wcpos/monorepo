@@ -100,20 +100,6 @@ function countEventStreamSubscriptions(target: RxCollection<Shape>): { count: ()
 }
 
 describe('useRecordField', () => {
-	it('delivers the current value synchronously on first render', async () => {
-		const document = await insertRow();
-		const seen: (string | undefined)[] = [];
-
-		function Probe({ record }: { record: RxDocument<Shape> }) {
-			const total = useRecordField(record, (row) => row.payload.total);
-			seen.push(total);
-			return <>{total}</>;
-		}
-
-		render(<Probe record={document} />);
-		expect(seen[0]).toBe('10.00');
-	});
-
 	it('re-renders for a selected-field change and dedupes unselected-field writes', async () => {
 		const document = await insertRow();
 		const renders = jest.fn();
@@ -125,6 +111,7 @@ describe('useRecordField', () => {
 		}
 
 		render(<Probe record={document} />);
+		expect(renders.mock.calls[0]?.[0]).toBe('10.00');
 		const after_mount = renders.mock.calls.length;
 
 		await writePayload(document, { note: 'changed' }); // unselected field

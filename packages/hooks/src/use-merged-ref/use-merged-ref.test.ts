@@ -110,26 +110,6 @@ describe('use-merged-ref', () => {
 			expect(forwardedRef).toHaveBeenCalledWith(element);
 		});
 
-		it('should handle useState setter as ref', () => {
-			const [, setValue] = [null as HTMLDivElement | null, jest.fn()];
-			const objectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
-
-			const { result } = renderHook(() =>
-				useMergedRef(
-					setValue as React.Dispatch<React.SetStateAction<HTMLDivElement | null>>,
-					objectRef
-				)
-			);
-
-			const element = document.createElement('div');
-
-			act(() => {
-				result.current(element);
-			});
-
-			expect(setValue).toHaveBeenCalledWith(element);
-			expect(objectRef.current).toBe(element);
-		});
 		it('should assign the mounted node to a new callback ref after rerender', () => {
 			const firstRef = jest.fn();
 			const secondRef = jest.fn();

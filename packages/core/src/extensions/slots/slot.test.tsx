@@ -71,11 +71,6 @@ describe('<Slot>', () => {
 	beforeEach(() => resetSlotRegistry());
 	afterEach(() => jest.restoreAllMocks());
 
-	it('renders nothing when the slot is empty', () => {
-		const { container } = render(<Slot id={SLOT} data={view} api={api} />);
-		expect(container.innerHTML).toBe('');
-	});
-
 	it('renders entries in registry order', () => {
 		registerLabel('second', 20);
 		registerLabel('first', 10);

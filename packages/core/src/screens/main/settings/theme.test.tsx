@@ -52,7 +52,7 @@ beforeEach(() => {
 });
 
 describe('the Scale row', () => {
-	it('offers exactly the four steps, each with its own testID', () => {
+	it('offers four scale steps with Auto selected by default', () => {
 		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
 		['auto', 'compact', 'regular', 'spacious'].forEach((option) => {
@@ -60,13 +60,6 @@ describe('the Scale row', () => {
 		});
 		expect(getAllByTestId(/^settings-scale-(auto|compact|regular|spacious)$/)).toHaveLength(4);
 		expect(getByRole('radiogroup').querySelectorAll('[role="radio"]')).toHaveLength(4);
-	});
-
-	// Absent means Auto: a store that has never had the field set still shows the
-	// group on Auto rather than on nothing.
-	it('shows Auto when the store has no stored step', () => {
-		const { getByTestId } = render(<ThemeSettings />);
-
 		expect(getByTestId('settings-scale-auto').getAttribute('aria-checked')).toBe('true');
 	});
 

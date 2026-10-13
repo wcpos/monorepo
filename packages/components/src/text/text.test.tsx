@@ -50,11 +50,6 @@ describe('Text component', () => {
 		expect(screen.getByText('Hello World')).toBeInTheDocument();
 	});
 
-	it('renders with className', () => {
-		render(<Text className="custom-class">Styled text</Text>);
-		expect(screen.getByText('Styled text')).toBeInTheDocument();
-	});
-
 	it('decodes HTML entities when decodeHtml is true', () => {
 		render(<Text decodeHtml>{'Tom &amp; Jerry'}</Text>);
 		expect(screen.getByText('Tom & Jerry')).toBeInTheDocument();

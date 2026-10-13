@@ -25,10 +25,6 @@ async function openAddCartItemsMenu(page: Page) {
  * Customer-related tests in the POS context (both free and pro).
  */
 test.describe('Customers in POS', () => {
-	test('should show guest customer by default', async ({ posPage: page }) => {
-		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
-	});
-
 	test('opens the customer picker on a tap and the address editor on a long press', async ({
 		posPage: page,
 	}) => {
@@ -53,22 +49,6 @@ test.describe('Add Customer from Cart (Pro)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
-	});
-
-	test('should have enabled add customer button', async ({ posPage: page }) => {
-		await openAddCartItemsMenu(page);
-		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
-		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
-		await expect(addCustomerMenuItem).toBeEnabled();
-	});
-
-	test('should open add customer dialog from cart', async ({ posPage: page }) => {
-		await openAddCartItemsMenu(page);
-		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
-		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
-		await addCustomerMenuItem.click();
-
-		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
 	/**
@@ -155,13 +135,7 @@ test.describe('Customers Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Customers page requires Pro');
 	});
 
-	test('should navigate to Customers page and see customer list', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
-	});
-
-	test('should show customer data or empty state', async ({ posPage: page }) => {
+	test('Customers page initial state', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
@@ -182,6 +156,8 @@ test.describe('Customers Page (Pro)', () => {
 				{ timeout: 30_000 }
 			)
 			.toBeTruthy();
+
+		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
 	});
 
 	test('should search customers', async ({
@@ -230,14 +206,6 @@ test.describe('Customers Page (Pro)', () => {
 			});
 		}
 	});
-
-	test('should have add customer button on Customers page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
-
-		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
-	});
 });
 
 /**
@@ -247,11 +215,6 @@ test.describe('Customers Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Customers', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

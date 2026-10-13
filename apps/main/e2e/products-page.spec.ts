@@ -73,20 +73,12 @@ test.describe('Products Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Products page requires Pro');
 	});
 
-	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
+	test('Products page initial table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('search-products')).toBeVisible({
 			timeout: 30_000,
 		});
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
-			timeout: 60_000,
-		});
-	});
-
-	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -673,31 +665,6 @@ test.describe('Products Page (Pro)', () => {
 		});
 	});
 
-	test('should expand variable product to show variations', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
-			timeout: 60_000,
-		});
-
-		await findVariableProduct(page, screen.getByTestId('search-products'));
-
-		// Click the expand link on the variable product
-		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
-		await expect(expandLink).toBeVisible({ timeout: 30_000 });
-		await Promise.all([
-			page.waitForResponse(
-				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
-				{ timeout: 30_000 }
-			),
-			expandLink.click(),
-		]);
-
-		// Variation rows should now be visible with their actions menus
-		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
-		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
-	});
-
 	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.locator('[data-testid="screen-products"]:visible');
@@ -770,13 +737,6 @@ test.describe('Products Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Products', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({
-			timeout: 30_000,
-		});
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

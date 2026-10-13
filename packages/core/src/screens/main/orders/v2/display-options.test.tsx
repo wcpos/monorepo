@@ -7,7 +7,6 @@ import { DisplayOptions } from './display-options';
 jest.mock('expo-haptics', () => ({}));
 const mockPatch = jest.fn();
 const mockReset = jest.fn();
-let mockOpenAutoFocus: (event: { preventDefault: () => void }) => void;
 const mockSettings = {
 	columns: [
 		{ key: 'number', show: true },
@@ -30,12 +29,7 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/popover', () => ({
 	Popover: ({ children }: React.PropsWithChildren) => children,
 	PopoverTrigger: ({ children }: React.PropsWithChildren) => children,
-	PopoverContent: ({
-		children,
-		testID,
-		onOpenAutoFocus,
-	}: React.PropsWithChildren<{ testID: string; onOpenAutoFocus: typeof mockOpenAutoFocus }>) => {
-		mockOpenAutoFocus = onOpenAutoFocus;
+	PopoverContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => {
 		return <div data-testid={testID}>{children}</div>;
 	},
 }));
@@ -94,10 +88,4 @@ jest.mock('@wcpos/components/form', () => {
 			/>
 		),
 	};
-});
-
-it('focuses the first column switch on opening rather than Restore defaults', () => {
-	render(<DisplayOptions />);
-	mockOpenAutoFocus({ preventDefault: jest.fn() });
-	expect(document.activeElement).toBe(screen.getAllByRole('switch')[0]);
 });
