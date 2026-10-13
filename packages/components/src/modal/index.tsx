@@ -259,14 +259,21 @@ function ModalContent({
 }: React.ComponentPropsWithoutRef<typeof View> &
 	Omit<VariantProps<typeof modalContentVariants>, 'side'> & { side?: ModalSide }) {
 	const Content = Platform.OS === 'web' ? DialogPrimitive.Content : View;
+	// A full-size modal on a phone IS the screen (owner, 2026-10-13): no scrim gutter, no
+	// rounded card floating over a grey bar, and the card colour runs to the safe-area edges.
+	const fullScreen = size === 'full' && Platform.OS !== 'web';
 	return (
-		<ModalOverlay side={side}>
+		<ModalOverlay
+			side={side}
+			className={fullScreen ? 'bg-card items-stretch justify-start p-0' : undefined}
+		>
 			<Content
 				className={cn(
 					modalContentVariants({ size, side }),
 					side === 'center'
 						? 'web:cursor-default border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
 						: 'z-50',
+					fullScreen && 'h-full w-full max-w-full flex-1 rounded-none border-0 shadow-none',
 					OVERLAY_MOTION[side].enter,
 					className
 				)}
