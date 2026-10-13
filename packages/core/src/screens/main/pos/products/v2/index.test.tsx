@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { cellsForRow, POSProducts } from './index';
+import { invokeSurface, resetSurfaces } from '../../../../../extensions/commands/surfaces';
 import { PersistedStateProvider } from '../../../../../contexts/persisted-state';
 import { ProductImage } from '../../../components/product/image';
 import { VariableProductImage } from '../../../components/product/variable-image';
@@ -37,8 +38,10 @@ let mockSessionsOn = false;
 
 // The state primitives pull in Button (expo-haptics) and Icon (uniwind), both ESM-only under
 // jest; the doubles keep the props this screen reads.
-jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }) }));
-jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));
+const mockNavigate = jest.fn();
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: mockNavigate }) }));
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@wcpos/components/empty-state', () => ({
 	EmptyState: ({
 		title,
@@ -138,7 +141,11 @@ jest.mock('./filter-bar', () => ({
 		return null;
 	},
 }));
-jest.mock('../../../components/query-search-input', () => ({ QuerySearchInput: () => null }));
+jest.mock('../../../components/query-search-input', () => ({
+	QuerySearchInput: ({ ref, testID }: { ref?: React.Ref<HTMLInputElement>; testID?: string }) => (
+		<input data-testid={testID} ref={ref} />
+	),
+}));
 jest.mock('../../../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -229,6 +236,18 @@ describe('POSProducts query-state wiring', () => {
 		mockGridColumns = 4;
 		mockSession = null;
 		mockSessionsOn = false;
+		mockFocused = true;
+		resetSurfaces();
+	});
+
+	it('the search surface brings an unfocused Products tab forward, then focuses once it is', async () => {
+		mockFocused = false;
+		const { rerender } = render(<POSProducts />);
+		await act(() => invokeSurface('search'));
+		expect(mockNavigate).toHaveBeenCalledWith('/(app)/(drawer)/(pos)/(tabs)');
+		mockFocused = true;
+		rerender(<POSProducts />);
+		expect(document.activeElement).toBe(screen.getByTestId('search-products'));
 	});
 
 	it('shows price-check guidance only before a session opens with sessions enabled', () => {
