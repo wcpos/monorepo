@@ -16,6 +16,8 @@ export interface SectionMeta {
 }
 
 export const SECTIONS: SectionMeta[] = [
+	{ key: 'software', label: 'Software', path: ['software'], kind: 'object' },
+	{ key: 'register', label: 'Register', path: ['register'], kind: 'object' },
 	{ key: 'order', label: 'Order', path: ['order'], kind: 'object' },
 	{ key: 'store', label: 'Store', path: ['store'], kind: 'object' },
 	{ key: 'cashier', label: 'Cashier', path: ['cashier'], kind: 'object' },

@@ -90,9 +90,12 @@ describe('full receipt raster helpers', () => {
 
 	it('inlines image sources before serializing full-receipt raster SVG', async () => {
 		const originalFetch = globalThis.fetch;
+		// Bytes, not a Blob: under vitest's jsdom environment `Blob` is jsdom's, and Node 22's
+		// `Response` cannot consume it (`object.stream is not a function`); Node 24 stringified it
+		// instead, so the assertion used to pass by accident.
 		const fetchMock = vi.fn(
 			async () =>
-				new Response(new Blob(['image-bytes'], { type: 'image/png' }), {
+				new Response(new TextEncoder().encode('image-bytes'), {
 					headers: { 'content-type': 'image/png' },
 				})
 		) as typeof fetch;

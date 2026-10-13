@@ -406,7 +406,7 @@ test('the allowlist fails closed when an entry is gone or has no tests', (t) => 
 		}
 
 		assert.throws(
-			() => checkCiTestMatrix(tree.root),
+			() => checkCiTestMatrix(tree.root, [{ dir: 'apps/template-studio', reason: 'test fixture' }]),
 			/ALLOWLIST.*(?:gone|no test files)/is,
 			packageState
 		);
