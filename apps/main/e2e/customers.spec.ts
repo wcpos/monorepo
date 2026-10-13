@@ -52,8 +52,8 @@ test.describe('Add Customer from Cart (Pro)', () => {
 	});
 
 	/**
-	 * The one test in this file that actually SUBMITS. Everything above stops at
-	 * "the dialog opened", which is why a create that died in the storage layer
+	 * The one test in this file that actually SUBMITS. The other dialog tests stop
+	 * at "the dialog opened", which is why a create that died in the storage layer
 	 * shipped unnoticed: `use-mutation` sourced its payload from
 	 * `RxDocument.get('payload')`, an RxDB **Proxy**, and on web the storage lives
 	 * in a Worker — so the enqueue failed the structured clone with

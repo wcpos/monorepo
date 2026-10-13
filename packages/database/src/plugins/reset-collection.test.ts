@@ -3,13 +3,10 @@ import { resetCollectionPlugin } from './reset-collection';
 import type { RxCollection } from 'rxdb';
 
 /**
- * Tests for reset-collection plugin logic.
- *
- * Note: Full RxDB integration tests are in @wcpos/query/tests/collection-swap.test.ts
- * which tests the actual swapCollection flow with the plugin.
- *
- * These tests focus on the plugin's core logic without requiring
- * actual RxDB database instances for every test.
+ * Unit test for the reset-collection plugin's hook contract. The reset flow
+ * end to end (reset$ consumers, clear-local-data) is covered in
+ * packages/core/src/screens/main/pos/cart/clear-local-data.test.tsx and
+ * packages/core/src/screens/main/hooks/use-collection.test.tsx.
  */
 
 describe('reset-collection plugin', () => {
