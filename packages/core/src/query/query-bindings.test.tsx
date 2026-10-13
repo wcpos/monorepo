@@ -2506,10 +2506,13 @@ describe('query bindings', () => {
 		expect(result.current.committedSearch).toBe('');
 		act(() => jest.advanceTimersByTime(1));
 		expect(result.current.committedSearch).toBe('al');
-		await act(async () => Promise.resolve());
-		expect(
-			(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits.length
-		).toBeLessThanOrEqual(2);
+		jest.useRealTimers();
+		await waitFor(() => expect(result.current.handle.value.ready).toBe(true));
+		expect(JSON.parse(result.current.handle.key)).toEqual(
+			expect.arrayContaining(['search-select', 'category', 'al', 2])
+		);
+		// Three residents match "al"; the page is two.
+		expect(result.current.handle.value.hits).toHaveLength(2);
 	});
 
 	/**
@@ -2561,7 +2564,80 @@ describe('query bindings', () => {
 		act(() => jest.advanceTimersByTime(50));
 		expect(result.current.committedSearch).toBe('ada');
 		expect(result.current.limit).toBe(50);
+		// The reset reaches the handle: the read asked for is page one of the new search.
+		expect(JSON.parse(result.current.handle.key)).toEqual(
+			expect.arrayContaining(['search-select', 'customer', 'ada', 50])
+		);
 		await act(async () => Promise.resolve());
+	});
+
+	describe('the search-select handle', () => {
+		const keyOf = (handle: { key: string }) => JSON.parse(handle.key) as unknown[];
+
+		it('is keyed by the committed search and the limit, and holds for an unchanged key', () => {
+			jest.useFakeTimers();
+			const { result, rerender } = renderHook(
+				() => useSearchSelect('customer', { debounceMs: 50 }),
+				{ wrapper: Provider }
+			);
+			const first = result.current.handle;
+			expect(keyOf(first)).toEqual(expect.arrayContaining(['search-select', 'customer', '', 50]));
+
+			rerender();
+			// Typing alone is not a new read: the key moves on the debounced commit.
+			act(() => result.current.setSearch('ada'));
+			expect(result.current.handle).toBe(first);
+
+			act(() => jest.advanceTimersByTime(50));
+			const searched = result.current.handle;
+			expect(searched).not.toBe(first);
+			expect(keyOf(searched)).toEqual(expect.arrayContaining(['ada', 50]));
+
+			act(() => result.current.extendLimit());
+			const extended = result.current.handle;
+			expect(extended).not.toBe(searched);
+			expect(keyOf(extended)).toEqual(expect.arrayContaining(['ada', 100]));
+		});
+
+		it('is one handle for two pickers asking the same question', async () => {
+			const first = renderHook(() => useSearchSelect('category'), { wrapper: Provider });
+			// The first owner's retain has run: its handle is the registry's for that key.
+			await act(async () => undefined);
+			const second = renderHook(() => useSearchSelect('category'), { wrapper: Provider });
+
+			expect(second.result.current.handle).toBe(first.result.current.handle);
+		});
+
+		it('is a different handle for pickers with different page sizes', async () => {
+			const small = renderHook(() => useSearchSelect('category', { pageSize: 10 }), {
+				wrapper: Provider,
+			});
+			await act(async () => undefined);
+			const large = renderHook(() => useSearchSelect('category', { pageSize: 20 }), {
+				wrapper: Provider,
+			});
+
+			expect(large.result.current.handle).not.toBe(small.result.current.handle);
+			expect(keyOf(small.result.current.handle)).toContain(10);
+			expect(keyOf(large.result.current.handle)).toContain(20);
+		});
+
+		it('is retained by the picker: demand while mounted, released on unmount', async () => {
+			jest.useFakeTimers();
+			const { result, unmount } = renderHook(() => useSearchSelect('customer', { debounceMs: 0 }), {
+				wrapper: Provider,
+			});
+			act(() => result.current.setSearch('ada'));
+			act(() => jest.advanceTimersByTime(0));
+			jest.useRealTimers();
+			await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
+			expect(engine.searchRequireCalls[0]?.released).toBe(false);
+
+			unmount();
+			await act(async () => undefined);
+
+			expect(engine.searchRequireCalls[0]?.released).toBe(true);
+		});
 	});
 
 	it('declares coupon refresh demand when the cart coupon picker binding mounts', async () => {
@@ -2818,7 +2894,7 @@ describe('query bindings', () => {
 		});
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['cashier-grace'])
+			expect(result.current.handle.value.hits.map((hit) => hit.id)).toEqual(['cashier-grace'])
 		);
 	});
 
@@ -2833,9 +2909,10 @@ describe('query bindings', () => {
 	 *
 	 * `useQuery` no longer exists. The contract moved DOWN a layer into these
 	 * binding hooks: every screen that mounts a grid (products.tsx, orders,
-	 * customers, tax-rates, the logs viewer, every search-select pill) calls one
-	 * of them and immediately destructures `resource`/`result$`/`total$` into a
-	 * Suspense boundary on the very first render, before anything has emitted.
+	 * customers, tax-rates, the logs viewer) calls one of them and immediately
+	 * destructures `resource`/`result$`/`total$` into a Suspense boundary on the
+	 * very first render, before anything has emitted. The search-select pickers
+	 * hand a query handle instead; their first-render guard is the case below.
 	 * A hook that returns `undefined` — or an object with a hole in it — crashes
 	 * the screen exactly the way 1.9 did.
 	 *
@@ -2978,8 +3055,6 @@ describe('query bindings', () => {
 						limit: 10,
 					}),
 			],
-			['customer search-select', () => useSearchSelect('customer')],
-			['category search-select', () => useSearchSelect('category')],
 			['category tree', () => useAllCategoriesBinding()],
 		])('%s is fully populated on its first render', async (_label, useBinding) => {
 			const captured = captureFirstRender(useBinding);
@@ -3013,7 +3088,6 @@ describe('query bindings', () => {
 		it.each([
 			['products grid', () => useCollectionBinding('products', productsState)],
 			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
-			['customer search-select', () => useSearchSelect('customer')],
 		])('%s survives a first render against an unopened engine', async (_label, useBinding) => {
 			const pending = createPendingFakeEngine(engineDB);
 
@@ -3026,6 +3100,45 @@ describe('query bindings', () => {
 				await Promise.resolve();
 			});
 		});
+
+		/**
+		 * The pickers hand a handle, not a binding: a list reads it on the first render, so the
+		 * handle (and the paging the list wires) must be there before anything has emitted —
+		 * on a cold engine too.
+		 */
+		it.each([
+			['customer', false],
+			['category', false],
+			['customer', true],
+		] as const)(
+			'the %s search-select hands a usable handle on its first render (unopened engine: %s)',
+			async (collection, unopened) => {
+				const pending = unopened ? createPendingFakeEngine(engineDB) : undefined;
+				let first: ReturnType<typeof useSearchSelect> | undefined;
+				function Probe() {
+					const select = useSearchSelect(collection);
+					first ??= select;
+					return null;
+				}
+				render(
+					<Provider value={pending?.engine}>
+						<Probe />
+					</Provider>
+				);
+
+				expect(typeof first?.handle.subscribe).toBe('function');
+				expect(first?.handle.value).toBeDefined();
+				expect(typeof first?.handle.whenAnswered).toBe('function');
+				expect(typeof first?.setSearch).toBe('function');
+				expect(typeof first?.extendLimit).toBe('function');
+				expect(first?.limit).toBe(50);
+
+				await act(async () => {
+					pending?.open();
+					await Promise.resolve();
+				});
+			}
+		);
 
 		it('returns a callable coupon-reference barrier on its first render', async () => {
 			let captured: unknown = undefined;

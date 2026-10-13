@@ -31,7 +31,7 @@ interface CashierPillProps {
  */
 function CashierSearch() {
 	const t = useT();
-	const binding = useSearchSelect('cashier');
+	const select = useSearchSelect('cashier');
 
 	/**
 	 *
@@ -40,11 +40,11 @@ function CashierSearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_cashiers')}
-				value={binding.search}
-				onChangeText={binding.setSearch}
+				value={select.search}
+				onChangeText={select.setSearch}
 			/>
 			<Suspense>
-				<CustomerList binding={binding} withGuest={false} />
+				<CustomerList select={select} withGuest={false} />
 			</Suspense>
 		</>
 	);

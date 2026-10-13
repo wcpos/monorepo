@@ -38,7 +38,7 @@ export type {
 export type {
 	QueryBinding,
 	QueryLaneProgress,
-	SearchSelectBinding,
+	SearchSelect,
 	SearchSelectCollection,
 } from './query-bindings';
 export {

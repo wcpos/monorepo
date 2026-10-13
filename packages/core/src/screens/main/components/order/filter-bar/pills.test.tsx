@@ -28,7 +28,8 @@ jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 let mockComboboxOption = { value: '42', item: { id: 42, first_name: 'Ada' } };
 let mockSelectOption = { value: 'processing', label: 'Processing' };
 const mockSetCashierSearch = jest.fn();
-const mockCashierResource = { kind: 'cashier-search-resource' };
+// The cashier picker's handle, handed to the list untouched (the list's reading is its own suite).
+const mockCashierHandle = { key: 'cashier-search-handle' };
 let mockCustomerListProps: Record<string, unknown> = {};
 
 jest.mock('../../../../../contexts/app-state', () => ({
@@ -39,7 +40,7 @@ jest.mock('../../../../../query', () => {
 	return {
 		...actual,
 		useSearchSelect: jest.fn(() => ({
-			resource: mockCashierResource,
+			handle: mockCashierHandle,
 			search: '',
 			setSearch: mockSetCashierSearch,
 			limit: 50,
@@ -203,7 +204,7 @@ describe('order filter pills', () => {
 		fireEvent.change(screen.getByTestId('cashier-search'), { target: { value: 'gra' } });
 		expect(mockSetCashierSearch).toHaveBeenCalledWith('gra');
 		expect(mockCustomerListProps).toMatchObject({
-			binding: expect.objectContaining({ resource: mockCashierResource }),
+			select: expect.objectContaining({ handle: mockCashierHandle }),
 			withGuest: false,
 		});
 		fireEvent.click(screen.getByTestId('select-combobox'));

@@ -18,21 +18,34 @@ import { useT } from '@wcpos/core/contexts/translations';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useAllCategoriesBinding, useGuardedExtension, useSearchSelect } from '../../../../query';
+import {
+	useAllCategoriesBinding,
+	useDrawnHandle,
+	useGuardedExtension,
+	useQuerySnapshot,
+	useSearchSelect,
+} from '../../../../query';
 
-import type { SearchSelectBinding } from '../../../../query';
+import type { SearchSelect } from '../../../../query';
 
 /**
  *
  */
-function CategoryList({ binding }: { binding: SearchSelectBinding }) {
-	const result = useObservableSuspense(binding.resource) as {
+function CategoryList({ select }: { select: SearchSelect }) {
+	// Drawn, not live: a typed search's new handle answers while the previous options stay.
+	const shown = useDrawnHandle(select.handle);
+	const settling = shown !== select.handle;
+	const snapshot = useQuerySnapshot(shown, ['pending', 'exhausted']);
+	const result = snapshot as unknown as {
 		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 	const handleEndReached = useGuardedExtension(
-		binding.extendLimit,
+		select.extendLimit,
 		result.hits.length,
-		binding.limit
+		select.limit,
+		// The rows drawn may be the previous search's: a full old page must not page the new
+		// search before its first page answers, so settling counts as pending.
+		{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }
 	);
 	const t = useT();
 
@@ -62,7 +75,7 @@ function CategoryList({ binding }: { binding: SearchSelectBinding }) {
  */
 export function CategorySearch() {
 	const t = useT();
-	const binding = useSearchSelect('category');
+	const select = useSearchSelect('category');
 
 	/**
 	 *
@@ -71,11 +84,11 @@ export function CategorySearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_categories')}
-				value={binding.search}
-				onChangeText={binding.setSearch}
+				value={select.search}
+				onChangeText={select.setSearch}
 			/>
 			<Suspense>
-				<CategoryList binding={binding} />
+				<CategoryList select={select} />
 			</Suspense>
 		</>
 	);

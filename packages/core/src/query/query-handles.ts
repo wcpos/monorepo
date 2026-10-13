@@ -267,32 +267,29 @@ export type CollectionHandleInput<C extends CollectionHandleKey> = {
 	searchFields: string[] | undefined;
 };
 
+/** What a plain engine read is built from: the descriptor it reads, the query it demands. */
+export type EngineQueryHandleInput = {
+	descriptor: EngineQueryDescriptor;
+	compiled: CompiledQuery;
+};
+
 /**
- * The plain collection read as a handle — what `useCollectionBinding` compiled per render: one
- * descriptor, one demand, the collection's own activity and census. Orders, customers, coupons,
- * tax rates, refunds, variations: every table screen's query.
+ * One descriptor read with one demand as a handle: the collection's own activity and census,
+ * the compiled query's coverage. `build` runs on a registry miss, and a handle enters the
+ * registry only when it starts (its owner's retain), so two acquires of one key before the
+ * first owner's effect each build; the later handle then mirrors the first at start. `build`
+ * is handed the handle's id, which its demand declares under.
  */
-export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
+export function acquireEngineQueryHandle(
 	engine: RxdbSyncEngine,
 	key: string,
-	input: CollectionHandleInput<C>
+	build: (id: string) => EngineQueryHandleInput
 ): QueryHandle<QueryResult<RxCollection>> {
 	return acquireQueryHandle(engine, key, (registry) => {
 		const id = `qh${nextHandleId++}`;
-		const { collection, state, remoteIds, storeScope, searchFields } = input;
-		const compiled = compileQuery(collection, state, {
-			id,
-			targeted: remoteIds,
-			storeScope,
-			searchFields,
-		});
-		const descriptor: EngineQueryDescriptor = {
-			collection: compiled.collection,
-			searchFields,
-			read: { ...compiled.read, searchFields },
-		};
+		const { descriptor, compiled } = build(id);
 		const engineCollection = engineCollectionNameFor(compiled.collection);
-		const search = compiled.read.search?.trim();
+		const search = (descriptor.read?.search ?? descriptor.search)?.trim();
 		return createQueryHandle(
 			engine,
 			{
@@ -310,6 +307,35 @@ export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
 			emptyResult(),
 			registry
 		);
+	});
+}
+
+/**
+ * The plain collection read as a handle — what `useCollectionBinding` compiled per render: one
+ * descriptor, one demand, the collection's own activity and census. Orders, customers, coupons,
+ * tax rates, refunds, variations: every table screen's query.
+ */
+export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
+	engine: RxdbSyncEngine,
+	key: string,
+	input: CollectionHandleInput<C>
+): QueryHandle<QueryResult<RxCollection>> {
+	return acquireEngineQueryHandle(engine, key, (id) => {
+		const { collection, state, remoteIds, storeScope, searchFields } = input;
+		const compiled = compileQuery(collection, state, {
+			id,
+			targeted: remoteIds,
+			storeScope,
+			searchFields,
+		});
+		return {
+			compiled,
+			descriptor: {
+				collection: compiled.collection,
+				searchFields,
+				read: { ...compiled.read, searchFields },
+			},
+		};
 	});
 }
 

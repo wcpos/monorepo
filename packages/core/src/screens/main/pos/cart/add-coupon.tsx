@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import { Platform } from '@wcpos/utils/platform';
 import {
 	Combobox,
@@ -27,11 +25,16 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { useGuardedExtension, useSearchSelect } from '../../../../query';
+import {
+	useDrawnHandle,
+	useGuardedExtension,
+	useQuerySnapshot,
+	useSearchSelect,
+} from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAddCoupon } from '../hooks/use-add-coupon';
 
-import type { SearchSelectBinding } from '../../../../query';
+import type { SearchSelect } from '../../../../query';
 
 interface CouponHit {
 	id: string;
@@ -106,8 +109,8 @@ export function AddCoupon() {
 
 function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
-	const binding = useSearchSelect('coupon');
-	const { setSearch } = binding;
+	const select = useSearchSelect('coupon');
+	const { setSearch } = select;
 
 	const onSearch = React.useCallback(
 		(value: string) => {
@@ -122,23 +125,32 @@ function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 			<ComboboxInput
 				testID="add-coupon-search-input"
 				placeholder={t('pos_cart.search_coupons')}
-				value={binding.search}
+				value={select.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CouponList binding={binding} />
+				<CouponList select={select} />
 			</Suspense>
 		</>
 	);
 }
 
-function CouponList({ binding }: { binding: SearchSelectBinding }) {
-	const result = useObservableSuspense(binding.resource) as { hits: CouponHit[] };
+function CouponList({ select }: { select: SearchSelect }) {
+	// Drawn, not live: a typed search's new handle answers while the previous options stay.
+	const shown = useDrawnHandle(select.handle);
+	const settling = shown !== select.handle;
+	const snapshot = useQuerySnapshot(shown, ['pending', 'exhausted']);
+	const result = snapshot as unknown as {
+		hits: CouponHit[];
+	};
 	const t = useT();
 	const handleEndReached = useGuardedExtension(
-		binding.extendLimit,
+		select.extendLimit,
 		result.hits.length,
-		binding.limit
+		select.limit,
+		// The rows drawn may be the previous search's: a full old page must not page the new
+		// search before its first page answers, so settling counts as pending.
+		{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }
 	);
 
 	return (
