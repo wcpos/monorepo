@@ -7,7 +7,7 @@ import { act, renderRouter } from 'expo-router/testing-library';
 import { returnToTill } from '../../../packages/core/src/screens/main/pos/checkout/till-route';
 
 async function renderCheckout() {
-	const view = renderRouter(
+	const view = await renderRouter(
 		{
 			'(app)/_layout': () => <Slot />,
 			'(app)/(drawer)/_layout': () => <Slot />,
@@ -33,7 +33,6 @@ async function renderCheckout() {
 		},
 		{ initialUrl: '/' }
 	);
-	await view;
 	expect(view.getSegments()).toEqual(['(app)', '(drawer)', '(pos)', '(tabs)']);
 	await act(async () => router.navigate('/(app)/(drawer)/(pos)/(tabs)/cart'));
 	await act(async () => {

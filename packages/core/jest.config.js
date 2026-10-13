@@ -50,7 +50,7 @@ module.exports = {
 	},
 	// react-hotkeys-hook v5 ships ESM only; the hotkeys module's suite drives the real library.
 	transformIgnorePatterns: [
-		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/|react-hotkeys-hook/)',
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/|react-hotkeys-hook/|@shopify/flash-list/)',
 	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

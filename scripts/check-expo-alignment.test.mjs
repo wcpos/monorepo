@@ -132,20 +132,11 @@ test('findExpoMisalignments respects the allowlist', () => {
 	assert.deepEqual(findExpoMisalignments(importers, bundled, allowed), []);
 });
 
-test('default allowlist permits the intentional Sentry SDK override', () => {
-	const sentryImporters = {
-		'apps/main': {
-			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
-		},
-		'packages/utils': {
-			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
-		},
-	};
-
-	assert.match(ALLOWED_EXPO_MISMATCHES.get('@sentry/react-native'), /8\.25\.0.*#6630/);
+test('default allowlist is empty and does not suppress mismatches', () => {
+	assert.equal(ALLOWED_EXPO_MISMATCHES.size, 0);
 	assert.deepEqual(
-		findExpoMisalignments(sentryImporters, { '@sentry/react-native': '~7.11.0' }),
-		[]
+		findExpoMisalignments(importers, bundled),
+		findExpoMisalignments(importers, bundled, new Map())
 	);
 });
 
