@@ -41,8 +41,9 @@ env:
           maxRetries: 1
           commands:
             # Re-issue the link only when the PREVIOUS leg's scheme prompt is not still
-            # pending. That prompt can surface more than 60 s late, after leg 1 has given
-            # up (run 38464219303, iOS phone): leg 2 re-issued the link while it was up,
+            # pending. That prompt can surface more than 60 s late, after leg 1's last
+            # prompt check, during the required wait that cannot answer it (run
+            # 38464219303, iOS phone): leg 2 re-issued the link while it was up,
             # both prompts got "Open", SpringBoard delivered BOTH links when the app
             # finally started 3 min later, the dev launcher loaded the app twice, and
             # flow 02 crashed on the discarded instance ("ExpoFabricView: The app context
