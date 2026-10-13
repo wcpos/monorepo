@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
@@ -120,12 +121,16 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	// so it must commit for the read to start: an owner that also read would suspend
 	// uncommitted, nothing would retain the handle, and the fallback would never leave (the
 	// nearest one above is the route's, `null` in production: a blank POS body). Identity by
-	// key holds only once a handle has started. No error boundary here: the children are the
-	// whole POS body, and a failed read reaches the route's.
+	// key holds only once a handle has started. The error boundary is ours for the same reason
+	// the Suspense is: it covers the same surface the route's did (the whole POS body), but the
+	// route's reset would remount this owner over the same failed handle (the registry still
+	// holds it), so the reader would throw again; ours asks the engine again first.
 	return (
-		<Suspense>
-			<TaxSettingsFromRates handle={handle}>{children}</TaxSettingsFromRates>
-		</Suspense>
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense>
+				<TaxSettingsFromRates handle={handle}>{children}</TaxSettingsFromRates>
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 

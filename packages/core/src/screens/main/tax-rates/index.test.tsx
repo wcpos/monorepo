@@ -49,15 +49,24 @@ jest.mock('observable-hooks', () => ({
 		{ name: 'Reduced', slug: 'reduced-rate' },
 	],
 }));
-// The real boundary with a reset control: `TaxRates` wires `onReset` to the handle's retry.
-// Every boundary draws the same control, so only the retry tells the owner's reset from the
-// modal's (which sits above the owner and cannot reach the handle).
+// The real boundary with a reset control: `TaxRates` wires `onReset` to the handle's retry and
+// `resetKeys` to the handle. Every boundary draws the same control, so only the retry tells the
+// owner's reset from the modal's (which sits above the owner and cannot reach the handle).
 jest.mock('@wcpos/components/error-boundary', () => {
 	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
 	return {
-		ErrorBoundary: ({ children, onReset }: { children: React.ReactNode; onReset?: () => void }) => (
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
 			<ErrorBoundary
 				onReset={onReset}
+				resetKeys={resetKeys}
 				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
 					<button data-testid="error-reset" onClick={() => resetErrorBoundary()} />
 				)}
@@ -196,6 +205,30 @@ describe('tax-rates query-state wiring', () => {
 			expect(screen.getByTestId('tax-rates-fallback')).toBeTruthy();
 
 			await act(async () => failed.set({ ready: true, result: answeredRates() }));
+			expectGroupingPreserved();
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	it('clears a failed read’s fallback on its own when a fresh handle replaces it', async () => {
+		// A scope bump (clear-and-sync) or a changed query hands the owner a new handle; the
+		// boundary's keys move with it, so the stale failure leaves without a click.
+		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+		const retry = jest.fn();
+		failed.retry = retry;
+		mockHandle = failed;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			const { rerender } = render(<TaxRatesModal />);
+			expect(screen.getByTestId('error-reset')).toBeTruthy();
+			expect(mockRateTable).not.toHaveBeenCalled();
+
+			mockHandle = fakeQueryHandle({ result: answeredRates(), total: 3 });
+			await act(async () => rerender(<TaxRatesModal />));
+
+			expect(screen.queryByTestId('error-reset')).toBeNull();
+			expect(retry).not.toHaveBeenCalled();
 			expectGroupingPreserved();
 		} finally {
 			consoleError.mockRestore();

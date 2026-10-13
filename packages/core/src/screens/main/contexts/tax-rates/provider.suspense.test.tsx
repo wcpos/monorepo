@@ -81,6 +81,15 @@ jest.mock('@wcpos/sync-core', () => ({
 	...jest.requireActual('@wcpos/sync-core'),
 	wooMetaCarrier: { readIdentity: () => ({}), taxBasedOnOverride: () => undefined },
 }));
+// The real boundary without the app's fallback (whose icon pulls in the styling runtime).
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({ children }: { children: React.ReactNode }) => (
+			<ErrorBoundary fallback={<div data-testid="tax-settings-error" />}>{children}</ErrorBoundary>
+		),
+	};
+});
 jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({ store }) }));
 jest.mock('../../hooks/use-base-tax-location', () => ({
 	useBaseTaxLocation: () => ({ country: 'GB', state: '', city: '', postcode: '' }),

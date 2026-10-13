@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, map } from 'rxjs';
 
 import type { EngineRecord } from '@wcpos/query';
@@ -57,6 +57,33 @@ jest.mock('../../../../query', () => {
 		...actual,
 		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
 			mockUseCollectionQueryHandle(collection, state),
+	};
+});
+
+// The real boundary with a reset control: the provider wires `onReset` to the handle's retry
+// and `resetKeys` to the handle. (The app's fallback pulls in the styling runtime.)
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="tax-settings-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
 	};
 });
 
@@ -171,6 +198,36 @@ describe('TaxRatesProvider query-state consumption', () => {
 
 		act(() => mockHandle?.set({ result: { hits: [{ record: { payload: allRates[1] } }] } }));
 		expect(screen.getByTestId('all-rate-ids').textContent).toBe('2');
+	});
+
+	it('throws a failed read to its own boundary, whose reset asks the handle again', async () => {
+		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+		const retry = jest.fn(() => failed.set({ error: null, ready: false }));
+		failed.retry = retry;
+		mockHandle = failed;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(
+				<TaxRatesProvider>
+					<AllRatesProbe />
+				</TaxRatesProvider>
+			);
+			expect(screen.getByTestId('tax-settings-error-reset')).toBeTruthy();
+			expect(screen.queryByTestId('all-rate-ids')).toBeNull();
+
+			// A remount over the same failed handle would throw again; the reset retries first.
+			act(() => {
+				fireEvent.click(screen.getByTestId('tax-settings-error-reset'));
+			});
+			expect(retry).toHaveBeenCalledTimes(1);
+			expect(screen.queryByTestId('tax-settings-error-reset')).toBeNull();
+			expect(screen.queryByTestId('all-rate-ids')).toBeNull();
+
+			await act(async () => failed.set({ ready: true, result: mockResult }));
+			expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 
 	/**
