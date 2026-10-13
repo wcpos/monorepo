@@ -5,9 +5,18 @@ import type {
 	DriverStatus,
 	PaymentDriver,
 } from '@wcpos/core/services/payment-drivers/types';
-import { fromMinor, type PaymentMethodDescriptor, toMinor } from '@wcpos/order-math';
+import {
+	fromMinor,
+	type PaymentMethodDescriptor,
+	type PaymentTransport,
+	toMinor,
+} from '@wcpos/order-math';
 
 import { getSumUpReader } from '../../../modules/sumup-reader';
+
+// SumUp's offline sessions run on these readers only (Solo ≥ 3.3.31.0, Solo Lite ≥ 2.2.1.25;
+// the SDK refuses older firmware itself). The Air and Tap to Pay have no offline (roadmap#427).
+const OFFLINE_READER_MODELS = new Set(['SOLO', 'SOLO_LITE']);
 
 export type Options = {
 	bootstrap: (methodId: string) => Promise<Record<string, unknown>>;
@@ -20,6 +29,10 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 	let initialization: Promise<void> | null = null;
 	let loggedIn = false;
 	let permissionDenied = false;
+	// SumUp's offline calls are strictly serial: a sync never starts during a checkout, and a
+	// checkout waits for a sync already running.
+	let collecting = false;
+	let syncing: Promise<void> | null = null;
 	let status: DriverStatus = { connection: 'disconnected', reader: null };
 	const listeners = new Set<(status: DriverStatus) => void>();
 	const publish = (next: DriverStatus) => {
@@ -147,11 +160,88 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 				)
 			);
 	};
+	// The descriptor says the merchant opted in; the saved reader says whether it can.
+	const queuesOffline = (transport: PaymentTransport) =>
+		transport === 'bluetooth' &&
+		loggedIn &&
+		enabledMethod()?.capabilities.offline === 'queue' &&
+		OFFLINE_READER_MODELS.has(status.reader?.model ?? '');
 	const ready = async () => {
 		await initialize();
 		if (!enabledMethod() || configuredMethod !== enabledMethod()?.id)
 			throw new Error('SumUp is not set up for this store');
 		return native();
+	};
+	const collectOnce = async (
+		input: Parameters<PaymentDriver['collect']>[0]
+	): Promise<CollectResult> => {
+		const sdk = await ready();
+		if ((await sdk.merchant().catch(rethrowPermissionError))?.merchantCode !== merchantCode)
+			throw new Error(
+				'SumUp account does not match this store. Use Connect Reader to log in again.'
+			);
+		await permissions();
+		// While a session is active SumUp takes EVERY checkout offline: an online payment ends it
+		// first (SumUp uploads the stored payments), an offline payment starts one.
+		const sessionActive = await sdk.offlineSessionActive();
+		if (input.offline && !sessionActive) await sdk.startOfflineSession();
+		if (!input.offline && sessionActive) await sdk.stopOfflineSession();
+		await sdk.prepareForCheckout().catch(rethrowPermissionError);
+		const checkout = sdk.checkout({
+			amount: input.row.amount,
+			currency: input.row.currency,
+			title: input.row.order_id == null ? 'Order' : `Order ${input.row.order_id}`,
+			foreignTransactionId: input.row.id,
+			tipOnReader:
+				input.tipEligibleMinor != null &&
+				(await sdk.isTipOnReaderAvailable().catch(rethrowPermissionError)),
+			skipSuccessScreen: true,
+		});
+		const result = await checkout.catch(rethrowPermissionError);
+		const base = { amount: null, receipt: {}, provider_refs: {}, transport: input.transport };
+		// Approved on the reader only: the row settles when Pro finds the uploaded transaction.
+		const provisional = input.offline || result.offline === true;
+		// A previous attempt may have charged: Pro must verify this row by lookup.
+		if (result.resultCode === 9 || result.resultCode === 53)
+			return {
+				...base,
+				outcome: 'authorized',
+				provider_refs: { foreign_transaction_id: input.row.id },
+			};
+		switch (result.outcome) {
+			case 'success':
+				return {
+					...base,
+					outcome: provisional ? 'authorized' : 'captured',
+					provider_refs: {
+						transaction_code: result.transactionCode ?? null,
+						foreign_transaction_id: input.row.id,
+					},
+					receipt: { brand: result.cardType, last4: result.last4 },
+					amount:
+						result.amount == null ||
+						!/^\d+(\.\d+)?$/.test(result.amount) ||
+						!Number.isFinite(Number(result.amount))
+							? null
+							: fromMinor(toMinor(result.amount, input.dp), input.dp),
+				};
+			case 'cancelled':
+				return { ...base, outcome: 'cancelled' };
+			case 'failed':
+				return {
+					...base,
+					outcome: 'declined',
+					failure_reason: result.message || `SumUp result ${result.resultCode ?? 'failed'}`,
+				};
+			case 'unknown':
+				return {
+					...base,
+					outcome: 'authorized',
+					provider_refs: { foreign_transaction_id: input.row.id },
+				};
+			default:
+				throw new Error('SumUp returned an unrecognized checkout outcome');
+		}
 	};
 	return {
 		provider: 'sumup',
@@ -159,6 +249,25 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		initialize,
 		refreshStatus,
 		reportError,
+		queuesOffline,
+		/** Back online: end an offline session (SumUp uploads its payments) and refresh its limits. */
+		async syncOffline() {
+			if (collecting || syncing || !loggedIn || enabledMethod()?.capabilities.offline !== 'queue')
+				return;
+			syncing = (async () => {
+				try {
+					const sdk = await ready();
+					if (await sdk.offlineSessionActive()) await sdk.stopOfflineSession();
+					await sdk.prepareOffline();
+				} catch (error) {
+					// The reader is still there; the next reconnect or online payment tries again.
+					publish({ ...status, message: error instanceof Error ? error.message : String(error) });
+				}
+			})().finally(() => {
+				syncing = null;
+			});
+			return syncing;
+		},
 		availability(): ReturnType<PaymentDriver['availability']> {
 			if (Platform.OS === 'web') return { available: false, reason: 'web' };
 			if (!getSumUpReader()) return { available: false, reason: 'unsupported' };
@@ -184,67 +293,15 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			}
 		},
 		async collect(input: Parameters<PaymentDriver['collect']>[0]): Promise<CollectResult> {
-			if (input.offline) throw new Error('SumUp offline payments are not supported');
 			if (input.transport !== 'bluetooth') throw new Error('SumUp requires a Bluetooth reader');
-			const sdk = await ready();
-			if ((await sdk.merchant().catch(rethrowPermissionError))?.merchantCode !== merchantCode)
-				throw new Error(
-					'SumUp account does not match this store. Use Connect Reader to log in again.'
-				);
-			await permissions();
-			await sdk.prepareForCheckout().catch(rethrowPermissionError);
-			const checkout = sdk.checkout({
-				amount: input.row.amount,
-				currency: input.row.currency,
-				title: input.row.order_id == null ? 'Order' : `Order ${input.row.order_id}`,
-				foreignTransactionId: input.row.id,
-				tipOnReader:
-					input.tipEligibleMinor != null &&
-					(await sdk.isTipOnReaderAvailable().catch(rethrowPermissionError)),
-				skipSuccessScreen: true,
-			});
-			const result = await checkout.catch(rethrowPermissionError);
-			const base = { amount: null, receipt: {}, provider_refs: {}, transport: input.transport };
-			// A previous attempt may have charged: Pro must verify this row by lookup.
-			if (result.resultCode === 9 || result.resultCode === 53)
-				return {
-					...base,
-					outcome: 'authorized',
-					provider_refs: { foreign_transaction_id: input.row.id },
-				};
-			switch (result.outcome) {
-				case 'success':
-					return {
-						...base,
-						outcome: 'captured',
-						provider_refs: {
-							transaction_code: result.transactionCode ?? null,
-							foreign_transaction_id: input.row.id,
-						},
-						receipt: { brand: result.cardType, last4: result.last4 },
-						amount:
-							result.amount == null ||
-							!/^\d+(\.\d+)?$/.test(result.amount) ||
-							!Number.isFinite(Number(result.amount))
-								? null
-								: fromMinor(toMinor(result.amount, input.dp), input.dp),
-					};
-				case 'cancelled':
-					return { ...base, outcome: 'cancelled' };
-				case 'failed':
-					return {
-						...base,
-						outcome: 'declined',
-						failure_reason: result.message || `SumUp result ${result.resultCode ?? 'failed'}`,
-					};
-				case 'unknown':
-					return {
-						...base,
-						outcome: 'authorized',
-						provider_refs: { foreign_transaction_id: input.row.id },
-					};
-				default:
-					throw new Error('SumUp returned an unrecognized checkout outcome');
+			if (input.offline && !queuesOffline(input.transport))
+				throw new Error('This SumUp reader cannot take offline payments');
+			collecting = true;
+			try {
+				await syncing;
+				return await collectOnce(input);
+			} finally {
+				collecting = false;
 			}
 		},
 		status$: {

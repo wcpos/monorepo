@@ -28,6 +28,10 @@ jest.mock('@wcpos/core/screens/main/hooks/use-payment-methods', () => ({
 jest.mock('@wcpos/core/screens/main/hooks/use-rest-http-client', () => ({
 	useRestHttpClient: jest.fn(),
 }));
+let mockOnlineStatus = 'offline';
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
 jest.mock('../stripe-terminal', () => ({
 	createStripeTerminalDriver: () => ({ provider: 'stripe' }),
 	StripeTerminalDriverBridge: () => null,
@@ -64,6 +68,10 @@ function sdkMock() {
 		isTipOnReaderAvailable: jest.fn().mockResolvedValue(true),
 		prepareForCheckout: jest.fn().mockResolvedValue(undefined),
 		checkout: jest.fn().mockResolvedValue(success),
+		offlineSessionActive: jest.fn().mockResolvedValue(false),
+		startOfflineSession: jest.fn().mockResolvedValue(undefined),
+		stopOfflineSession: jest.fn().mockResolvedValue(undefined),
+		prepareOffline: jest.fn().mockResolvedValue(undefined),
 		addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
 	};
 }
@@ -74,6 +82,7 @@ let driver: ReturnType<typeof createSumUpDriver>;
 const os = Platform.OS;
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockOnlineStatus = 'offline';
 	Platform.OS = 'ios';
 	sdk = sdkMock();
 	jest.mocked(getSumUpReader).mockReturnValue(sdk);
@@ -225,10 +234,143 @@ it('does not replace absent SDK amount with the requested amount', async () => {
 	sdk.checkout.mockResolvedValue({ outcome: 'success', transactionCode: 'TX1' });
 	await expect(driver.collect(input)).resolves.toMatchObject({ amount: null });
 });
-it('rejects offline and tap-to-pay before opening checkout', async () => {
-	await expect(driver.collect({ ...input, offline: true })).rejects.toThrow(/offline/i);
+it('rejects tap-to-pay before opening checkout', async () => {
 	await expect(driver.collect({ ...input, transport: 'tap_to_pay' })).rejects.toThrow(/Bluetooth/i);
 	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+const offlineInput = { ...input, offline: true, tipEligibleMinor: null };
+it.each(['SOLO_LITE', 'SOLO'])(
+	'takes an offline payment on a %s inside a SumUp offline session, as an authorization',
+	async (model) => {
+		sdk.readerStatus.mockResolvedValue({ ...saved, model });
+		await driver.initialize();
+		expect(driver.queuesOffline('bluetooth')).toBe(true);
+		expect(driver.queuesOffline('tap_to_pay')).toBe(false);
+		await expect(driver.collect(offlineInput)).resolves.toEqual({
+			outcome: 'authorized',
+			provider_refs: { transaction_code: 'TX1', foreign_transaction_id: 'leg' },
+			receipt: { brand: 'VISA', last4: '1234' },
+			amount: '11.25',
+			transport: 'bluetooth',
+		});
+		expect(sdk.startOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
+			sdk.checkout.mock.invocationCallOrder[0]
+		);
+		expect(sdk.stopOfflineSession).not.toHaveBeenCalled();
+		// A session SumUp already holds (it survives app restarts) is reused, not restarted.
+		sdk.offlineSessionActive.mockResolvedValue(true);
+		await driver.collect(offlineInput);
+		expect(sdk.startOfflineSession).toHaveBeenCalledTimes(1);
+	}
+);
+it.each([
+	['an Air', { model: 'AIR' }, descriptor],
+	['an unknown reader', { model: 'UNKNOWN' }, descriptor],
+	[
+		'a gateway without the opt-in',
+		{ model: 'SOLO_LITE' },
+		{
+			...descriptor,
+			capabilities: { ...descriptor.capabilities, offline: 'none' },
+		},
+	],
+])('refuses offline on %s before touching the SDK session', async (_name, reader, value) => {
+	resolveMethod.mockReturnValue(value);
+	sdk.readerStatus.mockResolvedValue({ ...saved, ...reader });
+	await driver.initialize();
+	expect(driver.queuesOffline('bluetooth')).toBe(false);
+	await expect(driver.collect(offlineInput)).rejects.toThrow(/cannot take offline/);
+	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
+	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+it('does not offer offline before login', async () => {
+	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
+	sdk.isLoggedIn.mockResolvedValue(false);
+	await driver.initialize();
+	expect(driver.queuesOffline('bluetooth')).toBe(false);
+});
+it('stops before checkout when SumUp refuses to start an offline session', async () => {
+	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
+	sdk.startOfflineSession.mockRejectedValue(
+		new Error('SumUp has not enabled offline payments on this account')
+	);
+	await driver.initialize();
+	await expect(driver.collect(offlineInput)).rejects.toThrow('not enabled offline payments');
+	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+it('ends an active offline session before an online payment, and refuses one it cannot end', async () => {
+	sdk.offlineSessionActive.mockResolvedValue(true);
+	await expect(driver.collect(input)).resolves.toMatchObject({ outcome: 'captured' });
+	expect(sdk.stopOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
+		sdk.checkout.mock.invocationCallOrder[0]
+	);
+	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
+	sdk.checkout.mockClear();
+	sdk.stopOfflineSession.mockRejectedValue(new Error('SumUp could not end its offline session'));
+	await expect(driver.collect(input)).rejects.toThrow('could not end');
+	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+it('never calls a payment SumUp took offline captured', async () => {
+	sdk.checkout.mockResolvedValue({ ...success, offline: true });
+	await expect(driver.collect(input)).resolves.toMatchObject({
+		outcome: 'authorized',
+		provider_refs: { transaction_code: 'TX1', foreign_transaction_id: 'leg' },
+	});
+});
+it('back online, ends the offline session so SumUp uploads, and refreshes its limits', async () => {
+	mockOnlineStatus = 'online-website-available';
+	sdk.offlineSessionActive.mockResolvedValue(true);
+	let tree!: ReactTestRenderer;
+	await act(async () => {
+		tree = create(<SumUpDriverBridge driver={driver} methods={[descriptor]} />);
+	});
+	expect(sdk.stopOfflineSession).toHaveBeenCalledTimes(1);
+	expect(sdk.stopOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
+		sdk.prepareOffline.mock.invocationCallOrder[0]
+	);
+	// A failed refresh is a message, not a lost reader.
+	sdk.offlineSessionActive.mockResolvedValue(false);
+	sdk.prepareOffline.mockRejectedValue(new Error('SumUp could not download its offline limits'));
+	await act(async () => tree.update(<SumUpDriverBridge driver={driver} methods={[descriptor]} />));
+	await act(async () => driver.syncOffline());
+	expect(driver.status$.get()).toMatchObject({
+		connection: 'connected',
+		message: 'SumUp could not download its offline limits',
+	});
+	await act(async () => tree.unmount());
+});
+it('starts a checkout only after a running offline sync has finished', async () => {
+	await driver.initialize();
+	let finishStop!: () => void;
+	sdk.offlineSessionActive.mockResolvedValueOnce(true);
+	sdk.stopOfflineSession.mockImplementationOnce(
+		() => new Promise<void>((resolve) => (finishStop = resolve))
+	);
+	const sync = driver.syncOffline();
+	const collected = driver.collect(input);
+	await act(async () => {});
+	expect(sdk.checkout).not.toHaveBeenCalled();
+	await act(async () => finishStop());
+	await sync;
+	await expect(collected).resolves.toMatchObject({ outcome: 'captured' });
+	expect(sdk.prepareOffline.mock.invocationCallOrder[0]).toBeLessThan(
+		sdk.checkout.mock.invocationCallOrder[0]
+	);
+});
+it('leaves SumUp offline sessions alone without the opt-in or while offline', async () => {
+	const optedOut = { ...descriptor, capabilities: { ...descriptor.capabilities, offline: 'none' } };
+	resolveMethod.mockReturnValue(optedOut);
+	mockOnlineStatus = 'online-website-available';
+	let tree!: ReactTestRenderer;
+	await act(async () => {
+		tree = create(<SumUpDriverBridge driver={driver} methods={[optedOut]} />);
+	});
+	resolveMethod.mockReturnValue(descriptor);
+	mockOnlineStatus = 'offline';
+	await act(async () => tree.update(<SumUpDriverBridge driver={driver} methods={[descriptor]} />));
+	expect(sdk.offlineSessionActive).not.toHaveBeenCalled();
+	expect(sdk.prepareOffline).not.toHaveBeenCalled();
+	await act(async () => tree.unmount());
 });
 it('refreshes on foreground and removes its subscription on unmount', async () => {
 	let foreground!: (state: AppStateStatus) => void;

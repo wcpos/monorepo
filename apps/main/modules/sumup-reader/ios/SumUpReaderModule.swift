@@ -33,10 +33,31 @@ public class SumUpReaderModule: Module {
     guard !Self.busy else { throw Exception(name: "SumUpBusy", description: "A SumUp operation is already in progress") }
     Self.busy = true
   }
+  // Android's ReaderType names, so the driver reads one model vocabulary on both platforms
+  // (String(describing:) on an imported C enum gives no case name).
+  private func model(_ type: ReaderType) -> String {
+    switch type {
+    case .solo: return "SOLO"
+    case .soloLite: return "SOLO_LITE"
+    case .air: return "AIR"
+    case .threeG: return "THREE_G"
+    case .pinPlus: return "PIN_PLUS"
+    default: return "UNKNOWN"
+    }
+  }
   private func status() -> [String: Any]? {
     guard Self.affiliateKey != nil, let reader = SumUpSDK.lastReaderStatus else { return nil }
     return ["connected": reader.isActive, "serial": reader.serialNumber,
-            "model": String(describing: reader.readerType), "battery": reader.batteryLevel]
+            "model": model(reader.readerType), "battery": reader.batteryLevel]
+  }
+  // SumUp's offline calls must be serial and never run under one of its screens.
+  private func requireIdle() throws {
+    try requireSetup()
+    guard !Self.busy else { throw Exception(name: "SumUpBusy", description: "A SumUp operation is already in progress") }
+  }
+  private func settle(_ promise: Promise, _ success: Bool, _ error: Error?, _ failure: String) {
+    if success { promise.resolve(nil) }
+    else { promise.reject("SumUpOffline", error?.localizedDescription ?? failure) }
   }
   private func emitStatus() {
     sendEvent("onReaderStatus", ["reader": status() as Any? ?? NSNull()])
@@ -107,6 +128,26 @@ public class SumUpReaderModule: Module {
       try self.requireSetup()
       SumUpSDK.prepareForCheckout()
     }.runOnQueue(.main)
+    // getOfflineSessionDetails answers an error when no session is active.
+    AsyncFunction("offlineSessionActive") { (promise: Promise) in
+      try self.requireSetup()
+      SumUpSDK.getOfflineSessionDetails { details, _ in promise.resolve(details != nil) }
+    }.runOnQueue(.main)
+    AsyncFunction("startOfflineSession") { (promise: Promise) in
+      try self.requireIdle()
+      SumUpSDK.startOfflineSession { success, error in
+        self.settle(promise, success, error, "SumUp could not start an offline session")
+      }
+    }.runOnQueue(.main)
+    AsyncFunction("stopOfflineSession") { (promise: Promise) in
+      try self.requireIdle()
+      SumUpSDK.endOfflineSession { success, error in
+        self.settle(promise, success, error, "SumUp could not end its offline session")
+      }
+    }.runOnQueue(.main)
+    // The SDK downloads its offline limits itself after login; SumUp discourages calling
+    // setupOfflineSession by hand, so there is nothing to prepare on iOS.
+    AsyncFunction("prepareOffline") { try self.requireIdle() }.runOnQueue(.main)
     AsyncFunction("checkout") { (options: SumUpCheckoutOptions, promise: Promise) in
       let controller = try self.controller()
       let total = NSDecimalNumber(string: options.amount, locale: Locale(identifier: "en_US_POSIX"))

@@ -19,7 +19,7 @@ import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
-import { deviceTransports, selectableReaders } from './tiles';
+import { deviceTransports, queuesOffline, selectableReaders } from './tiles';
 import { disabledReasonKey } from './labels';
 import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
@@ -211,7 +211,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		!tile.disabled ||
 		(tile.reason === 'offline' &&
 			tile.method.capture.mode === 'device' &&
-			deviceTransports(tile.method).some((transport) => transport.offline === 'queue'));
+			deviceTransports(tile.method).some((transport) => queuesOffline(tile.method, transport)));
 	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));
 	const pills = flow.tiles.filter(canChoose).map((tile) => {
 		const selected = flow.state.methodId === tile.method.id;
@@ -246,7 +246,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					? plan
 						? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
 						: t('pos_checkout.part_payment_left', { left: format(left) })
-					: '';
+					: !flow.online && method?.capture.mode === 'device'
+						? t('pos_checkout.offline_card_may_decline')
+						: '';
 	const commit = method
 		? (fields
 				? t('pos_checkout.send_verb_amount', {

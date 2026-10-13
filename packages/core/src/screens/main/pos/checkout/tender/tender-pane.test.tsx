@@ -655,6 +655,24 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 	});
 });
 
+it('says once, under the amount, that an offline card payment can still be declined', () => {
+	registerDriver(createSimulatedDriver());
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		tiles: [{ method: deviceMethod, disabled: false, reason: null, worksOffline: false }],
+		deviceTransport: 'bluetooth' as const,
+		pickTransport: jest.fn(),
+	};
+	const rendered = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+	rendered.rerender(<TenderPane flow={{ ...flow, online: false }} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
+		'Offline card payments can still be declined by the bank when they upload.'
+	);
+});
+
 it.each(['discovery', 'bootstrap'] as const)(
 	'restarts superseded %s without leaving controls disabled',
 	async (stage) => {
