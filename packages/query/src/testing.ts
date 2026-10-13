@@ -638,3 +638,6 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 		},
 	};
 }
+
+/** How many query handles an engine's registry holds: a started handle is registered, a stopped one is not. */
+export { queryHandleCount } from './query-handle';

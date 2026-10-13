@@ -21,6 +21,7 @@ import {
 	engineOrder,
 	engineProduct,
 	engineVariation,
+	queryHandleCount,
 } from '@wcpos/query/testing';
 import type { FakeEngine } from '@wcpos/query/testing';
 
@@ -2889,6 +2890,70 @@ describe('query handles over the engine', () => {
 			'categories',
 			'coupons',
 		]);
+	});
+
+	it('a foreground wait that times out over a wedged lane lets both handles go after unmount', async () => {
+		jest.useFakeTimers();
+		const { result, unmount } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+		// A lane that never goes quiet: readiness lands, the quiet wait starts and never ends.
+		act(() => engine.setCollectionStatus('coupons', { active: true }));
+		const barrier = result.current.whenSettled();
+		await act(async () => jest.advanceTimersByTimeAsync(100));
+		unmount();
+
+		await act(async () => jest.advanceTimersByTimeAsync(10_000));
+		await expect(barrier).resolves.toBe(false);
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		// The deadline ended the quiet wait too: nothing still reads (keeps alive) either handle.
+		expect(queryHandleCount(engine)).toBe(0);
+	});
+
+	it('background wait converges across a coverage-generation change: the successor declares before the predecessor releases', async () => {
+		jest.useFakeTimers();
+		const log: string[] = [];
+		const originalRequire = engine.require.bind(engine);
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			log.push(`require:${requirement.id}`);
+			return {
+				...handle,
+				release: () => {
+					log.push(`release:${requirement.id}`);
+					handle.release();
+				},
+			};
+		};
+		const standingCoupons = () => [
+			...new Set(
+				engine.requireCalls
+					.filter((call) => call.collection === 'coupons' && !call.id.includes(':rearm'))
+					.map((call) => call.id)
+			),
+		];
+		engine.refreshReleased = true;
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+		const controller = new AbortController();
+		const background = result.current.whenSettledInBackground(controller.signal);
+		await act(async () => jest.advanceTimersByTimeAsync(2_000));
+		const [before] = standingCoupons();
+
+		// A reset of the coupons collection while the wait is armed: a new handle, a new demand.
+		act(() => engine.setCollectionStatus('coupons', { coverageGeneration: 1 }));
+		await act(async () => jest.advanceTimersByTimeAsync(0));
+		const after = standingCoupons().find((id) => id !== before);
+		expect(after).toBeDefined();
+		expect(log.indexOf(`require:${after}`)).toBeLessThan(log.lastIndexOf(`release:${before}`));
+
+		// The other owner finishes: the superseded handle's re-arm is met, and the wait settles.
+		engine.refreshReleased = false;
+		await act(async () => jest.advanceTimersByTimeAsync(30_000));
+		await expect(background).resolves.toBe(true);
 	});
 
 	it('background wait abandons itself when the caller aborts (#963)', async () => {

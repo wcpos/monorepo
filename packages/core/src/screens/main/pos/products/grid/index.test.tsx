@@ -66,7 +66,6 @@ jest.mock('../../../contexts/ui-settings', () => ({
 		uiSettings: { gridColumns$: 3, gridFields$: {} },
 	}),
 }));
-jest.mock('../../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	List: ({

@@ -193,13 +193,35 @@ it('a custom footer gets the drawn total as a value in the rows’ commit', asyn
 	expect(renders.some(({ count, total }) => count === 1 && total !== 5)).toBe(false);
 });
 
-it('the default footer is the caption row: the drawn total, the live spinner, the live sync', () => {
-	const handle = handleWith({ total: 27 });
-	renderTable({ handle });
-	expect(screen.getByTestId('data-table-count').textContent).toBe(
-		'{"key":"common.showing_of","shown":"1","total":"27"}'
+it('the default footer is the caption row: the drawn total, the live spinner, the live sync', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const drawn = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+		total: 5,
+		active: false,
+	});
+	const drawnSync = jest.fn(async () => undefined);
+	Object.assign(drawn, { sync: drawnSync });
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ handle })}
+		</React.Suspense>
 	);
-	expect(screen.getByTestId('data-table-total-count').textContent).toBe('27');
+	const { rerender } = render(tree(drawn));
+	// A changed query, unanswered: it is the live handle (pulling, its own total), the previous
+	// one stays drawn.
+	const live = fakeQueryHandle({ ready: false, total: 99, active: true });
+	const liveSync = jest.fn(async () => undefined);
+	Object.assign(live, { sync: liveSync });
+	rerender(tree(live));
+
+	expect(screen.getByTestId('data-table-caption-row')).toBeTruthy();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe('5');
+	expect(screen.getByTestId('sync-button').dataset.active).toBe('true');
+	fireEvent.click(screen.getByTestId('sync-button'));
+	expect(liveSync).toHaveBeenCalledTimes(1);
+	expect(drawnSync).not.toHaveBeenCalled();
 });
 
 it('a custom footer is handed values, never streams, with the table’s collection', () => {

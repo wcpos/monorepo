@@ -396,7 +396,8 @@ export function acquireEmptyQueryHandle(
  * A demand and nothing to read: the standing declaration while owned, its readiness and re-arm
  * (`whenReady`, `declareOnce`), and the collection's pull activity (`value.active`). For a caller
  * that scans the residents itself once the demand has landed (the coupon replay), so it holds no
- * live query over a whole collection for nothing; its answer is the empty result.
+ * live query over a whole collection, and no census or coverage verdict, for nothing; its answer
+ * is the empty result and its `total` is null.
  */
 export function acquireDemandQueryHandle(
 	engine: RxdbSyncEngine,
@@ -414,6 +415,8 @@ export function acquireDemandQueryHandle(
 				demands: [createDemand(engine, id, demandPlanFor(compiled))],
 				activeCollections: [engineCollectionNameFor(compiled.collection)],
 				censusScoped: false,
+				// Nothing reads a total from a demand: no census, no coverage verdict.
+				projectsTotal: false,
 				observeActive: observeCollectionActive,
 			},
 			emptyResult(),

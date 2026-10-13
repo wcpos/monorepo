@@ -27,7 +27,6 @@ import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { ProductsFooter } from '../v2/footer';
-import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { RxCollection } from 'rxdb';
 import type { QueryStateActions, SnapshotFields } from '../../../../../query';
@@ -141,7 +140,6 @@ export function ProductGrid({
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
-	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 
 	// Stale-while-loading, React's own way: a changed query is a new handle; while it suspends,
@@ -176,7 +174,6 @@ export function ProductGrid({
 		handle,
 		actions,
 		uiSettings,
-		calcTaxes,
 		t,
 		Tile,
 		VariableTile,

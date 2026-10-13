@@ -53,7 +53,12 @@ jest.mock('../../../../../contexts/translations', () => ({
 jest.mock('../../../hooks/use-collection-reset', () => ({
 	useCollectionReset: () => ({ clearAndSync: jest.fn() }),
 }));
-jest.mock('../../sync-button', () => ({ SyncButton: () => null }));
+jest.mock('../../sync-button', () => ({
+	// The footer's sync control as the cashier sees it: it turns while `active`, a press syncs.
+	SyncButton: ({ active, sync }: { active: boolean; sync: () => Promise<void> }) => (
+		<button data-testid="sync-button" data-active={String(active)} onClick={() => void sync()} />
+	),
+}));
 jest.mock('../list-footer', () => ({ ListFooterComponent: () => null }));
 jest.mock('../../record-text-cell', () => ({
 	RecordTextCell: ({ column }: { column: { id: string } }) => (

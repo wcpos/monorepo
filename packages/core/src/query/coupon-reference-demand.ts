@@ -13,6 +13,7 @@ import {
 	map,
 	Observable,
 	race,
+	switchMap,
 	timer,
 } from 'rxjs';
 
@@ -229,15 +230,16 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	return React.useMemo(
 		() => ({
 			// Bounded: cart math must never hang on sync, so the wait cannot be open-ended. The
-			// deadline reports itself (`false`) instead of pretending the pull landed.
+			// deadline reports itself (`false`) instead of pretending the pull landed. The quiet
+			// wait is INSIDE the race, so the deadline also ends it: left outside, a wedged lane
+			// kept both handles read (alive) long after the cart unmounted.
 			whenSettled: () =>
 				firstValueFrom(
 					race(
-						from(
-							Promise.all([coupons.whenReady(), categories.whenReady()]).then(() =>
-								firstValueFrom(quiet$)
-							)
-						).pipe(map(() => true)),
+						from(Promise.all([coupons.whenReady(), categories.whenReady()])).pipe(
+							switchMap(() => quiet$),
+							map(() => true)
+						),
 						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
 					)
 				),

@@ -97,24 +97,33 @@ describe('useLocalQuery$', () => {
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(1);
 	});
 
-	it('answers a reader after Strict Mode replays its effects', async () => {
-		await localDB.collections.logs.bulkInsert([
-			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one' },
-		]);
+	it('opens one read per reader across a Strict Mode replay, and none after unmount', async () => {
+		const harness = localCollectionHarness(['only']);
+		const database = { collections: { logs: harness.collection } } as unknown as RxDatabase;
 		const engine = createFakeEngine(engineDB);
-		// Strict Mode runs the reader's effect cleanup and setup again: the streams must survive
-		// the replay (the resource form this used to pin is gone; `useOwnedResource` pins its own).
-		const wrapper = ({ children }: { children: React.ReactNode }) => (
-			<QueryProvider localDB={localDB} engine={engine} locale="en">
-				{children}
-			</QueryProvider>
+		let latest: ReturnType<typeof useLocalQueryProbe>['latest'];
+		function Probe() {
+			const query = useLocalQueryProbe({ collectionName: 'logs' });
+			React.useEffect(() => {
+				// The test probe exposes the answer after React commits it.
+				latest = query.latest;
+			}, [query.latest]);
+			return null;
+		}
+		// Strict Mode runs the reader's effect cleanup and setup again: the replay must hand the
+		// read over, not leave the first subscription (or a second) behind.
+		const view = render(
+			<React.StrictMode>
+				<QueryProvider localDB={database} engine={engine} locale="en">
+					<Probe />
+				</QueryProvider>
+			</React.StrictMode>
 		);
-		const { result } = renderHook(
-			() => useLocalQueryProbe({ collectionName: 'logs', sort: [{ timestamp: 'desc' }], limit: 1 }),
-			{ wrapper, reactStrictMode: true }
-		);
-
-		await waitFor(() => expect(result.current.latest?.hits).toHaveLength(1));
+		await waitFor(() => expect(latest?.hits[0]?.id).toBe('only'));
+		// One reader: the documents and the count, once each.
+		expect(harness.activeSubscriptions()).toBe(2);
+		view.unmount();
+		expect(harness.activeSubscriptions()).toBe(0);
 	});
 
 	it('returns an empty result when the logs collection is unavailable', async () => {

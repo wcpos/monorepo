@@ -18,11 +18,6 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'@wcpos/core/screens/main/orders',
-	() => ({ OrdersScreen: () => <div data-testid="old-orders" /> }),
-	{ virtual: true }
-);
-jest.mock(
 	'@wcpos/core/screens/main/orders/v2',
 	() => ({ OrdersScreen: () => <div data-testid="new-orders" /> }),
 	{ virtual: true }
@@ -43,7 +38,6 @@ it('switches the index to the v2 orders screen, unwrapped', () => {
 	render(<OrdersRoute />);
 	expect(screen.getByTestId('new-orders')).toBeTruthy();
 	expect(screen.queryByTestId('guard-orders')).toBeNull();
-	expect(screen.queryByTestId('old-orders')).toBeNull();
 });
 it('redirects legacy detail links to the list selection', () => {
 	render(<ViewRoute />);

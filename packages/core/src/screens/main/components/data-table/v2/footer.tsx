@@ -42,7 +42,7 @@ export function DataTableFooter({
 	return (
 		// A caption row on the ground under the card: no rule of its own, text aligned with the
 		// card's cell padding (gutter 8 + cell 12).
-		<HStack className="min-h-ctl items-center px-5">
+		<HStack testID="data-table-caption-row" className="min-h-ctl items-center px-5">
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">{children}</HStack>
 			<HStack className="shrink-0 gap-0">
 				<Text testID="data-table-count" className="text-muted-foreground text-sm">

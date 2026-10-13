@@ -621,6 +621,11 @@ export type QueryHandleSpec<R extends QueryResult<RxCollection>> = {
 	/** The census honestly stands for this read (not a targeted subset). */
 	censusScoped: boolean;
 	coverage?: 'exact' | 'superset';
+	/**
+	 * False for a handle nobody reads a total from (a demand with no read): the snapshot's
+	 * `total` and `laneProgress` stay null and no coverage verdict is subscribed. Default true.
+	 */
+	projectsTotal?: boolean;
 	/** The engine's `active` flag source; injectable so tests can fake it. */
 	observeActive: (engine: RxdbSyncEngine, collection: SyncCollectionName) => Observable<boolean>;
 };
@@ -704,15 +709,16 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		spec.censusScoped && primary ? censusTotal$(engine, primary.collection) : NO_CENSUS_TOTAL$;
 	// Rows and total in ONE emission (the projection carries the result it was computed for),
 	// so a reader never sees new rows against the previous total.
-	const projected$ = primary
-		? coverageProjectionWithResult$(
-				engine,
-				result$,
-				primary.coverageTarget$,
-				census$,
-				spec.coverage
-			)
-		: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
+	const projected$ =
+		primary && spec.projectsTotal !== false
+			? coverageProjectionWithResult$(
+					engine,
+					result$,
+					primary.coverageTarget$,
+					census$,
+					spec.coverage
+				)
+			: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
 	const exhausted$ = primary
 		? exhaustedFromCoverage$(engine, primary.searchLane$, primary.fetched$).pipe(startWith(null))
 		: UNKNOWN_EXHAUSTED$;

@@ -567,4 +567,23 @@ describe('query handle', () => {
 			fetched: false,
 		});
 	});
+
+	it('a handle that projects no total declares its demand and subscribes no coverage verdict', () => {
+		const demandOnly = acquireQueryHandle(engine, 'q', (registry) =>
+			createQueryHandle(
+				engine,
+				{ ...spec('q', of(EMPTY), [refreshPlan()]), projectsTotal: false },
+				EMPTY,
+				registry
+			)
+		);
+		demandOnly.retain();
+		expect(engine.requireCalls).toHaveLength(1);
+		expect(engine.coverageSubscribeCalls).toEqual([]);
+		expect(demandOnly.value).toMatchObject({ ready: true, total: null, laneProgress: null });
+
+		// The control: the same demand on a reading handle asks the engine for its verdict.
+		acquire('r', of(EMPTY), [refreshPlan()]).retain();
+		expect(engine.coverageSubscribeCalls).not.toEqual([]);
+	});
 });
