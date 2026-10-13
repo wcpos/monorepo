@@ -16,16 +16,16 @@ Ruled in [wcpos/roadmap#428](https://github.com/wcpos/roadmap/issues/428), 2026-
 
 ## The commands (closed list)
 
-| Command             | Does                               | `when`                              |
-| ------------------- | ---------------------------------- | ----------------------------------- |
-| `pos.search.focus`  | `focus('search')`                  | route is cart                       |
-| `pos.checkout.open` | `navigate.openCheckout()`          | route is cart, `lineCount > 0`      |
-| `pos.cart.new`      | `cart.newOrder()`                  | route is cart, `hasOpenOrder`       |
-| `pos.cart.previous` | `cart.selectOrder('previous')`     | route is cart, `openOrderCount > 1` |
-| `pos.cart.next`     | `cart.selectOrder('next')`         | route is cart, `openOrderCount > 1` |
-| `pos.cart.discount` | `focus('discount')`                | route is cart, `hasOpenOrder`       |
+| Command             | Does                               | `when`                                              |
+| ------------------- | ---------------------------------- | --------------------------------------------------- |
+| `pos.search.focus`  | `focus('search')`                  | route is cart                                       |
+| `pos.checkout.open` | `navigate.openCheckout()`          | route is cart, `lineCount > 0`                      |
+| `pos.cart.new`      | `cart.newOrder()`                  | route is cart, `hasOpenOrder`                       |
+| `pos.cart.previous` | `cart.selectOrder('previous')`     | route is cart, `openOrderCount > 1`                 |
+| `pos.cart.next`     | `cart.selectOrder('next')`         | route is cart, `openOrderCount > 1`                 |
+| `pos.cart.discount` | `focus('discount')`                | route is cart, `hasOpenOrder`                       |
 | `pos.cart.void`     | `cart.void()`                      | route is cart, `hasOpenOrder`, `hasSurface('void')` |
-| `pos.help.open`     | a `debug` row until the help sheet | always                              |
+| `pos.help.open`     | a `debug` row until the help sheet | always                                              |
 
 They register at import time in `commands.ts`, which the barrel imports. No key is bound here:
 the hotkeys module (PR 2 of roadmap#428) binds them.
@@ -81,7 +81,7 @@ returns the detach, so an effect is the whole registration.
 `invokeSurface(target)` runs the newest registration and rejects with `SurfaceNotMountedError`
 when none is mounted. A detach removes only its own entry. So the command does what the button
 does, while the button exists. The void button lives in the order sheet, so `pos.cart.void`'s
-`when` reads `hasSurface('void')` and the command is *refused* (an info row) while the sheet is
+`when` reads `hasSurface('void')` and the command is _refused_ (an info row) while the sheet is
 closed; its move to the cart column is PR 1b of roadmap#428. Surfaces register through
 `useRegisterSurface(target, handler)`, which registers once on mount and always invokes the latest
 handler, so a key landing between a render and an effect flush never runs a previous cart's path.
