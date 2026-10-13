@@ -1,5 +1,6 @@
 import { awaitWriteOutcome, type useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import {
@@ -10,6 +11,8 @@ import {
 } from '../../hooks/mutations/use-local-mutation';
 
 type QueryManager = ReturnType<typeof useQueryRuntime>;
+
+const voidLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
 /**
  * One bounded second watch after `awaitWriteOutcome`'s helper timeout: a slow
@@ -58,10 +61,23 @@ export async function voidOrder(
 	input: VoidOrderInput
 ): Promise<VoidOrderResult> {
 	const { recordId, registerId } = input;
+	// A refused delete is answered once the order is converted or restored, so its dead letter is
+	// settled: left in the queue it reads as "Save refused" on the order's tab for ever. Discard
+	// keeps the resident (a delete is never a born-local create) and drops only the delete's own
+	// bookkeeping; the queued pending or restoring update still protects the record from the
+	// re-pull that discard schedules. Not awaited: the outcome stands either way, and the re-pull
+	// is a fetch.
+	const settleRefusedDelete = (deleteMutationId: string) => {
+		void manager.engine.resolveConflict(deleteMutationId, 'discard').catch((error: unknown) => {
+			voidLogger.warn('Could not settle the refused delete of a void', {
+				context: { orderId: recordId, mutationId: deleteMutationId, error: getErrorMessage(error) },
+			});
+		});
+	};
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
 	// fallback is an atomic patch-and-enqueue to status 'pending' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
-	const convertToPending = async () => {
+	const convertToPending = async (deleteMutationId: string) => {
 		await patchAndEnqueueEngineResident({
 			manager,
 			collection: 'orders',
@@ -69,6 +85,7 @@ export async function voidOrder(
 			changes: { status: 'pending' },
 			registerId,
 		});
+		settleRefusedDelete(deleteMutationId);
 	};
 
 	const receipt = await requestServerDelete(manager.engine, { collection: 'orders', recordId });
@@ -84,7 +101,7 @@ export async function voidOrder(
 		return { kind: 'removed', confirmed: true, late: null };
 	} catch (error) {
 		if (isCannotDelete(error)) {
-			await convertToPending();
+			await convertToPending(receipt.mutationId);
 			return { kind: 'kept-pending' };
 		}
 		// A terminal-but-different outcome (conflict, other rejection) is owned by the engine's
@@ -98,8 +115,13 @@ export async function voidOrder(
 		}).then(
 			() => null,
 			async (lateError) => {
-				if (!isCannotDelete(lateError) || input.undone()) return null;
-				await convertToPending();
+				if (!isCannotDelete(lateError)) return null;
+				// Undone already: the order is restored, so only the dead letter needs settling.
+				if (input.undone()) {
+					settleRefusedDelete(receipt.mutationId);
+					return null;
+				}
+				await convertToPending(receipt.mutationId);
 				return 'kept-pending' as const;
 			}
 		);

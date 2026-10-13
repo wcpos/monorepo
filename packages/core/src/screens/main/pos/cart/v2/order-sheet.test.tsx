@@ -86,6 +86,10 @@ jest.mock('../../../contexts/use-push-document', () => ({ usePushDocument: () =>
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 	useCurrentOrderRecord: () => mockOrder,
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => mockOrder,
+		setCurrentOrderID: jest.fn(),
+	}),
 }));
 
 beforeEach(() => {
