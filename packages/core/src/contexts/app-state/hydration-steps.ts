@@ -503,10 +503,15 @@ export async function runConnectCompatibilityProbes(input: {
 		const code = ERROR_CODES.CACHE_SHARED_REPLAY;
 		const bustedFirst = await requestEcho(FIRST_PROBE_TOKEN, true);
 		const bustedSecond = await requestEcho(SECOND_PROBE_TOKEN, true);
+		// Both busted echoes must report exactly what was sent: a cache that
+		// ignores the key would answer the first probe's stored copy, and a probe
+		// that never answered proves nothing. Anything less stays blocked.
+		const arrivedIntact = (echo: HeaderEchoResult | null, sentLength: number) =>
+			echo?.headers.authorization?.received === true &&
+			echo.headers.authorization.length === sentLength;
 		if (
-			!isReplay(bustedFirst, bustedSecond) &&
-			bustedSecond?.headers.authorization?.received === true &&
-			bustedSecond.headers.authorization.length === secondSentLength
+			arrivedIntact(bustedFirst, `Bearer ${FIRST_PROBE_TOKEN}`.length) &&
+			arrivedIntact(bustedSecond, secondSentLength)
 		) {
 			appLogger.warn(
 				'Shared cache replay detected; routing around it with a unique cache key on every request',

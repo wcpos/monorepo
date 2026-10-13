@@ -1495,9 +1495,9 @@
 		"dataSafety": "data-at-risk",
 		"escalation": "support-with-export",
 		"summary": "A cache in front of the store is replaying one person's API responses to everyone.",
-		"docsBody": "A caching layer is serving stored REST API responses without checking who is asking: the app sent two differently-authenticated probes and received the first probe's answer both times. On a live store this means one cashier could see another's data, so connecting is blocked until the cache excludes the store's API. This is a hosting-layer problem — WordPress itself always answers per-user. The app first retries with a unique cache key on every request; when that defeats the cache it connects and keeps the key on every request, so this error is raised only when the cache ignores the query string as well.",
+		"docsBody": "A caching layer is serving stored REST API responses without checking who is asking: the app sent two differently-authenticated probes and received the first probe's answer both times. On a live store this means one cashier could see another's data, so connecting is blocked until the cache excludes the store's API. This is a hosting-layer problem — WordPress itself always answers per-user. The app first retries with a unique cache key on every request; when that retry proves the key defeats the cache, the app connects and keeps the key on every request, so this error is raised only when the retry could not prove a safe connection either.",
 		"troubleshooting": [
-			"The app already retried with a unique cache key on every request and the cache still replayed, so the cache is ignoring query strings too; the fix has to be on the host.",
+			"The app already retried with a unique cache key on every request and still could not prove a safe connection, so the cache has to be fixed on the host.",
 			"Exclude the store's REST API paths (/wp-json/ and /?rest_route=) from page caching — on LiteSpeed disable REST caching or add a no-cache rule; on WP Engine extend the WooCommerce exclusion to /wp-json/wcpos; on Sucuri set the caching level to honor Cache-Control.",
 			"The store's API already sends Cache-Control: no-store and Vary: Authorization — the cache layer is ignoring them; point the host at those headers.",
 			"After changing cache settings, purge the cache before reconnecting."

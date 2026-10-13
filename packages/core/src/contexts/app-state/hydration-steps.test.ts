@@ -894,6 +894,25 @@ describe('runConnectCompatibilityProbes', () => {
 		);
 		expect(mockAppLogger.error).not.toHaveBeenCalled();
 	});
+	it.each([{ status: 'success' }, null, echoBody(true, 36)])(
+		'blocks when the busted first echo does not prove arrival: %p',
+		async (first) => {
+			fetchMock
+				.mockResolvedValueOnce(response(200))
+				.mockResolvedValueOnce(response(200))
+				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+				.mockResolvedValueOnce(response(200, first))
+				.mockResolvedValueOnce(response(200, echoBody(true, 36)));
+			await expect(run()).resolves.toEqual({
+				blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
+				warnings: [],
+				useCacheBuster: false,
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(6);
+			expect(mockAppLogger.warn).not.toHaveBeenCalled();
+		}
+	);
 	it.each([{ status: 'success' }, null, echoBody(false, 36)])(
 		'blocks when the busted second echo does not prove arrival: %p',
 		async (second) => {
