@@ -1,5 +1,6 @@
 import { awaitWriteOutcome, type useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import {
@@ -10,6 +11,8 @@ import {
 } from '../../hooks/mutations/use-local-mutation';
 
 type QueryManager = ReturnType<typeof useQueryRuntime>;
+
+const voidLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
 /**
  * One bounded second watch after `awaitWriteOutcome`'s helper timeout: a slow
@@ -61,13 +64,23 @@ export async function voidOrder(
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
 	// fallback is an atomic patch-and-enqueue to status 'pending' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
-	const convertToPending = async () => {
+	const convertToPending = async (deleteMutationId: string) => {
 		await patchAndEnqueueEngineResident({
 			manager,
 			collection: 'orders',
 			recordId,
 			changes: { status: 'pending' },
 			registerId,
+		});
+		// The conversion answered the refusal, so its dead letter is settled: left in the queue it
+		// reads as "Save refused" on the order's tab for ever. Discard keeps the resident (a delete
+		// is never a born-local create) and drops only the delete's own bookkeeping; the queued
+		// pending update still protects the record from the re-pull that discard schedules.
+		// Not awaited: the void stands either way, and the re-pull is a fetch.
+		void manager.engine.resolveConflict(deleteMutationId, 'discard').catch((error: unknown) => {
+			voidLogger.warn('Could not settle the refused delete of a void kept as pending', {
+				context: { orderId: recordId, mutationId: deleteMutationId, error: getErrorMessage(error) },
+			});
 		});
 	};
 
@@ -84,7 +97,7 @@ export async function voidOrder(
 		return { kind: 'removed', confirmed: true, late: null };
 	} catch (error) {
 		if (isCannotDelete(error)) {
-			await convertToPending();
+			await convertToPending(receipt.mutationId);
 			return { kind: 'kept-pending' };
 		}
 		// A terminal-but-different outcome (conflict, other rejection) is owned by the engine's
@@ -99,7 +112,7 @@ export async function voidOrder(
 			() => null,
 			async (lateError) => {
 				if (!isCannotDelete(lateError) || input.undone()) return null;
-				await convertToPending();
+				await convertToPending(receipt.mutationId);
 				return 'kept-pending' as const;
 			}
 		);

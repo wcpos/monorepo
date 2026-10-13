@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useRouter } from 'expo-router';
-
 import { readLedger } from '@wcpos/order-math';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -24,7 +22,7 @@ import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import '../cart/void-audit-hook';
 import '../cart/void-guards';
 import { restoreVoidedOrder, voidOrder, type VoidOrderResult } from '../cart/void-order';
-import { useCurrentOrderRecord } from '../contexts/current-order';
+import { useCurrentOrderActions, useCurrentOrderRecord } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
@@ -39,7 +37,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 	storageDegraded: boolean;
 } {
 	const currentOrder = useCurrentOrderRecord();
-	const router = useRouter();
+	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const manager = useQueryRuntime();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
@@ -52,7 +50,9 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		async (recordId: string, orderPayload: Record<string, unknown>) => {
 			try {
 				await restoreVoidedOrder(manager, recordId, orderPayload);
-				router.setParams({ orderId: [recordId] });
+				// Through the provider, not the route: a kept-pending void left the order, which
+				// parks its id in the route, and only selecting it again releases that.
+				setCurrentOrderID(recordId);
 			} catch (err) {
 				cartLogger.error('Failed to restore order', {
 					showToast: true,
@@ -64,7 +64,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 				});
 			}
 		},
-		[manager, router]
+		[manager, setCurrentOrderID]
 	);
 
 	/**
@@ -102,6 +102,11 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 					orderNumber: orderPayload.number,
 				},
 			});
+		};
+		// A kept-pending order is still open on the store, so it stays a tab; the cart moves to a
+		// blank order. Only if the cashier is still on it: the store's answer can come much later.
+		const leaveKeptOrder = () => {
+			if (getCurrentOrderRecord().uuid === recordId) setCurrentOrderID('');
 		};
 		const reportFailure = (err: unknown) =>
 			cartLogger.error('Failed to void order', {
@@ -187,6 +192,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		}
 		if (outcome.kind === 'kept-pending') {
 			showSuccess(t('pos_cart.order_voided_kept_pending'));
+			leaveKeptOrder();
 			return;
 		}
 		showSuccess(t('pos_cart.order_removed'));
@@ -197,6 +203,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		try {
 			if ((await outcome.late) === 'kept-pending') {
 				showSuccess(t('pos_cart.order_voided_kept_pending'));
+				if (!undone) leaveKeptOrder();
 				ctx.log('info', `Order ${recordId} kept as pending after a late refusal`, {
 					category: ['wcpos', 'pos', 'cart', 'void'],
 					actor: cashier ?? undefined,
@@ -216,7 +223,19 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		} catch (err) {
 			reportFailure(err);
 		}
-	}, [blockIfDegraded, currentOrder, manager, t, undoRemove, onBeforeVoid, ctx, actor, cashier]);
+	}, [
+		blockIfDegraded,
+		currentOrder,
+		manager,
+		t,
+		undoRemove,
+		onBeforeVoid,
+		ctx,
+		actor,
+		cashier,
+		getCurrentOrderRecord,
+		setCurrentOrderID,
+	]);
 
 	return { voidOrder: handleRemove, storageDegraded };
 }
