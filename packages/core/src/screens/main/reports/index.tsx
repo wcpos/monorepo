@@ -38,7 +38,7 @@ import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
 import {
 	QueryStateProvider,
-	useCollectionBinding,
+	useCollectionQueryHandle,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
@@ -84,10 +84,14 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
-	const binding = useCollectionBinding('orders', state, { storeScope: 'sales' });
+	// The three handles are owned here (the effects retain them), above the refunds and
+	// comparison boundaries, so a suspended or failed secondary read never drops a handle. A
+	// failed sales read goes to the screen's boundary above this owner; its reset remounts the
+	// owner, which reads afresh.
+	const handle = useCollectionQueryHandle('orders', state, { storeScope: 'sales' });
 	const { comparisonFilter } = useReportsPeriod();
-	// The binding is compiled from the state object's identity: keep the comparison state stable
-	// across renders so the resource (and its Suspense) is rebuilt only when a bound changes.
+	// A handle is keyed by the state's canonical JSON, so an equal state is the same handle even
+	// unmemoised; the memo only saves building the key on every render.
 	const { from: comparisonFrom, to: comparisonTo } = comparisonFilter;
 	const comparisonState = React.useMemo(
 		() => ({
@@ -96,7 +100,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		}),
 		[state, comparisonFrom, comparisonTo]
 	);
-	const comparisonBinding = useCollectionBinding('orders', comparisonState, {
+	const comparisonHandle = useCollectionQueryHandle('orders', comparisonState, {
 		storeScope: 'sales',
 	});
 	const {
@@ -113,7 +117,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		}),
 		[search, limit, dateRange]
 	);
-	const refundsBinding = useCollectionBinding('refunds', refundsState);
+	const refundsHandle = useCollectionQueryHandle('refunds', refundsState);
 	const storeId = Number.isFinite(Number(state.filters.store))
 		? Number(state.filters.store)
 		: undefined;
@@ -177,8 +181,9 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
 			</View>
 			<View className="min-h-0 flex-1">
-				{/* The date button stays available while the orders load: it is the only way out of a
-				    slow or stuck range, so the loading shell carries the same title row. */}
+				{/* The date button stays available while the first orders load: it is the only way out
+				    of a slow or stuck range, so the loading shell carries the same title row. A later
+				    query keeps the previous figures until it answers (the provider's drawn handle). */}
 				<Suspense
 					fallback={
 						<View className="px-2">
@@ -187,13 +192,16 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 					}
 				>
 					<ReportsProvider
-						binding={binding}
-						comparisonBinding={comparisonBinding}
-						refundsBinding={refundsBinding}
+						handle={handle}
+						comparisonHandle={comparisonHandle}
+						refundsHandle={refundsHandle}
 					>
 						<ErrorBoundary
 							FallbackComponent={() => <Reports title={title} />}
-							resetKeys={[refundsBinding, binding]}
+							resetKeys={[refundsHandle, handle]}
+							// A new sales query can leave the failed refunds handle in place: the
+							// reset asks the engine again rather than rethrowing the old failure.
+							onReset={() => refundsHandle.retry()}
 						>
 							<React.Suspense fallback={<Reports title={title} />}>
 								<ReportsRefunds>

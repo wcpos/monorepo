@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { BehaviorSubject } from 'rxjs';
 import { render } from '@testing-library/react';
 
 import { mockState } from '../cards/test-utils';
@@ -110,12 +109,13 @@ export const real = jest.requireActual<typeof Context>('../context');
 export function preparePanel() {
 	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
 	jest.spyOn(context, 'useIncludedStatus').mockImplementation(real.useIncludedStatus);
-	jest.spyOn(context, 'useReportsBinding').mockImplementation(
+	jest.spyOn(context, 'useReportsHandles').mockImplementation(
 		() =>
 			({
-				binding: { laneProgress$: mockLaneProgress },
-				refundsBinding: { laneProgress$: mockRefundLaneProgress },
-			}) as unknown as Context.ReportsBinding
+				handle: mockSalesHandle,
+				comparisonHandle: mockSalesHandle,
+				refundsHandle: mockRefundsHandle,
+			}) as unknown as Context.ReportsHandles
 	);
 	jest.spyOn(context, 'useReportsSelection').mockImplementation(() => React.useContext(Selection)!);
 	jest.spyOn(context, 'useReportsData').mockImplementation(() => {
@@ -156,15 +156,10 @@ export const room = () =>
 		</real.ReportsScopeProvider>
 	);
 
-/** The sales lane's ranged-download progress: null when the range is complete. */
-export const mockLaneProgress = new BehaviorSubject<{
-	received: number;
-	total: number | null;
-} | null>(null);
-export const mockRefundLaneProgress = new BehaviorSubject<{
-	received: number;
-	total: number | null;
-} | null>(null);
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+/** The sales and refunds handles; a test drives `set({ laneProgress })` (null: range complete). */
+export const mockSalesHandle = fakeQueryHandle({}, 'sales');
+export const mockRefundsHandle = fakeQueryHandle({}, 'refunds');
 export const mockPrintDocument = {
 	templates: [{ id: 7, title: 'Sales', offline_capable: true }],
 	templatesReady: true,

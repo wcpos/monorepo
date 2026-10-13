@@ -172,6 +172,9 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../../../../query', () => ({
 	useQueryState: () => ({ filters: { register: mockState.register } }),
+	// The panel reads its lanes from the handles the tests drive.
+	useQueryHandleFields: (...args: unknown[]) =>
+		jest.requireActual('../../../../query/query-handles').useQueryHandleFields(...args),
 }));
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => mockState.names,

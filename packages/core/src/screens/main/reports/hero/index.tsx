@@ -25,8 +25,8 @@ import { Chart } from '../chart';
 import {
 	ReportsComparison,
 	useIncludedStatus,
-	useReportsBinding,
 	useReportsData,
+	useReportsHandles,
 	useReportsPeriod,
 	useReportsScope,
 	useReportsSelection,
@@ -317,7 +317,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const phone = screenSize === 'sm';
 	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView, setDetail } =
 		useReportsScope();
-	const { comparisonBinding } = useReportsBinding();
+	const { comparisonHandle } = useReportsHandles();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
 	const { store, money, number, quantity, percent } = useReportFormats(storeId);
 	const { formatDate } = useLocalDate();
@@ -460,7 +460,9 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			<ErrorBoundary
 				FallbackComponent={() => <Figures {...figures} comparison="failed" />}
 				// A failed comparison is retried when its query changes (range, cashier, choice, status).
-				resetKeys={[comparisonBinding, cmp, statusMode]}
+				// A status change keeps the handle, so the reset asks the engine again for it.
+				resetKeys={[comparisonHandle, cmp, statusMode]}
+				onReset={() => comparisonHandle.retry()}
 			>
 				<React.Suspense fallback={<Figures {...figures} comparison="loading" />}>
 					<ReportsComparison>
@@ -472,7 +474,8 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			<View testID="hero-chart" className="h-56 w-full">
 				<ErrorBoundary
 					FallbackComponent={() => <Chart />}
-					resetKeys={[comparisonBinding, cmp, statusMode]}
+					resetKeys={[comparisonHandle, cmp, statusMode]}
+					onReset={() => comparisonHandle.retry()}
 				>
 					<React.Suspense fallback={<Chart />}>
 						<ReportsComparison>

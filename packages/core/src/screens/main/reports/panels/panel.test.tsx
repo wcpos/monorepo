@@ -5,9 +5,9 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 
 import { mockCredentials, mockProducts, mockState, setOrders } from '../cards/test-utils';
 import {
-	mockLaneProgress,
 	mockPrintDocument,
-	mockRefundLaneProgress,
+	mockRefundsHandle,
+	mockSalesHandle,
 	preparePanel,
 	room,
 } from './test-utils';
@@ -19,8 +19,8 @@ import type * as Context from '../context';
 
 beforeEach(() => {
 	preparePanel();
-	mockLaneProgress.next(null);
-	mockRefundLaneProgress.next(null);
+	mockSalesHandle.set({ ready: true, laneProgress: null });
+	mockRefundsHandle.set({ ready: true, laneProgress: null });
 	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
 	mockPrintDocument.templatesReady = true;
 	mockPrintDocument.documentError = null;
@@ -168,14 +168,14 @@ it('shows a document error under the footer', () => {
 });
 
 it('Print waits while the orders lane is still downloading, and for a printer that can print the template', () => {
-	mockLaneProgress.next({ received: 40, total: 100 });
+	mockSalesHandle.set({ laneProgress: { downloaded: 40, total: 100 } });
 	room();
 	fireEvent.click(screen.getByTestId('card-taxes-open'));
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
 	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
 		'Still loading orders for this range'
 	);
-	mockLaneProgress.next(null);
+	act(() => mockSalesHandle.set({ laneProgress: null }));
 	mockPrintDocument.mismatchWarning = 'raw printer';
 	fireEvent.click(screen.getByTestId('detail-panel-close'));
 	fireEvent.click(screen.getByTestId('card-taxes-open'));
@@ -225,7 +225,7 @@ it('a phone total with the margin columns keeps its amount beside the margin', (
 it.each(['refunds', 'products', 'categories', 'brands'])(
 	'waits for refund download progress before printing panels: %s',
 	async (panel) => {
-		mockRefundLaneProgress.next({ received: 40, total: 100 });
+		mockRefundsHandle.set({ laneProgress: { downloaded: 40, total: 100 } });
 		setOrders([
 			{ uuid: 'a', status: 'completed', total: '10', cost_of_goods_sold: {} },
 		] as Context.ReportOrder[]);
@@ -237,14 +237,39 @@ it.each(['refunds', 'products', 'categories', 'brands'])(
 		);
 		fireEvent.click(screen.getByTestId('detail-panel-print'));
 		expect(mockPrintDocument.print).not.toHaveBeenCalled();
-		await act(async () => mockRefundLaneProgress.next(null));
+		await act(async () => mockRefundsHandle.set({ laneProgress: null }));
 		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 		fireEvent.click(screen.getByTestId('detail-panel-print'));
 		await waitFor(() => expect(mockPrintDocument.print).toHaveBeenCalledTimes(1));
 	}
 );
+// The refunds read has not answered (or failed): the room shows the report without
+// `periodRefunds` (and no refunds card to open). The grouped panels net refunds and would
+// print gross figures, so they wait.
+it.each(['products', 'categories', 'brands'])(
+	'Print waits for the refunds read on a panel that nets refunds: %s',
+	(panel) => {
+		mockRefundsHandle.set({ ready: false, laneProgress: { downloaded: 40, total: 100 } });
+		setOrders([
+			{ uuid: 'a', status: 'completed', total: '10', cost_of_goods_sold: {} },
+		] as Context.ReportOrder[]);
+		mockState.data.periodRefunds = undefined;
+		room();
+		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
+		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+	}
+);
+it('a panel that does not net refunds prints without the refunds read', () => {
+	mockRefundsHandle.set({ ready: false, laneProgress: { downloaded: 40, total: 100 } });
+	mockState.data.periodRefunds = undefined;
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect(screen.queryByTestId('detail-panel-print-waiting')).toBeNull();
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+});
 it('does not wait for refund downloads when printing payments', () => {
-	mockRefundLaneProgress.next({ received: 40, total: null });
+	mockRefundsHandle.set({ laneProgress: { downloaded: 40, total: null } });
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);

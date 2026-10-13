@@ -1,12 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
-import { useReportsBinding } from './context';
+import { useQueryHandleFields } from '../../../query';
+import { useReportsHandles } from './context';
 
 /**
  * "12,400 of 30,000 orders downloaded" while a ranged report is still being fetched (#954).
@@ -16,14 +15,15 @@ import { useReportsBinding } from './context';
  * it lands, the chart, the totals card and the Z-report are all computed from a partial set,
  * which is indistinguishable from a genuinely quiet day. This line is the only thing that
  * tells them apart, so it renders on the report itself rather than in the orders footer, and
- * it disappears on its own: the binding stops reporting progress the moment the lane's
+ * it disappears on its own: the handle stops reporting progress the moment the lane's
  * continuation cursor is cleared, which is exactly when the range is complete.
  */
 export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comparison' } = {}) {
-	const { binding, comparisonBinding } = useReportsBinding();
-	const source = lane === 'comparison' ? comparisonBinding : binding;
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const progress = useObservableState(source.laneProgress$, null);
+	const { handle, comparisonHandle } = useReportsHandles();
+	const source = lane === 'comparison' ? comparisonHandle : handle;
+	const { ready, laneProgress } = useQueryHandleFields(source, ['laneProgress']);
+	// Nothing to report before the read has answered: the line speaks for rows that are here.
+	const progress = ready ? laneProgress : null;
 	const t = useT();
 
 	if (!progress) return null;
