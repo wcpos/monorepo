@@ -18,20 +18,28 @@ const MaskedView = MaskedViewClass as unknown as React.ComponentType<
 	ViewProps & { maskElement: React.ReactElement }
 >;
 
-/** A top-down gradient filling its box: `color` at each stop's `of`, times `strength`. */
+/**
+ * A top-down gradient filling its box: `color` at each stop's `of`, times `strength`. Sized in
+ * numbers from the scrim's measurement: on Android a `height="100%"` Svg drew only as tall as the
+ * fade, so the tint stopped at the reach and left the plateau bare (Pixel 10, 2026-10-13).
+ */
 function Gradient({
 	id,
 	stops,
 	color,
 	strength,
+	width,
+	height,
 }: {
 	id: string;
 	stops: Stops;
 	color: string;
 	strength: number;
+	width: number;
+	height: number;
 }) {
 	return (
-		<Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
+		<Svg style={StyleSheet.absoluteFill} width={width} height={height} preserveAspectRatio="none">
 			<Defs>
 				<LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
 					{stops.map(({ offset, of }, index) => (
@@ -76,7 +84,9 @@ export function Scrim({
 				<MaskedView
 					pointerEvents="none"
 					style={StyleSheet.absoluteFill}
-					maskElement={<Gradient id={`${id}-mask`} stops={stops} color="#000" strength={1} />}
+					maskElement={
+						<Gradient id={`${id}-mask`} stops={stops} color="#000" strength={1} {...size} />
+					}
 				>
 					<View
 						style={{
@@ -91,7 +101,9 @@ export function Scrim({
 					</View>
 				</MaskedView>
 			)}
-			{size.height > 0 && <Gradient id={id} stops={stops} color={card} strength={SCRIM_STRENGTH} />}
+			{size.height > 0 && (
+				<Gradient id={id} stops={stops} color={card} strength={SCRIM_STRENGTH} {...size} />
+			)}
 			{children}
 		</View>
 	);
