@@ -26,8 +26,8 @@ const COMMANDS: [Command['id'], string, Command['when'], Command['run']][] = [
 	],
 	['pos.cart.next', 'pos_commands.cart_next', canStep, (ctx) => ctx.cart.selectOrder('next')],
 	['pos.cart.discount', 'pos_commands.cart_discount', onOrder, (ctx) => ctx.focus('discount')],
-	// The void button lives in the order sheet; until its path moves to the cart column the
-	// command is available only while the sheet is open (its own PR before the hotkeys module).
+	// The cart column registers the void surface while it is mounted, so `hasSurface('void')` is
+	// true whenever the cart column is; it is false on a screen without one.
 	[
 		'pos.cart.void',
 		'pos_commands.cart_void',
