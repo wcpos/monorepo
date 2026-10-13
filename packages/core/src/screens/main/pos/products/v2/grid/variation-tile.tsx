@@ -8,6 +8,7 @@ import {
 	type PosterPicture,
 	PosterPlaceholder,
 	PosterTile,
+	SCRIM_BLUR_RADIUS,
 	tintOf,
 } from '@wcpos/components/poster-tile';
 import { Suspense } from '@wcpos/components/suspense';
@@ -79,6 +80,28 @@ function VariationImageInner({
 	);
 }
 
+/** The variation's picture blurred, for the Poster's native scrim (web never mounts it). Bare. */
+function VariationImageBlurred({
+	record,
+	src,
+}: {
+	record: EngineRecord<'variations'>;
+	src: string;
+}) {
+	const { uri, error } = useImageAttachment(record, src);
+	if (!uri || error) return null;
+	return (
+		<Image
+			source={{ uri }}
+			blurRadius={SCRIM_BLUR_RADIUS}
+			recyclingKey={`${record.uuid}:blur`}
+			className="h-full w-full"
+			transition={0}
+			{...COVER}
+		/>
+	);
+}
+
 /**
  * A variation's own picture, or its parent's tint when it has none or it fails. The
  * attachment hook suspends while the image loads; the rest of the tile must not wait.
@@ -104,6 +127,11 @@ function useVariationPicture(
 				}
 			>
 				<VariationImageInner record={record} src={src} onFailed={onFailed} />
+			</Suspense>
+		),
+		blurred: (
+			<Suspense fallback={null}>
+				<VariationImageBlurred record={record} src={src} />
 			</Suspense>
 		),
 	};
