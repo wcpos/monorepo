@@ -297,7 +297,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		}
 		set({ phase: 'creating', deadlineAt: deps.now() + DEVICE_LEG_DEADLINE_MS });
 		timer = deps.setTimeout(() => {
-			if (active()) {
+			// A cancel the cashier already asked for keeps its own wording: the deadline only
+			// counts as the reason when nothing was requested before it.
+			if (active() && !state.cancelRequested) {
 				set({ deadlineHandled: true });
 				void cancel('deadline');
 			}

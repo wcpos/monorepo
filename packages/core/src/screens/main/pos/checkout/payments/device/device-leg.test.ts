@@ -485,6 +485,19 @@ it('offline, a cancel the reader refuses leaves the leg waiting for the reader',
 	expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
 	expect(c.post).not.toHaveBeenCalled();
 });
+it('the deadline does not claim a cancel the cashier already asked for', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	await jest.advanceTimersByTimeAsync(120000);
+	expect(c.leg.getState().deadlineHandled).toBe(false);
+	expect(c.driver.cancel).toHaveBeenCalledTimes(1);
+	c.collection.resolve({ ...approved, outcome: 'cancelled' });
+	await start;
+	const voidCall = c.post.mock.calls.find(([url]) => url.endsWith('/void'));
+	expect(voidCall?.[1]).toEqual({ reason: 'cashier' });
+});
 it('deadline requests cancellation at 120 seconds, and waits for the reader', async () => {
 	const c = setup();
 	const start = c.leg.start();
