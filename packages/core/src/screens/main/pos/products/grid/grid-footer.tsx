@@ -5,7 +5,7 @@ import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePagingVerdictFor } from '../../../../../query';
+import { usePagingVerdict } from '../../../../../query';
 
 import type { EngineOpinion } from '../../../../../query';
 
@@ -30,7 +30,7 @@ interface ProductGridFooterProps {
  */
 export function ProductGridFooter({ engine, renderedCount, hitCount }: ProductGridFooterProps) {
 	const t = useT();
-	const { verdict } = usePagingVerdictFor(hitCount, engine);
+	const { verdict } = usePagingVerdict(hitCount, engine);
 
 	if (renderedCount === 0) return null;
 	if (engine.pending) {

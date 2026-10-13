@@ -1,10 +1,20 @@
 import * as React from 'react';
 
 import { render } from '@testing-library/react';
-import { of } from 'rxjs';
+
+import type { QueryHandle } from '@wcpos/query';
 
 import { DataTable } from './index';
 import { QueryStateProvider } from '../../../../../query';
+
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+export type FakeHandle = QueryHandle & { set(partial: Record<string, unknown>): void };
+/** A handle answered with `state.result` (and any other snapshot fields), driven by `set`. */
+export function handleWith(snapshot: Record<string, unknown> = {}): FakeHandle {
+	return fakeQueryHandle({ result: state.result, ...snapshot });
+}
 
 export const state = {
 	pointer: 'fine',
@@ -21,6 +31,8 @@ export const state = {
 };
 export const patchUI = jest.fn();
 export const setSort = jest.fn();
+export const extendLimit = jest.fn();
+export const setFilter = jest.fn();
 export const pans: { begin?: () => void; end?: (event: { translationX: number }) => void }[] = [];
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => state.pointer,
@@ -30,12 +42,6 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, selector: (value: unknown) => unknown) =>
 		selector({ columns: state.columns }),
-	// The handle source's streams come from the handle itself.
-	queryHandleResults$: jest.requireActual('@wcpos/query').queryHandleResults$,
-}));
-jest.mock('observable-hooks', () => ({
-	...jest.requireActual('observable-hooks'),
-	useObservableSuspense: () => state.result,
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: {}, getUILabel: (key: string) => key, patchUI }),
@@ -93,10 +99,14 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 		data,
 		renderItem,
 		ListEmptyComponent,
+		ListFooterComponent,
+		onEndReached,
 	}: {
 		data: unknown[];
 		renderItem: (value: { item: unknown; index: number }) => React.ReactNode;
 		ListEmptyComponent: React.ComponentType;
+		ListFooterComponent?: React.ComponentType;
+		onEndReached?: () => void;
 	}) => (
 		<div>
 			{data.length ? (
@@ -106,6 +116,8 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 			) : (
 				<ListEmptyComponent />
 			)}
+			{ListFooterComponent ? <ListFooterComponent /> : null}
+			<button data-testid="end-reached" onClick={onEndReached} />
 		</div>
 	),
 }));
@@ -146,7 +158,10 @@ export function reset() {
 		searchState: 'answered',
 	};
 }
-/** The table under a query-state provider; `renderTable` renders it, a test can rerender it. */
+/**
+ * The table under a query-state provider over a handle (`overrides.handle`, or one answered with
+ * `state.result`); `renderTable` renders it, a test can rerender it.
+ */
 export function tableTree(overrides: Record<string, unknown> = {}) {
 	return (
 		<QueryStateProvider
@@ -157,12 +172,9 @@ export function tableTree(overrides: Record<string, unknown> = {}) {
 			<DataTable
 				id="pos-products"
 				collectionName="products"
-				resource={{} as never}
+				handle={handleWith()}
 				sort={{ field: 'name', direction: 'asc' }}
-				actions={{ setSort, extendLimit: jest.fn(), setFilter: jest.fn() }}
-				active$={of(false)}
-				total$={of(null)}
-				sync={jest.fn()}
+				actions={{ setSort, extendLimit, setFilter }}
 				{...overrides}
 			/>
 		</QueryStateProvider>

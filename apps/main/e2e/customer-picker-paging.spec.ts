@@ -41,7 +41,7 @@ import { becomesVisible, authenticatedTest as test } from './fixtures';
  * skip that names exactly why it fired.
  */
 
-/** Mirrors SEARCH_SELECT_PAGE_SIZE in packages/core/src/query/query-bindings.ts. */
+/** Mirrors SEARCH_SELECT_PAGE_SIZE in packages/core/src/query/search-select.ts. */
 const PAGE_SIZE = 50;
 
 /** Scroll rounds to spend. Two full pages is the claim; this leaves room to reach them. */

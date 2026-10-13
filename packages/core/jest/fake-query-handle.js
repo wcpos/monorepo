@@ -1,6 +1,6 @@
 /**
  * A query handle for tests: the handle's reader contract (`value`, `subscribe`, `observe`,
- * `retain`, `sync`, `whenReady`, `retry`, `whenAnswered`) over one snapshot a test drives with
+ * `retain`, `sync`, `whenReady`, `declareOnce`, `retry`, `whenAnswered`) over one snapshot a test drives with
  * `set(partial)`. `set({ result })` recomputes `hits` and `count`; `set({ ready: false })` is a
  * cold handle. Readers see every field change through `subscribe`, as with the real handle.
  */
@@ -66,6 +66,7 @@ function fakeQueryHandle(initial = {}, key = 'fake') {
 		},
 		sync: async () => undefined,
 		whenReady: async () => ({ attempted: true, fetched: false }),
+		declareOnce: async () => ({ attempted: true, fetched: false }),
 		retry: () => undefined,
 		// As the real handle: one promise per unanswered period, settled by `set`.
 		whenAnswered: () => {

@@ -26,3 +26,16 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 16. Clear-and-sync first restores search/filter initials and resets the explicitly named collection — retained filters or screen IDs must not make a successful refill look empty or clear the wrong collection — evidence: `7b240fb55c 2026-07-15 feat(core): the coupons screen rides the query-state store + bindings (migration 2/8) (#655)`; `index.test.tsx`: “clears the explicit products collection when the table id names a screen” — platform: all.
 17. Footer activity uses eager observable subscriptions — synchronous activity emissions must not trigger cross-component updates during render — evidence: `3459a4aca9 2026-03-03 fix: use useObservableEagerState for active$ to prevent setState-during-render warning` — platform: all.
 18. Footer children can shrink while count/sync controls retain their width — narrow product panes previously wrapped the tax label one character per line and expanded the footer vertically — evidence: `f4b4179aec 2026-09-05 fix(ui): narrow-column wrapping in the POS footer and the Store health database table` — platform: all.
+
+## Query-handle compat removal (added 2026-10-13)
+
+The v1 table (`index.tsx`, `index.test.tsx`, `skeleton.tsx`) and the bordered footer (`footer.tsx`, `footer.test.tsx`) are deleted: nothing mounted it once every screen read `v2/` (roadmap#423, R8). `getColumnStyle` moved to `column-style.ts`. No line is struck; their evidence moves:
+
+- 6: `getRowTestID` lives in `v2/rows.tsx`.
+- 8: the guard is `v2/index.test.tsx`, “re-renders header cells when the visible column set changes” (ported from the deleted `index.test.tsx`).
+- 9: `v2/index.test.tsx`, “resolves row cell maps and keeps the text fallback inside the table”.
+- 12: `v2/index.test.tsx`, “keeps the pending search distinct from empty results”.
+- 13: `v2/skeleton.tsx` (`DataTableSkeleton`).
+- 14: “the binding’s number” is now the drawn query handle’s `total`, handed to the footer as a value.
+- 16: `v2/footer.test.tsx`, “restores provider search and filter initials before clearing and syncing”; the table hands its footer its own `collectionName` (`v2/index.test.tsx`, “a custom footer is handed values, never streams, with the table’s collection”).
+- 17: the mechanism changed, the protection holds. No footer subscribes to a stream any more: the table reads `active` and `total` through `useQueryHandleFields` (`useSyncExternalStore`, so no setState during another component’s render) and hands the footer values (`DataTableFooterProps` in `v2/footer.tsx`). The bordered status row (`footer.tsx`, `footer.test.tsx`) is deleted: its last user, the POS tile grid, draws the products caption row (owner, 2026-10-05: one caption row under either body); its cases live in `v2/footer.test.tsx`.

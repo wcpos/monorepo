@@ -6,7 +6,7 @@ import { useSharedValue } from 'react-native-reanimated';
 
 import { TableHead } from '@wcpos/components/table';
 
-import { getColumnStyle } from '../index';
+import { getColumnStyle } from '../column-style';
 
 type Meta = { width?: number; flex?: number; align?: 'left' | 'right' | 'center' };
 export function ResizeHead({

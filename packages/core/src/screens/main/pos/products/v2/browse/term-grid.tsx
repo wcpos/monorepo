@@ -8,7 +8,7 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
+import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../../query';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import {
 	DealCell,
@@ -201,7 +201,7 @@ export function TermLevelGrid({
 	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
 	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
 	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
-	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
+	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, paging);
 	// An end-reached while the demand is pending is armed and fired once it clears (the list
 	// will not fire again for the same rows). So is one before the slots measure a positive
 	// height: a products screen kept mounted but inactive lays out at zero size, and zero

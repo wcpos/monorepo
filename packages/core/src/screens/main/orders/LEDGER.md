@@ -62,3 +62,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 1. Beside the list the pane slides out of the right edge on `SlideOver`, solid, and back into it; a closing pane keeps the order it showed until it has left — evidence: filmed 2026-10-02: it used `FadeInRight` with no exit, vanished on close, and showed a grey block for the whole of its arrival; test `v2/index.test.tsx`: “slides the pane out of the right edge, and a closing pane keeps its order until it has left”.
 2. The pane awaits its record outside Suspense, and focuses its close button with `preventScroll` — evidence: React held the committed fallback for 300 ms over a local record; a plain focus made the browser scroll the frame that clips the pane, and it arrived from the wrong side (both filmed 2026-10-02).
 3. The pane's width follows the theme's `roomy` (480 at a desk, two fifths up to 440 on a standing tablet), which the removed `md` breakpoint used to decide — evidence: the 768 boundary, 2026-10-02.
+
+## v1 screen deleted (added 2026-10-13)
+
+`index.tsx` (the v1 `OrdersScreen`), `filter-bar.tsx`, `ui-settings-form.tsx` and their tests are deleted: the route mounts `v2/` (roadmap#423, R8). The lines stand on `v2/`; no line is struck.

@@ -216,7 +216,7 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number }) =>
 		vars?.count !== undefined ? `${vars.count} ${key}` : key,
 }));
-// The counts come from the term bindings; the row's states are what is tested here.
+// The counts come from the term handles; the row's states are what is tested here.
 jest.mock('./v2/browse/use-browse-terms', () => ({ useBrowseCounts: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('../../../../../../query/src/records/use-record-field')

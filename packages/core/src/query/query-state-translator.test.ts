@@ -636,7 +636,7 @@ describe('query-state translator', () => {
 				sort: { field: 'date_created_gmt', direction: 'desc' },
 				limit: 50,
 			} satisfies QueryStateOf<'orders'>,
-			{ id: 'orders-binding' }
+			{ id: 'orders-query' }
 		);
 		expect(compiled.demand[0]).toMatchObject({
 			status: 'processing',
@@ -663,7 +663,7 @@ describe('query-state translator', () => {
 				sort: { field: 'date_created_gmt', direction: 'desc' },
 				limit: Number.MAX_SAFE_INTEGER,
 			} satisfies QueryStateOf<'orders'>,
-			{ id: 'reports-orders-binding' }
+			{ id: 'reports-orders-query' }
 		);
 
 		expect({
@@ -672,7 +672,7 @@ describe('query-state translator', () => {
 		}).toEqual({
 			requirements: [
 				{
-					id: 'reports-orders-binding:orders-browse',
+					id: 'reports-orders-query:orders-browse',
 					collection: 'orders',
 					kind: 'orders-browse',
 					status: 'completed',
@@ -753,12 +753,12 @@ describe('query-state translator', () => {
 				sort: { field: 'price', direction: 'desc' },
 				limit: 25,
 			},
-			{ id: 'products-binding' }
+			{ id: 'products-query' }
 		);
 
 		expect(compiled.demand).toEqual([
 			{
-				id: 'products-binding:search',
+				id: 'products-query:search',
 				collection: 'products',
 				kind: 'search',
 				term: 'shirt',

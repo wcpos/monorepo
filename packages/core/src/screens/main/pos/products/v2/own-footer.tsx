@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { ProductsFooter } from './footer';
+import { ProductsFooter, type ProductsFooterProps } from './footer';
 
 /**
  * The caller's own numbers for a DataTable's footer: its own loaded count (DataTable stamps
- * `count` from the live binding's window, which is not a browse level's or a variations pane's
- * own rows), its total as a value (undefined: the footer reads the binding's `total$`), and the
- * caption under the counts.
+ * `count` from the drawn handle's rows, which are not a browse level's or a variations pane's
+ * own rows), its total (undefined: the table's, the drawn handle's `total`), and the caption
+ * under the counts.
  */
 export type OwnFooterNumbers = {
 	count: number;
@@ -22,10 +22,10 @@ export const OwnFooterContext = React.createContext<OwnFooterNumbers>({ count: 0
  * made per render, or per count, is a new element type each time: React remounts the footer —
  * and its sync button, mid-sync — on every page.
  */
-export function OwnFooter(props: React.ComponentProps<typeof ProductsFooter>) {
+export function OwnFooter(props: ProductsFooterProps) {
 	const { count, total, children } = React.useContext(OwnFooterContext);
 	return (
-		<ProductsFooter {...props} count={count} total={total}>
+		<ProductsFooter {...props} count={count} total={total === undefined ? props.total : total}>
 			{children ?? props.children}
 		</ProductsFooter>
 	);

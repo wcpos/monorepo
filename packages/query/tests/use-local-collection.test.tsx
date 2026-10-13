@@ -13,7 +13,7 @@ import { createEngineDatabase, createFakeEngine } from '../src/testing';
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 /**
- * The shared mechanism behind every local-collection reader (useLocalQuery, the
+ * The shared mechanism behind every local-collection reader (useLocalQuery$, the
  * logs stat header, the drawer badge). A collection reference is not stable:
  * logs-storage-recovery replaces it IN PLACE announcing only on `reset$`, and a
  * store switch replaces the whole database announcing nothing on `reset$`.

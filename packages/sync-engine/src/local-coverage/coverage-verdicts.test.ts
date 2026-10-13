@@ -1,6 +1,6 @@
 /**
  * The coverage verdict's rules, with no storage in the way. These are the semantics
- * `query-bindings.ts` used to re-implement client-side; owning them here is the point of
+ * core's query layer used to re-implement client-side; owning them here is the point of
  * `engine.coverageChanges`.
  */
 

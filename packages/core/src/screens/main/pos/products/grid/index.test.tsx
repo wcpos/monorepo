@@ -55,7 +55,7 @@ jest.mock('../../../../../query', () => ({
 		mockSettling && (handle as { key?: string }).key === 'test'
 			? (mockPreviousHandle as unknown as T)
 			: handle,
-	useGuardedExtendLimitFor: (...args: unknown[]) => {
+	useGuardedExtendLimit: (...args: unknown[]) => {
 		mockGuard(...args);
 		return jest.fn();
 	},
@@ -102,8 +102,28 @@ jest.mock('./product-tile', () => ({ ProductTile: () => <div data-testid="defaul
 jest.mock('./variable-product-tile', () => ({
 	VariableProductTile: () => <div data-testid="default-variable-tile" />,
 }));
-jest.mock('../../../components/data-table/footer', () => ({ DataTableFooterFor: () => null }));
-jest.mock('../../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
+// The caption row the table view draws, values in (the tax notice is its own default child).
+jest.mock('../v2/footer', () => ({
+	ProductsFooter: ({
+		collectionName,
+		count,
+		total,
+		active,
+	}: {
+		collectionName: string;
+		count: number;
+		total: number | null;
+		active: boolean;
+	}) => (
+		<div
+			data-testid="products-footer"
+			data-collection={collectionName}
+			data-count={count}
+			data-total={String(total)}
+			data-active={String(active)}
+		/>
+	),
+}));
 
 function staleHit(uuid: string) {
 	return {
@@ -227,5 +247,27 @@ describe('ProductGrid on the handle snapshot', () => {
 		const silence = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 		expect(() => render(<ProductGrid {...props()} />)).toThrow('storage gone');
 		silence.mockRestore();
+	});
+});
+
+it('draws the products caption row under the tiles, as the table view does, with the rendered count', () => {
+	mockResult = {
+		hits: ['one', 'two'].map((uuid) => ({
+			record: { uuid, payload: { type: 'simple', name: uuid } },
+		})),
+	};
+	render(
+		<ProductGrid
+			{...({
+				handle: { key: 'test', sync: jest.fn() },
+				actions: { extendLimit: jest.fn() },
+			} as unknown as React.ComponentProps<typeof ProductGrid>)}
+		/>
+	);
+	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
+		collection: 'products',
+		count: '2',
+		total: 'null',
+		active: 'false',
 	});
 });

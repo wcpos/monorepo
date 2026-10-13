@@ -70,7 +70,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
-jest.mock('../../data-table', () => ({
+jest.mock('../../data-table/column-style', () => ({
 	getColumnStyle: () => ({}),
 }));
 jest.mock('./context', () => ({

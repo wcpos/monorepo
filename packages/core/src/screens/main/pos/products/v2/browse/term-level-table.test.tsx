@@ -21,14 +21,14 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../../../query', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
 	return {
-		useGuardedExtendLimitFor: (extend: () => void) => () => extend(),
+		useGuardedExtendLimit: (extend: () => void) => () => extend(),
 		// The real reader, field selection aside: the level sees every snapshot change.
 		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
 			React.useSyncExternalStore(handle.subscribe, () => handle.value),
 	};
 });
 // The real export pulls in the whole products screen; the level only hands it on.
-jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
+jest.mock('../cells-for-row', () => ({ cellsForRow: jest.fn() }));
 // The way back is the variations pane's own (level-back.test.tsx): Escape here.
 jest.mock('../level-back', () => ({
 	LevelBack: ({
@@ -47,7 +47,7 @@ type Row = { id?: string; record?: { uuid: string } };
 const mockPatchUI = jest.fn();
 // As the real DataTable: rows are `tableConfig.data`, keyed by `getRowId` and drawn through
 // `renderItem`; an empty list draws `noDataMessage`, and an `undefined` one falls back to the
-// translated default; the footer gets the table's own props (its `count` the LIVE binding's
+// translated default; the footer gets the table's own props (its `count` the LIVE handle's
 // loaded rows); an end-reached is a scroll and calls the `onEndReached` it was handed, which
 // replaces the extend behind its own guard; a header sort persists as the real one does.
 jest.mock('../../../../components/data-table/v2', () => ({
@@ -86,16 +86,15 @@ function MockTableBody({
 	actions: { extendLimit: () => void; setSort: (field: string, direction: string) => void };
 	handle: { value: { total: number | null }; sync: () => Promise<void> };
 	TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
-	sync: unknown;
 	cellsForRow: unknown;
-	ListFooterComponent?: React.ComponentType<{ active$: unknown }>;
+	ListFooterComponent?: React.ComponentType<{ active: boolean }>;
 	onEndReached?: () => void;
 }) {
 	return (
 		<div
 			data-testid="table"
 			data-meta={tableConfig.meta?.marker}
-			data-cells={String(cells === jest.requireMock('../../index').cellsForRow)}
+			data-cells={String(cells === jest.requireMock('../cells-for-row').cellsForRow)}
 			data-list-footer={String(!!ListFooterComponent)}
 			onScroll={() => (onEndReached ?? actions.extendLimit)()}
 		>
@@ -130,16 +129,15 @@ function MockTableBody({
 			)}
 			{/* Undefined falls back to the list's loading strip, as the real DataTable does. */}
 			{ListFooterComponent ? (
-				<ListFooterComponent active$={undefined} />
+				<ListFooterComponent active={false} />
 			) : (
 				<span data-testid="list-loading-strip" />
 			)}
-			{/* As the real handle-source DataTable: the custom footer gets the drawn total as a value. */}
+			{/* As the real DataTable: the custom footer gets the drawn total as a value. */}
 			{TableFooterComponent && (
 				<TableFooterComponent
 					collectionName="products"
-					total$={undefined}
-					active$={undefined}
+					active={false}
 					total={handle.value.total}
 					sync={handle.sync}
 					count={999}
@@ -175,8 +173,7 @@ jest.mock('../rows/variable-product-row', () => ({
 // would have painted, not only where the DOM settled.
 const mockFooterRenders: { count: number; total: number | null }[] = [];
 jest.mock('../footer', () => ({
-	ProductsFooter: ({ count, total: heldTotal }: { count: number; total?: number | null }) => {
-		const total = heldTotal ?? null;
+	ProductsFooter: ({ count, total }: { count: number; total: number | null }) => {
 		mockFooterRenders.push({ count, total });
 		return <footer data-testid="products-footer" data-count={count} data-total={String(total)} />;
 	},
@@ -352,7 +349,7 @@ it('a level mounted on an unanswered handle shows its child terms and held rows,
 	expect(screen.queryByTestId('table')).toBeNull();
 });
 
-it('footers the level’s own loaded rows and total, not the live binding’s', () => {
+it('footers the level’s own loaded rows and total, not the live handle’s', () => {
 	render(<TermLevelTable {...level()} />);
 	expect(screen.getByTestId('products-footer').dataset).toMatchObject({
 		count: '2',

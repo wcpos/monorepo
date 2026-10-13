@@ -95,7 +95,7 @@ export function useFollowedCollection$<T = Record<string, unknown>>(
  * The followed collection as a VALUE, correct in the render that switches it.
  *
  * The observable form above is right for a consumer that pipes it (a query
- * binding subscribes, and one render of lag on an async result is invisible).
+ * handle subscribes, and one render of lag on an async result is invisible).
  * It is wrong for a consumer that RETURNS the collection, because
  * `useObservableState` cannot deliver a new observable's first value during the
  * render that creates it: its `useState` initializer is mount-only, and

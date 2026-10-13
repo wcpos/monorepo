@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
@@ -10,22 +8,34 @@ import { useQueryStateActions } from '../../../../../query';
 import { SyncButton } from '../../sync-button';
 import { useCollectionReset } from '../../../hooks/use-collection-reset';
 
-import type { BindingDataTableFooterProps } from '../footer';
+import type { CollectionKey } from '../../../hooks/use-collection';
 
+/**
+ * What a table footer is handed: VALUES, read by its owner from the query handles in the same
+ * commit as the rows it counts. A stream's value lands one commit after the rows, and the footer
+ * printed the new count over the old denominator for a frame; no footer subscribes to one.
+ */
+export type DataTableFooterProps = {
+	collectionName: CollectionKey;
+	/** The rows drawn. */
+	count: number;
+	/** The engine is pulling the collection now (the live handle's `active`): the sync button turns. */
+	active: boolean;
+	/** The drawn rows' denominator, or null when nothing vouches for one ("Showing N"). */
+	total: number | null;
+	sync: () => Promise<void>;
+	children?: React.ReactNode;
+};
+
+/** The table's caption row: values in, read by the table from its handles (`DataTableFooterProps`). */
 export function DataTableFooter({
 	collectionName,
-	active$,
-	total$,
+	active: loading,
+	total,
 	sync,
 	count,
 	children,
-	total: held,
-}: BindingDataTableFooterProps) {
-	const loading = useObservableEagerState(active$);
-	const streamed = useObservableState(total$, null);
-	// A handle-backed table hands the total as a value in the same commit as `count`; the
-	// stream lands a commit later and would print the new count over the old denominator.
-	const total = held === undefined ? streamed : held;
+}: DataTableFooterProps) {
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();
 	const t = useT();

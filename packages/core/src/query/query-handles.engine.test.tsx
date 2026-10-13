@@ -8,13 +8,12 @@ import { TextDecoder, TextEncoder } from 'node:util';
 import * as React from 'react';
 
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react';
-import { useObservableSuspense } from 'observable-hooks';
-import { filter, firstValueFrom } from 'rxjs';
+import { distinctUntilChanged, filter, firstValueFrom, map, type Observable } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import type { RequirementHandle } from '@wcpos/sync-engine';
 import { queryHandleAnswers$, QueryProvider, useQueryRuntime } from '@wcpos/query';
-import type { QueryHandle, QueryResult } from '@wcpos/query';
+import type { QueryHandle, QueryResult, QuerySnapshot } from '@wcpos/query';
 import {
 	createEngineDatabase,
 	createFakeEngine,
@@ -25,15 +24,17 @@ import {
 } from '@wcpos/query/testing';
 import type { FakeEngine } from '@wcpos/query/testing';
 
-import {
-	useAppliedCouponReferenceDemand,
-	useCollectionBinding,
-	useRelationalCollectionBinding,
-	useScopeKey,
-	useSearchSelect,
-} from './query-bindings';
+import { useAppliedCouponReferenceDemand } from './coupon-reference-demand';
 import * as queryHandles from './query-handles';
-import { useDrawnHandle, useLogsQueryHandle, useQuerySnapshot } from './query-handles';
+import {
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useLogsQueryHandle,
+	useProductsQueryHandle,
+	useQuerySnapshot,
+} from './query-handles';
+import { useScopeKey } from './scope-key';
+import { useSearchSelect } from './search-select';
 import {
 	EXISTENCE_RECHECK_MS,
 	useAllTermsHandle,
@@ -51,10 +52,32 @@ Object.defineProperty(globalThis, 'crypto', {
 	value: webcrypto,
 });
 
-type Resource = ReturnType<typeof useCollectionBinding<'products'>>['resource'];
+/** A handle's answer, or undefined while it has none. */
+function current(handle: QueryHandle): QueryResult<RxCollection> | undefined {
+	return handle.value.ready ? handle.value.result : undefined;
+}
 
-function current(resource: Resource): QueryResult<RxCollection> | undefined {
-	return resource.valueRef$$.value?.current as QueryResult<RxCollection> | undefined;
+/** A handle's answer for a `waitFor`: throws while unanswered, and rethrows a failed read. */
+function read(handle: QueryHandle): QueryResult<RxCollection> {
+	if (handle.value.error) throw handle.value.error;
+	if (!handle.value.ready) throw new Error('unanswered');
+	return handle.value.result;
+}
+
+/**
+ * One snapshot field as a stream, as a stream-shaped reader would watch it: `active` and
+ * `pending` from the first snapshot, the projections (`total`, `exhausted`, `laneProgress`) only
+ * once the read has answered — an unanswered snapshot's `null` is "no answer yet", not a verdict.
+ */
+function field$<K extends 'active' | 'pending' | 'total' | 'exhausted' | 'laneProgress'>(
+	handle: QueryHandle,
+	name: K
+): Observable<QuerySnapshot[K]> {
+	return handle.observe().pipe(
+		filter((snapshot) => name === 'active' || name === 'pending' || snapshot.ready),
+		map((snapshot) => snapshot[name]),
+		distinctUntilChanged()
+	);
 }
 
 /** A handle's answered ids, sorted; undefined while it has not answered. */
@@ -62,7 +85,7 @@ function answeredIds(handle: QueryHandle): string[] | undefined {
 	return handle.value.ready ? handle.value.hits.map((hit) => hit.id).sort() : undefined;
 }
 
-describe('query bindings', () => {
+describe('query handles over the engine', () => {
 	let localDB: RxDatabase;
 	let engineDB: RxDatabase;
 	let engine: FakeEngine;
@@ -129,7 +152,7 @@ describe('query bindings', () => {
 		};
 		const { rerender } = renderHook(
 			({ currentState, remoteIds }) =>
-				useCollectionBinding('products', currentState, { remoteIds }),
+				useCollectionQueryHandle('products', currentState, { remoteIds }),
 			{
 				wrapper: Provider,
 				initialProps: { currentState: state, remoteIds: ['1', '2'] as never[] },
@@ -180,12 +203,12 @@ describe('query bindings', () => {
 			limit: 1,
 		};
 		const { result, rerender } = renderHook(
-			({ state }) => useCollectionBinding('products', state),
+			({ state }) => useCollectionQueryHandle('products', state),
 			{ wrapper: Provider, initialProps: { state: base } }
 		);
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['tea'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['tea'])
 		);
 
 		rerender({
@@ -196,7 +219,7 @@ describe('query bindings', () => {
 			},
 		});
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
 		);
 	});
 
@@ -579,24 +602,24 @@ describe('query bindings', () => {
 			limit: 1,
 		};
 		const { result } = renderHook(
-			() => useCollectionBinding('products', state, { remoteIds: [] }),
+			() => useCollectionQueryHandle('products', state, { remoteIds: [] }),
 			{
 				wrapper: Provider,
 			}
 		);
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		await waitFor(() => expect(current(result.current)?.hits).toEqual([]));
 		expect(engine.requireCalls).toEqual([]);
 	});
 
-	it('re-declares the footer binding current descriptor after a reset generation bump', async () => {
+	it('re-declares the current query after a reset generation bump', async () => {
 		const base: QueryStateOf<'products'> = {
 			search: '',
 			filters: { categories: [7], tags: [], brands: [] },
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		};
-		const { rerender } = renderHook(({ state }) => useCollectionBinding('products', state), {
+		const { rerender } = renderHook(({ state }) => useCollectionQueryHandle('products', state), {
 			wrapper: Provider,
 			initialProps: { state: base },
 		});
@@ -625,10 +648,10 @@ describe('query bindings', () => {
 			limit: 10,
 		};
 		const { result, rerender } = renderHook(
-			({ state }) => useCollectionBinding('products', state),
+			({ state }) => useCollectionQueryHandle('products', state),
 			{ wrapper: Provider, initialProps: { state: base } }
 		);
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 
 		// A broken index no longer errors the search — the scan lane answers it.
 		const products = engineDB.collections.products;
@@ -639,9 +662,9 @@ describe('query bindings', () => {
 			rerender({ state: { ...base, search: 'coffee' } });
 			await waitFor(
 				() => {
-					const read = result.current.resource.read();
-					expect(read.hits.map((hit) => hit.id)).toEqual(['coffee']);
-					expect(read.searchState).toBe('answered');
+					const answer = read(result.current);
+					expect(answer.hits.map((hit) => hit.id)).toEqual(['coffee']);
+					expect(answer.searchState).toBe('answered');
 				},
 				{ timeout: 2000 }
 			);
@@ -662,10 +685,10 @@ describe('query bindings', () => {
 			limit: 10,
 		};
 		const { result, rerender } = renderHook(
-			({ state }) => useCollectionBinding('products', state),
+			({ state }) => useCollectionQueryHandle('products', state),
 			{ wrapper: Provider, initialProps: { state: base } }
 		);
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 
 		const products = engineDB.collections.products;
 		const originalFind = products.find.bind(products);
@@ -674,18 +697,14 @@ describe('query bindings', () => {
 		};
 		try {
 			rerender({ state: { ...base, filters: { ...base.filters, categories: [9] } } });
-			await waitFor(() =>
-				expect(() => result.current.resource.read()).toThrow('collection read failed')
-			);
+			await waitFor(() => expect(() => read(result.current)).toThrow('collection read failed'));
 		} finally {
 			// The stub must not outlive a failed assertion — the collection instance
 			// is shared with later tests in this file.
 			(products as unknown as { find: typeof originalFind }).find = originalFind;
 		}
 		rerender({ state: base });
-		await waitFor(() =>
-			expect(result.current.resource.read().hits.map((hit) => hit.id)).toEqual(['coffee'])
-		);
+		await waitFor(() => expect(read(result.current).hits.map((hit) => hit.id)).toEqual(['coffee']));
 	});
 
 	it('keeps finite variation ids at the selector root while applying query-state filters', async () => {
@@ -718,11 +737,11 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		};
-		const bindTargeted = useCollectionBinding as unknown as (
+		const bindTargeted = useCollectionQueryHandle as unknown as (
 			collection: 'variations',
 			queryState: QueryStateOf<'variations'>,
 			options: { remoteIds: import('@wcpos/sync-core').RemoteId[] }
-		) => ReturnType<typeof useCollectionBinding<'variations'>>;
+		) => QueryHandle;
 		const { result } = renderHook(
 			() => bindTargeted('variations', state, { remoteIds: ['11', '12'] as never }),
 			{
@@ -731,7 +750,7 @@ describe('query bindings', () => {
 		);
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['red-small'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['red-small'])
 		);
 		expect(
 			engine.requireCalls.find(
@@ -762,15 +781,12 @@ describe('query bindings', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		};
-		const { result } = renderHook(() => useCollectionBinding('variations', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('variations', state), {
 			wrapper: Provider,
 		});
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
-				'red-small',
-				'any-color',
-			])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['red-small', 'any-color'])
 		);
 	});
 
@@ -813,18 +829,18 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		};
-		const bindTargeted = useCollectionBinding as unknown as (
+		const bindTargeted = useCollectionQueryHandle as unknown as (
 			collection: 'variations',
 			queryState: QueryStateOf<'variations'>,
 			options: { remoteIds: import('@wcpos/sync-core').RemoteId[] }
-		) => ReturnType<typeof useCollectionBinding<'variations'>>;
+		) => QueryHandle;
 		const { result, rerender } = renderHook(
 			({ state }) => bindTargeted('variations', state, { remoteIds: ['11', '12', '13'] as never }),
 			{ wrapper: Provider, initialProps: { state: base } }
 		);
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual([
 				'blue-large',
 				'red-large',
 				'red-small',
@@ -843,7 +859,7 @@ describe('query bindings', () => {
 			},
 		});
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['red-large'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['red-large'])
 		);
 
 		rerender({
@@ -857,10 +873,10 @@ describe('query bindings', () => {
 				},
 			},
 		});
-		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		await waitFor(() => expect(current(result.current)?.hits).toEqual([]));
 	});
 
-	it("useCollectionBinding('refunds', …) declares the requirement and serves exact-boundary local rows in the window", async () => {
+	it("useCollectionQueryHandle('refunds', …) declares the requirement and serves exact-boundary local rows in the window", async () => {
 		await engineDB.collections.refunds.bulkInsert(
 			[
 				['1', '2026-09-01T00:00:00'],
@@ -890,11 +906,11 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		};
-		const { result } = renderHook(() => useCollectionBinding('refunds', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('refunds', state), {
 			wrapper: Provider,
 		});
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual([
 				'woo-refund:3',
 				'woo-refund:2',
 				'woo-refund:1',
@@ -925,7 +941,7 @@ describe('query bindings', () => {
 			limit: 50,
 		};
 
-		renderHook(() => useCollectionBinding('orders', state), {
+		renderHook(() => useCollectionQueryHandle('orders', state), {
 			wrapper: Provider,
 		});
 
@@ -958,7 +974,7 @@ describe('query bindings', () => {
 		limit: Number.MAX_SAFE_INTEGER,
 	};
 	// Removing option forwarding or memo identity loses the online residents on this transition.
-	it("a sales-scoped orders binding serves the store's POS orders and the site's online orders from a mixed resident set", async () => {
+	it("a sales-scoped orders handle serves the store's POS orders and the site's online orders from a mixed resident set", async () => {
 		await engineDB.collections.orders.bulkInsert([
 			engineOrder({
 				uuid: 'local',
@@ -984,36 +1000,36 @@ describe('query bindings', () => {
 		]);
 		const { result, rerender } = renderHook(
 			({ storeScope }: { storeScope: 'pos' | 'sales' }) =>
-				useCollectionBinding('orders', salesState, { storeScope }),
+				useCollectionQueryHandle('orders', salesState, { storeScope }),
 			{ wrapper: Provider, initialProps: { storeScope: 'pos' } }
 		);
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['local'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['local'])
 		);
 		rerender({ storeScope: 'sales' });
 		await waitFor(() =>
 			expect(
-				current(result.current.resource)
+				current(result.current)
 					?.hits.map((hit) => hit.id)
 					.sort()
 			).toEqual(['admin', 'checkout', 'local'])
 		);
 	});
 
-	it("a sales-scoped binding's demand key carries no store part and differs from the pos-scoped key", async () => {
+	it("a sales-scoped handle's demand key carries no store part and differs from the pos-scoped key", async () => {
 		const { result, rerender } = renderHook(
 			({ storeScope }: { storeScope: 'pos' | 'sales' }) =>
-				useCollectionBinding('orders', salesState, { storeScope }),
+				useCollectionQueryHandle('orders', salesState, { storeScope }),
 			{ wrapper: Provider, initialProps: { storeScope: 'pos' } }
 		);
-		await firstValueFrom(result.current.total$);
+		await firstValueFrom(field$(result.current, 'total'));
 		expect(engine.coverageSubscribeCalls).toContainEqual({
 			collection: 'orders',
 			queryKey:
 				'orders:browser:status=all:store=12:after=1782864000:before=1783987200:search=:limit=all',
 		});
 		rerender({ storeScope: 'sales' });
-		await firstValueFrom(result.current.total$);
+		await firstValueFrom(field$(result.current, 'total'));
 		expect(engine.coverageSubscribeCalls).toContainEqual({
 			collection: 'orders',
 			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
@@ -1044,13 +1060,13 @@ describe('query bindings', () => {
 			progress: { downloaded: 4, total: 99 },
 		});
 		const { result } = renderHook(
-			() => useCollectionBinding('orders', salesState, { storeScope: 'sales' }),
+			() => useCollectionQueryHandle('orders', salesState, { storeScope: 'sales' }),
 			{ wrapper: Provider }
 		);
-		await waitFor(() => expect(current(result.current.resource)?.count).toBe(1));
+		await waitFor(() => expect(current(result.current)?.count).toBe(1));
 		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
-		expect(await firstValueFrom(result.current.laneProgress$)).toEqual({
+		const subscription = field$(result.current, 'total').subscribe((total) => totals.push(total));
+		expect(await firstValueFrom(field$(result.current, 'laneProgress'))).toEqual({
 			downloaded: 4,
 			total: 99,
 		});
@@ -1065,7 +1081,7 @@ describe('query bindings', () => {
 			})
 		);
 		await waitFor(() => expect(totals.at(-1)).toBe(1));
-		expect(await firstValueFrom(result.current.laneProgress$)).toBeNull();
+		expect(await firstValueFrom(field$(result.current, 'laneProgress'))).toBeNull();
 		expect(totals).not.toContain(99);
 		expect(totals).not.toContain(203);
 		subscription.unsubscribe();
@@ -1076,7 +1092,7 @@ describe('query bindings', () => {
 	 * ranged-walk cursor are settled behind `coverageChanges` and covered against real storage
 	 * in packages/sync-engine. What these fixtures pin is the half that stayed here: which
 	 * coverage TARGET a given query state resolves to, and how a verdict is composed with the
-	 * resident count. So the fixture seeds the verdict for the exact key it expects the binding
+	 * resident count. So the fixture seeds the verdict for the exact key it expects the handle
 	 * to ask about — seeding the wrong key is indistinguishable from asking the wrong question.
 	 */
 	async function expectCoverageTotal(queryKey: string, filters: QueryStateOf<'orders'>['filters']) {
@@ -1086,7 +1102,7 @@ describe('query bindings', () => {
 		);
 		const { result } = renderHook(
 			() =>
-				useCollectionBinding('orders', {
+				useCollectionQueryHandle('orders', {
 					search: '',
 					filters,
 					sort: { field: 'date_created_gmt', direction: 'desc' },
@@ -1095,10 +1111,10 @@ describe('query bindings', () => {
 			{ wrapper: Provider }
 		);
 
-		// The seeded verdict's total (no residents exist), proving the binding asked about
+		// The seeded verdict's total (no residents exist), proving the handle asked about
 		// exactly this coverage key.
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
 	}
 
@@ -1132,7 +1148,7 @@ describe('query bindings', () => {
 		);
 		const { result } = renderHook(
 			() =>
-				useCollectionBinding('orders', {
+				useCollectionQueryHandle('orders', {
 					search: '',
 					filters: {
 						status: 'processing',
@@ -1145,7 +1161,9 @@ describe('query bindings', () => {
 		);
 
 		await expect(
-			firstValueFrom(result.current.laneProgress$.pipe(filter((progress) => progress !== null)))
+			firstValueFrom(
+				field$(result.current, 'laneProgress').pipe(filter((progress) => progress !== null))
+			)
 		).resolves.toEqual({ downloaded: 3, total: 30_000 });
 	});
 
@@ -1158,7 +1176,7 @@ describe('query bindings', () => {
 		);
 		const { result } = renderHook(
 			() =>
-				useCollectionBinding('orders', {
+				useCollectionQueryHandle('orders', {
 					search: '',
 					filters: {
 						status: 'processing',
@@ -1170,7 +1188,7 @@ describe('query bindings', () => {
 			{ wrapper: Provider }
 		);
 
-		await expect(firstValueFrom(result.current.laneProgress$)).resolves.toBeNull();
+		await expect(firstValueFrom(field$(result.current, 'laneProgress'))).resolves.toBeNull();
 	});
 
 	// The lane may only stand in for the grid's total when the descriptor carries EVERY
@@ -1185,7 +1203,7 @@ describe('query bindings', () => {
 		);
 		const { result } = renderHook(
 			() =>
-				useCollectionBinding('orders', {
+				useCollectionQueryHandle('orders', {
 					search: '',
 					filters: {
 						status: 'processing',
@@ -1198,13 +1216,13 @@ describe('query bindings', () => {
 		);
 
 		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		const subscription = field$(result.current, 'total').subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		subscription.unsubscribe();
 		expect(totals.length).toBeGreaterThan(0);
 		// The seeded unranged lane's total (2) must never surface for the ranged grid.
 		expect(totals).not.toContain(2);
-		// Not merely "the answer stayed local": the binding never ASKED, which is the gate working.
+		// Not merely "the answer stayed local": the handle never ASKED, which is the gate working.
 		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
@@ -1236,17 +1254,23 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 10,
 		};
-		function OrdersTable({ currentState }: { currentState: QueryStateOf<'orders'> }) {
-			const binding = useCollectionBinding('orders', currentState);
-			const result = useObservableSuspense(binding.resource);
+		// The screen shape: the owner above the boundary, the reader drawing the handle below it.
+		function OrdersTable({ handle }: { handle: QueryHandle }) {
+			const { result } = useQuerySnapshot(useDrawnHandle(handle));
 			return <div data-testid="rows">{result.hits.length}</div>;
+		}
+		function OrdersScreen({ currentState }: { currentState: QueryStateOf<'orders'> }) {
+			const handle = useCollectionQueryHandle('orders', currentState);
+			return (
+				<React.Suspense fallback={<div data-testid="skeleton" />}>
+					<OrdersTable handle={handle} />
+				</React.Suspense>
+			);
 		}
 		function Screen({ currentState }: { currentState: QueryStateOf<'orders'> }) {
 			return (
 				<Provider>
-					<React.Suspense fallback={<div data-testid="skeleton" />}>
-						<OrdersTable currentState={currentState} />
-					</React.Suspense>
+					<OrdersScreen currentState={currentState} />
 				</Provider>
 			);
 		}
@@ -1272,15 +1296,15 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), {
 			wrapper: Provider,
 		});
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		// Nothing vouches for a size yet — one resident under a limit of 1 is "what has
-		// loaded", not "how many there are", so the binding declines to name a total rather
+		// loaded", not "how many there are", so the handle declines to name a total rather
 		// than publishing the loaded-row count as one.
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === null)))
 		).resolves.toBeNull();
 
 		// #909: the browse-window coverage key follows the DESCRIPTOR — this grid sorts by
@@ -1295,9 +1319,9 @@ describe('query bindings', () => {
 			{ total: 3, source: 'lane', complete: true, fresh: true }
 		);
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
-		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
+		await expect(firstValueFrom(field$(result.current, 'active'))).resolves.toBe(false);
 		await act(async () => result.current.sync());
 		expect(engine.syncCalls).toContain('scheduler-drain');
 	});
@@ -1323,13 +1347,13 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 25,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(2));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(2));
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
 
 		// The moment the recorded total catches back up, the server's number returns.
@@ -1341,7 +1365,7 @@ describe('query bindings', () => {
 			{ total: 5, source: 'query-total', complete: false, fresh: false }
 		);
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 5)))
 		).resolves.toBe(5);
 	});
 
@@ -1360,13 +1384,13 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 25,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 42)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 42)))
 		).resolves.toBe(42);
 		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
@@ -1390,12 +1414,12 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 25,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), {
 			wrapper: Provider,
 		});
 
 		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		const subscription = field$(result.current, 'total').subscribe((total) => totals.push(total));
 		await waitFor(() => expect(totals).toContain(42));
 		subscription.unsubscribe();
 		// The Database page's number wins outright — the browse walk's own tally may not
@@ -1430,12 +1454,12 @@ describe('query bindings', () => {
 			sort: { field: 'menu_order', direction: 'asc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', posShaped), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', posShaped), {
 			wrapper: Provider,
 		});
-		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		await waitFor(() => expect(current(result.current)).toBeTruthy());
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 5)))
 		).resolves.toBe(5);
 	});
 
@@ -1468,17 +1492,17 @@ describe('query bindings', () => {
 			sort: { field: 'menu_order', direction: 'asc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', partly), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', partly), {
 			wrapper: Provider,
 		});
-		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		await waitFor(() => expect(current(result.current)).toBeTruthy());
 		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		const subscription = field$(result.current, 'total').subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();
 		// The superset lane's total (4) must never surface for the narrower grid.
 		expect(totals).not.toContain(4);
-		// The superset lane exists and is fresh; the binding simply never asks about it.
+		// The superset lane exists and is fresh; the handle simply never asks about it.
 		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
@@ -1507,14 +1531,17 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 1,
 		};
-		const { result, rerender } = renderHook(({ state }) => useCollectionBinding('coupons', state), {
-			wrapper: Provider,
-			initialProps: { state: base },
-		});
+		const { result, rerender } = renderHook(
+			({ state }) => useCollectionQueryHandle('coupons', state),
+			{
+				wrapper: Provider,
+				initialProps: { state: base },
+			}
+		);
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
 
 		// Filtered, the reference lane's total no longer applies, and no census was recorded —
@@ -1522,15 +1549,15 @@ describe('query bindings', () => {
 		// rather than passing the single loaded row off as "1 of 1".
 		rerender({ state: { ...base, filters: { status: 'publish' } } });
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === null)))
 		).resolves.toBeNull();
 	});
 
 	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so compiled query demand declares
-	// nothing for them and there is no handle to carry a key. The binding must therefore ask
+	// nothing for them and there is no handle to carry a key. The handle must therefore ask
 	// through the reference arm and let the engine resolve `taxRates:all` itself — seeding the
 	// verdict under `{lane:'reference'}` is what proves it never spells the key out.
-	it('projects taxRates:all coverage and idle binding activity for Tier 0', async () => {
+	it('projects taxRates:all coverage and idle activity for Tier 0', async () => {
 		await engineDB.collections.taxRates.insert({
 			uuid: 'woo-tax-rate:1',
 			remoteId: '1',
@@ -1548,21 +1575,21 @@ describe('query bindings', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		};
-		const { result } = renderHook(() => useCollectionBinding('tax-rates', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('tax-rates', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
 
-		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
+		await expect(firstValueFrom(field$(result.current, 'active'))).resolves.toBe(false);
 	});
 
 	it('keeps customer search cold until engine results land locally, naming no total', async () => {
 		// A search lane exists and is complete, but a search is not a browse: the engine hands
-		// out no queryKey for it, so the binding has no coverage target. With no census either,
+		// out no queryKey for it, so the handle has no coverage target. With no census either,
 		// nobody can say how many customers match — so it names no total at all rather than
 		// dressing the loaded-row count up as one. The lane is seeded to prove it is IGNORED.
 		engine.setCoverageVerdict(
@@ -1575,11 +1602,11 @@ describe('query bindings', () => {
 			sort: { field: 'last_name', direction: 'asc' },
 			limit: 10,
 		};
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		await waitFor(() => expect(current(result.current)?.hits).toEqual([]));
 		expect(engine.searchRequireCalls).toHaveLength(1);
 		expect(engine.searchRequireCalls[0]?.requirement).toMatchObject({
 			collection: 'customers',
@@ -1588,7 +1615,7 @@ describe('query bindings', () => {
 			limit: 10,
 		});
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === null)))
 		).resolves.toBeNull();
 
 		await engineDB.collections.customers.insert({
@@ -1601,10 +1628,10 @@ describe('query bindings', () => {
 		});
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['customer-ada'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['customer-ada'])
 		);
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === null)))
 		).resolves.toBeNull();
 		expect(engine.searchRequireCalls).toHaveLength(1);
 		// The handle's one snapshot reads the search lane's EXHAUSTION verdict eagerly (the paging
@@ -1639,17 +1666,17 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		};
-		const { result, rerender } = renderHook(({ state }) => useRelationalCollectionBinding(state), {
+		const { result, rerender } = renderHook(({ state }) => useProductsQueryHandle(state), {
 			wrapper: Provider,
 			initialProps: { state: search },
 		});
 
 		await expect(
-			firstValueFrom(result.current.exhausted$.pipe(filter((value) => value === true)))
+			firstValueFrom(field$(result.current, 'exhausted').pipe(filter((value) => value === true)))
 		).resolves.toBe(true);
 
 		const incomplete = firstValueFrom(
-			result.current.exhausted$.pipe(filter((value) => value === false))
+			field$(result.current, 'exhausted').pipe(filter((value) => value === false))
 		);
 		act(() =>
 			engine.setCoverageVerdict(target, { complete: false, fresh: true, source: 'lane', total: 10 })
@@ -1658,7 +1685,7 @@ describe('query bindings', () => {
 
 		rerender({ state: { ...search, search: '' } });
 		await expect(
-			firstValueFrom(result.current.exhausted$.pipe(filter((value) => value === null)))
+			firstValueFrom(field$(result.current, 'exhausted').pipe(filter((value) => value === null)))
 		).resolves.toBeNull();
 		engine.require = originalRequire;
 	});
@@ -1678,12 +1705,14 @@ describe('query bindings', () => {
 		// Served local (the fake's default outcome) over an INCOMPLETE lane — a fully resident
 		// catalogue looks exactly like this, and its local rows are the whole answer: null.
 		engine.setCoverageVerdict(target, { complete: false, fresh: true, source: 'lane', total: 10 });
-		const first = renderHook(() => useRelationalCollectionBinding(search), { wrapper: Provider });
+		const first = renderHook(() => useProductsQueryHandle(search), { wrapper: Provider });
 		const firstSeen: (boolean | null)[] = [];
-		const firstSubscription = first.result.current.exhausted$.subscribe((value) =>
+		const firstSubscription = field$(first.result.current, 'exhausted').subscribe((value) =>
 			firstSeen.push(value)
 		);
-		await waitFor(() => expect(firstValueFrom(first.result.current.pending$)).resolves.toBe(false));
+		await waitFor(() =>
+			expect(firstValueFrom(field$(first.result.current, 'pending'))).resolves.toBe(false)
+		);
 		expect(firstSeen).not.toContain(false);
 		expect(firstSeen.at(-1)).toBeNull();
 		firstSubscription.unsubscribe();
@@ -1700,11 +1729,13 @@ describe('query bindings', () => {
 				ready: Promise.reject(new Error('Woo REST products search request failed: 503')),
 			};
 		};
-		const second = renderHook(() => useRelationalCollectionBinding(search), { wrapper: Provider });
+		const second = renderHook(() => useProductsQueryHandle(search), { wrapper: Provider });
 		const seen: (boolean | null)[] = [];
-		const subscription = second.result.current.exhausted$.subscribe((value) => seen.push(value));
+		const subscription = field$(second.result.current, 'exhausted').subscribe((value) =>
+			seen.push(value)
+		);
 		await waitFor(() =>
-			expect(firstValueFrom(second.result.current.pending$)).resolves.toBe(false)
+			expect(firstValueFrom(field$(second.result.current, 'pending'))).resolves.toBe(false)
 		);
 		expect(seen).not.toContain(false);
 		expect(seen.at(-1)).toBeNull();
@@ -1731,11 +1762,13 @@ describe('query bindings', () => {
 			sort: { field: 'last_name', direction: 'asc' },
 			limit: 10,
 		};
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 		const pending: boolean[] = [];
-		const subscription = result.current.pending$.subscribe((value) => pending.push(value));
+		const subscription = field$(result.current, 'pending').subscribe((value) =>
+			pending.push(value)
+		);
 		await waitFor(() => expect(pending.at(-1)).toBe(true));
 
 		act(() =>
@@ -1761,12 +1794,12 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 25,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', searched), {
+		const { result } = renderHook(() => useCollectionQueryHandle('products', searched), {
 			wrapper: Provider,
 		});
 
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 203)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 203)))
 		).resolves.toBe(203);
 		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
@@ -1776,7 +1809,7 @@ describe('query bindings', () => {
 	// scope-narrowed so no census stands in — leaving the loaded-row count as the only number
 	// in the room. Publishing THAT as the total made a page of 20 read "Showing 20 of 20",
 	// which tells a cashier those are all their orders right up until the next scroll finds
-	// more. There is no honest denominator here, so the binding names none.
+	// more. There is no honest denominator here, so the handle names none.
 	it('names no total for a windowed browse the engine cannot size', async () => {
 		await engineDB.collections.orders.bulkInsert(
 			Array.from({ length: 3 }, (_, index) =>
@@ -1801,13 +1834,13 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 3,
 		};
-		const { result } = renderHook(() => useCollectionBinding('orders', windowed), {
+		const { result } = renderHook(() => useCollectionQueryHandle('orders', windowed), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		await waitFor(() => expect(current(result.current)).toBeTruthy());
 		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		const subscription = field$(result.current, 'total').subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();
 		// The page size must never surface as the size of the set.
@@ -1841,12 +1874,12 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 100,
 		};
-		const { result } = renderHook(() => useCollectionBinding('orders', complete), {
+		const { result } = renderHook(() => useCollectionQueryHandle('orders', complete), {
 			wrapper: Provider,
 		});
 
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
 	});
 
@@ -1861,12 +1894,12 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 25,
 		};
-		const { result } = renderHook(() => useCollectionBinding('orders', scoped), {
+		const { result } = renderHook(() => useCollectionQueryHandle('orders', scoped), {
 			wrapper: Provider,
 		});
 
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 4_312)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 4_312)))
 		).resolves.toBe(4_312);
 		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
@@ -1899,11 +1932,11 @@ describe('query bindings', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: 10,
 		};
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		expect(engine.requireCalls).toContainEqual(
 			expect.objectContaining({
 				collection: 'customers',
@@ -1914,7 +1947,7 @@ describe('query bindings', () => {
 			})
 		);
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 4_200)))
+			firstValueFrom(field$(result.current, 'total').pipe(filter((total) => total === 4_200)))
 		).resolves.toBe(4_200);
 	});
 
@@ -1935,11 +1968,11 @@ describe('query bindings', () => {
 			sort: { field: 'last_name', direction: 'asc' },
 			limit: 10,
 		};
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		expect(
 			engine.requireCalls.filter((requirement) => requirement.kind === 'customer-browse')
 		).toContainEqual(
@@ -1964,24 +1997,24 @@ describe('query bindings', () => {
 			sort: { field: 'role', direction: 'desc' },
 			limit: 10,
 		};
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await waitFor(() => expect(current(result.current)?.hits).toHaveLength(1));
 		expect(engine.requireCalls).toContainEqual(
 			expect.objectContaining({ kind: 'customer-browse', orderby: 'role', order: 'desc' })
 		);
 	});
 
-	it('releases direct search demand when its binding unmounts', async () => {
+	it('releases direct search demand when its owner unmounts', async () => {
 		const state: QueryStateOf<'customers'> = {
 			search: 'ada',
 			filters: {},
 			sort: { field: 'last_name', direction: 'asc' },
 			limit: 10,
 		};
-		const { unmount } = renderHook(() => useCollectionBinding('customers', state), {
+		const { unmount } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 		await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
@@ -2015,7 +2048,7 @@ describe('query bindings', () => {
 			sort: { field: 'last_name', direction: 'asc' },
 			limit: 10,
 		};
-		renderHook(() => useCollectionBinding('customers', state), { wrapper: Provider });
+		renderHook(() => useCollectionQueryHandle('customers', state), { wrapper: Provider });
 		await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
 
 		// Same query, same term — only the generation moved.
@@ -2037,7 +2070,7 @@ describe('query bindings', () => {
 			limit: 10,
 		};
 
-		renderHook(() => useCollectionBinding('customers', state), {
+		renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
 		await act(async () => Promise.resolve());
@@ -2061,10 +2094,12 @@ describe('query bindings', () => {
 			limit: 10,
 		};
 		const activeValues: boolean[] = [];
-		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+		const { result } = renderHook(() => useCollectionQueryHandle('customers', state), {
 			wrapper: Provider,
 		});
-		const subscription = result.current.active$.subscribe((active) => activeValues.push(active));
+		const subscription = field$(result.current, 'active').subscribe((active) =>
+			activeValues.push(active)
+		);
 
 		await act(async () => Promise.resolve());
 		await act(async () => jest.advanceTimersByTimeAsync(1_000));
@@ -2235,14 +2270,14 @@ describe('query bindings', () => {
 		const wrapper = ({ children }: { children: React.ReactNode }) => (
 			<Provider value={movingEngine}>{children}</Provider>
 		);
-		const { result } = renderHook(() => useCollectionBinding('products', state), { wrapper });
-		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('old'));
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), { wrapper });
+		await waitFor(() => expect(current(result.current)?.hits[0]?.id).toBe('old'));
 
 		act(() => {
 			activeDB = secondDB;
 			listeners.forEach((listener) => listener(secondDB));
 		});
-		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('new'));
+		await waitFor(() => expect(current(result.current)?.hits[0]?.id).toBe('new'));
 		await secondDB.remove();
 	});
 
@@ -2267,8 +2302,8 @@ describe('query bindings', () => {
 		const wrapper = ({ children }: { children: React.ReactNode }) => (
 			<Provider value={resettingEngine}>{children}</Provider>
 		);
-		const { result } = renderHook(() => useCollectionBinding('products', state), { wrapper });
-		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('before-reset'));
+		const { result } = renderHook(() => useCollectionQueryHandle('products', state), { wrapper });
+		await waitFor(() => expect(current(result.current)?.hits[0]?.id).toBe('before-reset'));
 
 		await engineDB.collections.products.remove();
 		await engineDB.addCollections({
@@ -2279,7 +2314,7 @@ describe('query bindings', () => {
 			engineProduct({ uuid: 'after-refill', id: 2, name: 'After refill' })
 		);
 
-		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('after-refill'));
+		await waitFor(() => expect(current(result.current)?.hits[0]?.id).toBe('after-refill'));
 	});
 
 	it('binds the relational products-to-variations search pair', async () => {
@@ -2302,25 +2337,23 @@ describe('query bindings', () => {
 			limit: 20,
 		};
 		const { result, rerender } = renderHook(
-			({ queryState }) => useRelationalCollectionBinding(queryState),
+			({ queryState }) => useProductsQueryHandle(queryState),
 			{ wrapper: Provider, initialProps: { queryState: state } }
 		);
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits[0]).toMatchObject({
+			expect(current(result.current)?.hits[0]).toMatchObject({
 				id: 'shirt',
 				childrenSearchCount: 1,
 			})
 		);
-		expect(current(result.current.resource)?.searchActive).toBe(true);
+		expect(current(result.current)?.searchActive).toBe(true);
 		const variationSearch = engine.searchRequireCalls.find(
 			({ requirement }) => requirement.collection === 'variations'
 		);
 		expect(variationSearch?.released).toBe(false);
 
 		rerender({ queryState: { ...state, search: '' } });
-		await waitFor(() =>
-			expect(Boolean(current(result.current.resource)?.searchActive)).toBe(false)
-		);
+		await waitFor(() => expect(Boolean(current(result.current)?.searchActive)).toBe(false));
 		expect(variationSearch?.released).toBe(true);
 	});
 
@@ -2355,21 +2388,18 @@ describe('query bindings', () => {
 				limit: 20,
 			};
 			const { result, rerender } = renderHook(
-				({ queryState }) => useRelationalCollectionBinding(queryState),
+				({ queryState }) => useProductsQueryHandle(queryState),
 				{
 					wrapper: Provider,
 					initialProps: { queryState: state },
 				}
 			);
 			await waitFor(() =>
-				expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
-					'split',
-					'wanted',
-				])
+				expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['split', 'wanted'])
 			);
 			rerender({ queryState: { ...state, search: 'xxMY საბარგულიxx' } });
 			await waitFor(() =>
-				expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['wanted'])
+				expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['wanted'])
 			);
 		}
 	);
@@ -2399,11 +2429,11 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 20,
 		};
-		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+		const { result } = renderHook(() => useProductsQueryHandle(state), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)?.hits.length).toBe(0));
+		await waitFor(() => expect(current(result.current)?.hits.length).toBe(0));
 	});
 
 	it('windows relational products after considering every matching variation', async () => {
@@ -2433,12 +2463,12 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+		const { result } = renderHook(() => useProductsQueryHandle(state), {
 			wrapper: Provider,
 		});
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['alpha-shirt'])
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['alpha-shirt'])
 		);
 	});
 
@@ -2476,12 +2506,12 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 2,
 		};
-		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+		const { result } = renderHook(() => useProductsQueryHandle(state), {
 			wrapper: Provider,
 		});
 
 		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual([
 				'first-shirt',
 				'later-shirt',
 			])
@@ -2660,7 +2690,7 @@ describe('query bindings', () => {
 		});
 	});
 
-	it('declares coupon refresh demand when the cart coupon picker binding mounts', async () => {
+	it('declares coupon refresh demand when the cart coupon picker mounts', async () => {
 		renderHook(() => useSearchSelect('coupon'), { wrapper: Provider });
 
 		await waitFor(() =>
@@ -2927,28 +2957,28 @@ describe('query bindings', () => {
 	 *    This test catches the bug where useObservableState returns undefined
 	 *    before the observable emits."
 	 *
-	 * `useQuery` no longer exists. The contract moved DOWN a layer into these
-	 * binding hooks: every screen that mounts a grid (products.tsx, orders,
+	 * `useQuery` no longer exists. The contract moved DOWN a layer into the
+	 * handle hooks: every screen that mounts a grid (products.tsx, orders,
 	 * customers, tax-rates, the logs viewer) calls one of them and immediately
-	 * destructures `resource`/`result$`/`total$` into a Suspense boundary on the
-	 * very first render, before anything has emitted. The search-select pickers
-	 * hand a query handle instead; their first-render guard is the case below.
-	 * A hook that returns `undefined` — or an object with a hole in it — crashes
-	 * the screen exactly the way 1.9 did.
+	 * hands the handle to a reader (`value`, `subscribe`, `whenAnswered`) and its
+	 * footer (`sync`) on the very first render, before anything has emitted. A hook
+	 * that returns `undefined` — or a handle with a hole in it — crashes the screen
+	 * exactly the way 1.9 did.
 	 *
 	 * The guard is deliberately at the HOOK level rather than at
-	 * `observeEngineQuery`/`useLocalQuery`: the low-level observables were never
+	 * `observeEngineQuery`/`useLocalQuery$`: the low-level observables were never
 	 * what crashed, the value a component destructures was.
 	 */
-	describe('first render never yields an undefined binding (resurrected 1.9 guard)', () => {
-		const BINDING_FIELDS = [
-			'resource',
-			'result$',
-			'active$',
-			'pending$',
-			'exhausted$',
-			'total$',
-			'laneProgress$',
+	describe('first render never yields an undefined handle (resurrected 1.9 guard)', () => {
+		const HANDLE_METHODS = [
+			'subscribe',
+			'retain',
+			'observe',
+			'sync',
+			'whenReady',
+			'declareOnce',
+			'retry',
+			'whenAnswered',
 		] as const;
 
 		const productsState: QueryStateOf<'products'> = {
@@ -2959,38 +2989,35 @@ describe('query bindings', () => {
 		};
 
 		type Captured = {
-			binding: Record<string, unknown> | undefined;
-			/** Whether the resource already held a value during the first render pass. */
+			handle: QueryHandle | undefined;
+			/** Whether the handle already had an answer during the first render pass. */
 			hadValueOnFirstRender: boolean;
 		};
 
 		/**
-		 * Render a binding hook and capture what it returned on the FIRST render
+		 * Render a handle hook and capture what it returned on the FIRST render
 		 * pass — recorded during the render phase, so the snapshot predates effects
 		 * and any emission. The probe destructures the way a real screen does, so an
 		 * `undefined` return throws inside render (the 1.9 crash, verbatim).
 		 */
-		function captureFirstRender(useBinding: () => unknown, value?: FakeEngine): Captured {
-			const captured: Captured = { binding: undefined, hadValueOnFirstRender: false };
+		function captureFirstRender(useHandle: () => QueryHandle, value?: FakeEngine): Captured {
+			const captured: Captured = { handle: undefined, hadValueOnFirstRender: false };
 			let renders = 0;
 
 			function Probe() {
-				const binding = useBinding() as Record<string, unknown>;
+				const handle = useHandle();
 				renders += 1;
-				// What every consuming screen does immediately. If `binding` is
+				// What every consuming screen does immediately. If `handle` is
 				// undefined this line throws "Cannot destructure property ... of
 				// undefined", which is the bug this guard exists to catch.
-				const { resource, result$, active$, total$, laneProgress$, sync } = binding;
+				const { value: snapshot, subscribe, sync } = handle;
 				if (renders === 1) {
-					captured.binding = binding;
-					captured.hadValueOnFirstRender =
-						(resource as Resource | undefined)?.valueRef$$?.value?.current !== undefined;
+					captured.handle = handle;
+					captured.hadValueOnFirstRender = snapshot.ready;
 				}
 				return (
 					<div>
-						{[resource, result$, active$, total$, laneProgress$, sync].every(
-							(field) => field !== undefined && field !== null
-						)
+						{[snapshot, subscribe, sync].every((field) => field !== undefined && field !== null)
 							? 'valid'
 							: 'invalid'}
 					</div>
@@ -3008,36 +3035,26 @@ describe('query bindings', () => {
 			return captured;
 		}
 
-		function expectUsableBinding(captured: Captured) {
-			expect(captured.binding).toBeDefined();
-			expect(captured.binding).not.toBeNull();
-			for (const field of BINDING_FIELDS) {
-				expect(captured.binding?.[field]).toBeDefined();
-				expect(captured.binding?.[field]).not.toBeNull();
+		function expectUsableHandle(captured: Captured) {
+			expect(captured.handle).toBeDefined();
+			expect(captured.handle).not.toBeNull();
+			// A snapshot a reader can destructure straight away, and every method callable —
+			// "defined" is not enough if a field is a placeholder a consumer cannot use.
+			expect(captured.handle?.value).toMatchObject({
+				hits: expect.any(Array),
+				count: expect.any(Number),
+			});
+			for (const method of HANDLE_METHODS) {
+				expect(typeof captured.handle?.[method]).toBe('function');
 			}
-			// The observables must be subscribable and `sync` callable straight away —
-			// "defined" is not enough if the field is a placeholder a consumer cannot use.
-			for (const field of [
-				'result$',
-				'active$',
-				'pending$',
-				'exhausted$',
-				'total$',
-				'laneProgress$',
-			] as const) {
-				expect(typeof (captured.binding?.[field] as { subscribe?: unknown })?.subscribe).toBe(
-					'function'
-				);
-			}
-			expect(typeof captured.binding?.sync).toBe('function');
 		}
 
 		it.each([
-			['products grid', () => useCollectionBinding('products', productsState)],
+			['products grid', () => useCollectionQueryHandle('products', productsState)],
 			[
 				'orders grid',
 				() =>
-					useCollectionBinding('orders', {
+					useCollectionQueryHandle('orders', {
 						search: '',
 						filters: {},
 						sort: { field: 'date_created_gmt', direction: 'desc' },
@@ -3047,7 +3064,7 @@ describe('query bindings', () => {
 			[
 				'customers grid',
 				() =>
-					useCollectionBinding('customers', {
+					useCollectionQueryHandle('customers', {
 						search: '',
 						filters: {},
 						sort: { field: 'last_name', direction: 'asc' },
@@ -3057,31 +3074,36 @@ describe('query bindings', () => {
 			[
 				'tax-rates',
 				() =>
-					useCollectionBinding('tax-rates', {
+					useCollectionQueryHandle('tax-rates', {
 						search: '',
 						filters: {},
 						sort: { field: 'id', direction: 'asc' },
 						limit: 10,
 					}),
 			],
-			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
-		])('%s is fully populated on its first render', async (_label, useBinding) => {
-			const captured = captureFirstRender(useBinding);
+			['POS relational products grid', () => useProductsQueryHandle(productsState)],
+		] as [string, () => QueryHandle][])(
+			'%s is fully populated on its first render',
+			async (_label, useHandle) => {
+				const captured = captureFirstRender(useHandle);
 
-			expectUsableBinding(captured);
+				expectUsableHandle(captured);
 
-			await act(async () => {
-				await Promise.resolve();
-			});
-		});
+				await act(async () => {
+					await Promise.resolve();
+				});
+			}
+		);
 
-		it('populates the products binding BEFORE the query emits', async () => {
-			const captured = captureFirstRender(() => useCollectionBinding('products', productsState));
+		it('populates the products handle BEFORE the query emits', async () => {
+			const captured = captureFirstRender(() =>
+				useCollectionQueryHandle('products', productsState)
+			);
 
 			// The 1.9 comment verbatim: the crash was the window between mount and the
-			// first emission. Assert the binding was usable while that window was open.
+			// first emission. Assert the handle was usable while that window was open.
 			expect(captured.hadValueOnFirstRender).toBe(false);
-			expectUsableBinding(captured);
+			expectUsableHandle(captured);
 
 			await act(async () => {
 				await Promise.resolve();
@@ -3091,27 +3113,30 @@ describe('query bindings', () => {
 		/**
 		 * Cold start — the engine's database is still opening, so `active()` is null
 		 * and bootstrap demand rejects. This is the real-app window the 1.9 crash
-		 * lived in; the bindings must DEGRADE (constructible, empty) rather than
+		 * lived in; the handles must DEGRADE (constructible, empty) rather than
 		 * hand a screen `undefined`.
 		 */
 		it.each([
-			['products grid', () => useCollectionBinding('products', productsState)],
-			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
-		])('%s survives a first render against an unopened engine', async (_label, useBinding) => {
-			const pending = createPendingFakeEngine(engineDB);
+			['products grid', () => useCollectionQueryHandle('products', productsState)],
+			['POS relational products grid', () => useProductsQueryHandle(productsState)],
+		] as [string, () => QueryHandle][])(
+			'%s survives a first render against an unopened engine',
+			async (_label, useHandle) => {
+				const pending = createPendingFakeEngine(engineDB);
 
-			const captured = captureFirstRender(useBinding, pending.engine);
+				const captured = captureFirstRender(useHandle, pending.engine);
 
-			expectUsableBinding(captured);
+				expectUsableHandle(captured);
 
-			await act(async () => {
-				pending.open();
-				await Promise.resolve();
-			});
-		});
+				await act(async () => {
+					pending.open();
+					await Promise.resolve();
+				});
+			}
+		);
 
 		/**
-		 * The pickers hand a handle, not a binding: a list reads it on the first render, so the
+		 * The pickers hand a handle too: a list reads it on the first render, so the
 		 * handle (and the paging the list wires) must be there before anything has emitted —
 		 * on a cold engine too.
 		 */

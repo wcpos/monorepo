@@ -49,8 +49,8 @@ export function declareRequirements(
 	});
 }
 
-/** Binding-independent refill for collections a reset may have emptied with no binding
- * mounted over them. Mounted bindings replay themselves (coverageGeneration). */
+/** Reader-independent refill for collections a reset may have emptied with no query handle
+ * owned over them. An owned handle replays itself (the coverage generation is in its key). */
 export function resetRefillRequirements(collectionNames: string[]): EngineRequirement[] {
 	const wanted = new Set(collectionNames);
 	const resetEngineCollections = new Set<EngineCollectionName>(

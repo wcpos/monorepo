@@ -6,19 +6,17 @@
  * collection's scope key, so the same query from two components (the grid and the quick-filter
  * preview) is one handle, and a parent's render, a store tick or a clock cannot re-issue it.
  * The owning component retains the handle while mounted; readers subscribe to it with
- * `useQueryHandleValue` (one subscription, one snapshot) or gate on `useQueryHandleResource`.
+ * `useQueryHandleValue` (one subscription, one snapshot) or suspend on it with `useQuerySnapshot`.
  */
 
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
 import {
 	auditTime,
 	combineLatest,
 	defer,
 	distinctUntilChanged,
 	exhaustMap,
-	filter,
 	map,
 	merge,
 	Observable,
@@ -39,8 +37,6 @@ import {
 	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryHandle,
-	queryHandleResource,
-	queryHandleResults$,
 	type QueryHandleSpec,
 	type QueryResult,
 	type QuerySnapshot,
@@ -397,7 +393,37 @@ export function acquireEmptyQueryHandle(
 }
 
 /**
- * The plain collection read as a handle — what `useCollectionBinding` compiled per render: one
+ * A demand and nothing to read: the standing declaration while owned, its readiness and re-arm
+ * (`whenReady`, `declareOnce`), and the collection's pull activity (`value.active`). For a caller
+ * that scans the residents itself once the demand has landed (the coupon replay), so it holds no
+ * live query over a whole collection for nothing; its answer is the empty result.
+ */
+export function acquireDemandQueryHandle(
+	engine: RxdbSyncEngine,
+	key: string,
+	build: (id: string) => CompiledQuery
+): QueryHandle<QueryResult<RxCollection>> {
+	return acquireQueryHandle(engine, key, (registry) => {
+		const id = `qh${nextHandleId++}`;
+		const compiled = build(id);
+		return createQueryHandle(
+			engine,
+			{
+				key,
+				result$: () => of(emptyResult()),
+				demands: [createDemand(engine, id, demandPlanFor(compiled))],
+				activeCollections: [engineCollectionNameFor(compiled.collection)],
+				censusScoped: false,
+				observeActive: observeCollectionActive,
+			},
+			emptyResult(),
+			registry
+		);
+	});
+}
+
+/**
+ * The plain collection read as a handle: one
  * descriptor, one demand, the collection's own activity and census. Orders, customers, coupons,
  * tax rates, refunds, variations: every table screen's query.
  */
@@ -426,9 +452,9 @@ export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
 }
 
 /**
- * The handle for a collection's query state, retained while the caller is mounted: the shape
- * `useCollectionBinding` has always taken, keyed by scope, state, targeted ids, store scope and
- * search fields, so two screens asking the same question share one read and one demand.
+ * The handle for a collection's query state, retained while the caller is mounted: keyed by
+ * scope, state, targeted ids, store scope and search fields, so two screens asking the same
+ * question share one read and one demand.
  */
 export function useCollectionQueryHandle<C extends CollectionHandleKey>(
 	collection: C,
@@ -684,110 +710,4 @@ export function useQuerySnapshot<R extends QueryResult<RxCollection>>(
 	if (snapshot.error) throw snapshot.error;
 	if (!snapshot.ready) throw handle.whenAnswered();
 	return snapshot;
-}
-
-/**
- * The eight-observable `QueryBinding` shape over a handle, for the shared consumers that still
- * take it (the data table, the browse stage's footers). The Suspense resource is created on
- * first access, not on mount — a grid that reads the snapshot never builds one, so nothing
- * subscribes during render on that path — and it reloads (keeps its rows) when the handle moves.
- */
-export function useQueryBindingFor<R extends QueryResult<RxCollection>>(
-	handle: QueryHandle<R>
-): {
-	resource: ObservableResource<R>;
-	result$: Observable<R>;
-	active$: Observable<boolean>;
-	pending$: Observable<boolean>;
-	exhausted$: Observable<boolean | null>;
-	total$: Observable<number | null>;
-	laneProgress$: Observable<QuerySnapshot<R>['laneProgress']>;
-	sync: () => Promise<void>;
-} {
-	const held = React.useRef<{ handle: QueryHandle<R>; resource: ObservableResource<R> } | null>(
-		null
-	);
-	React.useEffect(() => {
-		// The resource follows the handle in an effect, never in a reader's render (a reload
-		// subscribes the new read on the spot, and a live shared handle would then emit into the
-		// table's Suspense state while another component renders). Until the effect runs, a
-		// reader gets the resource as it is — the previous rows, which is what `reload` keeps.
-		// It follows even if nobody reads it again (the view switched from table to grid), or it
-		// would retain that handle for good.
-		const current = held.current;
-		if (!current || current.handle === handle) return;
-		current.resource.reload(queryHandleResults$(handle));
-		held.current = { handle, resource: current.resource };
-	}, [handle]);
-	React.useEffect(
-		() => () => {
-			held.current?.resource.destroy();
-			held.current = null;
-		},
-		[]
-	);
-	return React.useMemo(
-		() => ({
-			get resource() {
-				// Built on first access only; a reader that never asks (the grid) never subscribes.
-				if (!held.current) held.current = { handle, resource: queryHandleResource(handle) };
-				return held.current.resource;
-			},
-			...bindingObservablesFor(handle),
-		}),
-		[handle]
-	);
-}
-
-/**
- * A Suspense resource over a handle, owned by the calling component: it suspends until the
- * engine's first answer, and when the handle changes it RELOADS rather than re-suspends, so
- * the current rows stay rendered while the next query loads (the extended-limit case).
- */
-export function useQueryHandleResource<R extends QueryResult<RxCollection>>(
-	handle: QueryHandle<R>
-): ObservableResource<R> {
-	const [resource] = React.useState(() => queryHandleResource(handle));
-	const bound = React.useRef(handle);
-	React.useEffect(() => {
-		if (bound.current === handle) return;
-		bound.current = handle;
-		resource.reload(queryHandleResults$(handle));
-	}, [handle, resource]);
-	React.useEffect(() => () => resource.destroy(), [resource]);
-	return resource;
-}
-
-/**
- * The eight-observable `QueryBinding` shape over a handle, for the shared consumers that
- * still take it (the data table, the footers, the paging verdict). Each observable retains
- * the handle while subscribed and projects one field of the snapshot. Built once per handle,
- * so a binding's identity is the handle's.
- */
-export function bindingObservablesFor<R extends QueryResult<RxCollection>>(handle: QueryHandle<R>) {
-	const snapshot$ = handle.observe();
-	// The projections say nothing until the read has answered: a footer holding the previous
-	// query's total keeps it while the next loads (as the old per-binding streams did, which
-	// emitted nothing before their read), instead of blanking to "Showing 20" per keystroke.
-	const answered$ = snapshot$.pipe(filter((snapshot) => snapshot.ready));
-	const field = <K extends keyof QuerySnapshot<R>>(source: Observable<QuerySnapshot<R>>, name: K) =>
-		source.pipe(
-			map((snapshot) => snapshot[name]),
-			distinctUntilChanged()
-		);
-	return {
-		result$: queryHandleResults$(handle),
-		active$: field(snapshot$, 'active'),
-		pending$: field(snapshot$, 'pending'),
-		exhausted$: field(answered$, 'exhausted'),
-		total$: field(answered$, 'total'),
-		laneProgress$: answered$.pipe(
-			map((snapshot) => snapshot.laneProgress),
-			distinctUntilChanged(
-				(previous, current) =>
-					previous?.downloaded === current?.downloaded && previous?.total === current?.total
-			)
-		),
-		sync: handle.sync,
-	};
 }

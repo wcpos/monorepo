@@ -27,7 +27,7 @@ export type CollectionKey = keyof typeof storeCollections | LegacyCollectionName
  * 2. collection.remove() is called (instant, regardless of record count)
  * 3. reset-collection plugin re-creates the collection and emits on reset$
  * 4. This hook receives the new collection and triggers re-render
- * 5. Direct query bindings subscribe to engine db$ replacement.
+ * 5. Query handles subscribe to engine db$ replacement.
  */
 export const useCollection = <K extends keyof StoreCollections>(
 	key: K
@@ -47,7 +47,7 @@ export const useCollection = <K extends keyof StoreCollections>(
 	 * render, correctly read the new one. The table simply stopped moving
 	 * (#1542-adjacent; reported 2026-08-25).
 	 *
-	 * The mechanism is shared with `useLocalQuery` and the two logs readers
+	 * The mechanism is shared with `useLocalQuery$` and the two logs readers
 	 * rather than restated here — including the check that a reset belongs to
 	 * THIS database, which a name-only filter cannot make: `reset$` is one
 	 * process-wide Subject, so store A's reset would otherwise land in a

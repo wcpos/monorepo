@@ -7,7 +7,6 @@ import { buildScanSearchSelector } from '@wcpos/sync-core';
 
 import { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
 import { useLocalCollection$ } from './use-local-collection';
-import { useOwnedResource } from './use-owned-resource';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
@@ -93,7 +92,7 @@ function localQueryResult$(collection: LocalCollection, options: LocalQueryOptio
 		map((selector) => normalizeSelectorSemantics(selector)),
 		switchMap((matchingSelector) => {
 			// No startWith(empty) on these: the first emission must be the real query
-			// result, so a descriptor swap in useLocalQuery keeps the previous window
+			// result, so a descriptor swap in a reader keeps the previous window
 			// on screen instead of flashing an empty table.
 			const documents$ = collection
 				.find({
@@ -148,14 +147,4 @@ export const useLocalQuery$ = (options: LocalQueryOptions) => {
 		[result$]
 	);
 	return { result$, total$ };
-};
-
-/** Direct local-only query binding. It never registers engine demand. */
-export const useLocalQuery = (options: LocalQueryOptions) => {
-	const { result$, total$ } = useLocalQuery$(options);
-	// The hook's resource: a changed query reloads it (the current window stays while the new
-	// one loads), and it reads only once the caller commits — a caller that owns the read's
-	// lifetime itself takes `useLocalQuery$`.
-	const resource = useOwnedResource(result$);
-	return { resource, result$, total$ };
 };

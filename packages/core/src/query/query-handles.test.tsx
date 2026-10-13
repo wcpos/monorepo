@@ -16,12 +16,7 @@ import {
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import {
-	useDrawnHandle,
-	useQueryBindingFor,
-	useQueryHandleFields,
-	useQuerySnapshot,
-} from './query-handles';
+import { useDrawnHandle, useQueryHandleFields, useQuerySnapshot } from './query-handles';
 
 import type { RxCollection } from 'rxdb';
 
@@ -44,8 +39,6 @@ function handleOver(key: string, results: Subject<Result>): QueryHandle<Result> 
 		EMPTY
 	);
 }
-
-const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe('useQuerySnapshot', () => {
 	function Reader({
@@ -278,53 +271,5 @@ describe('useQueryHandleFields', () => {
 		act(() => results.next({ count: 2, hits: [] }));
 		expect(result.current.count).toBe(2);
 		expect(result.current.active).toBe(true);
-	});
-});
-
-describe('useQueryBindingFor', () => {
-	it('builds the resource on first access only, and its identity is the handle’s', () => {
-		const results = new Subject<Result>();
-		const handle = handleOver('c', results);
-		let started = 0;
-		const original = handle.subscribe;
-		handle.subscribe = (listener) => {
-			started += 1;
-			return original(listener);
-		};
-		const { result, rerender } = renderHook(() => useQueryBindingFor(handle));
-		const binding = result.current;
-		rerender();
-		expect(result.current).toBe(binding);
-		// Nothing subscribed the handle: no reader has asked for the resource yet.
-		expect(started).toBe(0);
-		expect(binding.resource).toBe(binding.resource);
-		expect(binding.sync).toBe(handle.sync);
-	});
-
-	it('follows the handle when it changes, keeping one resource, and lets go on unmount', async () => {
-		const first = new Subject<Result>();
-		const second = new Subject<Result>();
-		const handles = { a: handleOver('d', first), b: handleOver('e', second) };
-		const { result, rerender, unmount } = renderHook(
-			({ key }) => useQueryBindingFor(handles[key]),
-			{
-				initialProps: { key: 'a' as 'a' | 'b' },
-			}
-		);
-		const resource = result.current.resource;
-		act(() => first.next({ count: 1, hits: [] }));
-		expect(resource.read().count).toBe(1);
-
-		rerender({ key: 'b' });
-		await settle();
-		// The same resource now follows the second handle; it kept the rows it had.
-		expect(result.current.resource).toBe(resource);
-		expect(resource.read().count).toBe(1);
-		act(() => second.next({ count: 2, hits: [] }));
-		expect(resource.read().count).toBe(2);
-
-		unmount();
-		await settle();
-		expect(resource.isDestroyed).toBe(true);
 	});
 });

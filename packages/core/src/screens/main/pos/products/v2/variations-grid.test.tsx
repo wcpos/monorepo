@@ -92,7 +92,7 @@ jest.mock('@wcpos/components/status-badge', () => ({
 // The footer row as the handle footer hands it values: the real HandleProductsFooter reads
 // `active` from the handle and passes the grid's count and denominator through.
 jest.mock('./footer', () => ({
-	ProductsFooterRow: ({
+	ProductsFooter: ({
 		children,
 		count,
 		total,

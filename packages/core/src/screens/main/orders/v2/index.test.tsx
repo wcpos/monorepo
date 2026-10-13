@@ -149,11 +149,6 @@ jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null 
 jest.mock('../../components/order/customer', () => ({ Customer: () => null }));
 jest.mock('../../components/order/order-number', () => ({ OrderNumber: () => null }));
 jest.mock('../../components/order/payment-method', () => ({ PaymentMethod: () => null }));
-jest.mock('../../components/order/status', () => ({
-	Status: () => null,
-	OrderStatusBadge: () => null,
-}));
-jest.mock('../../components/order/total', () => ({ Total: () => null, OrderTotal: () => null }));
 jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 jest.mock('../../hooks/use-referenced-customer-demand', () => ({
 	useReferencedCustomerDemand: jest.fn(),
@@ -161,7 +156,7 @@ jest.mock('../../hooks/use-referenced-customer-demand', () => ({
 
 function latestState(): QueryStateOf<'orders'> {
 	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
-	if (!call) throw new Error('orders binding was not called');
+	if (!call) throw new Error('orders handle was not called');
 	return call[1] as QueryStateOf<'orders'>;
 }
 
@@ -339,7 +334,7 @@ it('interleaves store-day headings only on date-created sort', () => {
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
-it('uses the orders skeleton while the binding resource is unresolved', () => {
+it('uses the orders skeleton while the orders handle is unanswered', () => {
 	const original = mockHandle;
 	mockHandle = fakeQueryHandle({ ready: false });
 	try {

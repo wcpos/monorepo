@@ -8,9 +8,9 @@ import {
 	createDemand,
 	createQueryHandle,
 	type DemandPlan,
+	NOT_ATTEMPTED,
 	queryHandleAnswers$,
 	queryHandleCount,
-	queryHandleResource,
 	type QueryHandleSpec,
 	type QuerySnapshot,
 } from '../src/query-handle';
@@ -43,6 +43,17 @@ function searchPlan(term: string): DemandPlan {
 			})),
 		represented: true,
 		isUnfiltered: false,
+	};
+}
+
+function refreshPlan(): DemandPlan {
+	return {
+		collection: 'products',
+		requirementsFor: (overlay) => [
+			{ kind: 'refresh', collection: 'products', id: `${overlay.id}:refresh` } as EngineRequirement,
+		],
+		represented: false,
+		isUnfiltered: true,
 	};
 }
 
@@ -159,13 +170,12 @@ describe('query handle', () => {
 		expect(notified).toBe(1);
 	});
 
-	it('reads engine rows and answers the resource once they land', async () => {
+	it('reads engine rows and answers once they land', async () => {
 		await database.collections.products.insert(engineProduct({ uuid: 'p1', id: 1, name: 'One' }));
 		const handle = acquire(
 			'd',
 			observeEngineQuery(engine, { collection: 'products', sort: [{ id: 'asc' }] })
 		);
-		const resource = queryHandleResource(handle);
 		const result = await firstValueFrom(
 			new Observable<Result>((subscriber) => {
 				const unsubscribe = handle.subscribe(() => {
@@ -176,11 +186,10 @@ describe('query handle', () => {
 			})
 		);
 		expect(result.hits.map((hit) => hit.id)).toEqual(['p1']);
-		expect(resource.read().hits.map((hit) => hit.id)).toEqual(['p1']);
-		resource.destroy();
+		await expect(handle.whenAnswered()).resolves.toBeUndefined();
 	});
 
-	it('rethrows a failed read through the resource and retries it for the next reader', async () => {
+	it('rejects a failed read to its reader and retries it for the next reader', async () => {
 		let attempts = 0;
 		const handle = acquireQueryHandle(engine, 'f', (registry) =>
 			createQueryHandle(
@@ -198,16 +207,16 @@ describe('query handle', () => {
 				registry
 			)
 		);
-		const resource = queryHandleResource(handle);
-		expect(() => resource.read()).toThrow('storage gone');
+		const leave = handle.subscribe(() => undefined);
 		expect(handle.value.error).toBeInstanceOf(Error);
-		resource.destroy();
+		await expect(handle.whenAnswered()).rejects.toThrow('storage gone');
+		leave();
 		await settle();
 		// A new reader asks the engine again and gets an answer.
-		const again = queryHandleResource(handle);
-		expect(again.read()).toEqual(EMPTY);
+		const leaveAgain = handle.subscribe(() => undefined);
+		expect(handle.value).toMatchObject({ ready: true, error: null, result: EMPTY });
 		expect(attempts).toBe(2);
-		again.destroy();
+		leaveAgain();
 	});
 
 	it('carries rows and total in one frame, and keeps the last rows across a restart', async () => {
@@ -352,12 +361,13 @@ describe('query handle', () => {
 		);
 		handle.subscribe(() => undefined);
 		expect(handle.value.error).toBeInstanceOf(Error);
-		const resource = queryHandleResource(handle);
+		handle.subscribe(() => undefined);
 		expect(handle.value.error).toBeNull();
-		expect(() => resource.read()).toThrow(); // a pending Suspense promise, not the old error
+		// The wait is on the new read, not the old error.
+		const answered = handle.whenAnswered();
 		late.next({ count: 2, hits: [] });
-		expect(resource.read().count).toBe(2);
-		resource.destroy();
+		await expect(answered).resolves.toBeUndefined();
+		expect(handle.value.count).toBe(2);
 	});
 
 	it('keeps notifying a subscription whose callback another subscription shared and released', () => {
@@ -508,5 +518,53 @@ describe('query handle', () => {
 		const forced = engine.requireCalls.find((call) => call.id?.endsWith(':sync:search'));
 		expect(forced).toMatchObject({ priority: 1000, forceRefresh: true });
 		expect(engine.syncCalls).toEqual(['scheduler-drain']);
+	});
+
+	it('declareOnce asks the engine afresh for the first demand, releases it, and honours abort', async () => {
+		// Another owner holds the scheduler row: the standing declaration settles `released`.
+		engine.refreshReleased = true;
+		const handle = acquire('o', of(EMPTY), [refreshPlan()]);
+		handle.retain();
+		await expect(handle.whenReady()).resolves.toEqual(NOT_ATTEMPTED);
+
+		// The standing declaration settled once; only a fresh declaration can see the owner finish.
+		engine.refreshReleased = false;
+		await expect(handle.declareOnce()).resolves.toEqual({ attempted: true, fetched: false });
+		const rearms = () => engine.requireCalls.filter((call) => call.id?.endsWith(':rearm:refresh'));
+		expect(rearms()).toHaveLength(1);
+		expect(engine.demandEvents.slice(-1)).toEqual(['release:refresh']);
+
+		// An aborted caller declares nothing.
+		const aborted = new AbortController();
+		aborted.abort();
+		await expect(handle.declareOnce(aborted.signal)).resolves.toEqual(NOT_ATTEMPTED);
+		expect(rearms()).toHaveLength(1);
+
+		// Aborting mid-wait releases the declaration nobody wants any more.
+		const originalRequire = engine.require.bind(engine);
+		const released = jest.fn();
+		engine.require = (requirement) => {
+			const pending = originalRequire(requirement);
+			return {
+				...pending,
+				ready: new Promise(() => undefined),
+				release: () => {
+					released(requirement.id);
+					pending.release();
+				},
+			};
+		};
+		const controller = new AbortController();
+		const waiting = handle.declareOnce(controller.signal);
+		controller.abort();
+		expect(released).toHaveBeenCalledWith('o:0:rearm:refresh');
+		engine.require = originalRequire;
+		void waiting;
+
+		// A handle with no demand has nothing to ask.
+		await expect(acquire('p', of(EMPTY)).declareOnce()).resolves.toEqual({
+			attempted: true,
+			fetched: false,
+		});
 	});
 });

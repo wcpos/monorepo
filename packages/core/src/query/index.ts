@@ -9,19 +9,14 @@ export type { QueryStateStore } from './query-state-store';
 export {
 	getPagingVerdict,
 	usePagingVerdict,
-	usePagingVerdictFor,
 	useGuardedExtendLimit,
-	useGuardedExtendLimitFor,
 	useGuardedExtension,
 } from './use-guarded-extend-limit';
 export type { EngineOpinion, PagingVerdict } from './use-guarded-extend-limit';
-export {
-	useCollectionBinding,
-	useAppliedCouponReferenceDemand,
-	useRelationalCollectionBinding,
-	useScopeKey,
-	useSearchSelect,
-} from './query-bindings';
+export { useAppliedCouponReferenceDemand } from './coupon-reference-demand';
+export { useScopeKey } from './scope-key';
+export { useSearchSelect } from './search-select';
+export type { SearchSelect, SearchSelectCollection } from './search-select';
 export type {
 	CollectionKey,
 	DateRangeFilter,
@@ -31,19 +26,11 @@ export type {
 	SortFieldOf,
 	VariationMatch,
 } from './query-state-types';
-export type {
-	QueryBinding,
-	QueryLaneProgress,
-	SearchSelect,
-	SearchSelectCollection,
-} from './query-bindings';
+export type { QueryLaneProgress } from '@wcpos/query';
 export {
-	bindingObservablesFor,
 	useCollectionQueryHandle,
 	useProductsQueryHandle,
-	useQueryBindingFor,
 	useQueryHandleFields,
-	useQueryHandleResource,
 	useQueryHandleValue,
 	useDrawnHandle,
 	useLogsQueryHandle,

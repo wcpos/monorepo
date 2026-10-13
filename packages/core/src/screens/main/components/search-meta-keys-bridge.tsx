@@ -9,7 +9,7 @@ import { useAppState } from '../../../contexts/app-state';
  * through the plugin's `woocommerce_pos_search_fields` filter, published by `wcpos/v2/site`
  * and stored on the sites row at connect) to the query layer, so the till folds the same
  * custom fields into its local search that the server matches (#2411). Mounted beside the
- * other engine bridges, inside the QueryProvider. A change takes effect for bindings created
+ * other engine bridges, inside the QueryProvider. A change takes effect for handles created
  * after it — in practice the next screen mount, since the row only changes at connect.
  */
 export function SearchMetaKeysBridge() {

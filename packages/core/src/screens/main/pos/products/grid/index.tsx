@@ -9,7 +9,7 @@ import { useDocField } from '@wcpos/query';
 
 import {
 	useDrawnHandle,
-	useGuardedExtendLimitFor,
+	useGuardedExtendLimit,
 	useQueryHandleFields,
 	useQueryHandleValue,
 	useQuerySnapshot,
@@ -26,8 +26,7 @@ import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { DataTableFooterFor } from '../../../components/data-table/footer';
-import { TaxBasedOn } from '../../../components/product/tax-based-on';
+import { ProductsFooter } from '../v2/footer';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { RxCollection } from 'rxdb';
@@ -79,33 +78,31 @@ function EmissionProbe({ handle }: { handle: QueryHandle<ProductsResult> }) {
 
 /**
  * The status row under the grid, reading `active` and `total` itself so the grid body does not
- * re-render when the sync spinner flips or the census lands.
+ * re-render when the sync spinner flips or the census lands. It is the products caption row the
+ * table view draws (owner, 2026-10-05: one caption row under either body; switching tiles and
+ * list moves only the body), the tax notice included.
  */
 function GridStatusFooter({
 	handle,
 	shown,
 	count,
-	children,
 }: {
 	/** The live handle: the spinner is the engine's now, whichever query is drawn. */
 	handle: QueryHandle<ProductsResult>;
 	/** The drawn handle: the total rides with its rows ("of N" holds until the next answers). */
 	shown: QueryHandle<ProductsResult>;
 	count: number;
-	children?: React.ReactNode;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
 	return (
-		<DataTableFooterFor
+		<ProductsFooter
 			collectionName="products"
 			active={active}
 			total={total}
 			sync={handle.sync}
 			count={count}
-		>
-			{children}
-		</DataTableFooterFor>
+		/>
 	);
 }
 const ACTIVE_FIELD: SnapshotFields = ['active'];
@@ -188,7 +185,7 @@ export function ProductGrid({
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
 	// Short local reads stop unless the engine says more may exist.
-	const handleEndReached = useGuardedExtendLimitFor(
+	const handleEndReached = useGuardedExtendLimit(
 		actions.extendLimit,
 		deferredResult.hits.length,
 		engine
@@ -284,14 +281,7 @@ export function ProductGrid({
 					)}
 				/>
 			</VirtualizedList.Root>
-			{/* The footer draws its own top line; a bordered wrapper here doubled it. */}
-			{calcTaxes ? (
-				<GridStatusFooter handle={handle} shown={shown} count={renderedCount}>
-					<TaxBasedOn />
-				</GridStatusFooter>
-			) : (
-				<GridStatusFooter handle={handle} shown={shown} count={renderedCount} />
-			)}
+			<GridStatusFooter handle={handle} shown={shown} count={renderedCount} />
 		</View>
 	);
 }

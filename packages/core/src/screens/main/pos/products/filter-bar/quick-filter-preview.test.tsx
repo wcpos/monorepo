@@ -15,6 +15,10 @@ const actions = {
 	setSort: jest.fn(),
 };
 let hits: { id: string; record: { payload: { name: string } } }[] = [];
+// The owner's (live) handle and the one the reader draws while a changed query loads.
+const liveHandle = { key: 'live' };
+let drawnHandle: object = liveHandle;
+let drawnHits: typeof hits = [];
 
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) => {
@@ -49,9 +53,12 @@ jest.mock('../../../../../query', () => ({
 	},
 	useQueryState: () => ({ filters: {}, search: '', sort: { field: 'name', direction: 'asc' } }),
 	useQueryStateActions: () => actions,
-	useRelationalCollectionBinding: () => ({ resource: {} }),
+	useProductsQueryHandle: () => liveHandle,
+	useDrawnHandle: () => drawnHandle,
+	useQuerySnapshot: (handle: object) => ({
+		result: { hits: handle === liveHandle ? hits : drawnHits },
+	}),
 }));
-jest.mock('observable-hooks', () => ({ useObservableSuspense: () => ({ hits }) }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
@@ -77,6 +84,8 @@ const draft: QuickFilter = {
 beforeEach(() => {
 	jest.useFakeTimers();
 	hits = [];
+	drawnHandle = liveHandle;
+	drawnHits = [];
 	providerProps.length = 0;
 	settings = { showOutOfStock: false, sortBy: 'name', sortDirection: 'asc' };
 	jest.clearAllMocks();
@@ -156,4 +165,17 @@ it('resets filters before applying every quick-filter patch entry', () => {
 	expect(actions.resetFilters.mock.invocationCallOrder[0]).toBeLessThan(
 		actions.setFilter.mock.invocationCallOrder[0]
 	);
+});
+
+it('keeps the previous matches while a changed draft loads: it reads the drawn handle', () => {
+	// The live handle has not answered its new query; the drawn one still holds the last answer.
+	drawnHandle = { key: 'previous' };
+	drawnHits = [{ id: 'kept', record: { payload: { name: 'Kept product' } } }];
+	hits = [];
+	render(<QuickFilterPreview draft={draft} />);
+
+	expect(screen.getByTestId('quick-filter-preview-count').textContent).toBe(
+		'1 products match on this device'
+	);
+	expect(screen.getByTestId('quick-filter-preview-item-0').textContent).toBe('Kept product');
 });
