@@ -543,9 +543,12 @@ export function createStripeTerminalDriver({
 						handoffKeys: Object.keys(input.handoff ?? {}),
 					});
 				if (isCanceled(failure.code)) return failed('cancelled');
-				const decline = failure.declineCode ?? failure.apiError?.declineCode;
+				// Stripe's API can refuse a confirm with an EMPTY decline code (a reader at a
+				// location the account cannot use, a currency the account cannot take): the
+				// message is then the only reason there is, and the till must show it.
+				const decline = failure.declineCode || failure.apiError?.declineCode || null;
 				if (confirming && (decline || sameCode(failure.code, 'DECLINED_BY_STRIPE_API')))
-					return failed('declined', decline ?? 'card_declined');
+					return failed('declined', decline ?? failure.message ?? 'card_declined');
 				throw new Error(failure.message);
 			}
 		},

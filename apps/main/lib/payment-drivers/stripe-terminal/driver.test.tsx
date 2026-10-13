@@ -457,11 +457,14 @@ it.each([
 	{ code: 'DECLINED_BY_STRIPE_API' },
 	{ code: 'DECLINED_BY_STRIPE_API', declineCode: 'insufficient_funds' },
 	{ code: 'DeclinedByStripeAPI', apiError: { declineCode: 'expired_card' } },
+	// Stripe refused the confirm itself (reader at a location the account cannot use): the
+	// Android SDK sends an EMPTY decline code, and the message is the only reason there is.
+	{ code: 'DECLINED_BY_STRIPE_API', declineCode: '', apiError: { declineCode: '' } },
 ])('maps a confirmation decline: %j', async (error) => {
 	api.confirmPaymentIntent.mockResolvedValue({ error: { ...error, message: 'declined' } });
 	await expect(driver.collect(input)).resolves.toMatchObject({
 		outcome: 'declined',
-		failure_reason: error.declineCode ?? error.apiError?.declineCode ?? 'card_declined',
+		failure_reason: error.declineCode || error.apiError?.declineCode || 'declined',
 	});
 });
 it('rejects SDK and unexpected thrown errors instead of inventing outcomes', async () => {
