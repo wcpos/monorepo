@@ -600,7 +600,7 @@ export function PaymentWebview({
 	 * completed sale.
 	 */
 	const onWebViewLoaded = React.useCallback(
-		(_event: unknown) => {
+		(event: unknown) => {
 			// The store's order-pay template registers its `wcpos-process-payment`
 			// listener in a synchronous <head> script, so the frame's load event is
 			// strictly after that listener exists. It is the strongest readiness
@@ -608,7 +608,7 @@ export function PaymentWebview({
 			// so the checkout footer gates on it (#1024).
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
-			loadSinceStartRef.current = navigationURL(_event);
+			loadSinceStartRef.current = navigationURL(event);
 			erroredURLRef.current = null;
 
 			loadCountRef.current += 1;

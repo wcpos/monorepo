@@ -231,8 +231,8 @@ describe('PaymentWebview load watchdog', () => {
 			});
 			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
 
-			// A navigation that fails never commits, so Android sends no load-start
-			// for it: the synthetic finish and the error are all the frame hears.
+			// Android sends no load-start before a navigation fails (it comes from
+			// the history update): the synthetic finish and the error arrive first.
 			const gateway = 'https://gateway.example.com/hosted/abc';
 			failedNavigation(gateway);
 
@@ -282,6 +282,43 @@ describe('PaymentWebview load watchdog', () => {
 				webViewProps.onLoad({ nativeEvent: { url: 'https://shop.example.com/received' } });
 			});
 			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+		});
+
+		it('iOS: a form post back to the loaded URL that errors stays a failure, never a Retry', () => {
+			// The pay page loaded, the cashier pressed, the order-pay form POSTed back
+			// to its own URL and that navigation failed: a sale may be paid, so the
+			// load-start in between must keep the earlier load counted.
+			const { setFrameStatus } = renderFrame();
+			const pay = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: pay } });
+			});
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url: pay } });
+				webViewProps.onError({ nativeEvent: { url: pay, code: -1005, description: 'lost' } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+			act(() => {
+				jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+			});
+			expect(webViewMounts).toBe(1);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		});
+
+		it('a load after an error clears it: a later navigation to that URL re-gates the frame', () => {
+			const { setFrameStatus } = renderFrame();
+			const url = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+			act(() => {
+				webViewProps.onError({ nativeEvent: { url, code: -1009, description: 'offline' } });
+			});
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
 		});
 
 		it('web: an iframe error after a load stays a failure (the iframe names no URL)', () => {
