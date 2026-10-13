@@ -48,6 +48,7 @@ export {
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,
+	type EngineQueryRelation,
 } from './engine-query';
 export {
 	META_FIELD_PREFIX,
