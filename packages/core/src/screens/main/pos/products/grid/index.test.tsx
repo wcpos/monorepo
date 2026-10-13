@@ -12,21 +12,11 @@ import { ProductGrid } from './index';
 let mockResult: { hits: object[] };
 let mockReady = true;
 let mockError: unknown = null;
-// Settling is `useDeferredValue(handle) !== handle`: while set, the deferred handle the grid
-// draws is a previous one, as React would hand it while the new handle suspends.
+// Settling is `useDrawnHandle(handle) !== handle`: while set, the drawn handle the grid draws
+// is a previous one, as React would hand it while the new handle suspends.
 let mockSettling = false;
 const mockPending = new Promise<void>(() => undefined);
 const mockPreviousHandle = { key: 'previous', sync: jest.fn() };
-jest.mock('react', () => {
-	const actual = jest.requireActual<typeof import('react')>('react');
-	return {
-		...actual,
-		useDeferredValue: <T,>(value: T): T =>
-			mockSettling && (value as { key?: string }).key === 'test'
-				? (mockPreviousHandle as unknown as T)
-				: actual.useDeferredValue(value),
-	};
-});
 const mockGuard = jest.fn();
 // The grid reads one snapshot from the handle; the double hands it the current `mockResult`.
 const mockSnapshot = () => ({
@@ -61,6 +51,10 @@ jest.mock('../../../../../query', () => ({
 	},
 	useQueryHandleFields: () => mockSnapshot(),
 	useQueryHandleValue: () => mockSnapshot(),
+	useDrawnHandle: <T,>(handle: T): T =>
+		mockSettling && (handle as { key?: string }).key === 'test'
+			? (mockPreviousHandle as unknown as T)
+			: handle,
 	useGuardedExtendLimitFor: (...args: unknown[]) => {
 		mockGuard(...args);
 		return jest.fn();

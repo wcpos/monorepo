@@ -49,6 +49,7 @@ export {
 	useQueryHandleFields,
 	useQueryHandleResource,
 	useQueryHandleValue,
+	useDrawnHandle,
 	useQuerySnapshot,
 } from './query-handles';
 export type { SnapshotFields } from './query-handles';

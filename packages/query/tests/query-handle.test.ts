@@ -8,6 +8,7 @@ import {
 	createDemand,
 	createQueryHandle,
 	type DemandPlan,
+	queryHandleAnswers$,
 	queryHandleCount,
 	queryHandleResource,
 	type QueryHandleSpec,
@@ -400,6 +401,41 @@ describe('query handle', () => {
 		// Live read: a retry is a no-op.
 		handle.retry();
 		expect(attempts).toBe(2);
+	});
+
+	it('the answers stream skips a failed read and is still listening after the retry', () => {
+		let attempts = 0;
+		const reads = [new Subject<Result>(), new Subject<Result>()];
+		const handle = acquireQueryHandle(engine, 'answers', (registry) =>
+			createQueryHandle(
+				engine,
+				{
+					...spec('answers', of(EMPTY)),
+					result$: () =>
+						defer(() => {
+							attempts += 1;
+							return reads[attempts - 1];
+						}),
+				},
+				EMPTY,
+				registry
+			)
+		);
+		const seen: number[] = [];
+		let closed = false;
+		queryHandleAnswers$(handle).subscribe({
+			next: (result) => seen.push(result.count),
+			error: () => {
+				closed = true;
+			},
+		});
+		reads[0].next({ count: 1, hits: [] });
+		reads[0].error(new Error('storage gone'));
+		expect(handle.value.error).toBeInstanceOf(Error);
+		expect(closed).toBe(false);
+		handle.retry();
+		reads[1].next({ count: 2, hits: [] });
+		expect(seen).toEqual([1, 2]);
 	});
 
 	it('whenAnswered settles on the first answer, rejects on a failure, and waits on the retry', async () => {

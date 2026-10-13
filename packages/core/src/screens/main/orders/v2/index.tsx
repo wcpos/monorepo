@@ -13,7 +13,7 @@ import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/devic
 import { SlideOver } from '@wcpos/components/slide-over';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
-import { queryHandleResults$ } from '@wcpos/query';
+import { queryHandleAnswers$ } from '@wcpos/query';
 import type { QueryHandle } from '@wcpos/query';
 
 import { ManagementBar } from '../../components/management-bar';
@@ -46,6 +46,7 @@ import { useReferencedCustomerDemand } from '../../hooks/use-referenced-customer
 import {
 	QueryStateProvider,
 	useCollectionQueryHandle,
+	useDrawnHandle,
 	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
@@ -133,8 +134,8 @@ function OrdersList({
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	// Suspended on until the first answer (the screen's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDeferredValue(handle)`).
-	const shown = React.useDeferredValue(handle);
+	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
+	const shown = useDrawnHandle(handle);
 	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const { timezone } = useStoreDay();
@@ -257,8 +258,9 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	useBarcode(actions.setSearch);
 	const handle = useCollectionQueryHandle('orders', state);
 	// The customers the listed orders reference, asked for as the rows change: a reader of the
-	// handle (it keeps the read while subscribed and declares nothing itself).
-	const results$ = React.useMemo(() => queryHandleResults$(handle), [handle]);
+	// handle (it keeps the read while subscribed and declares nothing itself) that skips a
+	// failed read, so it is still listening after the boundary's retry.
+	const results$ = React.useMemo(() => queryHandleAnswers$(handle), [handle]);
 	useReferencedCustomerDemand(results$);
 	const t = useT();
 	const phone = useIsPhone();
@@ -301,7 +303,9 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 			}
 		>
 			<View className="min-w-0 flex-1">
-				<ErrorBoundary>
+				{/* A failed orders read is thrown here; the fallback's reset asks the handle again,
+				    and a changed query (its handle is new) clears the fallback on its own. */}
+				<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 					<Suspense fallback={<DataTableSkeleton id="orders" />}>
 						{/* Beside the pane the list has the pane's width left: below the desktop
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
-import { patchUI, renderTable, reset, setSort, state } from './test-fixture';
+import { patchUI, renderTable, reset, setSort, state, tableTree } from './test-fixture';
 import { DataTableRow } from './rows';
 import { DataTableSkeleton } from './skeleton';
 
@@ -109,4 +109,43 @@ it('skeleton follows visible columns, with a capped row count', () => {
 	// A line of text in a real cell, not a bar the height of a row: the skeleton row is as
 	// tall as its cells make it, which is what keeps it the size of the row that replaces it.
 	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('line');
+});
+
+// The handle source (roadmap#423): the screens' tables read the query handle.
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle & {
+		set(partial: Record<string, unknown>): void;
+	};
+};
+it('on the handle source the drawn rows stay while a changed handle answers, then its rows show', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const first = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+	});
+	const handleProps = {
+		resource: undefined,
+		active$: undefined,
+		total$: undefined,
+		sync: undefined,
+	};
+	// The screen's boundary: a table that suspended on the changed handle would show this.
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ ...handleProps, handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(first));
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	// A changed query: an unanswered handle. The table defers it: the first rows stay drawn.
+	const next = fakeQueryHandle({ ready: false });
+	rerender(tree(next));
+	expect(screen.queryByTestId('table-fallback')).toBeNull();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	await act(async () =>
+		next.set({
+			ready: true,
+			result: { hits: [hit('coffee'), hit('milk')], searchActive: false, searchState: 'answered' },
+		})
+	);
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('2');
 });
