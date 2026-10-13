@@ -86,6 +86,7 @@ export {
 	exhaustedFromCoverage$,
 	NO_CENSUS_TOTAL$,
 	NOT_ATTEMPTED,
+	queryHandleAnswers$,
 	queryHandleResource,
 	queryHandleResults$,
 	readinessFrom,

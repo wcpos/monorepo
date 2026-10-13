@@ -47,7 +47,7 @@ jest.mock('@wcpos/query', () => ({
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
-	queryHandleResults$: (handle: { observe(): unknown }) => handle.observe(),
+	queryHandleAnswers$: (handle: { observe(): unknown }) => handle.observe(),
 }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),

@@ -476,14 +476,36 @@ export function useQueryHandleFields<R extends QueryResult<RxCollection>>(
 }
 
 /**
+ * The handle a stale-while-loading reader draws: the previous handle while a changed one is
+ * still unanswered (React's `useDeferredValue`), and the changed one as soon as the previous
+ * handle has failed since. A superseded handle's failure must not reach the boundary over a
+ * healthy query: the boundary's keys moved on with the healthy render, so nothing would clear
+ * the fallback once the new handle answered. On that failure the reader suspends on the live
+ * handle instead (the fallback, not the old failure), and draws its answer.
+ */
+export function useDrawnHandle<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>
+): QueryHandle<R> {
+	const deferred = React.useDeferredValue(handle);
+	const superseded = deferred !== handle;
+	// Subscribed, not peeked: the previous handle's failure is what moves the reader on.
+	const failed = React.useSyncExternalStore(
+		deferred.subscribe,
+		() => deferred.value.error !== null,
+		() => deferred.value.error !== null
+	);
+	return superseded && failed ? handle : deferred;
+}
+
+/**
  * A ready snapshot, or a suspension: the reader's one hook (roadmap#423).
  *
  * Suspense-native. While the handle has no answer the reader throws `handle.whenAnswered()`,
  * one stable promise per handle, and the nearest boundary draws its fallback; the owner's
  * retain (an effect above the boundary) is what starts the read, so nothing subscribes during
  * render. A failed read is thrown to the boundary. Stale-while-loading is React's own: a reader
- * that renders `useDeferredValue(handle)` keeps the previous handle's rows on screen while the
- * new one suspends (`deferred !== handle` is "settling", and is pending for paging).
+ * that renders `useDrawnHandle(handle)` keeps the previous handle's rows on screen while the
+ * new one suspends (`drawn !== handle` is "settling", and is pending for paging).
  *
  * A boundary reset remounts the reader over the same failure; the owner's boundary wires
  * `onReset={() => handle.retry()}` so the reset asks the engine again and the reader suspends

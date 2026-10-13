@@ -8,6 +8,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import {
+	useDrawnHandle,
 	useGuardedExtendLimitFor,
 	useQueryHandleFields,
 	useQueryHandleValue,
@@ -147,9 +148,9 @@ export function ProductGrid({
 	const t = useT();
 
 	// Stale-while-loading, React's own way: a changed query is a new handle; while it suspends,
-	// the grid keeps rendering the deferred one's rows. Within one handle, a new answer is
-	// deferred too, so the rows re-chunk off the urgent path.
-	const shown = React.useDeferredValue(handle);
+	// the grid keeps rendering the drawn (previous) one's rows. Within one handle, a new answer
+	// is deferred too, so the rows re-chunk off the urgent path.
+	const shown = useDrawnHandle(handle);
 	const settling = shown !== handle;
 	// One subscription, one object: rows, count and the engine's paging opinion, suspended on
 	// until the first answer, thrown to the boundary on a failed read.

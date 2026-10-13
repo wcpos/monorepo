@@ -41,6 +41,7 @@ import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
 	useCollectionQueryHandle,
+	useDrawnHandle,
 	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
@@ -106,8 +107,8 @@ function CouponsList({
 	const state = useQueryState<'coupons'>();
 	const actions = useQueryStateActions<'coupons'>();
 	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
-	// query keeps the current rows while the new handle answers (`useDeferredValue(handle)`).
-	const shown = React.useDeferredValue(handle);
+	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
+	const shown = useDrawnHandle(handle);
 	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;

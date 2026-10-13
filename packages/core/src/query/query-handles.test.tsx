@@ -16,7 +16,12 @@ import {
 } from '@wcpos/query';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { useQueryBindingFor, useQueryHandleFields, useQuerySnapshot } from './query-handles';
+import {
+	useDrawnHandle,
+	useQueryBindingFor,
+	useQueryHandleFields,
+	useQuerySnapshot,
+} from './query-handles';
 
 import type { RxCollection } from 'rxdb';
 
@@ -194,6 +199,49 @@ describe('useQuerySnapshot with useDeferredValue(handle)', () => {
 
 		await act(async () => second.next({ count: 2, hits: [] }));
 		expect(screen.getByTestId('rows').textContent).toBe('2:settled');
+	});
+});
+
+describe('useDrawnHandle', () => {
+	it('moves the reader onto the live handle when the superseded one fails, instead of the boundary', async () => {
+		const first = new Subject<Result>();
+		const second = new Subject<Result>();
+		const handles = { a: handleOver('drawn-a', first), b: handleOver('drawn-b', second) };
+		function Owner({ which }: { which: 'a' | 'b' }) {
+			const handle = handles[which];
+			React.useEffect(() => handle.retain(), [handle]);
+			return (
+				<ErrorBoundary fallbackRender={() => <span data-testid="failed" />} resetKeys={[handle]}>
+					<React.Suspense fallback={<span data-testid="fallback" />}>
+						<Reader handle={handle} />
+					</React.Suspense>
+				</ErrorBoundary>
+			);
+		}
+		function Reader({ handle }: { handle: QueryHandle<Result> }) {
+			const shown = useDrawnHandle(handle);
+			const snapshot = useQuerySnapshot(shown);
+			return <span data-testid="rows">{snapshot.count}</span>;
+		}
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			const { rerender } = render(<Owner which="a" />);
+			await act(async () => first.next({ count: 1, hits: [] }));
+			expect(screen.getByTestId('rows').textContent).toBe('1');
+			rerender(<Owner which="b" />);
+			await act(async () => undefined);
+			// A's rows stay while B answers.
+			expect(screen.getByTestId('rows').textContent).toBe('1');
+			// A's read fails in that window: not the boundary (its keys already moved on to B,
+			// so nothing would ever clear it); the reader waits on B instead.
+			await act(async () => first.error(new Error('storage gone')));
+			expect(screen.queryByTestId('failed')).toBeNull();
+			expect(screen.getByTestId('fallback')).toBeTruthy();
+			await act(async () => second.next({ count: 2, hits: [] }));
+			expect(screen.getByTestId('rows').textContent).toBe('2');
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });
 

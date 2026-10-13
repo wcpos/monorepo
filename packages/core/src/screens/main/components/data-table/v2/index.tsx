@@ -24,6 +24,7 @@ import { useDocField } from '@wcpos/query';
 
 import {
 	bindingObservablesFor,
+	useDrawnHandle,
 	useGuardedExtendLimitFor,
 	useQueryHandleFields,
 	useQuerySnapshot,
@@ -132,7 +133,7 @@ type StreamSource = {
 /**
  * The source as a query handle (roadmap#423): one snapshot, suspended on until the engine's
  * first answer (the screen's boundary draws the skeleton, as it does for the stream source), a
- * changed query keeping its rows while the next one suspends (`useDeferredValue(handle)`). The
+ * changed query keeping its rows while the next one suspends (`useDrawnHandle`). The
  * footers still take streams, derived from the handle, until they move with their screens.
  */
 type HandleSource = {
@@ -252,8 +253,8 @@ function HandleDataTable<TData extends RowData, TSortField extends string>(
 	props: CommonProps<TData> & TableProps<TSortField> & HandleSource
 ) {
 	const { handle, ...rest } = props;
-	// Stale-while-loading: the deferred handle's rows stay while the new one suspends.
-	const shown = React.useDeferredValue(handle);
+	// Stale-while-loading: the drawn (previous) handle's rows stay while the new one suspends.
+	const shown = useDrawnHandle(handle);
 	const settling = shown !== handle;
 	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
 	// The spinner is the engine's now, whichever query is drawn.

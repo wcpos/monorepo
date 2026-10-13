@@ -1042,6 +1042,21 @@ export function queryHandleResults$<R extends QueryResult<RxCollection>>(
 	);
 }
 
+/**
+ * Every answered result for as long as the subscription lasts. A failed read is skipped, not
+ * thrown, so a side subscription derived from the rows (a demand for the records they
+ * reference) survives the boundary's retry instead of closing on the failure for good.
+ */
+export function queryHandleAnswers$<R extends QueryResult<RxCollection>>(
+	handle: QueryHandle<R>
+): Observable<R> {
+	return handle.observe().pipe(
+		filter((snapshot) => snapshot.ready && snapshot.error === null),
+		map((snapshot) => snapshot.result),
+		distinctUntilChanged()
+	);
+}
+
 export function queryHandleResource<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>
 ): ObservableResource<R> {
