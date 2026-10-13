@@ -2,7 +2,7 @@
  * and counts itself out only on "already closed" or when its handler returns COMMIT/ROLLBACK. A
  * handler that throws for any other reason (a masked UNIQUE-constraint error, a closed statement)
  * leaves the count high for ever, and `close()` — which waits for the count to reach 0 — hangs.
- * Before `patches/rxdb@17.5.0.patch` kept the transaction queue alive that hang was masked by the
+ * Before `patches/rxdb@17.6.0.patch` kept the transaction queue alive that hang was masked by the
  * queue's own latched rejection (close() threw instead); with the queue recovering, the leak is
  * the only thing left between a failed write and a clean collection close (monorepo#2417).
  * Wraps the handler so a thrown error counts the write out exactly once; the error still propagates.

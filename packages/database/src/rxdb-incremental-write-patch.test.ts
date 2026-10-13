@@ -1,12 +1,13 @@
 /**
- * Pins the pnpm patch on rxdb@17.5.0 (patches/rxdb@17.5.0.patch).
+ * Pins the IncrementalWriteQueue behaviour rxdb 17.6.0 ships upstream (it was
+ * patches/rxdb@17.5.0.patch until then).
  *
- * Upstream bug (https://github.com/pubkey/rxdb/pull/9026): triggerRun() has no
- * try/finally, so one rejected storage bulkWrite leaves isRunning=true forever;
+ * Upstream bug (https://github.com/pubkey/rxdb/pull/9026): triggerRun() had no
+ * try/finally, so one rejected storage bulkWrite left isRunning=true forever;
  * the failing caller and every later incrementalModify() on the collection
  * hang, never settling. Our sync scheduler persists task state through
  * incrementalModify, so a single transient storage failure would silently
- * freeze it. If an rxdb upgrade drops the patch, the first expect here times
+ * freeze it. If an rxdb upgrade regresses this, the first expect here times
  * out instead of rejecting.
  */
 import { createRxDatabase } from 'rxdb';

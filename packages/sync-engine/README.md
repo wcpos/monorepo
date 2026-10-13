@@ -99,7 +99,7 @@ Install from GitHub Packages with this line in your `.npmrc` and a token with
 @wcpos:registry=https://npm.pkg.github.com
 ```
 
-The required peer is `rxdb@17.5.0`. `rxdb-premium@17.5.0` is an optional peer;
+The required peer is `rxdb@17.6.0`. `rxdb-premium@17.6.0` is an optional peer;
 the engine never imports it, but the host needs it to enable the premium flag below.
 The published engine depends on the exact matching version of `@wcpos/sync-core`.
 The two packages are published in lockstep: if your host also depends on sync-core,
@@ -123,17 +123,12 @@ A registry install gets stock `rxdb`/`rxdb-premium`; it does not get WCPOS's pat
 The host must apply these itself if it needs the fixes. WCPOS applies the RxDB patch
 through pnpm `patchedDependencies` and the seven premium scripts through the root
 `postinstall`, after rxdb-premium has materialized its licensed `dist/` files.
-Abstract-filesystem storages below include OPFS and filesystem storage.
 
 | Patch | What it fixes | Applies when |
 | --- | --- | --- |
-| [`patches/rxdb@17.5.0.patch`](../../patches/rxdb@17.5.0.patch) | Keeps `IncrementalWriteQueue` in `dist/{cjs,esm}/incremental-write.js` from staying wedged with `isRunning` stuck after a failed bulk write. | Always |
-| [`scripts/patch-rxdb-premium-resurrection-leak.mjs`](../../scripts/patch-rxdb-premium-resurrection-leak.mjs) | Prevents leaked index rows when a soft-deleted document is reinserted. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-task-queue-containment.mjs`](../../scripts/patch-rxdb-premium-task-queue-containment.mjs) | Releases access handles and keeps the task queue usable after a storage task fails. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-changelog-replay-safety.mjs`](../../scripts/patch-rxdb-premium-changelog-replay-safety.mjs) | Makes changelog compaction crash-safe and rebuilds corrupt derived indexes from `documents.json` on boot. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs`](../../scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs) | Batches document moves and index writes in the same cleanup round. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-changes-file-salvage.mjs`](../../scripts/patch-rxdb-premium-changes-file-salvage.mjs) | Tracks append offsets and salvages complete leading bulks from damaged `changes.json` logs. | Abstract-filesystem storages |
-| [`scripts/patch-rxdb-premium-changelog-identity.mjs`](../../scripts/patch-rxdb-premium-changelog-identity.mjs) | Applies peer changelog operations by index-string identity when positions drift, avoiding deletion of healthy neighbours. | Abstract-filesystem storages |
+| [`patches/rxdb@17.6.0.patch`](../../patches/rxdb@17.6.0.patch) | Keeps the storage-sqlite `sqliteTransaction` queue alive after a failed handler (rolls back, drops the rejected link) so later writes to that database do not replay the error. (The `IncrementalWriteQueue` wedge this file also carried before 17.6.0 is fixed upstream.) | SQLite storages |
+| [`scripts/patch-rxdb-premium-sqlite-query-translation.mjs`](../../scripts/patch-rxdb-premium-sqlite-query-translation.mjs) | Translates literal `$regex` and `$elemMatch` selectors to native SQL instead of premium's row-by-row matcher fallback. | Premium SQLite storages |
+| [`scripts/patch-rxdb-premium-open-write-count.mjs`](../../scripts/patch-rxdb-premium-open-write-count.mjs) | Counts a bulkWrite whose handler throws out of `openWriteCount$`, so `close()` settles after a failed write. | Premium SQLite storages |
 
 ### Publishing
 
