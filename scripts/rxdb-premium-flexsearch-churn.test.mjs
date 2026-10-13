@@ -59,14 +59,9 @@ function pristineSource(dist) {
 		source = source
 			.replace(anchors.closeAfter, anchors.closeBefore)
 			.replace(previousClose, anchors.closeBefore);
-		for (const key of ['live', 'replay', 'pipeline', 'append']) {
+		for (const key of ['live', 'replay', 'pipeline', 'append', 'liveDelete', 'replayOrder']) {
 			assert.ok(source.includes(anchors[`${key}After`]), `missing installed ${key} rewrite`);
 			source = source.replace(anchors[`${key}After`], anchors[`${key}Before`]);
-		}
-		for (const key of ['liveDelete', 'replayOrder']) {
-			if (source.includes(anchors[`${key}After`])) {
-				source = source.replace(anchors[`${key}After`], anchors[`${key}Before`]);
-			}
 		}
 	}
 	return source;
