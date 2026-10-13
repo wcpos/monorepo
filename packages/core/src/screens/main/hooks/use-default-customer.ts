@@ -3,9 +3,10 @@ import * as React from 'react';
 import { ObservableResource, useObservable } from 'observable-hooks';
 import { map, switchMap } from 'rxjs/operators';
 
+import { queryHandleResults$ } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
-import { useCollectionBinding } from '../../../query';
+import { useCollectionQueryHandle } from '../../../query';
 import { useDefaultCustomerID } from './use-default-customer-id';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
@@ -13,7 +14,7 @@ export const useDefaultCustomer = () => {
 	const guestCustomer = useGuestCustomer();
 	const defaultCustomerID = useDefaultCustomerID();
 	const defaultCustomerRemoteId = remoteIdOrNull(defaultCustomerID);
-	const binding = useCollectionBinding(
+	const handle = useCollectionQueryHandle(
 		'customers',
 		{
 			search: '',
@@ -29,20 +30,25 @@ export const useDefaultCustomer = () => {
 		{ remoteIds: defaultCustomerID > 0 && defaultCustomerRemoteId ? [defaultCustomerRemoteId] : [] }
 	);
 
+	// The guest stands in for an EMPTY answer only: a failed read throws on to the readers'
+	// boundary (the POS order, the settings page) rather than hanging them on a fallback.
 	const defaultCustomer$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([result$, guest]) =>
-					result$.pipe(map((result) => (result.hits.length === 1 ? result.hits[0].record : guest)))
+				switchMap(([current, guest]) =>
+					queryHandleResults$(current).pipe(
+						map((result) => (result.hits.length === 1 ? result.hits[0].record : guest))
+					)
 				)
 			),
-		[binding.result$, guestCustomer]
+		[handle, guestCustomer]
 	);
 
-	const defaultCustomerResource = React.useMemo(
-		() => new ObservableResource(defaultCustomer$),
-		[defaultCustomer$]
-	);
+	// One resource for the hook's lifetime (`useObservable` hands back one stream), destroyed on
+	// unmount: it subscribes on construction, and its subscription is a reader of the customers
+	// handle that would otherwise outlive the caller.
+	const [defaultCustomerResource] = React.useState(() => new ObservableResource(defaultCustomer$));
+	React.useEffect(() => () => defaultCustomerResource.destroy(), [defaultCustomerResource]);
 
 	return { defaultCustomer$, defaultCustomerResource };
 };

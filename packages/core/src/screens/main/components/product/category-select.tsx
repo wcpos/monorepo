@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import {
 	Combobox,
 	ComboboxContent,
@@ -19,14 +17,14 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
 
 import {
-	useAllCategoriesBinding,
+	useAllCategoriesHandle,
 	useDrawnHandle,
 	useGuardedExtension,
 	useQuerySnapshot,
 	useSearchSelect,
 } from '../../../../query';
 
-import type { SearchSelect } from '../../../../query';
+import type { QueryHandle, SearchSelect } from '../../../../query';
 
 /**
  *
@@ -103,12 +101,12 @@ export function CategorySearch() {
  */
 function CategoryTreeLoaderInner({
 	onOptionsLoaded,
-	resource,
+	handle,
 }: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
-	resource: ReturnType<typeof useAllCategoriesBinding>['resource'];
+	handle: QueryHandle;
 }) {
-	const result = useObservableSuspense(resource) as {
+	const result = useQuerySnapshot(handle, []) as unknown as {
 		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 
@@ -137,15 +135,16 @@ function CategoryTreeLoaderInner({
 export function CategoryTreeLoader(props: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
 }) {
-	// The binding is built HERE, above the boundary, and only the reader is inside it. A
-	// resource built inside the boundary that suspends on it is discarded with the aborted
-	// render and rebuilt by every retry, which never ends (#1707); built above it, this
-	// component commits alongside the fallback and the retry reads back the same resource.
-	const binding = useAllCategoriesBinding();
+	// The handle's owner is HERE, above the boundary, and only the reader is inside it. The
+	// owner's retain is an effect, and it is what starts the read: an owner inside the boundary
+	// its reader suspends is discarded with the aborted render and never commits, so the read
+	// never starts and the reader waits forever (#1707). Above it, this component commits
+	// alongside the fallback, the read starts, and the retry reads the same handle's answer.
+	const handle = useAllCategoriesHandle();
 
 	return (
 		<Suspense>
-			<CategoryTreeLoaderInner {...props} resource={binding.resource} />
+			<CategoryTreeLoaderInner {...props} handle={handle} />
 		</Suspense>
 	);
 }

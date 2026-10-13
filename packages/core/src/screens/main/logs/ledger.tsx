@@ -3,17 +3,20 @@ import { Pressable, ScrollView, View } from 'react-native';
 import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns';
-import { useObservableSuspense } from 'observable-hooks';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Loader } from '@wcpos/components/loader';
+import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { QueryResult } from '@wcpos/query';
+import type { QueryHandle } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
+import { useDrawnHandle, useQuerySnapshot } from '../../../query';
 import {
 	CodeChip,
 	HairlineHeaderCell,
@@ -31,11 +34,6 @@ import {
 	type LogRow,
 } from './logs-logic';
 import { RowDetail } from './row-detail';
-
-import type { ObservableResource } from 'observable-hooks';
-import type { RxCollection } from 'rxdb';
-
-type LedgerResource = ObservableResource<QueryResult<RxCollection>>;
 
 export function useLevelLabel(): (kind: LevelKind) => string {
 	const t = useT();
@@ -296,7 +294,7 @@ function LedgerRow({
  * "Show more" button); the header and honest-count footer stay pinned.
  */
 export function Ledger({
-	resource,
+	handle,
 	activeKind,
 	onKindPress,
 	onRenderedCount,
@@ -305,7 +303,7 @@ export function Ledger({
 	onLayout,
 	scrollEventThrottle,
 }: {
-	resource: LedgerResource;
+	handle: QueryHandle;
 	activeKind: LevelKind | undefined;
 	onKindPress: (kind: LevelKind) => void;
 	onRenderedCount?: (count: number) => void;
@@ -316,7 +314,9 @@ export function Ledger({
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
-	const result = useObservableSuspense(resource);
+	// Drawn, not live: a changed filter's new handle answers while the previous rows stay.
+	const drawn = useDrawnHandle(handle);
+	const result = useQuerySnapshot(drawn, []);
 	const levelLabel = useLevelLabel();
 	const eventTitle = useEventTitle();
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
@@ -395,6 +395,29 @@ export function Ledger({
 				)}
 			</ScrollView>
 		</VStack>
+	);
+}
+
+/**
+ * The ledger inside its own boundaries, the way the screen mounts it. A failed read reaches the
+ * error boundary; its reset asks the handle again (`retry` withdraws the stored failure, so the
+ * remounted reader waits on the new read instead of rethrowing the old one), and a new handle —
+ * a changed filter or search — resets it too.
+ */
+export function LedgerPane(props: React.ComponentProps<typeof Ledger>) {
+	const { handle } = props;
+	return (
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense
+				fallback={
+					<View className="min-h-0 flex-1 items-center justify-center py-8">
+						<Loader />
+					</View>
+				}
+			>
+				<Ledger {...props} />
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 

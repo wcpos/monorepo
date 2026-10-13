@@ -34,7 +34,7 @@ export function engineKeyOf(engine: RxdbSyncEngine): number {
  * The scope a collection is read from now, as a string: the engine (a cross-site change brings a
  * new one) and the collection's coverage generation (a same-site `scope.switch()` keeps the engine
  * and changes its database in place, and bumps every collection's generation; a reset of the
- * collection bumps it too, and leaves it empty). The same identity `useAllTermsBinding` keys its
+ * collection bumps it too, and leaves it empty). The same identity `useAllTermsHandle` keys its
  * one-shot refresh to. A surface holding records across renders keys itself to this, so a scope
  * switch starts it afresh instead of showing the previous scope's records — and a query handle
  * carries it in its key, so a generation bump is a new handle declared before the old one releases.

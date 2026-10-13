@@ -2,13 +2,8 @@ import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
-
 import { Button, ButtonText } from '@wcpos/components/button';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
-import { Loader } from '@wcpos/components/loader';
-import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -20,7 +15,9 @@ import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import {
 	QueryStateProvider,
-	useLogsBinding,
+	useDrawnHandle,
+	useLogsQueryHandle,
+	useQueryHandleFields,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
@@ -28,7 +25,7 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
-import { Ledger, LedgerFooter, useLevelLabel } from './ledger';
+import { LedgerFooter, LedgerPane, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
@@ -127,7 +124,7 @@ function LogsScreenContent() {
 	const t = useT();
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
-	const binding = useLogsBinding(state);
+	const handle = useLogsQueryHandle(state);
 	const runtime = useQueryRuntime();
 	const status = useEngineStatus();
 	const stats = useLogStats();
@@ -182,11 +179,13 @@ function LogsScreenContent() {
 	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
 	// materialized window (#1132) — and it re-arms when the query identity
 	// changes, because filters/search reset the window to page one.
-	// Logs is a local-only collection: its count IS the whole set, so this stream never
-	// publishes the "no denominator" null that server-backed collections can (see
-	// QueryBinding.total$). Coalesced so the pagination guard below keeps a number.
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const total = useObservableState(binding.total$, 0) ?? 0;
+	// Logs is a local-only collection: its result's count IS the whole set (the local count of
+	// every matching row), so the footer prints it as the total — never the "no denominator"
+	// null a server-backed query can report. Read from the handle the ledger draws, so the total
+	// stays the shown rows' while a changed filter's handle answers; 0 before the first answer.
+	const drawn = useDrawnHandle(handle);
+	const answered = useQueryHandleFields(drawn, []);
+	const total = answered.ready ? answered.count : 0;
 	// State mirror of the rendered-row count: the pinned footer lives outside
 	// the ledger's Suspense boundary, so it can't read rows.length itself.
 	const [renderedCount, setRenderedCount] = React.useState(0);
@@ -455,26 +454,16 @@ function LogsScreenContent() {
 				</ScrollView>
 
 				<View className="min-h-32 flex-1">
-					<ErrorBoundary>
-						<Suspense
-							fallback={
-								<View className="min-h-0 flex-1 items-center justify-center py-8">
-									<Loader />
-								</View>
-							}
-						>
-							<Ledger
-								resource={binding.resource}
-								activeKind={activeKind}
-								onKindPress={toggleKind}
-								onRenderedCount={handleRenderedCount}
-								onScroll={handleScroll}
-								onContentSizeChange={handleContentSizeChange}
-								onLayout={handleLayout}
-								scrollEventThrottle={64}
-							/>
-						</Suspense>
-					</ErrorBoundary>
+					<LedgerPane
+						handle={handle}
+						activeKind={activeKind}
+						onKindPress={toggleKind}
+						onRenderedCount={handleRenderedCount}
+						onScroll={handleScroll}
+						onContentSizeChange={handleContentSizeChange}
+						onLayout={handleLayout}
+						scrollEventThrottle={64}
+					/>
 				</View>
 
 				{/* Outside the ledger's boundaries on purpose: the honest count and

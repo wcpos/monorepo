@@ -13,8 +13,8 @@ import { filter, firstValueFrom } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import type { RequirementHandle } from '@wcpos/sync-engine';
-import { QueryProvider, useQueryRuntime } from '@wcpos/query';
-import type { QueryResult } from '@wcpos/query';
+import { queryHandleAnswers$, QueryProvider, useQueryRuntime } from '@wcpos/query';
+import type { QueryHandle, QueryResult } from '@wcpos/query';
 import {
 	createEngineDatabase,
 	createFakeEngine,
@@ -26,17 +26,19 @@ import {
 import type { FakeEngine } from '@wcpos/query/testing';
 
 import {
-	EXISTENCE_RECHECK_MS,
-	useAllCategoriesBinding,
-	useAllTermsBinding,
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
-	useLogsBinding,
-	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
 	useScopeKey,
 	useSearchSelect,
 } from './query-bindings';
+import * as queryHandles from './query-handles';
+import { useDrawnHandle, useLogsQueryHandle, useQuerySnapshot } from './query-handles';
+import {
+	EXISTENCE_RECHECK_MS,
+	useAllTermsHandle,
+	useProductsCarryingTermsHandle,
+} from './terms-handles';
 import * as queryStateTranslator from './query-state-translator';
 import { createStoreDatabase } from '../../../query/tests/helpers/db';
 
@@ -53,6 +55,11 @@ type Resource = ReturnType<typeof useCollectionBinding<'products'>>['resource'];
 
 function current(resource: Resource): QueryResult<RxCollection> | undefined {
 	return resource.valueRef$$.value?.current as QueryResult<RxCollection> | undefined;
+}
+
+/** A handle's answered ids, sorted; undefined while it has not answered. */
+function answeredIds(handle: QueryHandle): string[] | undefined {
+	return handle.value.ready ? handle.value.hits.map((hit) => hit.id).sort() : undefined;
 }
 
 describe('query bindings', () => {
@@ -205,24 +212,18 @@ describe('query bindings', () => {
 			}),
 			engineProduct({ uuid: 'draft', id: 3, status: 'draft', categories: [{ id: 7 }] }),
 		]);
-		const { result } = renderHook(() => useProductsCarryingTermsBinding('categories', [7]), {
+		const { result } = renderHook(() => useProductsCarryingTermsHandle('categories', [7]), {
 			wrapper: Provider,
 		});
 
-		await waitFor(() =>
-			expect(
-				current(result.current.resource)
-					?.hits.map((hit) => hit.id)
-					.sort()
-			).toEqual(['live', 'pos-only'])
-		);
+		await waitFor(() => expect(answeredIds(result.current)).toEqual(['live', 'pos-only']));
 		expect(engine.requireCalls).toEqual([]);
 	});
 
 	it('compiles the existence read taxonomy filter inside the selling baseline', () => {
 		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
 		const { rerender } = renderHook(
-			({ showOutOfStock }) => useProductsCarryingTermsBinding('tags', [9, 5], { showOutOfStock }),
+			({ showOutOfStock }) => useProductsCarryingTermsHandle('tags', [9, 5], { showOutOfStock }),
 			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
 		);
 		const prefilter = () =>
@@ -258,19 +259,14 @@ describe('query bindings', () => {
 			}),
 			engineProduct({ uuid: 'draft', id: 3, status: 'draft', tags: [{ id: 7 }] }),
 		]);
-		const ids = (resource: Resource) =>
-			current(resource)
-				?.hits.map((hit) => hit.id)
-				.sort();
 		const { result, rerender } = renderHook(
-			({ showOutOfStock }) =>
-				useProductsCarryingTermsBinding('tags', [5, 6, 7], { showOutOfStock }),
+			({ showOutOfStock }) => useProductsCarryingTermsHandle('tags', [5, 6, 7], { showOutOfStock }),
 			{ wrapper: Provider, initialProps: { showOutOfStock: false } }
 		);
 
-		await waitFor(() => expect(ids(result.current.resource)).toEqual(['stocked']));
+		await waitFor(() => expect(answeredIds(result.current)).toEqual(['stocked']));
 		rerender({ showOutOfStock: true });
-		await waitFor(() => expect(ids(result.current.resource)).toEqual(['sold-out', 'stocked']));
+		await waitFor(() => expect(answeredIds(result.current)).toEqual(['sold-out', 'stocked']));
 	});
 
 	it('answers the existence read once, and re-checks a product write only after the window', async () => {
@@ -280,10 +276,10 @@ describe('query bindings', () => {
 		);
 		const answers: string[][] = [];
 		const { result, rerender } = renderHook(
-			({ ids }) => useProductsCarryingTermsBinding('tags', ids),
+			({ ids }) => useProductsCarryingTermsHandle('tags', ids),
 			{ wrapper: Provider, initialProps: { ids: [5] } }
 		);
-		const subscription = result.current.result$.subscribe((answer) =>
+		const subscription = queryHandleAnswers$(result.current).subscribe((answer) =>
 			answers.push(answer.hits.map((hit) => hit.id).sort())
 		);
 		await act(async () => jest.advanceTimersByTimeAsync(0));
@@ -312,7 +308,7 @@ describe('query bindings', () => {
 		// A changed id set is a new read, answered at once — not at the window's end.
 		rerender({ ids: [5, 6] });
 		const next: string[][] = [];
-		const nextSubscription = result.current.result$.subscribe((answer) =>
+		const nextSubscription = queryHandleAnswers$(result.current).subscribe((answer) =>
 			next.push(answer.hits.map((hit) => hit.id).sort())
 		);
 		await act(async () => jest.advanceTimersByTimeAsync(0));
@@ -329,43 +325,62 @@ describe('query bindings', () => {
 		local: { dirty: false, pendingMutationIds: [] },
 	});
 
+	/**
+	 * A residents-only terms hook as the settings dialog reads it: every render's answer (the
+	 * hits' count, or undefined while unanswered or withheld) and the handle it held.
+	 */
+	function residentsOnlyTerms() {
+		const answers: (number | undefined)[] = [];
+		const handles: QueryHandle[] = [];
+		const useTerms = () => {
+			const terms = useAllTermsHandle('products/categories', true, { residentsOnly: true });
+			const { ready, hits } = terms.handle.value;
+			answers.push(ready && !terms.withheld ? hits.length : undefined);
+			if (handles.at(-1) !== terms.handle) handles.push(terms.handle);
+			return terms;
+		};
+		/** The answers given since `from` (undefined is no answer). */
+		const answered = (from = 0) =>
+			answers.slice(from).filter((answer): answer is number => answer !== undefined);
+		return { answers, handles, useTerms, answered };
+	}
+
+	/** Holds every refresh declaration in flight until `settle()`. */
+	function holdRefreshes(target: FakeEngine) {
+		const held = { settle: undefined as (() => void) | undefined };
+		const require = target.require;
+		target.require = (requirement) => {
+			const handle = require(requirement);
+			if (requirement.kind !== 'refresh') return handle;
+			const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
+				held.settle = () => void handle.ready.then(resolve);
+			});
+			return { ...handle, ready };
+		};
+		return held;
+	}
+
 	it('reads resident terms without declaring a refresh when asked for residents only', async () => {
 		await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
-		const answers: number[] = [];
-		const { result } = renderHook(
-			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
-			{ wrapper: Provider }
-		);
-		const subscription = result.current.result$.subscribe((answer) =>
-			answers.push(answer.hits.length)
-		);
-		await waitFor(() => expect(answers.at(-1)).toBe(1));
+		const acquire = jest.spyOn(queryHandles, 'acquireEngineQueryHandle');
+		const terms = residentsOnlyTerms();
+		renderHook(terms.useTerms, { wrapper: Provider });
+		await waitFor(() => expect(terms.answered().at(-1)).toBe(1));
 		expect(engine.requireCalls).toEqual([]);
-		subscription.unsubscribe();
+		// ONE read while the dialog is open: the residents read is the empty watch too.
+		expect(new Set(acquire.mock.calls.map(([, key]) => key)).size).toBe(1);
+		expect(terms.handles).toHaveLength(1);
+		acquire.mockRestore();
 
-		// The stage's binding still fetches.
-		renderHook(() => useAllTermsBinding('products/categories'), { wrapper: Provider });
+		// The stage's read still fetches.
+		renderHook(() => useAllTermsHandle('products/categories'), { wrapper: Provider });
 		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
 	});
 
 	it('pulls an empty collection once for a residents-only read, unanswered until the pull settles', async () => {
-		let settle: (() => void) | undefined;
-		const require = engine.require;
-		engine.require = (requirement) => {
-			const handle = require(requirement);
-			if (requirement.kind !== 'refresh') return handle;
-			const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
-				settle = () => void handle.ready.then(resolve);
-			});
-			return { ...handle, ready };
-		};
-		const answers: number[] = [];
-		const { result } = renderHook(
-			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
-			{ wrapper: Provider }
-		);
-		const latest = () => result.current.result$;
-		let subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
+		const held = holdRefreshes(engine);
+		const terms = residentsOnlyTerms();
+		const { result } = renderHook(terms.useTerms, { wrapper: Provider });
 
 		// A fresh till: no residents is not an answer while the one refresh is in flight.
 		await waitFor(() =>
@@ -374,16 +389,40 @@ describe('query bindings', () => {
 			])
 		);
 		await act(async () => Promise.resolve());
-		expect(answers).toEqual([]);
+		expect(terms.answered()).toEqual([]);
 
 		// Settled and still empty: the collection's own answer — no terms (dimmed).
-		await act(async () => settle?.());
-		subscription.unsubscribe();
-		subscription = latest().subscribe((answer) => answers.push(answer.hits.length));
-		await waitFor(() => expect(answers.at(-1)).toBe(0));
-		// One pull, then residents-only again: nothing re-declared.
+		await act(async () => held.settle?.());
+		await waitFor(() => expect(terms.answered().at(-1)).toBe(0));
+		// One pull, then residents-only again: nothing re-declared…
 		expect(engine.requireCalls).toHaveLength(1);
-		subscription.unsubscribe();
+		// …and the read after the pull is the read before it: one handle (no demand) either side
+		// of the pulling one, so the answer is there the moment the pull settles.
+		expect(terms.handles).toHaveLength(3);
+		expect(terms.handles[1]).not.toBe(terms.handles[0]);
+		expect(terms.handles[2]).toBe(terms.handles[0]);
+		expect(result.current.handle).toBe(terms.handles[0]);
+	});
+
+	it('answers the pulled terms the moment the pull settles: the resident read is held through it', async () => {
+		const held = holdRefreshes(engine);
+		const terms = residentsOnlyTerms();
+		const { result } = renderHook(terms.useTerms, { wrapper: Provider });
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
+		const resting = terms.handles[0];
+
+		// The pull lands a term, then settles.
+		await act(async () => {
+			await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
+		});
+		await waitFor(() => expect(terms.answered().at(-1)).toBe(1));
+		const from = terms.answers.length;
+		await act(async () => held.settle?.());
+		await waitFor(() => expect(result.current.handle).toBe(resting));
+		// Back on the resident read, which kept reading while the pull ran: never its stale
+		// empty answer from before the pull.
+		expect(terms.answered(from)).not.toContain(0);
+		expect(terms.answered(from).at(-1)).toBe(1);
 	});
 
 	it('pulls the new store’s empty collection again when the engine changes under a residents-only read', async () => {
@@ -391,22 +430,11 @@ describe('query bindings', () => {
 		function Swappable({ children }: { children: React.ReactNode }) {
 			return <Provider value={active}>{children}</Provider>;
 		}
-		const answers: number[] = [];
-		const { result, rerender } = renderHook(
-			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
-			{ wrapper: Swappable }
-		);
-		let subscription = result.current.result$.subscribe((answer) =>
-			answers.push(answer.hits.length)
-		);
+		const terms = residentsOnlyTerms();
+		const { rerender } = renderHook(terms.useTerms, { wrapper: Swappable });
 		// The first store's one-shot: pulled, settled, answered empty.
 		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
-		await waitFor(() => {
-			subscription.unsubscribe();
-			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
-			expect(answers.at(-1)).toBe(0);
-		});
-		subscription.unsubscribe();
+		await waitFor(() => expect(terms.answered().at(-1)).toBe(0));
 
 		// A store switch: a new engine, its collection empty too — pulled once again.
 		const next = createFakeEngine(engineDB);
@@ -421,25 +449,15 @@ describe('query bindings', () => {
 	});
 
 	it('pulls the new scope’s empty collection again when a same-site switch keeps the engine', async () => {
-		const answers: number[] = [];
-		const { result } = renderHook(
-			() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
-			{ wrapper: Provider }
-		);
-		let subscription = result.current.result$.subscribe((answer) =>
-			answers.push(answer.hits.length)
-		);
+		const terms = residentsOnlyTerms();
+		renderHook(terms.useTerms, { wrapper: Provider });
 		// The first scope's one-shot: pulled, settled, answered empty.
 		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
-		await waitFor(() => {
-			subscription.unsubscribe();
-			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
-			expect(answers.at(-1)).toBe(0);
-		});
-		subscription.unsubscribe();
+		await waitFor(() => expect(terms.answered().at(-1)).toBe(0));
 
 		// A store or cashier switch on the same site: `scope.switch()` keeps the engine and bumps
 		// every collection's coverage generation. The new scope's collection is empty too.
+		const from = terms.answers.length;
 		act(() => engine.setCollectionStatus('categories', { coverageGeneration: 1 }));
 		await waitFor(() => expect(engine.requireCalls).toHaveLength(2));
 		expect(engine.requireCalls.at(-1)).toEqual(
@@ -447,12 +465,7 @@ describe('query bindings', () => {
 		);
 		// …and once only: settled, the empty answer is the new scope's own, and nothing more is
 		// declared.
-		answers.length = 0;
-		await waitFor(() => {
-			subscription = result.current.result$.subscribe((answer) => answers.push(answer.hits.length));
-			subscription.unsubscribe();
-			expect(answers.at(-1)).toBe(0);
-		});
+		await waitFor(() => expect(terms.answered(from).at(-1)).toBe(0));
 		expect(engine.requireCalls).toHaveLength(2);
 	});
 
@@ -471,54 +484,33 @@ describe('query bindings', () => {
 		}) as never;
 		try {
 			await engineDB.collections.categories.insert(residentCategory(1, 'Coffee'));
-			const { result } = renderHook(
-				() => useAllTermsBinding('products/categories', true, { residentsOnly: true }),
-				{ wrapper: Provider }
-			);
-			const before: number[] = [];
-			const first = result.current.result$.subscribe((answer) => before.push(answer.hits.length));
-			await waitFor(() => expect(before.at(-1)).toBe(1));
-			first.unsubscribe();
+			const terms = residentsOnlyTerms();
+			const { result } = renderHook(terms.useTerms, { wrapper: Provider });
+			await waitFor(() => expect(terms.answered().at(-1)).toBe(1));
 			expect(engine.requireCalls).toEqual([]);
 
 			// Scope B holds no terms; its pull is held in flight.
-			let settle: (() => void) | undefined;
-			const require = engine.require;
-			engine.require = (requirement) => {
-				const handle = require(requirement);
-				if (requirement.kind !== 'refresh') return handle;
-				const ready = new Promise<Awaited<RequirementHandle['ready']>>((resolve) => {
-					settle = () => void handle.ready.then(resolve);
-				});
-				return { ...handle, ready };
-			};
-			const scopeA$ = result.current.result$;
-			const during: number[] = [];
+			const held = holdRefreshes(engine);
+			const scopeA = result.current.handle;
+			const from = terms.answers.length;
 			act(() => {
 				activeDatabase = scopeB;
 				databaseListeners.forEach((listener) => listener(scopeB));
 				engine.setCollectionStatus('categories', { coverageGeneration: 1 });
-				// Subscribed in the same tick as the switch: the read has not answered for B yet.
 			});
-			// A new stream for the new scope: whoever attributes answers to it starts unanswered…
-			expect(result.current.result$).not.toBe(scopeA$);
-			const second = result.current.result$.subscribe((answer) => during.push(answer.hits.length));
+			// A new handle for the new scope: its snapshot starts unanswered…
+			expect(result.current.handle).not.toBe(scopeA);
 			await waitFor(() =>
 				expect(engine.requireCalls).toEqual([
 					expect.objectContaining({ kind: 'refresh', collection: 'categories' }),
 				])
 			);
 			// …and stays so while the pull runs: never scope A's one term.
-			expect(during).toEqual([]);
-			second.unsubscribe();
+			await act(async () => Promise.resolve());
+			expect(terms.answered(from)).toEqual([]);
 
-			await act(async () => settle?.());
-			const after: number[] = [];
-			await waitFor(() => {
-				const third = result.current.result$.subscribe((answer) => after.push(answer.hits.length));
-				third.unsubscribe();
-				expect(after.at(-1)).toBe(0);
-			});
+			await act(async () => held.settle?.());
+			await waitFor(() => expect(terms.answered(from).at(-1)).toBe(0));
 		} finally {
 			if (!scopeB.destroyed) await scopeB.remove();
 		}
@@ -554,7 +546,7 @@ describe('query bindings', () => {
 			engineProduct({ uuid: 'untagged', id: 2, status: 'publish', tags: [{ id: 6 }] }),
 		]);
 		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
-		const { result } = renderHook(() => useProductsCarryingTermsBinding('tags', [9, 5]), {
+		const { result } = renderHook(() => useProductsCarryingTermsHandle('tags', [9, 5]), {
 			wrapper: Provider,
 		});
 
@@ -572,9 +564,7 @@ describe('query bindings', () => {
 			],
 		});
 		expect(JSON.stringify(prefilter)).not.toContain('payload.tags');
-		await waitFor(() =>
-			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['tagged'])
-		);
+		await waitFor(() => expect(answeredIds(result.current)).toEqual(['tagged']));
 		compileQuery.mockRestore();
 	});
 
@@ -2116,35 +2106,51 @@ describe('query bindings', () => {
 			sort: { field: 'timestamp', direction: 'desc' },
 			limit: 1,
 		};
-		const { result, rerender } = renderHook(({ currentState }) => useLogsBinding(currentState), {
-			wrapper: Provider,
-			initialProps: { currentState: state },
-		});
-		await expect(firstValueFrom(result.current.pending$)).resolves.toBe(false);
-		await expect(firstValueFrom(result.current.exhausted$)).resolves.toBeNull();
-		await waitFor(() =>
-			expect(
-				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
-			).toHaveLength(1)
+		const { result, rerender } = renderHook(
+			({ currentState }) => useLogsQueryHandle(currentState),
+			{ wrapper: Provider, initialProps: { currentState: state } }
 		);
-		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
-		).resolves.toBe(2);
-		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
-
+		await waitFor(() => expect(result.current.value.ready).toBe(true));
+		// The loaded window is one row; the count — the footer's total — is every match.
+		expect(result.current.value.hits).toHaveLength(1);
+		await waitFor(() => expect(result.current.value.count).toBe(2));
+		// A local read: nothing pending, no exhaustion opinion, never active, nothing to sync.
+		expect(result.current.value.pending).toBe(false);
+		expect(result.current.value.exhausted).toBeNull();
+		expect(result.current.value.active).toBe(false);
 		const syncCalls = [...engine.syncCalls];
 		await act(async () => result.current.sync());
 		expect(engine.syncCalls).toEqual(syncCalls);
+		expect(engine.requireCalls).toEqual([]);
 
 		rerender({ currentState: { ...state, search: 'three', filters: {} } });
-		await waitFor(() =>
-			expect(
-				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
-			).toHaveLength(1)
+		await waitFor(() => expect(result.current.value.ready).toBe(true));
+		expect(result.current.value.hits).toHaveLength(1);
+		await waitFor(() => expect(result.current.value.count).toBe(1));
+	});
+
+	it('runs the logs read only once its handle is retained, never from the render that builds it', async () => {
+		const find = jest.spyOn(localDB.collections.logs, 'find');
+		const state: QueryStateOf<'logs'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'timestamp', direction: 'desc' },
+			limit: 1,
+		};
+		const readsAtRender: number[] = [];
+		const { result } = renderHook(
+			() => {
+				const handle = useLogsQueryHandle(state);
+				readsAtRender.push(find.mock.calls.length);
+				return handle;
+			},
+			{ wrapper: Provider }
 		);
-		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
-		).resolves.toBe(1);
+		// The render built the handle and nothing read: the owner's retain (an effect) starts it.
+		expect(readsAtRender[0]).toBe(0);
+		await waitFor(() => expect(result.current.value.ready).toBe(true));
+		expect(find).toHaveBeenCalled();
+		find.mockRestore();
 	});
 
 	it('keeps the current logs window while an extended limit loads instead of blanking', async () => {
@@ -2170,22 +2176,36 @@ describe('query bindings', () => {
 			sort: { field: 'timestamp', direction: 'desc' },
 			limit: 1,
 		};
-		const { result, rerender } = renderHook(({ currentState }) => useLogsBinding(currentState), {
-			wrapper: Provider,
-			initialProps: { currentState: state },
-		});
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
-		const initialResource = result.current.resource;
+		// The ledger's shape: the screen owns the handle, the rows draw it inside a boundary.
+		function Rows({ handle }: { handle: QueryHandle }) {
+			const { hits } = useQuerySnapshot(useDrawnHandle(handle), []);
+			return <span data-testid="rows">{hits.length}</span>;
+		}
+		let extend: () => void = () => undefined;
+		function Screen() {
+			const [limit, setLimit] = React.useState(1);
+			extend = () => setLimit(2);
+			const handle = useLogsQueryHandle({ ...state, limit });
+			return (
+				<React.Suspense fallback={<span data-testid="fallback" />}>
+					<Rows handle={handle} />
+				</React.Suspense>
+			);
+		}
+		const view = render(
+			<Provider>
+				<Screen />
+			</Provider>
+		);
+		await waitFor(() => expect(view.getByTestId('rows').textContent).toBe('1'));
 
-		// Infinite scroll: the limit extends 1 → 2. The mounted table must keep the
-		// loaded window (same resource, same value) until the wider query emits —
-		// a fresh resource with a synchronous empty first emission blanks the table.
-		rerender({ currentState: { ...state, limit: 2 } });
-
-		expect(result.current.resource).toBe(initialResource);
-		expect(current(result.current.resource)?.hits).toHaveLength(1);
-
-		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(2));
+		// Infinite scroll: the limit extends 1 → 2. The mounted ledger must keep the loaded
+		// window until the wider query answers — never the fallback, never an empty window.
+		act(() => extend());
+		expect(view.queryByTestId('fallback')).toBeNull();
+		expect(view.getByTestId('rows').textContent).toBe('1');
+		await waitFor(() => expect(view.getByTestId('rows').textContent).toBe('2'));
+		expect(view.queryByTestId('fallback')).toBeNull();
 	});
 
 	it('rebinds residents when engine db$ moves to another scope', async () => {
@@ -3045,17 +3065,6 @@ describe('query bindings', () => {
 					}),
 			],
 			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
-			[
-				'logs viewer',
-				() =>
-					useLogsBinding({
-						search: '',
-						filters: {},
-						sort: { field: 'timestamp', direction: 'desc' },
-						limit: 10,
-					}),
-			],
-			['category tree', () => useAllCategoriesBinding()],
 		])('%s is fully populated on its first render', async (_label, useBinding) => {
 			const captured = captureFirstRender(useBinding);
 

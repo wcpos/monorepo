@@ -17,11 +17,7 @@ export {
 export type { EngineOpinion, PagingVerdict } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
-	useLogsBinding,
-	useAllCategoriesBinding,
-	useAllTermsBinding,
 	useAppliedCouponReferenceDemand,
-	useProductsCarryingTermsBinding,
 	useRelationalCollectionBinding,
 	useScopeKey,
 	useSearchSelect,
@@ -50,7 +46,13 @@ export {
 	useQueryHandleResource,
 	useQueryHandleValue,
 	useDrawnHandle,
+	useLogsQueryHandle,
 	useQuerySnapshot,
 } from './query-handles';
+export {
+	useAllCategoriesHandle,
+	useAllTermsHandle,
+	useProductsCarryingTermsHandle,
+} from './terms-handles';
 export type { SnapshotFields } from './query-handles';
 export type { QueryHandle, QuerySnapshot } from '@wcpos/query';

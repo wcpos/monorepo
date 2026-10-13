@@ -27,11 +27,26 @@ import { useDefaultCustomer } from './use-default-customer';
 let subscribes = 0;
 let result$: Observable<{ hits: { record: { payload: { id: number } } }[] }>;
 
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: {} }),
+	// The handle's results: here, the source's every emission (each one an answered snapshot).
+	queryHandleResults$: (handle: { observe(): Observable<{ result: unknown }> }) =>
+		handle
+			.observe()
+			.pipe(jest.requireActual('rxjs').map((snapshot: { result: unknown }) => snapshot.result)),
+}));
 jest.mock('@wcpos/sync-core', () => ({
 	remoteIdOrNull: (id: number) => (id > 0 ? String(id) : null),
 }));
-jest.mock('../../../query', () => ({ useCollectionBinding: () => ({ result$ }) }));
+// A handle-shaped reader over the source: one subscription of `result$` per observe.
+jest.mock('../../../query', () => ({
+	useCollectionQueryHandle: () => ({
+		observe: () =>
+			result$.pipe(
+				jest.requireActual('rxjs').map((result: unknown) => ({ ready: true, error: null, result }))
+			),
+	}),
+}));
 jest.mock('./use-default-customer-id', () => ({ useDefaultCustomerID: () => 7 }));
 jest.mock('../hooks/use-guest-customer', () => ({ useGuestCustomer: () => ({ id: 0 }) }));
 
