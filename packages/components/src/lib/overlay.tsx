@@ -480,6 +480,12 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				accessible={false}
 				importantForAccessibility="no"
 				accessibilityElementsHidden
+				// A scrim that cannot dismiss (a confirmation) must never take a touch: on
+				// Android a plain full-screen View above the panel swallows every tap, and a
+				// scrim given its own z-index (the alert's `z-70`) ends up above the panel's
+				// wrapper. Measured on a Pixel 10, 2026-10-13 (Restore server settings: Cancel
+				// and Confirm dead).
+				pointerEvents={onDismiss || onOutsidePress ? 'auto' : 'none'}
 				testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 			/>
 			<KeyboardAvoidingView
