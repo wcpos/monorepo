@@ -15,12 +15,22 @@ let mockWpCredentials = { id: 1, access_token: 'initial', refresh_token: 'refres
 let mockWriteSessionHeld = false;
 let mockAuthRequired = false;
 let mockSyncBacklogSales = 3;
+let mockStatus = { writeSessionHeld: false, authRequired: false };
+
+function mockRepublishStatus() {
+	mockStatus = { ...mockStatus };
+}
 
 jest.mock('../../hooks/use-engine-monitor', () => ({
-	useEngineStatus: () => ({
-		writeSessionHeld: mockWriteSessionHeld,
-		authRequired: mockAuthRequired,
-	}),
+	useEngineStatus: () => {
+		if (
+			mockStatus.writeSessionHeld !== mockWriteSessionHeld ||
+			mockStatus.authRequired !== mockAuthRequired
+		) {
+			mockStatus = { writeSessionHeld: mockWriteSessionHeld, authRequired: mockAuthRequired };
+		}
+		return mockStatus;
+	},
 	useMutationCounts: () => ({ syncBacklogSales: mockSyncBacklogSales }),
 }));
 
@@ -72,6 +82,7 @@ describe('SessionHoldBanner', () => {
 		jest.clearAllMocks();
 		mockWriteSessionHeld = false;
 		mockAuthRequired = false;
+		mockStatus = { writeSessionHeld: false, authRequired: false };
 		mockSyncBacklogSales = 3;
 		mockWpCredentials = { id: 1, access_token: 'initial', refresh_token: 'refresh' };
 	});
@@ -199,7 +210,7 @@ describe('SessionHoldBanner', () => {
 				context: { siteName: 'Shop' },
 			});
 
-			requestStateManager.setAuthFailed(true);
+			act(() => requestStateManager.setAuthFailed(true));
 			requestStateManager.setRefreshedToken('old');
 			rerender(<SessionHoldBanner />);
 			expect(requestStateManager.isAuthFailed()).toBe(true);
@@ -235,6 +246,20 @@ describe('SessionHoldBanner', () => {
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps the sales warning after a recovery while the write session is still held', () => {
+		mockAuthRequired = true;
+		mockWriteSessionHeld = true;
+		mockSyncBacklogSales = 2;
+		requestStateManager.setAuthFailed(true);
+		const { rerender } = render(<SessionHoldBanner />);
+		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
+		rerender(<SessionHoldBanner />);
+		expect(requestStateManager.isAuthFailed()).toBe(false);
+		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
+			'2 sales waiting to sync'
+		);
+	});
+
 	it('shows the banner again when the latch sets after a recovery', () => {
 		mockAuthRequired = true;
 		requestStateManager.setAuthFailed(true);
@@ -246,6 +271,28 @@ describe('SessionHoldBanner', () => {
 		act(() => requestStateManager.setAuthFailed(true));
 		expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
 	});
+
+	it.each([true, false])(
+		're-evaluates recovery on a new snapshot with authRequired=%s',
+		(required) => {
+			mockAuthRequired = true;
+			requestStateManager.setAuthFailed(true);
+			const { rerender } = render(<SessionHoldBanner />);
+			mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
+			rerender(<SessionHoldBanner />);
+			expect(screen.queryByTestId('session-hold-banner')).toBeNull();
+			expect(requestStateManager.isAuthFailed()).toBe(false);
+
+			mockAuthRequired = required;
+			mockRepublishStatus();
+			rerender(<SessionHoldBanner />);
+			if (required) {
+				expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
+			} else {
+				expect(screen.queryByTestId('session-hold-banner')).toBeNull();
+			}
+		}
+	);
 
 	it('does not clear the cached token or log recovery when auth has not failed', () => {
 		requestStateManager.setRefreshedToken('current');

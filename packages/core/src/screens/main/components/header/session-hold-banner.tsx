@@ -34,7 +34,14 @@ export function SessionHoldBanner() {
 	const previousAccessToken = React.useRef(accessToken);
 	const [recovered, setRecovered] = React.useState(false);
 	const held = status.writeSessionHeld || status.authRequired;
-	if (!held && recovered) setRecovered(false);
+	const previousStatus = React.useRef(status);
+	// Recovery hides the stale hold only until the engine publishes its next snapshot.
+	// eslint-disable-next-line react-hooks/refs -- Compare snapshots before rendering the recovery state.
+	if (previousStatus.current !== status) {
+		// eslint-disable-next-line react-hooks/refs -- Record the snapshot before the conditional rerender.
+		previousStatus.current = status;
+		if (recovered) setRecovered(false);
+	}
 
 	// A renewed token can be refused too: when the latch sets again, the banner must show again.
 	React.useEffect(
@@ -75,7 +82,8 @@ export function SessionHoldBanner() {
 		}
 	}, [held, site.name, t, triggerAuthFlow]);
 
-	if (!held || recovered) return null;
+	// A recovery answers the auth hold only; a held write session keeps its sales warning.
+	if (!held || (recovered && !status.writeSessionHeld)) return null;
 
 	return (
 		<View
