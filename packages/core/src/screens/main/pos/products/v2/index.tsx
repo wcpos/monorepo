@@ -1,6 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
+import { useRouter } from 'expo-router';
+import { useIsFocused } from 'expo-router/react-navigation';
 import omit from 'lodash/omit';
 import { useObservableRef } from 'observable-hooks';
 import { type ExpandedState } from '@tanstack/react-table';
@@ -36,6 +38,8 @@ import { DataTable } from '../../../components/data-table/v2';
 import { QuerySearchInput } from '../../../components/query-search-input';
 import { UISettingsDialog } from '../../../components/ui-settings';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { useRegisterSurface } from '../../../../../extensions/commands/use-register-surface';
+import { tillHref } from '../../checkout/till-route';
 import { createReadonlyView, Slot } from '../../../../../extensions/slots';
 import {
 	QueryStateProvider,
@@ -178,6 +182,23 @@ function POSProductsContent({
 }) {
 	const side = usePanelSide('products');
 	const { session, sessionsOn } = useRegisterSession();
+	// `pos.search.focus` focuses this input while the screen is mounted (roadmap#428). On a phone
+	// both tabs stay mounted, so an unfocused Products tab is brought forward first and the input
+	// takes focus once the tab is.
+	const searchRef = React.useRef<TextInputInstance>(null);
+	const searchPending = React.useRef(false);
+	const isFocused = useIsFocused();
+	const router = useRouter();
+	React.useEffect(() => {
+		if (!isFocused || !searchPending.current) return;
+		searchPending.current = false;
+		searchRef.current?.focus();
+	}, [isFocused]);
+	useRegisterSurface('search', () => {
+		if (isFocused) return searchRef.current?.focus();
+		searchPending.current = true;
+		router.navigate(tillHref(true, 'products'));
+	});
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -494,6 +515,7 @@ function POSProductsContent({
 							<HStack>
 								<ErrorBoundary>
 									<QuerySearchInput
+										ref={searchRef}
 										collectionName="products"
 										placeholder={t('pos_products.search_products')}
 										className="flex-1"

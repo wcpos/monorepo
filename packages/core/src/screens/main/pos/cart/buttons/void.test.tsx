@@ -3,11 +3,12 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { VoidButton } from './void';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
 /** Scripted result for one awaitWriteOutcome call, consumed in order. */
 type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
@@ -855,4 +856,19 @@ it('closes the sheet synchronously before starting the existing void flow', asyn
 	expect(before).toHaveBeenCalledTimes(1);
 	// The delete follows the order's queue slot and the gate, so it lands a tick later.
 	await waitFor(() => expect(mockEngine.write).toHaveBeenCalled());
+});
+
+it('registers its void path as the void surface while mounted (roadmap#428)', async () => {
+	mockEngine.write.mockClear();
+	const before = jest.fn();
+	const { unmount } = render(<VoidButton onBeforeVoid={before} />);
+	await act(() => invokeSurface('void'));
+	expect(before).toHaveBeenCalledTimes(1);
+	expect(mockEngine.write).toHaveBeenCalledWith({
+		collection: 'orders',
+		operation: 'delete',
+		recordId: 'order-1',
+	});
+	unmount();
+	await expect(invokeSurface('void')).rejects.toBeInstanceOf(SurfaceNotMountedError);
 });
