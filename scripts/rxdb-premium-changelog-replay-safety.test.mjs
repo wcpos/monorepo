@@ -670,6 +670,39 @@ for (const runtime of runtimes) {
 		});
 	}
 
+	for (const count of ['x', undefined]) {
+		test(`${runtime.dist}: invalid persisted count ${String(count)} rebuilds once`, async () => {
+			const basePath = makeDirectory(`${runtime.dist}-invalid-persisted-count`);
+			let db;
+			try {
+				const expected = await seedCrashWindow(runtime, basePath, { dieAt: 'empty' });
+				const path = indexFiles(basePath)[0];
+				const stored = JSON.parse(readFileSync(path, 'utf8'));
+				if (count === undefined) delete stored.changelogOperations;
+				else stored.changelogOperations = count;
+				writeFileSync(path, JSON.stringify(stored));
+
+				let opened = await openWithRebuildEvents(runtime, basePath);
+				db = opened.db;
+				assert.deepEqual(await findAll(opened.collection), expected);
+				assert.equal(opened.events.length, 1);
+				assert.equal(opened.events[0].reason, 'invalid-persisted-count:index-0');
+				opened.stopCapture();
+				await db.close();
+
+				opened = await openWithRebuildEvents(runtime, basePath);
+				db = opened.db;
+				assert.deepEqual(await findAll(opened.collection), expected);
+				assert.deepEqual(opened.events, []);
+				opened.stopCapture();
+			} finally {
+				delete globalThis.__wcposOnIndexRebuild;
+				await db?.close();
+				rmSync(basePath, { recursive: true, force: true });
+			}
+		});
+	}
+
 	test(`${runtime.dist}: null rows in primary and secondary indexes self-heal`, async () => {
 		const basePath = makeDirectory(`${runtime.dist}-null-rows`);
 		const expected = [
