@@ -1,29 +1,34 @@
 import * as React from 'react';
 
 import { flexRender } from '@tanstack/react-table';
-import { useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
 import { matchesStockStatusFilter } from '../../stock-filter';
 import { RecordTextCell } from '../../../../components/record-text-cell';
 import { getColumnStyle } from '../../../data-table';
+import { useDrawnHandle, useQuerySnapshot } from '../../../../../../query';
 
 import type { DataTableFeatures } from '../../../data-table';
+import type { SnapshotFields } from '../../../../../../query';
 import type { Cell, CellContext, Row } from '../../../../../../table-types';
 
 interface Props {
-	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
+	/** The variations handle the row owns: the table reads its snapshot, the footer its fields. */
+	handle: QueryHandle;
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	/** The products list's Stock Status filter; undefined shows every variation. */
 	stockStatus?: string;
 }
+
+// The rows re-render for the answer only; the footer reads its own fields.
+const ANSWER_ONLY: SnapshotFields = [];
 
 interface TableCellRow {
 	record: EngineRecord<'variations'>;
@@ -60,7 +65,7 @@ const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeature
 /**
  *
  */
-export function VariationsTable({ binding, row, stockStatus }: Props) {
+export function VariationsTable({ handle, row, stockStatus }: Props) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
 	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
@@ -73,7 +78,9 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 	 */
 	// eslint-disable-next-line react-compiler/react-compiler -- directive is load-bearing under babel-plugin-react-compiler 1.0.0
 	'use no memo';
-	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
+	// A changed search keeps the current variations while the new handle answers.
+	const shown = useDrawnHandle(handle);
+	const result = useQuerySnapshot(shown, ANSWER_ONLY).result as unknown as { hits: VariationHit[] };
 	const hits = React.useMemo(
 		() =>
 			stockStatus
@@ -143,7 +150,12 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter binding={binding} parent={row.original.record} count={hits.length} />
+			<VariationTableFooter
+				handle={handle}
+				shown={shown}
+				parent={row.original.record}
+				count={hits.length}
+			/>
 		</VStack>
 	);
 }

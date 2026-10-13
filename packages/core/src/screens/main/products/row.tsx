@@ -2,14 +2,15 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map, type Observable } from 'rxjs';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Image } from '@wcpos/components/image';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { Suspense } from '@wcpos/components/suspense';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useProAccess } from '../contexts/pro-access';
@@ -26,8 +27,15 @@ import { VariationRowProvider } from '../components/product/variable-product-row
 import { VariationsFilterBar } from '../components/product/variable-product-row/variations/filters';
 import { VariationTableFooter } from '../components/product/variable-product-row/variations/footer';
 import { matchesStockStatusFilter } from '../components/product/stock-filter';
-import { useCollectionBinding, useQueryState, useQueryStateActions } from '../../../query';
+import {
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useQuerySnapshot,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
 
+import type { SnapshotFields } from '../../../query';
 import type { Row, Table } from '../../../table-types';
 import type { DataTableFeatures } from '../components/data-table/v2';
 
@@ -182,13 +190,14 @@ function InlineVariations({
 	const state = useQueryState<'variations'>();
 	const actions = useQueryStateActions<'variations'>();
 	const ids = useRecordField(row.original.record, ({ payload }) => payload.variations) ?? [];
-	const binding = useCollectionBinding('variations', state, {
+	const handle = useCollectionQueryHandle('variations', state, {
 		remoteIds: ids.map(remoteIdOrNull).filter((id) => id !== null),
 	});
-	const initialBinding = React.useRef(binding);
+	// The expansion's handle, not a later one: the refresh runs once per expansion.
+	const initialHandle = React.useRef(handle);
 	React.useEffect(() => {
 		// Same expansion refresh and row-scoped cleanup as the shared inline variations view.
-		void initialBinding.current.sync().catch(() => undefined);
+		void initialHandle.current.sync().catch(() => undefined);
 		return () => {
 			actions.clearSearch();
 			actions.resetFilters();
@@ -197,22 +206,32 @@ function InlineVariations({
 	return (
 		<View>
 			<VariationsFilterBar row={row} />
-			<Suspense>
-				<VariationRows binding={binding} parent={row.original.record} stockStatus={stockStatus} />
-			</Suspense>
+			{/* A failed variations read stays inside the row: past here it would reach the products
+			    list's boundary, replace the whole list, retry the products handle (which has not
+			    failed) and remount the list collapsed. A changed query clears it on its own. */}
+			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+				<Suspense>
+					<VariationRows handle={handle} parent={row.original.record} stockStatus={stockStatus} />
+				</Suspense>
+			</ErrorBoundary>
 		</View>
 	);
 }
+// The rows re-render for the answer only; the footer reads its own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
 function VariationRows({
-	binding,
+	handle,
 	parent,
 	stockStatus,
 }: {
-	binding: ReturnType<typeof useCollectionBinding<'variations'>>;
+	handle: QueryHandle;
 	parent: EngineRecord<'products'>;
 	stockStatus?: string;
 }) {
-	const result = useObservableSuspense(binding.resource);
+	// A changed search keeps the current variations while the new handle answers.
+	const shown = useDrawnHandle(handle);
+	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const hits = result.hits.filter((hit) =>
 		matchesStockStatusFilter(hit.record.payload, stockStatus)
 	);
@@ -226,7 +245,7 @@ function VariationRows({
 					<ProductRow record={record} />
 				</View>
 			))}
-			<VariationTableFooter binding={binding} parent={parent} count={hits.length} />
+			<VariationTableFooter handle={handle} shown={shown} parent={parent} count={hits.length} />
 		</View>
 	);
 }

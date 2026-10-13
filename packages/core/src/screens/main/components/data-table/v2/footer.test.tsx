@@ -107,6 +107,43 @@ describe('DataTableFooter binding projections', () => {
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 
+	// A handle-backed table (the products screen's custom footer) hands the total as a value in
+	// the same commit as the rows: it wins over the stream, which lands a commit later.
+	it('prints a held total over the streamed one, including a null that vouches for nothing', () => {
+		const BindingFooter = DataTableFooter as unknown as React.ComponentType<
+			Record<string, unknown>
+		>;
+		const props = {
+			collectionName: 'coupons',
+			count: 10,
+			total$: of(27),
+			active$: of(false),
+			sync: mockSync,
+		};
+		const { rerender } = render(
+			<QueryStateProvider
+				collection="coupons"
+				initialPageSize={10}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<BindingFooter {...props} total={12} />
+			</QueryStateProvider>
+		);
+		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/12');
+		rerender(
+			<QueryStateProvider
+				collection="coupons"
+				initialPageSize={10}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<BindingFooter {...props} total={null} />
+			</QueryStateProvider>
+		);
+		expect(screen.getByTestId('data-table-count').textContent).toBe(
+			'common.showing_n:10/undefined'
+		);
+	});
+
 	it('retains sync/reset actions', () => {
 		renderBindingFooter();
 
