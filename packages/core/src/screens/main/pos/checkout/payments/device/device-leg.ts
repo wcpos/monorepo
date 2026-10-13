@@ -148,7 +148,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			capturing: true,
 			captureFailed: false,
 			error: null,
-			failureReason: result?.failure_reason ?? null,
+			// A reader-side cancel (the SDK's CANCELED, the Tap to Pay screen closed) carries no
+			// reason from any driver; it is named here so the view keeps the mark on the terminal
+			// step while the void confirms, as it does for a cashier cancel and a time-out.
+			failureReason:
+				result?.failure_reason ?? (result?.outcome === 'cancelled' ? 'cancelled' : null),
 		});
 		try {
 			if (input.resume && input.row.status === 'authorized') {

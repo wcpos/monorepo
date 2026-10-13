@@ -295,6 +295,22 @@ it('a refused capture the store cannot explain stays held for retry', async () =
 	await start;
 	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
 });
+it('a reader-side cancel with no reason is named cancelled at confirm, and voids as cashier', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.collection.resolve({
+		outcome: 'cancelled',
+		provider_refs: {},
+		receipt: {},
+		amount: null,
+		transport: 'bluetooth',
+	});
+	await start;
+	expect(c.leg.getState()).toMatchObject({ outcome: 'voided', failureReason: 'cancelled' });
+	const voidCall = c.post.mock.calls.find(([url]) => url.endsWith('/void'));
+	expect(voidCall?.[1]).toEqual({ reason: 'cashier' });
+});
 it('cancel waits for collection; a late successful result is still verified', async () => {
 	const c = setup();
 	const start = c.leg.start();
