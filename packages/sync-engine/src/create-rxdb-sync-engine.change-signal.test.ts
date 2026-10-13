@@ -505,6 +505,40 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('skips a journal row for customer 0 (the Guest sentinel) and still applies the real ids', async () => {
+		const server = scriptedServer();
+		const customerIncludes: string[] = [];
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: (url, init) => {
+				const u = new URL(url);
+				if (u.pathname.endsWith('/customers')) {
+					customerIncludes.push(u.searchParams.get('include') ?? '');
+				}
+				return server.fetch(url, init);
+			},
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			server.state.rows.push(
+				{ sequence: 6, id: 0, deleted: 1, collection: 'customers', modified_gmt: '' },
+				{ sequence: 7, id: 0, deleted: 0, collection: 'customers', modified_gmt: '' },
+				{ sequence: 8, id: 30, deleted: 0, collection: 'customers', modified_gmt: '' }
+			);
+			server.state.head = 8;
+			server.state.sequenceLogSince = [];
+
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			expect(customerIncludes.some((include) => include.split(',').includes('0'))).toBe(false);
+			// The batch was not wedged: the next poll resumes past it.
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			expect(server.state.sequenceLogSince.at(-1)).toBe(8);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('primes the cursor at scope open so a record changed before the first poll is still pulled', async () => {
 		const server = scriptedServer();
 		const engine = engineWith({
