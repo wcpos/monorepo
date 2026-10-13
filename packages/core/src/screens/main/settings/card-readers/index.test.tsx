@@ -394,11 +394,17 @@ it("a provider whose SDK owns pairing gets one button that opens the provider's 
 });
 
 describe('Tap to Pay row', () => {
-	it('is iOS-only, admin-only for Set up, and scans the tap_to_pay transport', async () => {
+	it('is native-only, admin-only for Set up, and scans the tap_to_pay transport', async () => {
 		const web = render(<CardReadersSettings />);
 		await flush();
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeNull();
 		web.unmount();
+		mockOS = 'android';
+		mockCaps = { canAcceptReaderTerms: false };
+		const android = render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeTruthy();
+		android.unmount();
 		mockOS = 'ios';
 		mockCaps = { canAcceptReaderTerms: false };
 		const cashier = render(<CardReadersSettings />);

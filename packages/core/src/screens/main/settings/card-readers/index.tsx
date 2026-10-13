@@ -63,12 +63,14 @@ export function CardReadersSettings() {
 			Boolean(actions.errors[method.id])
 		);
 	});
-	// Tap to Pay (iOS only): the phone is a reader this provider can connect, offered as a row of
-	// its own until it is the connected one. Apple's awareness moment and Terms sheet come from the
-	// provider's SDK on the first connect; only an administrator may accept them (fail closed).
+	// Tap to Pay (the native app only; the browser has no NFC): the phone is a reader this provider
+	// can connect, offered as a row of its own until it is the connected one. The provider's terms
+	// (Apple's awareness moment and Terms sheet on iOS, the SDK's own on Android) come on the first
+	// connect; only an administrator may accept them (fail closed). Android needs the Stripe plugin
+	// options from roadmap#429 in the native build.
 	const tapToPay = devices.filter(
 		(method) =>
-			Platform.OS === 'ios' &&
+			Platform.OS !== 'web' &&
 			deviceTransports(method).some((item) => item.transport === 'tap_to_pay') &&
 			getDriver(method.capture.provider)?.capabilities.discovery === 'harness' &&
 			getDriver(method.capture.provider)?.status$.get().reader?.transport !== 'tap_to_pay' &&
