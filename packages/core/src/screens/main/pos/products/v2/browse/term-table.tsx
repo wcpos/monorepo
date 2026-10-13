@@ -7,10 +7,10 @@ import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { Suspense } from '@wcpos/components/suspense';
 
 import { useT } from '../../../../../../contexts/translations';
-import { useGuardedExtendLimitFor, useQueryHandleFields } from '../../../../../../query';
+import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../../query';
 import { DataTable } from '../../../../components/data-table/v2';
 import { TableSurface } from '../../../../components/data-table/surface';
-import { cellsForRow } from '../../index';
+import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';
 import { OwnFooter, OwnFooterContext } from '../own-footer';
 import { ProductRow } from '../rows/product-row';
@@ -223,7 +223,7 @@ export function TermLevelTable({
 	// A handle that has not answered is in flight for paging (a fresh handle opens with no demand
 	// declared yet): an arm must wait for its answer, not be spent on its opening snapshot.
 	const paging = { pending: snapshot.pending || !snapshot.ready, exhausted: snapshot.exhausted };
-	const extend = useGuardedExtendLimitFor(actions.extendLimit, loaded, paging);
+	const extend = useGuardedExtendLimit(actions.extendLimit, loaded, paging);
 	const { onEndReached, onViewport } = useArmedEndReached(extend, paging.pending, settled, {
 		measuresViewport: true,
 	});

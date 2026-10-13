@@ -24,9 +24,6 @@
   "packages/core/src/screens/auth/connect.tsx": {
     "arbitrary-px": 1
   },
-  "packages/core/src/screens/main/components/data-table/index.tsx": {
-    "bare-Suspense": 1
-  },
   "packages/core/src/screens/main/components/header/user-menu.tsx": {
     "duration-literal": 1
   },

@@ -230,7 +230,6 @@ describe('ProductsScreen query-state wiring', () => {
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');
 		expect(mockDataTableProps).not.toHaveProperty('resource');
-		expect(mockDataTableProps).not.toHaveProperty('binding');
 	});
 
 	it('keeps custom variation detail expansion under screen ownership', () => {

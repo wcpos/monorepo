@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -15,23 +13,27 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useT } from '../../../../../contexts/translations';
 import {
 	QueryStateProvider,
+	useDrawnHandle,
+	useProductsQueryHandle,
+	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
-	useRelationalCollectionBinding,
 } from '../../../../../query';
 
 import type { QuickFilter } from './filter-bar-layout';
+import type { QueryHandle, SnapshotFields } from '../../../../../query';
 import type { FiltersOf, QueryStateOf } from '../../../../../query/query-state-types';
-import type { QueryBinding } from '../../../../../query/query-bindings';
 
 const PREVIEW_LIMIT = 200;
+// The preview draws the rows and nothing else: no spinner, no total, no paging.
+const ANSWER_ONLY: SnapshotFields = [];
 
-function PreviewResults({ resource }: { resource: QueryBinding['resource'] }) {
-	const result = useObservableSuspense(resource) as {
-		hits: { id: string; record: EngineRecord<'products'> }[];
-	};
+function PreviewResults({ handle }: { handle: QueryHandle }) {
+	// The drawn handle: a changed draft keeps the previous matches on screen while it loads.
+	const { result } = useQuerySnapshot(useDrawnHandle(handle), ANSWER_ONLY);
+	const hits = result.hits as { id: string; record: EngineRecord<'products'> }[];
 	const t = useT();
-	const count = result.hits.length;
+	const count = hits.length;
 
 	return (
 		<VStack className="gap-1">
@@ -45,7 +47,7 @@ function PreviewResults({ resource }: { resource: QueryBinding['resource'] }) {
 					{t('pos_products.quick_filter_preview_empty')}
 				</Text>
 			)}
-			{result.hits.slice(0, 5).map(({ id, record }, index) => (
+			{hits.slice(0, 5).map(({ id, record }, index) => (
 				<Text
 					key={id}
 					testID={`quick-filter-preview-item-${index}`}
@@ -64,8 +66,8 @@ type ProductSort = QueryStateOf<'products'>['sort'];
 function PreviewQuery({ draft, settingsSort }: { draft: QuickFilter; settingsSort: ProductSort }) {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
-	// Build the binding above the boundary so a suspended reader retries the same resource (#1707).
-	const binding = useRelationalCollectionBinding(state);
+	// The owner sits above the boundary: its retain must commit for the reader's answer (#1707).
+	const handle = useProductsQueryHandle(state);
 	const conditions = draft.conditions;
 	const sort = draft.sort;
 
@@ -94,7 +96,7 @@ function PreviewQuery({ draft, settingsSort }: { draft: QuickFilter; settingsSor
 
 	return (
 		<Suspense>
-			<PreviewResults resource={binding.resource} />
+			<PreviewResults handle={handle} />
 		</Suspense>
 	);
 }

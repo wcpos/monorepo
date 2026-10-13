@@ -56,7 +56,7 @@ import {
 
 import type { ExpandedState } from '@tanstack/react-table';
 import type { QueryStateActions, SnapshotFields } from '../../../query';
-import type { BindingDataTableFooterProps, DataTableFeatures } from '../components/data-table/v2';
+import type { DataTableFeatures, DataTableFooterProps } from '../components/data-table/v2';
 import type { Row, Table } from '../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };
@@ -152,10 +152,8 @@ function renderFineItem({
 	);
 }
 
-/**
- *
- */
-function TableFooter(props: BindingDataTableFooterProps) {
+/** The table's caption row with the tax notice beside the counts. */
+function TableFooter(props: DataTableFooterProps) {
 	return (
 		<DataTableFooter {...props}>
 			<TaxBasedOn />

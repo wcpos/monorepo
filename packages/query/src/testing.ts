@@ -108,7 +108,7 @@ export interface FakeEngine extends RxdbSyncEngine {
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
 	/**
-	 * Every target `coverageChanges` has been subscribed for. A binding that must NOT read
+	 * Every target `coverageChanges` has been subscribed for. A handle that must NOT read
 	 * coverage — an unrepresented selector, a search — is proved by this staying empty, which
 	 * is stronger than watching for a `'coverage'` value that could simply be late.
 	 */
@@ -124,7 +124,7 @@ export interface FakeEngine extends RxdbSyncEngine {
 		state: Partial<EngineStatus['collections'][SyncCollectionName]>
 	): void;
 	/**
-	 * How many times `censusChanges` has been subscribed. A binding that must NOT read the
+	 * How many times `censusChanges` has been subscribed. A handle that must NOT read the
 	 * whole-collection census — anything filtered, searched or targeted — is proved by this
 	 * staying 0, the same never-asked discipline `coverageSubscribeCalls` pins for coverage.
 	 */
@@ -170,7 +170,7 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 /**
  * The engine keys a verdict by (collection, queryKey) — or by (collection, reference lane) when
  * it resolves the key itself. The fake keys its seeded verdicts the same way, so a fixture that
- * seeds `{lane:'reference'}` proves the binding took the reference arm rather than spelling out
+ * seeds `{lane:'reference'}` proves the handle took the reference arm rather than spelling out
  * a lane key of its own.
  */
 const coverageTargetKey = (target: CoverageTarget): string =>
@@ -638,3 +638,6 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 		},
 	};
 }
+
+/** How many query handles an engine's registry holds: a started handle is registered, a stopped one is not. */
+export { queryHandleCount } from './query-handle';

@@ -10,7 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
  * catalogue (the pull skips unchanged documents, RxDB keeps the document instance, the image
  * resource is cached per URL), so this probe records the whole chain once a sync flips:
  *
- *   sync active ⇄ idle          → `markSyncActive` (the grid subscribes to `binding.active$`)
+ *   sync active ⇄ idle          → `markSyncActive` (the grid reads the handle snapshot's `active`)
  *   result emissions            → `logResultEmission`: identity/order/image-src diff per emission
  *   component renders           → `useRenderProbe`: mount, unmount, and which props changed
  *   image loads                 → `probeEvent`: Suspense fallbacks, load/display/error callbacks
@@ -48,7 +48,7 @@ function stamp(): {
 	};
 }
 
-/** The grid reports `binding.active$` here so every other row can be placed against it. */
+/** The grid reports the snapshot's `active` here so every other row can be placed against it. */
 export function markSyncActive(active: boolean): void {
 	if (!RENDER_PROBE_ENABLED) return;
 	if (active === phase.active && phase.flips > 0) return;
@@ -61,7 +61,7 @@ export function markSyncActive(active: boolean): void {
 }
 
 /**
- * Any one-off observation (an image load, a Suspense fallback, a binding flag flip). Events
+ * Any one-off observation (an image load, a Suspense fallback, a snapshot flag flip). Events
  * batch by name AND context, so `pending: true` then `pending: false` in one tick are two rows;
  * `id` names the subject and is collected per row rather than keyed.
  */

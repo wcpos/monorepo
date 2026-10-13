@@ -226,7 +226,7 @@ describe('useBrowseCounts', () => {
 	});
 	// Opening the dialog pulls nothing it holds: thousands of tags, or a brands route that 404s
 	// before WooCommerce 9.4, must not be fetched on a settings tap (an empty source is pulled
-	// once by the handle itself — see the query bindings' tests).
+	// once by the handle itself — see `query-handles.engine.test.tsx`).
 	it('reads every source from resident terms only, and asks the stage baseline of the products', () => {
 		(useAllTermsHandle as jest.Mock).mockClear();
 		fakeCarrying();

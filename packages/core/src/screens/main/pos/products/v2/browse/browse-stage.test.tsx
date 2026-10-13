@@ -57,7 +57,7 @@ jest.mock('../../../../../../query', () => {
 				() => mockState
 			),
 		useQueryStateActions: () => mockActions,
-		useGuardedExtendLimitFor: () => () => {},
+		useGuardedExtendLimit: () => () => {},
 		// The real reader, field selection aside: the stage sees every snapshot change.
 		useQueryHandleFields: (handle: { subscribe: never; value: unknown }) =>
 			React.useSyncExternalStore(handle.subscribe, () => handle.value),
@@ -288,7 +288,7 @@ jest.mock('../../../../components/data-table/v2', () => ({
 		</div>
 	),
 }));
-jest.mock('../../index', () => ({ cellsForRow: jest.fn() }));
+jest.mock('../cells-for-row', () => ({ cellsForRow: jest.fn() }));
 jest.mock('../rows/product-row', () => ({
 	ProductRow: ({ item }: { item: { original: { record: { uuid: string } } } }) => (
 		<div data-testid={`product-${item.original.record.uuid}`} />

@@ -7,7 +7,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Cashier } from './cashier';
 import { Customer } from './customer';
-import { Status } from './status';
 
 const mockSetFilter = jest.fn();
 
@@ -22,11 +21,6 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ onPress }: { onPress: () => void }) => (
-		<button data-testid="filter-cell" onClick={onPress} />
-	),
-}));
 jest.mock('@wcpos/components/format', () => ({ FormatAddress: () => null }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -34,19 +28,11 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
 jest.mock('../../hooks/use-cashier-label', () => ({
 	useCashierLabel: () => ({ id: 7, label: 'Grace' }),
 }));
 jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Ada' }),
-}));
-jest.mock('../../hooks/use-order-status-label', () => ({
-	useOrderStatusLabel: () => ({ getLabel: (status: string) => status }),
 }));
 
 function context(payload: Record<string, unknown>, columnMeta: Record<string, unknown> = {}) {
@@ -84,17 +70,5 @@ describe('order table-cell query filters', () => {
 		);
 		fireEvent.click(screen.getByTestId('filter-cell'));
 		expect(mockSetFilter).toHaveBeenCalledWith('customer_id', 42);
-	});
-
-	it('filters by status through the narrow table-meta action', () => {
-		render(
-			<Status
-				{...(context({
-					status: 'processing',
-				}) as unknown as React.ComponentProps<typeof Status>)}
-			/>
-		);
-		fireEvent.click(screen.getByTestId('filter-cell'));
-		expect(mockSetFilter).toHaveBeenCalledWith('status', 'processing');
 	});
 });

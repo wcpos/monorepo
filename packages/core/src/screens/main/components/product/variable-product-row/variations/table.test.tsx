@@ -27,7 +27,7 @@ jest.mock('@wcpos/components/table', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('../../../data-table', () => ({ getColumnStyle: () => ({}) }));
+jest.mock('../../../data-table/column-style', () => ({ getColumnStyle: () => ({}) }));
 jest.mock('../../../record-text-cell', () => ({ RecordTextCell: () => null }));
 let mockFooterProps: { handle?: unknown; shown?: unknown } = {};
 jest.mock('./footer', () => ({

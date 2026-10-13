@@ -36,7 +36,7 @@ const guarded = jest.fn();
 jest.mock('../../../../../../query', () => {
 	const React = jest.requireActual<typeof import('react')>('react');
 	return {
-		useGuardedExtendLimitFor: (extend: () => void, count: number) => () => {
+		useGuardedExtendLimit: (extend: () => void, count: number) => () => {
 			guarded(count);
 			extend();
 		},

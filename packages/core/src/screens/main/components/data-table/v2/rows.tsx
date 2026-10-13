@@ -9,7 +9,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { TableCell } from '@wcpos/components/table';
 import { TooltipPassiveTriggers } from '@wcpos/components/tooltip';
 
-import { getColumnStyle } from '../index';
+import { getColumnStyle } from '../column-style';
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from './index';

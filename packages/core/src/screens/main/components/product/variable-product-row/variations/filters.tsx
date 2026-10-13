@@ -14,7 +14,7 @@ import {
 import { useVariationRow } from '../context';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
-import type { DataTableFeatures } from '../../../data-table';
+import type { DataTableFeatures } from '../../../data-table/v2';
 import type { Row } from '../../../../../../table-types';
 
 interface Props {

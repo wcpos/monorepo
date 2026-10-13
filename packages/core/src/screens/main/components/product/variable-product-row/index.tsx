@@ -18,11 +18,11 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import type { EngineRecord } from '@wcpos/query';
 
-import { getColumnStyle } from '../../data-table';
+import { getColumnStyle } from '../../data-table/column-style';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
-import type { DataTableFeatures } from '../../data-table';
+import type { DataTableFeatures } from '../../data-table/v2';
 import type { Cell, Row, Table } from '../../../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };

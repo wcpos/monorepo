@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
@@ -12,58 +10,23 @@ import { SyncButton } from '../../../components/sync-button';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 import { useCollectionReset } from '../../../hooks/use-collection-reset';
 
-import type { BindingDataTableFooterProps } from '../../../components/data-table/footer';
+import type { DataTableFooterProps } from '../../../components/data-table/v2/footer';
 
-type ProductsFooterProps = BindingDataTableFooterProps & {
-	/**
-	 * A total the caller already holds as state (the browse root's, attributed to its query):
-	 * shown in the SAME commit as `count`. A total handed as a stream lands one commit late —
-	 * `useObservableState` keeps its state across the stream's identity change and subscribes to
-	 * the replacement after commit — so a return to the root with a changed catalogue painted the
-	 * new count over the old denominator for a frame. `total$` is still read (hooks run
-	 * unconditionally) and ignored while this is given.
-	 */
-	total?: number | null;
-};
+/** The footer contract every table footer takes (`DataTableFooterProps`): values only. */
+export type ProductsFooterProps = DataTableFooterProps;
 
-/** The streams read once, then the row. The browse stage hands the row values straight. */
+/**
+ * The products caption row, values in: the table hands them from its handles, a browse level or
+ * the variations grid from its own (`HandleProductsFooter`). The tax notice unless given children.
+ */
 export function ProductsFooter({
-	active$,
-	total$,
-	total: heldTotal,
-	...props
-}: ProductsFooterProps) {
-	const loading = useObservableEagerState(active$);
-	const streamTotal = useObservableState(total$, null);
-	return (
-		<ProductsFooterRow
-			{...props}
-			active={loading}
-			total={heldTotal !== undefined ? heldTotal : streamTotal}
-		/>
-	);
-}
-
-export type ProductsFooterRowProps = {
-	collectionName: BindingDataTableFooterProps['collectionName'];
-	/** The engine is pulling the collection: the sync button turns. */
-	active: boolean;
-	/** The denominator, or null for none ("Showing N"). */
-	total: number | null;
-	sync: () => Promise<void>;
-	count: number;
-	children?: React.ReactNode;
-};
-
-/** The products caption row, values in: a reader of a query-handle snapshot hands them over. */
-export function ProductsFooterRow({
 	collectionName,
 	active: loading,
 	total,
 	sync,
 	count,
 	children,
-}: ProductsFooterRowProps) {
+}: ProductsFooterProps) {
 	const { calcTaxes } = useTaxSettings();
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();

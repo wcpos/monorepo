@@ -195,7 +195,7 @@ jest.mock('../../../components/record-text-cell', () => ({ RecordTextCell: () =>
 
 function latestState(): QueryStateOf<'products'> {
 	const call = mockUseProductsQueryHandle.mock.calls.at(-1);
-	if (!call) throw new Error('POS products binding was not called');
+	if (!call) throw new Error('POS products handle was not called');
 	return call[0] as QueryStateOf<'products'>;
 }
 
@@ -270,7 +270,7 @@ describe('POSProducts query-state wiring', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		});
-		// The table reads the products handle (roadmap#423), not the eight-observable binding.
+		// The table reads the products handle (roadmap#423).
 		expect(mockDataTableProps).toMatchObject({
 			collectionName: 'products',
 			handle: mockHandle,
@@ -605,11 +605,6 @@ jest.mock('./deal-stack', () => ({
 }));
 jest.mock('./footer', () => ({ ProductsFooter: () => null }));
 jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (n: number) => n }));
-
-// cellsForRow is reused from the old screen; its unrelated runtime surfaces stay out of this test.
-jest.mock('../filter-bar/pos-filter-bar', () => ({ POSFilterBar: () => null }));
-jest.mock('../../../components/data-table', () => ({ defaultRenderItem: jest.fn() }));
-jest.mock('../../contexts/overlay-side', () => ({ useOverlaySide: () => 'right' }));
 
 jest.mock('../../../components/data-table/v2/skeleton', () => ({
 	DataTableSkeleton: () => <div data-testid="table-skeleton" />,

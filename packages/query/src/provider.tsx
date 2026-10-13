@@ -4,7 +4,7 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import type { RxDatabase } from 'rxdb';
 
-/** Runtime dependencies shared by the direct query bindings and local-only hooks. */
+/** Runtime dependencies shared by the query handles and local-only hooks. */
 // The constraint is RxDatabase<any>, not bare RxDatabase: a typed database
 // (e.g. RxDatabase<StoreCollections>) is not assignable to the default
 // RxDatabase<CollectionsOfDatabase> because of variance in exportJSON's return.

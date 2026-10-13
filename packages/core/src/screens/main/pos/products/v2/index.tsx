@@ -45,7 +45,7 @@ import {
 	useQueryStateStore,
 	useScopeKey,
 } from '../../../../../query';
-import { cellsForRow } from '../index';
+import { cellsForRow } from './cells-for-row';
 import { ProductRow as ProductRowView } from './rows/product-row';
 import { VariableProductRow } from './rows/variable-product-row';
 import { ProductTile } from './grid/product-tile';

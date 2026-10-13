@@ -224,7 +224,7 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 		});
 	});
 
-	it('pins the full categories binding', () => {
+	it('pins the full categories query', () => {
 		expect(
 			compiledPlan(
 				'products/categories',
@@ -242,7 +242,7 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 					collection: 'categories',
 					kind: 'refresh',
 					priority: 700,
-					// #1347 part 2: the tree binding's name sort now rides the refresh.
+					// #1347 part 2: the tree query's name sort now rides the refresh.
 					orderby: 'name',
 					order: 'asc',
 				},

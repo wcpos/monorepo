@@ -30,3 +30,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 20. Order numbers expose `order-number-<number>` test IDs — server-created orders have client UUIDs that arrival tests cannot know beforehand — evidence: `4dcc008637 2026-08-21 test(e2e): value-bearing arrival anchors replace hasText narrowing` — platform: all.
 21. Active filter pills use the component's default variant through `undefined`, not the literal `'default'` — preserves the corrected active icon colors — evidence: `83f564f5f0 2025-03-03 fix pill icon colours` — platform: all.
 22. Order-status selection delegates to `OptionSelect` and forwards its resolved option — avoids propagating web primitives' raw-value labels instead of canonical option labels — evidence: `ccceebc667 2026-08-23 refactor(components): consolidate Select call sites behind OptionSelect (#1499)` — platform: all; label correction specifically web/Electron.
+
+## v1 cells deleted (added 2026-10-13)
+
+`status.tsx` and `total.tsx` were mounted only by the deleted v1 Orders screen and are deleted; line 3’s status-cell evidence (the `query-filters.test.tsx` status case) goes with them, the cashier and customer cells keep theirs. Line 10’s “search-select binding” is the search-select handle (`useSearchSelect` in `query/search-select.ts`).

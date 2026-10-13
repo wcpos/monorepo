@@ -143,7 +143,6 @@ jest.mock(
 	'../../../packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage',
 	() => ({ ReceiptStage: () => null })
 );
-jest.mock('@wcpos/core/screens/main/pos/products', () => ({ POSProducts: () => null }));
 // The columns route and the panel entry render the v2 products screen since the register switch.
 jest.mock('@wcpos/core/screens/main/pos/products/v2', () => ({
 	POSProducts: () => {
@@ -156,9 +155,6 @@ jest.mock('../../../packages/core/src/screens/main/pos/products/v2', () => ({
 		if (mockSuspendedPane === 'products') throw mockPendingPane;
 		return null;
 	},
-}));
-jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
-	POSProducts: () => null,
 }));
 jest.mock('@wcpos/core/screens/main/pos/cart', () => ({
 	OpenOrders: () => {

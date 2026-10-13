@@ -3,7 +3,7 @@ import * as React from 'react';
 import type { QueryHandle } from '@wcpos/query';
 
 import { useQueryHandleFields } from '../../../../../query';
-import { ProductsFooterRow, type ProductsFooterRowProps } from './footer';
+import { ProductsFooter, type ProductsFooterProps } from './footer';
 
 import type { SnapshotFields } from '../../../../../query';
 
@@ -26,12 +26,12 @@ export function HandleProductsFooter({
 	total: number | null;
 	count: number;
 	/** The collection the sync button's clear-and-sync resets: the variations pane's own. */
-	collectionName?: ProductsFooterRowProps['collectionName'];
+	collectionName?: ProductsFooterProps['collectionName'];
 	children?: React.ReactNode;
 }) {
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	return (
-		<ProductsFooterRow
+		<ProductsFooter
 			collectionName={collectionName}
 			active={active}
 			total={total}
@@ -39,6 +39,6 @@ export function HandleProductsFooter({
 			count={count}
 		>
 			{children}
-		</ProductsFooterRow>
+		</ProductsFooter>
 	);
 }

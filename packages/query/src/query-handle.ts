@@ -11,7 +11,7 @@
  *    verdict, the collection's activity flag — composed once, into one snapshot.
  *
  * Readers hold `{ value, subscribe }`, the shape the slot primitive ruled for data crossing
- * to an extension (#139), plus the enumerated methods out (`sync`, `whenReady`). Nothing a
+ * to an extension (#139), plus the enumerated methods out (`sync`, `whenReady`, `declareOnce`). Nothing a
  * reader does can re-issue the handle: its identity is its `key`, held in a per-engine
  * registry (`acquireQueryHandle`), so a parent's render, a clock tick or a store subscription
  * firing cannot hand the screen a "new" query that is the same query.
@@ -27,7 +27,6 @@
  * same engine entry. A plain unmount still releases within the same task.
  */
 
-import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
@@ -366,7 +365,7 @@ export type Demand = {
 };
 
 /**
- * The demand lifecycle, outside React: what `useDemand`'s effect did per render, as a start /
+ * The demand lifecycle, outside React: what core's per-render demand effect did, as a start /
  * stop pair the handle drives from its subscriber count. Everything the effect pinned stays:
  * one retry after a rejected declaration, a readiness barrier that stays pending across the
  * retry, and a superseded declaration that never speaks for its successor.
@@ -529,7 +528,7 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
  * Everything a reader of a query sees, as one plain object replaced whole on change.
  *
  * `ready` is false until the engine has answered once; a reader that must not paint an empty
- * grid over a pending read suspends on it (`useQueryHandleResource` in core). `hits[].record`
+ * grid over a pending read suspends on it (`useQuerySnapshot` in core). `hits[].record`
  * is the engine record (an RxDocument) for first-party readers — the document cache keeps it
  * the same instance while the record is unchanged — and is projected to plain data at the slot
  * boundary, never handed across it (#139).
@@ -537,9 +536,9 @@ export function createDemand(engine: RxdbSyncEngine, id: string, plan: DemandPla
 export type QuerySnapshot<R extends QueryResult<RxCollection> = QueryResult<RxCollection>> = {
 	ready: boolean;
 	/**
-	 * The read failed (storage recovery gave up, a selector the adapter cannot run). The
-	 * Suspense resource rethrows it into the screen's ErrorBoundary, as the old
-	 * `ObservableResource(result$)` did; the handle stops its read so the next reader restarts it.
+	 * The read failed (storage recovery gave up, a selector the adapter cannot run). The reader
+	 * (`useQuerySnapshot` in core) rethrows it into the screen's ErrorBoundary; the handle stops
+	 * its read so the next reader restarts it.
 	 */
 	error: unknown;
 	result: R;
@@ -580,6 +579,12 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	/** Readiness of the standing declaration (the first demand's, for a relational handle). */
 	whenReady(): Promise<DemandReadiness>;
 	/**
+	 * Declare the first demand's requirements once more and release them (`Demand.declareOnce`):
+	 * the re-arm for a caller that read the standing declaration as `released` and must ask the
+	 * engine afresh. Aborting `signal` releases the declaration. Attempted, with no demand.
+	 */
+	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
+	/**
 	 * Ask the engine again after a failed read (`value.error`), withdrawing the error first; a
 	 * no-op while the read is live. A reader that remounts over a failure (an ErrorBoundary
 	 * reset) calls this instead of subscribing anew.
@@ -593,8 +598,9 @@ export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<R
 	 */
 	whenAnswered(): Promise<void>;
 	/**
-	 * The snapshot stream, one subscription per subscriber, retaining like `subscribe`. For the
-	 * React edge and the compatibility bindings; readers take `value` + `subscribe`.
+	 * The snapshot stream, one subscription per subscriber, retaining like `subscribe`. For
+	 * stream-shaped consumers (a side demand derived from the rows, a barrier that waits for a
+	 * quiet collection); React readers take `value` + `subscribe`.
 	 */
 	observe(): Observable<Readonly<QuerySnapshot<R>>>;
 }
@@ -615,6 +621,11 @@ export type QueryHandleSpec<R extends QueryResult<RxCollection>> = {
 	/** The census honestly stands for this read (not a targeted subset). */
 	censusScoped: boolean;
 	coverage?: 'exact' | 'superset';
+	/**
+	 * False for a handle nobody reads a total from (a demand with no read): the snapshot's
+	 * `total` and `laneProgress` stay null and no coverage verdict is subscribed. Default true.
+	 */
+	projectsTotal?: boolean;
 	/** The engine's `active` flag source; injectable so tests can fake it. */
 	observeActive: (engine: RxdbSyncEngine, collection: SyncCollectionName) => Observable<boolean>;
 };
@@ -698,15 +709,16 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		spec.censusScoped && primary ? censusTotal$(engine, primary.collection) : NO_CENSUS_TOTAL$;
 	// Rows and total in ONE emission (the projection carries the result it was computed for),
 	// so a reader never sees new rows against the previous total.
-	const projected$ = primary
-		? coverageProjectionWithResult$(
-				engine,
-				result$,
-				primary.coverageTarget$,
-				census$,
-				spec.coverage
-			)
-		: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
+	const projected$ =
+		primary && spec.projectsTotal !== false
+			? coverageProjectionWithResult$(
+					engine,
+					result$,
+					primary.coverageTarget$,
+					census$,
+					spec.coverage
+				)
+			: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
 	const exhausted$ = primary
 		? exhaustedFromCoverage$(engine, primary.searchLane$, primary.fetched$).pipe(startWith(null))
 		: UNKNOWN_EXHAUSTED$;
@@ -785,7 +797,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 	};
 	const onReadError = (error: unknown) => {
 		// The read is over; the demand stays until the readers leave. Publish the error so the
-		// resource rethrows it into the screen's ErrorBoundary; the next reader retries the read.
+		// reader rethrows it into the screen's ErrorBoundary; the next reader retries the read.
 		read = null;
 		publish({ ...snapshot$.getValue(), error });
 	};
@@ -946,6 +958,12 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 				: Promise.all(spec.demands.map((demand) => demand.sync())).then(() => undefined),
 		whenReady: () =>
 			mirrored ? mirrored.whenReady() : primary ? primary.whenReady() : Promise.resolve(ATTEMPTED),
+		declareOnce: (signal) =>
+			mirrored
+				? mirrored.declareOnce(signal)
+				: primary
+					? primary.declareOnce(signal)
+					: Promise.resolve(ATTEMPTED),
 		retry: () => {
 			if (mirrored) {
 				mirrored.retry();
@@ -1026,16 +1044,16 @@ export function queryHandleCount(engine: RxdbSyncEngine): number {
 }
 
 /**
- * An `ObservableResource` over a handle, for Suspense gates: it resolves on the first engine
- * answer (`ready`) and then tracks every result. Subscribing retains the handle, so the
- * resource's owner (the React edge) destroys it on unmount.
+ * Every answered result, for a stream-shaped reader: it waits for the first engine answer
+ * (`ready`), then tracks every result, and errors with a failed read. Subscribing retains the
+ * handle as a reader; the subscriber unsubscribes when it is done.
  */
 export function queryHandleResults$<R extends QueryResult<RxCollection>>(
 	handle: QueryHandle<R>
 ): Observable<R> {
 	return handle.observe().pipe(
 		switchMap((snapshot) => (snapshot.error ? throwError(() => snapshot.error) : of(snapshot))),
-		// `ready: false` is "no answer yet"; a Suspense resource stays pending on it.
+		// `ready: false` is "no answer yet": nothing is emitted for it.
 		filter((snapshot) => snapshot.ready),
 		map((snapshot) => snapshot.result),
 		distinctUntilChanged()
@@ -1055,10 +1073,4 @@ export function queryHandleAnswers$<R extends QueryResult<RxCollection>>(
 		map((snapshot) => snapshot.result),
 		distinctUntilChanged()
 	);
-}
-
-export function queryHandleResource<R extends QueryResult<RxCollection>>(
-	handle: QueryHandle<R>
-): ObservableResource<R> {
-	return new ObservableResource(queryHandleResults$(handle));
 }

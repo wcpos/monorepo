@@ -3,7 +3,6 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { of } from 'rxjs';
 
 import { VariationsPane } from './variations-pane';
 import { VariationRow } from './rows/variation-row';
@@ -102,20 +101,20 @@ jest.mock('../../../components/data-table/v2/skeleton', () => {
 		},
 	};
 });
-// The table as the handle source: it is handed the handle itself, never streams.
+// The table is handed the handle itself; its footer, values.
 const mockTableProps: { value: Record<string, unknown> } = { value: {} };
 jest.mock('../../../components/data-table/v2', () => ({
 	DataTable: (props: {
 		tableConfig: { data: typeof hits };
 		handle: unknown;
-		TableFooterComponent: React.ComponentType<{ count: number; total$: unknown }>;
+		TableFooterComponent: React.ComponentType<{ count: number; total: number | null }>;
 	}) => {
 		mockTableProps.value = props;
 		const { tableConfig, TableFooterComponent } = props;
 		return (
 			<>
 				<output data-testid="hits">{tableConfig.data.map((hit) => hit.id).join(',')}</output>
-				<TableFooterComponent count={tableConfig.data.length} total$={of(99)} />
+				<TableFooterComponent count={tableConfig.data.length} total={99} />
 			</>
 		);
 	},
@@ -132,30 +131,20 @@ jest.mock('./variations-grid', () => ({
 		</button>
 	),
 }));
-// The footer's denominator as the real one reads it: `total` when handed one, else `total$`.
+// The footer takes values: the denominator is whatever `total` it is handed.
 jest.mock('./footer', () => ({
 	ProductsFooter: ({
 		children,
 		count,
-		total$,
-		total: heldTotal,
-	}: React.PropsWithChildren<{
-		count: number;
-		total$: { subscribe: (next: (value: number) => void) => { unsubscribe: () => void } };
-		total?: number | null;
-	}>) => {
-		let total: number | null = 0;
-		if (heldTotal !== undefined) total = heldTotal;
-		else total$.subscribe((value) => (total = value)).unsubscribe();
-		return (
-			<footer data-testid="footer">
-				{children}
-				<output>
-					{count} of {total}
-				</output>
-			</footer>
-		);
-	},
+		total,
+	}: React.PropsWithChildren<{ count: number; total: number | null }>) => (
+		<footer data-testid="footer">
+			{children}
+			<output>
+				{count} of {String(total)}
+			</output>
+		</footer>
+	),
 }));
 jest.mock('../cells/price', () => ({ Price: () => null }));
 jest.mock('../cells/sku', () => ({ SKU: () => null }));
@@ -210,10 +199,7 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 		{ filters: { status: 'publish' } },
 		{ remoteIds: ['1', '2'] }
 	);
-	// The table is the handle source: no streams, no resource beside it.
 	expect(mockTableProps.value.handle).toBe(mockHandle);
-	expect(mockTableProps.value).not.toHaveProperty('resource');
-	expect(mockTableProps.value).not.toHaveProperty('active$');
 	expect(screen.getByTestId('hits').textContent).toBe('one');
 	expect(screen.getByTestId('footer').textContent).toContain('1 of 2');
 	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_variations_of');

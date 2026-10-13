@@ -2,11 +2,22 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
 
-import { patchUI, renderTable, reset, setSort, state, tableTree } from './test-fixture';
+import {
+	extendLimit,
+	handleWith,
+	patchUI,
+	renderTable,
+	reset,
+	setFilter,
+	setSort,
+	state,
+	tableTree,
+} from './test-fixture';
 import { DataTableRow } from './rows';
 import { DataTableSkeleton } from './skeleton';
+
+import type { DataTableFooterProps } from './footer';
 
 beforeEach(reset);
 it('fine headers fill their cells and sorting keeps the applied-sort marker', () => {
@@ -77,18 +88,18 @@ it('keeps the pending search distinct from empty results', () => {
 });
 it('an empty list shows skeleton rows while the collection is syncing, the empty state once it settles', () => {
 	state.result = { hits: [], searchActive: false, searchState: 'answered' };
-	const active$ = new BehaviorSubject(true);
-	renderTable({ active$, noDataMessage: <span data-testid="empty-state">No customers yet</span> });
+	const handle = handleWith({ active: true });
+	renderTable({ handle, noDataMessage: <span data-testid="empty-state">No customers yet</span> });
 	expect(screen.getByTestId('data-table-syncing-rows')).toBeTruthy();
 	expect(screen.getAllByTestId('data-table-skeleton-name')).toHaveLength(5);
 	expect(screen.queryByTestId('empty-state')).toBeNull();
-	act(() => active$.next(false));
+	act(() => handle.set({ active: false }));
 	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
 	expect(screen.getByTestId('empty-state')).toBeTruthy();
 });
 it('a pending search says so even while the collection is syncing', () => {
 	state.result = { hits: [], searchActive: true, searchState: 'pending' };
-	renderTable({ active$: of(true) });
+	renderTable({ handle: handleWith({ active: true }) });
 	expect(screen.getByTestId('search-pending-message')).toBeTruthy();
 	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
 });
@@ -111,27 +122,21 @@ it('skeleton follows visible columns, with a capped row count', () => {
 	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('line');
 });
 
-// The handle source (roadmap#423): the screens' tables read the query handle.
+// The screens' tables read the query handle (roadmap#423).
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
 	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle & {
 		set(partial: Record<string, unknown>): void;
 	};
 };
-it('on the handle source the drawn rows stay while a changed handle answers, then its rows show', async () => {
+it('the drawn rows stay while a changed handle answers, then its rows show', async () => {
 	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
 	const first = fakeQueryHandle({
 		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
 	});
-	const handleProps = {
-		resource: undefined,
-		active$: undefined,
-		total$: undefined,
-		sync: undefined,
-	};
 	// The screen's boundary: a table that suspended on the changed handle would show this.
 	const tree = (handle: unknown) => (
 		<React.Suspense fallback={<div data-testid="table-fallback" />}>
-			{tableTree({ ...handleProps, handle })}
+			{tableTree({ handle })}
 		</React.Suspense>
 	);
 	const { rerender } = render(tree(first));
@@ -149,13 +154,12 @@ it('on the handle source the drawn rows stay while a changed handle answers, the
 	);
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('2');
 });
-// The products screen's custom footer (`TableFooter` → `DataTableFooter` + `TaxBasedOn`) takes
-// the binding props; on the handle source `CustomHandleFooter` hands it the drawn handle's
-// `total` as a VALUE, so the denominator and the count it describes land in one commit.
-it('on the handle source a custom footer gets the drawn total as a value in the rows’ commit', async () => {
+// A custom footer (the products screen's `TableFooter` → `DataTableFooter` + `TaxBasedOn`) takes
+// values: the drawn handle's `total` lands in the same commit as the count it describes.
+it('a custom footer gets the drawn total as a value in the rows’ commit', async () => {
 	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
 	const renders: { count: number; total: number | null | undefined }[] = [];
-	function Probe({ count, total }: { count: number; total?: number | null }) {
+	function Probe({ count, total }: DataTableFooterProps) {
 		renders.push({ count, total });
 		return <div data-testid="footer-probe">{`${count}/${String(total)}`}</div>;
 	}
@@ -163,16 +167,9 @@ it('on the handle source a custom footer gets the drawn total as a value in the 
 		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
 		total: 5,
 	});
-	const handleProps = {
-		resource: undefined,
-		active$: undefined,
-		total$: undefined,
-		sync: undefined,
-		TableFooterComponent: Probe,
-	};
 	const tree = (handle: unknown) => (
 		<React.Suspense fallback={<div data-testid="table-fallback" />}>
-			{tableTree({ ...handleProps, handle })}
+			{tableTree({ TableFooterComponent: Probe, handle })}
 		</React.Suspense>
 	);
 	const { rerender } = render(tree(first));
@@ -194,4 +191,121 @@ it('on the handle source a custom footer gets the drawn total as a value in the 
 	// Never the new count over the old denominator (or none), not even for one commit.
 	expect(renders.filter(({ count }) => count === 2).every(({ total }) => total === 9)).toBe(true);
 	expect(renders.some(({ count, total }) => count === 1 && total !== 5)).toBe(false);
+});
+
+it('the default footer is the caption row: the drawn total, the live spinner, the live sync', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const drawn = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+		total: 5,
+		active: false,
+	});
+	const drawnSync = jest.fn(async () => undefined);
+	Object.assign(drawn, { sync: drawnSync });
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(drawn));
+	// A changed query, unanswered: it is the live handle (pulling, its own total), the previous
+	// one stays drawn.
+	const live = fakeQueryHandle({ ready: false, total: 99, active: true });
+	const liveSync = jest.fn(async () => undefined);
+	Object.assign(live, { sync: liveSync });
+	rerender(tree(live));
+
+	expect(screen.getByTestId('data-table-caption-row')).toBeTruthy();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe('5');
+	expect(screen.getByTestId('sync-button').dataset.active).toBe('true');
+	fireEvent.click(screen.getByTestId('sync-button'));
+	expect(liveSync).toHaveBeenCalledTimes(1);
+	expect(drawnSync).not.toHaveBeenCalled();
+});
+
+it('a custom footer is handed values, never streams, with the table’s collection', () => {
+	const props: DataTableFooterProps[] = [];
+	function Footer(footer: DataTableFooterProps) {
+		props.push(footer);
+		return null;
+	}
+	const handle = handleWith({ total: 27, active: true });
+	renderTable({ handle, TableFooterComponent: Footer });
+	expect(props.at(-1)).toEqual({
+		collectionName: 'products',
+		count: 1,
+		active: true,
+		total: 27,
+		sync: handle.sync,
+	});
+});
+
+it('a list footer is handed the live handle’s activity as a value', () => {
+	const seen: boolean[] = [];
+	function ListFooter({ active }: { active: boolean }) {
+		seen.push(active);
+		return null;
+	}
+	const handle = handleWith({ active: true });
+	renderTable({ handle, ListFooterComponent: ListFooter });
+	expect(seen.at(-1)).toBe(true);
+	act(() => handle.set({ active: false }));
+	expect(seen.at(-1)).toBe(false);
+});
+
+it('pages through the actions on a full read, and holds while the handle’s demand is pending', () => {
+	// One row at a page size of one: a full read, which always extends.
+	const handle = handleWith({ pending: true });
+	renderTable({ handle });
+	fireEvent.click(screen.getByTestId('end-reached'));
+	expect(extendLimit).not.toHaveBeenCalled();
+	act(() => handle.set({ pending: false }));
+	fireEvent.click(screen.getByTestId('end-reached'));
+	expect(extendLimit).toHaveBeenCalledTimes(1);
+});
+
+it('publishes only the filter action to the cells', () => {
+	let meta: Record<string, unknown> | undefined;
+	renderTable({
+		renderItem: ({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
+			meta = table.options.meta;
+			return <div />;
+		},
+	});
+	expect(meta).toEqual({ actions: { setFilter } });
+});
+
+it('resolves row cell maps and keeps the text fallback inside the table', () => {
+	function RowCell() {
+		return <div data-testid="row-cell" />;
+	}
+	function FlatCell() {
+		return <div data-testid="flat-cell" />;
+	}
+	const cellsForRow = jest.fn(() => ({ name: RowCell }));
+	renderTable({ cells: { name: FlatCell, price: FlatCell }, cellsForRow, showFooter: false });
+	expect(screen.getByTestId('row-cell')).toBeTruthy();
+	expect(screen.queryByTestId('flat-cell')).toBeNull();
+	expect(screen.getByTestId('cell-price')).toBeTruthy();
+	expect(cellsForRow).toHaveBeenCalledWith(
+		expect.objectContaining({ original: expect.objectContaining({ id: 'hit-1' }) })
+	);
+});
+
+/**
+ * Regression guard for the react-table v9 migration (see the NOTE in `DataTableBody`): this file
+ * runs against the table compiled by the React Compiler, as the app compiles it, so a stale memo
+ * fails here rather than reaching a cashier as a column toggle that does nothing.
+ */
+it('re-renders header cells when the visible column set changes', () => {
+	const handle = handleWith();
+	const { rerender } = renderTable({ handle });
+	expect(screen.queryByTestId('data-table-header-name')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-header-price')).toBeTruthy();
+	// Hide a column, exactly as the column-visibility popover does.
+	state.columns = state.columns.filter(({ key }) => key !== 'price');
+	rerender(tableTree({ handle }));
+	expect(screen.queryByTestId('data-table-header-name')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-header-price')).toBeNull();
 });

@@ -9,7 +9,7 @@ import { useDocField } from '@wcpos/query';
 
 import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
 import { DataTableHeader } from '../header';
-import { getColumnStyle } from '../index';
+import { getColumnStyle } from '../column-style';
 import { TableSurface } from '../surface';
 
 type Column = { key: string; hideLabel?: boolean; show?: boolean };

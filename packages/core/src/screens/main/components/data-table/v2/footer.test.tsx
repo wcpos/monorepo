@@ -4,7 +4,6 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
 
 import { DataTableFooter } from './footer';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../../query';
@@ -52,19 +51,18 @@ jest.mock('../../../../../contexts/translations', () => ({
 		values ? `${key}:${values.shown}/${values.total}` : key,
 }));
 
-function renderBindingFooter() {
-	const BindingFooter = DataTableFooter as unknown as React.ComponentType<Record<string, unknown>>;
+function renderFooter() {
 	return render(
 		<QueryStateProvider
 			collection="coupons"
 			initialPageSize={10}
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 		>
-			<BindingFooter
+			<DataTableFooter
 				collectionName="coupons"
 				count={10}
-				total$={of(27)}
-				active$={of(false)}
+				total={27}
+				active={false}
 				sync={mockSync}
 			/>
 		</QueryStateProvider>
@@ -95,11 +93,11 @@ function currentCouponQueryState(): QueryStateOf<'coupons'> {
 	return JSON.parse(screen.getByTestId('query-state').textContent ?? '') as QueryStateOf<'coupons'>;
 }
 
-describe('DataTableFooter binding projections', () => {
+describe('DataTableFooter', () => {
 	beforeEach(() => jest.clearAllMocks());
 
 	it('shows the plain showing-of total — never an at-least suffix', () => {
-		renderBindingFooter();
+		renderFooter();
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
 		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
@@ -107,45 +105,30 @@ describe('DataTableFooter binding projections', () => {
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 
-	// A handle-backed table (the products screen's custom footer) hands the total as a value in
-	// the same commit as the rows: it wins over the stream, which lands a commit later.
-	it('prints a held total over the streamed one, including a null that vouches for nothing', () => {
-		const BindingFooter = DataTableFooter as unknown as React.ComponentType<
-			Record<string, unknown>
-		>;
-		const props = {
-			collectionName: 'coupons',
-			count: 10,
-			total$: of(27),
-			active$: of(false),
-			sync: mockSync,
-		};
-		const { rerender } = render(
+	it('names no denominator for a null total: nothing vouches for one', () => {
+		render(
 			<QueryStateProvider
 				collection="coupons"
 				initialPageSize={10}
 				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 			>
-				<BindingFooter {...props} total={12} />
-			</QueryStateProvider>
-		);
-		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/12');
-		rerender(
-			<QueryStateProvider
-				collection="coupons"
-				initialPageSize={10}
-				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
-			>
-				<BindingFooter {...props} total={null} />
+				<DataTableFooter
+					collectionName="coupons"
+					count={10}
+					total={null}
+					active={false}
+					sync={mockSync}
+				/>
 			</QueryStateProvider>
 		);
 		expect(screen.getByTestId('data-table-count').textContent).toBe(
 			'common.showing_n:10/undefined'
 		);
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe('');
 	});
 
 	it('retains sync/reset actions', () => {
-		renderBindingFooter();
+		renderFooter();
 
 		fireEvent.click(screen.getByTestId('sync'));
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
@@ -154,9 +137,6 @@ describe('DataTableFooter binding projections', () => {
 	});
 
 	it('restores provider search and filter initials before clearing and syncing', () => {
-		const BindingFooter = DataTableFooter as unknown as React.ComponentType<
-			Record<string, unknown>
-		>;
 		render(
 			<QueryStateProvider
 				collection="coupons"
@@ -165,11 +145,11 @@ describe('DataTableFooter binding projections', () => {
 				initialFilters={{ status: 'future' }}
 			>
 				<CouponQueryStateProbe />
-				<BindingFooter
+				<DataTableFooter
 					collectionName="coupons"
 					count={0}
-					total$={of(27)}
-					active$={of(false)}
+					total={27}
+					active={false}
 					sync={mockSync}
 				/>
 			</QueryStateProvider>
