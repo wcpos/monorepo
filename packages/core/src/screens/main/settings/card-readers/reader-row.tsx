@@ -148,7 +148,16 @@ export function ReaderRow({
 	// menu item read as "so is it connected or not?"): a remembered reader says it is not.
 	else if (!connected && reader) line = t('settings.card_readers.not_connected');
 
-	if (found)
+	// A scan that found nothing has ended: there is nothing to cancel, so the slot below offers
+	// Try again (the guide's "unavailable → the same slot") and the docs link sits under the line.
+	const foundNone = found !== null && found.length === 0;
+	if (foundNone)
+		below = (
+			<DocsLink testID={`reader-row-${method.id}-cant-see`} href={CARD_READER_DOCS_URL}>
+				{t('settings.card_readers.cant_see')}
+			</DocsLink>
+		);
+	else if (found)
 		below = (
 			<VStack testID={`reader-row-${method.id}-found`}>
 				{found.map((candidate) => (
@@ -270,8 +279,18 @@ export function ReaderRow({
 			</HStack>
 			{below}
 			{/* The actions are a full-width row of their own: nothing shares a line with free text. */}
-			{!scan || found === null ? (
+			{!scan || found === null || foundNone ? (
 				<HStack className="w-full items-center gap-2">
+					{foundNone ? (
+						<Button
+							className="flex-1"
+							disabled={busy}
+							onPress={() => void actions.start(method, scan?.transport)}
+							testID={`reader-row-${method.id}-retry`}
+						>
+							<ButtonText>{t('settings.card_readers.try_again')}</ButtonText>
+						</Button>
+					) : null}
 					{scan && found === null ? (
 						<Button
 							variant="outline"
