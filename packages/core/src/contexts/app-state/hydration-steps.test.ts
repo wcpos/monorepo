@@ -796,6 +796,7 @@ describe('runConnectCompatibilityProbes', () => {
 		await expect(run()).resolves.toEqual({
 			blocking: null,
 			warnings: [ERROR_CODES.SEARCH_BLOCKED_BY_WAF],
+			useCacheBuster: false,
 		});
 		expect(String(fetchMock.mock.calls[1][0])).toContain('s=%C3%9Cnion+select+caf%C3%A9');
 		expect(mockAppLogger.warn).toHaveBeenCalledWith(
@@ -819,7 +820,8 @@ describe('runConnectCompatibilityProbes', () => {
 			.mockResolvedValueOnce(response(500))
 			.mockResolvedValueOnce(response(500));
 
-		await expect(run()).resolves.toEqual({ blocking: null, warnings: [] });
+		await expect(run()).resolves.toEqual({ blocking: null, warnings: [], useCacheBuster: false });
+		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(mockAppLogger.warn).not.toHaveBeenCalled();
 	});
 
@@ -828,13 +830,22 @@ describe('runConnectCompatibilityProbes', () => {
 			.mockResolvedValueOnce(response(200))
 			.mockResolvedValueOnce(response(200))
 			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
 			.mockResolvedValueOnce(response(200, echoBody(true, 24)));
 
 		await expect(run()).resolves.toEqual({
 			blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
 			warnings: [],
+			useCacheBuster: false,
 		});
-		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock).toHaveBeenCalledTimes(6);
+		const keys = fetchMock.mock.calls
+			.slice(4)
+			.map(([url]) => new URL(url).searchParams.get('_wcpos_nocache'));
+		expect(keys[0]).toBeTruthy();
+		expect(keys[1]).toBeTruthy();
+		expect(keys[0]).not.toBe(keys[1]);
 		expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[3][0]);
 		expect(fetchMock.mock.calls[2][1].headers.authorization).toHaveLength(24);
 		expect(fetchMock.mock.calls[3][1].headers.authorization).toHaveLength(36);
@@ -855,10 +866,52 @@ describe('runConnectCompatibilityProbes', () => {
 			.mockResolvedValueOnce(response(200, first))
 			.mockResolvedValueOnce(response(200, second));
 
-		await expect(run()).resolves.toEqual({ blocking: null, warnings: [] });
+		await expect(run()).resolves.toEqual({ blocking: null, warnings: [], useCacheBuster: false });
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(mockAppLogger.error).not.toHaveBeenCalled();
 	});
+
+	it('routes around replay when the busted pair is healthy without a toast', async () => {
+		fetchMock
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 36)));
+		await expect(run()).resolves.toEqual({
+			blocking: null,
+			warnings: [ERROR_CODES.CACHE_SHARED_REPLAY],
+			useCacheBuster: true,
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(6);
+		expect(mockAppLogger.warn).toHaveBeenCalledWith(
+			'Shared cache replay detected; routing around it with a unique cache key on every request',
+			{
+				code: ERROR_CODES.CACHE_SHARED_REPLAY,
+				context: { classification: 'CACHE_SHARED_REPLAY', mitigated: true },
+			}
+		);
+		expect(mockAppLogger.error).not.toHaveBeenCalled();
+	});
+	it.each([{ status: 'success' }, null, echoBody(false, 36)])(
+		'blocks when the busted second echo does not prove arrival: %p',
+		async (second) => {
+			fetchMock
+				.mockResolvedValueOnce(response(200))
+				.mockResolvedValueOnce(response(200))
+				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+				.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+				.mockResolvedValueOnce(response(200, second));
+			await expect(run()).resolves.toEqual({
+				blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
+				warnings: [],
+				useCacheBuster: false,
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(6);
+		}
+	);
 });
 
 describe('testAuthorizationMethod', () => {

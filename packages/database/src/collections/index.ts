@@ -80,6 +80,11 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// query transport, so existing documents need no change.
 			return oldDoc;
 		},
+		6(oldDoc) {
+			// v6 adds the optional `use_cache_buster` flag; absent reads as
+			// no cache key, so existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

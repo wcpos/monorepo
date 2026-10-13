@@ -31,6 +31,7 @@ export interface Site {
 	wp_api_url?: string;
 	use_jwt_as_param?: boolean;
 	use_rest_route_param?: boolean;
+	use_cache_buster?: boolean;
 	use_protocol_headers?: boolean;
 	incrementalPatch: (data: any) => void;
 }
