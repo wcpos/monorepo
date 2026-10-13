@@ -2519,6 +2519,96 @@ describe('query handles over the engine', () => {
 		);
 	});
 
+	it('asks for the parents matching children named only while owned, declaring a new set before releasing the old', async () => {
+		await engineDB.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
+		// Parent 99 is NOT resident: only the owner's targeted demand can bring it in.
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat' }),
+			engineVariation({ uuid: 'orphan-1', id: 991, parent_id: 99, sku: 'blue-orphan' }),
+		]);
+		const state: QueryStateOf<'products'> = {
+			search: 'blue',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 20,
+		};
+		const targeted = () =>
+			engine.requireCalls.filter(
+				(requirement) =>
+					requirement.collection === 'products' && requirement.kind === 'targeted-records'
+			) as { remoteIds: string[] }[];
+		const targetedEvents = (from: number) =>
+			engine.demandEvents.slice(from).filter((event) => event.endsWith(':targeted-records'));
+		const { result, unmount } = renderHook(() => useProductsQueryHandle(state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(current(result.current)?.hits.map((hit) => hit.id)).toEqual(['hat'])
+		);
+		// Catches: the owned demand dropped, or built from resident hits (99 would be missing).
+		await waitFor(() => expect(targeted().at(-1)?.remoteIds).toEqual(['20', '99']));
+		expect(targetedEvents(0)).toEqual(['require:targeted-records']);
+
+		const before = engine.demandEvents.length;
+		await engineDB.collections.variations.insert(
+			engineVariation({ uuid: 'orphan-2', id: 771, parent_id: 77, sku: 'blue-other' })
+		);
+		await waitFor(() => expect(targeted().at(-1)?.remoteIds).toEqual(['20', '77', '99']));
+		// Catches: release-before-declare (the composition's old switchMap order).
+		expect(targetedEvents(before)).toEqual([
+			'require:targeted-records',
+			'release:targeted-records',
+		]);
+
+		const beforeUnmount = engine.demandEvents.length;
+		unmount();
+		// Catches: a targeted requirement that outlives its owner.
+		await waitFor(() =>
+			expect(targetedEvents(beforeUnmount)).toEqual(['release:targeted-records'])
+		);
+		expect(targetedEvents(0).filter((event) => event.startsWith('require:'))).toHaveLength(2);
+		expect(targetedEvents(0).filter((event) => event.startsWith('release:'))).toHaveLength(2);
+	});
+
+	it('a reader outliving the owner keeps the rows and asks for no parents', async () => {
+		await engineDB.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat' }),
+			engineVariation({ uuid: 'orphan-1', id: 991, parent_id: 99, sku: 'blue-orphan' }),
+		]);
+		const targetedEvents = (from: number) =>
+			engine.demandEvents.slice(from).filter((event) => event.endsWith(':targeted-records'));
+		const handle = queryHandles.acquireProductsQueryHandle(engine, 'test:relation:reader', {
+			state: {
+				search: 'blue',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'name', direction: 'asc' },
+				limit: 20,
+			},
+			parentSearchFields: ['name'],
+			childSearchFields: ['sku'],
+		});
+		// A reader alone: the read runs, nothing targeted is asked for (readers never declare).
+		const stopReading = handle.subscribe(() => undefined);
+		await waitFor(() => expect(handle.value.hits.map((hit) => hit.id)).toEqual(['hat']));
+		// Catches: `declareRelatedWhileOwned` declaring on a result instead of on ownership.
+		expect(targetedEvents(0)).toEqual([]);
+
+		const retained = engine.demandEvents.length;
+		const release = handle.retain();
+		// Catches: the owned demand not following `owned$` (99 is only reachable through it).
+		await waitFor(() => expect(targetedEvents(retained)).toEqual(['require:targeted-records']));
+
+		const released = engine.demandEvents.length;
+		release();
+		// Catches: a targeted requirement that survives the owner while a reader still holds the
+		// read, or one re-declared for the reader.
+		await waitFor(() => expect(targetedEvents(released)).toEqual(['release:targeted-records']));
+		expect(handle.value.hits.map((hit) => hit.id)).toEqual(['hat']);
+		stopReading();
+	});
+
 	it('debounces search-select input and bounds its resident results', async () => {
 		jest.useFakeTimers();
 		await engineDB.collections.categories.bulkInsert([
