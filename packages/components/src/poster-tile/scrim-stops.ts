@@ -38,3 +38,13 @@ export const SCRIM_STOPS: readonly (readonly [at: number, of: number])[] = [
 	[0.81, 0.738],
 	[1, 1],
 ];
+
+/**
+ * The band of card under the square, so every tile is the same height whatever it says: the
+ * most common words, one line of name (`text-base`, `leading-tight`: 1.25) and the money row
+ * (`text-base` at its 1.35 line height), with the 2 px gap between them and the 10 px foot (three
+ * spacing steps), sit wholly on it. In the type scale's own variables, so it grows with the text
+ * (owner, 2026-10-13: "I like the band"; board `pos-tile-square-or-band-2026-10-13.html`, 48 px).
+ */
+export const POSTER_BAND =
+	'h-[calc(var(--text-base)*1.25+var(--text-base--line-height)+var(--spacing)*3)]';

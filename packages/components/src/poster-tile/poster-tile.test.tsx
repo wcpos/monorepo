@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { PosterTile, type PosterTileProps, SCRIM_REACH, SCRIM_STOPS } from './index';
+import {
+	PosterPlaceholder,
+	PosterTile,
+	type PosterTileProps,
+	SCRIM_REACH,
+	SCRIM_STOPS,
+} from './index';
 
 let mockPressed = false;
 // Keep RNW's Pressable (press, ref); expose classes because Jest does not compile Uniwind.
@@ -248,4 +254,32 @@ it('anchors the words to the card, not the square, so the money row sits on the 
 	expect(words.parentElement).toBe(screen.getByTestId('poster-card'));
 	expect(screen.getByTestId('tile-12').contains(words)).toBe(false);
 	expect(classes('poster-scrim').split(' ')).toContain('bottom-0');
+});
+
+it('paints the marks after the words, so a fade that climbs far never washes over them', () => {
+	render(
+		tile({
+			title: 'Tea',
+			facts: 'SKU T1',
+			mark: { kind: 'count', value: 3 },
+			markTestID: 'stock',
+			corner: <span data-testid="in-cart" />,
+		})
+	);
+	const card = [...screen.getByTestId('poster-card').children];
+	const at = (node: Element) => card.findIndex((child) => child === node || child.contains(node));
+	const scrim = at(screen.getByTestId('poster-scrim'));
+	expect(at(screen.getByTestId('stock'))).toBeGreaterThan(scrim);
+	expect(at(screen.getByTestId('in-cart'))).toBeGreaterThan(scrim);
+	// Still at the card's top corners, outside the square that the words climb.
+	expect(screen.getByTestId('tile-12').contains(screen.getByTestId('stock'))).toBe(false);
+});
+
+it("holds a slot in the tile's own shape: square and band", () => {
+	render(<PosterPlaceholder testID="placeholder" />);
+	const placeholder = screen.getByTestId('placeholder');
+	expect(placeholder.children).toHaveLength(2);
+	expect(placeholder.children[1].getAttribute('data-classes')).toContain(
+		'h-[calc(var(--text-base)'
+	);
 });

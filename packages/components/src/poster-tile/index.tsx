@@ -6,13 +6,14 @@ import Animated from 'react-native-reanimated';
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
 import { Text } from '../text';
+import { PosterBand } from './band';
 import { Scrim } from './scrim';
-import { SCRIM_REACH } from './scrim-stops';
+import { POSTER_BAND, SCRIM_REACH } from './scrim-stops';
 import { type Tint, tintOf } from './tint-of';
 
 import type { ImageSource } from 'expo-image';
 
-export { tintOf, type Tint };
+export { POSTER_BAND, PosterBand, tintOf, type Tint };
 export { SCRIM_REACH, SCRIM_STOPS, SCRIM_STRENGTH } from './scrim-stops';
 
 export type PosterPicture =
@@ -80,15 +81,6 @@ const TINTS = [
 	'bg-tile-tint-4',
 	'bg-tile-tint-5',
 ] as const;
-/**
- * The band of card under the square, so every tile is the same height whatever it says: the
- * most common words, one line of name (`text-base`, `leading-tight`: 1.25) and the money row
- * (`text-base` at its 1.35 line height), with the 2 px gap between them and the 10 px foot (three
- * spacing steps), sit wholly on it. In the type scale's own variables, so it grows with the text
- * (owner, 2026-10-13: "I like the band"; board `pos-tile-square-or-band-2026-10-13.html`, 48 px).
- */
-export const POSTER_BAND =
-	'h-[calc(var(--text-base)*1.25+var(--text-base--line-height)+var(--spacing)*3)]';
 const VEIL = 'bg-foreground/10 absolute inset-0';
 // The words' block, at the foot of the card. Never taller than the card: on a narrow tile
 // what overflows is clipped at the bottom (the facts), so the name, money and sub stay.
@@ -280,21 +272,10 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 							</View>
 							{/* The press dims the picture or the tint alike, under the words and marks. */}
 							{pressed && <View className={VEIL} pointerEvents="none" testID="poster-pressed" />}
-							{mark && (
-								<View className="absolute top-2 left-2">
-									<Mark mark={mark} label={markLabel} testID={markTestID} bare={tint !== null} />
-								</View>
-							)}
-							{back && (
-								<View className={`${CIRCLE} absolute top-2 right-2`} testID={backTestID}>
-									<Icon name="chevronLeft" size="sm" className="text-muted-foreground" />
-								</View>
-							)}
-							{corner != null && <View className="absolute top-2 right-2">{corner}</View>}
 						</View>
-						<View className={POSTER_BAND} testID="poster-band">
+						<PosterBand testID="poster-band">
 							{pressed && <View className={VEIL} pointerEvents="none" />}
-						</View>
+						</PosterBand>
 						{/* Anchored to the card: one line of name and the money row sit on the band, and the
 						    fade begins at the picture's foot; more lines climb into it. */}
 						{words &&
@@ -312,9 +293,35 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									{words}
 								</View>
 							))}
+						{/* Last, so the fade and blur of words that climb far never wash over them. */}
+						{mark && (
+							<View className="absolute top-2 left-2">
+								<Mark mark={mark} label={markLabel} testID={markTestID} bare={tint !== null} />
+							</View>
+						)}
+						{back && (
+							<View className={`${CIRCLE} absolute top-2 right-2`} testID={backTestID}>
+								<Icon name="chevronLeft" size="sm" className="text-muted-foreground" />
+							</View>
+						)}
+						{corner != null && <View className="absolute top-2 right-2">{corner}</View>}
 					</View>
 				</>
 			)}
 		</Pressable>
 	);
 });
+
+/** A Poster tile that has not arrived yet: its slot held in the tile's own shape, square and band. */
+export function PosterPlaceholder({ testID, grow }: { testID?: string; grow?: boolean }) {
+	return (
+		<View
+			className={`bg-muted m-1 ${grow ? 'grow' : 'flex-1'} rounded-lg`}
+			aria-busy
+			testID={testID}
+		>
+			<View className="aspect-square" />
+			<PosterBand />
+		</View>
+	);
+}
