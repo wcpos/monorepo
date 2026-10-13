@@ -1,59 +1,87 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { of } from 'rxjs';
 
 import { VariationsPane } from './variations-pane';
 import { VariationRow } from './rows/variation-row';
 
+// The variations handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+	retained: number;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>, key?: string) => FakeHandle;
+};
 const addVariation = jest.fn();
 const hits = [
 	{ id: 'one', record: { remoteId: 1, payload: { stock_status: 'instock' } } },
 	{ id: 'two', record: { remoteId: 2, payload: { stock_status: 'outofstock' } } },
 ];
-const mockRead = jest.fn();
-const answered = { value: true };
-// Whether the answer carried a value; an answer without one is a failed query.
-const valued = { value: true };
-const binding = {
-	resource: {
-		hits,
-		read: mockRead,
-		// The answer as the subject holds it, for the grid: `undefined` until the query has spoken.
-		valueRef$$: {
-			get value() {
-				return answered.value && valued.value ? { current: { hits } } : undefined;
-			},
-		},
-	},
-	sync: jest.fn(async () => {}),
-	total$: of(99),
-	active$: of(false),
+const answeredWith = (found: typeof hits = hits) =>
+	fakeQueryHandle({ result: { hits: found }, total: 99 });
+let mockHandle: FakeHandle = answeredWith();
+const bind = jest.fn((..._args: unknown[]) => mockHandle);
+// The registry, for the reset test: one handle per key while retained, joined on the owner's
+// retain and left on the last release, as the real one claims the key on start and releases it
+// on stop. A remount after every holder left gets a FRESH handle; one still held gets the old.
+const mockRegistry = {
+	on: false,
+	handles: new Map<string, FakeHandle>(),
+	created: [] as FakeHandle[],
 };
-const bind = jest.fn(() => binding);
-jest.mock('../../../../../query', () => ({
-	useCollectionBinding: (...args: unknown[]) => bind(...(args as [])),
-	useQueryState: () => ({ filters: { status: 'publish' } }),
-	useQueryStateActions: () => ({}),
-}));
+function mockAcquire(key: string): FakeHandle {
+	const live = mockRegistry.handles.get(key);
+	if (live) return live;
+	const handle = fakeQueryHandle({ ready: false }, key);
+	mockRegistry.created.push(handle);
+	const retain = handle.retain;
+	handle.retain = () => {
+		mockRegistry.handles.set(key, handle);
+		const release = retain();
+		// The owner's retain starts the read; its first answer is one microtask later.
+		void Promise.resolve().then(() => handle.set({ ready: true, result: { hits } }));
+		return () => {
+			release();
+			if (handle.retained === 0 && mockRegistry.handles.get(key) === handle) {
+				mockRegistry.handles.delete(key);
+			}
+		};
+	};
+	return handle;
+}
+jest.mock('../../../../../query', () => {
+	const ReactActual = jest.requireActual('react') as typeof React;
+	return {
+		...jest.requireActual('../../../../../query'),
+		// The owner's contract: acquire by key (memoised on the fiber), retain while mounted.
+		useCollectionQueryHandle: (...args: unknown[]) => {
+			const key = JSON.stringify(args.slice(1));
+			const fixed = bind(...args);
+			const acquired = ReactActual.useMemo(
+				() => (mockRegistry.on ? mockAcquire(key) : null),
+				[key]
+			);
+			const handle = acquired ?? fixed;
+			ReactActual.useEffect(() => handle.retain(), [handle]);
+			return handle;
+		},
+		useQueryState: () => ({ filters: { status: 'publish' } }),
+		useQueryStateActions: () => ({}),
+	};
+});
 jest.mock('@wcpos/query', () => ({
+	queryHandleAnswers$: jest.requireActual('@wcpos/query').queryHandleAnswers$,
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-jest.mock('observable-hooks', () => ({
-	useObservableSuspense: (resource: unknown) => resource,
-	// The subscription that re-renders the pane when the answer moves; the pane reads the value
-	// off the subject itself.
-	useObservableEagerState: () => undefined,
-}));
-// The resource's first answer: false until the query has spoken (or failed).
-jest.mock('../../../hooks/use-first-answer', () => ({ useFirstAnswer: () => answered.value }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: object) => JSON.stringify({ key, ...values }),
 }));
-jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: React.PropsWithChildren) => children,
-}));
+// The real Suspense: a fallback commit is what the pane avoids, so it must be observable.
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -61,28 +89,36 @@ jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }))
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('../../../components/data-table/v2/skeleton', () => ({
-	DataTableSkeleton: ({ rowCount }: { rowCount: number }) => (
-		<div data-testid="skeleton" data-rows={rowCount} />
-	),
-}));
+// Every skeleton committed, by the pane or as a Suspense fallback.
+const mockSkeletonMounts = { value: 0 };
+jest.mock('../../../components/data-table/v2/skeleton', () => {
+	const ReactActual = jest.requireActual('react') as typeof React;
+	return {
+		DataTableSkeleton: ({ rowCount }: { rowCount: number }) => {
+			ReactActual.useEffect(() => {
+				mockSkeletonMounts.value += 1;
+			}, []);
+			return <div data-testid="skeleton" data-rows={rowCount} />;
+		},
+	};
+});
+// The table as the handle source: it is handed the handle itself, never streams.
+const mockTableProps: { value: Record<string, unknown> } = { value: {} };
 jest.mock('../../../components/data-table/v2', () => ({
-	DataTable: ({
-		tableConfig,
-		resource,
-		TableFooterComponent,
-	}: {
-		tableConfig?: { data: typeof hits };
-		resource: { hits: typeof hits };
+	DataTable: (props: {
+		tableConfig: { data: typeof hits };
+		handle: unknown;
 		TableFooterComponent: React.ComponentType<{ count: number; total$: unknown }>;
-	}) => (
-		<>
-			<output data-testid="hits">
-				{(tableConfig?.data ?? resource.hits).map((hit) => hit.id).join(',')}
-			</output>
-			<TableFooterComponent count={resource.hits.length} total$={binding.total$} />
-		</>
-	),
+	}) => {
+		mockTableProps.value = props;
+		const { tableConfig, TableFooterComponent } = props;
+		return (
+			<>
+				<output data-testid="hits">{tableConfig.data.map((hit) => hit.id).join(',')}</output>
+				<TableFooterComponent count={tableConfig.data.length} total$={of(99)} />
+			</>
+		);
+	},
 }));
 jest.mock('../../../components/data-table/v2/rows', () => ({
 	DataTableRow: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
@@ -135,6 +171,38 @@ const parent = {
 	uuid: 'parent',
 	payload: { name: 'Tea', variations: [1, 2] },
 } as unknown as React.ComponentProps<typeof VariationsPane>['parent'];
+beforeEach(() => {
+	mockHandle = answeredWith();
+	mockSkeletonMounts.value = 0;
+	bind.mockClear();
+	mockRegistry.on = false;
+	mockRegistry.handles.clear();
+	mockRegistry.created = [];
+});
+// React logs every error a boundary catches; these tests throw them on purpose.
+let quiet: jest.SpyInstance | null = null;
+function quietBoundaryLogs() {
+	quiet = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+}
+afterEach(() => {
+	quiet?.mockRestore();
+	quiet = null;
+});
+// The stage's boundary above the pane, as a reader of what reached it.
+function Boundary({ children }: React.PropsWithChildren) {
+	return (
+		<ErrorBoundary
+			fallbackRender={({ error, resetErrorBoundary }) => (
+				<>
+					<output data-testid="boundary">{(error as Error).message}</output>
+					<button data-testid="boundary-reset" onClick={() => resetErrorBoundary()} />
+				</>
+			)}
+		>
+			{children}
+		</ErrorBoundary>
+	);
+}
 it('scopes the query to published parent IDs, filters displayed stock and counts shown of parent total', () => {
 	const { rerender } = render(<VariationsPane parent={parent} stockStatus="instock" />);
 	expect(bind).toHaveBeenLastCalledWith(
@@ -142,6 +210,10 @@ it('scopes the query to published parent IDs, filters displayed stock and counts
 		{ filters: { status: 'publish' } },
 		{ remoteIds: ['1', '2'] }
 	);
+	// The table is the handle source: no streams, no resource beside it.
+	expect(mockTableProps.value.handle).toBe(mockHandle);
+	expect(mockTableProps.value).not.toHaveProperty('resource');
+	expect(mockTableProps.value).not.toHaveProperty('active$');
 	expect(screen.getByTestId('hits').textContent).toBe('one');
 	expect(screen.getByTestId('footer').textContent).toContain('1 of 2');
 	expect(screen.getByTestId('footer').textContent).toContain('pos_products.n_variations_of');
@@ -177,37 +249,105 @@ it('adds a variation with exactly the old cell’s sanitised metadata', () => {
 });
 it('holds the skeleton, one row per variation, until the query has answered', () => {
 	// Outside Suspense on purpose: a fallback React has committed stays up for 300 ms.
-	answered.value = false;
-	const { rerender } = render(<VariationsPane parent={parent} />);
+	mockHandle.set({ ready: false });
+	render(<VariationsPane parent={parent} />);
 	expect(screen.getByTestId('skeleton').dataset.rows).toBe('2');
 	expect(screen.queryByTestId('hits')).toBeNull();
-	answered.value = true;
-	rerender(<VariationsPane parent={parent} />);
+	// The answer is heard from the handle itself, with no render from above.
+	act(() => mockHandle.set({ ready: true }));
 	expect(screen.queryByTestId('skeleton')).toBeNull();
 	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+});
+it('commits no skeleton or fallback at all when the handle has answered by the first render', () => {
+	render(<VariationsPane parent={parent} />);
+	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+	expect(mockSkeletonMounts.value).toBe(0);
+});
+it('keeps the table rows while a changed handle answers, then draws its answer', async () => {
+	const { rerender } = render(<VariationsPane parent={parent} />);
+	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+	// A header sort is a new query: a new handle, unanswered.
+	const sorted = fakeQueryHandle({ ready: false });
+	mockHandle = sorted;
+	await act(async () => rerender(<VariationsPane parent={parent} />));
+	expect(screen.getByTestId('hits').textContent).toBe('one,two');
+	expect(screen.queryByTestId('skeleton')).toBeNull();
+	expect(mockSkeletonMounts.value).toBe(0);
+	await act(async () => sorted.set({ ready: true, result: { hits: [hits[1], hits[0]] } }));
+	expect(screen.getByTestId('hits').textContent).toBe('two,one');
+	expect(mockSkeletonMounts.value).toBe(0);
+});
+it('throws a failed first read on the table path into the boundary, not a skeleton for good', () => {
+	quietBoundaryLogs();
+	mockHandle.set({ ready: false });
+	render(
+		<Boundary>
+			<VariationsPane parent={parent} />
+		</Boundary>
+	);
+	expect(screen.getByTestId('skeleton')).not.toBeNull();
+	// A failure counts as answered: the table's reader throws it.
+	act(() => mockHandle.set({ error: new Error('variations read failed') }));
+	expect(screen.getByTestId('boundary').textContent).toBe('variations read failed');
 });
 it('given a way back, hands the grid the answer itself and never a skeleton or a suspense fallback', () => {
 	// A tile that suspended or was swapped for a skeleton mid-deal would lose its place.
 	const back = jest.fn();
-	answered.value = false;
-	const { rerender } = render(<VariationsPane parent={parent} back={back} />);
+	mockHandle.set({ ready: false });
+	render(<VariationsPane parent={parent} back={back} />);
 	expect(screen.getByTestId('grid').textContent).toBe('unanswered');
 	expect(screen.queryByTestId('skeleton')).toBeNull();
-	answered.value = true;
-	rerender(<VariationsPane parent={parent} back={back} />);
+	act(() => mockHandle.set({ ready: true }));
 	expect(screen.getByTestId('grid').textContent).toBe('one,two');
 	expect(screen.queryByTestId('hits')).toBeNull();
+	expect(mockSkeletonMounts.value).toBe(0);
 	fireEvent.click(screen.getByTestId('grid'));
 	expect(back).toHaveBeenCalled();
 });
-it('reads a query that failed, so its error reaches the boundary instead of an empty grid', () => {
-	answered.value = true;
-	mockRead.mockClear();
-	const { rerender } = render(<VariationsPane parent={parent} back={jest.fn()} />);
-	expect(mockRead).not.toHaveBeenCalled();
-	// Answered, but with no value: the resource's own read is what rethrows the failure.
-	valued.value = false;
-	rerender(<VariationsPane parent={parent} back={jest.fn()} />);
-	expect(mockRead).toHaveBeenCalled();
-	valued.value = true;
+it('throws a failed read on the grid path into the boundary instead of an empty grid', () => {
+	quietBoundaryLogs();
+	render(
+		<Boundary>
+			<VariationsPane parent={parent} back={jest.fn()} />
+		</Boundary>
+	);
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	act(() => mockHandle.set({ error: new Error('variations read failed') }));
+	expect(screen.queryByTestId('grid')).toBeNull();
+	expect(screen.getByTestId('boundary').textContent).toBe('variations read failed');
+});
+it('keeps the dealt tiles while a changed handle answers, then lands the new hits', async () => {
+	// A products pull moving the parent's variation list is a new key, so a new handle, which
+	// starts its read only in the owner's effect: the tiles must not turn into placeholders.
+	const back = jest.fn();
+	const { rerender } = render(<VariationsPane parent={parent} back={back} />);
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	const moved = fakeQueryHandle({ ready: false });
+	mockHandle = moved;
+	await act(async () => rerender(<VariationsPane parent={parent} back={back} />));
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	await act(async () => moved.set({ ready: true, result: { hits: [hits[1]] } }));
+	expect(screen.getByTestId('grid').textContent).toBe('two');
+});
+it('recovers from a failed read on the boundary’s reset: the remount reads a fresh handle', async () => {
+	quietBoundaryLogs();
+	mockRegistry.on = true;
+	render(
+		<Boundary>
+			<VariationsPane parent={parent} back={jest.fn()} />
+		</Boundary>
+	);
+	await act(async () => {});
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
+	const failed = mockRegistry.created[0];
+	act(() => failed.set({ error: new Error('variations read failed') }));
+	expect(screen.getByTestId('boundary').textContent).toBe('variations read failed');
+	// The fallback unmounted every holder: the key has left the registry.
+	await act(async () => {});
+	expect(failed.retained).toBe(0);
+	await act(async () => fireEvent.click(screen.getByTestId('boundary-reset')));
+	expect(screen.queryByTestId('boundary')).toBeNull();
+	expect(mockRegistry.created).toHaveLength(2);
+	expect(mockRegistry.created[1]).not.toBe(failed);
+	expect(screen.getByTestId('grid').textContent).toBe('one,two');
 });

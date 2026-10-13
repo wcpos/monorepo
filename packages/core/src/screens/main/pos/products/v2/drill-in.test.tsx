@@ -16,11 +16,20 @@ jest.mock('./deal-stack', () => ({
 		<div data-testid="crumb-fades">{children}</div>
 	),
 }));
-jest.mock('./variations-pane', () => ({
-	VariationsPane: ({ back }: { back?: () => void }) => (
-		<button data-testid="variations" data-tiles={!!back} onClick={back} />
-	),
-}));
+// Every pane instance mounted, so a test can tell a reused pane from a fresh one.
+const mockPaneMounts: string[] = [];
+jest.mock('./variations-pane', () => {
+	const ReactActual = jest.requireActual('react') as typeof React;
+	return {
+		VariationsPane: ({ back, parent }: { back?: () => void; parent: { uuid: string } }) => {
+			ReactActual.useEffect(() => {
+				mockPaneMounts.push(parent.uuid);
+				// Mount-only on purpose: a re-render with a new parent is the reuse under test.
+			}, []);
+			return <button data-testid="variations" data-tiles={!!back} onClick={back} />;
+		},
+	};
+});
 jest.mock('@wcpos/components/button', () => ({
 	Button: React.forwardRef<
 		HTMLButtonElement,
@@ -167,4 +176,20 @@ it('keeps the existing expanded row under inline and drills with a chevron other
 	expect(screen.getByTestId('chevronRight')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('drill-row'));
 	expect(onDrill).toHaveBeenCalledWith(parent);
+});
+
+it('mounts a fresh variations pane for another product, never the previous one’s instance', () => {
+	// The PaneStack reuses its detail across a pop and a tap on another product mid-slide: a
+	// reused pane would draw the first product's rows under the second one's crumb.
+	mockPaneMounts.length = 0;
+	const other = {
+		uuid: 'other',
+		remoteId: 13,
+		payload: { name: 'Coffee', variations: [3] },
+	} as unknown as React.ComponentProps<typeof DrillIn>['parent'];
+	const { rerender } = render(<DrillIn parent={parent} back={jest.fn()} />);
+	rerender(<DrillIn parent={parent} back={jest.fn()} />);
+	expect(mockPaneMounts).toEqual(['parent']);
+	rerender(<DrillIn parent={other} back={jest.fn()} />);
+	expect(mockPaneMounts).toEqual(['parent', 'other']);
 });

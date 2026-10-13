@@ -7,7 +7,11 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useVariationsRefresh } from './use-variations-refresh';
 import { Variations } from './variations';
-import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../../../query';
+import {
+	QueryStateProvider,
+	useCollectionQueryHandle,
+	useQueryState,
+} from '../../../../../../query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
@@ -44,12 +48,10 @@ function VariationsPopoverContent({
 	const remoteIds = (variationIds ?? [])
 		.map(remoteIdOrNull)
 		.filter((remoteId) => remoteId !== null);
-	const binding = useCollectionBinding('variations', state, {
-		remoteIds,
-	});
+	const handle = useCollectionQueryHandle('variations', state, { remoteIds });
 	// Refresh once per popover open, then retry (bounded, logged) while no variation has
 	// materialized: `use-variations-refresh.ts` carries the two live runs this recovers.
-	useVariationsRefresh(binding);
+	useVariationsRefresh(handle);
 	const allVariationsState = React.useMemo(
 		() => ({
 			...state,
@@ -57,15 +59,23 @@ function VariationsPopoverContent({
 		}),
 		[state]
 	);
-	const allVariationsBinding = useCollectionBinding('variations', allVariationsState, {
+	const allVariationsHandle = useCollectionQueryHandle('variations', allVariationsState, {
 		remoteIds,
 	});
+	// Both handles are owned here, above the boundary: its reset asks each to read again, or
+	// the remounted reader would throw the old failure straight back.
 	return (
-		<ErrorBoundary>
+		<ErrorBoundary
+			onReset={() => {
+				handle.retry();
+				allVariationsHandle.retry();
+			}}
+			resetKeys={[handle, allVariationsHandle]}
+		>
 			<Suspense>
 				<Variations
-					binding={binding}
-					allVariationsResource={allVariationsBinding.resource}
+					handle={handle}
+					allVariationsHandle={allVariationsHandle}
 					parent={parent}
 					addToCart={addToCart}
 					stockStatus={stockStatus}
