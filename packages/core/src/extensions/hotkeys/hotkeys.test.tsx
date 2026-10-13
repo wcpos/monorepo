@@ -221,6 +221,7 @@ it('leaves a key another handler answered, and a dead key inside a field, alone'
 	input.focus();
 	await act(async () => {
 		fireEvent.keyDown(input, { ...ALT_N, key: 'Dead' });
+		fireEvent.keyDown(input, { ...ALT_N, key: 'ń' }); // Polish Pro: the letter itself
 	});
 	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	await act(async () => {
@@ -228,6 +229,29 @@ it('leaves a key another handler answered, and a dead key inside a field, alone'
 	});
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	input.remove();
+});
+
+it('a second press before a deferred run fires runs the command once', async () => {
+	jest.useFakeTimers();
+	try {
+		const pay = jest.fn(async () => undefined);
+		registerSurface('pay', pay);
+		const ALT_P = chord('KeyP', 'p');
+		mount();
+		await act(async () => {
+			fireEvent.keyDown(document.body, chord('Slash', '/'));
+		});
+		await act(async () => {
+			fireEvent.keyDown(document.body, ALT_P);
+			fireEvent.keyDown(document.body, ALT_P);
+		});
+		await act(async () => {
+			jest.runOnlyPendingTimers();
+		});
+		expect(pay).toHaveBeenCalledTimes(1);
+	} finally {
+		jest.useRealTimers();
+	}
 });
 
 it('renders nothing on native', () => {

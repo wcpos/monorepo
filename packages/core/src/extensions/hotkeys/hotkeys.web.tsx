@@ -13,15 +13,19 @@ import type { CommandContext, CommandId } from '../commands';
 const EDITABLE = 'input, textarea, select, [contenteditable]';
 // Active inside inputs too (R4). `preventDefault` stops the browser's own Alt+letter; nothing
 // stops propagation, so the barcode wedge detector on the document sees every keystroke. A key
-// another handler already answered (the cart strip's own arrows) is left alone, and so is a dead
-// key inside a field: on a Mac, Option+N is how ñ and ń are typed.
+// another handler already answered (the cart strip's own arrows) is left alone, and so is a
+// letter being typed inside a field: on a Mac, Option+N is a dead key for ñ (US) or ń itself
+// (Polish Pro). An accented letter carries a combining mark once decomposed; the US Option
+// symbols on the bound letters (ƒ π ∂ √ ÷) do not, so no chord is lost there.
+const typesALetter = (event: KeyboardEvent) =>
+	event.key === 'Dead' || (event.key.length === 1 && /\p{M}/u.test(event.key.normalize('NFD')));
 const OPTIONS = {
 	enableOnFormTags: true,
 	enableOnContentEditable: true,
 	preventDefault: true,
 	ignoreEventWhen: (event: KeyboardEvent) =>
 		event.defaultPrevented ||
-		(event.key === 'Dead' && (event.target as Element | null)?.closest?.(EDITABLE) != null),
+		(typesALetter(event) && (event.target as Element | null)?.closest?.(EDITABLE) != null),
 };
 // A chord whose previous run has not settled is dropped (spec §3).
 const inFlight = new Set<CommandId>();
