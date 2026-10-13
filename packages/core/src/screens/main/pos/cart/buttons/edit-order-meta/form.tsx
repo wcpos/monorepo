@@ -104,7 +104,7 @@ export function EditOrderMetaForm({
 	const cashierID = useDocField(wpCredentials, (value) => value.id);
 	const [pending, setPending] = React.useState<FormValues | null>(null);
 	const [loading, setLoading] = React.useState(false);
-	const binding = useSearchSelect('cashier');
+	const cashierSelect = useSearchSelect('cashier');
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -259,11 +259,11 @@ export function EditOrderMetaForm({
 											<ComboboxInput
 												testID="order-meta-cashier-search"
 												placeholder={t('common.search_cashiers')}
-												value={binding.search}
-												onChangeText={binding.setSearch}
+												value={cashierSelect.search}
+												onChangeText={cashierSelect.setSearch}
 											/>
 											<Suspense>
-												<CustomerList binding={binding} withGuest={false} />
+												<CustomerList select={cashierSelect} withGuest={false} />
 											</Suspense>
 										</ComboboxContent>
 									</Combobox>

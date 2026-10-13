@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import { Avatar } from '@wcpos/components/avatar';
 import {
 	Combobox,
@@ -22,10 +20,15 @@ import type { EngineRecord } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../contexts/translations';
-import { useGuardedExtension, useSearchSelect } from '../../../query';
+import {
+	useDrawnHandle,
+	useGuardedExtension,
+	useQuerySnapshot,
+	useSearchSelect,
+} from '../../../query';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
-import type { SearchSelectBinding } from '../../../query';
+import type { SearchSelect } from '../../../query';
 import type { CustomerData } from '../hooks/use-customer-name-format/helpers';
 
 export function CustomerSelect({
@@ -52,8 +55,8 @@ export function CustomerSelect({
 
 export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	const t = useT();
-	const binding = useSearchSelect('customer');
-	const { setSearch } = binding;
+	const select = useSearchSelect('customer');
+	const { setSearch } = select;
 
 	/**
 	 *
@@ -72,11 +75,11 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_customers')}
-				value={binding.search}
+				value={select.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CustomerList binding={binding} withGuest={withGuest} />
+				<CustomerList select={select} withGuest={withGuest} />
 			</Suspense>
 		</>
 	);
@@ -95,16 +98,25 @@ interface CustomerListItem {
 
 type CustomerListProps = {
 	withGuest: boolean;
-	binding: SearchSelectBinding;
+	select: SearchSelect;
 };
 
-export function CustomerList({ binding, withGuest }: CustomerListProps) {
-	const result = useObservableSuspense(binding.resource) as { hits: CustomerHit[] };
+export function CustomerList({ select, withGuest }: CustomerListProps) {
+	// Drawn, not live: a typed search's new handle answers while the previous options stay.
+	const shown = useDrawnHandle(select.handle);
+	const settling = shown !== select.handle;
+	const snapshot = useQuerySnapshot(shown, ['pending', 'exhausted']);
+	const result = snapshot as unknown as {
+		hits: CustomerHit[];
+	};
 	const t = useT();
 	const handleEndReached = useGuardedExtension(
-		binding.extendLimit,
+		select.extendLimit,
 		result.hits.length,
-		binding.limit
+		select.limit,
+		// The rows drawn may be the previous search's: a full old page must not page the new
+		// search before its first page answers, so settling counts as pending.
+		{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }
 	);
 
 	/**

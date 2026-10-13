@@ -51,6 +51,8 @@ import type { CoverageTarget, RequirementHandle, RxdbSyncEngine } from '@wcpos/s
 import type { RemoteId } from '@wcpos/sync-core';
 
 import {
+	acquireEngineQueryHandle,
+	canonicalQueryKey,
 	useCollectionQueryHandle,
 	useProductsQueryHandle,
 	useQueryBindingFor,
@@ -60,7 +62,7 @@ import {
 	requirementsForCompiledQuery,
 	translateLogsQueryState,
 } from './query-state-translator';
-import { useCoverageGeneration } from './scope-key';
+import { useCoverageGeneration, useScopeKey } from './scope-key';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
 import type { RxCollection } from 'rxdb';
@@ -610,22 +612,23 @@ export type SearchSelectCollection =
 const SEARCH_SELECT_PAGE_SIZE = 50;
 const SEARCH_SELECT_PAGE_SIZE_MAX = 100;
 
+const SEARCH_SELECT_COLLECTIONS: Record<SearchSelectCollection, LegacyCollectionName> = {
+	customer: 'customers',
+	cashier: 'customers',
+	category: 'products/categories',
+	brand: 'products/brands',
+	tag: 'products/tags',
+	coupon: 'coupons',
+};
+
 function searchSelectDescriptor(
 	collection: SearchSelectCollection,
 	search: string,
 	limit: number
 ): EngineQueryDescriptor {
 	const isCustomer = collection === 'customer' || collection === 'cashier';
-	const names: Record<SearchSelectCollection, LegacyCollectionName> = {
-		customer: 'customers',
-		cashier: 'customers',
-		category: 'products/categories',
-		brand: 'products/brands',
-		tag: 'products/tags',
-		coupon: 'coupons',
-	};
 	return {
-		collection: names[collection],
+		collection: SEARCH_SELECT_COLLECTIONS[collection],
 		selector:
 			collection === 'cashier'
 				? { role: { $in: ['administrator', 'shop_manager', 'cashier'] } }
@@ -640,6 +643,54 @@ function searchSelectDescriptor(
 	};
 }
 
+/** The picker's demand: the collection's sort, the cashier role filter left residual. */
+function compileSearchSelect(
+	collection: SearchSelectCollection,
+	search: string,
+	limit: number,
+	id: string
+): CompiledQuery {
+	const common = { search, filters: {}, limit } as const;
+	switch (collection) {
+		case 'customer':
+		case 'cashier':
+			return compileQuery(
+				'customers',
+				{ ...common, sort: { field: 'last_name', direction: 'asc' } },
+				{ id, residual: collection === 'cashier' }
+			);
+		case 'category':
+			return compileQuery(
+				'products/categories',
+				{ ...common, sort: { field: 'name', direction: 'asc' } },
+				{ id }
+			);
+		case 'brand':
+			return compileQuery(
+				'products/brands',
+				{ ...common, sort: { field: 'name', direction: 'asc' } },
+				{ id }
+			);
+		case 'tag':
+			return compileQuery(
+				'products/tags',
+				{ ...common, sort: { field: 'name', direction: 'asc' } },
+				{ id }
+			);
+		case 'coupon':
+			return compileQuery(
+				'coupons',
+				{ ...common, sort: { field: 'code', direction: 'asc' } },
+				{ id }
+			);
+	}
+}
+
+/**
+ * A picker's search: the typed text, its debounced commit, local paging, and the query handle
+ * for the committed search and window (roadmap#423). Each committed search or page is its own
+ * handle; a list reads it through `useDrawnHandle` so the previous options stay while it answers.
+ */
 export function useSearchSelect(
 	collection: SearchSelectCollection,
 	options: { debounceMs?: number; pageSize?: number } = {}
@@ -677,53 +728,44 @@ export function useSearchSelect(
 			limit: (current.key === pagingKey ? current.limit : pageSize) + pageSize,
 		}));
 	}, [pageSize, pagingKey]);
-	const bindingId = React.useId();
-	const compiled = React.useMemo(() => {
-		const common = { search: committedSearch, filters: {}, limit } as const;
-		switch (collection) {
-			case 'customer':
-			case 'cashier':
-				return compileQuery(
-					'customers',
-					{ ...common, sort: { field: 'last_name', direction: 'asc' } },
-					{ id: bindingId, residual: collection === 'cashier' }
-				);
-			case 'category':
-				return compileQuery(
-					'products/categories',
-					{ ...common, sort: { field: 'name', direction: 'asc' } },
-					{ id: bindingId }
-				);
-			case 'brand':
-				return compileQuery(
-					'products/brands',
-					{ ...common, sort: { field: 'name', direction: 'asc' } },
-					{ id: bindingId }
-				);
-			case 'tag':
-				return compileQuery(
-					'products/tags',
-					{ ...common, sort: { field: 'name', direction: 'asc' } },
-					{ id: bindingId }
-				);
-			case 'coupon':
-				return compileQuery(
-					'coupons',
-					{ ...common, sort: { field: 'code', direction: 'asc' } },
-					{ id: bindingId }
-				);
-		}
-	}, [bindingId, collection, committedSearch, limit]);
-	const binding = useEngineBinding(
-		searchSelectDescriptor(collection, committedSearch, limit),
-		compiled,
-		true,
-		bindingId
-	);
-	return { ...binding, search, setSearch, committedSearch, limit, extendLimit };
+	const { engine } = useQueryRuntime();
+	const legacy = SEARCH_SELECT_COLLECTIONS[collection];
+	const scope = useScopeKey(legacy);
+	const searchFields = useSearchFieldsFor(legacy);
+	// Scope and search fields are in the key so a scope switch or a site's new meta keys is a
+	// new handle, declared before the old one releases (as `useCollectionQueryHandle` keys).
+	const key = canonicalQueryKey([
+		'search-select',
+		collection,
+		scope,
+		committedSearch,
+		limit,
+		searchFields ?? null,
+	]);
+	const handle = React.useMemo(() => {
+		// Built from the key itself, as `useCollectionQueryHandle` is: the key is the query.
+		const [, , , text, size, fields] = JSON.parse(key) as [
+			string,
+			SearchSelectCollection,
+			string,
+			string,
+			number,
+			string[] | null,
+		];
+		return acquireEngineQueryHandle(engine, key, (id) => ({
+			descriptor: {
+				...searchSelectDescriptor(collection, text, size),
+				searchFields: fields ?? undefined,
+			},
+			compiled: compileSearchSelect(collection, text, size, id),
+		}));
+	}, [collection, engine, key]);
+	// The picker that holds the search owns the read: its demand is declared while it is mounted.
+	React.useEffect(() => handle.retain(), [handle]);
+	return { handle, search, setSearch, committedSearch, limit, extendLimit };
 }
 
-export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
+export type SearchSelect = ReturnType<typeof useSearchSelect>;
 
 /**
  * Whether a (non-empty) result's rows were read from the database the engine has active now: a

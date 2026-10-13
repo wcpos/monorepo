@@ -9,10 +9,14 @@ import { BrandSearch } from './brand-select';
 import { CategorySearch } from './category-select';
 import { TagSearch } from './tag-select';
 
+// The search-select handle as a reader sees it (one snapshot, driven with `set`).
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle;
+};
 const setSearch = jest.fn();
 const mockUseSearchSelect = jest.fn((collection: string) => ({
-	resource: {
-		value: {
+	handle: fakeQueryHandle({
+		result: {
 			hits: [
 				{
 					id: `${collection}-uuid`,
@@ -25,26 +29,32 @@ const mockUseSearchSelect = jest.fn((collection: string) => ({
 				},
 			],
 		},
-	},
+	}),
 	search: '',
 	setSearch,
 	limit: 50,
 	extendLimit: jest.fn(),
 }));
 
-jest.mock('../../../../query', () => ({
-	useSearchSelect: (collection: string) => mockUseSearchSelect(collection),
-	useGuardedExtension: jest.requireActual<
-		typeof import('../../../../query/use-guarded-extend-limit')
-	>('../../../../query/use-guarded-extend-limit').useGuardedExtension,
-}));
+jest.mock('../../../../query', () => {
+	// The real readers: the lists draw the handle the way the screens do.
+	const handles = jest.requireActual<typeof import('../../../../query/query-handles')>(
+		'../../../../query/query-handles'
+	);
+	return {
+		useSearchSelect: (collection: string) => mockUseSearchSelect(collection),
+		useDrawnHandle: handles.useDrawnHandle,
+		useQuerySnapshot: handles.useQuerySnapshot,
+		useGuardedExtension: jest.requireActual<
+			typeof import('../../../../query/use-guarded-extend-limit')
+		>('../../../../query/use-guarded-extend-limit').useGuardedExtension,
+	};
+});
 jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
-}));
-jest.mock('observable-hooks', () => ({
-	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: { children: React.ReactNode }) => children,
