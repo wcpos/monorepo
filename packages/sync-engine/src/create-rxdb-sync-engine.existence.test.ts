@@ -654,7 +654,9 @@ describe('existence maintenance lanes through the public facade', () => {
 	// "unknown, re-verify", never as "gone from the server": a wrong reading prunes real orders.
 	it('reads a dropped manifest row as unknown: re-checks its bucket, never prunes, re-primes it', async () => {
 		const fetches: string[] = [];
-		const server = [18934, 18947, 18950].map((id) => ({
+		// 18947 shares bucket 18 with rows that survive; 27001 was the only row in bucket 27.
+		const dropped = [18947, 27001];
+		const server = [18934, 18947, 18950, 27001].map((id) => ({
 			id,
 			digest: String(id),
 			object_type: 'order',
@@ -668,7 +670,11 @@ describe('existence maintenance lanes through the public facade', () => {
 				return json({ digests: orders.filter((row) => ids.includes(row.id)) });
 			}
 			if (parsed.pathname.endsWith('/integrity/scan')) return json(scanEnvelope(url, orders));
-			if (parsed.pathname.endsWith('/integrity/bucket')) return json({ ids: orders });
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				const bucket = Number(parsed.searchParams.get('bucket'));
+				const size = Number(parsed.searchParams.get('bucket_size'));
+				return json({ ids: orders.filter((row) => Math.floor(row.id / size) === bucket) });
+			}
 			throw new Error(`unexpected fetch ${url}`);
 		});
 		const diagnostics = vi.fn();
@@ -688,8 +694,7 @@ describe('existence maintenance lanes through the public facade', () => {
 				sync: { revision: 'r', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			});
-			// 18947's manifest row is the one recovery dropped.
-			if (id !== 18947)
+			if (!dropped.includes(id))
 				await seed(db.existenceManifestOrders as never, {
 					remoteId: String(id),
 					wooId: id,
@@ -707,7 +712,8 @@ describe('existence maintenance lanes through the public facade', () => {
 				);
 			});
 		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
-		// The gap makes the local bucket disagree with the server's, so it is drilled...
+		// The gap makes bucket 18 disagree with the server's, so it is drilled; bucket 27 now holds
+		// no row, so it is not walked at all...
 		expect(bucketFetches().map((url) => new URL(url).searchParams.get('bucket'))).toEqual(['18']);
 		// ...and the server-side id with no local row is "missing", never a prune.
 		const reconcile = diagnostics.mock.calls
@@ -716,23 +722,21 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(reconcile?.fields).toMatchObject({ pruned: 0, missing: 1 });
 		for (const { id } of server) expect(await db.orders.findOne(`o${id}`).exec()).not.toBeNull();
 
-		// The next prime re-verifies the id against the server and restores its row.
+		// The next prime re-verifies both ids against the server and restores their rows.
 		await expect(e.sync('existence-prime')).resolves.toMatchObject({ status: 'ran' });
-		expect(
-			fetches.some((url) => {
-				const parsed = new URL(url);
-				return (
-					parsed.pathname.endsWith('/digests') &&
-					parsed.searchParams.get('collection') === 'orders' &&
-					parsed.searchParams.get('include')?.split(',').includes('18947')
-				);
-			})
-		).toBe(true);
-		expect((await db.existenceManifestOrders.findOne('18947').exec())?.toJSON()).toMatchObject({
-			wooId: 18947,
-			digest: '18947',
+		const reprimed = fetches.flatMap((url) => {
+			const parsed = new URL(url);
+			return parsed.pathname.endsWith('/digests') &&
+				parsed.searchParams.get('collection') === 'orders'
+				? (parsed.searchParams.get('include')?.split(',') ?? [])
+				: [];
 		});
-		for (const { id } of server) expect(await db.orders.findOne(`o${id}`).exec()).not.toBeNull();
+		for (const id of dropped) {
+			expect(reprimed).toContain(String(id));
+			expect((await db.existenceManifestOrders.findOne(String(id)).exec())?.toJSON()).toMatchObject(
+				{ wooId: id, digest: String(id) }
+			);
+		}
 
 		// Converged: the bucket matches again, so the next audit drills nothing.
 		const settled = bucketFetches().length;

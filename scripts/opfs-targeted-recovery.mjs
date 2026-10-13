@@ -57,10 +57,12 @@ const DISPOSABLE_COLLECTIONS = new Set([
 ]);
 
 // The existence manifests hold {wooId, digest} rows the server can rebuild, so a damaged row is
-// dropped the same way (owner ruling 2026-10-13). A missing row is safe: the reconcile prunes only
-// ids a manifest HOLDS, so the gap reads as "unknown" — the bucket's count stops matching the
-// server's and is drilled — and the next existence prime re-fetches the id's digest from the server.
-// A range past EOF stays refused here as everywhere: it is a stale instance, not a damaged row.
+// dropped the same way (owner ruling 2026-10-13). A missing row is never read as "gone from the
+// server": the reconcile prunes only ids a manifest HOLDS, a bucket that still has other rows no
+// longer matches the server's and is drilled, and the existence prime (count-gated, periodically
+// forced) re-fetches the id's digest. Names must match the engine's collections; drift fails
+// closed (the row is refused again). A range past EOF stays refused on the read and cleanup
+// paths: it is a stale instance, not a damaged row.
 const SERVER_REBUILT_COLLECTIONS = new Set([
   "existenceManifest",
   "existenceManifestCustomers",
@@ -445,6 +447,12 @@ async function dropHollowRows(
       const [, start, end] = primaryRow;
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
       const foreign = !pastEof && !isBlankBytes(bytes);
+      // A range holding the id's OWN document is healthy: a write filed the
+      // row after the read that missed it. Neither hollow nor foreign.
+      if (foreign && holdsDocument(instance, bytes, documentId)) {
+        outcomes.set(documentId, false);
+        continue;
+      }
       if (foreign && !discardForeign) {
         outcomes.set(documentId, "range-holds-foreign-bytes");
         continue;
@@ -485,6 +493,15 @@ async function dropHollowRows(
     }
     return outcomes;
   });
+}
+
+function holdsDocument(instance, bytes, documentId) {
+  try {
+    const document = JSON.parse(instance._decode(bytes));
+    return document?.[instance.primaryPath] === documentId;
+  } catch {
+    return false;
+  }
 }
 
 // Drops every index row (primary and secondary) pointing at one byte range,

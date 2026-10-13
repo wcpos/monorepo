@@ -334,10 +334,19 @@ test("propagates the retry error and reports the initial cleanup error", async (
 // whose own rows share the damaged row's offsets and sort first: a discard must
 // remove "damaged" by identity and leave the sibling standing (an offset lookup
 // would take the sibling instead).
-async function damagedRowFixture(collectionName, reason, params = {}) {
+async function damagedRowFixture(
+  collectionName,
+  reason,
+  params = {},
+  overrides = {},
+) {
   const id = "damaged";
   const bytes = Buffer.from(
-    reason === "no-valid-document" ? "{junk" : '{"id":"foreign"}',
+    {
+      "no-valid-document": "{junk",
+      "range-holds-foreign-bytes": '{"id":"foreign"}',
+      "own-document": `{"id":"${id}"}`,
+    }[reason],
   );
   const operations = [];
   const ids = reason === "range-holds-foreign-bytes" ? ["foreign", id] : [id];
@@ -382,6 +391,7 @@ async function damagedRowFixture(collectionName, reason, params = {}) {
       runCleanup: async (operation) => operation({ accessHandlers: new Map() }),
     },
     _decode: (value) => value.toString(),
+    ...overrides,
   };
   const recovering = await withTargetedOpfsRecovery({
     createStorageInstance: async () => instance,
@@ -453,13 +463,15 @@ for (const collectionName of [
             },
           ]);
         } else {
+          const refusedKind =
+            reason === "no-valid-document"
+              ? "document-repair-refused"
+              : "hollow-row-refused";
           assert.ok(
             events.some(
-              (event) =>
-                (event.kind === "hollow-row-refused" ||
-                  event.kind === "document-repair-refused") &&
-                event.reason === reason,
+              (event) => event.kind === refusedKind && event.reason === reason,
             ),
+            JSON.stringify(events),
           );
         }
       } finally {
@@ -468,6 +480,29 @@ for (const collectionName of [
     });
   }
 }
+
+// A read can miss an id whose row a write files before the cleanup run starts;
+// the range then holds the id's OWN document. That row is healthy, not foreign,
+// and a discarding collection must not drop it.
+test("existenceManifestOrders: a row holding its own document is never discarded", async () => {
+  const { id, indexes, operations, recovering } = await damagedRowFixture(
+    "existenceManifestOrders",
+    "own-document",
+    {},
+    { findDocumentsById: async () => "[]" },
+  );
+  const events = [];
+  const previousHook = globalThis.__wcposOnStorageRecovery;
+  globalThis.__wcposOnStorageRecovery = (event) => events.push(event);
+  try {
+    await recovering.findDocumentsById([id], true);
+    for (const index of indexes) assert.ok(index.metaIdMap.has(id));
+    assert.equal(operations.length, 0);
+    assert.deepEqual(events, []);
+  } finally {
+    globalThis.__wcposOnStorageRecovery = previousHook;
+  }
+});
 
 // The discard is a positional "D" op, so a manifest row is dropped only by the
 // sole repair owner (#1057, #1049), like every other repair.
