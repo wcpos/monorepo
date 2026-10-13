@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -15,16 +14,13 @@ import { HeaderSection } from './sections/header';
 import { LineItemsSection } from './sections/line-items';
 import { PaymentSection } from './sections/payment';
 import { POSMetadataSection } from './sections/pos-metadata';
-import { RefundsFallback, RefundsSection, RefundsSkeleton } from './sections/refunds';
 import { TotalsSection } from './sections/totals';
-import { useOrderRefunds } from './use-order-refunds';
+import { RefundsBoundary } from './refunds-boundary';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
-
-type OrderPayload = EngineRecord<'orders'>['payload'];
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
@@ -32,7 +28,6 @@ export function ViewOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const router = useRouter();
-	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
 	const payload = useRecordField(order, (record) => record.payload);
 
 	if (!order || !payload) {
@@ -68,12 +63,9 @@ export function ViewOrderModal({ resource }: Props) {
 						<View className="min-w-0 flex-1">
 							<LineItemsSection order={payload} />
 							<TotalsSection order={payload} />
-							<RefundsBoundary
-								key={refundsRetryKey}
-								orderUuid={order.uuid}
-								order={payload}
-								onRetry={() => setRefundsRetryKey((key) => key + 1)}
-							/>
+							{payload.id ? (
+								<RefundsBoundary order={payload} orderUuid={order.uuid} orderId={payload.id} />
+							) : null}
 							<CustomerNoteSection order={payload} />
 						</View>
 
@@ -102,63 +94,5 @@ export function ViewOrderModal({ resource }: Props) {
 				</ModalFooter>
 			</ModalContent>
 		</Modal>
-	);
-}
-
-function RefundsBoundary({
-	order,
-	orderUuid,
-	onRetry,
-}: {
-	order: OrderPayload;
-	orderUuid: string;
-	onRetry: () => void;
-}) {
-	if (!order.id) {
-		return null;
-	}
-
-	return (
-		<RefundsResourceBoundary
-			order={order}
-			orderUuid={orderUuid}
-			orderId={order.id}
-			onRetry={onRetry}
-		/>
-	);
-}
-
-function RefundsResourceBoundary({
-	order,
-	orderUuid,
-	orderId,
-	onRetry,
-}: {
-	order: OrderPayload;
-	orderUuid: string;
-	orderId: number;
-	onRetry: () => void;
-}) {
-	const resource = useOrderRefunds(orderId);
-
-	function RefundsErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
-		return (
-			<RefundsFallback
-				refunds={order.refunds}
-				currencySymbol={order.currency_symbol}
-				onRetry={() => {
-					onRetry();
-					resetErrorBoundary();
-				}}
-			/>
-		);
-	}
-
-	return (
-		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
-			<React.Suspense fallback={<RefundsSkeleton />}>
-				<RefundsSection order={order} orderUuid={orderUuid} resource={resource} />
-			</React.Suspense>
-		</ErrorBoundary>
 	);
 }
