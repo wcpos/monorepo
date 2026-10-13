@@ -192,7 +192,12 @@ function ModalOverlayNative({
 	return (
 		<View
 			collapsable={false}
-			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+			// A bottom sheet carries the bottom inset itself (in card colour); the scrim must not
+			// show as a grey bar under it (owner, 2026-10-13).
+			style={[
+				StyleSheet.absoluteFill,
+				{ paddingTop: insets.top, paddingBottom: side === 'bottom' ? 0 : insets.bottom },
+			]}
 			className={cn(
 				// last-child: the content wrapper; the first child is the scrim Pressable.
 				'flex items-center justify-center bg-black/70 p-2 [&>*:last-child]:max-h-full [&>*:last-child]:max-w-full',
@@ -262,9 +267,13 @@ function ModalContent({
 }: React.ComponentPropsWithoutRef<typeof View> &
 	Omit<VariantProps<typeof modalContentVariants>, 'side'> & { side?: ModalSide }) {
 	const Content = Platform.OS === 'web' ? DialogPrimitive.Content : View;
+	const insets = useSafeAreaInsets();
 	// A full-size modal on a phone IS the screen (owner, 2026-10-13): no scrim gutter, no
 	// rounded card floating over a grey bar, and the card colour runs to the safe-area edges.
 	const fullScreen = size === 'full' && Platform.OS !== 'web';
+	// A native bottom sheet paints the bottom inset itself (see ModalOverlayNative).
+	const sheetInset =
+		side === 'bottom' && Platform.OS !== 'web' ? { paddingBottom: insets.bottom } : undefined;
 	return (
 		<ModalOverlay
 			side={side}
@@ -281,6 +290,7 @@ function ModalContent({
 					OVERLAY_MOTION[side].enter,
 					className
 				)}
+				style={sheetInset}
 				{...props}
 			>
 				<SideContext.Provider value={side}>{children}</SideContext.Provider>
