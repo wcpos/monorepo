@@ -2380,6 +2380,7 @@
 	"pos_checkout.offline": "Offline",
 	"pos_checkout.offline_card_may_decline": "Offline card payments can still be declined by the bank when they upload.",
 	"pos_checkout.full_balance": "Full balance {amount}",
+	"pos_checkout.full_balance_label": "Full balance",
 	"pos_checkout.clear_amount": "Clear",
 	"pos_checkout.delete_digit": "Delete",
 	"pos_checkout.works_offline": "Works offline",
