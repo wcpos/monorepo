@@ -121,12 +121,17 @@ jest.mock('../deal-stack', () => ({
 	useDeal: () => ({ placeGrid }),
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
+	useDealCards: () => null,
 }));
 // The list renders every row it is handed, wrapped as its cells are (with the cell style the
 // grid asks for), and an end-reached is a scroll on it.
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
+		// Every term tile is a stack now: its cards are an animated view.
+		View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		FlatList: ({
 			data,
 			renderItem,
@@ -165,6 +170,7 @@ jest.mock('react-native-reanimated', () => ({
 		),
 	},
 	useAnimatedRef: () => ({ current: null }),
+	useAnimatedStyle: (style: () => object) => style(),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
@@ -399,6 +405,8 @@ it('holds a row of placeholders for products until the query answers', () => {
 	render(<TermLevelGrid {...level({ answer: undefined })} />);
 	// One row's worth on the two columns: the deal goes out with shape.
 	expect(screen.getAllByTestId('product-placeholder')).toHaveLength(2);
+	// A tile's own shape: the square and the Poster band under it.
+	expect(screen.getAllByTestId('product-placeholder')[0].children).toHaveLength(2);
 	expect(screen.getByTestId('cell-0').dataset.count).toBe('4');
 	expect(screen.queryByTestId('products-breadcrumb-detail')).toBeNull();
 	expect(screen.queryByTestId('no-data-message')).toBeNull();

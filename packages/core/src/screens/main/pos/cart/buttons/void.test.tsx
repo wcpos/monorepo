@@ -8,6 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { VoidButton } from './void';
+import { invokeSurface, SurfaceNotMountedError } from '../../../../../extensions/commands/surfaces';
 
 /** Scripted result for one awaitWriteOutcome call, consumed in order. */
 type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
@@ -15,6 +16,7 @@ type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
 const mockCartLogger = {
 	success: jest.fn(),
 	error: jest.fn(),
+	warn: jest.fn(),
 };
 const mockRouter = { setParams: jest.fn() };
 const mockPatchEngineResident = jest.fn();
@@ -31,7 +33,11 @@ const mockEngine = {
 		annihilated: false,
 	})),
 	status: jest.fn(() => ({ connectivity: mockConnectivity })),
+	resolveConflict: jest.fn(async (_mutationId: string, _resolution: string) => undefined),
 };
+const mockSetCurrentOrderID = jest.fn();
+/** The order the cart shows when the store answers; the cashier may have moved on. */
+let mockShownOrderUuid = 'order-1';
 const mockManager = { engine: mockEngine };
 const mockOrderJson: Record<string, unknown> = {
 	uuid: 'order-1',
@@ -103,6 +109,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		success: (...args: unknown[]) => mockCartLogger.success(...args),
 		error: (...args: unknown[]) => mockCartLogger.error(...args),
+		warn: (...args: unknown[]) => mockCartLogger.warn(...args),
 	}),
 }));
 
@@ -119,6 +126,10 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrderRecord: () => mockCurrentOrder,
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => ({ uuid: mockShownOrderUuid }),
+		setCurrentOrderID: mockSetCurrentOrderID,
+	}),
 }));
 
 let mockHeldLeg: {
@@ -155,6 +166,7 @@ describe('VoidButton', () => {
 		mockOutcomes = [];
 		mockAwaitCalls = [];
 		mockConnectivity = 'online';
+		mockShownOrderUuid = 'order-1';
 		mockFindEngineResident.mockResolvedValue({});
 		mockPatchEngineResident.mockResolvedValue({
 			// RxDB returns a *Proxy* from `get()` for object-valued paths, and a Proxy
@@ -183,6 +195,8 @@ describe('VoidButton', () => {
 			recordId: 'order-1',
 		});
 		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+		expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	});
 
 	it('cancels a refused void on the store and enqueues the update', async () => {
@@ -204,6 +218,51 @@ describe('VoidButton', () => {
 		});
 		// `pending` is an open-cart status: the voided cart would stay open and take the next sale.
 		expect(mockPatchAndEnqueueEngineResident.mock.calls[0][0].changes.status).toBe('cancelled');
+		// The refused delete is settled, so the tab never reads "Save refused", and the cart
+		// leaves the kept order for a blank one.
+		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard');
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	});
+
+	it('Undo of a kept-cancelled void selects the order again', async () => {
+		mockOutcomes = ['rejected'];
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+		await waitFor(() => expect(mockSetCurrentOrderID).toHaveBeenCalledWith(''));
+
+		mockCartLogger.success.mock.calls[0][1].toast.action.onClick();
+		await waitFor(() => expect(mockSetCurrentOrderID).toHaveBeenLastCalledWith('order-1'));
+		expect(mockPatchEngineResident).toHaveBeenCalled();
+	});
+
+	it('leaves the cart alone when the cashier moved to another order before the store answered', async () => {
+		mockOutcomes = ['rejected'];
+		mockShownOrderUuid = 'order-2';
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_voided_cancelled',
+				expect.any(Object)
+			)
+		);
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+	});
+
+	it('a refused delete that cannot be settled still reports the conversion', async () => {
+		mockOutcomes = ['rejected'];
+		mockEngine.resolveConflict.mockRejectedValueOnce(new Error('claim taken'));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() => expect(mockCartLogger.warn).toHaveBeenCalled());
+		expect(mockCartLogger.success).toHaveBeenCalledWith(
+			'pos_cart.order_voided_cancelled',
+			expect.any(Object)
+		);
+		expect(mockCartLogger.error).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	});
 
 	it('converts a refused void while connectivity is degraded — the drain still pushes', async () => {
@@ -257,9 +316,11 @@ describe('VoidButton', () => {
 		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalledWith(
 			expect.objectContaining({ changes: { status: 'cancelled' } })
 		);
+		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard');
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	});
 
-	it('does not convert on a late refusal after the cashier already undid the void', async () => {
+	it('does not convert on a late refusal after the cashier already undid the void, but settles its dead letter', async () => {
 		let releaseLateWatch: (() => void) | undefined;
 		mockOutcomes = ['timeout'];
 		const lateRejection = new Promise<never>((_resolve, reject) => {
@@ -276,23 +337,53 @@ describe('VoidButton', () => {
 			.mockImplementationOnce(original)
 			.mockImplementationOnce(() => lateRejection);
 
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+
+			await waitFor(() =>
+				expect(mockCartLogger.success).toHaveBeenCalledWith(
+					'pos_cart.order_removed',
+					expect.any(Object)
+				)
+			);
+			const toastOptions = mockCartLogger.success.mock.calls[0][1];
+			await toastOptions.toast.action.onClick(); // undo
+			releaseLateWatch?.();
+
+			// The restored order must not keep a "Save refused" dead letter behind it.
+			await waitFor(() =>
+				expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard')
+			);
+			expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+			expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
+		} finally {
+			query.awaitWriteOutcome = original;
+		}
+	});
+
+	it('an Undo pressed while a late conversion is in flight keeps the order selected', async () => {
+		mockOutcomes = ['timeout', 'rejected'];
+		let releaseConversion!: () => void;
+		mockPatchAndEnqueueEngineResident.mockImplementationOnce(
+			() => new Promise<void>((resolve) => (releaseConversion = resolve))
+		);
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
+		// The late refusal has arrived and its conversion is waiting on the enqueue.
+		await waitFor(() => expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalled());
+		mockCartLogger.success.mock.calls[0][1].toast.action.onClick(); // undo
+		await waitFor(() => expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-1'));
+		releaseConversion();
+
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_removed',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
-		const toastOptions = mockCartLogger.success.mock.calls[0][1];
-		await toastOptions.toast.action.onClick(); // undo
-		releaseLateWatch?.();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
-		query.awaitWriteOutcome = original;
+		expect(mockSetCurrentOrderID.mock.calls).toEqual([['order-1']]);
 	});
 
 	it('surfaces an error toast and no success toast when the delete write fails', async () => {
@@ -857,4 +948,10 @@ it('closes the sheet synchronously before starting the existing void flow', asyn
 	expect(before).toHaveBeenCalledTimes(1);
 	// The delete follows the order's queue slot and the gate, so it lands a tick later.
 	await waitFor(() => expect(mockEngine.write).toHaveBeenCalled());
+});
+
+it('registers no void surface: the cart column owns it (roadmap#428, PR 1b)', async () => {
+	const { unmount } = render(<VoidButton />);
+	await expect(invokeSurface('void')).rejects.toBeInstanceOf(SurfaceNotMountedError);
+	unmount();
 });

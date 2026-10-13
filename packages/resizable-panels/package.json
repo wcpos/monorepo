@@ -50,8 +50,8 @@
 		"react-native": "*",
 		"react-native-gesture-handler": ">=2.24.0",
 		"react-native-reanimated": ">=4.0.0",
-		"react-native-worklets": ">=0.5.0",
-		"react-native-web": "*"
+		"react-native-web": "*",
+		"react-native-worklets": ">=0.5.0"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.3",
@@ -59,8 +59,8 @@
 		"jest": "^30.5.2",
 		"jest-environment-jsdom": "^30.5.2",
 		"react-dom": "19.3.0",
-		"react-native-web": "~0.21.0",
-		"ts-jest": "^29.4.12"
+		"react-native-web": "~0.21.4",
+		"ts-jest": "29.4.12"
 	},
 	"peerDependenciesMeta": {
 		"react-native": {

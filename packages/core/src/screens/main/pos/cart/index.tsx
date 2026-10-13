@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
@@ -11,6 +12,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
 import { Text } from '@wcpos/components/text';
 
+import { useRegisterSurface } from '../../../../extensions/commands/use-register-surface';
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useEngineRecord } from '../../hooks/use-engine-document';
@@ -18,6 +20,7 @@ import { CheckoutLedger } from './checkout-ledger';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
+import { useVoidOrder } from '../hooks/use-void-order';
 import { CartTable } from './v2/table';
 import { EmptyCart } from './v2/empty-cart';
 import { CartFoot } from './v2/foot';
@@ -43,6 +46,7 @@ import { CartConditionsProvider } from '../conditions/use-cart-conditions';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 const NEVER_CHANGES = () => () => {};
+const NOOP = () => undefined;
 const LOADING_ROWS = (
 	<View testID="cart-column-loading" className="gap-2 p-2">
 		{[0, 1, 2].map((row) => (
@@ -98,6 +102,10 @@ function CartColumn({
 	const { currentOrderRecord } = useCurrentOrder();
 	// Keep the sheet mounted on its original order while a send changes the open-order list.
 	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
+	// `pos.cart.void` runs the void path while the cart column is mounted, sheet open or not; a
+	// void from a key closes the sheet first, as the sheet's own Void button does (roadmap#428).
+	const { voidOrder } = useVoidOrder({ onBeforeVoid: () => setEditingOrder(null) });
+	useRegisterSurface('void', voidOrder);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
@@ -116,6 +124,12 @@ function CartColumn({
 		!(sessionsOn && !session && bindingStatus === 'bound') &&
 		!(session && session.status !== 'open');
 	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
+	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
+	// the count too, and a key must not void or switch an order the cashier cannot see (#428).
+	// Shown AND not covered by the open-orders list (inert, out of the accessibility tree).
+	// …and the screen holding it focused: the phone tabs keep the cart mounted behind Products.
+	const screenFocused = useIsFocused();
+	useRegisterSurface('cart', NOOP, cartShown && !cartCovered && screenFocused);
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');

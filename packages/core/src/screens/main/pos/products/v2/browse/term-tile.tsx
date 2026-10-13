@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { type ViewInstance } from 'react-native';
 
+import { useAnimatedStyle } from 'react-native-reanimated';
+
 import {
 	type PosterMark,
 	type PosterPicture,
@@ -11,7 +13,7 @@ import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../../contexts/translations';
-import { type Measurable, useCopyPicture } from '../deal-stack';
+import { type Measurable, useCopyPicture, useDealCards } from '../deal-stack';
 import { type BrowseTerm, termKey } from './browse-source';
 
 // All products and a shortcut are not a category: their glyph on the last tint.
@@ -133,6 +135,8 @@ export function TermTile({
 			mark={mark}
 			title={title}
 			sub={sub}
+			// A tile that opens onto more tiles is a stack (owner, 2026-10-13).
+			stacked
 			grow={dealt}
 			lifted={lifted}
 			onPress={() => onPress(term, tile.current)}
@@ -146,6 +150,11 @@ export function TermTile({
 
 /** The term whose contents are out on the grid: slot 0, and tapping it is the way back. */
 export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: () => void }) {
+	// Its cards leave as its contents are dealt and come back as they gather, as a product's do.
+	const cards = useDealCards();
+	const stackStyle = useAnimatedStyle(() => ({
+		opacity: cards ? Math.min(1, Math.max(0, cards.value)) : 1,
+	}));
 	const { t, mark, title, sub } = useTermWords(term);
 	// The same picture the tapped tile was showing: it moves, it does not arrive.
 	const picture = useTermPicture(term, true);
@@ -155,6 +164,8 @@ export function ParentTermTile({ term, onPress }: { term: BrowseTerm; onPress: (
 			mark={mark}
 			back
 			backTestID="browse-parent-badge"
+			stacked
+			stackStyle={stackStyle}
 			title={title}
 			sub={sub}
 			grow

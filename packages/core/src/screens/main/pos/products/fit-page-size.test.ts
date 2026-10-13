@@ -10,11 +10,12 @@ describe('fitPageSize', () => {
 		expect(fitPageSize({ viewMode: 'grid', width: 1000, height: 1500, gridColumns: 4 })).toBe(24);
 	});
 
-	it('fits a grid whose rows are only their square tiles and margins (the Poster)', () => {
-		// 1000 / 4 + 8 = 258 px a row: six rows fill 1500, plus one.
+	it('fits a grid whose rows are their square tiles, band and margins (the Poster)', () => {
+		// 1000 / 4 + 48 + 8 = 306 px a row: six rows fill 1600, plus one (the legacy 370 px: 5 + 1).
 		expect(
-			fitPageSize({ viewMode: 'grid', width: 1000, height: 1500, gridColumns: 4, tileExtraPx: 8 })
+			fitPageSize({ viewMode: 'grid', width: 1000, height: 1600, gridColumns: 4, tileExtraPx: 56 })
 		).toBe(28);
+		expect(fitPageSize({ viewMode: 'grid', width: 1000, height: 1600, gridColumns: 4 })).toBe(24);
 	});
 
 	it('caps a wide grid at one server page', () => {

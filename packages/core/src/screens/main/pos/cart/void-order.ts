@@ -1,5 +1,6 @@
 import { awaitWriteOutcome, type useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import {
@@ -11,11 +12,13 @@ import {
 
 type QueryManager = ReturnType<typeof useQueryRuntime>;
 
+const voidLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
+
 /**
  * One bounded second watch after `awaitWriteOutcome`'s helper timeout: a slow
  * shop or a drain queued behind earlier work can answer after 15s, and a late
  * `woocommerce_rest_cannot_delete` must still convert the void to a status
- * cancellation. Beyond this window the offline-class accepted gap applies (#864).
+ * change. Beyond this window the offline-class accepted gap applies (#864).
  */
 export const LATE_OUTCOME_TIMEOUT_MS = 120_000;
 
@@ -39,7 +42,7 @@ export type VoidOrderResult =
 			confirmed: boolean;
 			/**
 			 * Set only when the first watch was non-terminal: resolves `kept-cancelled` if a late
-			 * refusal cancelled the order on the store, `null` otherwise; rejects if that conversion failed.
+			 * refusal converted the void, `null` otherwise; rejects if that conversion failed.
 			 */
 			late: Promise<'kept-cancelled' | null> | null;
 	  }
@@ -52,17 +55,31 @@ const isCannotDelete = (error: unknown) =>
  * The one writer for voiding an order: the sanctioned delete, then the store's answer. A store
  * that refuses the delete keeps the order, so the fallback cancels it on the store: an atomic
  * patch-and-enqueue to status `cancelled` (WooCommerce's void). Never `pending`: that is an open
- * cart status, so the voided cart would stay open and take the next sale's lines. Throws when the delete or the fallback could not be enqueued; never toasts.
+ * cart status, so the voided cart would stay open and take the next sale's lines. Throws when the
+ * delete or the fallback could not be enqueued; never toasts.
  */
 export async function voidOrder(
 	manager: QueryManager,
 	input: VoidOrderInput
 ): Promise<VoidOrderResult> {
 	const { recordId, registerId } = input;
+	// A refused delete is answered once the order is converted or restored, so its dead letter is
+	// settled: left in the queue it reads as "Save refused" on the order's tab for ever. Discard
+	// keeps the resident (a delete is never a born-local create) and drops only the delete's own
+	// bookkeeping; the queued pending or restoring update still protects the record from the
+	// re-pull that discard schedules. Not awaited: the outcome stands either way, and the re-pull
+	// is a fetch.
+	const settleRefusedDelete = (deleteMutationId: string) => {
+		void manager.engine.resolveConflict(deleteMutationId, 'discard').catch((error: unknown) => {
+			voidLogger.warn('Could not settle the refused delete of a void', {
+				context: { orderId: recordId, mutationId: deleteMutationId, error: getErrorMessage(error) },
+			});
+		});
+	};
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
 	// fallback is an atomic patch-and-enqueue to status 'cancelled' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
-	const cancelOnStore = async () => {
+	const cancelOnStore = async (deleteMutationId: string) => {
 		await patchAndEnqueueEngineResident({
 			manager,
 			collection: 'orders',
@@ -70,6 +87,7 @@ export async function voidOrder(
 			changes: { status: 'cancelled' },
 			registerId,
 		});
+		settleRefusedDelete(deleteMutationId);
 	};
 
 	const receipt = await requestServerDelete(manager.engine, { collection: 'orders', recordId });
@@ -85,7 +103,7 @@ export async function voidOrder(
 		return { kind: 'removed', confirmed: true, late: null };
 	} catch (error) {
 		if (isCannotDelete(error)) {
-			await cancelOnStore();
+			await cancelOnStore(receipt.mutationId);
 			return { kind: 'kept-cancelled' };
 		}
 		// A terminal-but-different outcome (conflict, other rejection) is owned by the engine's
@@ -99,8 +117,13 @@ export async function voidOrder(
 		}).then(
 			() => null,
 			async (lateError) => {
-				if (!isCannotDelete(lateError) || input.undone()) return null;
-				await cancelOnStore();
+				if (!isCannotDelete(lateError)) return null;
+				// Undone already: the order is restored, so only the dead letter needs settling.
+				if (input.undone()) {
+					settleRefusedDelete(receipt.mutationId);
+					return null;
+				}
+				await cancelOnStore(receipt.mutationId);
 				return 'kept-cancelled' as const;
 			}
 		);

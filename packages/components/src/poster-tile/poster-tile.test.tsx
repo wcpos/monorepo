@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { PosterTile, type PosterTileProps } from './index';
+import {
+	PosterPlaceholder,
+	PosterTile,
+	type PosterTileProps,
+	SCRIM_REACH,
+	SCRIM_STOPS,
+} from './index';
 
 let mockPressed = false;
 // Keep RNW's Pressable (press, ref); expose classes because Jest does not compile Uniwind.
@@ -118,11 +124,27 @@ it('draws the scrim over a picture, with the words in order', () => {
 	expect(screen.getByTestId('tile-12').querySelector('[data-image="tea.jpg"]')).not.toBeNull();
 });
 
+it('blurs the picture under the words on web, masked by the same fade, and not on a tint', () => {
+	const { rerender } = render(tile({ title: 'Tea' }));
+	const blur = JSON.parse(screen.getByTestId('poster-scrim-blur').dataset.style!);
+	expect(blur.backdropFilter).toBe('blur(6px)');
+	// Every stop, at its position: the same thirteen as the tint, as alpha.
+	expect(blur.maskImage).toBe(
+		`linear-gradient(to bottom, ${[
+			...SCRIM_STOPS.map(([at, of]) => `rgb(0 0 0 / ${of}) ${at * SCRIM_REACH}px`),
+			'#000 100%',
+		].join(', ')})`
+	);
+	rerender(tile({ picture: { kind: 'tint', tint: 1 }, title: 'Tea' }));
+	expect(screen.queryByTestId('poster-scrim-blur')).toBeNull();
+});
+
 it('puts the words straight on a tint, with the tint’s class and no scrim', () => {
 	render(tile({ picture: { kind: 'tint', tint: 4 }, title: 'Tea' }));
 	expect(screen.queryByTestId('poster-scrim')).toBeNull();
 	expect(screen.getByTestId('poster-words').textContent).toBe('Tea');
-	expect(classes('tile-12')).toContain('bg-tile-tint-4');
+	// The whole card is the tint: the square and the band under it.
+	expect(classes('poster-card')).toContain('bg-tile-tint-4');
 });
 
 it('greys the picture of a tile that is out', () => {
@@ -191,7 +213,10 @@ it('keeps the name when the words outgrow the square: the block clips at its foo
 	expect(words).toEqual(expect.arrayContaining(['bottom-0', 'max-h-full', 'overflow-hidden']));
 	// The name comes first in the block, so a clip at the foot takes the facts, not the name.
 	const block = screen.getByTestId('poster-scrim');
-	expect(block.firstChild?.textContent).toBe('Tea');
+	// (The web scrim's blur layer comes first, under the words; it holds no words.)
+	const blur = screen.getByTestId('poster-scrim-blur');
+	expect(block.firstChild).toBe(blur);
+	expect(blur.nextSibling?.textContent).toBe('Tea');
 	expect(block.lastChild).toBe(screen.getByTestId('facts'));
 });
 
@@ -206,4 +231,55 @@ it('veils a tint as it veils a picture while pressed, and only then', () => {
 	mockPressed = false;
 	rerender(tile({ title: 'Tea' }));
 	expect(screen.queryByTestId('poster-pressed')).toBeNull();
+});
+
+it('puts a band of the card under the square: card colour over a picture, the tint on a tint', () => {
+	const { rerender } = render(tile({ title: 'Tea' }));
+	const card = screen.getByTestId('poster-card');
+	// Square, then band, both inside the one bordered card.
+	expect(card.children[0]).toBe(screen.getByTestId('tile-12'));
+	expect(card.children[1]).toBe(screen.getByTestId('poster-band'));
+	expect(classes('poster-band')).toMatch(/^h-\[calc\(var\(--text-base\)/);
+	expect(classes('poster-card')).toContain('bg-card');
+	expect(classes('poster-card')).toContain('border-border');
+	expect(classes('tile-12')).not.toContain('border');
+	rerender(tile({ picture: { kind: 'tint', tint: 3 }, title: 'Tea' }));
+	expect(classes('poster-card')).toContain('bg-tile-tint-3');
+	expect(screen.getByTestId('poster-band')).toBeTruthy();
+});
+
+it('anchors the words to the card, not the square, so the money row sits on the band', () => {
+	render(tile({ title: 'Tea', money: '4.00' }));
+	const words = screen.getByTestId('poster-scrim');
+	expect(words.parentElement).toBe(screen.getByTestId('poster-card'));
+	expect(screen.getByTestId('tile-12').contains(words)).toBe(false);
+	expect(classes('poster-scrim').split(' ')).toContain('bottom-0');
+});
+
+it('paints the marks after the words, so a fade that climbs far never washes over them', () => {
+	render(
+		tile({
+			title: 'Tea',
+			facts: 'SKU T1',
+			mark: { kind: 'count', value: 3 },
+			markTestID: 'stock',
+			corner: <span data-testid="in-cart" />,
+		})
+	);
+	const card = [...screen.getByTestId('poster-card').children];
+	const at = (node: Element) => card.findIndex((child) => child === node || child.contains(node));
+	const scrim = at(screen.getByTestId('poster-scrim'));
+	expect(at(screen.getByTestId('stock'))).toBeGreaterThan(scrim);
+	expect(at(screen.getByTestId('in-cart'))).toBeGreaterThan(scrim);
+	// Still at the card's top corners, outside the square that the words climb.
+	expect(screen.getByTestId('tile-12').contains(screen.getByTestId('stock'))).toBe(false);
+});
+
+it("holds a slot in the tile's own shape: square and band", () => {
+	render(<PosterPlaceholder testID="placeholder" />);
+	const placeholder = screen.getByTestId('placeholder');
+	expect(placeholder.children).toHaveLength(2);
+	expect(placeholder.children[1].getAttribute('data-classes')).toContain(
+		'h-[calc(var(--text-base)'
+	);
 });

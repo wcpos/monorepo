@@ -70,6 +70,10 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.checkout_sent');
 		case 'checkout.split-planned':
 			return t('health.logs.event.checkout_split_planned');
+		case 'command.failed':
+			return t('health.logs.event.command_failed');
+		case 'command.refused':
+			return t('health.logs.event.command_refused');
 		case 'connectivity.device-offline':
 			return t('health.logs.event.connectivity_device_offline');
 		case 'connectivity.restored':

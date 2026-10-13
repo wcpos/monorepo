@@ -6,8 +6,18 @@
 /** How far above the first line of words the fade reaches, in px. */
 export const SCRIM_REACH = 48;
 
-/** The card colour's opacity under the words: the plateau the fade eases up to. */
-export const SCRIM_STRENGTH = 0.85;
+/**
+ * The card colour's opacity under the words: the plateau the fade eases up to. Owner,
+ * 2026-10-13: "around 90 or 92", after 85 read thin over busy pictures.
+ */
+export const SCRIM_STRENGTH = 0.92;
+
+/**
+ * The blur under the words, in px, masked by the same fade so it has no edge. Drawn on web only
+ * for now: native draws it as a blurred copy of the picture under a gradient mask (roadmap
+ * `docs/research/2026-10-13-native-scrim-blur.md`), which is its own change once judged on a device.
+ */
+export const SCRIM_BLUR_PX = 6;
 
 /**
  * The fade, top-down, as `[at, of]`: `at` a fraction of the reach, `of` a fraction of the
@@ -28,3 +38,13 @@ export const SCRIM_STOPS: readonly (readonly [at: number, of: number])[] = [
 	[0.81, 0.738],
 	[1, 1],
 ];
+
+/**
+ * The band of card under the square, so every tile is the same height whatever it says: the
+ * most common words, one line of name (`text-base`, `leading-tight`: 1.25) and the money row
+ * (`text-base` at its 1.35 line height), with the 2 px gap between them and the 10 px foot (three
+ * spacing steps), sit wholly on it. In the type scale's own variables, so it grows with the text
+ * (owner, 2026-10-13: "I like the band"; board `pos-tile-square-or-band-2026-10-13.html`, 48 px).
+ */
+export const POSTER_BAND =
+	'h-[calc(var(--text-base)*1.25+var(--text-base--line-height)+var(--spacing)*3)]';

@@ -157,6 +157,10 @@ jest.mock('../../contexts/current-order', () => ({
 		currentOrderRecord: mockCurrentOrderRecord,
 	}),
 	useCurrentOrderRecord: () => mockCurrentOrderRecord,
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => mockCurrentOrderRecord,
+		setCurrentOrderID: jest.fn(),
+	}),
 }));
 
 jest.mock('../../../../../contexts/translations', () => {

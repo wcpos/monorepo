@@ -48,8 +48,9 @@ module.exports = {
 		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|settings/card-readers/reader-row)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
+	// react-hotkeys-hook v5 ships ESM only; the hotkeys module's suite drives the real library.
 	transformIgnorePatterns: [
-		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/)',
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/|react-hotkeys-hook/|@shopify/flash-list/)',
 	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

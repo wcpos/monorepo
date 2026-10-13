@@ -8,8 +8,11 @@ const expoPreset = require('jest-expo/jest-preset');
 // cannot parse untransformed ("Unexpected token 'export'"). Widen the preset's
 // own allowlist entry to the whole scope rather than replacing the list, so a
 // jest-expo upgrade that adds packages keeps working.
+// `@shopify/flash-list` 2.3.2 ships an ESM `dist/` with no "type": "module", which the
+// preset's ignore list does not allow through; widen the same entry so the app's grid renders
+// in tests (core and components do the same in their ts-jest configs).
 const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map((pattern) =>
-	pattern.replace('@sentry/react-native', '@sentry')
+	pattern.replace('@sentry/react-native', '@sentry|@shopify/flash-list')
 );
 if (transformIgnorePatterns.join('\n') === expoPreset.transformIgnorePatterns.join('\n')) {
 	throw new Error(

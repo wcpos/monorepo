@@ -179,6 +179,7 @@ jest.mock('../deal-stack', () => ({
 	useDeal: () => ({ grid: null, placeGrid: () => {}, dealt: true }),
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
+	useDealCards: () => null,
 }));
 jest.mock('@wcpos/components/pane-stack', () => ({
 	PaneStack: (props: Parameters<typeof MockStack>[0]) => <MockStack {...props} />,
@@ -308,6 +309,10 @@ jest.mock('../rows/variable-product-row', () => ({
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
+		// Every term tile is a stack now: its cards are an animated view.
+		View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		FlatList: ({
 			data,
 			renderItem,
@@ -330,6 +335,7 @@ jest.mock('react-native-reanimated', () => ({
 		),
 	},
 	useAnimatedRef: () => ({ current: null }),
+	useAnimatedStyle: (style: () => object) => style(),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
 // Android's back (use-system-back.android.ts subscribes it to BackHandler): the stage's handler,

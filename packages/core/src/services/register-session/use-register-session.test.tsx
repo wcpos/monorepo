@@ -78,6 +78,7 @@ const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [
 	{ release: mockReleaseParents, ready: Promise.resolve() },
 ]);
 const mockRuntime = { engine: {}, locale: 'en' };
+let mockCloseTime: string | null = null;
 const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
@@ -111,7 +112,7 @@ jest.mock('@wcpos/query', () => ({
 		select({
 			register_sessions: true,
 			variance_threshold: null,
-			expected_close_time: null,
+			expected_close_time: mockCloseTime,
 			capabilities: ['view_woocommerce_pos_reports'],
 		}),
 }));
@@ -160,6 +161,7 @@ beforeEach(() => {
 	closed = [];
 	closureRows = [];
 	entries = [movement];
+	mockCloseTime = null;
 });
 
 it('reports not loaded until the combined query first emits, so an open register never reads as closed', async () => {
@@ -1196,3 +1198,122 @@ it.each([
 		}
 	}
 );
+
+describe('overdue', () => {
+	// Local noon, so the close times below sit either side of it whatever the runner's zone.
+	const noon = new Date(2026, 9, 13, 12, 0);
+
+	function rendered() {
+		const counter = { renders: 0, overdueWithSession: [] as boolean[] };
+		const view = renderHook(() => {
+			counter.renders += 1;
+			const value = useRegisterSession();
+			if (value.session) counter.overdueWithSession.push(value.overdue);
+			return value;
+		});
+		return { ...view, counter };
+	}
+
+	async function settle(result: { current: ReturnType<typeof useRegisterSession> }) {
+		await waitFor(() => expect(result.current.loaded).toBe(true));
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+	}
+
+	// One act per minute: a single act over many minutes batches every tick into one render.
+	async function advanceMinutes(minutes: number) {
+		for (let minute = 0; minute < minutes; minute += 1) {
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(60_000);
+			});
+		}
+	}
+
+	beforeEach(() => {
+		jest.useFakeTimers();
+		jest.setSystemTime(noon);
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it('never re-renders from the clock when the store has no close time', async () => {
+		const { result, counter } = rendered();
+		await settle(result);
+		const settledRenders = counter.renders;
+		await advanceMinutes(10);
+		// Put `timer(0, 60_000)` back in the data stream and this counts ten more.
+		expect(counter.renders).toBe(settledRenders);
+		// Catches a store with no close time reading as overdue.
+		expect(result.current.overdue).toBe(false);
+	});
+
+	it('is overdue on the first settled render of an open session past close', async () => {
+		mockCloseTime = '11:00';
+		const { result, counter } = rendered();
+		await settle(result);
+		// Catches a verdict that waits for the clock's first tick: every render with the session is overdue.
+		expect(counter.overdueWithSession.length).toBeGreaterThan(0);
+		expect(counter.overdueWithSession.every(Boolean)).toBe(true);
+	});
+
+	it('is not overdue past close while counting', async () => {
+		mockCloseTime = '11:00';
+		active = [{ ...active[0], status: 'counting' }];
+		const { result } = rendered();
+		await settle(result);
+		expect(result.current.session?.status).toBe('counting');
+		// Catches dropping `session.status === 'open'` from the verdict.
+		expect(result.current.overdue).toBe(false);
+	});
+
+	it('is not overdue past close with no session', async () => {
+		mockCloseTime = '11:00';
+		active = [];
+		const { result } = rendered();
+		await settle(result);
+		expect(result.current.session).toBeNull();
+		// Catches dropping `!!session` from the verdict.
+		expect(result.current.overdue).toBe(false);
+	});
+
+	it('flips to overdue once, with one render, when the clock passes close', async () => {
+		mockCloseTime = '12:05';
+		const { result, counter } = rendered();
+		await settle(result);
+		// Catches a close time ahead of now reading as past.
+		expect(result.current.overdue).toBe(false);
+		const settledRenders = counter.renders;
+		await advanceMinutes(30);
+		// Catches the flip never re-rendering (no clock at all) ...
+		expect(result.current.overdue).toBe(true);
+		// ... and a per-minute render (a clock without distinctUntilChanged): one flip, one render.
+		expect(counter.renders).toBe(settledRenders + 1);
+	});
+
+	it('follows a close time changed mid-session, on the render that carries it', async () => {
+		mockCloseTime = '13:00';
+		const { result, counter, rerender } = rendered();
+		await settle(result);
+		// Catches a close time an hour ahead reading as past.
+		expect(result.current.overdue).toBe(false);
+		mockCloseTime = '11:00';
+		rerender();
+		// Read the verdict from the stream's state instead of fresh in render and this frame shows the old close time's verdict.
+		expect(result.current.overdue).toBe(true);
+		mockCloseTime = '12:10';
+		rerender();
+		// Catches the same stale-state frame in the other direction: a close time moved ahead still reads overdue.
+		expect(result.current.overdue).toBe(false);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		const settledRenders = counter.renders;
+		await advanceMinutes(30);
+		// Key `pastClose$` on [] instead of [closeTime] and the 13:00 stream never flips inside this window.
+		expect(result.current.overdue).toBe(true);
+		// Catches the replacement stream re-rendering per minute rather than once at its flip.
+		expect(counter.renders).toBe(settledRenders + 1);
+	});
+});
