@@ -74,6 +74,9 @@ jobs:
     env:
       UNIT_PACKAGES: ${{ needs.changes.outputs.unit }}
       PLUGIN_BRANCH: ${{ (github.base_ref || github.ref_name) == 'next' && 'next' || 'main' }}
+      # The plugin checkout needs the wcpos-bot app secrets, which GitHub withholds from
+      # Dependabot and from fork PRs; those runs skip the Template Studio lane explicitly.
+      PLUGIN_CHECKOUT: ${{ github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
       WCPOS_GALLERY_TEMPLATES_DIR: ${{ github.workspace }}/.plugin-checkout/woocommerce-pos/templates/gallery
       WCPOS_GALLERY_REGISTRY_PATH: ${{ github.workspace }}/.plugin-checkout/woocommerce-pos/includes/Templates/Gallery_Registry.php
     permissions:
@@ -130,7 +133,7 @@ jobs:
           fi
 
       - name: Generate plugin checkout token
-        if: github.actor != 'dependabot[bot]' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
+        if: env.PLUGIN_CHECKOUT == 'true' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
         id: plugin-token
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
         with:
@@ -138,15 +141,17 @@ jobs:
           private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
           owner: wcpos
           repositories: woocommerce-pos
+          permission-contents: read
 
       - name: Check out plugin gallery
-        if: github.actor != 'dependabot[bot]' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
+        if: env.PLUGIN_CHECKOUT == 'true' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: wcpos/woocommerce-pos
           ref: ${{ env.PLUGIN_BRANCH }}
           token: ${{ steps.plugin-token.outputs.token }}
           path: .plugin-checkout/woocommerce-pos
+          persist-credentials: false
           sparse-checkout: |
             templates/gallery
             includes/Templates/Gallery_Registry.php
@@ -184,8 +189,8 @@ jobs:
           # tripwire and joined here (ruling R15).
           for pkg in printer receipt-renderer scanner template-studio; do
             wants "$pkg" || continue
-            # Dependabot cannot mint the private plugin checkout token.
-            [ "$pkg" = template-studio ] && [ "$GITHUB_ACTOR" = 'dependabot[bot]' ] && continue
+            # No app secrets (Dependabot, fork PR): no plugin checkout, so no Studio lane.
+            [ "$pkg" = template-studio ] && [ "$PLUGIN_CHECKOUT" != true ] && continue
             touch "$RUNNER_TEMP/ci-unit-executed"
             echo "::group::Testing @wcpos/$pkg"
             if [ "$pkg" = template-studio ]; then
@@ -233,8 +238,8 @@ jobs:
           fi
 
       - name: "\U0001F9FE Prove narrowed unit tests ran"
-        # A Studio-only Dependabot run is deliberately skipped, not an empty test selection.
-        if: always() && needs.changes.outputs.unit != 'all' && !(github.actor == 'dependabot[bot]' && needs.changes.outputs.unit == 'template-studio')
+        # A Studio-only run without the app secrets is deliberately skipped, not an empty test selection.
+        if: always() && needs.changes.outputs.unit != 'all' && !(env.PLUGIN_CHECKOUT != 'true' && needs.changes.outputs.unit == 'template-studio')
         run: |
           ran=false; [ -f "$RUNNER_TEMP/ci-unit-executed" ] && ran=true
           for file in packages/*/test-results.json apps/main/test-results.json; do
