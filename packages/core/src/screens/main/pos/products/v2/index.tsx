@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import omit from 'lodash/omit';
 import { useObservableRef } from 'observable-hooks';
@@ -36,6 +36,7 @@ import { DataTable } from '../../../components/data-table/v2';
 import { QuerySearchInput } from '../../../components/query-search-input';
 import { UISettingsDialog } from '../../../components/ui-settings';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { registerSurface } from '../../../../../extensions/commands/surfaces';
 import { createReadonlyView, Slot } from '../../../../../extensions/slots';
 import {
 	QueryStateProvider,
@@ -178,6 +179,9 @@ function POSProductsContent({
 }) {
 	const side = usePanelSide('products');
 	const { session, sessionsOn } = useRegisterSession();
+	// `pos.search.focus` focuses this input while the screen is mounted (roadmap#428).
+	const searchRef = React.useRef<TextInputInstance>(null);
+	React.useEffect(() => registerSurface('search', () => searchRef.current?.focus()), []);
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -494,6 +498,7 @@ function POSProductsContent({
 							<HStack>
 								<ErrorBoundary>
 									<QuerySearchInput
+										ref={searchRef}
 										collectionName="products"
 										placeholder={t('pos_products.search_products')}
 										className="flex-1"

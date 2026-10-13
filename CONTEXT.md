@@ -301,6 +301,16 @@ The one function that writes for an action event; nothing else writes that colle
 action. Every dispatch runs inside the order's mutation queue, so a rewrite lands on an
 unchanged target.
 
+**Command**:
+A named thing the POS can be told to do (`pos.checkout.open`), raised by a key, a button, a
+macro or a palette; it dispatches an action event or calls a host verb and never writes. Closed
+dotted list. Ruled wcpos/roadmap#428, 2026-10-13; `@wcpos/core/extensions/commands`.
+_Avoid_: shortcut (that is the key), action (that is the event)
+
+**Hotkey**:
+A chord bound to a command by the hotkeys module.
+_Avoid_: hot key, keybinding
+
 **Bridge**:
 The versioned JSON postMessage channel between the host app and a mini-app:
 request/response RPC with correlation ids, plus host-initiated events. Supersedes the

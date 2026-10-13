@@ -2657,5 +2657,13 @@
 	"settings.try_again": "Try again",
 	"settings.store_locked_link": "Open WooCommerce settings",
 	"settings.delete_printer_title": "Delete {name}?",
-	"settings.delete_printer_description": "Receipts routed to it print with Auto instead."
+	"settings.delete_printer_description": "Receipts routed to it print with Auto instead.",
+	"pos_commands.search_focus": "Search products",
+	"pos_commands.checkout_open": "Checkout",
+	"pos_commands.cart_new": "New cart",
+	"pos_commands.cart_previous": "Previous cart",
+	"pos_commands.cart_next": "Next cart",
+	"pos_commands.cart_discount": "Add discount",
+	"pos_commands.cart_void": "Void order",
+	"pos_commands.help_open": "Keyboard shortcuts"
 }

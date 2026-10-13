@@ -11,6 +11,7 @@ import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
+import { registerSurface } from '../../../../../extensions/commands/surfaces';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import {
 	clearOrderSaving,
@@ -186,6 +187,8 @@ export function PayButton() {
 		t,
 		total,
 	]);
+	// `pos.checkout.open` runs this same path while the button is mounted (roadmap#428).
+	React.useEffect(() => registerSurface('pay', handlePay), [handlePay]);
 
 	/**
 	 *

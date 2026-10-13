@@ -40,7 +40,12 @@ const COLLECTION_WRITES = new Set([
 	'bulkInsert',
 	'incrementalUpsert',
 ]);
-const SOURCE_ROOTS = ['packages/core/src/screens/main/pos/', 'packages/core/src/services/'];
+const SOURCE_ROOTS = [
+	'packages/core/src/screens/main/pos/',
+	'packages/core/src/services/',
+	// A command never writes (roadmap#428): any order write under extensions/ ratchets.
+	'packages/core/src/extensions/',
+];
 
 export const BOTTOM_HANDLERS = new Set([
 	// cart.line.add: the queued cart-line writer.

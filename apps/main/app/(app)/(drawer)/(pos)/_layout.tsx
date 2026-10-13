@@ -15,6 +15,7 @@ import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
+import { CommandsProvider } from '@wcpos/core/extensions/commands';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
@@ -128,7 +129,10 @@ export default function POSLayout() {
 							    mounts the screen afresh in the other tree — keeps the cashier's place. */}
 							<PersistedStateProvider>
 								<Suspense>
-									<POSStack />
+									{/* The command context (roadmap#428): inside the current order, around the stack. */}
+									<CommandsProvider>
+										<POSStack />
+									</CommandsProvider>
 								</Suspense>
 							</PersistedStateProvider>
 						</ErrorBoundary>

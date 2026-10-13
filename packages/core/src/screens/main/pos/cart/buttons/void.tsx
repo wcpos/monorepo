@@ -16,6 +16,7 @@ import {
 	ORDER_VOID_GUARD_IDS,
 	presentActionRefusal,
 } from '../../../../../extensions/actions';
+import { registerSurface } from '../../../../../extensions/commands/surfaces';
 import { getCurrentBoundRegisterId } from '../../../../../services/register/register-document';
 import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import { getTerminalPaymentsService } from '../../../../../services/terminal-payments';
@@ -212,6 +213,8 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 			reportFailure(err);
 		}
 	}, [blockIfDegraded, currentOrder, manager, t, undoRemove, onBeforeVoid, ctx, actor, cashier]);
+	// `pos.cart.void` runs this same path while the button is mounted (roadmap#428).
+	React.useEffect(() => registerSurface('void', handleRemove), [handleRemove]);
 
 	/**
 	 *
