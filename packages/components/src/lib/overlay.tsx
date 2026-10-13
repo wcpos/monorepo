@@ -206,6 +206,9 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
+	// The phone sheet paints the bottom inset itself, in card colour: the shell leaves that
+	// strip unpadded so the scrim never shows as a grey bar under the sheet (owner, 2026-10-13).
+	const insets = useSafeAreaInsets();
 	const setNode = React.useCallback(
 		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);
@@ -233,7 +236,7 @@ export function OverlaySheetPanel({
 				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
 				'z-50'
 			)}
-			style={style}
+			style={[isWeb ? null : { paddingBottom: insets.bottom + 8 }, style]}
 		>
 			{children}
 		</View>
@@ -463,7 +466,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				StyleSheet.absoluteFill,
 				{
 					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
+					// A bottom sheet carries its own bottom inset (OverlaySheetPanel).
+					paddingBottom: presentation === 'bottom' ? 0 : insets.bottom,
 					paddingLeft: insets.left,
 					paddingRight: insets.right,
 				},

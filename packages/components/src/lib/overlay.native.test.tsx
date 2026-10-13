@@ -140,15 +140,18 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		});
 		expect(scrim.onPress).toBeUndefined();
 		expect(scrim.style).toBe(StyleSheet.absoluteFill);
+		// A bottom sheet paints its own bottom inset (OverlaySheetPanel), so the shell leaves
+		// that strip unpadded: no scrim bar under the sheet.
+		const bottomInset = presentation === 'bottom' ? 0 : 34;
 		expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
 			paddingTop: 20,
-			paddingBottom: 34,
+			paddingBottom: bottomInset,
 			paddingLeft: 12,
 			paddingRight: 12,
 		});
 		expect(container.firstElementChild).toHaveStyle({
 			paddingTop: '20px',
-			paddingBottom: '34px',
+			paddingBottom: `${bottomInset}px`,
 			paddingLeft: '12px',
 			paddingRight: '12px',
 		});
