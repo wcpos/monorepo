@@ -67,11 +67,7 @@ test.describe('Orders Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
 
-	test('should navigate to Orders page and see order list', async ({ posPage: page }) => {
-		await navigateToOrders(page);
-	});
-
-	test('should show order columns', async ({ posPage: page }) => {
+	test('Orders page columns and filters', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
 		// Wait for orders data to load first
@@ -83,6 +79,8 @@ test.describe('Orders Page (Pro)', () => {
 		const columnHeaders = screen.getByRole('columnheader');
 		await expect(columnHeaders.first()).toBeVisible({ timeout: 15_000 });
 		expect(await columnHeaders.count()).toBeGreaterThanOrEqual(2);
+
+		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
@@ -180,12 +178,6 @@ test.describe('Orders Page (Pro)', () => {
 			.toBeGreaterThanOrEqual(1);
 	});
 
-	test('should show filter pills', async ({ posPage: page }) => {
-		const screen = await navigateToOrders(page);
-
-		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
-	});
-
 	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
 		await addOrderProbeProduct(page);
 		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
@@ -211,11 +203,6 @@ test.describe('Orders Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Orders', async ({ posPage: page }) => {
-		await navigateToPage(page, 'orders');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

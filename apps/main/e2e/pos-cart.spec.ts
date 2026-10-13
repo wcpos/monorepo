@@ -181,14 +181,10 @@ test.describe('POS Cart', () => {
 		});
 	});
 
-	test('should show subtotal in cart totals', async ({ posPage: page }) => {
+	test('cart subtotal and checkout total', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
 		await expect(page.getByTestId('cart-subtotal')).toBeVisible({ timeout: 15_000 });
-	});
-
-	test('should show cart total in checkout button', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
 
 		const checkoutButton = page.getByTestId('checkout-button');
 		const buttonText = await checkoutButton.textContent();

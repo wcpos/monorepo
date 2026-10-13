@@ -34,12 +34,9 @@ function SubscribedAvatar() {
 	return <UserAvatar wpCredentials={wpCredentials} displayName={displayName} />;
 }
 beforeEach(() => displayName$.next('Ada Lovelace'));
-it('renders the current display name initials', () => {
-	render(<SubscribedAvatar />);
-	expect(screen.getByTestId('avatar').textContent).toBe('AL');
-});
 it('updates the avatar initials when the name is changed', () => {
 	render(<SubscribedAvatar />);
+	expect(screen.getByTestId('avatar').textContent).toBe('AL');
 	act(() => displayName$.next('Grace Hopper'));
 	expect(screen.getByTestId('avatar').textContent).toBe('GH');
 });

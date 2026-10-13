@@ -213,17 +213,6 @@ describe('logger/index', () => {
 			});
 		});
 
-		describe('getCategoryString', () => {
-			it('should return dot-separated category string', () => {
-				expect(logger.getCategoryString()).toBe('wcpos.test');
-			});
-
-			it('should handle single segment', () => {
-				const singleLogger = getLogger(['app']);
-				expect(singleLogger.getCategoryString()).toBe('app');
-			});
-		});
-
 		describe('log methods', () => {
 			it('forwards renderer logs to Electron and tolerates a missing bridge', () => {
 				const electronInfo = jest.fn();

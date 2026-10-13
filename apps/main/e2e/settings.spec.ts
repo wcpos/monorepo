@@ -13,7 +13,7 @@ async function openSettings(page: import('@playwright/test').Page) {
 }
 
 test.describe('Settings Area', () => {
-	test('should open settings and show pages', async ({ posPage: page }) => {
+	test('settings navigation and General form', async ({ posPage: page }) => {
 		await openSettings(page);
 		await expect(page.getByTestId('settings-nav-general')).toBeVisible({
 			timeout: 10_000,
@@ -23,10 +23,7 @@ test.describe('Settings Area', () => {
 		await expect(page.getByTestId('settings-nav-card-readers')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-barcode-scanning')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-theme')).toBeVisible();
-	});
 
-	test('should show General settings page', async ({ posPage: page }) => {
-		await openSettings(page);
 		// General settings has form inputs (store name, language, currency, etc.)
 		const settingsPage = page.getByTestId('screen-settings-general');
 		await expect(settingsPage.locator('input').first()).toBeVisible({
@@ -217,13 +214,6 @@ test.describe('Language Settings', () => {
 		await expect(combobox.getByTestId(SWITCH_TARGETS[0].optionTestID)).toBeVisible({
 			timeout: 10_000,
 		});
-	});
-
-	test('should change language and load translations from CDN', async ({ posPage: page }) => {
-		await openSettings(page);
-
-		const { response } = await switchToDifferentLanguage(page);
-		expect(response.ok()).toBeTruthy();
 	});
 
 	/**

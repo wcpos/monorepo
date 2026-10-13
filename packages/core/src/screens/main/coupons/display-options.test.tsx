@@ -50,8 +50,10 @@ jest.mock('@wcpos/components/dnd', () => ({
 	}) => items.map(renderItem),
 }));
 jest.mock('../pos/contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
-it('patches a column immediately and restores defaults without a dialog footer', async () => {
+it('focuses columns, patches immediately and restores defaults', async () => {
 	render(<DisplayOptions />);
+	mockOpenAutoFocus({ preventDefault: jest.fn() });
+	expect(document.activeElement).toBe(screen.getAllByRole('switch')[0]);
 	fireEvent.click(screen.getAllByRole('switch')[0]);
 	await waitFor(() => expect(mockPatch).toHaveBeenCalledWith({ 'columns.0.show': false }));
 	fireEvent.click(screen.getByTestId('coupons-display-restore'));
@@ -94,10 +96,4 @@ jest.mock('@wcpos/components/form', () => {
 			/>
 		),
 	};
-});
-
-it('focuses the first column switch on opening rather than Restore defaults', () => {
-	render(<DisplayOptions />);
-	mockOpenAutoFocus({ preventDefault: jest.fn() });
-	expect(document.activeElement).toBe(screen.getAllByRole('switch')[0]);
 });

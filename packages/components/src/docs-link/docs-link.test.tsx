@@ -55,6 +55,11 @@ describe('DocsLink', () => {
 		expect(link.textContent).toContain('How syncing works');
 		expect(link.querySelector('[data-icon="arrowUpRight"]')).not.toBeNull();
 
+		const parts = link.querySelectorAll('span');
+		expect(parts).toHaveLength(2);
+		expect(parts[0].textContent).toBe('How syncing works');
+		expect(parts[1]).toHaveAttribute('data-icon', 'arrowUpRight');
+
 		fireEvent.click(link);
 		expect(mockOpenExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/products/sync');
 	});
@@ -80,12 +85,4 @@ it('wraps a long label instead of truncating it', () => {
 	expect(source.match(/numberOfLines=\{0\}/g)).toHaveLength(2);
 	// Yoga's default flexShrink is 0: without `shrink` a long label overflows on native.
 	expect(source.match(/className="[^"]*\bshrink\b/g)).toHaveLength(2);
-});
-
-it('renders only the label and arrow without a code', () => {
-	const { container } = render(<DocsLink href="https://docs.wcpos.com">Learn more</DocsLink>);
-	const parts = container.querySelectorAll('span');
-	expect(parts).toHaveLength(2);
-	expect(parts[0].textContent).toBe('Learn more');
-	expect(parts[1]).toHaveAttribute('data-icon', 'arrowUpRight');
 });

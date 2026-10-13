@@ -174,10 +174,11 @@ test.describe('POS Cart - Order Actions', () => {
 		});
 	});
 
-	test('should add order note', async ({ posPage: page }) => {
+	test('open order details and add a note', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
 		await page.getByTestId('order-meta-button').click();
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 
 		const textarea = page.getByTestId('order-note-input');
 		await expect(textarea).toBeVisible({ timeout: 15_000 });
@@ -186,14 +187,6 @@ test.describe('POS Cart - Order Actions', () => {
 		const addNoteButton = page.getByTestId('order-meta-save');
 		await expect(addNoteButton).toBeVisible({ timeout: 15_000 });
 		await addNoteButton.click();
-	});
-
-	test('should open order meta dialog', async ({ posPage: page }) => {
-		await addTestProductToCart(page);
-
-		await page.getByTestId('order-meta-button').click();
-
-		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -217,12 +210,6 @@ test.describe('POS Cart - Multiple Orders', () => {
 });
 
 test.describe('POS Checkout', () => {
-	test('should open checkout modal', async ({ posPage: page }) => {
-		await addTestProductToCart(page);
-
-		await openCheckout(page);
-	});
-
 	test('should show order total in checkout', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 

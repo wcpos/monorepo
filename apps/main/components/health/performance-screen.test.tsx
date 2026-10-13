@@ -172,9 +172,29 @@ describe('PerformanceScreen · server over time', () => {
 		jest.useRealTimers();
 	});
 
-	it('shows a normal pace with no warning on a quiet server', () => {
+	it('renders quiet-server defaults, layout and controls', () => {
 		const renderer = renderScreen([]);
 		expect(paceText(renderer)).toBe('✓ Normal pace');
+
+		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
+
+		expect(screen.props.className).toBe(
+			'mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8'
+		);
+
+		const card = renderer.root.findByProps({ testID: 'preset-eco' });
+		expect(card.props.onPress).toBeUndefined();
+
+		expect(mockTranslationKeys).toEqual(
+			expect.arrayContaining([
+				'health.performance.seconds_short',
+				'health.performance.minutes_short',
+			])
+		);
+
+		const mathLine = renderer.root.findByProps({ testID: 'settings-math-line' });
+		// Default 60 s interval → 60 requests/hour, rendered from the shipped en catalogue.
+		expect(String(mathLine.props.children)).toContain('~60 requests per hour');
 	});
 
 	it('says the advisory high header is being overruled, still as a normal pace', () => {
@@ -212,15 +232,6 @@ describe('PerformanceScreen · server over time', () => {
 		expect(loadUnavailableShown(renderer)).toBe(false);
 	});
 
-	it('keeps the wider health layout with the shared screen spacing', () => {
-		const renderer = renderScreen([]);
-		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
-
-		expect(screen.props.className).toBe(
-			'mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8'
-		);
-	});
-
 	it('says the server does not report load once it has been asked and stayed silent', () => {
 		// Distinct from "not enough data yet": a plain sentence, no chart frame.
 		const renderer = renderScreen([bucket(2, 10), bucket(1, 20)]);
@@ -246,22 +257,6 @@ describe('PerformanceScreen · server over time', () => {
 		expect(loadUnavailableShown(renderer)).toBe(false);
 	});
 
-	it('exposes each preset card as only its labeled radio control', () => {
-		const renderer = renderScreen([]);
-		const card = renderer.root.findByProps({ testID: 'preset-eco' });
-		expect(card.props.onPress).toBeUndefined();
-	});
-
-	it('routes check-frequency endpoint labels through translations', () => {
-		renderScreen([]);
-		expect(mockTranslationKeys).toEqual(
-			expect.arrayContaining([
-				'health.performance.seconds_short',
-				'health.performance.minutes_short',
-			])
-		);
-	});
-
 	it('keeps low-volume request-axis labels distinct', () => {
 		renderScreen([bucket(2, 0), bucket(1, 1)]);
 		const formatValue = trend('pos-requests-trend')?.formatValue;
@@ -274,12 +269,5 @@ describe('PerformanceScreen · server over time', () => {
 		const formatValue = trend('server-load-trend')?.formatValue;
 		expect(formatValue).toBeDefined();
 		expect([1, 14].map((value) => formatValue?.(value))).toEqual(['1.0', '14.0']);
-	});
-
-	it('states the request budget per hour, not per day', () => {
-		const renderer = renderScreen([]);
-		const mathLine = renderer.root.findByProps({ testID: 'settings-math-line' });
-		// Default 60 s interval → 60 requests/hour, rendered from the shipped en catalogue.
-		expect(String(mathLine.props.children)).toContain('~60 requests per hour');
 	});
 });

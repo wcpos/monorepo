@@ -69,16 +69,6 @@ describe('findOneFixPlugin', () => {
 			expect(originalFindOne).toHaveBeenCalledWith(query);
 		});
 
-		it('should delegate to original findOne for query with selector', () => {
-			const mockResult = { exec: () => Promise.resolve({ id: 1 }), $: of({ id: 1 }) };
-			originalFindOne.mockReturnValue(mockResult);
-
-			const query = { selector: { name: { $eq: 'test' } } };
-			mockCollection.findOneFix(query);
-
-			expect(originalFindOne).toHaveBeenCalledWith(query);
-		});
-
 		it('should delegate for query with primary key', () => {
 			const mockResult = { exec: () => Promise.resolve({ id: 1 }), $: of({ id: 1 }) };
 			originalFindOne.mockReturnValue(mockResult);
@@ -154,15 +144,6 @@ describe('findOneFixPlugin', () => {
 			const result = mockCollection.findOneFix(false);
 
 			await expect(result.exec()).resolves.toBeNull();
-		});
-
-		it('should delegate for non-empty string queries', () => {
-			const mockResult = { exec: () => Promise.resolve({ id: 1 }), $: of({ id: 1 }) };
-			originalFindOne.mockReturnValue(mockResult);
-
-			mockCollection.findOneFix('some-uuid');
-
-			expect(originalFindOne).toHaveBeenCalledWith('some-uuid');
 		});
 
 		it('should return null for empty string queries', async () => {

@@ -135,13 +135,6 @@ describe('RequestStateManager', () => {
 	});
 
 	describe('onWake', () => {
-		it('should register and call wake callback', () => {
-			const cb = jest.fn();
-			requestStateManager.onWake(cb);
-			// We can't easily trigger visibility change in jsdom, but we can verify registration
-			expect(typeof requestStateManager.onWake).toBe('function');
-		});
-
 		it('should return cleanup function', () => {
 			const cb = jest.fn();
 			const cleanup = requestStateManager.onWake(cb);

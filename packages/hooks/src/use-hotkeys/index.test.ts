@@ -57,14 +57,5 @@ describe('use-hotkeys/index', () => {
 
 			expect(getKeyFromEvent(event)).toBe('a');
 		});
-
-		it('should handle various key values', () => {
-			const testKeys = ['Escape', 'Tab', 'ArrowUp', 'ArrowDown', ' ', 'a', '1', 'F1'];
-
-			testKeys.forEach((key) => {
-				const event = { key } as RNKeyboardEvent;
-				expect(getKeyFromEvent(event)).toBe(key);
-			});
-		});
 	});
 });

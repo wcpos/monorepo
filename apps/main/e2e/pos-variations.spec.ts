@@ -190,22 +190,6 @@ test.describe('POS Variations', () => {
 		await voidCartIfNeeded(page);
 	});
 
-	test('should show popover button on variable products instead of add-to-cart', async ({
-		posPage: page,
-	}) => {
-		await searchForVariableProduct(page);
-
-		// Variable products should NOT have the simple add-to-cart button
-		// They should have the popover button (chevron) instead
-		const popoverButton = page.getByTestId('variable-product-popover-button').first();
-		await expect(popoverButton).toBeVisible();
-	});
-
-	test('should open variation popover when clicking chevron button', async ({ posPage: page }) => {
-		await searchForVariableProduct(page);
-		await openVariationPopover(page);
-	});
-
 	test('should add variation to cart via popover attribute selection', async ({
 		posPage: page,
 	}) => {
@@ -231,24 +215,6 @@ test.describe('POS Variations', () => {
 
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await expect(expandLink).toBeVisible({ timeout: 15_000 });
-	});
-
-	test('should expand variable product row to show variations', async ({ posPage: page }) => {
-		await searchForVariableProduct(page);
-
-		// Click the expand link on the first variable product
-		const expandLink = page.getByTestId('variable-product-expand').first();
-		await Promise.all([
-			page.waitForResponse(
-				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
-				{ timeout: 30_000 }
-			),
-			expandLink.click(),
-		]);
-
-		// Variation rows should now be visible with their "+" buttons
-		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
-		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should add variation to cart via expanded row plus button', async ({ posPage: page }) => {

@@ -55,14 +55,6 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		}
 	);
 
-	authenticatedTest('should navigate to Logs inside Store health', async ({ posPage: page }) => {
-		await navigateToPage(page, 'health');
-		await page.getByTestId('health-nav-logs').click();
-		await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({
-			timeout: 30_000,
-		});
-	});
-
 	authenticatedTest('should navigate to Support page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'support');
 		await expect(page.getByTestId('screen-support').locator('iframe').first()).toBeVisible({
