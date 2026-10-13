@@ -180,8 +180,8 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 			reportFailure(err);
 			return;
 		}
-		if (outcome.kind === 'kept-pending') {
-			showSuccess(t('pos_cart.order_voided_kept_pending'));
+		if (outcome.kind === 'kept-cancelled') {
+			showSuccess(t('pos_cart.order_voided_cancelled'));
 			return;
 		}
 		showSuccess(t('pos_cart.order_removed'));
@@ -190,9 +190,9 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 		// watching and converts, and the cashier hears about it, or about a failed conversion.
 		// The audit row said `removed`; the correction is a second row, after the slot.
 		try {
-			if ((await outcome.late) === 'kept-pending') {
-				showSuccess(t('pos_cart.order_voided_kept_pending'));
-				ctx.log('info', `Order ${recordId} kept as pending after a late refusal`, {
+			if ((await outcome.late) === 'kept-cancelled') {
+				showSuccess(t('pos_cart.order_voided_cancelled'));
+				ctx.log('info', `Order ${recordId} cancelled on the store after a late refusal`, {
 					category: ['wcpos', 'pos', 'cart', 'void'],
 					actor: cashier ?? undefined,
 					context: {
@@ -200,8 +200,8 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 						orderId: (orderPayload.id as number | undefined) ?? null,
 						orderUUID: recordId,
 						orderNumber: (orderPayload.number as string | undefined) ?? null,
-						status: 'pending',
-						outcome: 'kept-pending',
+						status: 'cancelled',
+						outcome: 'kept-cancelled',
 						late: true,
 						registerId: registerId ?? null,
 						sessionId: voidedIn,
