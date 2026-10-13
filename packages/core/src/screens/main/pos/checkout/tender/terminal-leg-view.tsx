@@ -95,7 +95,7 @@ export function TerminalLegView({
 		status = failed
 			? t('pos_checkout.payment_failed_reason', { reason })
 			: leg.outcome === 'voided'
-				? leg.deadlineHandled || failureReason === 'timed_out'
+				? leg.deadlineHandled || (failureReason === 'timed_out' && !leg.cancelRequested)
 					? t('pos_checkout.payment_timed_out')
 					: t('pos_checkout.payment_cancelled_on_terminal')
 				: t('pos_checkout.payment_released');

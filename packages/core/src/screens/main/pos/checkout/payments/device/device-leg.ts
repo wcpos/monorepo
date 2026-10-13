@@ -246,11 +246,12 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 								}
 							: {
 									// A reader time-out (its own collect window ran out) voids as `timed_out`:
-									// nobody at the till cancelled it.
+									// nobody at the till cancelled it. A cancel already requested at the till
+									// (or its deadline) wins over a time-out that lands at the same moment.
 									reason:
 										result?.outcome === 'declined'
 											? (result.failure_reason ?? 'card_declined')
-											: result?.failure_reason === 'timed_out'
+											: result?.failure_reason === 'timed_out' && !state.cancelRequested
 												? 'timed_out'
 												: cancelReason,
 								}
