@@ -96,15 +96,16 @@ function normalizeLocale(locale: string): string {
  * v3: accent-/Unicode-normalization-folding encoder (#1732).
  * v4: terms keep their punctuation — "0.4" is one term, not "0" + "4" dropped by minlength.
  * v5: `"`, `,`, `+` are no longer term separators — `0,4` is one term.
+ * v6: drop indexes whose append compaction re-indexed stale text, losing order numbers (#2501).
  */
-const SEARCH_INDEX_VERSION = 'v5';
+const SEARCH_INDEX_VERSION = 'v6';
 
 /**
  * Identifier versions this build no longer reads ('' is the unversioned pre-v2 name).
  * A bump above leaves every upgraded device carrying the whole old index next to the
  * new one, so the first build of a collection+locale in a session drops these.
  */
-const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3', 'v4'];
+const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3', 'v4', 'v5'];
 const staleSearchIndexSweeps = new Set<string>();
 
 /**
