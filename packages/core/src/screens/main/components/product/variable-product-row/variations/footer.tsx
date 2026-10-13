@@ -1,20 +1,19 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
+import { useQueryHandleFields } from '../../../../../../query';
 import { SyncButton } from '../../../../components/sync-button';
 import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 
 interface VariationTableFooterProps {
-	binding: Pick<
-		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
-		'sync' | 'active$' | 'total$'
-	>;
+	/** The live handle the row owns: the sync button acts on it and spins with it. */
+	handle: QueryHandle;
+	/** The handle whose variations are drawn, so the total describes the `count` beside it. */
+	shown?: QueryHandle;
 	parent: EngineRecord<'products'>;
 	count: number;
 }
@@ -22,9 +21,13 @@ interface VariationTableFooterProps {
 /**
  *
  */
-export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const loading = useObservableEagerState(binding.active$);
+export function VariationTableFooter({
+	handle,
+	shown = handle,
+	parent,
+	count,
+}: VariationTableFooterProps) {
+	const { active: loading } = useQueryHandleFields(handle, ['active']);
 	const { clearAndSync } = useCollectionReset('variations');
 
 	/**
@@ -36,8 +39,8 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	 */
 	const handleClearVariations = React.useCallback(async () => {
 		await clearAndSync();
-		return binding.sync();
-	}, [binding, clearAndSync]);
+		return handle.sync();
+	}, [handle, clearAndSync]);
 
 	/**
 	 * The parent product's own payload names every variation the server has, so it is the
@@ -48,12 +51,12 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	 * resident-count floor `coverageProjection$` applies to every other footer. Without it a
 	 * parent whose payload had not caught up would read "Showing 2 of 0".
 	 *
-	 * With no parent list at all, `binding.total$` carries the answer — and it is null when
-	 * nothing vouches for a size (see QueryBinding.total$), in which case the footer states
-	 * the count alone rather than passing the loaded-row count off as a total.
+	 * With no parent list at all, the drawn handle's `total` carries the answer — and it is null
+	 * when nothing vouches for a size, in which case the footer states the count alone rather
+	 * than passing the loaded-row count off as a total. (The drawn handle has answered: the
+	 * footer renders only under a reader that has returned from `useQuerySnapshot(shown)`.)
 	 */
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const localTotal = useObservableState(binding.total$, null);
+	const { total: localTotal } = useQueryHandleFields(shown, ['total']);
 	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
 	const parentCount = parentVariations?.length;
 	const total = parentCount === undefined ? localTotal : Math.max(parentCount, count);
@@ -69,7 +72,7 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 							total: total.toLocaleString(),
 						})}
 			</Text>
-			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
+			<SyncButton sync={handle.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
 }
