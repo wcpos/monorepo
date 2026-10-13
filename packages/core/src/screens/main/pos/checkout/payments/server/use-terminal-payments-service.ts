@@ -73,8 +73,11 @@ export function useTerminalPaymentsService(): void {
 		const binding = { store, site, client: latestHttp.current };
 		bindingRef.current = binding;
 		let stopped = false;
+		// Read at call time from the latest store document, not the session's snapshot (see
+		// use-tender-flow); a plain store without `getLatest` (tests) falls back to itself.
+		const dp = () => store.getLatest?.()?.price_num_decimals ?? store.price_num_decimals ?? 2;
 		const service = startTerminalPaymentsService({
-			dp: () => store.price_num_decimals ?? 2,
+			dp,
 			http: {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
@@ -93,7 +96,7 @@ export function useTerminalPaymentsService(): void {
 				const meta = cloneDeep(payload.meta_data ?? []);
 				const rows = upsertPaymentRow(readLedger(meta), payment);
 				const summary = derive(payload.total, rows, latest.current.methods, {
-					dp: store.price_num_decimals ?? 2,
+					dp: dp(),
 				});
 				const meta_data = withLedger(meta, rows);
 				const written = await latest.current.localPatch({
@@ -166,7 +169,7 @@ export function useTerminalPaymentsService(): void {
 				const payload = (resident.getLatest?.().payload ??
 					resident.payload) as EngineRecord<'orders'>['payload'];
 				return derive(payload.total, readLedger(payload.meta_data), latest.current.methods, {
-					dp: store.price_num_decimals ?? 2,
+					dp: dp(),
 				}).balance;
 			},
 			getActor: () => latest.current.actor,
@@ -217,7 +220,7 @@ export function useTerminalPaymentsService(): void {
 									row.status === 'authorized'
 								)
 									service.trackOffline({
-										dp: store.price_num_decimals ?? 2,
+										dp: dp(),
 										orderUuid: document.uuid,
 										orderId: document.payload.id ?? 0,
 										orderNumber: document.payload.number ?? '',

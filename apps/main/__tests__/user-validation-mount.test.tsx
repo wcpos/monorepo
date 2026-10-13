@@ -49,6 +49,10 @@ jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-paymen
 jest.mock('@wcpos/core/services/register-session/bridge', () => ({
 	RegisterSessionBridge: () => null,
 }));
+// The customer-display service talks to the store through the REST client; not this test's concern.
+jest.mock('@wcpos/core/screens/main/pos/customer-display/use-customer-display-service', () => ({
+	useCustomerDisplayService: () => undefined,
+}));
 // The card-reader driver registration mounts a native SDK bridge; not this test's concern.
 jest.mock('../lib/payment-drivers', () => ({
 	StripeTerminalDriverRegistration: () => null,

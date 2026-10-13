@@ -29,6 +29,7 @@ import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider, useDocField } from '@wcpos/query';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
@@ -428,6 +429,11 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<OnlineStatusLogger />
+			{/* Lives under the online-status provider on purpose: it uses the REST client, and a
+			    client rendered above the provider reads the context default ("offline") and sets
+			    the app-wide request block — every request then fails "No internet connection"
+			    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). */}
+			<CustomerDisplayServiceController />
 			<EngineConnectivityBridge />
 			<MetricsPersistenceBridge />
 			<SyncStatusPersistenceBridge />
@@ -436,4 +442,9 @@ export default function AppLayout() {
 			</RasterizeProvider>
 		</OnlineStatusProvider>
 	);
+}
+
+function CustomerDisplayServiceController(): null {
+	useCustomerDisplayService();
+	return null;
 }

@@ -24,7 +24,7 @@ import {
 	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -236,7 +236,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// answer, on a change of pill or of the values (a different attempt), and once the stamp
 	// already names it (the lost answer has synced in; the next press is Send again).
 	const attemptRef = React.useRef<string | null>(null);
-	const dp = store.price_num_decimals ?? 2;
+	// Read the store's money settings from the LATEST document, not the session's snapshot:
+	// an RxDB document instance is immutable, so after Settings → General changes the currency
+	// (or Restore server settings does) the snapshot still says the old one and a payment is
+	// minted in a currency the order no longer has ("Payment currency must match the order",
+	// Pixel 10, 2026-10-13). The order's own currency wins: the store refuses a payment in any
+	// other, and a saved cart keeps the currency it was opened in.
+	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
+	const currency = payload.currency || storeCurrency;
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
+	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -447,7 +456,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						quantity: line.quantity ?? 1,
 						totalMinor:
 							toMinor(line.total ?? '0', dp) +
-							(store.tax_display_cart === 'incl' ? toMinor(line.total_tax ?? '0', dp) : 0),
+							(taxDisplayCart === 'incl' ? toMinor(line.total_tax ?? '0', dp) : 0),
 					},
 				];
 	});
@@ -864,7 +873,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					recordedOffline: offline,
 					orderId: payload.id ?? null,
 					amount: fromMinor(amountMinor, dp),
-					currency: store.currency ?? '',
+					currency,
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
 					dp,
@@ -921,7 +930,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					method,
 					orderId: payload.id,
 					amount: fromMinor(amountMinor, dp),
-					currency: store.currency ?? '',
+					currency,
 					cashierId: wpCredentials.id ?? 0,
 					storeId: store.id || null,
 					dp,
@@ -1318,6 +1327,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		payload.number,
 		service,
 		store,
+		currency,
 		wpCredentials,
 		t,
 		tiles,

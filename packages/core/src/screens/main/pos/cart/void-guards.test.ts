@@ -38,7 +38,7 @@ const e: ActionEventInput<typeof ORDER_VOID_EVENT> = {
 		paymentLegs: { live: 0, captured: 0, device: 0 },
 	},
 };
-const bottom = jest.fn(async (): Promise<{ kind: 'removed' | 'kept-pending' }> => ({
+const bottom = jest.fn(async (): Promise<{ kind: 'removed' | 'kept-cancelled' }> => ({
 	kind: 'removed',
 }));
 beforeEach(() => {
@@ -71,8 +71,8 @@ it('a void needs no open session: the gate never reads one', async () => {
 	expect(bottom).toHaveBeenCalledTimes(1);
 });
 it('the audit row is written after the writer, with the outcome and who did it', async () => {
-	bottom.mockResolvedValueOnce({ kind: 'kept-pending' });
-	expect(await auditOrderVoided(ctx, e, bottom)).toEqual({ kind: 'kept-pending' });
+	bottom.mockResolvedValueOnce({ kind: 'kept-cancelled' });
+	expect(await auditOrderVoided(ctx, e, bottom)).toEqual({ kind: 'kept-cancelled' });
 	expect(log).toHaveBeenCalledWith(
 		'info',
 		'Order order voided',
@@ -85,7 +85,7 @@ it('the audit row is written after the writer, with the outcome and who did it',
 				orderUUID: 'order',
 				orderNumber: '42',
 				status: 'pos-open',
-				outcome: 'kept-pending',
+				outcome: 'kept-cancelled',
 				registerId: 'till',
 				sessionId: null,
 			},

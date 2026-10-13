@@ -50,7 +50,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		async (recordId: string, orderPayload: Record<string, unknown>) => {
 			try {
 				await restoreVoidedOrder(manager, recordId, orderPayload);
-				// Through the provider, not the route: a kept-pending void left the order, which
+				// Through the provider, not the route: a kept-cancelled void left the order, which
 				// parks its id in the route, and only selecting it again releases that.
 				setCurrentOrderID(recordId);
 			} catch (err) {
@@ -103,8 +103,8 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 				},
 			});
 		};
-		// A kept-pending order is still open on the store, so it stays a tab; the cart moves to a
-		// blank order. Only if the cashier is still on it: the store's answer can come much later.
+		// A kept-cancelled order is cancelled on the store, not open, so it leaves the tabs; the cart
+		// moves to a blank order. Only if the cashier is still on it: the store's answer can come much later.
 		const leaveKeptOrder = () => {
 			if (getCurrentOrderRecord().uuid === recordId) setCurrentOrderID('');
 		};
@@ -190,8 +190,8 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 			reportFailure(err);
 			return;
 		}
-		if (outcome.kind === 'kept-pending') {
-			showSuccess(t('pos_cart.order_voided_kept_pending'));
+		if (outcome.kind === 'kept-cancelled') {
+			showSuccess(t('pos_cart.order_voided_cancelled'));
 			leaveKeptOrder();
 			return;
 		}
@@ -201,10 +201,10 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		// watching and converts, and the cashier hears about it, or about a failed conversion.
 		// The audit row said `removed`; the correction is a second row, after the slot.
 		try {
-			if ((await outcome.late) === 'kept-pending') {
-				showSuccess(t('pos_cart.order_voided_kept_pending'));
+			if ((await outcome.late) === 'kept-cancelled') {
+				showSuccess(t('pos_cart.order_voided_cancelled'));
 				if (!undone) leaveKeptOrder();
-				ctx.log('info', `Order ${recordId} kept as pending after a late refusal`, {
+				ctx.log('info', `Order ${recordId} cancelled on the store after a late refusal`, {
 					category: ['wcpos', 'pos', 'cart', 'void'],
 					actor: cashier ?? undefined,
 					context: {
@@ -212,8 +212,9 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 						orderId: (orderPayload.id as number | undefined) ?? null,
 						orderUUID: recordId,
 						orderNumber: (orderPayload.number as string | undefined) ?? null,
-						status: 'pending',
-						outcome: 'kept-pending',
+						// The status before the void, as on the first row; the outcome says what happened.
+						status: (orderPayload.status as string | undefined) ?? '',
+						outcome: 'kept-cancelled',
 						late: true,
 						registerId: registerId ?? null,
 						sessionId: voidedIn,

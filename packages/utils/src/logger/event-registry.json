@@ -451,7 +451,7 @@
 		"type": "order.voided",
 		"domain": "CHECKOUT",
 		"label": "Voided an order",
-		"description": "The order was removed from the till, or kept as pending when the store refused the delete.",
+		"description": "The order was removed from the till, or cancelled on the store when it refused the delete.",
 		"introducedIn": "2.0.0"
 	},
 	{

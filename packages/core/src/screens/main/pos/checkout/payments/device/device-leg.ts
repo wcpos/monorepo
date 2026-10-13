@@ -130,6 +130,16 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		} else set(changes);
 	};
 	const url = (route: string) => `orders/${input.orderId}/payments/${input.row.id}/${route}`;
+	/** Read the store's row; true when it was final and the leg has finished on it. */
+	const settledOnStore = async () => {
+		try {
+			const response = await deps.get(url('status'));
+			await apply(response.data as ServerLegResponse);
+		} catch {
+			return false;
+		}
+		return !active();
+	};
 	async function confirm() {
 		if (!active() || inFlight || (state.phase === 'collecting' && !result)) return;
 		inFlight = true;
@@ -149,6 +159,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				if (!active()) return;
 				throw new Error('Payment is not final on the store');
 			} else if (input.resume) {
+				// A pending row the till minted online may already be settled on the store: the
+				// provider's webhook can land before the till's own capture. Ask the store before
+				// calling the session lost; an unreachable store leaves the answer below. A row
+				// recorded offline has no store row to ask (a resume is never `input.offline`).
+				if (!state.row.recorded_offline && (await settledOnStore())) return;
 				const lost = {
 					t: new Date(deps.now()).toISOString(),
 					level: 'error' as const,
@@ -250,6 +265,10 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			if (body?.data?.payment) {
 				await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
+			} else if (body?.code === 'wcpos_invalid_transition' && (await settledOnStore())) {
+				// The store refused the capture as a repeat: the webhook settled the row first,
+				// and its answer is on the status route, not in the refusal.
+				return;
 			}
 			set({ captureFailed: true, capturing: false });
 		} finally {

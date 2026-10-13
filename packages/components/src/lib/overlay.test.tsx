@@ -13,6 +13,7 @@ import {
 	SCRIM_WRAPPER,
 	useOverlay,
 	useOverlayPresentation,
+	useSheetInset,
 } from './overlay';
 
 const mockScrimProps: PressableProps[] = [];
@@ -30,8 +31,10 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+const mockUseKeyboardState = jest.fn();
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: (...args: unknown[]) => mockUseKeyboardState(...args),
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('react-native-reanimated', () => {
@@ -164,6 +167,22 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 	}
 );
 
+it('lets a blocking scrim keep its clicks on web, where the panel sits inside it', () => {
+	function InsetProbe() {
+		return <View testID="inset" {...{ dataSet: { inset: String(useSheetInset(16)) } }} />;
+	}
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} blocking testID="b">
+			<InsetProbe />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.pointerEvents).toBeUndefined();
+	// Web has no keyboard wrapper and never reads the keyboard's state.
+	expect(mockUseKeyboardState).not.toHaveBeenCalled();
+	// Web pads nothing: the inset is a native sheet's.
+	expect(screen.getByTestId('inset')).toHaveAttribute('data-inset', 'undefined');
+});
+
 it('names the functional wait beats and the web progress sweep', () => {
 	expect(SPINNER).toBe(1000);
 	expect(INDETERMINATE).toBe(1100);
@@ -188,6 +207,9 @@ it('leaves anchored positioning to the primitive without deferring focus', () =>
 	expect(OVERLAY_PANEL.anchored).toContain('shadow-md');
 	expect(OVERLAY_PANEL.bottom).toContain('rounded-t-2xl');
 	expect(OVERLAY_PANEL.bottom).not.toContain('shadow');
+	// Web: SCRIM_WRAPPER skips a `[data-sheet]`, so the sheet panel keeps its own cap.
+	expect(OVERLAY_PANEL.bottom).toContain('max-h-[92%]');
+	expect(OVERLAY_PANEL.bottom).not.toContain('max-h-full');
 });
 
 it('offers an optional presentation without exporting the context', () => {

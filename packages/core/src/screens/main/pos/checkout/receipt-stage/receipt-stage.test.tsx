@@ -34,6 +34,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 jest.mock('../../../hooks/use-engine-document', () => ({ useEngineRecord: () => mockOrder }));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: <T,>(value: T) => value }));

@@ -457,13 +457,52 @@ it.each([
 	{ code: 'DECLINED_BY_STRIPE_API' },
 	{ code: 'DECLINED_BY_STRIPE_API', declineCode: 'insufficient_funds' },
 	{ code: 'DeclinedByStripeAPI', apiError: { declineCode: 'expired_card' } },
+	// Stripe refused the confirm itself (reader at a location the account cannot use): the
+	// Android SDK sends an EMPTY decline code, and the message is the only reason there is.
+	{ code: 'DECLINED_BY_STRIPE_API', declineCode: '', apiError: { declineCode: '' } },
 ])('maps a confirmation decline: %j', async (error) => {
 	api.confirmPaymentIntent.mockResolvedValue({ error: { ...error, message: 'declined' } });
 	await expect(driver.collect(input)).resolves.toMatchObject({
 		outcome: 'declined',
-		failure_reason: error.declineCode ?? error.apiError?.declineCode ?? 'card_declined',
+		failure_reason: error.declineCode || error.apiError?.declineCode || 'declined',
 	});
 });
+it('adopts a reader the SDK already holds once the hook carries it (connected before connectedReader)', () => {
+	// A JS reload: the SDK says "connected" first, the hook's `connectedReader` lands on a later
+	// render. The status must end up with the reader, or the pay sheet re-pairs it.
+	driver.callbacks.onDidChangeConnectionStatus('connected');
+	expect(driver.status$.get()).toMatchObject({ connection: 'connected', reader: null });
+	driver.bindSdk({ ...api, connectedReader: rawReader } as unknown as Sdk);
+	expect(driver.status$.get().reader?.id).toBe(reader.serialNumber);
+	expect(driver.status$.get().connection).toBe('connected');
+});
+
+it('a decline with neither a code nor a message still names a reason', async () => {
+	api.confirmPaymentIntent.mockResolvedValue({
+		error: { code: 'DECLINED_BY_STRIPE_API', declineCode: '', message: '' },
+	});
+	await expect(driver.collect(input)).resolves.toMatchObject({
+		outcome: 'declined',
+		failure_reason: 'card_declined',
+	});
+});
+it('a Tap to Pay reader the SDK reports connected keeps its transport', () => {
+	driver.bindSdk({
+		...api,
+		connectedReader: { ...rawReader, deviceType: 'tapToPay' },
+	} as unknown as Sdk);
+	driver.callbacks.onDidChangeConnectionStatus('connected');
+	expect(driver.status$.get().reader?.transport).toBe('tap_to_pay');
+});
+it('an adopted Tap to Pay reader keeps its transport', () => {
+	driver.callbacks.onDidChangeConnectionStatus('connected');
+	driver.bindSdk({
+		...api,
+		connectedReader: { ...rawReader, deviceType: 'tapToPay' },
+	} as unknown as Sdk);
+	expect(driver.status$.get().reader?.transport).toBe('tap_to_pay');
+});
+
 it('rejects SDK and unexpected thrown errors instead of inventing outcomes', async () => {
 	api.confirmPaymentIntent.mockResolvedValueOnce({
 		error: { code: 'NetworkError', message: 'network unavailable' },

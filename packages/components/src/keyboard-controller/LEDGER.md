@@ -9,3 +9,4 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 ## Lines
 
 1. Replaces KeyboardProvider and KeyboardAvoidingView with children-only wrappers on web — evidence: `60f77d4098 2025-04-04 add keyboard-controller wrapper for web`, code: "This is an empty wrapper for web platforms" in `packages/components/src/keyboard-controller/index.web.tsx:7` and `packages/components/src/keyboard-controller/index.web.tsx:15`.
+2. Exposes `useKeyboardState` on web as an always-hidden state (`isVisible: false`): the browser keyboard does not overlay the page, and the overlay shell imports the hook from this wrapper — evidence: round-2 review of wcpos/monorepo#2529 (a searchable phone sheet sat under the keyboard); code: "return selector({ isVisible: false });" in `packages/components/src/keyboard-controller/index.web.tsx`.

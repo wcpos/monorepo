@@ -235,6 +235,52 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
 - Touch targets and contrast checked, not assumed.
 - Every interactive element carries a stable `testID`.
 
+### Components: one answer per element, app-wide
+
+The owner's rule (2026-10-13, Card readers run): *"I don't want a special UI carved out for this
+sheet, it needs to be consistent across the whole app. If a suggestion is not consistent with
+similar UI elements, warn me."* So every element below has ONE home and ONE set of rules. A fix
+goes into the shared component in `packages/components`, never into a screen's own override, and
+a request that would make one screen differ from this table is answered with the table first,
+then built only if the owner confirms the exception.
+
+#### Buttons (`@wcpos/components/button`)
+| Role | Variant | Where it sits | Examples |
+|---|---|---|---|
+| Primary: the action the screen exists for | `default` (filled) | one per screen, full width on a phone, 56 pt when it is the sale's button | *Take 18,00 € in Cash*, *Try again* after a refusal, *Set up Tap to Pay*, *Connect a reader* when nothing is connected |
+| Secondary: the reversible alternative beside the primary | `outline` | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Help* |
+| Quiet: navigation, escapes, more | `ghost-quiet` / `link` | after the buttons, on its own line | *Reader guide*, *Details*, *Cancel* on a scan |
+| Destructive: what loses something | `outline-error` (red outline, never filled) or the last red row of a ⋮ sheet | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel on terminal* |
+| Unavailable | the same button, `disabled`, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
+
+Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
+slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
+never shares a colour with Void (§7).
+
+#### Rows and cards
+A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),
+line 1 the name (16 px semibold) with an optional chip at the right edge, line 2 the identifiers
+(serial · location), line 3 ONE state line (dot + words, or the error in `text-destructive`), then
+the action slot as a full-width row under the lines. Nothing shares a line with free text, so
+nothing wraps. The same shape is the Printers row and the Card readers row.
+
+#### Sheets, modals and menus on a phone
+- A full-size modal IS the screen: no scrim gutter, no radius, card colour to the safe-area
+  edges, top-aligned (`Modal` with `size="full"` does this on native; nothing else is needed).
+- A bottom sheet (a ⋮ menu, a picker, a short choice) sits on the screen edge and paints the
+  bottom inset itself in card colour; the shell leaves that strip unpadded. Both live in
+  `lib/overlay.tsx` and `modal/index.tsx`; a sheet that shows a bar under it is a bug there,
+  not a reason for local padding.
+- A sheet's rows are 48 pt, one icon + one verb each; a destructive row is last and red.
+- The sheet header is title + close; a segmented switch (Payments / Legacy) is its own row
+  under the header on a phone, never in the header row.
+
+#### Where the shared component is
+`packages/components/src/<name>/` with its `LEDGER.md`. Before styling anything on a screen,
+check that folder: if the element exists, use it as is; if it needs a new state, add the state
+there with a test and a line in the ledger; if it does not exist, say so before building a local
+one.
+
 ### Anti-patterns that have already been rejected
 - The centred modal that grew: enlarging it is the one fix the design systems forbid.
 - A paragraph under the tiles telling the cashier how the screen works.

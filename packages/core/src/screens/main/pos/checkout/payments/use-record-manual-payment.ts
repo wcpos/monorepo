@@ -3,7 +3,7 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -57,6 +57,9 @@ export function useRecordManualPayment(
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
 	const { wpCredentials, store } = useStoreSession();
+	// The latest store document, not the session's snapshot (see use-tender-flow).
+	const storeCurrency = useDocField(store, (value) => value.currency) ?? '';
+	const storeDecimals = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
 	const t = useT();
@@ -91,8 +94,9 @@ export function useRecordManualPayment(
 					});
 					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
 				},
-				currency: store.currency ?? '',
-				dp: store.price_num_decimals ?? 2,
+				// The order's own currency wins (see use-tender-flow); the store's only when it has none.
+				currency: payload.currency || storeCurrency,
+				dp: storeDecimals,
 				patchAndEnqueue: async (changes) => {
 					const result = await localPatch({ document: order, data: changes });
 					if (!result) throw new Error('Payment could not be saved locally.');
@@ -185,6 +189,18 @@ export function useRecordManualPayment(
 			}
 			return outcome;
 		},
-		[ctx, http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[
+			ctx,
+			http,
+			forceOffline,
+			onlineStatus.status,
+			wpCredentials.id,
+			store,
+			storeCurrency,
+			storeDecimals,
+			localPatch,
+			manager,
+			t,
+		]
 	);
 }

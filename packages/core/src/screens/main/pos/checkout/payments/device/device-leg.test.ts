@@ -254,6 +254,37 @@ it('retries capture using the same driver result, never collecting twice', async
 	expect(c.leg.getState().outcome).toBe('captured');
 	expect(c.driver.collect).toHaveBeenCalledTimes(1);
 });
+it('a capture the store refuses as a repeat is settled from the status route', async () => {
+	// Stripe's webhook landed before the till's capture: the row is already captured there.
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.post.mockRejectedValueOnce({
+		response: {
+			data: { code: 'wcpos_invalid_transition', message: 'Payment transition is invalid.' },
+		},
+	});
+	c.get.mockResolvedValueOnce({ data: { payment: { ...row, status: 'captured' } } });
+	c.collection.resolve(approved);
+	await start;
+	expect(c.get).toHaveBeenCalledWith('orders/42/payments/leg/status');
+	expect(c.leg.getState()).toMatchObject({ outcome: 'captured', captureFailed: false });
+	expect(c.driver.collect).toHaveBeenCalledTimes(1);
+});
+it('a refused capture the store cannot explain stays held for retry', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.post.mockRejectedValueOnce({
+		response: {
+			data: { code: 'wcpos_invalid_transition', message: 'Payment transition is invalid.' },
+		},
+	});
+	c.get.mockRejectedValueOnce(new Error('offline'));
+	c.collection.resolve(approved);
+	await start;
+	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
+});
 it('cancel waits for collection; a late successful result is still verified', async () => {
 	const c = setup();
 	const start = c.leg.start();
@@ -507,11 +538,33 @@ it('a failed offline write stays held for retry without a second collect', async
 		})
 	);
 });
+it('a resumed pending row the store has captured is paid, not lost', async () => {
+	const c = setup(false, true);
+	c.get.mockResolvedValueOnce({ data: { payment: { ...row, status: 'captured' } } });
+	await c.leg.start();
+	expect(c.driver.collect).not.toHaveBeenCalled();
+	expect(c.post).not.toHaveBeenCalled();
+	expect(c.mirror).toHaveBeenCalledWith({
+		payment: expect.objectContaining({ status: 'captured' }),
+	});
+	expect(c.leg.getState().outcome).toBe('captured');
+});
+it('a resumed pending row recorded offline asks no store and ends lost', async () => {
+	const c = setup(false, true, undefined, { ...row, recorded_offline: true });
+	await c.leg.start();
+	expect(c.get).not.toHaveBeenCalled();
+	expect(c.post).not.toHaveBeenCalled();
+	expect(c.mirror).toHaveBeenCalledWith({
+		payment: expect.objectContaining({ status: 'failed', failure_reason: 'reader_session_lost' }),
+	});
+	expect(c.leg.getState().outcome).toBe('failed');
+});
 it('lost pending sessions fail locally without restarting the driver', async () => {
 	const c = setup(false, true);
 	await c.leg.start();
 	expect(c.driver.collect).not.toHaveBeenCalled();
 	expect(c.post).not.toHaveBeenCalled();
+	expect(c.get).toHaveBeenCalledWith('orders/42/payments/leg/status');
 	expect(c.mirror).toHaveBeenCalledWith({
 		payment: expect.objectContaining({
 			status: 'failed',

@@ -129,9 +129,12 @@ function ModalAction({
 function ModalOverlayWeb({
 	className,
 	side = 'center',
+	// Native-only (the wrappers that must fill a full-size phone modal); kept off the DOM.
+	fill: _fill,
 	...props
 }: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
 	side?: ModalSide;
+	fill?: boolean;
 }) {
 	const { onClose } = useRootContext();
 	// Radix adds a content wrapper; SCRIM_WRAPPER sizes it as the panel's box (never
@@ -161,12 +164,16 @@ function ModalOverlayNative({
 	className,
 	children,
 	side = 'center',
+	fill = false,
 	...props
 }: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
 	side?: ModalSide;
+	/** A full-size phone modal: the keyboard and motion wrappers must fill the screen too. */
+	fill?: boolean;
 }) {
 	const { onClose } = useRootContext();
 	const fullHeight = side === 'left' || side === 'right';
+	const wrapperClass = fullHeight ? 'h-full' : fill ? 'h-full w-full' : undefined;
 	const insets = useSafeAreaInsets();
 
 	/**
@@ -185,7 +192,17 @@ function ModalOverlayNative({
 	return (
 		<View
 			collapsable={false}
-			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+			// A bottom sheet carries the bottom inset itself (in card colour); the scrim must not
+			// show as a grey bar under it (owner, 2026-10-13). A full-size modal is a contained
+			// route whose host already sits under the status bar (the POS stack pads insets.top):
+			// a second top inset was the blank band over the pay sheet's title (Pixel 10).
+			style={[
+				StyleSheet.absoluteFill,
+				{
+					paddingTop: fill ? 0 : insets.top,
+					paddingBottom: side === 'bottom' ? 0 : insets.bottom,
+				},
+			]}
 			className={cn(
 				// last-child: the content wrapper; the first child is the scrim Pressable.
 				'flex items-center justify-center bg-black/70 p-2 [&>*:last-child]:max-h-full [&>*:last-child]:max-w-full',
@@ -204,13 +221,9 @@ function ModalOverlayNative({
 			<KeyboardAvoidingView
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
-				className={fullHeight ? 'h-full' : undefined}
+				className={wrapperClass}
 			>
-				<Animated.View
-					entering={entering[side]}
-					exiting={exiting[side]}
-					className={fullHeight ? 'h-full' : undefined}
-				>
+				<Animated.View entering={entering[side]} exiting={exiting[side]} className={wrapperClass}>
 					<>{children}</>
 				</Animated.View>
 			</KeyboardAvoidingView>
@@ -259,23 +272,39 @@ function ModalContent({
 }: React.ComponentPropsWithoutRef<typeof View> &
 	Omit<VariantProps<typeof modalContentVariants>, 'side'> & { side?: ModalSide }) {
 	const Content = Platform.OS === 'web' ? DialogPrimitive.Content : View;
+	const insets = useSafeAreaInsets();
+	// A full-size modal on a phone IS the screen (owner, 2026-10-13): no scrim gutter, no
+	// rounded card floating over a grey bar, and the card colour runs to the safe-area edges.
+	const fullScreen = size === 'full' && Platform.OS !== 'web';
+	// A native bottom sheet paints the bottom inset itself (see ModalOverlayNative).
+	const sheetInset =
+		side === 'bottom' && Platform.OS !== 'web' ? { paddingBottom: insets.bottom } : undefined;
 	return (
-		<ModalOverlay side={side}>
+		<ModalOverlay
+			side={side}
+			fill={fullScreen}
+			className={fullScreen ? 'bg-card items-stretch justify-start p-0' : undefined}
+		>
 			<Content
 				className={cn(
 					modalContentVariants({ size, side }),
 					side === 'center'
 						? 'web:cursor-default border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
 						: 'z-50',
+					// The title sits 8 under the status bar and the last row 8 above the bottom inset.
+					fullScreen && 'h-full w-full max-w-full rounded-none border-0 py-2 shadow-none',
 					OVERLAY_MOTION[side].enter,
 					className
 				)}
+				style={sheetInset}
 				{...props}
 			>
 				<SideContext.Provider value={side}>{children}</SideContext.Provider>
-				<View className="absolute top-2 right-2">
-					<ModalClose className="web:transition-opacity web:hover:opacity-100 opacity-70" asChild>
-						<IconButton name="xmark" />
+				{/* Borderless and muted, 44 pt: the child's `default` variant overrides ModalClose's
+				    `outline`. Full screen lifts it to centre on the title row. */}
+				<View className={cn('absolute right-2', fullScreen ? 'top-0' : 'top-2')}>
+					<ModalClose asChild>
+						<IconButton name="xmark" variant="default" />
 					</ModalClose>
 				</View>
 			</Content>

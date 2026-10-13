@@ -144,6 +144,30 @@ it('offline settlement puts the tuple and ledger in the same completing patch', 
 	mockResident.payload.meta_data = original;
 });
 
+it('reads the decimal count from the latest store document at call time, not the snapshot', async () => {
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const store = mockStore as typeof mockStore & {
+		getLatest?: () => { price_num_decimals: number };
+	};
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const options = start.mock.calls[0][0];
+		const dp = () => (typeof options.dp === 'function' ? options.dp() : options.dp);
+		expect(dp()).toBe(2);
+		// Settings → General changes the decimals: the session's document instance is immutable,
+		// the latest one says 0.
+		store.getLatest = () => ({ price_num_decimals: 0 });
+		expect(dp()).toBe(0);
+	} finally {
+		delete store.getLatest;
+		hook.unmount();
+		start.mockRestore();
+	}
+});
+
 it('background terminal settlement enqueues one provenance-only patch after mirroring', async () => {
 	const original = mockResident.payload.meta_data;
 	mockResident.payload.meta_data = withLedger([], [mockRow]);

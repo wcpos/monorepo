@@ -9,6 +9,7 @@ import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-mat
 
 import { useT } from '../../../../../contexts/translations';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
+import { readerName } from '../../../settings/card-readers/reader-name';
 import { deviceTransports } from './tiles';
 import { useDriverStatus } from './use-driver-status';
 
@@ -70,6 +71,11 @@ export function ReaderConnection({
 		}
 		if (!remembered || attempted.current || !driver?.discoverReaders || disabled) return;
 		attempted.current = true;
+		// Already holding the remembered reader (connected from Settings → Card readers, or the
+		// last sale): use it as it is. A discovery here would drop it first — the SDK refuses to
+		// scan while connected — and re-pair it seven seconds later (Pixel 10, 2026-10-13).
+		const held = driver.status$.get();
+		const alreadyHeld = held.connection === 'connected' && held.reader?.id === remembered;
 		let active = true;
 		const operation = { cancelled: false };
 		reconnect.current = operation;
@@ -78,6 +84,10 @@ export function ReaderConnection({
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- A fresh attempt clears the last attempt's verdict.
 		setFailed(false);
 		void (async () => {
+			if (alreadyHeld) {
+				pickTransport(held.reader!.transport);
+				return;
+			}
 			for (const item of deviceTransports(method)) {
 				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
 					(r) => r.id === remembered
@@ -114,9 +124,11 @@ export function ReaderConnection({
 	}, [remembered, driver, method, disabled, connect, pickTransport]);
 	const connected = status.connection === 'connected' && !working;
 	let line: string;
+	// The name Settings → Card readers shows ("WisePad 3"), never the SDK key or the serial.
 	if (connected)
 		line = [
-			status.reader?.label ?? status.reader?.model ?? t('pos_checkout.reader_connected'),
+			readerName(status.reader, t),
+			t('pos_checkout.reader_connected'),
 			status.reader?.battery == null
 				? null
 				: t('pos_checkout.reader_battery_percent', { battery: status.reader.battery }),

@@ -18,6 +18,7 @@ import {
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 jest.mock('../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
 jest.mock('../../hooks/use-payment-methods', () => ({

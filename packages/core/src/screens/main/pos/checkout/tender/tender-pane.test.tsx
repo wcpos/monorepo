@@ -128,8 +128,18 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleTrigger: 'div',
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<span data-testid={testID}>{children}</span>
+	Text: ({
+		children,
+		testID,
+		className,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) => (
+		<span data-testid={testID} className={className}>
+			{children}
+		</span>
 	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
@@ -390,6 +400,38 @@ it.each([
 	}
 );
 
+it('says the amount once: the eyebrow and Full balance drop it while the entry is the balance', () => {
+	const card: PaymentMethodDescriptor = {
+		...method,
+		id: 'card',
+		title: 'Card',
+		kind: 'other',
+		capabilities: { ...method.capabilities, change: false },
+	};
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: card,
+		tiles: [{ method: card, disabled: false, reason: null, worksOffline: true }],
+		entryAppliedMinor: 9295,
+		state: { ...initialTenderState, view: 'amount' as const, methodId: card.id, entryMinor: 9295 },
+	};
+	const { rerender } = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+	expect(screen.getByTestId('checkout-balance').className).toContain('hidden');
+	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Full balance');
+	// The commit keeps its object (buttons are verbs with the object).
+	expect(screen.getByTestId('checkout-commit').textContent).toBe('Take 9295 in Card');
+	rerender(
+		<TenderPane
+			flow={{ ...flow, entryAppliedMinor: 2000, state: { ...flow.state, entryMinor: 2000 } }}
+			format={String}
+		/>
+	);
+	expect(screen.getByTestId('checkout-balance').className).not.toContain('hidden');
+	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Full balance 9295');
+});
+
 it.each([
 	// 10.03 rounds up to 10.05; 10.02 down to 10.00 (#66, #84).
 	[1003, 1005, 1005, '', 'Take 1005 in Cash'],
@@ -629,9 +671,12 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 		pickTransport: jest.fn(),
 		deviceReady: false,
 		entryAppliedMinor: 1000,
+		// The battery shows on the selected tile only.
+		state: { ...initialTenderState, methodId: deviceMethod.id },
 	};
 	const rendered = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('No reader connected');
+	expect(screen.queryByTestId(`checkout-method-dot-${deviceMethod.id}`)).toBeNull();
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
 	expect(screen.queryByTestId('checkout-reader-connect')).toBeNull();
 	expect(screen.queryByTestId('checkout-transport-tap_to_pay')).toBeNull();
@@ -643,13 +688,58 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 			null
 		);
 	});
-	expect(screen.getByTestId('checkout-reader-status').textContent).toBe('Simulated approve · 82%');
+	expect(screen.getByTestId('checkout-reader-status').textContent).toBe(
+		'Simulated approve · Connected · 82%'
+	);
 	expect(screen.queryByTestId('checkout-reader-settings-link')).toBeNull();
 	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).textContent).toContain(
 		'82%'
 	);
+	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).className).toContain(
+		'text-muted-foreground'
+	);
+	expect(screen.getByTestId(`checkout-method-dot-${deviceMethod.id}`).className).toContain(
+		'bg-success'
+	);
 	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	await act(async () => {
+		await driver.disconnect!();
+	});
+});
+
+it('names the connected reader as Settings → Card readers does, never the SDK key or serial', async () => {
+	const driver = createSimulatedDriver();
+	registerDriver(driver);
+	const tile = { method: deviceMethod, disabled: false, reason: null, worksOffline: false };
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		tiles: [tile],
+		deviceTransport: 'bluetooth' as const,
+		pickTransport: jest.fn(),
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	await act(async () => {
+		await driver.connect!(
+			{
+				id: 'WPC323211047061',
+				label: 'WPC323211047061',
+				model: 'wisePad3',
+				serial: 'WPC323211047061',
+				battery: 74,
+				transport: 'bluetooth',
+			},
+			null
+		);
+	});
+	expect(screen.getByTestId('checkout-reader-status').textContent).toBe(
+		'WisePad 3 · Connected · 74%'
+	);
+	// Not the selected tile: the dot says connected, the battery stays on the reader line.
+	expect(screen.getByTestId(`checkout-method-dot-${deviceMethod.id}`)).toBeTruthy();
+	expect(screen.queryByTestId(`checkout-method-status-${deviceMethod.id}`)).toBeNull();
 	await act(async () => {
 		await driver.disconnect!();
 	});
@@ -741,6 +831,40 @@ it.each(['discovery', 'bootstrap'] as const)(
 		rendered.unmount();
 	}
 );
+
+it('uses a remembered reader the driver already holds without a discovery (no re-pair)', async () => {
+	const reader = { id: 'remembered', label: 'Remembered', transport: 'bluetooth' as const };
+	const discoverReaders = jest.fn(async () => [reader]);
+	const connect = jest.fn(async () => {});
+	const base = createSimulatedDriver();
+	registerDriver({
+		...base,
+		discoverReaders,
+		connect,
+		status$: {
+			get: () => ({ ...base.status$.get(), connection: 'connected' as const, reader }),
+			subscribe: base.status$.subscribe,
+		},
+	});
+	const pickTransport = jest.fn();
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		rememberedReaderId: 'remembered',
+		pickTransport,
+		bootstrapReader: jest.fn(async () => ({ token: 'new' })),
+		deviceTransport: 'bluetooth' as const,
+	};
+	const rendered = render(<TenderPane flow={flow} format={String} />);
+	await act(async () => {});
+	// Connected from Settings: the sheet takes the reader as it is. A discovery would have
+	// dropped it (the SDK refuses to scan while connected) and re-paired it seconds later.
+	expect(discoverReaders).not.toHaveBeenCalled();
+	expect(connect).not.toHaveBeenCalled();
+	expect(pickTransport).toHaveBeenCalledWith('bluetooth');
+	rendered.unmount();
+});
 
 it('keeps typed entry when switching methods without taking money', () => {
 	const state = tenderReducer(
@@ -865,7 +989,7 @@ it('shrinks the shared keypad under a short measured pane and restores tile fit'
 // Fractional widths plus a gap must not wrap five methods into four columns.
 it.each([
 	[false, 5],
-	[true, 3],
+	[true, 2],
 ] as const)('keeps fixed method rows and pads the last row (phone=%s)', (phone, columns) => {
 	const flow = makeFlow(7);
 	flow.tiles = flow.tiles.map((tile, index) => ({
@@ -887,7 +1011,7 @@ it.each([
 		const tiles = screen.getAllByTestId(/^checkout-method-method-/);
 		expect(screen.getByTestId('checkout-commit').textContent === 'Saving order…').toBe(saving);
 		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
-		expect(rows).toHaveLength(phone ? 3 : 2);
+		expect(rows).toHaveLength(phone ? 4 : 2);
 		for (const row of rows) {
 			expect(row.className).toContain('flex-row gap-2');
 			expect(row.className).not.toContain('flex-wrap');
@@ -901,7 +1025,7 @@ it.each([
 		const lastRow = rows.at(-1)!;
 		expect(
 			Array.from(lastRow.children).filter((cell) => !cell.hasAttribute('data-testid'))
-		).toHaveLength(phone ? 2 : 3);
+		).toHaveLength(phone ? 1 : 3);
 	}
 	rerender(
 		<DeviceScope phone={phone}>

@@ -6,6 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { CARD_READER_DOCS_URL } from './docs';
 import { CardReadersSettings } from './index';
 import { method as deviceMethod } from '../../pos/checkout/payments/device/fixtures.test-utils';
 import { registerDriver } from '../../../../services/payment-drivers/registry';
@@ -81,6 +82,10 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
+const mockOpenExternalURL = jest.fn();
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
+}));
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<a data-testid={testID}>{children}</a>
@@ -124,6 +129,21 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogFooter: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+// The provider sheet renders inline while it is mounted.
+jest.mock('@wcpos/components/portal', () => ({
+	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/modal', () => ({
+	Modal: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	ModalContent: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	ModalHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	ModalTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	ModalClose: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<button data-testid={testID}>{children}</button>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -214,9 +234,10 @@ it('scans in place, connects with a bootstrap handoff, remembers, then disconnec
 		fireEvent.click(screen.getByTestId(`${row}-disconnect`));
 	});
 	expect(screen.queryByTestId(`${row}-status`)).toBeNull();
-	// Remembered but disconnected: the row stays with no third line (the Connect button says
-	// it), and offers Connect and Forget.
-	expect(screen.queryByTestId(`${row}-line`)).toBeNull();
+	// Remembered but disconnected: the state line says so (never blank), and the row offers
+	// Connect and Forget; the release item only appears while the SDK still holds a reader.
+	expect(screen.getByTestId(`${row}-line`).textContent).toBe('Not connected');
+	expect(screen.queryByTestId(`${row}-release`)).toBeNull();
 	expect(screen.getByTestId(`${row}-connect`)).toBeTruthy();
 	fireEvent.click(screen.getByTestId(`${row}-forget`));
 	// The row and the dialog name the model, as the box does; the label is the SDK's.
@@ -263,7 +284,9 @@ it('shows a failed connect as one line with Try again, and the update progress a
 		'Could not connect: not supported at this location'
 	);
 	expect(screen.getByTestId(`${row}-retry`)).toBeTruthy();
-	expect(screen.getByTestId(`${row}-help`)).toBeTruthy();
+	// Help is a full-width button now, still opening the reader docs.
+	fireEvent.click(screen.getByTestId(`${row}-help`));
+	expect(mockOpenExternalURL).toHaveBeenCalledWith(CARD_READER_DOCS_URL);
 	// The list went with the choice; the error is the row's one line.
 	expect(screen.queryByTestId(`${row}-found`)).toBeNull();
 	// Try again scans afresh and clears the error.
@@ -370,6 +393,16 @@ it('Cancel during a scan frees the row and drops the late result', async () => {
 	expect(screen.getByTestId('card-readers-empty')).toBeTruthy();
 });
 
+it.each([
+	[null, 'default'],
+	[{ id: 'solo', label: 'Solo Lite', serial: 'SU-1', transport: 'bluetooth' as const }, 'outline'],
+])('Connect a reader is the primary only while no reader is held (%j)', (reader, variant) => {
+	registerDriver(sdkUiDriver(reader));
+	mockMethods = [deviceMethod, sumupMethod];
+	render(<CardReadersSettings />);
+	expect(screen.getByTestId('card-readers-connect').getAttribute('data-variant')).toBe(variant);
+});
+
 it("a provider whose SDK owns pairing gets one button that opens the provider's screen", async () => {
 	const driver = sdkUiDriver({
 		id: 'solo',
@@ -388,29 +421,116 @@ it("a provider whose SDK owns pairing gets one button that opens the provider's 
 		fireEvent.click(screen.getByTestId('reader-row-sumup-open-sdk'));
 	});
 	expect(driver.opened).toHaveBeenCalledTimes(1);
-	// Two providers: Connect a reader offers each by name.
+	// Two providers: Connect a reader opens a sheet offering each by name.
+	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+	fireEvent.click(screen.getByTestId('card-readers-connect'));
+	expect(screen.getByTestId('card-readers-provider-sheet').textContent).toContain(
+		'Connect a reader with'
+	);
 	expect(screen.getByTestId(`card-readers-connect-${deviceMethod.id}`)).toBeTruthy();
-	expect(screen.getByTestId('card-readers-connect-sumup')).toBeTruthy();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-connect-sumup'));
+	});
+	// Picking a provider closes the sheet and starts that provider.
+	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+	expect(driver.opened).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the action slot filled while connecting: a disabled Connecting… and the menu', async () => {
+	const driver = createSimulatedDriver();
+	let status: DriverStatus = { connection: 'disconnected', reader: null };
+	const listeners = new Set<(s: DriverStatus) => void>();
+	let finish!: () => void;
+	registerDriver({
+		...driver,
+		connect: async (reader) => {
+			status = { connection: 'connecting', reader };
+			listeners.forEach((listener) => listener(status));
+			await new Promise<void>((resolve) => {
+				finish = resolve;
+			});
+		},
+		status$: {
+			get: () => status,
+			subscribe: (listener) => {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			},
+		},
+	});
+	render(<CardReadersSettings />);
+	await flush();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-connect'));
+	});
+	const row = `reader-row-${deviceMethod.id}`;
+	await act(async () => {
+		fireEvent.click(screen.getByTestId(`${row}-connect-sim-approve`));
+	});
+	const slot = screen.getByTestId(`${row}-connect`) as HTMLButtonElement;
+	expect(slot.textContent).toBe('Connecting…');
+	expect(slot.disabled).toBe(true);
+	expect(screen.getByTestId(`${row}-menu`)).toBeTruthy();
+	expect(screen.getByTestId(`${row}-line`).textContent).toContain('Connecting to');
+	await act(async () => {
+		finish();
+	});
 });
 
 describe('Tap to Pay row', () => {
-	it('is iOS-only, admin-only for Set up, and scans the tap_to_pay transport', async () => {
+	// A real provider's name: the simulated provider gets no Tap to Pay row on a device.
+	const stripeMethod: PaymentMethodDescriptor = {
+		...deviceMethod,
+		capture: { ...deviceMethod.capture, provider: 'stripe-test' },
+	};
+	beforeEach(() => {
+		registerDriver({ ...createSimulatedDriver(), provider: 'stripe-test' });
+		mockMethods = [stripeMethod];
+	});
+
+	it('is not offered for the simulated provider on a device', async () => {
+		mockOS = 'android';
+		mockMethods = [deviceMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeNull();
+		expect(screen.queryByTestId('card-readers-this-phone')).toBeNull();
+	});
+
+	it('is native-only, admin-only for Set up, and scans the tap_to_pay transport', async () => {
 		const web = render(<CardReadersSettings />);
 		await flush();
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeNull();
 		web.unmount();
+		mockOS = 'android';
+		mockCaps = { canAcceptReaderTerms: false };
+		const android = render(<CardReadersSettings />);
+		await flush();
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeTruthy();
+		// Named for the platform: an Android phone never reads "on iPhone".
+		expect(screen.getByText('Tap to Pay on Android')).toBeTruthy();
+		android.unmount();
 		mockOS = 'ios';
 		mockCaps = { canAcceptReaderTerms: false };
 		const cashier = render(<CardReadersSettings />);
 		await flush();
+		// One meta line says both things; no second "Not set up" under it.
 		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-line`).textContent).toBe(
-			'Ask an administrator to set this up'
+			'Not set up · ask an administrator'
 		);
+		expect(screen.queryByText('Not set up')).toBeNull();
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`)).toBeNull();
+		expect(screen.getByText('Tap to Pay on iPhone')).toBeTruthy();
 		cashier.unmount();
 		mockCaps = { canAcceptReaderTerms: true };
 		render(<CardReadersSettings />);
 		await flush();
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-line`).textContent).toBe(
+			'Not set up'
+		);
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`).textContent).toBe(
+			'Set up Tap to Pay'
+		);
 		await act(async () => {
 			fireEvent.click(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`));
 		});

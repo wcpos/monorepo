@@ -41,20 +41,22 @@ export type VoidOrderResult =
 			 */
 			confirmed: boolean;
 			/**
-			 * Set only when the first watch was non-terminal: resolves `kept-pending` if a late
+			 * Set only when the first watch was non-terminal: resolves `kept-cancelled` if a late
 			 * refusal converted the void, `null` otherwise; rejects if that conversion failed.
 			 */
-			late: Promise<'kept-pending' | null> | null;
+			late: Promise<'kept-cancelled' | null> | null;
 	  }
-	| { kind: 'kept-pending' };
+	| { kind: 'kept-cancelled' };
 
 const isCannotDelete = (error: unknown) =>
 	error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE;
 
 /**
  * The one writer for voiding an order: the sanctioned delete, then the store's answer. A store
- * that refuses the delete keeps the order, so the fallback is an atomic patch-and-enqueue to
- * status `pending`. Throws when the delete or the fallback could not be enqueued; never toasts.
+ * that refuses the delete keeps the order, so the fallback cancels it on the store: an atomic
+ * patch-and-enqueue to status `cancelled` (WooCommerce's void). Never `pending`: that is an open
+ * cart status, so the voided cart would stay open and take the next sale's lines. Throws when the
+ * delete or the fallback could not be enqueued; never toasts.
  */
 export async function voidOrder(
 	manager: QueryManager,
@@ -75,14 +77,14 @@ export async function voidOrder(
 		});
 	};
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
-	// fallback is an atomic patch-and-enqueue to status 'pending' — the shared rollback path
+	// fallback is an atomic patch-and-enqueue to status 'cancelled' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
-	const convertToPending = async (deleteMutationId: string) => {
+	const cancelOnStore = async (deleteMutationId: string) => {
 		await patchAndEnqueueEngineResident({
 			manager,
 			collection: 'orders',
 			recordId,
-			changes: { status: 'pending' },
+			changes: { status: 'cancelled' },
 			registerId,
 		});
 		settleRefusedDelete(deleteMutationId);
@@ -101,8 +103,8 @@ export async function voidOrder(
 		return { kind: 'removed', confirmed: true, late: null };
 	} catch (error) {
 		if (isCannotDelete(error)) {
-			await convertToPending(receipt.mutationId);
-			return { kind: 'kept-pending' };
+			await cancelOnStore(receipt.mutationId);
+			return { kind: 'kept-cancelled' };
 		}
 		// A terminal-but-different outcome (conflict, other rejection) is owned by the engine's
 		// conflict/dead-letter surfaces — the void stands and nothing more is watched.
@@ -121,8 +123,8 @@ export async function voidOrder(
 					settleRefusedDelete(receipt.mutationId);
 					return null;
 				}
-				await convertToPending(receipt.mutationId);
-				return 'kept-pending' as const;
+				await cancelOnStore(receipt.mutationId);
+				return 'kept-cancelled' as const;
 			}
 		);
 		return { kind: 'removed', confirmed: false, late };

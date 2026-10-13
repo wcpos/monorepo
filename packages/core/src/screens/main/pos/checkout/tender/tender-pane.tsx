@@ -92,9 +92,10 @@ export function TenderPane({ flow, format, compact }: Props) {
 	);
 }
 
-// Keep each row at the same column count: percentage bases plus gaps wrap too early.
+// Keep each row at the same column count: percentage bases plus gaps wrap too early. Two on a
+// phone so six gateways' names fit (three rows), never an ellipsis.
 function MethodRows({ children }: React.PropsWithChildren) {
-	const columns = useIsPhone() ? 3 : 5;
+	const columns = useIsPhone() ? 2 : 5;
 	const tiles = React.Children.toArray(children);
 	const rows: React.ReactNode[][] = [];
 	for (let index = 0; index < tiles.length; index += columns) {
@@ -207,6 +208,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		method && !givesChange && !fixedAmount && flow.state.entryMinor > flow.balanceMinor
 	);
 	const left = flow.balanceMinor + flow.roundingMinor - flow.entryAppliedMinor;
+	// The big figure. The eyebrow and the Full balance chip repeat an amount only when it differs.
+	const shownMinor =
+		flow.state.view === 'select'
+			? due
+			: fixedAmount
+				? flow.entryAppliedMinor
+				: flow.state.entryMinor;
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
 		(tile.reason === 'offline' &&
@@ -219,7 +227,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			<Button
 				key={tile.method.id}
 				variant="outline"
-				className={`h-tile border-border bg-background min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${busy ? 'opacity-45' : ''}`}
+				className={`min-h-tile border-border bg-background h-auto min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 py-2 ${selected ? 'border-primary bg-muted' : ''} ${busy ? 'opacity-45' : ''}`}
 				testID={`checkout-method-${tile.method.id}`}
 				disabled={busy}
 				onPress={() => {
@@ -228,7 +236,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				}}
 			>
 				<Icon name={methodIcon(tile.method)} />
-				<ButtonText decodeHtml>{tile.method.title}</ButtonText>
+				<ButtonText decodeHtml numberOfLines={2} className="text-center">
+					{tile.method.title}
+				</ButtonText>
 				<MethodStatus tile={tile} selected={selected} />
 			</Button>
 		);
@@ -297,7 +307,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									? 'pos_checkout.remaining'
 									: 'pos_checkout.to_pay'
 							)}{' '}
-					<Text testID="checkout-balance" className={plan ? 'hidden' : 'tabular-nums'}>
+					<Text
+						testID="checkout-balance"
+						className={plan || flow.balanceMinor === shownMinor ? 'hidden' : 'tabular-nums'}
+					>
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
@@ -324,13 +337,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				testID="checkout-entry"
 				className={`text-foreground text-amt font-bold tabular-nums ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
 			>
-				{format(
-					flow.state.view === 'select'
-						? due
-						: fixedAmount
-							? flow.entryAppliedMinor
-							: flow.state.entryMinor
-				)}
+				{format(shownMinor)}
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
@@ -415,21 +422,26 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			) : null}
 			{unavailable.length > 0 ? (
 				<VStack space="xs" className="w-full max-w-md">
+					{/* Styled as the quiet folded line it is: centred muted words, a chevron, no chrome. */}
 					<Button
-						variant="ghost"
-						size="sm"
-						className="rounded-md"
+						variant="ghost-quiet"
+						className="flex-row gap-1 self-center"
 						testID="checkout-unavailable-toggle"
 						disabled={busy}
 						onPress={() => setUnavailableOpen(!unavailableOpen)}
 					>
-						<ButtonText decodeHtml>
+						<ButtonText decodeHtml numberOfLines={2} className="text-center">
 							{unavailable.length === 1
 								? t('pos_checkout.method_not_available_right_now', {
 										method: unavailable[0].method.title,
 									})
 								: t('pos_checkout.not_available_right_now_n', { n: unavailable.length })}
 						</ButtonText>
+						<Icon
+							name={unavailableOpen ? 'chevronUp' : 'chevronDown'}
+							size="xs"
+							className="text-muted-foreground"
+						/>
 					</Button>
 					{unavailableOpen
 						? unavailable.map((tile) => (
@@ -442,7 +454,6 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									<Text className="text-foreground text-sm" decodeHtml>
 										{tile.method.title}
 									</Text>
-									<MethodStatus tile={tile} />
 									<Text className="text-muted-foreground flex-1 text-xs">
 										{tile.reason
 											? t(disabledReasonKey(tile.reason), {
@@ -554,7 +565,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						label={t(
 							(givesChange && !remote) || plan
 								? 'pos_checkout.exact_amount'
-								: 'pos_checkout.full_balance',
+								: exactMinor === shownMinor
+									? 'pos_checkout.full_balance_label'
+									: 'pos_checkout.full_balance',
 							{ amount: format(exactMinor) }
 						)}
 						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
@@ -574,6 +587,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
 				className="w-full"
 			/>
+			{/* On a phone the full-size modal keeps this 8 above the bottom inset (modal/index.tsx). */}
 			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
 				<Button
 					variant="default"
@@ -642,29 +656,42 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 	);
 }
 
-function MethodStatus({ tile, selected }: { tile: TenderTile; selected?: boolean }) {
+/**
+ * One status language on every tile: a success dot in the corner while the reader or driver is
+ * connected (or a cloud reader is online), nothing otherwise; the battery only on the selected tile.
+ */
+function MethodStatus({ tile, selected }: { tile: TenderTile; selected: boolean }) {
 	const { method } = tile;
 	const t = useT();
-	// A folded (unavailable) row shows a grey dot and never subscribes to its driver.
+	// A disabled tile never subscribes to its driver.
 	const status = useDriverStatus(
 		method.capture.mode === 'device' && !tile.disabled
 			? getDriver(method.capture.provider)
 			: undefined
 	);
-	if (method.capture.mode !== 'server' && method.capture.mode !== 'device') return null;
+	if (tile.disabled || (method.capture.mode !== 'server' && method.capture.mode !== 'device'))
+		return null;
 	const connected =
-		!tile.disabled &&
-		(method.capture.mode === 'device'
+		method.capture.mode === 'device'
 			? status.connection === 'connected'
-			: selectableReaders(method).readers.length > 0);
+			: selectableReaders(method).readers.length > 0;
+	const battery = selected && connected ? status.reader?.battery : null;
 	return (
-		<View testID={`checkout-method-status-${method.id}`} className="flex-row items-center gap-1">
-			<View className={`size-2 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground'}`} />
-			{!tile.disabled && status.reader?.battery != null ? (
-				<Text className={`text-xs ${selected ? 'text-primary' : 'text-foreground'}`}>
-					{t('pos_checkout.reader_battery_percent', { battery: status.reader.battery })}
+		<>
+			{connected ? (
+				<View
+					testID={`checkout-method-dot-${method.id}`}
+					className="bg-success absolute top-2 right-2 size-2 rounded-full"
+				/>
+			) : null}
+			{battery != null ? (
+				<Text
+					testID={`checkout-method-status-${method.id}`}
+					className="text-muted-foreground text-xs"
+				>
+					{t('pos_checkout.reader_battery_percent', { battery })}
 				</Text>
 			) : null}
-		</View>
+		</>
 	);
 }

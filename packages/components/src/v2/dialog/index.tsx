@@ -15,6 +15,7 @@ import {
 	OVERLAY_MOTION,
 	OverlayShell,
 	useOverlay,
+	useSheetInset,
 } from '../../lib/overlay';
 import { usePortalContainer } from '../../lib/portal-container';
 import { cn } from '../../lib/utils';
@@ -43,9 +44,9 @@ const byPresentation: Record<DialogPresentation, string> = {
 	left: 'h-full rounded-none border-r',
 	right: 'h-full rounded-none border-l',
 	page: 'h-full w-full rounded-none border-0',
-	// Native keeps the cap on the panel; on web it sits on the Radix wrapper (SCRIM_WRAPPER.bottom)
-	// and the panel fills it.
-	bottom: 'w-full max-h-[92%] web:max-h-full rounded-t-2xl border-t',
+	// The cap sits on the wrappers and the panel fills them: on web the Radix wrapper
+	// (SCRIM_WRAPPER.bottom), on native the shell's keyboard wrapper.
+	bottom: 'w-full max-h-full rounded-t-2xl border-t',
 };
 const sizes: Record<DialogSize, string> = {
 	xs: 'w-64',
@@ -125,6 +126,7 @@ function DialogPanel(allProps: DialogContentProps) {
 		onInteractOutside,
 		testID,
 		ref,
+		style,
 		...props
 	} = rest;
 	const {
@@ -139,6 +141,8 @@ function DialogPanel(allProps: DialogContentProps) {
 		onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>
 	);
 	const { open } = DialogPrimitive.useRootContext();
+	// The bottom sheet paints its own inset; 16 keeps the `py-4` the class gives.
+	const inset = useSheetInset(16);
 	const sizeClass =
 		presentation === 'center' || presentation === 'left' || presentation === 'right'
 			? sizes[size]
@@ -168,6 +172,8 @@ function DialogPanel(allProps: DialogContentProps) {
 				className
 			)}
 			testID={testID}
+			// A caller's style adds to the inset; it never replaces it.
+			style={[inset, style]}
 			{...EXIT_MARK}
 			{...props}
 		>

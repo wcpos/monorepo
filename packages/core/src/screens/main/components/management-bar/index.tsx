@@ -19,7 +19,7 @@ import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
 
 type Props = React.PropsWithChildren<{
-	title: string;
+	title?: string;
 	testID: string;
 	search?: React.ReactNode;
 	back?: React.ComponentProps<typeof PageBar>['back'];

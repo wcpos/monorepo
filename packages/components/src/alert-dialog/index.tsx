@@ -12,6 +12,7 @@ import {
 	type OverlayScrimProps,
 	OverlayShell,
 	useOverlayPresentation,
+	useSheetInset,
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -28,6 +29,7 @@ function AlertDialogContent({
 	className,
 	portalHost,
 	inline,
+	style,
 	...props
 }: AlertDialogPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const { open } = AlertDialogPrimitive.useRootContext();
@@ -40,8 +42,17 @@ function AlertDialogContent({
 		}
 		return Scrim;
 	}, []);
+	// The bottom sheet paints its own inset; 16 keeps the `py-4` the class gives.
+	const inset = useSheetInset(16, presentation);
 	const shell = (
-		<OverlayShell presentation={presentation} open={open} Scrim={Scrim} testID={props.testID}>
+		<OverlayShell
+			presentation={presentation}
+			open={open}
+			Scrim={Scrim}
+			// A confirmation never dismisses from its scrim.
+			blocking
+			testID={props.testID}
+		>
 			<AlertDialogPrimitive.Content
 				className={cn(
 					'bg-card border-border z-70 max-h-full max-w-full gap-4 border py-4',
@@ -51,6 +62,8 @@ function AlertDialogContent({
 					open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
 					className
 				)}
+				// A caller's style adds to the inset; it never replaces it.
+				style={[inset, style]}
 				{...props}
 			/>
 		</OverlayShell>

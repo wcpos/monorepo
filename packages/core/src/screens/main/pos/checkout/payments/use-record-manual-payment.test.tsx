@@ -522,3 +522,24 @@ it('stamps the ids the tender gates handed over', async () => {
 	expect(row.session_id).toBe('session-from-gate');
 	expect(row.register_id).toBe('register-from-gate');
 });
+
+it.each([
+	['USD', 'USD'],
+	[undefined, 'EUR'],
+])(
+	'mints the row in the order currency (%s), the store currency only when it has none',
+	async (orderCurrency, minted) => {
+		// The store document says EUR; a saved cart opened in USD keeps USD.
+		const payload = order.payload as typeof order.payload & { currency?: string };
+		if (orderCurrency) payload.currency = orderCurrency;
+		else delete payload.currency;
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { session: gateSession(), amount: 40 }));
+		delete payload.currency;
+
+		const { readLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		const row = readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0];
+		expect(row.currency).toBe(minted);
+	}
+);

@@ -199,14 +199,14 @@ describe('VoidButton', () => {
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	});
 
-	it('keeps a refused void pending locally and enqueues the update', async () => {
+	it('cancels a refused void on the store and enqueues the update', async () => {
 		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -214,15 +214,17 @@ describe('VoidButton', () => {
 			manager: mockManager,
 			collection: 'orders',
 			recordId: 'order-1',
-			changes: { status: 'pending' },
+			changes: { status: 'cancelled' },
 		});
+		// `pending` is an open-cart status: the voided cart would stay open and take the next sale.
+		expect(mockPatchAndEnqueueEngineResident.mock.calls[0][0].changes.status).toBe('cancelled');
 		// The refused delete is settled, so the tab never reads "Save refused", and the cart
 		// leaves the kept order for a blank one.
 		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard');
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	});
 
-	it('Undo of a kept-pending void selects the order again', async () => {
+	it('Undo of a kept-cancelled void selects the order again', async () => {
 		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
@@ -241,7 +243,7 @@ describe('VoidButton', () => {
 
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -256,7 +258,7 @@ describe('VoidButton', () => {
 
 		await waitFor(() => expect(mockCartLogger.warn).toHaveBeenCalled());
 		expect(mockCartLogger.success).toHaveBeenCalledWith(
-			'pos_cart.order_voided_kept_pending',
+			'pos_cart.order_voided_cancelled',
 			expect.any(Object)
 		);
 		expect(mockCartLogger.error).not.toHaveBeenCalled();
@@ -271,7 +273,7 @@ describe('VoidButton', () => {
 
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -300,7 +302,7 @@ describe('VoidButton', () => {
 		// Optimistic toast fires at the timeout, then the late refusal converts.
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -312,7 +314,7 @@ describe('VoidButton', () => {
 		expect(mockAwaitCalls).toHaveLength(2);
 		expect(mockAwaitCalls[1]?.timeoutMs).toBeGreaterThan(15_000);
 		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalledWith(
-			expect.objectContaining({ changes: { status: 'pending' } })
+			expect.objectContaining({ changes: { status: 'cancelled' } })
 		);
 		expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard');
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
@@ -377,7 +379,7 @@ describe('VoidButton', () => {
 
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -704,7 +706,7 @@ describe('VoidButton', () => {
 		fireEvent.click(screen.getByTestId('void-button'));
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_voided_kept_pending',
+				'pos_cart.order_voided_cancelled',
 				expect.any(Object)
 			)
 		);
@@ -713,10 +715,12 @@ describe('VoidButton', () => {
 		);
 		expect(rows.map(([, , options]) => options.context.outcome)).toEqual([
 			'removed',
-			'kept-pending',
+			'kept-cancelled',
 		]);
+		// `status` is the order's status before the void on both rows; `outcome` tells them apart.
+		expect(rows[1][2].context.status).toBe(rows[0][2].context.status);
 		expect(rows[1][2].context).toEqual(
-			expect.objectContaining({ late: true, status: 'pending', sessionId: 'session-1' })
+			expect.objectContaining({ late: true, status: 'pos-open', sessionId: 'session-1' })
 		);
 		expect(rows[1][2].actor).toEqual({ id: '9', name: 'Demo Cashier' });
 	});
@@ -922,7 +926,7 @@ it('stamps the original register through the real writer when binding switches d
 		expect(mockEngine.write).toHaveBeenCalledWith(
 			expect.objectContaining({
 				payload: {
-					status: 'pending',
+					status: 'cancelled',
 					meta_data: [
 						{ key: '_wcpos_register', value: 'register' },
 						{ key: '_wcpos_till', value: 'till' },

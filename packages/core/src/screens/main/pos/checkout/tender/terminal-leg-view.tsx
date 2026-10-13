@@ -31,6 +31,7 @@ export function TerminalLegView({
 }) {
 	const t = useT();
 	const { screenSize } = useTheme();
+	const phone = screenSize === 'sm';
 	const [open, setOpen] = React.useState(false);
 	const leg = flow.terminalLeg!;
 	const { row } = leg;
@@ -187,9 +188,7 @@ export function TerminalLegView({
 			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
 				{t('pos_checkout.on_the_terminal')}
 			</Text>
-			<Text
-				className={`text-foreground font-bold tabular-nums ${screenSize === 'sm' ? 'text-5xl' : 'text-7xl'}`}
-			>
+			<Text className={`text-foreground font-bold tabular-nums ${phone ? 'text-5xl' : 'text-7xl'}`}>
 				{format(toMinor(row.amount, flow.dp))}
 			</Text>
 			{/* The status is said once, here. The steps show where; the log, behind Details, says why. */}
@@ -200,8 +199,8 @@ export function TerminalLegView({
 			/>
 			{/* Flat on the pane: no card around the reader, no box around the log (owner, 2026-10-06). */}
 			<VStack className="w-full max-w-md" space="md">
-				<HStack className="flex-wrap items-center justify-between gap-2 pt-4">
-					<Text className="text-muted-foreground shrink text-xs" decodeHtml>
+				<HStack className="items-center justify-between gap-2 pt-4">
+					<Text className="text-muted-foreground shrink text-xs" numberOfLines={1} decodeHtml>
 						{method?.title ?? row.method_id} · {readerLabel}
 					</Text>
 					{connected ? (
@@ -252,7 +251,14 @@ export function TerminalLegView({
 				</Collapsible>
 				<View className="bg-border h-px w-full" />
 			</VStack>
-			<HStack className="flex-wrap justify-center gap-2">
+			{/* A phone stacks the end-state buttons full width, the first one primary. */}
+			<View
+				className={
+					phone
+						? 'w-full max-w-md flex-col gap-2'
+						: 'flex-row flex-wrap items-center justify-center gap-2'
+				}
+			>
 				{action === 'capture' ? (
 					<Button
 						variant="default"
@@ -314,7 +320,7 @@ export function TerminalLegView({
 						</Button>
 					</>
 				) : null}
-			</HStack>
+			</View>
 			{action === 'release' ? (
 				<Text className="text-muted-foreground text-sm">{t('pos_checkout.release_explainer')}</Text>
 			) : null}

@@ -732,7 +732,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Voided an order',
 		descriptionKey: 'health.logs.event_description.order_voided',
 		description:
-			'The order was removed from the till, or kept as pending when the store refused the delete.',
+			'The order was removed from the till, or cancelled on the store when it refused the delete.',
 		introducedIn: '2.0.0',
 	},
 	'payment.authorized-offline': {

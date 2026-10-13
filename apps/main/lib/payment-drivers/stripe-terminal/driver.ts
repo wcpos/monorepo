@@ -151,6 +151,9 @@ export function createStripeTerminalDriver({
 	provideToken = nextToken;
 	const connected = (reader?: Reader.Type) => {
 		bluetoothOff = false;
+		// The reader carries its own transport (an adopted or reconnected reader, as well as
+		// one this driver connected); the module's may still be the default.
+		if (reader) transport = reader.deviceType === 'tapToPay' ? 'tap_to_pay' : 'bluetooth';
 		publish({
 			connection: 'connected',
 			reader: reader ? readerInfo(reader, transport) : status.reader,
@@ -322,6 +325,12 @@ export function createStripeTerminalDriver({
 			if (api && !sdk) publish({ message: null });
 			sdk = api;
 			if (api) {
+				// The SDK reports "connected" before the hook has its `connectedReader` (a reader
+				// held across a JS reload, Pixel 10, 2026-10-13): the status then says connected
+				// with no reader, and the pay sheet re-discovers (drops and re-pairs) it. Adopt
+				// the reader as soon as the hook carries it.
+				if (status.connection === 'connected' && !status.reader && api.connectedReader)
+					connected(api.connectedReader);
 				bindings.forEach((bind) => bind(api));
 			} else lastMethodId = undefined;
 		},
@@ -543,9 +552,12 @@ export function createStripeTerminalDriver({
 						handoffKeys: Object.keys(input.handoff ?? {}),
 					});
 				if (isCanceled(failure.code)) return failed('cancelled');
-				const decline = failure.declineCode ?? failure.apiError?.declineCode;
+				// Stripe's API can refuse a confirm with an EMPTY decline code (a reader at a
+				// location the account cannot use, a currency the account cannot take): the
+				// message is then the only reason there is, and the till must show it.
+				const decline = failure.declineCode || failure.apiError?.declineCode || null;
 				if (confirming && (decline || sameCode(failure.code, 'DECLINED_BY_STRIPE_API')))
-					return failed('declined', decline ?? 'card_declined');
+					return failed('declined', decline || failure.message || 'card_declined');
 				throw new Error(failure.message);
 			}
 		},

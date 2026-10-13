@@ -45,9 +45,9 @@ export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...prop
 							)}
 						>
 							{key.icon ? (
-								<Icon name={key.icon} size="lg" className="text-foreground" />
+								<Icon name={key.icon} size="xl" className="text-foreground" />
 							) : (
-								<Text className="text-base font-medium">{key.label}</Text>
+								<Text className="text-2xl font-medium">{key.label}</Text>
 							)}
 						</Pressable>
 					))}

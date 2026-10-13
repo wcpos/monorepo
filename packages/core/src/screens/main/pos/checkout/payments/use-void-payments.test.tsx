@@ -20,7 +20,10 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({}) }));
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({}),
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
+}));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 	patchEngineResident: (input: unknown) => mockMirror(input),

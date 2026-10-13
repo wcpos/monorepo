@@ -4,7 +4,14 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 import { render, screen } from '@testing-library/react';
 
 import { EASE, EASE_EXIT } from './motion';
-import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
+import {
+	OVERLAY_MOTION,
+	OVERLAY_PANEL,
+	type OverlayPresentation,
+	OverlayShell,
+	useOverlay,
+	useSheetInset,
+} from './overlay';
 
 const mockViews: ViewProps[] = [];
 const mockScrimProps: PressableProps[] = [];
@@ -34,8 +41,11 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
+let mockKeyboardVisible = false;
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: <T,>(select: (state: { isVisible: boolean }) => T) =>
+		select({ isVisible: mockKeyboardVisible }),
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('react-native-reanimated', () => {
@@ -139,25 +149,38 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 			accessibilityElementsHidden: true,
 		});
 		expect(scrim.onPress).toBeUndefined();
+		// Not blocking: the primitives' Overlay dismisses on a press, so the scrim keeps its touches.
+		expect(scrim.pointerEvents).toBeUndefined();
 		expect(scrim.style).toBe(StyleSheet.absoluteFill);
+		// A bottom sheet paints its own bottom inset (OverlaySheetPanel), so the shell leaves
+		// that strip unpadded: no scrim bar under the sheet.
+		const bottomInset = presentation === 'bottom' ? 0 : 34;
 		expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
 			paddingTop: 20,
-			paddingBottom: 34,
+			paddingBottom: bottomInset,
 			paddingLeft: 12,
 			paddingRight: 12,
 		});
 		expect(container.firstElementChild).toHaveStyle({
 			paddingTop: '20px',
-			paddingBottom: '34px',
+			paddingBottom: `${bottomInset}px`,
 			paddingLeft: '12px',
 			paddingRight: '12px',
 		});
 		const fullHeight = ['left', 'right', 'page'].includes(presentation);
+		const bottom = presentation === 'bottom';
+		// A bottom sheet sits on the screen edge: the keyboard wrapper is off (with the keyboard
+		// hidden it still padded the sheet ~9 dp up) and carries the sheet's height cap.
 		expect(mockViews).toContainEqual(
 			expect.objectContaining({
 				behavior: 'padding',
-				keyboardVerticalOffset: 34,
-				className: fullHeight ? 'max-h-full max-w-full h-full' : 'max-h-full max-w-full',
+				keyboardVerticalOffset: bottom ? 0 : 34,
+				enabled: !bottom,
+				className: bottom
+					? 'max-w-full max-h-[92%] w-full'
+					: fullHeight
+						? 'max-w-full h-full max-h-full'
+						: 'max-w-full max-h-full',
 				pointerEvents: 'box-none',
 			})
 		);
@@ -177,6 +200,55 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
 	}
 );
+
+it("turns a bottom sheet's keyboard wrapper on only while the keyboard is up", () => {
+	// Hidden: the it.each above pins it off (`enabled: !bottom`).
+	mockKeyboardVisible = true;
+	try {
+		render(
+			<OverlayShell presentation="bottom" open Scrim={Pressable}>
+				<View />
+			</OverlayShell>
+		);
+		// A searchable picker opens the keyboard on mount; the wrapper pushes the sheet above it.
+		expect(mockViews).toContainEqual(
+			expect.objectContaining({ behavior: 'padding', enabled: true, keyboardVerticalOffset: 0 })
+		);
+	} finally {
+		mockKeyboardVisible = false;
+	}
+});
+
+it('takes no touches on a blocking scrim (a confirmation)', () => {
+	render(
+		<OverlayShell presentation="center" open Scrim={Pressable} blocking testID="c">
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.pointerEvents).toBe('none');
+});
+
+it.each([
+	['bottom', { paddingBottom: 34 + 16 }],
+	['center', undefined],
+] as const)('pads only a native bottom sheet with the inset (%s)', (presentation, expected) => {
+	const seen: unknown[] = [];
+	function InsetProbe() {
+		seen.push(useSheetInset(16));
+		return null;
+	}
+	render(
+		<OverlayShell presentation={presentation} open Scrim={Pressable}>
+			<InsetProbe />
+		</OverlayShell>
+	);
+	expect(seen.at(-1)).toEqual(expected);
+});
+
+it('caps the native sheet on the wrappers, so its panel only fills them', () => {
+	expect(OVERLAY_PANEL.bottom).toContain('max-h-full');
+	expect(OVERLAY_PANEL.bottom).not.toContain('max-h-[92%]');
+});
 
 it('keeps anchored native content full-bleed and reachable without keyboard or inset layout', () => {
 	render(

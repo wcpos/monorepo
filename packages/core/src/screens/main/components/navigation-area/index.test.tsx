@@ -121,7 +121,7 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
 	});
 
-	it('uses the leaf title and a single bar crumb to navigate a phone deep link to the index', () => {
+	it('shows no bar title and a single bar crumb to navigate a phone deep link to the index', () => {
 		mockScreenSize = 'sm';
 		render(
 			<NavigationAreaLayout
@@ -131,11 +131,13 @@ describe('NavigationAreaLayout', () => {
 				testID="settings-navigation"
 				screenTestID="settings-screen"
 				barTestID="settings-bar"
+				leafPagesCarryTitle
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
-		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Tax');
+		// The leaf page carries its own heading; the bar shows only the way back (one title).
+		expect(screen.queryByTestId('settings-bar-title')).toBeNull();
 		const back = screen.getByTestId('settings-navigation-back');
 		expect(screen.getByTestId('settings-bar').contains(back)).toBe(true);
 		expect(back.textContent).toContain('Settings');

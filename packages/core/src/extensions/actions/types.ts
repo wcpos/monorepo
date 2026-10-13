@@ -164,8 +164,11 @@ export interface ActionContracts {
 			 */
 			paymentLegs: { live: number; captured: number; device: number };
 		};
-		/** The writer's answer; a `removed` may still be converted by a late store refusal. */
-		result: { kind: 'removed' | 'kept-pending' };
+		/**
+		 * The writer's answer: `kept-cancelled` when the store refused the delete, so the order was
+		 * cancelled on the store; a `removed` may still be cancelled by a late store refusal.
+		 */
+		result: { kind: 'removed' | 'kept-cancelled' };
 	};
 }
 /** Every other payload key is restored by the dispatcher. */

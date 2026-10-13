@@ -24,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { KeyboardAvoidingView } from '../keyboard-controller';
+import { KeyboardAvoidingView, useKeyboardState } from '../keyboard-controller';
 import {
 	EASE,
 	EASE_EXIT,
@@ -44,6 +44,8 @@ const isWeb = Platform.OS === 'web';
  * scrim. Native's primitives unmount at once and Reanimated plays the exit on the way out.
  */
 export const OVERLAY_EXIT_MOUNTED = isWeb;
+// Only the native shell has a keyboard wrapper; web never reads the keyboard's state.
+const useKeyboardVisible = isWeb ? () => false : () => useKeyboardState((state) => state.isVisible);
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
 export type OverlayScrimProps = {
 	ref?: React.Ref<never>;
@@ -55,6 +57,8 @@ export type OverlayScrimProps = {
 	accessible?: boolean;
 	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
 	accessibilityElementsHidden?: boolean;
+	/** Native: a blocking scrim takes no touches (see `OverlayShellProps.blocking`). */
+	pointerEvents?: 'auto' | 'none';
 	onPress?: (event: GestureResponderEvent) => void;
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
@@ -81,6 +85,11 @@ export type OverlayShellProps = {
 	 * whose target went with the layer; a touch it leaves to the click, which lands here.
 	 */
 	onOutsidePress?: () => void;
+	/**
+	 * A confirmation: the scrim takes no touches on native; on web the panel sits inside the
+	 * scrim, so it keeps taking clicks.
+	 */
+	blocking?: boolean;
 	pinned?: boolean;
 	testID?: string;
 	children: React.ReactNode;
@@ -99,6 +108,21 @@ export function useOverlay(): OverlayContextValue {
 }
 export function useOverlayPresentation(): OverlayPresentation | undefined {
 	return React.useContext(OverlayContext)?.presentation;
+}
+/**
+ * The bottom inset a native phone sheet paints itself, in card colour: the shell leaves that
+ * strip unpadded so the scrim never shows as a bar under the sheet (owner, 2026-10-13).
+ * `padding` is the panel's own bottom padding on top of the inset. A panel that renders the
+ * shell itself (the alert) is outside the shell's context and names its presentation.
+ */
+export function useSheetInset(
+	padding: number,
+	presentation?: OverlayPresentation
+): { paddingBottom: number } | undefined {
+	const insets = useSafeAreaInsets();
+	const current = useOverlayPresentation();
+	if (isWeb || (presentation ?? current) !== 'bottom') return undefined;
+	return { paddingBottom: insets.bottom + padding };
 }
 /**
  * Web: Radix mounts an auto-sized `role="dialog"` wrapper between the scrim and the panel.
@@ -140,7 +164,9 @@ export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
 	// `max-w-full`: the phone sheet is the phone's width, whatever cap an anchored caller set
 	// (`max-w-80` on the variations popover left a 280 dp sheet, Pixel 2026-10-06).
-	bottom: 'bg-card border-border w-full max-w-full max-h-[92%] rounded-t-2xl border-t p-2',
+	// Native caps the sheet on the shell's wrappers (a percentage on the panel resolved against
+	// its own content); web has no such wrapper for a `[data-sheet]`, so the panel keeps the cap.
+	bottom: `bg-card border-border w-full max-w-full ${isWeb ? 'max-h-[92%]' : 'max-h-full'} rounded-t-2xl border-t p-2`,
 };
 export const OVERLAY_MOTION: Record<
 	OverlayPresentation,
@@ -206,6 +232,7 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
+	const inset = useSheetInset(8);
 	const setNode = React.useCallback(
 		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);
@@ -233,7 +260,7 @@ export function OverlaySheetPanel({
 				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
 				'z-50'
 			)}
-			style={style}
+			style={[inset, style]}
 		>
 			{children}
 		</View>
@@ -265,9 +292,20 @@ const keyOwners: object[] = [];
  * keyed on `open` runs, and that effect would never re-run.
  */
 export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
-	const { ref, presentation, open, Scrim, onDismiss, onOutsidePress, pinned, testID, children } =
-		props;
+	const {
+		ref,
+		presentation,
+		open,
+		Scrim,
+		onDismiss,
+		onOutsidePress,
+		blocking,
+		pinned,
+		testID,
+		children,
+	} = props;
 	const insets = useSafeAreaInsets();
+	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
@@ -463,7 +501,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				StyleSheet.absoluteFill,
 				{
 					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
+					// A bottom sheet carries its own bottom inset (OverlaySheetPanel).
+					paddingBottom: presentation === 'bottom' ? 0 : insets.bottom,
 					paddingLeft: insets.left,
 					paddingRight: insets.right,
 				},
@@ -476,20 +515,42 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				accessible={false}
 				importantForAccessibility="no"
 				accessibilityElementsHidden
+				// A confirmation's scrim (`blocking`) must never take a touch: on Android a
+				// scrim given its own z-index (the alert's `z-70`) ends up above the panel's
+				// wrapper and swallows every tap. Measured on a Pixel 10, 2026-10-13 (Restore
+				// server settings: Cancel and Confirm dead). Every other scrim dismisses on a
+				// press (the primitives' Overlay), so it keeps its touches.
+				pointerEvents={blocking && !isWeb ? 'none' : undefined}
 				testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 			/>
 			<KeyboardAvoidingView
 				pointerEvents="box-none"
 				behavior="padding"
-				keyboardVerticalOffset={insets.bottom}
-				className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
+				// Measured on a Pixel 10 (2026-10-13): with the keyboard hidden the padding
+				// behaviour still pads a bottom sheet ~9 dp off the screen edge. A sheet sits on
+				// the edge, so its wrapper is on only while the keyboard is up, and pushes the
+				// sheet (a searchable picker opens the keyboard on mount) from the edge.
+				keyboardVerticalOffset={presentation === 'bottom' ? 0 : insets.bottom}
+				enabled={presentation !== 'bottom' || keyboardVisible}
+				// The sheet's height cap lives on the wrappers, not the panel: a percentage cap on
+				// the panel resolves against a wrapper that is itself sized by the panel, and the
+				// panel ends up clipped to 92% of its own content (same measurement).
+				className={cn(
+					'max-w-full',
+					fullHeight && 'h-full',
+					presentation === 'bottom' ? 'max-h-[92%] w-full' : 'max-h-full'
+				)}
 			>
 				<Animated.View
 					pointerEvents="box-none"
 					onAccessibilityEscape={onDismiss}
 					entering={OVERLAY_MOTION[presentation].entering}
 					exiting={OVERLAY_MOTION[presentation].exiting}
-					className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
+					className={cn(
+						'max-h-full max-w-full',
+						fullHeight && 'h-full',
+						presentation === 'bottom' && 'w-full'
+					)}
 				>
 					{children}
 				</Animated.View>
