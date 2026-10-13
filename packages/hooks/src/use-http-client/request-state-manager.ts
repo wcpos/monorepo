@@ -349,7 +349,7 @@ class RequestStateManager {
 				httpLogger.debug('Token refresh completed successfully');
 				this.refreshedToken = newToken;
 				this.isRefreshing = false;
-				this.authFailed = false; // Clear auth failed on successful refresh
+				this.setAuthFailed(false); // Clear auth failed on successful refresh
 				this.tokenRefreshPromise = null;
 			})
 			.catch((error) => {

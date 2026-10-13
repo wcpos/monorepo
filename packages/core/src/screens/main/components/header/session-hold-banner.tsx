@@ -13,6 +13,12 @@ import { useEngineStatus, useMutationCounts } from '../../hooks/use-engine-monit
 import { useSessionLoginFlow } from '../../hooks/use-rest-http-client/use-session-login-flow';
 
 const logger = getLogger(['wcpos', 'auth', 'error']);
+let holdToastShown = false;
+
+/** Test-only reset of shared hold toast state. */
+export function resetSessionHoldBannerState() {
+	holdToastShown = false;
+}
 
 /**
  * A refused session is a STATE that lasts until the cashier logs in, so it is
@@ -25,30 +31,35 @@ export function SessionHoldBanner() {
 	const { triggerAuthFlow } = useSessionLoginFlow(site, wpCredentials, logout);
 	const t = useT();
 	const accessToken = useDocField(wpCredentials, (value) => value.access_token);
-	const refreshToken = useDocField(wpCredentials, (value) => value.refresh_token);
-	const previousTokens = React.useRef({ accessToken, refreshToken });
-	const previousHeld = React.useRef(false);
+	const previousAccessToken = React.useRef(accessToken);
+	const [recovered, setRecovered] = React.useState(false);
 	const held = status.writeSessionHeld || status.authRequired;
+	if (!held && recovered) setRecovered(false);
+
+	// A renewed token can be refused too: when the latch sets again, the banner must show again.
+	React.useEffect(
+		() => requestStateManager.onAuthFailed((failed) => failed && setRecovered(false)),
+		[]
+	);
 
 	// Shared credential document changes arrive outside this component (e.g. another tab).
 	React.useEffect(() => {
-		const changed =
-			previousTokens.current.accessToken !== accessToken ||
-			previousTokens.current.refreshToken !== refreshToken;
-		previousTokens.current = { accessToken, refreshToken };
+		const changed = previousAccessToken.current !== accessToken;
+		previousAccessToken.current = accessToken;
 		if (changed && requestStateManager.isAuthFailed()) {
 			requestStateManager.clearAuthFailure();
+			setRecovered(true);
 			logger.info('Session renewed by another tab', {
 				showToast: true,
 				toast: { title: t('auth.session_renewed_automatically') },
 				context: { siteName: site.name },
 			});
 		}
-	}, [accessToken, refreshToken, site.name, t]);
+	}, [accessToken, site.name, t]);
 
 	// The toast marks an external engine state transition, once per hold.
 	React.useEffect(() => {
-		if (held && !previousHeld.current) {
+		if (held && !holdToastShown) {
 			logger.warn('Please log in to continue', {
 				showToast: true,
 				toast: {
@@ -57,11 +68,14 @@ export function SessionHoldBanner() {
 				code: ERROR_CODES.SESSION_EXPIRED,
 				context: { siteName: site.name },
 			});
+			holdToastShown = true;
 		}
-		previousHeld.current = held;
+		if (!held) {
+			holdToastShown = false;
+		}
 	}, [held, site.name, t, triggerAuthFlow]);
 
-	if (!held) return null;
+	if (!held || recovered) return null;
 
 	return (
 		<View

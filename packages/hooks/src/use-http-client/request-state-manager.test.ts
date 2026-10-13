@@ -149,8 +149,12 @@ describe('RequestStateManager', () => {
 
 		it('should clear authFailed on successful refresh', async () => {
 			requestStateManager.setAuthFailed(true);
+			const callback = jest.fn();
+			const cleanup = requestStateManager.onAuthFailed(callback);
 			await requestStateManager.startTokenRefresh(async () => 'token');
+			cleanup();
 			expect(requestStateManager.isAuthFailed()).toBe(false);
+			expect(callback.mock.calls).toEqual([[false]]);
 		});
 
 		it('should handle refresh failure', async () => {
