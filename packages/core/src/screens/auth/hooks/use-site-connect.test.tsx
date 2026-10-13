@@ -47,12 +47,18 @@ jest.mock('../../../utils/site-writes', () => ({
 }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the hook.
+import { upsertSiteData } from '../../../utils/site-writes';
+// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the hook.
 import { useSiteConnect } from './use-site-connect';
 
 describe('useSiteConnect', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockRunConnectCompatibilityProbes.mockResolvedValue({ blocking: null, warnings: [] });
+		mockRunConnectCompatibilityProbes.mockResolvedValue({
+			blocking: null,
+			warnings: [],
+			useCacheBuster: false,
+		});
 	});
 
 	it.each([
@@ -86,6 +92,7 @@ describe('useSiteConnect', () => {
 		mockRunConnectCompatibilityProbes.mockResolvedValue({
 			blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
 			warnings: [],
+			useCacheBuster: false,
 		});
 		const { result } = renderHook(() => useSiteConnect());
 
@@ -97,29 +104,37 @@ describe('useSiteConnect', () => {
 		expect(result.current.errorCode).toBe(ERROR_CODES.CACHE_SHARED_REPLAY);
 	});
 
-	it('continues connecting when compatibility probes return only warnings', async () => {
-		mockTestAuthorizationMethod.mockResolvedValue({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: true,
-		});
-		mockRunConnectCompatibilityProbes.mockResolvedValue({
-			blocking: null,
-			warnings: [ERROR_CODES.SEARCH_BLOCKED_BY_WAF],
-		});
-		const { result } = renderHook(() => useSiteConnect());
+	it.each([false, true])(
+		'persists cache-buster mode %s when probes return only warnings',
+		async (useCacheBuster) => {
+			mockTestAuthorizationMethod.mockResolvedValue({
+				ok: true,
+				useJwtAsParam: false,
+				useRestRouteParam: true,
+			});
+			mockRunConnectCompatibilityProbes.mockResolvedValue({
+				blocking: null,
+				warnings: [ERROR_CODES.SEARCH_BLOCKED_BY_WAF],
+				useCacheBuster,
+			});
+			const { result } = renderHook(() => useSiteConnect());
 
-		await act(async () => {
-			await result.current.onConnect('https://example.com');
-		});
+			await act(async () => {
+				await result.current.onConnect('https://example.com');
+			});
 
-		expect(mockRunConnectCompatibilityProbes).toHaveBeenCalledWith({
-			pathBase: 'https://example.com/wp-json/wcpos/v2/',
-			pathRoot: 'https://example.com/wp-json/',
-			useRestRouteParam: true,
-		});
-		expect(result.current.error).toBeNull();
-		expect(result.current.status).toBe('success');
-		expect(result.current.errorCode).toBeNull();
-	});
+			expect(mockRunConnectCompatibilityProbes).toHaveBeenCalledWith({
+				pathBase: 'https://example.com/wp-json/wcpos/v2/',
+				pathRoot: 'https://example.com/wp-json/',
+				useRestRouteParam: true,
+			});
+			expect(result.current.error).toBeNull();
+			expect(result.current.status).toBe('success');
+			expect(upsertSiteData).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ use_cache_buster: useCacheBuster })
+			);
+			expect(result.current.errorCode).toBeNull();
+		}
+	);
 });

@@ -109,6 +109,7 @@ function AppStack() {
 		site,
 		(value) => value.use_rest_route_param
 	) as boolean;
+	const useCacheBuster = useDocField(site, (value) => value.use_cache_buster) as boolean;
 	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 
@@ -148,6 +149,7 @@ function AppStack() {
 						wcpos_version: wcposVersion,
 						use_jwt_as_param: useJwtAsParam,
 						use_rest_route_param: useRestRouteParamField,
+						use_cache_buster: useCacheBuster,
 						use_protocol_headers: useProtocolHeaders,
 					},
 					wpCredentials,
@@ -163,6 +165,7 @@ function AppStack() {
 			cashierID,
 			useJwtAsParam,
 			useRestRouteParamField,
+			useCacheBuster,
 			wcposVersion,
 			useProtocolHeaders,
 			wpCredentials,

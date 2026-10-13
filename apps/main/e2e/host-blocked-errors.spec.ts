@@ -177,6 +177,8 @@ test('HOST151 blocks an authenticated echo replayed from shared cache', async ({
 		// The replay probes are the echo GETs that carry an Authorization header
 		// but NO authorization query param — the ladder's own echo carries the
 		// masked param, so it still reaches the real store.
+		// Other query params are ignored: the cache-busted retry still replays
+		// this fixture, so HOST151 continues to block.
 		matches: (url, request) =>
 			(request.method() === 'GET' || request.method() === 'OPTIONS') &&
 			isRoute(url, 'echo') &&

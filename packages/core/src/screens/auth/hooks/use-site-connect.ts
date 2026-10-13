@@ -61,6 +61,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 	wcpos_login_url: string;
 	use_jwt_as_param: boolean;
 	use_rest_route_param: boolean;
+	use_cache_buster: boolean;
 	use_protocol_headers: boolean;
 }
 
@@ -129,7 +130,8 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 		async (
 			siteData: WpJsonResponse,
 			endpoints: any,
-			authResult: any
+			authResult: any,
+			useCacheBuster: boolean
 		): Promise<SiteDocument | null> => {
 			try {
 				// Combine all the data into the extended site data format
@@ -138,6 +140,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					...endpoints,
 					use_jwt_as_param: authResult.useJwtAsParam,
 					use_rest_route_param: authResult.useRestRouteParam,
+					use_cache_buster: useCacheBuster,
 					use_protocol_headers: authResult.useProtocolHeaders,
 				};
 
@@ -286,7 +289,12 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				updateProgress(4, t('auth.saving_site_configuration'));
 				setStatus('saving');
 
-				const savedSite = await saveSiteData(apiResult.siteData, apiResult.endpoints, authResult);
+				const savedSite = await saveSiteData(
+					apiResult.siteData,
+					apiResult.endpoints,
+					authResult,
+					compatibility.useCacheBuster
+				);
 				if (!savedSite) {
 					throw new Error(t('auth.failed_to_save_site_configuration'));
 				}

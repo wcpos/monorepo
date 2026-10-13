@@ -434,7 +434,7 @@ export async function runConnectCompatibilityProbes(input: {
 	pathBase: string;
 	pathRoot: string;
 	useRestRouteParam: boolean;
-}): Promise<{ blocking: ErrorCode | null; warnings: ErrorCode[] }> {
+}): Promise<{ blocking: ErrorCode | null; warnings: ErrorCode[]; useCacheBuster: boolean }> {
 	const resolvedUrl = (pathUrl: string) =>
 		input.useRestRouteParam ? toRestRouteUrl(pathUrl, input.pathRoot) : pathUrl;
 	const ping = buildRequestPreamble(
@@ -457,9 +457,14 @@ export async function runConnectCompatibilityProbes(input: {
 		});
 	}
 
-	const requestEcho = async (token: string): Promise<HeaderEchoResult | null> => {
+	const requestEcho = async (token: string, bustCache: boolean) => {
 		const prepared = buildRequestPreamble(
-			{ purpose: 'probe-cache', client: AppInfo, accessToken: token },
+			{
+				purpose: 'probe-cache',
+				client: AppInfo,
+				accessToken: token,
+				site: bustCache ? { use_cache_buster: true } : undefined,
+			},
 			{ url: `${input.pathBase}echo` }
 		);
 		const result = await fetchJsonWithTimeout(
@@ -477,29 +482,52 @@ export async function runConnectCompatibilityProbes(input: {
 	// a 17-char token reports 24). Derived, never hardcoded — a changed literal
 	// must not silently turn this comparison into a constant.
 	const secondSentLength = `Bearer ${SECOND_PROBE_TOKEN}`.length;
-	const first = await requestEcho(FIRST_PROBE_TOKEN);
-	const second = await requestEcho(SECOND_PROBE_TOKEN);
-	const firstReported = first?.headers.authorization?.length;
-	const secondReported = second?.headers.authorization?.length;
-	if (
-		first &&
-		second &&
-		// Load-bearing: a host that STRIPS Authorization reports {received:false,
-		// length:0} on both probes — identical, and unequal to what was sent.
-		// Without this guard every header-stripping host (the commonest hostile
-		// profile) would be told its cache leaks data between cashiers. A
-		// stripped header is AUTH421's condition, not evidence of replay.
-		first.headers.authorization?.received === true &&
-		typeof firstReported === 'number' &&
-		secondReported === firstReported &&
-		secondReported !== secondSentLength
-	) {
+	const isReplay = (first: HeaderEchoResult | null, second: HeaderEchoResult | null) => {
+		const firstReported = first?.headers.authorization?.length;
+		const secondReported = second?.headers.authorization?.length;
+		return (
+			first &&
+			second &&
+			// Load-bearing: a host that STRIPS Authorization reports {received:false,
+			// length:0} on both probes — identical, and unequal to what was sent.
+			// A stripped header is AUTH421's condition, not evidence of replay.
+			first.headers.authorization?.received === true &&
+			typeof firstReported === 'number' &&
+			secondReported === firstReported &&
+			secondReported !== secondSentLength
+		);
+	};
+	const first = await requestEcho(FIRST_PROBE_TOKEN, false);
+	const second = await requestEcho(SECOND_PROBE_TOKEN, false);
+	if (isReplay(first, second)) {
 		const code = ERROR_CODES.CACHE_SHARED_REPLAY;
+		const bustedFirst = await requestEcho(FIRST_PROBE_TOKEN, true);
+		const bustedSecond = await requestEcho(SECOND_PROBE_TOKEN, true);
+		// Both busted echoes must report exactly what was sent: a cache that
+		// ignores the key would answer the first probe's stored copy, and a probe
+		// that never answered proves nothing. Anything less stays blocked.
+		const arrivedIntact = (echo: HeaderEchoResult | null, sentLength: number) =>
+			echo?.headers.authorization?.received === true &&
+			echo.headers.authorization.length === sentLength;
+		if (
+			arrivedIntact(bustedFirst, `Bearer ${FIRST_PROBE_TOKEN}`.length) &&
+			arrivedIntact(bustedSecond, secondSentLength)
+		) {
+			appLogger.warn(
+				'Shared cache replay detected; routing around it with a unique cache key on every request',
+				{
+					code,
+					context: { classification: ERROR_CATALOGUE[code].symbol, mitigated: true },
+				}
+			);
+			warnings.push(code);
+			return { blocking: null, warnings, useCacheBuster: true };
+		}
 		appLogger.error('Shared cache replay detected', { code, showToast: true });
-		return { blocking: code, warnings };
+		return { blocking: code, warnings, useCacheBuster: false };
 	}
 
-	return { blocking: null, warnings };
+	return { blocking: null, warnings, useCacheBuster: false };
 }
 
 async function finishHostBlock(

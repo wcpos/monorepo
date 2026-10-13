@@ -11,6 +11,11 @@ import {
 	SYNC_PROTOCOL_VERSION,
 } from './sync-protocol';
 
+export const CACHE_BUSTER_PARAM = '_wcpos_nocache';
+export function cacheBusterValue(): string {
+	return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export type RequestPurpose =
 	| 'sync'
 	| 'rest'
@@ -24,6 +29,7 @@ export type RequestPurpose =
 export interface PreambleSite {
 	wp_api_url?: string;
 	use_rest_route_param?: boolean;
+	use_cache_buster?: boolean;
 	use_jwt_as_param?: boolean;
 	use_protocol_headers?: boolean;
 	wcpos_version?: string;
@@ -32,6 +38,7 @@ export function toPreambleSite(site: PreambleSite): PreambleSite {
 	const {
 		wp_api_url,
 		use_rest_route_param,
+		use_cache_buster,
 		use_jwt_as_param,
 		use_protocol_headers,
 		wcpos_version,
@@ -39,6 +46,7 @@ export function toPreambleSite(site: PreambleSite): PreambleSite {
 	return {
 		wp_api_url,
 		use_rest_route_param,
+		use_cache_buster,
 		use_jwt_as_param,
 		use_protocol_headers,
 		wcpos_version,
@@ -268,6 +276,14 @@ export function buildRequestPreamble(
 		context.storeId !== 0
 	) {
 		setParam('store_id', String(context.storeId));
+	}
+	// nginx-style microcaches key on the URL and ignore no-store/Vary: a unique key is never a hit.
+	// Only the connect probe sets this flag; mutations keep their stable URLs.
+	if (
+		site.use_cache_buster === true &&
+		['GET', 'HEAD'].includes((request.method ?? 'GET').toUpperCase())
+	) {
+		url.searchParams.set(CACHE_BUSTER_PARAM, cacheBusterValue());
 	}
 	return { url: url.toString(), headers };
 }

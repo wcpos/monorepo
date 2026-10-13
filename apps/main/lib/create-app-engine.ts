@@ -88,6 +88,7 @@ export interface CreateAppSyncEngineOptions {
 	/** Query-param auth mode and whether that server accepts a bare token. */
 	useJwtAsParam?: boolean;
 	useRestRouteParam: boolean;
+	useCacheBuster?: boolean;
 	bareAuthParam?: boolean;
 	useProtocolHeaders?: boolean;
 	/**
@@ -119,6 +120,7 @@ type MutableFetcherOptions = Pick<
 	| 'useJwtAsParam'
 	| 'bareAuthParam'
 	| 'useRestRouteParam'
+	| 'useCacheBuster'
 	| 'useProtocolHeaders'
 >;
 type WriteLeaderState = {
@@ -197,6 +199,7 @@ export function createSessionFetcherOptions(
 		credentials: wpCredentials,
 		useJwtAsParam: site.use_jwt_as_param,
 		useRestRouteParam: resolveRestTransport(site) === 'query',
+		useCacheBuster: site.use_cache_buster,
 		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
 		useProtocolHeaders: site.use_protocol_headers,
 		refreshAuth: (context) =>
@@ -223,6 +226,7 @@ function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOp
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
 		useRestRouteParam: options.useRestRouteParam,
+		useCacheBuster: options.useCacheBuster,
 		useProtocolHeaders: options.useProtocolHeaders,
 	};
 }
