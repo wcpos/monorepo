@@ -225,6 +225,16 @@ describe('device tiles', () => {
 			buildTenderTiles([device], { online: false, transports: { [device.id]: 'tap_to_pay' } })[0]
 		).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
 	});
+	it('lets the driver narrow offline: queue to the reader in hand', () => {
+		const queuesOffline = jest.fn(() => false);
+		registerDriver({ ...driver, queuesOffline });
+		expect(buildTenderTiles([device], { online: false })[0]).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+			settlesLater: false,
+		});
+		expect(queuesOffline).toHaveBeenCalledWith('bluetooth');
+	});
 	it.each(['web', 'permission', 'bluetooth_off', 'not_logged_in', 'unsupported'] as const)(
 		'explains unavailable %s',
 		(reason) => {

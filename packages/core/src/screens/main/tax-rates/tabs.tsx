@@ -2,17 +2,22 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableSuspense } from 'observable-hooks';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
-import { useCollectionBinding, useQueryState } from '../../../query';
+import {
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useQuerySnapshot,
+	useQueryState,
+} from '../../../query';
 import { useExtraData } from '../contexts/extra-data';
 
 import type { TaxRateData } from '../contexts/tax-rates';
@@ -26,25 +31,25 @@ interface QueryResult {
 	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
-type TaxRatesBinding = ReturnType<typeof useCollectionBinding<'tax-rates'>>;
-
-/**
- *
- */
-/** Creator above, reader below its own boundary — see `tax-rates.tsx` for why. */
+/** Owner above, reader below its own boundary — see `tax-rates.tsx` for why. */
 export function TaxRatesTabs() {
 	const state = useQueryState<'tax-rates'>();
-	const binding = useCollectionBinding('tax-rates', state);
+	const handle = useCollectionQueryHandle('tax-rates', state);
 
 	return (
-		<Suspense>
-			<TaxRatesTabsContent binding={binding} />
-		</Suspense>
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense>
+				<TaxRatesTabsContent handle={handle} />
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 
-function TaxRatesTabsContent({ binding }: { binding: TaxRatesBinding }) {
-	const result = useObservableSuspense(binding.resource) as QueryResult;
+function TaxRatesTabsContent({ handle }: { handle: QueryHandle }) {
+	// The current rates stay drawn while a changed handle answers — see `tax-rates.tsx`.
+	const shown = useDrawnHandle(handle);
+	// The answer only: the footer reads `active` and `total` itself.
+	const result = useQuerySnapshot(shown, []).result as QueryResult;
 	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as TaxClass[] | undefined;
@@ -82,12 +87,7 @@ function TaxRatesTabsContent({ binding }: { binding: TaxRatesBinding }) {
 					</TabsContent>
 				))}
 			</Tabs>
-			<TaxRatesFooter
-				count={rates.length}
-				active$={binding.active$}
-				total$={binding.total$}
-				sync={binding.sync}
-			/>
+			<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 		</>
 	);
 }

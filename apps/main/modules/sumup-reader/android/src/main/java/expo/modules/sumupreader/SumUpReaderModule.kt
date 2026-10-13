@@ -1,13 +1,25 @@
 package expo.modules.sumupreader
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import com.sumup.merchant.reader.api.SumUpAPI
 import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpPayment
 import com.sumup.reader.sdk.api.SumUpState
 import com.sumup.merchant.reader.models.SavedCardReaderDetailsResult
 import com.sumup.checkout.core.models.TransactionInfo
+import com.sumup.contract.offline.OfflineSessionState
+import com.sumup.contract.offline.OfflineUploadFailureReasons
+import com.sumup.merchant.reader.offline.callbacks.OfflineSessionCallback
+import com.sumup.merchant.reader.offline.callbacks.SecurityPatchUpdateCallback
+import com.sumup.merchant.reader.offline.callbacks.UploadOfflineTransactionsStatusListener
+import com.sumup.merchant.reader.offline.session.domain.contracts.StartOfflineSessionCallback
+import com.sumup.merchant.reader.offline.session.domain.contracts.StopOfflineSessionCallback
+import com.sumup.merchant.reader.offline.session.domain.model.OfflineOperationResult.StartOfflineSessionResult
+import com.sumup.merchant.reader.offline.session.domain.model.OfflineOperationResult.StopOfflineSessionResult
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Queues
@@ -37,6 +49,36 @@ class SumUpReaderModule : Module() {
     val reader = SumUpAPI.getSavedCardReaderDetails() as? SavedCardReaderDetailsResult.SavedCardReaderDetails ?: return null
     return mapOf("connected" to SumUpAPI.isCardReaderConnected(), "serial" to reader.serialNumber,
       "model" to reader.readerType?.toString(), "battery" to reader.lastKnownBatteryPercentage)
+  }
+  // SumUp's offline calls must be serial and never overlap one of its screens: each one holds
+  // `busy` until its callback (any thread) settles back on the main thread.
+  private fun offline(promise: Promise, call: ((Promise.() -> Unit) -> Unit) -> Unit) {
+    requireSetup()
+    if (busy) throw CodedException("ERR_SUMUP_BUSY", "A SumUp operation is already in progress", null)
+    busy = true
+    val settle: (Promise.() -> Unit) -> Unit = { outcome ->
+      Handler(Looper.getMainLooper()).post { busy = false; promise.outcome() }
+    }
+    try { call(settle) } catch (error: Exception) { busy = false; throw error }
+  }
+  // Set when this app starts an offline session, cleared once SumUp has its payments: only this
+  // app starts sessions, so without it there is none and no SDK call is needed to say so.
+  private var sessionStarted: Boolean
+    get() = prefs()?.getBoolean("offlineSessionStarted", false) ?: false
+    set(value) { prefs()?.edit()?.putBoolean("offlineSessionStarted", value)?.apply() }
+  private fun prefs() = appContext.reactContext?.getSharedPreferences("wcpos.sumup", Context.MODE_PRIVATE)
+  private fun uploadFailure(reason: OfflineUploadFailureReasons): String = when (reason) {
+    is OfflineUploadFailureReasons.DifferentMerchant -> "Log in to the SumUp account that took the offline payments to upload them"
+    is OfflineUploadFailureReasons.UserNotLoggedIn -> "Log in to SumUp first"
+    else -> "SumUp could not upload the offline payments; it will try again when online"
+  }
+  private fun startFailure(result: StartOfflineSessionResult): String = when (result) {
+    is StartOfflineSessionResult.NotEligible -> "This SumUp reader cannot take offline payments"
+    is StartOfflineSessionResult.FeatureNotEnabled -> "SumUp has not enabled offline payments on this account"
+    is StartOfflineSessionResult.OfflineLimitsAbsent -> "Go online once so SumUp can download its offline limits"
+    is StartOfflineSessionResult.TransactionsPresent -> "Go online to upload the stored SumUp offline payments first"
+    is StartOfflineSessionResult.UserLoggedOut -> "Log in to SumUp first"
+    else -> "SumUp could not start an offline session"
   }
   private fun emitStatus() { sendEvent("onReaderStatus", mapOf("reader" to status())) }
   private fun launch(code: Int, promise: Promise, action: (Activity) -> Unit) {
@@ -68,7 +110,8 @@ class SumUpReaderModule : Module() {
       "transactionCode" to data?.getStringExtra(SumUpAPI.Response.TX_CODE),
       "amount" to info?.amount?.toString(), "tipAmount" to info?.tipAmount?.toString(),
       "currency" to info?.currency, "cardType" to info?.card?.type,
-      "last4" to info?.card?.last4Digits, "message" to data?.getStringExtra(SumUpAPI.Response.MESSAGE))
+      "last4" to info?.card?.last4Digits, "message" to data?.getStringExtra(SumUpAPI.Response.MESSAGE),
+      "offline" to data?.getStringExtra(SumUpAPI.Response.TX_TYPE)?.let { it == "OFFLINE" })
   }
   override fun definition() = ModuleDefinition {
     Name("SumUpReader")
@@ -114,6 +157,57 @@ class SumUpReaderModule : Module() {
     AsyncFunction("prepareForCheckout") {
       requireSetup()
       SumUpAPI.prepareForCheckout()
+    }.runOnQueue(Queues.MAIN)
+    // pending: this app started a session SumUp has not confirmed uploaded; active: it is running.
+    AsyncFunction("offlineSession") { promise: Promise ->
+      if (!sessionStarted) promise.resolve(mapOf("active" to false, "pending" to false))
+      else offline(promise) { settle ->
+        SumUpAPI.fetchCurrentOfflineSession(object : OfflineSessionCallback {
+          override fun onSessionInfoReceived(state: OfflineSessionState) {
+            settle { resolve(mapOf("active" to (state is OfflineSessionState.ActiveSession), "pending" to true)) }
+          }
+        })
+      }
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("startOfflineSession") { promise: Promise ->
+      offline(promise) { settle ->
+        SumUpAPI.startOfflineSession(object : StartOfflineSessionCallback {
+          override fun onResult(result: StartOfflineSessionResult) {
+            if (result is StartOfflineSessionResult.Success || result is StartOfflineSessionResult.SessionInProgress) settle { sessionStarted = true; resolve(null) }
+            else settle { reject("ERR_SUMUP_OFFLINE", startFailure(result), null) }
+          }
+        })
+      }
+    }.runOnQueue(Queues.MAIN)
+    // Upload what the device holds, then end the session (stop with nothing left to upload).
+    // Nothing stored is not a failure; any other upload failure leaves the session running.
+    AsyncFunction("uploadOffline") { promise: Promise ->
+      offline(promise) { settle ->
+        val stop = {
+          SumUpAPI.stopOfflineSession(object : StopOfflineSessionCallback {
+            override fun onResult(result: StopOfflineSessionResult) {
+              if (result is StopOfflineSessionResult.Success || result is StopOfflineSessionResult.NoActiveSession) settle { sessionStarted = false; resolve(null) }
+              else settle { reject("ERR_SUMUP_OFFLINE", "SumUp could not end its offline session", null) }
+            }
+          })
+        }
+        SumUpAPI.uploadOfflineTransactions(object : UploadOfflineTransactionsStatusListener {
+          override fun onUploadSuccess() { Handler(Looper.getMainLooper()).post { stop() } }
+          override fun onUploadFailure(error: OfflineUploadFailureReasons) {
+            if (error is OfflineUploadFailureReasons.NoOfflineTransactions) Handler(Looper.getMainLooper()).post { stop() }
+            else settle { reject("ERR_SUMUP_OFFLINE", uploadFailure(error), null) }
+          }
+        })
+      }
+    }.runOnQueue(Queues.MAIN)
+    // Only the public API refreshes the offline limits in 7.1.0; without them start refuses.
+    AsyncFunction("prepareOffline") { promise: Promise ->
+      offline(promise) { settle ->
+        SumUpAPI.updateOfflineSecurityPatch(object : SecurityPatchUpdateCallback {
+          override fun onSuccess() { settle { resolve(null) } }
+          override fun onFailure() { settle { reject("ERR_SUMUP_OFFLINE", "SumUp could not download its offline limits", null) } }
+        })
+      }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("checkout") { options: Map<String, Any>, promise: Promise ->
       val builder = SumUpPayment.builder()

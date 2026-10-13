@@ -1,15 +1,22 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { filterTaxRates } from './tax-rates.helpers';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
+import {
+	QueryStateProvider,
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useQuerySnapshot,
+	useQueryState,
+} from '../../../../query';
 import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-rates/query-state';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import {
@@ -108,30 +115,37 @@ export function TaxRatesProvider({ children, order }: TaxRatesProviderProps) {
  */
 function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const state = useQueryState<'tax-rates'>();
-	const binding = useCollectionBinding('tax-rates', state);
+	const handle = useCollectionQueryHandle('tax-rates', state);
 
-	// The binding is built HERE and read one level down, inside the boundary. Built in the
-	// component that also READS it, the resource would be discarded with the aborted render
-	// and rebuilt by every Suspense retry, which never ends (#1707): a tax-rates query's first
-	// emission is always async, and the nearest boundary was the per-route one, whose
-	// production fallback is `null` — a blank POS body under a painted header. Above a boundary
-	// of its own, this component commits alongside the fallback and the retry reads back the
-	// resource the first attempt already subscribed.
+	// Acquired HERE, read one level down inside the boundary. The owner's retain is an effect,
+	// so it must commit for the read to start: an owner that also read would suspend
+	// uncommitted, nothing would retain the handle, and the fallback would never leave (the
+	// nearest one above is the route's, `null` in production: a blank POS body). Identity by
+	// key holds only once a handle has started. The error boundary is ours for the same reason
+	// the Suspense is: it covers the same surface the route's did (the whole POS body), but the
+	// route's reset would remount this owner over the same failed handle (the registry still
+	// holds it), so the reader would throw again; ours asks the engine again first.
 	return (
-		<Suspense>
-			<TaxSettingsFromRates binding={binding}>{children}</TaxSettingsFromRates>
-		</Suspense>
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense>
+				<TaxSettingsFromRates handle={handle}>{children}</TaxSettingsFromRates>
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 
 function TaxSettingsFromRates({
-	binding,
+	handle,
 	children,
 }: {
-	binding: ReturnType<typeof useCollectionBinding<'tax-rates'>>;
+	handle: QueryHandle;
 	children: React.ReactNode;
 }) {
-	const result = useObservableSuspense(binding.resource) as QueryResult;
+	// A changed handle (a scope bump from the tax-rates modal's clear-and-sync) keeps the
+	// current rates published until it answers; suspending here would blank the POS body.
+	const shown = useDrawnHandle(handle);
+	// The answer only: nothing here reads the sync state.
+	const result = useQuerySnapshot(shown, []).result as QueryResult;
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
 
 	const { store } = useStoreSession();

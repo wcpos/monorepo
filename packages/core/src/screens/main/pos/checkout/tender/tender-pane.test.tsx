@@ -655,6 +655,41 @@ it('the pay sheet shows one reader line: a link to Settings until a reader is co
 	});
 });
 
+it('says once, under the amount, that an offline card payment can still be declined', () => {
+	registerDriver(createSimulatedDriver());
+	const tile = { method: deviceMethod, disabled: false, reason: null, worksOffline: false };
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		tiles: [tile],
+		deviceTransport: 'bluetooth' as const,
+		pickTransport: jest.fn(),
+	};
+	const hint = () => screen.getByTestId('checkout-entry-hint').textContent;
+	const line = 'Offline card payments can still be declined by the bank when they upload.';
+	const rendered = render(<TenderPane flow={flow} format={String} />);
+	expect(hint()).toBe('');
+	// A reader that cannot queue (an Air) says nothing, even with the till offline.
+	rendered.rerender(
+		<TenderPane
+			flow={{ ...flow, online: false, tiles: [{ ...tile, settlesLater: false }] }}
+			format={String}
+		/>
+	);
+	expect(hint()).toBe('');
+	// It outranks the part-payment line: a part payment still goes down the offline path.
+	const queued = {
+		...flow,
+		online: false,
+		tiles: [{ ...tile, settlesLater: true }],
+		entryAppliedMinor: 100,
+		state: { ...flow.state, entryMinor: 100 },
+	};
+	rendered.rerender(<TenderPane flow={queued} format={String} />);
+	expect(hint()).toBe(line);
+});
+
 it.each(['discovery', 'bootstrap'] as const)(
 	'restarts superseded %s without leaving controls disabled',
 	async (stage) => {

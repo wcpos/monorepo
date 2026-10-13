@@ -4,7 +4,6 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
 
 import { QueryStateProvider, useQueryState } from '../../../../../../query';
 import { VariationsPopover } from './index';
@@ -26,35 +25,42 @@ const mockVariationDocuments = [
 	},
 ];
 const mockSync = jest.fn().mockResolvedValue(undefined);
-// When non-null, the binding reports this count (with no hits) - the shape the
+// The variations handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+// When non-null, the handle answers this count (with no hits) - the shape the
 // retry effect watches. null = derive count from the filtered documents.
 let mockResultCount: number | null = null;
-// The most recent result$ subscriber - lets a test emit a later count.
-let mockResultNext: ((result: { count: number }) => void) | null = null;
-// When true, result$ never emits on subscribe - the count stays at the effect's
-// -1 "unknown" sentinel, the shape of a live query delaying its first emission.
+// When true, the handle has not answered - the count stays at the effect's
+// -1 "unknown" sentinel, the shape of a live query delaying its first answer.
 let mockResultSilent = false;
-const mockUseCollectionBinding = jest.fn(
+// One handle per query state, as the real registry keys them: a re-render asking the same
+// question gets the same handle. The first one asked for is the open refresh's.
+const mockHandles = new Map<string, FakeHandle>();
+let mockOpenHandle: FakeHandle | null = null;
+const mockUseCollectionQueryHandle = jest.fn(
 	(_collection: string, state: { filters: { status?: string } }) => {
+		const key = JSON.stringify(state);
+		const held = mockHandles.get(key);
+		if (held) return held;
 		const hits =
 			mockResultCount !== null
 				? []
 				: mockVariationDocuments
 						.filter((document) => !state.filters.status || document.status === state.filters.status)
-						.map((document) => ({ document, record: { payload: document } }));
-		const count = mockResultCount ?? hits.length;
-		return {
-			resource: { value: { count, hits } },
-			result$: {
-				subscribe(next: (result: { count: number }) => void) {
-					if (!mockResultSilent) next({ count });
-					mockResultNext = next;
-					return { unsubscribe() {} };
-				},
-			},
-			active$: of(false),
-			sync: mockSync,
-		};
+						.map((document) => ({ id: String(document.id), record: { payload: document } }));
+		const handle = fakeQueryHandle({
+			ready: !mockResultSilent,
+			result: { hits, count: mockResultCount ?? hits.length },
+		});
+		handle.sync = mockSync;
+		mockHandles.set(key, handle);
+		mockOpenHandle ??= handle;
+		return handle;
 	}
 );
 
@@ -62,14 +68,10 @@ jest.mock('../../../../../../query', () => {
 	const actual = jest.requireActual('../../../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: string, state: { filters: { status?: string } }) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (collection: string, state: { filters: { status?: string } }) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => false,
-	useObservableSuspense: (resource: { value: unknown }) => resource.value,
-}));
 // The store document the popover reads `prevent_overselling` from (via useAppState +
 // useDocField). Tests flip it to prove Add to Cart follows the Avoid overselling switch.
 const mockStore = { prevent_overselling: false };
@@ -77,6 +79,9 @@ jest.mock('../../../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore }),
 }));
 jest.mock('@wcpos/query', () => ({
+	// Both answer streams are real, so the refresh's choice between them is what is tested.
+	queryHandleAnswers$: jest.requireActual('@wcpos/query').queryHandleAnswers$,
+	queryHandleResults$: jest.requireActual('@wcpos/query').queryHandleResults$,
 	useDocField: (source: unknown, select: (value: unknown) => unknown) =>
 		select(source === mockStore ? mockStore : { showOutOfStock: false }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
@@ -84,6 +89,9 @@ jest.mock('@wcpos/query', () => ({
 		throw new Error('legacy popover replication reached');
 	},
 }));
+// The Add button's press handler as last rendered: a test calls it past `disabled`, the way a
+// press already in flight (or a native gesture) reaches it.
+const mockAddPress: { current: (() => void) | undefined } = { current: undefined };
 jest.mock('@wcpos/components/button', () => ({
 	// Mirrors the real Button: `loading` disables the press.
 	Button: ({
@@ -98,16 +106,19 @@ jest.mock('@wcpos/components/button', () => ({
 		testID?: string;
 		loading?: boolean;
 		disabled?: boolean;
-	}) => (
-		<button
-			data-testid={testID}
-			data-loading={String(!!loading)}
-			disabled={!!disabled || !!loading}
-			onClick={onPress}
-		>
-			{children}
-		</button>
-	),
+	}) => {
+		if (testID === 'variation-popover-add-to-cart') mockAddPress.current = onPress;
+		return (
+			<button
+				data-testid={testID}
+				data-loading={String(!!loading)}
+				disabled={!!disabled || !!loading}
+				onClick={onPress}
+			>
+				{children}
+			</button>
+		);
+	},
 	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/hstack', () => ({
@@ -120,12 +131,32 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
-}));
+// The real boundary with a reset control: the popover wires `onReset` to the handles' retry.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="variations-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
+	};
+});
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('./buttons', () => ({
 	VariationButtons: ({
 		attribute,
@@ -199,8 +230,9 @@ describe('Variations popover query state', () => {
 	beforeEach(() => {
 		mockSync.mockClear();
 		mockResultCount = null;
-		mockResultNext = null;
 		mockResultSilent = false;
+		mockHandles.clear();
+		mockOpenHandle = null;
 		mockStore.prevent_overselling = false;
 		Object.assign(mockStock, { status: 'instock', quantity: null, sellable: true });
 	});
@@ -317,8 +349,8 @@ describe('Variations popover query state', () => {
 		}
 	});
 
-	it('retries when result$ never emits and the refresh never settles', async () => {
-		// CodeRabbit on #1731: with a silent result$ the count stays at the -1
+	it('retries when the handle never answers and the refresh never settles', async () => {
+		// CodeRabbit on #1731: with a silent handle the count stays at the -1
 		// sentinel, and a "!== 0" guard read unknown as "variations present" -
 		// the settle timeout then exited without logging or retrying, recreating
 		// the zero-log wedge this PR fixes. Unknown must be retryable.
@@ -388,7 +420,7 @@ describe('Variations popover query state', () => {
 
 			// Variations materialize while the first retry timer is pending.
 			act(() => {
-				mockResultNext?.({ count: 2 });
+				mockOpenHandle?.set({ result: { hits: [], count: 2 } });
 			});
 			await act(async () => {
 				jest.advanceTimersByTime(120000);
@@ -608,28 +640,25 @@ describe('Variations popover query state', () => {
 
 	it('adds and removes an attribute match through the provider actions', () => {
 		const Component = Variations as unknown as React.ComponentType<Record<string, unknown>>;
-		const binding = {
-			resource: {
-				value: {
-					count: 2,
-					hits: [
-						{
-							document: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] },
-							record: {
-								payload: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] },
-							},
+		const handle = fakeQueryHandle({
+			result: {
+				count: 2,
+				hits: [
+					{
+						id: '11',
+						record: {
+							payload: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] },
 						},
-						{
-							document: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] },
-							record: {
-								payload: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] },
-							},
+					},
+					{
+						id: '12',
+						record: {
+							payload: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] },
 						},
-					],
-				},
+					},
+				],
 			},
-			active$: of(false),
-		};
+		});
 		render(
 			<QueryStateProvider
 				collection="variations"
@@ -637,7 +666,7 @@ describe('Variations popover query state', () => {
 				initialSort={{ field: 'name', direction: 'asc' }}
 			>
 				<Component
-					binding={binding}
+					handle={handle}
 					parent={{
 						payload: {
 							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
@@ -654,5 +683,120 @@ describe('Variations popover query state', () => {
 
 		fireEvent.click(screen.getByText('clear-color'));
 		expect(screen.getByTestId('popover-matches').textContent).toBe('[]');
+	});
+
+	it('keeps the options drawn while a pick’s new query answers, and adds only its own match', async () => {
+		const addToCart = jest.fn();
+		render(
+			<VariationsPopover
+				parent={
+					{
+						payload: {
+							variations: [11, 12],
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
+					} as never
+				}
+				addToCart={addToCart}
+			/>
+		);
+		// The pick is a new query state, so a new handle, which has not answered yet.
+		mockResultSilent = true;
+		const before = mockHandles.size;
+		await act(async () => fireEvent.click(screen.getByText('select-blue')));
+		expect(mockHandles.size).toBe(before + 1);
+		const picked = [...mockHandles.values()].at(-1)!;
+		expect(picked.value.ready).toBe(false);
+		// Suspending here would blank the popover to its fallback on every tap (React hides the
+		// suspended content with `display: none`, it does not unmount it): the previous answer's
+		// options and outcome stay on show instead.
+		const shown = (node: HTMLElement) => {
+			for (let at: HTMLElement | null = node; at; at = at.parentElement) {
+				if (at.style.display === 'none') return false;
+			}
+			return true;
+		};
+		expect(shown(screen.getByTestId('variation-popover-options'))).toBe(true);
+		expect(shown(screen.getByTestId('variation-popover-add-to-cart'))).toBe(true);
+		// The match on show is the previous pick's: adding it now would put it in the cart under
+		// the new pick's attribute meta. Held in place, disabled, and its handler refuses.
+		const add = () => screen.getByTestId('variation-popover-add-to-cart') as HTMLButtonElement;
+		expect(add().disabled).toBe(true);
+		await act(async () => mockAddPress.current?.());
+		expect(addToCart).not.toHaveBeenCalled();
+		// The pick's own answer: its match is the one to add.
+		await act(async () => picked.set({ ready: true }));
+		expect(shown(add())).toBe(true);
+		expect(add().disabled).toBe(false);
+		await act(async () => add().click());
+		expect(addToCart).toHaveBeenCalledTimes(1);
+		expect(addToCart.mock.calls[0][0]).toBe(picked.value.hits[0].record);
+	});
+
+	it('still hears the count after a failed read is retried, so a retry it no longer needs is skipped', async () => {
+		// The count stream skips failures: a stream that threw on the failure would close, the
+		// count would stay 0 forever, and the refresh would re-ask the server for variations
+		// that have since arrived.
+		jest.useFakeTimers();
+		const quiet = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			mockResultCount = 0;
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			expect(mockSync).toHaveBeenCalledTimes(1);
+			await act(async () => {});
+			// The read fails, then the retry answers with the variations the refresh brought.
+			act(() => mockOpenHandle?.set({ error: new Error('variations read failed') }));
+			act(() => mockOpenHandle?.set({ error: null, result: { hits: [], count: 2 } }));
+			await act(async () => {
+				jest.advanceTimersByTime(120000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(1);
+		} finally {
+			quiet.mockRestore();
+			jest.useRealTimers();
+		}
+	});
+
+	it('asks the handles to read again when the boundary resets over a failed read', () => {
+		const quiet = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			const handle = mockOpenHandle!;
+			// As the real handle: a retry withdraws the failure and reads again.
+			const retry = jest.fn(() => handle.set({ error: null }));
+			handle.retry = retry;
+			act(() => handle.set({ error: new Error('variations read failed') }));
+			expect(screen.queryByText('select-blue')).toBeNull();
+			// Without the retry the remounted reader throws the same failure straight back.
+			fireEvent.click(screen.getByTestId('variations-error-reset'));
+			expect(retry).toHaveBeenCalled();
+			expect(screen.getByText('select-blue')).not.toBeNull();
+		} finally {
+			quiet.mockRestore();
+		}
 	});
 });

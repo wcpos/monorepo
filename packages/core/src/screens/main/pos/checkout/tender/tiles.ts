@@ -16,6 +16,17 @@ export function deviceTransports(method: PaymentMethodDescriptor | null) {
 		: [];
 }
 
+/** A device transport that takes payments offline: the descriptor allows it and the driver agrees. */
+export function queuesOffline(
+	method: PaymentMethodDescriptor,
+	item: ReturnType<typeof deviceTransports>[number]
+) {
+	return (
+		item.offline === 'queue' &&
+		(getDriver(method.capture.provider)?.queuesOffline?.(item.transport) ?? true)
+	);
+}
+
 /** Why a tile cannot be tapped. The UI turns each into a cashier-facing line. */
 export type TileDisabledReason =
 	/** The descriptor names a capture mode this build has never heard of. */
@@ -117,7 +128,8 @@ export function buildTenderTiles(
 				deviceTransports(method).find(
 					(item) => item.transport === options.transports?.[method.id]
 				) ?? deviceTransports(method)[0];
-			const settlesLater = method.capture.mode === 'device' && transport?.offline === 'queue';
+			const settlesLater =
+				method.capture.mode === 'device' && !!transport && queuesOffline(method, transport);
 			if (!KNOWN_CAPTURE_MODES.some((mode) => mode === method.capture.mode)) {
 				reason = 'unsupported_mode';
 			} else if (method.capture.mode === 'device') {

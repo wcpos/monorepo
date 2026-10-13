@@ -1,8 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { VariationsGrid } from './variations-grid';
 import { ParentTile, VariationTile } from './grid/variation-tile';
@@ -21,11 +20,13 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 	useRecordField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-const refreshing = { value: false };
-jest.mock('observable-hooks', () => ({
-	useObservableSuspense: () => undefined,
-	useObservableEagerState: () => refreshing.value,
-}));
+// The variations handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
@@ -88,26 +89,28 @@ jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span data-testid="stock">{label}</span>,
 }));
+// The footer row as the handle footer hands it values: the real HandleProductsFooter reads
+// `active` from the handle and passes the grid's count and denominator through.
 jest.mock('./footer', () => ({
-	ProductsFooter: ({
+	ProductsFooterRow: ({
 		children,
 		count,
-		total$,
+		total,
+		active,
+		collectionName,
 	}: React.PropsWithChildren<{
 		count: number;
-		total$: { subscribe: (next: (value: number) => void) => { unsubscribe: () => void } };
-	}>) => {
-		let total = 0;
-		total$.subscribe((value) => (total = value)).unsubscribe();
-		return (
-			<footer data-testid="footer">
-				{children}
-				<output>
-					{count} of {total}
-				</output>
-			</footer>
-		);
-	},
+		total: number | null;
+		active: boolean;
+		collectionName: string;
+	}>) => (
+		<footer data-testid="footer" data-active={String(active)} data-collection={collectionName}>
+			{children}
+			<output>
+				{count} of {String(total)}
+			</output>
+		</footer>
+	),
 }));
 jest.mock('../../../components/product/price-with-tax', () => ({
 	PriceWithTax: ({ price, strikethrough }: { price: string; strikethrough?: boolean }) => (
@@ -147,12 +150,10 @@ const hits = [
 	{ record: variation(1, { stock_status: 'instock', attributes: [{ option: 'Blue' }] }) },
 	{ record: variation(2, { stock_status: 'outofstock', attributes: [{ option: 'Red' }] }) },
 ];
-const binding = {
-	resource: {},
-	sync: jest.fn(async () => {}),
-	total$: of(99),
-	active$: of(false),
-} as unknown as React.ComponentProps<typeof VariationsGrid>['binding'];
+let handle: FakeHandle = fakeQueryHandle({ total: 99 });
+beforeEach(() => {
+	handle = fakeQueryHandle({ total: 99 });
+});
 const gridFields = {
 	name: true,
 	price: true,
@@ -168,7 +169,7 @@ const gridFields = {
 it('holds a slot for every variation until the query answers, so the deal never waits for data', () => {
 	const back = jest.fn();
 	const { rerender } = render(
-		<VariationsGrid parent={parent} back={back} binding={binding} hits={undefined} />
+		<VariationsGrid parent={parent} back={back} handle={handle} hits={undefined} />
 	);
 	// The parent has four variations: five slots on the products' own three columns, the parent first.
 	expect(screen.getByTestId('cell-0').dataset).toMatchObject({ count: '5', columns: '3' });
@@ -194,7 +195,7 @@ it('holds a slot for every variation until the query answers, so the deal never 
 	expect(placeGrid).toHaveBeenCalledWith(slots);
 
 	// The answer lands in the slots that are already there.
-	rerender(<VariationsGrid parent={parent} back={back} binding={binding} hits={hits} />);
+	rerender(<VariationsGrid parent={parent} back={back} handle={handle} hits={hits} />);
 	expect(screen.queryByTestId('variation-placeholder')).toBeNull();
 	expect(screen.getByTestId('cell-1').contains(screen.getByTestId('variation-tile-1'))).toBe(true);
 	expect(screen.getByTestId('cell-2').contains(screen.getByTestId('variation-tile-2'))).toBe(true);
@@ -204,9 +205,9 @@ it('holds a slot for every variation until the query answers, so the deal never 
 
 it('keeps a slot for what a cold refresh has not brought yet, and only while it runs', () => {
 	// A cold drill-in answers empty at once; the variations arrive when the refresh returns.
-	refreshing.value = true;
+	handle.set({ active: true });
 	const view = (found: typeof hits) => (
-		<VariationsGrid parent={parent} back={jest.fn()} binding={binding} hits={found} />
+		<VariationsGrid parent={parent} back={jest.fn()} handle={handle} hits={found} />
 	);
 	const { rerender } = render(view([]));
 	expect(screen.getAllByTestId('variation-placeholder')).toHaveLength(4);
@@ -214,8 +215,8 @@ it('keeps a slot for what a cold refresh has not brought yet, and only while it 
 	expect(screen.getAllByTestId('variation-tile')).toHaveLength(2);
 	expect(screen.getAllByTestId('variation-placeholder')).toHaveLength(2);
 	// Refresh over: a variation the parent lists but the store does not serve holds no slot.
-	refreshing.value = false;
-	rerender(view(hits));
+	// Heard from the handle itself, with no render from above.
+	act(() => handle.set({ active: false }));
 	expect(screen.queryByTestId('variation-placeholder')).toBeNull();
 	expect(screen.getByTestId('cell-0').dataset.count).toBe('3');
 });
@@ -225,7 +226,7 @@ it('filters displayed stock like the rows do and counts shown of the parent tota
 		<VariationsGrid
 			parent={parent}
 			back={jest.fn()}
-			binding={binding}
+			handle={handle}
 			hits={hits}
 			stockStatus="instock"
 		/>
@@ -233,6 +234,26 @@ it('filters displayed stock like the rows do and counts shown of the parent tota
 	expect(screen.getAllByTestId('variation-tile')).toHaveLength(1);
 	expect(screen.getByTestId('variation-tile-1')).not.toBeNull();
 	expect(screen.getByTestId('footer').textContent).toContain('1 of 4');
+});
+
+it('without a parent list, counts against the handle total once it has answered, and resets variations', () => {
+	const unlisted = {
+		...parent,
+		payload: { name: 'Tea' },
+	} as unknown as React.ComponentProps<typeof VariationsGrid>['parent'];
+	handle.set({ ready: false });
+	render(<VariationsGrid parent={unlisted} back={jest.fn()} handle={handle} hits={undefined} />);
+	// No denominator before the first answer: a total from no answer vouches for nothing.
+	expect(screen.getByTestId('footer').textContent).toContain('0 of null');
+	act(() => handle.set({ ready: true, total: 7 }));
+	expect(screen.getByTestId('footer').textContent).toContain('0 of 7');
+	// The footer's own sync spinner follows the handle; its clear-and-sync is the variations'.
+	expect(screen.getByTestId('footer').dataset).toMatchObject({
+		active: 'false',
+		collection: 'variations',
+	});
+	act(() => handle.set({ active: true }));
+	expect(screen.getByTestId('footer').dataset.active).toBe('true');
 });
 
 it('the parent tile is the way back', () => {

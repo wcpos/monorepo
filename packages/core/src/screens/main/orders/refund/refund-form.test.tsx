@@ -19,6 +19,10 @@ function mockWebProps({ testID, ...props }: any) {
 
 let mockEnableRefundActions = false;
 
+// The tax provider's own boundary (its fallback loads an icon jest's CommonJS runtime cannot).
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children, open }: any) => (
 		<div data-testid="refund-confirm-dialog" data-open={open}>
