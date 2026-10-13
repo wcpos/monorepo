@@ -17,7 +17,6 @@ import * as React from 'react';
 import { columnVisibilityFeature, tableFeatures, useTable } from '@tanstack/react-table';
 import { act, render } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
-import { ObservableResource } from 'observable-hooks';
 
 import { VariableProductRow } from './index';
 
@@ -90,23 +89,30 @@ jest.mock('../stock-filter', () => ({
 	matchesStockStatusFilter: () => true,
 }));
 
-const variationHits$ = new BehaviorSubject({
-	hits: [
-		{
-			id: 'v11',
-			document: { id: 11, type: 'variation' },
-			record: { remoteId: '11', payload: { id: 11, type: 'variation' } },
-		},
-	],
-});
-const binding = {
-	resource: new ObservableResource(variationHits$),
-	sync: jest.fn().mockResolvedValue(undefined),
+// A query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+
+const handle = fakeQueryHandle({
+	result: {
+		hits: [
+			{
+				id: 'v11',
+				document: { id: 11, type: 'variation' },
+				record: { remoteId: '11', payload: { id: 11, type: 'variation' } },
+			},
+		],
+	},
+});
 jest.mock('../../../../../query', () => ({
+	...jest.requireActual('../../../../../query'),
 	useQueryState: () => ({}),
 	useQueryStateActions: () => ({ clearSearch: jest.fn(), resetFilters: jest.fn() }),
-	useCollectionBinding: () => binding,
+	useCollectionQueryHandle: () => handle,
 }));
 
 type RowData = {

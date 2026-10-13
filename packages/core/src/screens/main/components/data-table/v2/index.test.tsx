@@ -149,3 +149,49 @@ it('on the handle source the drawn rows stay while a changed handle answers, the
 	);
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('2');
 });
+// The products screen's custom footer (`TableFooter` → `DataTableFooter` + `TaxBasedOn`) takes
+// the binding props; on the handle source `CustomHandleFooter` hands it the drawn handle's
+// `total` as a VALUE, so the denominator and the count it describes land in one commit.
+it('on the handle source a custom footer gets the drawn total as a value in the rows’ commit', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const renders: { count: number; total: number | null | undefined }[] = [];
+	function Probe({ count, total }: { count: number; total?: number | null }) {
+		renders.push({ count, total });
+		return <div data-testid="footer-probe">{`${count}/${String(total)}`}</div>;
+	}
+	const first = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+		total: 5,
+	});
+	const handleProps = {
+		resource: undefined,
+		active$: undefined,
+		total$: undefined,
+		sync: undefined,
+		TableFooterComponent: Probe,
+	};
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ ...handleProps, handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(first));
+	expect(screen.getByTestId('footer-probe').textContent).toBe('1/5');
+	// A changed query: the previous handle's rows and total stay while the new one answers.
+	const next = fakeQueryHandle({ ready: false, total: 99 });
+	rerender(tree(next));
+	expect(screen.queryByTestId('table-fallback')).toBeNull();
+	expect(screen.getByTestId('footer-probe').textContent).toBe('1/5');
+	renders.length = 0;
+	await act(async () =>
+		next.set({
+			ready: true,
+			result: { hits: [hit('coffee'), hit('milk')], searchActive: false, searchState: 'answered' },
+			total: 9,
+		})
+	);
+	expect(screen.getByTestId('footer-probe').textContent).toBe('2/9');
+	// Never the new count over the old denominator (or none), not even for one commit.
+	expect(renders.filter(({ count }) => count === 2).every(({ total }) => total === 9)).toBe(true);
+	expect(renders.some(({ count, total }) => count === 1 && total !== 5)).toBe(false);
+});

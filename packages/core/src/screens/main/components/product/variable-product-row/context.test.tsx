@@ -16,7 +16,7 @@ jest.mock('../../../../../query', () => {
 	const actual = jest.requireActual('../../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: () => ({ resource: {}, active$: {}, total$: {}, sync: mockSync }),
+		useCollectionQueryHandle: () => ({ sync: mockSync, retry: jest.fn() }),
 	};
 });
 jest.mock('./variations/filters', () => ({ VariationsFilterBar: () => null }));

@@ -4,11 +4,11 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 import omit from 'lodash/omit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useObservableRef, useObservableSuspense } from 'observable-hooks';
+import { useObservableRef } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
@@ -47,13 +47,15 @@ import { useMutation } from '../hooks/mutations/use-mutation';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
 import {
+	useDrawnHandle,
+	useProductsQueryHandle,
+	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
-	useRelationalCollectionBinding,
 } from '../../../query';
 
 import type { ExpandedState } from '@tanstack/react-table';
-import type { QueryStateActions } from '../../../query';
+import type { QueryStateActions, SnapshotFields } from '../../../query';
 import type { BindingDataTableFooterProps, DataTableFeatures } from '../components/data-table/v2';
 import type { Row, Table } from '../../../table-types';
 
@@ -161,10 +163,18 @@ function TableFooter(props: BindingDataTableFooterProps) {
 	);
 }
 
+// The list re-renders for the answer only; the table and the footer read their own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
 /**
  * Tables are expensive to render, so memoize all props.
  */
-function ProductsList({ binding }: { binding: ReturnType<typeof useRelationalCollectionBinding> }) {
+function ProductsList({
+	handle,
+}: {
+	/** The relational products handle (roadmap#423): the list and its table read its snapshot. */
+	handle: QueryHandle;
+}) {
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 
@@ -189,7 +199,9 @@ function ProductsList({ binding }: { binding: ReturnType<typeof useRelationalCol
 	 * Barcode
 	 */
 	const pointer = usePointer();
-	const result = useObservableSuspense(binding.resource);
+	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
+	// query keeps the current rows while the new handle answers (`useDrawnHandle`).
+	const { result } = useQuerySnapshot(useDrawnHandle(handle), ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
 	const emptyStore =
@@ -282,13 +294,9 @@ function ProductsList({ binding }: { binding: ReturnType<typeof useRelationalCol
 				<DataTable<ProductRow>
 					id="products"
 					collectionName="products"
-					binding={binding}
-					resource={binding.resource}
+					handle={handle}
 					sort={state.sort}
 					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
 					renderItem={(props) =>
 						pointer === 'fine' ? (
 							renderFineItem(props)
@@ -341,12 +349,14 @@ function ProductsList({ binding }: { binding: ReturnType<typeof useRelationalCol
 
 function ProductsBody() {
 	const state = useQueryState<'products'>();
-	const binding = useRelationalCollectionBinding(state);
+	const handle = useProductsQueryHandle(state);
 	return (
 		<View testID="products-body" className="flex-1">
-			<ErrorBoundary>
+			{/* A failed products read is thrown here; the fallback's reset asks the handle again,
+			    and a changed query (its handle is new) clears the fallback on its own. */}
+			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 				<Suspense fallback={<DataTableSkeleton id="products" />}>
-					<ProductsList binding={binding} />
+					<ProductsList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
 		</View>

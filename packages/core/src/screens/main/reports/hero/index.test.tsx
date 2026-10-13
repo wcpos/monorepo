@@ -2,8 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { ObservableResource } from 'observable-hooks';
-import { of, Subject } from 'rxjs';
+import { of } from 'rxjs';
 
 import { Hero } from './index';
 import {
@@ -17,6 +16,10 @@ import {
 import { QueryStateProvider, useQueryState } from '../../../../query';
 
 import type { ReportOrder } from '../context';
+import type { QueryHandle } from '../../../../query';
+
+type FakeHandle = QueryHandle & { set: (partial: object) => void };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 
 const mockPrint = jest.fn();
 let mockCashiersPending = false;
@@ -152,11 +155,14 @@ const previous = [
 		line_items: [{ quantity: 8 }],
 	},
 ] as ReportOrder[];
-function resource(orders: ReportOrder[]) {
-	return new ObservableResource(
-		of({ hits: orders.map(({ uuid, ...payload }) => ({ record: { uuid, payload } })) })
-	);
+const hitsOf = (orders: ReportOrder[]) =>
+	orders.map(({ uuid, ...payload }) => ({ record: { uuid, payload } }));
+/** An answered handle over these orders. */
+function handleOf(orders: ReportOrder[]): FakeHandle {
+	return fakeQueryHandle({ result: { hits: hitsOf(orders) } });
 }
+/** A handle whose read has not answered yet. */
+const unanswered = (): FakeHandle => fakeQueryHandle({ ready: false });
 function Probe() {
 	const data = useReportsData();
 	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
@@ -179,17 +185,11 @@ function Probe() {
 	);
 }
 function setup({
-	comparison = resource(previous),
+	comparison = handleOf(previous),
 	week = false,
 	probe = true,
 	cashier = undefined as string | undefined,
 } = {}) {
-	const Provider = ReportsProvider as unknown as React.ComponentType<
-		React.PropsWithChildren<{
-			binding: { resource: unknown };
-			comparisonBinding: { resource: unknown };
-		}>
-	>;
 	return render(
 		<QueryStateProvider
 			collection="orders"
@@ -206,9 +206,10 @@ function setup({
 		>
 			<ReportsScopeProvider>
 				<React.Suspense fallback={null}>
-					<Provider
-						binding={{ resource: resource(current) }}
-						comparisonBinding={{ resource: comparison }}
+					<ReportsProvider
+						handle={handleOf(current)}
+						comparisonHandle={comparison}
+						refundsHandle={handleOf([])}
 					>
 						<Hero title={<span>Today</span>} />
 						{probe && (
@@ -218,7 +219,7 @@ function setup({
 								</ReportsComparison>
 							</React.Suspense>
 						)}
-					</Provider>
+					</ReportsProvider>
 				</React.Suspense>
 			</ReportsScopeProvider>
 		</QueryStateProvider>
@@ -248,12 +249,12 @@ it('renders the figure, delta and three companions using the store currency and 
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 it('shows a muted dash when the comparison figure is zero', () => {
-	setup({ comparison: resource([]) });
+	setup({ comparison: handleOf([]) });
 	expect(screen.getByTestId('hero-delta').textContent).toBe('—');
 });
 // With nothing to compare with, the companions read the same dash, never a difference against nothing.
 it('shows the dash on every companion when there are no comparison orders', () => {
-	setup({ comparison: resource([]) });
+	setup({ comparison: handleOf([]) });
 	for (const id of ['orders-delta', 'average-delta', 'items-delta'])
 		expect(screen.getByTestId(`hero-${id}`).textContent).toBe('—');
 });
@@ -286,8 +287,7 @@ it('cuts a live comparison at store wall time but retains the whole period and i
 	expect(screen.getByTestId('hero-delta').textContent).toBe('−50.0% vs yesterday');
 });
 it('keeps the current figure and companions visible while comparison is suspended', () => {
-	const pending = new ObservableResource(new Subject<{ hits: never[] }>());
-	setup({ comparison: pending as unknown as ReturnType<typeof resource> });
+	setup({ comparison: unanswered() });
 	expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
 	expect(screen.getByTestId('hero-orders').textContent).toBe('2');
 	expect(screen.getByTestId('hero-delta-loading')).toBeTruthy();
@@ -332,7 +332,7 @@ it('keeps the figure visible while the cashier chip is suspended', () => {
 });
 it('shows flat deltas in percent and the companions own units', () => {
 	setup({
-		comparison: resource(
+		comparison: handleOf(
 			current
 				.filter((order) => order.status !== 'pending')
 				.map((order) => ({ ...order, date_created_gmt: '2026-07-14T08:00:00' }))
@@ -354,7 +354,7 @@ it('advances a live comparison cutoff as the clock moves', () => {
 // Money differences are taken at the displayed precision: two figures that read the same never differ.
 it('shows no money difference below the store precision', () => {
 	setup({
-		comparison: resource([
+		comparison: handleOf([
 			{ ...previous[0], total: '15.004' },
 			{ ...previous[0], uuid: 'other', total: '14.998' },
 		] as ReportOrder[]),
@@ -364,7 +364,7 @@ it('shows no money difference below the store precision', () => {
 });
 // The percentage is rounded to its displayed tenth before the sign: a change below that reads flat.
 it('reads a change below a tenth of a percent as flat', () => {
-	setup({ comparison: resource([{ ...previous[0], total: '30.01' }] as ReportOrder[]) });
+	setup({ comparison: handleOf([{ ...previous[0], total: '30.01' }] as ReportOrder[]) });
 	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
 });
 // Past the store's midnight the day is no longer live: the whole comparison day counts.
@@ -376,7 +376,7 @@ it('counts the whole comparison day once the store day rolls over', () => {
 		// 23:59 in New York on the 14th.
 		date_created_gmt: '2026-07-15T03:59:00',
 	};
-	setup({ comparison: resource([...previous, lateNight] as ReportOrder[]) });
+	setup({ comparison: handleOf([...previous, lateNight] as ReportOrder[]) });
 	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/3');
 	act(() => {
 		// 12:00 to 00:31 New York time, in minute ticks.
@@ -404,31 +404,58 @@ it('labels the week chart By day', () => {
 	expect(screen.getByTestId('hero-chart-toggle-run').textContent).toBe('Running total');
 });
 it('keeps the primary chart while comparison is pending then supplies the comparison', async () => {
-	const source = new Subject<{ hits: { record: { uuid: string; payload: ReportOrder } }[] }>();
-	setup({ comparison: new ObservableResource(source) as unknown as ReturnType<typeof resource> });
+	const comparison = unanswered();
+	setup({ comparison });
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
 	await act(async () => {
-		source.next({ hits: previous.map((payload) => ({ record: { uuid: payload.uuid, payload } })) });
+		comparison.set({ ready: true, result: { hits: hitsOf(previous) } });
 	});
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
 });
 
 it('keeps the primary chart and figures when the comparison fails', async () => {
-	const source = new Subject<{ hits: never[] }>();
+	const comparison = unanswered();
 	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
 	try {
 		setup({
-			comparison: new ObservableResource(source) as unknown as ReturnType<typeof resource>,
+			comparison,
 			probe: false,
 		});
 		await act(async () => {
-			source.error(new Error('comparison failed'));
+			comparison.set({ error: new Error('comparison failed') });
 		});
 		expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe(
 			'unavailable'
 		);
 		expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
 		expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+	} finally {
+		errors.mockRestore();
+	}
+});
+
+// A status change keeps the comparison handle: without `onReset` the boundary would remount the
+// reader over the same failure and show the dash again instead of asking the engine.
+it('retries a failed comparison when the status choice resets its boundary', async () => {
+	const comparison = unanswered();
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		setup({ comparison, probe: false });
+		await act(async () => {
+			comparison.set({ error: new Error('comparison failed') });
+		});
+		expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+		const retry = jest.fn(() =>
+			comparison.set({ error: null, ready: true, result: { hits: hitsOf(previous) } })
+		);
+		comparison.retry = retry;
+		fireEvent.click(screen.getByTestId('hero-chip-status'));
+		fireEvent.click(screen.getByTestId('hero-status-all'));
+		expect(retry).toHaveBeenCalled();
+		expect(screen.getByTestId('hero-delta').textContent).not.toBe('—');
+		expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).not.toBe(
+			'unavailable'
+		);
 	} finally {
 		errors.mockRestore();
 	}

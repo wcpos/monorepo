@@ -15,8 +15,6 @@
 import * as React from 'react';
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ObservableResource } from 'observable-hooks';
-import { of } from 'rxjs';
 import { format } from 'date-fns';
 
 import { QueryStateProvider } from '../../../../query';
@@ -795,8 +793,9 @@ describe('instant buckets and comparison alignment', () => {
 // Exercise the existing provider cutoff and the new aggregator together, not a second cutoff implementation.
 it('a live day drops comparison orders after now while preserving the whole comparison series', () => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-22T10:00:00Z'));
-	const resource = new ObservableResource(
-		of({
+	const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
+	const comparisonHandle = fakeQueryHandle({
+		result: {
 			hits: [
 				{
 					record: {
@@ -811,8 +810,8 @@ it('a live day drops comparison orders after now while preserving the whole comp
 					},
 				},
 			],
-		})
-	);
+		},
+	});
 	function Probe() {
 		const data = useReportsData();
 		const buckets = aggregateData([], data.dateRange, undefined, 'Europe/London');
@@ -838,11 +837,8 @@ it('a live day drops comparison orders after now while preserving the whole comp
 			`${cut.reduce((sum, b) => sum + (b.total ?? 0), 0)}/${whole.reduce((sum, b) => sum + (b.total ?? 0), 0)}`
 		);
 	}
-	const Provider = ReportsProvider as unknown as React.ComponentType<
-		React.PropsWithChildren<{
-			binding: { resource: unknown };
-			comparisonBinding: { resource: unknown };
-		}>
+	const Provider = ReportsProvider as React.ComponentType<
+		React.PropsWithChildren<Omit<React.ComponentProps<typeof ReportsProvider>, 'children'>>
 	>;
 	const QueryProvider = QueryStateProvider as React.ComponentType<
 		React.PropsWithChildren<Omit<React.ComponentProps<typeof QueryStateProvider>, 'children'>>
@@ -866,8 +862,9 @@ it('a live day drops comparison orders after now while preserving the whole comp
 					React.createElement(
 						Provider,
 						{
-							binding: { resource: new ObservableResource(of({ hits: [] })) },
-							comparisonBinding: { resource },
+							handle: fakeQueryHandle(),
+							comparisonHandle,
+							refundsHandle: fakeQueryHandle(),
 						},
 						React.createElement(ReportsComparison, null, React.createElement(Probe))
 					)
@@ -877,6 +874,5 @@ it('a live day drops comparison orders after now while preserving the whole comp
 		expect(result).toBe('<span>10/50</span>');
 	} finally {
 		jest.useRealTimers();
-		resource.destroy();
 	}
 });

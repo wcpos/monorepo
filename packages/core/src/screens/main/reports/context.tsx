@@ -11,7 +11,7 @@ import {
 	subDays,
 	subMonths,
 } from 'date-fns';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { startWith } from 'rxjs';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
@@ -27,10 +27,10 @@ import {
 } from '../../../hooks/use-store-day';
 import { calculateTotals } from './report/utils';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { useQueryState } from '../../../query';
+import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
 
 import type { RowSelectionState } from '@tanstack/react-table';
-import type { useCollectionBinding } from '../../../query';
+import type { QueryHandle } from '../../../query';
 
 export interface DateRange {
 	start: Date;
@@ -45,11 +45,11 @@ export type ReportOrder = OrderPayload & {
 
 export type RefundRow = EngineRecord<'refunds'>['payload'] & { parentNumber?: string };
 
-/** The query binding. Changes only when the provider is handed a new one. */
-export interface ReportsBinding {
-	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
-	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
-	refundsBinding: ReturnType<typeof useCollectionBinding<'refunds'>>;
+/** The query handles the screen owns. Changes only when the provider is handed new ones. */
+export interface ReportsHandles {
+	handle: QueryHandle;
+	comparisonHandle: QueryHandle;
+	refundsHandle: QueryHandle;
 }
 
 /** Row selection state. Changes when the cashier ticks a row. */
@@ -112,7 +112,7 @@ export function useReportsScope() {
 	return value;
 }
 
-/** Shared by the two binding requests and the data provider; boundaries are store calendar days. */
+/** Shared by the two orders handles and the data provider; boundaries are store calendar days. */
 export function useReportsPeriod() {
 	const { cmp } = useReportsScope();
 	const filters = useQueryState<'orders'>().filters;
@@ -188,21 +188,23 @@ export function useIncludedStatus() {
  *
  * `allOrders` and `selectedOrders` are rebuilt on every order-query emission, and the whole
  * bundle was republished with them — so `ReportsSyncProgress`, which reads nothing but
- * `binding`, re-rendered on every emission and on every row the cashier ticked.
+ * the handles, re-rendered on every emission and on every row the cashier ticked. The handles
+ * context no longer moves with either; the progress line still follows the handle's own
+ * answers (every result) plus its lane progress, but never a tick.
  *
  * There is deliberately NO combined context here. Every consumer takes exactly the slice it
  * uses; a combined `useReports()` would be surface with no callers, and the only thing it
  * could do is put back the coupling this split removes.
  */
-const ReportsBindingContext = React.createContext<ReportsBinding | undefined>(undefined);
+const ReportsHandlesContext = React.createContext<ReportsHandles | undefined>(undefined);
 const ReportsSelectionContext = React.createContext<ReportsSelection | undefined>(undefined);
 const ReportsDataContext = React.createContext<ReportsData | undefined>(undefined);
 
-/** Just the binding — stable across order emissions and selection changes. */
-export const useReportsBinding = (): ReportsBinding => {
-	const context = React.useContext(ReportsBindingContext);
+/** Just the handles — stable across order emissions and selection changes. */
+export const useReportsHandles = (): ReportsHandles => {
+	const context = React.useContext(ReportsHandlesContext);
 	if (!context) {
-		throw new Error('useReportsBinding must be used within a ReportsContext');
+		throw new Error('useReportsHandles must be used within a ReportsContext');
 	}
 	return context;
 };
@@ -225,10 +227,7 @@ export const useReportsData = (): ReportsData => {
 	return context;
 };
 
-interface ReportsProviderProps {
-	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
-	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
-	refundsBinding: ReturnType<typeof useCollectionBinding<'refunds'>>;
+interface ReportsProviderProps extends ReportsHandles {
 	children: React.ReactNode;
 }
 
@@ -236,12 +235,14 @@ interface ReportsProviderProps {
  *
  */
 export function ReportsProvider({
-	binding,
-	comparisonBinding,
-	refundsBinding,
+	handle,
+	comparisonHandle,
+	refundsHandle,
 	children,
 }: ReportsProviderProps) {
-	const result = useObservableSuspense(binding.resource);
+	// The answer only: the sync state is read by the progress line, not by every report reader.
+	// The drawn handle keeps the previous figures on screen while a changed query answers.
+	const result = useQuerySnapshot(useDrawnHandle(handle), []).result;
 	const { dateRange, comparisonRange, live } = useReportsPeriod();
 	const { statusMode } = useReportsScope();
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
@@ -268,9 +269,9 @@ export function ReportsProvider({
 			),
 		[allOrders, statusMode, unselectedRowIds]
 	);
-	const bindingValue = React.useMemo<ReportsBinding>(
-		() => ({ binding, comparisonBinding, refundsBinding }),
-		[binding, comparisonBinding, refundsBinding]
+	const handlesValue = React.useMemo<ReportsHandles>(
+		() => ({ handle, comparisonHandle, refundsHandle }),
+		[handle, comparisonHandle, refundsHandle]
 	);
 
 	const selectionValue = React.useMemo<ReportsSelection>(
@@ -300,22 +301,22 @@ export function ReportsProvider({
 	);
 
 	return (
-		<ReportsBindingContext.Provider value={bindingValue}>
+		<ReportsHandlesContext.Provider value={handlesValue}>
 			<ReportsSelectionContext.Provider value={selectionValue}>
 				<ReportsDataContext.Provider value={dataValue}>{children}</ReportsDataContext.Provider>
 			</ReportsSelectionContext.Provider>
-		</ReportsBindingContext.Provider>
+		</ReportsHandlesContext.Provider>
 	);
 }
 
 /** Mount only inside a differences-only Suspense boundary: the current figure never suspends. */
 export function ReportsComparison({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
-	const { comparisonBinding } = useReportsBinding();
+	const { comparisonHandle } = useReportsHandles();
 	const { statusMode } = useReportsScope();
 	const { timezone, period, storeId } = useReportsPeriod();
 	const { presets } = useStoreDay(storeId);
-	const result = useObservableSuspense(comparisonBinding.resource);
+	const { result } = useQuerySnapshot(useDrawnHandle(comparisonHandle), []);
 	const wholeComparisonOrders = result.hits
 		.map(({ record }) => {
 			const order = record as EngineRecord<'orders'>;
@@ -353,10 +354,10 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 /** A secondary read: parent lookup is local-only and never expands the sales demand. */
 export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
-	const { refundsBinding } = useReportsBinding();
+	const { refundsHandle } = useReportsHandles();
 	const { unselectedRowIds } = useReportsSelection();
 	const { filters } = useQueryState<'orders'>();
-	const result = useObservableSuspense(refundsBinding.resource);
+	const { result } = useQuerySnapshot(useDrawnHandle(refundsHandle), []);
 	const refunds = result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload);
 	const { engine, locale } = useQueryRuntime();
 	const parentIds = [

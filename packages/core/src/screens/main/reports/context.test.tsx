@@ -3,21 +3,25 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ObservableResource } from 'observable-hooks';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import {
+	ReportsComparison,
 	ReportsProvider,
 	ReportsRefunds,
 	ReportsScopeProvider,
-	useReportsBinding,
 	useReportsData,
+	useReportsHandles,
 	useReportsPeriod,
 	useReportsScope,
 	useReportsSelection,
 } from './context';
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
+
+import type { QueryHandle } from '../../../query';
+
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 
 let mockZone = 'UTC';
 let mockLocalParents: { uuid?: string }[] = [];
@@ -44,39 +48,43 @@ const orders = [
 	{ uuid: 'one', total: 'legacy-one' },
 	{ uuid: 'two', total: 'legacy-two' },
 ] as import('@wcpos/database').OrderDocument[];
-const binding = {
-	resource: new ObservableResource(
-		of({
-			hits: orders.map((document) => ({
-				id: document.uuid,
-				document,
-				record: {
-					uuid: document.uuid,
-					payload: {
-						total: `engine-${document.uuid}`,
-						status: document.uuid === 'one' ? 'completed' : 'processing',
-					},
-				},
-			})),
-		})
-	),
-};
-const DataProvider = ReportsProvider as unknown as React.ComponentType<{
-	binding: { resource: unknown };
-	comparisonBinding: { resource: unknown };
-	refundsBinding?: { resource: unknown };
-	children: React.ReactNode;
-}>;
+/** A handle answered with these hits (`ready: false` for a read that has not answered). */
+function handleOf(hits: object[], ready = true): QueryHandle & { set: (partial: object) => void } {
+	return fakeQueryHandle({ ready, result: { hits } });
+}
+const handle = handleOf(
+	orders.map((document) => ({
+		id: document.uuid,
+		document,
+		record: {
+			uuid: document.uuid,
+			payload: {
+				total: `engine-${document.uuid}`,
+				status: document.uuid === 'one' ? 'completed' : 'processing',
+			},
+		},
+	}))
+);
 
 function Provider({
-	binding,
+	handle,
+	comparisonHandle = handle,
+	refundsHandle = handleOf([]),
 	children,
-}: React.PropsWithChildren<{ binding: { resource: unknown } }>) {
+}: React.PropsWithChildren<{
+	handle: QueryHandle;
+	comparisonHandle?: QueryHandle;
+	refundsHandle?: QueryHandle;
+}>) {
 	return (
 		<ReportsScopeProvider>
-			<DataProvider binding={binding} comparisonBinding={binding}>
+			<ReportsProvider
+				handle={handle}
+				comparisonHandle={comparisonHandle}
+				refundsHandle={refundsHandle}
+			>
 				{children}
-			</DataProvider>
+			</ReportsProvider>
 		</ReportsScopeProvider>
 	);
 }
@@ -119,7 +127,7 @@ function PayloadProbe() {
 	return <div data-testid="order-totals">{allOrders.map((order) => order.total).join(',')}</div>;
 }
 
-describe('ReportsProvider binding context', () => {
+describe('ReportsProvider handles context', () => {
 	it('maps report rows from engine record payloads rather than legacy documents', () => {
 		render(
 			<QueryStateProvider
@@ -128,7 +136,7 @@ describe('ReportsProvider binding context', () => {
 				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 			>
 				<React.Suspense fallback={null}>
-					<Provider binding={binding}>
+					<Provider handle={handle}>
 						<PayloadProbe />
 					</Provider>
 				</React.Suspense>
@@ -138,7 +146,7 @@ describe('ReportsProvider binding context', () => {
 		expect(screen.getByTestId('order-totals').textContent).toBe('engine-one,engine-two');
 	});
 
-	it('derives orders, selection, and dates from the binding result plus query state', () => {
+	it('derives orders, selection, and dates from the handle result plus query state', () => {
 		render(
 			<QueryStateProvider
 				collection="orders"
@@ -152,7 +160,7 @@ describe('ReportsProvider binding context', () => {
 				}}
 			>
 				<React.Suspense fallback={null}>
-					<Provider binding={binding}>
+					<Provider handle={handle}>
 						<Probe />
 					</Provider>
 				</React.Suspense>
@@ -175,17 +183,17 @@ describe('ReportsProvider binding context', () => {
 	});
 
 	/**
-	 * `ReportsSyncProgress` reads nothing but `binding`, and the binding does not change when
+	 * `ReportsSyncProgress` reads nothing but the handles, and they do not change when
 	 * the cashier ticks a row — but the whole bundle used to be republished together, so it
 	 * re-rendered on every selection change and every order emission.
 	 *
 	 * The consumer is memoised with no props, so a parent render alone cannot reach it.
 	 */
-	it('does not re-render a binding-only consumer when the row selection changes', () => {
-		const onBindingRender = jest.fn();
-		const BindingConsumer = React.memo(function BindingConsumer() {
-			useReportsBinding();
-			onBindingRender();
+	it('does not re-render a handles-only consumer when the row selection changes', () => {
+		const onHandlesRender = jest.fn();
+		const HandlesConsumer = React.memo(function HandlesConsumer() {
+			useReportsHandles();
+			onHandlesRender();
 			return null;
 		});
 
@@ -201,41 +209,170 @@ describe('ReportsProvider binding context', () => {
 				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 			>
 				<React.Suspense fallback={null}>
-					<Provider binding={binding}>
-						<BindingConsumer />
+					<Provider handle={handle}>
+						<HandlesConsumer />
 						<SelectionButton />
 					</Provider>
 				</React.Suspense>
 			</QueryStateProvider>
 		);
 
-		const rendersBefore = onBindingRender.mock.calls.length;
+		const rendersBefore = onHandlesRender.mock.calls.length;
 		expect(rendersBefore).toBeGreaterThan(0);
 
 		fireEvent.click(screen.getByTestId('exclude'));
 
-		expect(onBindingRender).toHaveBeenCalledTimes(rendersBefore);
+		expect(onHandlesRender).toHaveBeenCalledTimes(rendersBefore);
+	});
+});
+
+// The three readers go through `useQuerySnapshot`: an unanswered handle suspends its reader,
+// a failed one throws to the boundary. Reading `handle.value` directly renders an empty report
+// as if the day had no sales.
+describe('the readers suspend on unanswered handles', () => {
+	const hits = (...ids: string[]) =>
+		ids.map((uuid) => ({ record: { uuid, payload: { status: 'completed', total: '10' } } }));
+	function Orders() {
+		const { allOrders, comparisonOrders, periodRefunds } = useReportsData();
+		return (
+			<span data-testid="readers">
+				{allOrders.map((order) => order.uuid).join(',')}|{comparisonOrders.length}|
+				{periodRefunds === undefined ? 'none' : periodRefunds.length}
+			</span>
+		);
+	}
+	function Room({
+		handle,
+		comparisonHandle,
+		refundsHandle,
+	}: {
+		handle: QueryHandle;
+		comparisonHandle: QueryHandle;
+		refundsHandle: QueryHandle;
+	}) {
+		return (
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={Number.MAX_SAFE_INTEGER}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<React.Suspense fallback={<span data-testid="provider-loading" />}>
+					<Provider
+						handle={handle}
+						comparisonHandle={comparisonHandle}
+						refundsHandle={refundsHandle}
+					>
+						<Orders />
+						<React.Suspense fallback={<span data-testid="comparison-loading" />}>
+							<ReportsComparison>
+								<span data-testid="comparison-read" />
+							</ReportsComparison>
+						</React.Suspense>
+						<React.Suspense fallback={<span data-testid="refunds-loading" />}>
+							<ReportsRefunds>
+								<span data-testid="refunds-read" />
+							</ReportsRefunds>
+						</React.Suspense>
+					</Provider>
+				</React.Suspense>
+			</QueryStateProvider>
+		);
+	}
+
+	it('the provider suspends until the sales handle answers, then renders its rows', async () => {
+		const sales = handleOf([], false);
+		render(<Room handle={sales} comparisonHandle={handleOf([])} refundsHandle={handleOf([])} />);
+		expect(screen.getByTestId('provider-loading')).toBeTruthy();
+		expect(screen.queryByTestId('readers')).toBeNull();
+
+		await act(async () => sales.set({ ready: true, result: { hits: hits('one', 'two') } }));
+		expect(screen.queryByTestId('provider-loading')).toBeNull();
+		expect(screen.getByTestId('readers').textContent).toBe('one,two|0|none');
+	});
+
+	// A date or filter change is a new handle: the previous figures stay until it answers,
+	// rather than blanking the report to its loading shell.
+	it('keeps the previous orders while a changed sales handle answers', async () => {
+		const comparison = handleOf([]);
+		const refunds = handleOf([]);
+		const view = render(
+			<Room handle={handleOf(hits('one'))} comparisonHandle={comparison} refundsHandle={refunds} />
+		);
+		expect(screen.getByTestId('readers').textContent).toBe('one|0|none');
+
+		const next = handleOf([], false);
+		await act(async () => {
+			view.rerender(<Room handle={next} comparisonHandle={comparison} refundsHandle={refunds} />);
+		});
+		expect(screen.queryByTestId('provider-loading')).toBeNull();
+		expect(screen.getByTestId('readers').textContent).toBe('one|0|none');
+
+		await act(async () => next.set({ ready: true, result: { hits: hits('two', 'three') } }));
+		expect(screen.getByTestId('readers').textContent).toBe('two,three|0|none');
+	});
+
+	it('the comparison and refunds readers suspend in their own boundaries', async () => {
+		const comparison = handleOf([], false);
+		const refunds = handleOf([], false);
+		render(
+			<Room handle={handleOf(hits('one'))} comparisonHandle={comparison} refundsHandle={refunds} />
+		);
+		// The current figure is drawn; only the two secondary reads wait.
+		expect(screen.getByTestId('readers').textContent).toBe('one|0|none');
+		expect(screen.getByTestId('comparison-loading')).toBeTruthy();
+		expect(screen.getByTestId('refunds-loading')).toBeTruthy();
+
+		await act(async () => comparison.set({ ready: true, result: { hits: hits('old') } }));
+		expect(screen.getByTestId('comparison-read')).toBeTruthy();
+		expect(screen.getByTestId('refunds-loading')).toBeTruthy();
+
+		await act(async () => refunds.set({ ready: true, result: { hits: [] } }));
+		expect(screen.getByTestId('refunds-read')).toBeTruthy();
+	});
+
+	it('throws a failed sales read to the nearest boundary', () => {
+		const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+		class Boundary extends React.Component<React.PropsWithChildren, { error: unknown }> {
+			state = { error: null as unknown };
+			static getDerivedStateFromError(error: unknown) {
+				return { error };
+			}
+			render() {
+				return this.state.error ? (
+					<span data-testid="failed">{String((this.state.error as Error).message)}</span>
+				) : (
+					this.props.children
+				);
+			}
+		}
+		try {
+			const sales = fakeQueryHandle({ ready: false, error: new Error('sales failed') });
+			render(
+				<Boundary>
+					<Room handle={sales} comparisonHandle={handleOf([])} refundsHandle={handleOf([])} />
+				</Boundary>
+			);
+			expect(screen.getByTestId('failed').textContent).toBe('sales failed');
+		} finally {
+			errors.mockRestore();
+		}
 	});
 });
 
 // Removing the device status set would include pending/cancelled orders in the default figure.
 it('counts completed and processing, never pending or cancelled by default', () => {
-	const statusBinding = {
-		resource: new ObservableResource(
-			of({
-				hits: [
-					'completed',
-					'processing',
-					'pending',
-					'on-hold',
-					'cancelled',
-					'refunded',
-					'failed',
-					'draft',
-				].map((status) => ({ record: { uuid: status, payload: { status, total: '10' } } })),
-			})
-		),
-	};
+	const statusHandle = handleOf(
+		[
+			'completed',
+			'processing',
+			'pending',
+			'on-hold',
+			'cancelled',
+			'refunded',
+			'failed',
+			'draft',
+		].map((status) => ({ record: { uuid: status, payload: { status, total: '10' } } }))
+	);
 	render(
 		<QueryStateProvider
 			collection="orders"
@@ -243,7 +380,7 @@ it('counts completed and processing, never pending or cancelled by default', () 
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 		>
 			<React.Suspense fallback={null}>
-				<Provider binding={statusBinding}>
+				<Provider handle={statusHandle}>
 					<Probe />
 				</Provider>
 			</React.Suspense>
@@ -419,20 +556,10 @@ function refundRoom(
 	} = {}
 ) {
 	mockLocalParents = parents;
-	const source = {
-		resource: new ObservableResource(
-			of({ hits: refunds.map((payload) => ({ record: { payload } })) })
-		),
-	};
-	const sales = {
-		resource: new ObservableResource(
-			of({
-				hits: (options.orders ?? []).map((payload) => ({
-					record: { uuid: payload.uuid, payload },
-				})),
-			})
-		),
-	};
+	const source = handleOf(refunds.map((payload) => ({ record: { payload } })));
+	const sales = handleOf(
+		(options.orders ?? []).map((payload) => ({ record: { uuid: payload.uuid, payload } }))
+	);
 	function RefundProbe() {
 		const { periodRefunds } = useReportsData();
 		return (
@@ -452,16 +579,14 @@ function refundRoom(
 				cashier: options.cashier,
 			}}
 		>
-			<ReportsScopeProvider>
-				<DataProvider binding={sales} comparisonBinding={sales} refundsBinding={source}>
-					<React.Suspense fallback={<RefundProbe />}>
-						<ReportsRefunds>
-							<Probe />
-							<RefundProbe />
-						</ReportsRefunds>
-					</React.Suspense>
-				</DataProvider>
-			</ReportsScopeProvider>
+			<Provider handle={sales} refundsHandle={source}>
+				<React.Suspense fallback={<RefundProbe />}>
+					<ReportsRefunds>
+						<Probe />
+						<RefundProbe />
+					</ReportsRefunds>
+				</React.Suspense>
+			</Provider>
 		</QueryStateProvider>
 	);
 }

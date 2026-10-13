@@ -16,7 +16,7 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useQueryState } from '../../../../query';
+import { useQueryHandleFields, useQueryState } from '../../../../query';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import {
 	useRegisterNames,
@@ -35,8 +35,8 @@ import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
 	useIncludedStatus,
-	useReportsBinding,
 	useReportsData,
+	useReportsHandles,
 	useReportsPeriod,
 	useReportsScope,
 	useReportsSelection,
@@ -112,9 +112,10 @@ export function DetailPanel() {
 	const [busy, setBusy] = React.useState(false);
 
 	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
+	// Products, categories and brands net refunds: without them they would print gross figures.
 	const ready =
 		formats.store &&
-		(detail !== 'refunds' || periodRefunds !== undefined) &&
+		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		(detail !== 'categories' || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory) &&
@@ -191,11 +192,12 @@ export function DetailPanel() {
 	});
 	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
 	// the document would claim a whole period it does not hold, so Print waits for the lane.
-	const { binding: salesBinding, refundsBinding } = useReportsBinding();
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const laneProgress = useObservableState(salesBinding.laneProgress$, null);
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-09-30.
-	const refundLaneProgress = useObservableState(refundsBinding.laneProgress$, null);
+	const { handle: salesHandle, refundsHandle } = useReportsHandles();
+	// Ready-gated, as the progress line: a read that has not answered reports no lane.
+	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
+	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
+	const laneProgress = sales.ready ? sales.laneProgress : null;
+	const refundLaneProgress = refunds.ready ? refunds.laneProgress : null;
 	const waiting:
 		'store' | 'data' | 'orders' | 'refunds' | 'templates' | 'no-template' | 'printer' | null =
 		!formats.store
