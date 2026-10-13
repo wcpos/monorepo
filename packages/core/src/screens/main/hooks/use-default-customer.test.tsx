@@ -22,6 +22,9 @@ jest.mock('@wcpos/query', () => {
 	type Snapshot = { ready: boolean; error: unknown; result: unknown };
 	return {
 		useQueryRuntime: () => ({ engine: {} }),
+		// The real owner of the resource: its read starts on commit, and Strict Mode is safe.
+		useOwnedResource: jest.requireActual('../../../../../query/src/use-owned-resource')
+			.useOwnedResource,
 		// As the real ones. Answers: every answered result, failures skipped.
 		queryHandleAnswers$: (handle: import('@wcpos/query').QueryHandle) =>
 			handle.observe().pipe(

@@ -1,16 +1,12 @@
-import * as React from 'react';
-
-import { ObservableResource, useObservable } from 'observable-hooks';
+import { useObservable } from 'observable-hooks';
 import { map, switchMap } from 'rxjs/operators';
 
-import { queryHandleResults$ } from '@wcpos/query';
+import { queryHandleResults$, useOwnedResource } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useCollectionQueryHandle } from '../../../query';
 import { useDefaultCustomerID } from './use-default-customer-id';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
-
-import type { ObservedValueOf } from 'rxjs';
 
 export const useDefaultCustomer = () => {
 	const guestCustomer = useGuestCustomer();
@@ -46,27 +42,9 @@ export const useDefaultCustomer = () => {
 		[handle, guestCustomer]
 	);
 
-	// One resource over the hook's one stream (`useObservable` hands back the same observable for
-	// the hook's life), destroyed on unmount: it subscribes on construction, and its subscription
-	// is a reader of the customers handle that would otherwise outlive the caller. `renew` swaps
-	// in a live one only when the held one is destroyed; the ref is what the mount-only cleanup
-	// destroys.
-	const [defaultCustomerResource, renew] = React.useReducer(
-		(current: ObservableResource<ObservedValueOf<typeof defaultCustomer$>>) =>
-			current.isDestroyed ? new ObservableResource(defaultCustomer$) : current,
-		defaultCustomer$,
-		(customer$) => new ObservableResource(customer$)
-	);
-	const resourceRef = React.useRef(defaultCustomerResource);
-	React.useEffect(() => {
-		resourceRef.current = defaultCustomerResource;
-	});
-	React.useEffect(() => {
-		// Strict Mode replays this effect with the same refs: the replayed cleanup destroyed the
-		// resource, so the setup re-renders the readers onto a live one.
-		if (resourceRef.current.isDestroyed) renew();
-		return () => resourceRef.current.destroy();
-	}, []);
+	// The resource the readers suspend on, owned here: its read (a reader of the customers
+	// handle) starts when this commits and is destroyed on unmount, Strict Mode replay included.
+	const defaultCustomerResource = useOwnedResource(defaultCustomer$);
 
 	return { defaultCustomer$, defaultCustomerResource };
 };

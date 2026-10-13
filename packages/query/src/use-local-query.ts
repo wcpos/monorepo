@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
 import { combineLatest, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, switchMap } from 'rxjs/operators';
 
@@ -8,6 +7,7 @@ import { buildScanSearchSelector } from '@wcpos/sync-core';
 
 import { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
 import { useLocalCollection$ } from './use-local-collection';
+import { useOwnedResource } from './use-owned-resource';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
@@ -153,33 +153,9 @@ export const useLocalQuery$ = (options: LocalQueryOptions) => {
 /** Direct local-only query binding. It never registers engine demand. */
 export const useLocalQuery = (options: LocalQueryOptions) => {
 	const { result$, total$ } = useLocalQuery$(options);
-	// One resource for the hook's lifetime: reloading retains the current value while the new
-	// query loads and clears terminal errors, so a descriptor change never blanks a mounted
-	// consumer. It subscribes on construction, so the read runs for the hook's lifetime — a
-	// caller that owns the read's lifetime takes `useLocalQuery$`. `renew` swaps in a live one
-	// only when the held one is destroyed; the ref is what the mount-only cleanup destroys.
-	const [resource, renew] = React.useReducer(
-		(current: ObservableResource<QueryResult<LocalCollection>>) =>
-			current.isDestroyed ? new ObservableResource(result$) : current,
-		result$,
-		(input$) => new ObservableResource(input$)
-	);
-	const resourceRef = React.useRef(resource);
-	React.useEffect(() => {
-		resourceRef.current = resource;
-	});
-
-	React.useEffect(() => {
-		if (resource.input$ !== result$) resource.reload(result$);
-	}, [resource, result$]);
-
-	React.useEffect(() => {
-		// Strict Mode replays this effect with the same refs: the replayed cleanup destroyed the
-		// resource, so the setup re-renders the consumer onto a live one. Otherwise the resource
-		// owns the local RxDB subscriptions for this hook, until unmount.
-		if (resourceRef.current.isDestroyed) renew();
-		return () => resourceRef.current.destroy();
-	}, []);
-
+	// The hook's resource: a changed query reloads it (the current window stays while the new
+	// one loads), and it reads only once the caller commits — a caller that owns the read's
+	// lifetime itself takes `useLocalQuery$`.
+	const resource = useOwnedResource(result$);
 	return { resource, result$, total$ };
 };

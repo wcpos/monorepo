@@ -29,6 +29,9 @@ let result$: Observable<{ hits: { record: { payload: { id: number } } }[] }>;
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: {} }),
+	// The real owner of the resource: its read starts on commit, and Strict Mode is safe.
+	useOwnedResource: jest.requireActual('../../../../../query/src/use-owned-resource')
+		.useOwnedResource,
 	// The handle's results: here, the source's every emission (each one an answered snapshot).
 	queryHandleResults$: (handle: { observe(): Observable<{ result: unknown }> }) =>
 		handle
@@ -155,24 +158,40 @@ describe('the default customer resource', () => {
 		expect(handed.at(-1)?.isDestroyed).toBe(false);
 	});
 
-	it('loops when the creator is inside the boundary — the shape this replaced', async () => {
+	it('holds exactly one live read of the customers handle after Strict Mode replays its effects', async () => {
+		// Every resource subscribes on construction: one Strict Mode discards (a reducer or an
+		// initializer invoked twice) would be a read nobody destroys.
+		let live = 0;
+		result$ = new Observable((subscriber) => {
+			subscribes++;
+			live++;
+			void Promise.resolve().then(() =>
+				subscriber.next({ hits: [{ record: { payload: { id: 7 } } }] })
+			);
+			return () => {
+				live--;
+			};
+		});
+		render(
+			<React.StrictMode>
+				<Creator />
+			</React.StrictMode>
+		);
+		await settle();
+
+		expect((await screen.findByTestId('default-customer')).textContent).toBe('7');
+		expect(live).toBe(1);
+	});
+
+	it('never mounts when the creator is inside the boundary — the shape this replaced', async () => {
 		// The control, in one file with its fix. `CreatorAndReader` is `GeneralSettings` and
 		// `useNewOrder` as they were: build and read in one component, boundary above.
 		//
-		// The real loop never ends, which is unusable as a test — `act` would flush forever — so
-		// this source relents on the fifth subscription by emitting SYNCHRONOUSLY, which lets
-		// that attempt commit and turns the loop into a number. Five subscriptions for one mount
-		// is one per attempt.
-		const RELENTS_AT = 5;
-		result$ = new Observable((subscriber) => {
-			subscribes++;
-			const hits = [{ record: { payload: { id: 7 } } }];
-			if (subscribes >= RELENTS_AT) {
-				subscriber.next({ hits });
-				return;
-			}
-			void Promise.resolve().then(() => subscriber.next({ hits }));
-		});
+		// It used to loop: every attempt built a resource that subscribed during render, and the
+		// aborted render discarded it (one subscription per attempt, measured in the app). The
+		// resource now reads only once its owner COMMITS, so an owner its own reader suspends
+		// never commits and never reads: the screen still never mounts — the boundary above the
+		// creator is no help either way — but it costs no reads.
 		function CreatorAndReader() {
 			const { defaultCustomerResource } = useDefaultCustomer();
 			const customer = useObservableSuspense(defaultCustomerResource) as {
@@ -187,9 +206,8 @@ describe('the default customer resource', () => {
 		);
 		await settle();
 
-		// One subscription per attempt — the 1:1 ratio measured in the app, where nothing
-		// relented and the screen never mounted at all.
-		expect((await screen.findByTestId('inline')).textContent).toBe('7');
-		expect(subscribes).toBe(RELENTS_AT);
+		expect(screen.queryByTestId('inline')).toBeNull();
+		expect(screen.getByTestId('route-fallback')).toBeTruthy();
+		expect(subscribes).toBe(0);
 	});
 });
