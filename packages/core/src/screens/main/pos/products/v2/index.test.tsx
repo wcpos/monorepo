@@ -58,6 +58,10 @@ jest.mock('@wcpos/components/empty-state', () => ({
 		</section>
 	),
 }));
+// The grid's loading rows are Poster placeholders (their own suite covers the shape).
+jest.mock('@wcpos/components/poster-tile', () => ({
+	PosterPlaceholder: ({ testID }: { testID?: string }) => <div data-testid={testID} />,
+}));
 jest.mock('@wcpos/components/skeleton', () => ({
 	Skeleton: ({ shape }: { shape?: string }) => <div data-testid="skeleton" data-shape={shape} />,
 	skeletonCount: () => 3,

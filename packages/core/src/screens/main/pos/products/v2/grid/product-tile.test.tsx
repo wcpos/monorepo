@@ -397,7 +397,8 @@ it('counts a drill tile’s options, and stacks only a drill tile', () => {
 });
 
 it('falls back to the tint of its first category, or its name, when the picture fails', () => {
-	const square = () => screen.getByTestId('product-tile-12').getAttribute('data-class-name');
+	// The tint is the whole card, square and band.
+	const square = () => screen.getByTestId('poster-card').getAttribute('data-class-name');
 	const pictured = { ...record, payload: { ...record.payload, images: [{ src: 'tea.jpg' }] } };
 	mockImageFails = false;
 	const first = render(<ProductTile record={pictured} gridFields={gridFields} />);

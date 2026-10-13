@@ -6,13 +6,14 @@ import Animated from 'react-native-reanimated';
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
 import { Text } from '../text';
+import { PosterBand } from './band';
 import { Scrim } from './scrim';
-import { SCRIM_REACH } from './scrim-stops';
+import { POSTER_BAND, SCRIM_REACH } from './scrim-stops';
 import { type Tint, tintOf } from './tint-of';
 
 import type { ImageSource } from 'expo-image';
 
-export { tintOf, type Tint };
+export { POSTER_BAND, PosterBand, tintOf, type Tint };
 export { SCRIM_REACH, SCRIM_STOPS, SCRIM_STRENGTH } from './scrim-stops';
 
 export type PosterPicture =
@@ -56,7 +57,7 @@ export type PosterTileProps = {
 	facts?: React.ReactNode;
 	/** Greys the picture; the caller says "Sold out" in the money slot. */
 	out?: boolean;
-	/** The stack of cards behind the tile: a variable product, "tap to deal". */
+	/** The stack of cards behind the tile: any tile that deals more tiles out ("tap to deal"). */
 	stacked?: boolean;
 	/** The stack's style, for the Deal's fade (an animated style). */
 	stackStyle?: React.ComponentProps<typeof Animated.View>['style'];
@@ -80,7 +81,8 @@ const TINTS = [
 	'bg-tile-tint-4',
 	'bg-tile-tint-5',
 ] as const;
-// The words' block, at the foot of the square. Never taller than the square: on a narrow tile
+const VEIL = 'bg-foreground/10 absolute inset-0';
+// The words' block, at the foot of the card. Never taller than the card: on a narrow tile
 // what overflows is clipped at the bottom (the facts), so the name, money and sub stay.
 const WORDS = 'absolute right-0 bottom-0 left-0 max-h-full gap-0.5 overflow-hidden';
 // The words sit the scrim's reach below its top edge, where the fade has reached full strength.
@@ -200,7 +202,7 @@ function Mark({
  * card-colour scrim at its foot (wcpos/roadmap `docs/specs/2026-10-12-pos-product-tile-poster-spec.md`).
  * It knows nothing about products: a picture, marks and words. The frame keeps `m-1` and forwards
  * its ref, so the Deal measures and lifts it as before; a stack's cards are drawn inside that
- * frame, behind the square.
+ * frame, behind the card.
  */
 export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(function PosterTile(
 	{
@@ -259,22 +261,23 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 						</Animated.View>
 					)}
 					<View
-						className={`aspect-square overflow-hidden rounded-lg border ${
+						className={`overflow-hidden rounded-lg border ${
 							tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`
 						}`}
-						testID={squareTestID}
+						testID="poster-card"
 					>
-						<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
-							<Picture picture={picture} />
+						<View className="aspect-square overflow-hidden" testID={squareTestID}>
+							<View className={`h-full w-full ${out ? 'opacity-40' : ''}`} testID="poster-picture">
+								<Picture picture={picture} />
+							</View>
+							{/* The press dims the picture or the tint alike, under the words and marks. */}
+							{pressed && <View className={VEIL} pointerEvents="none" testID="poster-pressed" />}
 						</View>
-						{/* The press dims the picture or the tint alike, under the words and marks. */}
-						{pressed && (
-							<View
-								className="bg-foreground/10 absolute inset-0"
-								pointerEvents="none"
-								testID="poster-pressed"
-							/>
-						)}
+						<PosterBand testID="poster-band">
+							{pressed && <View className={VEIL} pointerEvents="none" />}
+						</PosterBand>
+						{/* Anchored to the card: one line of name and the money row sit on the band, and the
+						    fade begins at the picture's foot; more lines climb into it. */}
 						{words &&
 							(tint === null ? (
 								<Scrim
@@ -290,6 +293,7 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 									{words}
 								</View>
 							))}
+						{/* Last, so the fade and blur of words that climb far never wash over them. */}
 						{mark && (
 							<View className="absolute top-2 left-2">
 								<Mark mark={mark} label={markLabel} testID={markTestID} bare={tint !== null} />
@@ -307,3 +311,17 @@ export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(functi
 		</Pressable>
 	);
 });
+
+/** A Poster tile that has not arrived yet: its slot held in the tile's own shape, square and band. */
+export function PosterPlaceholder({ testID, grow }: { testID?: string; grow?: boolean }) {
+	return (
+		<View
+			className={`bg-muted m-1 ${grow ? 'grow' : 'flex-1'} rounded-lg`}
+			aria-busy
+			testID={testID}
+		>
+			<View className="aspect-square" />
+			<PosterBand />
+		</View>
+	);
+}

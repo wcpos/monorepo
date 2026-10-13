@@ -8,7 +8,8 @@ import { useObservableRef } from 'observable-hooks';
 import { type ExpandedState } from '@tanstack/react-table';
 
 import { EmptyState } from '@wcpos/components/empty-state';
-import { Skeleton, skeletonCount } from '@wcpos/components/skeleton';
+import { PosterPlaceholder } from '@wcpos/components/poster-tile';
+import { skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { PaneStack } from '@wcpos/components/pane-stack';
@@ -25,7 +26,7 @@ import { CameraScanButton } from '../camera-scan-button';
 import { CameraScannerPanel } from '../camera-scanner-panel';
 import { StorageOutageBanner } from '../storage-outage-banner';
 import { ProductGrid } from '../grid';
-import { POS_PRODUCTS_MIN_PAGE_SIZE, TABLE_ROW_PX } from '../fit-page-size';
+import { POS_PRODUCTS_MIN_PAGE_SIZE } from '../fit-page-size';
 import { usePanelSide } from '../../contexts/overlay-side/v2';
 import { UISettingsForm } from '../ui-settings-form';
 import { POSFilterBar } from './filter-bar';
@@ -170,9 +171,13 @@ function ProductsView({
 }
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
-// A Poster tile is its square and nothing under it: a grid row is the square plus the tile's two
+// A Poster tile is its square and its band: a grid row is the square, the band and the tile's two
 // 4 px `m-1` margins (the legacy grid adds a 120 px text block instead, `TILE_TEXT_BLOCK_PX`).
 const POSTER_ROW_MARGIN_PX = 8;
+// The band (`POSTER_BAND`) at the base text scale, about 48 px. An estimate for the first page
+// size and the skeleton only: the band itself is drawn from the type scale's variables.
+const POSTER_BAND_ESTIMATE_PX = 48;
+const POSTER_ROW_EXTRA_PX = POSTER_BAND_ESTIMATE_PX + POSTER_ROW_MARGIN_PX;
 function POSProductsContent({
 	showOutOfStock,
 	initialFilters,
@@ -316,7 +321,7 @@ function POSProductsContent({
 		actions.setPageSize,
 		viewMode,
 		gridColumns,
-		POSTER_ROW_MARGIN_PX
+		POSTER_ROW_EXTRA_PX
 	);
 	const [body, setBody] = React.useState({ width: 0, height: 0 });
 	// "No products yet" only when nothing narrows the baseline: no search and no filter beyond the
@@ -350,22 +355,14 @@ function POSProductsContent({
 		viewMode === 'table' ? (
 			<DataTableSkeleton id="pos-products" />
 		) : (
-			<View className="gap-2 p-2">
+			// The grid loads in the tiles' own shape, so the rows drawn are the rows counted.
+			<View className="px-1">
 				{Array.from(
-					{
-						length: skeletonCount(
-							body.height,
-							viewMode === 'grid' ? body.width / gridColumns + POSTER_ROW_MARGIN_PX : TABLE_ROW_PX
-						),
-					},
+					{ length: skeletonCount(body.height, body.width / gridColumns + POSTER_ROW_EXTRA_PX) },
 					(_, row) => (
-						<View key={row} className="flex-row gap-2">
-							{Array.from({ length: viewMode === 'grid' ? gridColumns : 1 }, (_, column) => (
-								<Skeleton
-									key={column}
-									shape={viewMode === 'grid' ? 'tile' : 'row'}
-									className="flex-1"
-								/>
+						<View key={row} className="flex-row">
+							{Array.from({ length: gridColumns }, (_, column) => (
+								<PosterPlaceholder key={column} testID="products-grid-skeleton" />
 							))}
 						</View>
 					)
