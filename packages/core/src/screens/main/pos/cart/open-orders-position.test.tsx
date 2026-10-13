@@ -226,6 +226,9 @@ it('registers the cart surface only while the column shows the cart (roadmap#428
 		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true };
 		rerender(<OpenOrders isColumn />);
 		expect(hasSurface('cart')).toBe(true);
+		// Covered by the open-orders list: inert, so no cart command may reach it (Codex on #2521).
+		fireEvent.click(screen.getByTestId('open-orders'));
+		expect(hasSurface('cart')).toBe(false);
 		unmount();
 		expect(hasSurface('cart')).toBe(false);
 	} finally {

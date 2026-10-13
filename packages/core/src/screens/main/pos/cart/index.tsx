@@ -125,7 +125,8 @@ function CartColumn({
 	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={barApi} data={view} /> : null;
 	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
 	// the count too, and a key must not void or switch an order the cashier cannot see (#428).
-	useRegisterSurface('cart', NOOP, cartShown);
+	// Shown AND not covered by the open-orders list (inert, out of the accessibility tree).
+	useRegisterSurface('cart', NOOP, cartShown && !cartCovered);
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');

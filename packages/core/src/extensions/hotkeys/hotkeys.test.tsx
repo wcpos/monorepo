@@ -158,6 +158,35 @@ it('Alt+/ opens the help sheet', async () => {
 	ran('pos.help.open');
 });
 
+it('Alt+/ over the open sheet closes it; another chord closes it first, then runs', async () => {
+	jest.useFakeTimers();
+	try {
+		mount();
+		await act(async () => {
+			fireEvent.keyDown(document.body, chord('Slash', '/'));
+		});
+		expect(screen.getByTestId('hotkeys-help-sheet')).toBeTruthy();
+		await act(async () => {
+			fireEvent.keyDown(document.body, chord('Slash', '/'));
+		});
+		expect(screen.queryByTestId('hotkeys-help-sheet')).toBeNull();
+		await act(async () => {
+			fireEvent.keyDown(document.body, chord('Slash', '/'));
+		});
+		await act(async () => {
+			fireEvent.keyDown(document.body, ALT_N);
+		});
+		expect(screen.queryByTestId('hotkeys-help-sheet')).toBeNull();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		await act(async () => {
+			jest.runOnlyPendingTimers();
+		});
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
 it('renders nothing on native', () => {
 	const { container } = render(<NativeHotkeys />);
 	expect(container.innerHTML).toBe('');

@@ -23,11 +23,30 @@ export function Hotkeys() {
 		latest.current = ctx;
 	});
 	const [helpOpen, setHelpOpen] = React.useState(false);
+	const helpOpenRef = React.useRef(helpOpen);
+	React.useLayoutEffect(() => {
+		helpOpenRef.current = helpOpen;
+	}, [helpOpen]);
 	useRegisterSurface('help', () => setHelpOpen(true));
+	// A chord pressed over the open sheet: `Alt+/` closes it; any other closes it first and runs
+	// after the close commits, as a row press does (the open sheet's focus trap would pull a focus
+	// back). Returns true when the sheet handled the press.
+	const closeHelpFor = React.useCallback((command: CommandId, run: () => void) => {
+		if (!helpOpenRef.current) return false;
+		setHelpOpen(false);
+		if (command !== 'pos.help.open') setTimeout(run);
+		return true;
+	}, []);
 	return (
 		<>
 			{DEFAULT_BINDINGS.map(({ keys, command }) => (
-				<Binding key={keys} keys={keys} command={command} ctx={latest} />
+				<Binding
+					key={keys}
+					keys={keys}
+					command={command}
+					ctx={latest}
+					closeHelpFor={closeHelpFor}
+				/>
 			))}
 			<HelpSheet open={helpOpen} onOpenChange={setHelpOpen} ctx={ctx} />
 		</>
@@ -39,19 +58,24 @@ function Binding({
 	keys,
 	command,
 	ctx,
+	closeHelpFor,
 }: {
 	keys: string;
 	command: CommandId;
 	ctx: { readonly current: CommandContext };
+	closeHelpFor: (command: CommandId, run: () => void) => boolean;
 }) {
 	useHotkeys(
 		keys,
 		() => {
 			if (inFlight.has(command)) return;
-			inFlight.add(command);
-			void runCommand(command, ctx.current, { source: 'key' }).finally(() =>
-				inFlight.delete(command)
-			);
+			const run = () => {
+				inFlight.add(command);
+				void runCommand(command, ctx.current, { source: 'key' }).finally(() =>
+					inFlight.delete(command)
+				);
+			};
+			if (!closeHelpFor(command, run)) run();
 		},
 		OPTIONS
 	);
