@@ -5,10 +5,13 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const mockTrigger = jest.fn();
 const mockWarn = jest.fn();
+const mockInfo = jest.fn();
+let mockWpCredentials = { id: 1, access_token: 'initial', refresh_token: 'refresh' };
 let mockWriteSessionHeld = false;
 let mockAuthRequired = false;
 let mockSyncBacklogSales = 3;
@@ -24,7 +27,7 @@ jest.mock('../../hooks/use-engine-monitor', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { name: 'Shop' },
-		wpCredentials: { id: 1 },
+		wpCredentials: mockWpCredentials,
 		logout: jest.fn(),
 	}),
 }));
@@ -34,7 +37,17 @@ jest.mock('../../hooks/use-rest-http-client/use-session-login-flow', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ warn: mockWarn }),
+	// Deferred so the factory can run while the state manager module loads, before the
+	// mock fns above are initialised.
+	getLogger: () => ({
+		warn: (...args: unknown[]) => mockWarn(...args),
+		info: (...args: unknown[]) => mockInfo(...args),
+		debug: jest.fn(),
+	}),
+}));
+
+jest.mock('@wcpos/query', () => ({
+	useDocField: <T, R>(doc: T, select: (value: T) => R) => select(doc),
 }));
 
 // Render with react-native-web's Text, avoiding raw JSX in @rn-primitives/slot.
@@ -59,6 +72,11 @@ describe('SessionHoldBanner', () => {
 		mockWriteSessionHeld = false;
 		mockAuthRequired = false;
 		mockSyncBacklogSales = 3;
+		mockWpCredentials = { id: 1, access_token: 'initial', refresh_token: 'refresh' };
+	});
+
+	afterEach(() => {
+		requestStateManager.reset();
 	});
 
 	it('renders nothing when neither session flag is set', () => {
@@ -67,12 +85,17 @@ describe('SessionHoldBanner', () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it('renders nothing when the write session is held but no sales are waiting', () => {
-		mockWriteSessionHeld = true;
+	it.each(['writeSessionHeld', 'authRequired'])('shows %s without waiting sales', (reason) => {
+		mockWriteSessionHeld = reason === 'writeSessionHeld';
+		mockAuthRequired = reason === 'authRequired';
 		mockSyncBacklogSales = 0;
-		const { container } = render(<SessionHoldBanner />);
+		render(<SessionHoldBanner />);
 
-		expect(container.firstChild).toBeNull();
+		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
+			'Session expired — sign in to reconnect to the store.'
+		);
+		fireEvent.click(screen.getByTestId('session-hold-login'));
+		expect(mockTrigger).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows the waiting sales while the write session is held', () => {
@@ -134,13 +157,59 @@ describe('SessionHoldBanner', () => {
 		expect(mockTrigger).toHaveBeenCalledTimes(1);
 	});
 
-	it('does not toast when authRequired is already true as the hold starts', () => {
-		mockAuthRequired = true;
+	it('toasts once when authRequired starts and not again when the write hold joins it', () => {
 		const { rerender } = render(<SessionHoldBanner />);
+		mockAuthRequired = true;
+		rerender(<SessionHoldBanner />);
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockWarn).toHaveBeenCalledWith(
+			'Please log in to continue',
+			expect.objectContaining({ code: ERROR_CODES.SESSION_EXPIRED })
+		);
+		rerender(<SessionHoldBanner />);
 
 		mockWriteSessionHeld = true;
 		rerender(<SessionHoldBanner />);
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+	});
 
-		expect(mockWarn).not.toHaveBeenCalled();
+	it.each(['access_token', 'refresh_token'] as const)(
+		'recovers a failed session only when %s changes after mount',
+		(field) => {
+			requestStateManager.setAuthFailed(true);
+			requestStateManager.setRefreshedToken('old');
+			const { rerender } = render(<SessionHoldBanner />);
+			rerender(<SessionHoldBanner />);
+			expect(requestStateManager.isAuthFailed()).toBe(true);
+			expect(requestStateManager.getRefreshedToken()).toBe('old');
+			expect(mockInfo).not.toHaveBeenCalled();
+
+			mockWpCredentials = { ...mockWpCredentials, [field]: 'new' };
+			rerender(<SessionHoldBanner />);
+			expect(requestStateManager.isAuthFailed()).toBe(false);
+			expect(requestStateManager.getRefreshedToken()).toBeNull();
+			expect(mockInfo).toHaveBeenCalledTimes(1);
+			expect(mockInfo).toHaveBeenCalledWith('Session renewed by another tab', {
+				showToast: true,
+				toast: { title: 'Session renewed automatically' },
+				context: { siteName: 'Shop' },
+			});
+
+			requestStateManager.setAuthFailed(true);
+			requestStateManager.setRefreshedToken('old');
+			rerender(<SessionHoldBanner />);
+			expect(requestStateManager.isAuthFailed()).toBe(true);
+			expect(requestStateManager.getRefreshedToken()).toBe('old');
+			expect(mockInfo).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it('does not clear the cached token or log recovery when auth has not failed', () => {
+		requestStateManager.setRefreshedToken('current');
+		const { rerender } = render(<SessionHoldBanner />);
+		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
+		rerender(<SessionHoldBanner />);
+		expect(requestStateManager.getRefreshedToken()).toBe('current');
+		expect(mockInfo).not.toHaveBeenCalled();
 	});
 });

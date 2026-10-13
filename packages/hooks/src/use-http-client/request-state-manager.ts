@@ -125,6 +125,7 @@ class RequestStateManager {
 	// Global state flags
 	private offline = false;
 	private authFailed = false;
+	private authFailedCallbacks: ((failed: boolean) => void)[] = [];
 	private requestsPaused = false;
 
 	// Visibility/sleep coordination
@@ -502,7 +503,28 @@ class RequestStateManager {
 			} else {
 				httpLogger.debug('Authentication restored - requests can proceed');
 			}
+			for (const callback of this.authFailedCallbacks) {
+				try {
+					callback(failed);
+				} catch {
+					// Silently ignore auth callback errors, like wake callback errors.
+				}
+			}
 		}
+	}
+
+	/** Register for auth failure transitions; returns an unsubscribe function. */
+	onAuthFailed(callback: (failed: boolean) => void): () => void {
+		this.authFailedCallbacks.push(callback);
+		return () => {
+			this.authFailedCallbacks = this.authFailedCallbacks.filter((cb) => cb !== callback);
+		};
+	}
+
+	/** Resume using persisted credentials, not a stale in-memory refresh token. */
+	clearAuthFailure(): void {
+		this.refreshedToken = null;
+		this.setAuthFailed(false);
 	}
 
 	// ============================================================================
@@ -548,8 +570,8 @@ class RequestStateManager {
 		this.isRefreshing = false;
 		this.refreshedToken = null;
 		this.offline = false;
-		this.authFailed = false;
 		this.requestsPaused = false;
+		this.setAuthFailed(false);
 	}
 }
 

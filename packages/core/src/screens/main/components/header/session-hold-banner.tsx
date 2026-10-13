@@ -2,6 +2,8 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
+import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
+import { useDocField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -22,12 +24,31 @@ export function SessionHoldBanner() {
 	const { site, wpCredentials, logout } = useStoreSession();
 	const { triggerAuthFlow } = useSessionLoginFlow(site, wpCredentials, logout);
 	const t = useT();
-	const previousWriteSessionHeld = React.useRef(false);
+	const accessToken = useDocField(wpCredentials, (value) => value.access_token);
+	const refreshToken = useDocField(wpCredentials, (value) => value.refresh_token);
+	const previousTokens = React.useRef({ accessToken, refreshToken });
+	const previousHeld = React.useRef(false);
 	const held = status.writeSessionHeld || status.authRequired;
+
+	// Shared credential document changes arrive outside this component (e.g. another tab).
+	React.useEffect(() => {
+		const changed =
+			previousTokens.current.accessToken !== accessToken ||
+			previousTokens.current.refreshToken !== refreshToken;
+		previousTokens.current = { accessToken, refreshToken };
+		if (changed && requestStateManager.isAuthFailed()) {
+			requestStateManager.clearAuthFailure();
+			logger.info('Session renewed by another tab', {
+				showToast: true,
+				toast: { title: t('auth.session_renewed_automatically') },
+				context: { siteName: site.name },
+			});
+		}
+	}, [accessToken, refreshToken, site.name, t]);
 
 	// The toast marks an external engine state transition, once per hold.
 	React.useEffect(() => {
-		if (status.writeSessionHeld && !previousWriteSessionHeld.current && !status.authRequired) {
+		if (held && !previousHeld.current) {
 			logger.warn('Please log in to continue', {
 				showToast: true,
 				toast: {
@@ -37,10 +58,10 @@ export function SessionHoldBanner() {
 				context: { siteName: site.name },
 			});
 		}
-		previousWriteSessionHeld.current = status.writeSessionHeld;
-	}, [status.writeSessionHeld, status.authRequired, site.name, t, triggerAuthFlow]);
+		previousHeld.current = held;
+	}, [held, site.name, t, triggerAuthFlow]);
 
-	if (!held || syncBacklogSales <= 0) return null;
+	if (!held) return null;
 
 	return (
 		<View
@@ -48,7 +69,9 @@ export function SessionHoldBanner() {
 			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
 		>
 			<Text className="text-destructive flex-1 text-sm">
-				{t('auth.sales_waiting_to_sync', { count: syncBacklogSales })}
+				{syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
+					: t('auth.session_expired')}
 			</Text>
 			<Pressable testID="session-hold-login" onPress={() => triggerAuthFlow()}>
 				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
