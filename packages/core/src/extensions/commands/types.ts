@@ -27,10 +27,6 @@ export interface Command extends CommandDescriptor {
 	when?: (ctx: CommandContext) => boolean;
 	run: (ctx: CommandContext, args?: Readonly<Record<string, unknown>>) => Promise<void>;
 }
-export type CommandRegistration = Omit<Command, 'commandApiVersion'> & {
-	/** Defaults to `COMMAND_API_VERSION`. */
-	commandApiVersion?: typeof COMMAND_API_VERSION;
-};
 /** What a mounted surface registers: the Pay button, the void button, the search input, the discount opener. */
 export type SurfaceTarget = 'pay' | 'void' | 'search' | 'discount';
 export type RunOutcome = { outcome: 'ran' | 'refused' | 'failed' };
@@ -42,7 +38,7 @@ export type RunOutcome = { outcome: 'ran' | 'refused' | 'failed' };
  */
 export interface CommandContext extends ActionContext {
 	/** `openCheckout` and `cart.void` run the button's own path and reject when it is not mounted. */
-	readonly navigate: { openCheckout(): Promise<void>; leaveCheckout(): Promise<void> };
+	readonly navigate: { openCheckout(): Promise<void> };
 	readonly cart: {
 		newOrder(): Promise<void>;
 		/** An open order by uuid, or a step through the open carts (wrapping, receipts skipped). */

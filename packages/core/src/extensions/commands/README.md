@@ -54,8 +54,8 @@ const { outcome } = await runCommand('pos.cart.new', ctx, { source: 'key' }); //
 stack) builds it; `useCommandContext()` reads it (a consumer that raises commands from a key handler holds the
 latest context in a ref and calls `runCommand`). It is the action context plus:
 
-- `navigate.openCheckout()`: the Pay button's own path; `navigate.leaveCheckout()`: release
-  checkout mode and, from the sheet route, return to the cart.
+- `navigate.openCheckout()`: the Pay button's own path (leaving checkout is reserved with
+  `pos.checkout.leave`; Escape in checkout is the screen's own today).
 - `cart.newOrder()`, `cart.selectOrder(uuid | 'previous' | 'next')` (open orders in the strip's
   order, wrapping, receipts skipped; the blank cart sits past the last cart; an unknown uuid
   rejects), `cart.void()`: the void button's own path.

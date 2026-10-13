@@ -43,8 +43,7 @@ const COLLECTION_WRITES = new Set([
 const SOURCE_ROOTS = [
 	'packages/core/src/screens/main/pos/',
 	'packages/core/src/services/',
-	// A command never writes (roadmap#428): any order write under extensions/ ratchets.
-	'packages/core/src/extensions/',
+	'packages/core/src/extensions/', // a command never writes (roadmap#428)
 ];
 
 export const BOTTOM_HANDLERS = new Set([

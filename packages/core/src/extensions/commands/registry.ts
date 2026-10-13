@@ -2,27 +2,14 @@ import { getErrorMessage } from '@wcpos/utils/logger';
 
 import { COMMAND_API_VERSION, COMMAND_IDS } from './types';
 
-import type {
-	Command,
-	CommandContext,
-	CommandId,
-	CommandRegistration,
-	CommandSource,
-	RunOutcome,
-} from './types';
+import type { Command, CommandContext, CommandId, CommandSource, RunOutcome } from './types';
 
 const COMMANDS_CATEGORY = ['wcpos', 'pos', 'commands'];
-/**
- * Module-level and static, as the slot and action registries: commands register at import
- * time, so the registry is inspectable from a test without React.
- */
+// Module-level and static, as the slot and action registries: inspectable without React.
 const commands = new Map<CommandId, Command>();
 let snapshot: readonly Command[] | null = null;
 
-export function registerCommand({
-	commandApiVersion = COMMAND_API_VERSION,
-	...command
-}: CommandRegistration): void {
+export function registerCommand(command: Omit<Command, 'commandApiVersion'>): void {
 	// The union is closed at compile time; this catches a cast or a manifest at runtime.
 	if (!(COMMAND_IDS as readonly string[]).includes(command.id))
 		throw new Error(`Command "${command.id}" is not in COMMAND_IDS`);
@@ -33,7 +20,7 @@ export function registerCommand({
 		// so does every test that imports it. Throwing would make both of those fatal.
 		console.warn(`Command "${command.id}" re-registered — replacing.`);
 	}
-	commands.set(command.id, Object.freeze({ ...command, commandApiVersion }));
+	commands.set(command.id, Object.freeze({ ...command, commandApiVersion: COMMAND_API_VERSION }));
 	snapshot = null;
 }
 

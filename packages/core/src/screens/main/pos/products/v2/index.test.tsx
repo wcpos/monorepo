@@ -37,6 +37,8 @@ let mockSessionsOn = false;
 
 // The state primitives pull in Button (expo-haptics) and Icon (uniwind), both ESM-only under
 // jest; the doubles keep the props this screen reads.
+jest.mock('expo-router', () => ({ useRouter: () => ({ navigate: jest.fn() }) }));
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));
 jest.mock('@wcpos/components/empty-state', () => ({
 	EmptyState: ({
 		title,

@@ -12,24 +12,16 @@ import type { CommandContext } from './types';
 const mockLog = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockSelectReceipt = jest.fn();
-const mockLeaveCheckout = jest.fn();
-const mockReturnToTill = jest.fn();
-const mockRouter = { replace: jest.fn(), dismissTo: jest.fn() };
 let mockSegments: string[] = [];
 let mockStage: 'cart' | 'checkout' | 'receipt' = 'cart';
 let mockMode = { receiptOrders: new Set<string>(), selectedReceiptOrder: null as string | null };
 let mockCurrent: { uuid: string; isNew?: boolean; payload: Record<string, unknown[]> };
 let mockOpenOrders: { id: string }[] = [];
-let mockScreenSize = 'lg';
 
-jest.mock('expo-router', () => ({
-	useRouter: () => mockRouter,
-	useSegments: () => mockSegments,
-}));
+jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockScreenSize }) }));
 jest.mock('../../screens/main/pos/hooks/use-action-context', () => ({
 	useActionContext: () => ({ ctx: mockActionCtx }),
 }));
@@ -47,10 +39,6 @@ jest.mock('../../screens/main/pos/checkout/checkout-mode', () => ({
 	getCheckoutModeSnapshot: () => mockMode,
 	useOrderCheckoutStage: () => mockStage,
 	selectReceipt: (id: string | null) => mockSelectReceipt(id),
-	leaveCheckout: (id: string) => mockLeaveCheckout(id),
-}));
-jest.mock('../../screens/main/pos/checkout/till-route', () => ({
-	returnToTill: (...args: unknown[]) => mockReturnToTill(...args),
 }));
 
 function renderContext() {
@@ -69,7 +57,6 @@ beforeEach(() => {
 	mockMode = { receiptOrders: new Set(), selectedReceiptOrder: null };
 	mockOpenOrders = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 	mockCurrent = { uuid: 'c', payload: { line_items: [{}], fee_lines: [{}], shipping_lines: [] } };
-	mockScreenSize = 'lg';
 });
 
 it('throws outside the provider', () => {
@@ -148,18 +135,6 @@ it('newOrder selects the blank cart', async () => {
 	await ctx.cart.newOrder();
 	expect(mockSelectReceipt).toHaveBeenCalledWith(null);
 	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-});
-
-it('leaveCheckout releases checkout mode, and leaves the sheet route for the cart', async () => {
-	let { ctx } = renderContext();
-	await ctx.navigate.leaveCheckout();
-	expect(mockLeaveCheckout).toHaveBeenCalledWith('c');
-	expect(mockReturnToTill).not.toHaveBeenCalled();
-	mockSegments = ['(app)', '(drawer)', '(pos)', '(modals)', 'cart', '[orderId]', 'checkout'];
-	mockScreenSize = 'sm';
-	({ ctx } = renderContext());
-	await ctx.navigate.leaveCheckout();
-	expect(mockReturnToTill).toHaveBeenCalledWith(mockRouter, true, 'cart');
 });
 
 it('screen reflects the cart, checkout mode, the sheet route and receipts', () => {

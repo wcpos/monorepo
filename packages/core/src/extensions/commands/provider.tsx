@@ -1,19 +1,16 @@
 import * as React from 'react';
 
-import { useRouter, useSegments } from 'expo-router';
+import { useSegments } from 'expo-router';
 
 import { useRecordField } from '@wcpos/query';
 
 import { hasSurface, invokeSurface } from './surfaces';
-import { useTheme } from '../../contexts/theme';
 import {
 	getCheckoutModeSnapshot,
-	leaveCheckout,
 	selectReceipt,
 	useCheckoutMode,
 	useOrderCheckoutStage,
 } from '../../screens/main/pos/checkout/checkout-mode';
-import { returnToTill } from '../../screens/main/pos/checkout/till-route';
 import {
 	useCurrentOrder,
 	useCurrentOrderActions,
@@ -31,9 +28,7 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const { receiptOrders, selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(currentOrderRecord);
-	const router = useRouter();
 	const segments: string[] = useSegments();
-	const compact = useTheme().screenSize === 'sm';
 	const lineCount = useRecordField(
 		currentOrderRecord,
 		(order) =>
@@ -43,14 +38,13 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 	);
 	const hasOpenOrder = !(currentOrderRecord as { isNew?: boolean }).isNew;
 	const openOrderCount = openOrders.filter(({ id }) => !receiptOrders.has(id)).length;
-	const onSheet = segments.includes('checkout');
 	const route =
 		!segments.includes('(pos)') ||
 		segments.includes('receipt') ||
 		selectedReceiptOrder !== null ||
 		stage === 'receipt'
 			? 'other'
-			: onSheet || stage === 'checkout'
+			: segments.includes('checkout') || stage === 'checkout'
 				? 'checkout'
 				: 'cart';
 
@@ -63,14 +57,7 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 		};
 		return Object.freeze({
 			...actionCtx,
-			navigate: Object.freeze({
-				openCheckout: () => invokeSurface('pay'),
-				// As Pay's `abandon`: release checkout mode; from the sheet route, back to the cart.
-				leaveCheckout: async () => {
-					leaveCheckout(getCurrentOrderRecord().uuid);
-					if (onSheet) returnToTill(router, compact, 'cart');
-				},
-			}),
+			navigate: Object.freeze({ openCheckout: () => invokeSurface('pay') }),
 			cart: Object.freeze({
 				newOrder: async () => select(''),
 				selectOrder: async (target: string) => {
@@ -100,9 +87,6 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 		getCurrentOrderRecord,
 		setCurrentOrderID,
 		openOrders,
-		router,
-		compact,
-		onSheet,
 		route,
 		hasOpenOrder,
 		openOrderCount,

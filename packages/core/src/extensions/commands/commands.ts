@@ -1,6 +1,6 @@
 import { registerCommand } from './registry';
 
-import type { CommandContext, CommandRegistration } from './types';
+import type { Command, CommandContext } from './types';
 
 /** The eight v1 commands (spec §3). No key is bound here: the hotkeys module binds them. */
 const inCart = (ctx: CommandContext) => ctx.screen.route === 'cart';
@@ -9,12 +9,7 @@ const onOrder = (ctx: CommandContext) => inCart(ctx) && ctx.screen.hasOpenOrder;
 const canStep = (ctx: CommandContext) => inCart(ctx) && ctx.screen.openOrderCount > 1;
 const hasLines = (ctx: CommandContext) => inCart(ctx) && ctx.screen.lineCount > 0;
 
-const COMMANDS: [
-	CommandRegistration['id'],
-	string,
-	CommandRegistration['when'],
-	CommandRegistration['run'],
-][] = [
+const COMMANDS: [Command['id'], string, Command['when'], Command['run']][] = [
 	['pos.search.focus', 'pos_commands.search_focus', inCart, (ctx) => ctx.focus('search')],
 	[
 		'pos.checkout.open',
@@ -40,12 +35,6 @@ const COMMANDS: [
 		(ctx) => ctx.cart.void(),
 	],
 	// The help sheet arrives with the hotkeys module (PR 2 of roadmap#428), which opens it.
-	[
-		'pos.help.open',
-		'pos_commands.help_open',
-		undefined,
-		async (ctx) =>
-			ctx.log('debug', 'Keyboard shortcuts requested', { category: ['wcpos', 'pos', 'commands'] }),
-	],
+	['pos.help.open', 'pos_commands.help_open', undefined, async () => undefined],
 ];
 for (const [id, label, when, run] of COMMANDS) registerCommand({ id, label, when, run });
