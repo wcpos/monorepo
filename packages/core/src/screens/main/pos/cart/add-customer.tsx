@@ -52,7 +52,9 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data, awaitRemoteId: true });
+				// create() logs and toasts its own failure, with the store's sentence; reporting
+				// it here too showed the cashier two toasts for one refusal.
+				const savedDoc = await create({ data, awaitRemoteId: true }).catch(() => undefined);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its
 					// payload. Snapshot it rather than reading fields off the record:

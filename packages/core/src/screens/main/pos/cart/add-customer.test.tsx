@@ -127,4 +127,16 @@ describe.each([
 		expect(mockFormat).toHaveBeenCalledWith(payload);
 		expect(toJSON).not.toHaveBeenCalled();
 	});
+
+	it('leaves a refused create to the one report useMutation already made', async () => {
+		mockCreate.mockRejectedValue(new Error('write-rejected for mutation "mutation-1"'));
+
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
 });

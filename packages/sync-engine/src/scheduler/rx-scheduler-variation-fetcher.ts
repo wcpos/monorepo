@@ -22,6 +22,24 @@ export type VariationsSchedulerFetcherInput = CollectionSchedulerInput<StoredVar
 	exactSkuLeg?: () => boolean;
 };
 
+/**
+ * The plugin's variations search answers HTTP 400 beyond these limits (woocommerce-pos
+ * `Variations_Controller::validate_search_request`: MAX_SEARCH_LENGTH = 256 characters and
+ * Collection_Rules SEARCH_TERM_CAP = 10 terms), where product search falls back to the whole
+ * phrase. Deployed plugins keep rejecting, so such a term gets no remote search; local search
+ * still answers it.
+ */
+const PLUGIN_VARIATION_SEARCH_MAX_CHARACTERS = 256;
+const PLUGIN_VARIATION_SEARCH_MAX_TERMS = 10;
+
+function withinPluginSearchLimits(search: string): boolean {
+	return (
+		[...search].length <= PLUGIN_VARIATION_SEARCH_MAX_CHARACTERS &&
+		// Same separators as the plugin's Collection_Rules::search_terms.
+		search.split(/[\s\p{Z}\p{C}]+/u).filter(Boolean).length <= PLUGIN_VARIATION_SEARCH_MAX_TERMS
+	);
+}
+
 function variationSearchTerm(task: FetchTask): string | null {
 	const match = /^variations:search:(.+)$/.exec(task.queryKey);
 	if (!match) return null;
@@ -106,7 +124,8 @@ export function createVariationsSchedulerFetcher(
 	input: VariationsSchedulerFetcherInput
 ): SchedulerFetcher {
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
-		const search = assertVariationSearchTask(task).trim();
+		const term = assertVariationSearchTask(task).trim();
+		const search = withinPluginSearchLimits(term) ? term : '';
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
 		const exactSkuLeg = search.length > 0 && (input.exactSkuLeg?.() ?? true);

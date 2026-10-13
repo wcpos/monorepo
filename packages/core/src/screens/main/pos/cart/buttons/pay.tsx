@@ -6,9 +6,10 @@ import { Button } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
-import { useRecordField } from '@wcpos/query';
+import { useRecordField, WriteOutcomeTimeoutError } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -77,10 +78,12 @@ export function PayButton() {
 			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
-				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 				toast: { title: t('pos_cart.checkout_failed') },
 				context: {
 					error: errorMessage,
+					// Why a push never went out: connectivity, auth hold, queue depth, last drain.
+					...(error instanceof WriteOutcomeTimeoutError ? { pushState: error.diagnostics } : {}),
 				},
 			});
 		} finally {

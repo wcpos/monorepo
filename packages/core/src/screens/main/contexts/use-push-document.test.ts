@@ -7,6 +7,7 @@ import { WriteDeferredError, WriteOutcomeError } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { pushFailureCode } from './push-failure-code';
 import { usePushDocument } from './use-push-document';
 
 jest.mock('../pos/contexts/current-order/temporary-order', () => ({
@@ -259,7 +260,7 @@ describe('usePushDocument', () => {
 			ERROR_CODES.INSUFFICIENT_ROLE,
 		],
 	])(
-		'throws and logs the failure code when an order write outcome is %s',
+		'throws without reporting, and maps the failure code, when an order write outcome is %s',
 		async (_label, error, code) => {
 			const resident: Record<string, unknown> = {
 				remoteId: null,
@@ -278,10 +279,17 @@ describe('usePushDocument', () => {
 			const { result } = renderHook(() => usePushDocument());
 
 			await expect(result.current(doc as never)).rejects.toThrow(error.message);
-			expect(getLogger(['wcpos', 'sync', 'push']).error).toHaveBeenCalledWith(
-				'Failed to send document to server',
-				expect.objectContaining({ code })
-			);
+			// The caller owns the one report (log + toast); a second here doubled both.
+			expect(getLogger(['wcpos', 'sync', 'push']).error).not.toHaveBeenCalled();
+			expect(pushFailureCode(error)).toBe(code);
 		}
 	);
+
+	it('keeps the auth codes and falls back to the caller code for any other failure', () => {
+		const fallback = ERROR_CODES.CHECKOUT_FAILED_CART_SAFE;
+		expect(pushFailureCode(new WriteDeferredError('mutation-1', 401), fallback)).toBe(
+			ERROR_CODES.SESSION_EXPIRED
+		);
+		expect(pushFailureCode(new Error('Timed out waiting for mutation'), fallback)).toBe(fallback);
+	});
 });

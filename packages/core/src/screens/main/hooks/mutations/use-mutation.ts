@@ -7,6 +7,7 @@ import {
 	COLLECTION_VOCABULARY,
 	useQueryRuntime,
 	type WriteableCollection,
+	WriteOutcomeError,
 } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -69,13 +70,19 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const handleError = React.useCallback(
 		(error: unknown, context?: Record<string, unknown>) => {
 			const message = getErrorMessage(error);
-			mutationLogger.error(message, {
+			// A store refusal carries the store's own (already localized) sentence, e.g.
+			// "An account is already registered with your email address"; the error's
+			// message is only the machine `write-rejected for mutation "<uuid>"`.
+			const rejection =
+				error instanceof WriteOutcomeError && error.serverMessage ? error : undefined;
+			mutationLogger.error(rejection?.serverMessage ?? message, {
 				showToast: true,
 				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
 					collectionName,
 					endpoint,
 					operation: 'mutation',
+					...(rejection ? { error: message, reason: rejection.reason } : {}),
 					...context,
 				},
 			});

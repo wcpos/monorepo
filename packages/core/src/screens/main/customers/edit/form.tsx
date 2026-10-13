@@ -7,10 +7,10 @@ import * as z from 'zod';
 import { useModal } from '@wcpos/components/modal';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
+import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -83,7 +83,7 @@ export function EditCustomerForm({ customer }: Props) {
 				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save customer', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: pushFailureCode(error),
 					toast: { title: t('common.failed_to_save_customer') },
 					context: {
 						customerId: customer.getLatest().payload.id,

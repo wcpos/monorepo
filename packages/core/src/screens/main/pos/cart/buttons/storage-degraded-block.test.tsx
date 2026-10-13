@@ -12,6 +12,7 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { WriteDeferredError, WriteOutcomeTimeoutError } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -72,17 +73,40 @@ jest.mock('@wcpos/components/button', () => ({
 	},
 }));
 
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({
-		engine: {
-			write: mockEngineWrite,
-			status: () => ({ connectivity: 'online' }),
-		},
-	}),
-	awaitWriteOutcome: jest.fn(async () => undefined),
-	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
-	WriteOutcomeError: class WriteOutcomeError extends Error {},
-}));
+// Stand-ins for the real error classes: the real module loads the sync engine, which
+// collides with the `@wcpos/sync-core` mock below. They carry only what the buttons read.
+jest.mock('@wcpos/query', () => {
+	class WriteOutcomeError extends Error {}
+	class WriteDeferredError extends Error {
+		constructor(
+			mutationId: string,
+			public status?: number
+		) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+		}
+	}
+	class WriteOutcomeTimeoutError extends Error {
+		constructor(
+			mutationId: string,
+			public diagnostics: Record<string, unknown>
+		) {
+			super(`Timed out waiting for mutation "${mutationId}"`);
+		}
+	}
+	return {
+		useQueryRuntime: () => ({
+			engine: {
+				write: mockEngineWrite,
+				status: () => ({ connectivity: 'online' }),
+			},
+		}),
+		awaitWriteOutcome: jest.fn(async () => undefined),
+		useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+		WriteDeferredError,
+		WriteOutcomeError,
+		WriteOutcomeTimeoutError,
+	};
+});
 
 jest.mock('@wcpos/sync-core', () => ({
 	WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete',
@@ -294,5 +318,43 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 
 		await waitFor(() => expectBlockedLog());
 		expect(mockPush).not.toHaveBeenCalled();
+	});
+});
+
+describe('checkout failure report', () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it('reports a timed-out checkout once, carrying the push state', async () => {
+		const pushState = { connectivity: 'online', queueDepth: 2, writeSessionHeld: false };
+		mockPushDocument.mockRejectedValue(new WriteOutcomeTimeoutError('mutation-1', pushState));
+
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+
+		await waitFor(() => expect(mockLogger.error).toHaveBeenCalledTimes(1));
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			'Checkout failed',
+			expect.objectContaining({
+				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				context: {
+					error: 'Timed out waiting for mutation "mutation-1"',
+					pushState,
+				},
+			})
+		);
+	});
+
+	it('reports a refused session as AUTH101, not the generic checkout code', async () => {
+		mockPushDocument.mockRejectedValue(new WriteDeferredError('mutation-1', 401));
+
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+
+		await waitFor(() =>
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				'Checkout failed',
+				expect.objectContaining({ code: ERROR_CODES.SESSION_EXPIRED })
+			)
+		);
 	});
 });

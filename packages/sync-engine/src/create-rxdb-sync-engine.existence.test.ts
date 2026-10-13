@@ -782,6 +782,64 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	// The plugin's Digest_Index sends '' for a side with no rows in that bucket (XOR of nothing).
+	function emptySideEnvelope(url: string, storedCount: number) {
+		const envelope = scanEnvelope(url, []);
+		return {
+			...envelope,
+			changes: [
+				{
+					bucket: 0,
+					stored_count: storedCount,
+					current_count: 1,
+					stored_digest: '',
+					current_digest: '1',
+					match: false,
+				},
+			],
+		};
+	}
+
+	it("accepts the plugin's empty digest for a side whose count is zero", async () => {
+		const e = engine(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/scan')) return json(emptySideEnvelope(url, 0));
+			if (parsed.pathname.endsWith('/integrity/bucket')) return json({ ids: [] });
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		await e.ready;
+		await seed(e.active()!.database.collections.existenceManifest as never, {
+			remoteId: '1',
+			wooId: 1,
+			digest: '1',
+			objectType: 'product',
+		});
+
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		await e.dispose();
+	});
+
+	it('rejects an empty digest alongside a non-zero count', async () => {
+		const e = engine(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/scan')) return json(emptySideEnvelope(url, 1));
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		await e.ready;
+		await seed(e.active()!.database.collections.existenceManifest as never, {
+			remoteId: '1',
+			wooId: 1,
+			digest: '1',
+			objectType: 'product',
+		});
+
+		const report = await e.sync('existence-reconcile');
+
+		expect(report).toMatchObject({ status: 'error' });
+		expect(report.error).toMatch(/unusable products envelope/i);
+		await e.dispose();
+	});
+
 	it('skips both existence lanes offline without fetching', async () => {
 		const connectivity = scriptedConnectivity('offline');
 		const fetcher = vi.fn(async () => json({}));

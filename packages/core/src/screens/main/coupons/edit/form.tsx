@@ -7,10 +7,10 @@ import * as z from 'zod';
 import { useModal } from '@wcpos/components/modal';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
+import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
@@ -62,7 +62,7 @@ export function EditCouponForm({ coupon }: Props) {
 				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save coupon', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: pushFailureCode(error),
 					toast: { title: t('coupons.failed_to_save_coupon') },
 					context: {
 						couponId: coupon.getLatest().payload.id,
