@@ -2,6 +2,8 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
+import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
+import { useDocField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -11,6 +13,12 @@ import { useEngineStatus, useMutationCounts } from '../../hooks/use-engine-monit
 import { useSessionLoginFlow } from '../../hooks/use-rest-http-client/use-session-login-flow';
 
 const logger = getLogger(['wcpos', 'auth', 'error']);
+let holdToastShown = false;
+
+/** Test-only reset of shared hold toast state. */
+export function resetSessionHoldBannerState() {
+	holdToastShown = false;
+}
 
 /**
  * A refused session is a STATE that lasts until the cashier logs in, so it is
@@ -22,12 +30,42 @@ export function SessionHoldBanner() {
 	const { site, wpCredentials, logout } = useStoreSession();
 	const { triggerAuthFlow } = useSessionLoginFlow(site, wpCredentials, logout);
 	const t = useT();
-	const previousWriteSessionHeld = React.useRef(false);
+	const accessToken = useDocField(wpCredentials, (value) => value.access_token);
+	const previousAccessToken = React.useRef(accessToken);
+	const [recovered, setRecovered] = React.useState(false);
 	const held = status.writeSessionHeld || status.authRequired;
+	// Recovery hides the stale hold only until the engine publishes its next snapshot
+	// (previous-value-in-state: a new snapshot identity resets the flag during render).
+	const [seenStatus, setSeenStatus] = React.useState(status);
+	if (seenStatus !== status) {
+		setSeenStatus(status);
+		if (recovered) setRecovered(false);
+	}
+
+	// A renewed token can be refused too: when the latch sets again, the banner must show again.
+	React.useEffect(
+		() => requestStateManager.onAuthFailed((failed) => failed && setRecovered(false)),
+		[]
+	);
+
+	// Shared credential document changes arrive outside this component (e.g. another tab).
+	React.useEffect(() => {
+		const changed = previousAccessToken.current !== accessToken;
+		previousAccessToken.current = accessToken;
+		if (changed && requestStateManager.isAuthFailed()) {
+			requestStateManager.clearAuthFailure();
+			setRecovered(true);
+			logger.info('Session renewed by another tab', {
+				showToast: true,
+				toast: { title: t('auth.session_renewed_automatically') },
+				context: { siteName: site.name },
+			});
+		}
+	}, [accessToken, site.name, t]);
 
 	// The toast marks an external engine state transition, once per hold.
 	React.useEffect(() => {
-		if (status.writeSessionHeld && !previousWriteSessionHeld.current && !status.authRequired) {
+		if (held && !holdToastShown) {
 			logger.warn('Please log in to continue', {
 				showToast: true,
 				toast: {
@@ -36,11 +74,15 @@ export function SessionHoldBanner() {
 				code: ERROR_CODES.SESSION_EXPIRED,
 				context: { siteName: site.name },
 			});
+			holdToastShown = true;
 		}
-		previousWriteSessionHeld.current = status.writeSessionHeld;
-	}, [status.writeSessionHeld, status.authRequired, site.name, t, triggerAuthFlow]);
+		if (!held) {
+			holdToastShown = false;
+		}
+	}, [held, site.name, t, triggerAuthFlow]);
 
-	if (!held || syncBacklogSales <= 0) return null;
+	// A recovery answers the auth hold only; a held write session keeps its sales warning.
+	if (!held || (recovered && !status.writeSessionHeld)) return null;
 
 	return (
 		<View
@@ -48,7 +90,9 @@ export function SessionHoldBanner() {
 			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
 		>
 			<Text className="text-destructive flex-1 text-sm">
-				{t('auth.sales_waiting_to_sync', { count: syncBacklogSales })}
+				{syncBacklogSales > 0
+					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
+					: t('auth.session_expired')}
 			</Text>
 			<Pressable testID="session-hold-login" onPress={() => triggerAuthFlow()}>
 				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
