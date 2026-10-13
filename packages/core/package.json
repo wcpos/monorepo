@@ -154,7 +154,7 @@
 		"react-native-safe-area-context": "~5.9.1",
 		"react-native-screens": "~4.28.0",
 		"react-native-svg": "15.15.5",
-		"ts-jest": "^29.4.14",
+		"ts-jest": "29.4.12",
 		"victory-native": "^41.26.0"
 	}
 }

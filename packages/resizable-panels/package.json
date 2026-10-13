@@ -60,7 +60,7 @@
 		"jest-environment-jsdom": "^30.5.2",
 		"react-dom": "19.3.0",
 		"react-native-web": "~0.21.0",
-		"ts-jest": "^29.4.14"
+		"ts-jest": "29.4.12"
 	},
 	"peerDependenciesMeta": {
 		"react-native": {

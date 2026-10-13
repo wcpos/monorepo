@@ -58,6 +58,6 @@
     "jest": "^30.5.2",
     "react-native": "0.88.0-rc.2",
     "react-test-renderer": "19.3.0",
-    "ts-jest": "^29.4.14"
+    "ts-jest": "29.4.12"
   }
 }
