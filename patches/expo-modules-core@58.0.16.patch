@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt b/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
-index 52ec91cffa0dc0679df61ab2cdd748f8d9b57c11..b81145f64d09ef11bc44a282303037b0a994d7fd 100644
+index 52ec91c..b81145f 100644
 --- a/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
 +++ b/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
 @@ -94,8 +94,10 @@ class SharedObjectRegistry(runtime: Runtime) {

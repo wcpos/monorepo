@@ -49,7 +49,7 @@ module.exports = {
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [
-		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/)',
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/|@rn-primitives/|@shopify/flash-list/)',
 	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

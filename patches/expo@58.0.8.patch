@@ -1,8 +1,8 @@
 diff --git a/types/react-native-web.d.ts b/types/react-native-web.d.ts
-index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c850104a6c54f1 100644
+index 1fc21a2..342a298 100644
 --- a/types/react-native-web.d.ts
 +++ b/types/react-native-web.d.ts
-@@ -11,105 +11,6 @@ declare module 'react-native' {
+@@ -11,95 +11,6 @@ declare module 'react-native' {
      className?: string;
    }
  
@@ -32,17 +32,7 @@ index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c85010
 -    /** @platform web */
 -    backgroundClip?: string;
 -    /** @platform web */
--    backgroundImage?: string;
--    /** @platform web */
 -    backgroundOrigin?: 'border-box' | 'content-box' | 'padding-box';
--    /** @platform web */
--    backgroundPosition?: string;
--    /** @platform web */
--    backgroundRepeat?: string;
--    /** @platform web */
--    backgroundSize?: string;
--    /** @platform web */
--    boxSizing?: string;
 -    /** @platform web */
 -    clip?: string;
 -    /** @platform web */
@@ -108,7 +98,7 @@ index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c85010
    /**
     * Text
     */
-@@ -122,123 +23,6 @@ declare module 'react-native' {
+@@ -112,107 +23,6 @@ declare module 'react-native' {
      lang?: string;
    }
  
@@ -138,25 +128,11 @@ index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c85010
 -    /** @platform web */
 -    backgroundClip?: string;
 -    /** @platform web */
--    backgroundImage?: string;
--    /** @platform web */
 -    backgroundOrigin?: 'border-box' | 'content-box' | 'padding-box';
--    /** @platform web */
--    backgroundPosition?: string;
--    /** @platform web */
--    backgroundRepeat?: string;
--    /** @platform web */
--    backgroundSize?: string;
--    /** @platform web */
--    boxShadow?: string;
--    /** @platform web */
--    boxSizing?: string;
 -    /** @platform web */
 -    clip?: string;
 -    /** @platform web */
 -    cursor?: string;
--    /** @platform web */
--    filter?: string;
 -    /** @platform web */
 -    gridAutoColumns?: string;
 -    /** @platform web */
@@ -183,8 +159,6 @@ index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c85010
 -    gridTemplateAreas?: string;
 -    /** @platform web */
 -    outline?: string;
--    /** @platform web */
--    outlineColor?: string;
 -    /** @platform web */
 -    overflowX?: string;
 -    /** @platform web */
@@ -232,7 +206,7 @@ index d6159045aa4b1f6864037cfc1c001a68605b416d..b280f9ecde23d4b5e664e75237c85010
    /**
     * Pressable
     */
-@@ -252,9 +36,6 @@ declare module 'react-native' {
+@@ -226,9 +36,6 @@ declare module 'react-native' {
        | React.ReactNode
        | ((state: PressableStateCallbackType) => React.ReactNode)
        | undefined;

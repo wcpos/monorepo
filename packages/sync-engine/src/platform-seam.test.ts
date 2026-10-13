@@ -70,18 +70,20 @@ describe('platform seam: AbortController abort reasons', () => {
 		expect(source).not.toMatch(/\breason\b/);
 	});
 
-	it('expo patches the reason back on, which is why it can be trusted through expo APIs', () => {
-		// expo/src/winter/AbortSignal.ts carries abortWithReason(), which calls
-		// abort(reason) and then re-defines signal.reason when the platform
-		// dropped it. Corroborating evidence for the test above: the workaround
-		// only makes sense against a polyfill that loses the argument.
-		//
-		// It is applied to expo's OWN signals. A bare `new AbortController()` in
-		// our code — which is what require-plane uses — does not get it.
-		const source = readFileSync(require_.resolve('expo/src/winter/AbortSignal.ts'), 'utf8');
+	it('expo forwards existing abort reasons but no longer patches AbortSignal', () => {
+		// Expo removed winter/AbortSignal and its abortWithReason repair. Fetch
+		// preserves a reason only when the incoming signal already supplies it;
+		// it cannot recover a reason discarded by the RN polyfill above.
+		const runtime = readDependencySource('expo/src/winter/runtime.native.ts');
+		const fetch = readDependencySource('expo/src/winter/fetch/fetch.ts');
+		const response = readDependencySource('expo/src/winter/fetch/FetchResponse.ts');
 
-		expect(source).toMatch(/function abortWithReason/);
-		expect(source).toMatch(/controller\.signal\.reason !== reason/);
+		expect(runtime).not.toMatch(/AbortSignal|AbortController|abortWithReason/);
+		expect(fetch).toMatch(/cause: signal\.reason/);
+		expect(fetch).toMatch(/response\.abort\(signal\?\.reason\)/);
+		expect(response).toMatch(/reason != null\s*\? reason\s*:/);
+		expect(response).toMatch(/this\.abortReason = abortError/);
+		expect(response).toMatch(/this\.bodyStreamController\?\.error\(abortError\)/);
 	});
 });
 

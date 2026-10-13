@@ -38,9 +38,9 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "expo-application": "~58.0.1",
-    "expo-constants": "~58.0.8",
-    "expo-file-system": "~58.0.3",
+    "expo-application": "~58.1.1",
+    "expo-constants": "~58.0.11",
+    "expo-file-system": "~58.0.9",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "@sentry/browser": "10.75.0",
-    "@sentry/react-native": "8.25.0",
+    "@sentry/react-native": "~8.28.0",
     "lodash": "^4.18.1",
     "react-native-logs": "^5.6.0"
   },

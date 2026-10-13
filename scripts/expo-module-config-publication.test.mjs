@@ -1,58 +1,32 @@
-// Every Expo module that declares an Android `publication` must give it a `version`: the SDK 58
-// Gradle autolinking plugin decodes the config with a serializer whose `Publication.version` is
-// required, so one missing field aborts EVERY Android build at settings evaluation
-// ("Field 'version' is required for type ... Publication"). expo-observe 58.0.11,
-// expo-app-metrics 58.0.9, expo-blob 58.0.2 and expo-device 58.0.5 ship such a block (EAS build
-// 4160ee2e, 2026-09-30; the device run of 2026-10-06). The prebuilt AARs those blocks point at DO
-// exist, under each package's `local-maven-repo/`; our patches remove the block, so the four build
-// from source instead of using the prebuilt (independent review of monorepo#2408 corrected an
-// earlier claim here that no AAR shipped). This test reads the INSTALLED configs so a bump that
-// drops the patch key re-checks upstream.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+// Expo modules ship `expo-module.config.json` with an Android `publication` that carries no
+// `version`: Expo's pipeline leaves it out on purpose. SDK 58's Gradle autolinking plugin decodes
+// the config with a serializer whose `Publication.version` is required, so on
+// expo-modules-autolinking 58.0.5 one missing field aborted EVERY Android build at settings
+// evaluation ("Field 'version' is required for type ... Publication"; EAS build 4160ee2e,
+// 2026-09-30). Four exact-keyed patches removed the block (expo-observe, expo-app-metrics,
+// expo-blob, expo-device) so those modules built from source. expo-modules-autolinking 58.0.12
+// fills the gap itself — `publication.version ?? revision.version` in
+// src/platforms/android/android.ts — before Gradle sees the config, so the patches are gone and
+// the prebuilt AARs under each package's `local-maven-repo/` are used, as upstream intends.
+//
+// This tripwire pins that default. If a bump of expo-modules-autolinking drops it, the
+// version-less blocks (twenty modules on SDK 58.0.8) abort Android settings evaluation again and
+// the patches come back.
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const require = createRequire(import.meta.url);
+const mainPaths = [join(process.cwd(), 'apps/main')];
 
-function moduleConfig(name) {
-	const pkg = require.resolve(`${name}/package.json`, {
-		paths: [join(process.cwd(), 'apps/main')],
-	});
-	const file = join(dirname(pkg), 'expo-module.config.json');
-	return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-}
-
-// expo-blob 58.0.2 ships the same block (found by the first Android device run of
-// `next`, 2026-09-30, right after the SDK-58 bump of expo-blob); `patches/expo-blob@58.0.2.patch`.
-// expo-device 58.0.5 too (caught by the test below when it was added, 2026-10-06);
-// `patches/expo-device@58.0.5.patch`.
-for (const name of ['expo-observe', 'expo-app-metrics', 'expo-blob', 'expo-device']) {
-	test(`${name} declares no Android publication (the patch removes the version-less block; it builds from source)`, () => {
-		const config = moduleConfig(name);
-		assert.ok(config, `${name} is installed with an expo-module.config.json`);
-		assert.equal(config.android?.publication, undefined);
-		const android =
-			dirname(
-				require.resolve(`${name}/package.json`, { paths: [join(process.cwd(), 'apps/main')] })
-			) + '/android';
-		assert.ok(
-			existsSync(join(android, 'build.gradle')),
-			`${name} has Android sources to build from`
-		);
-	});
-}
-
-test('every installed Expo module with an Android publication gives it a version', () => {
-	const modulesDir = join(process.cwd(), 'node_modules');
-	const offenders = [];
-	for (const entry of readdirSync(modulesDir)) {
-		if (!entry.startsWith('expo')) continue;
-		const file = join(modulesDir, entry, 'expo-module.config.json');
-		if (!existsSync(file)) continue;
-		const publication = JSON.parse(readFileSync(file, 'utf8')).android?.publication;
-		if (publication && !publication.version) offenders.push(entry);
-	}
-	assert.deepEqual(offenders, []);
+test('expo-modules-autolinking defaults a missing Android publication version to the package revision', () => {
+	const pkg = require.resolve('expo-modules-autolinking/package.json', { paths: mainPaths });
+	const source = readFileSync(join(dirname(pkg), 'build/platforms/android/android.js'), 'utf8');
+	assert.match(
+		source,
+		/version:\s*project\.publication\.version\s*\?\?\s*revision\.version/,
+		'autolinking no longer fills publication.version; the version-less module configs abort Gradle settings evaluation again — restore the removal patches (1cc639fc0)'
+	);
 });

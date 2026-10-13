@@ -5,9 +5,8 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'jsdom',
 	transform: {
-		// The rn-primitives builds ship JSX; a suite that needs the browser behaviour (the
-		// popover's outside press, monorepo#2313) loads the web build, as @wcpos/core does.
-		'/node_modules/@rn-primitives/.+\\.js$': [
+		// rn-primitives ships JSX and flash-list ships ESM; transform both to CommonJS.
+		'/node_modules/(@rn-primitives|@shopify/flash-list)/.+\\.js$': [
 			'babel-jest',
 			{
 				babelrc: false,
@@ -26,7 +25,7 @@ module.exports = {
 			},
 		],
 	},
-	transformIgnorePatterns: ['node_modules/(?!@rn-primitives/)'],
+	transformIgnorePatterns: ['node_modules/(?!@rn-primitives/|@shopify/flash-list/)'],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,
