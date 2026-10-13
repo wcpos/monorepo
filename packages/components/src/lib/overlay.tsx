@@ -140,7 +140,7 @@ export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
 	// `max-w-full`: the phone sheet is the phone's width, whatever cap an anchored caller set
 	// (`max-w-80` on the variations popover left a 280 dp sheet, Pixel 2026-10-06).
-	bottom: 'bg-card border-border w-full max-w-full max-h-[92%] rounded-t-2xl border-t p-2',
+	bottom: 'bg-card border-border w-full max-w-full max-h-full rounded-t-2xl border-t p-2',
 };
 export const OVERLAY_MOTION: Record<
 	OverlayPresentation,
@@ -485,15 +485,30 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			<KeyboardAvoidingView
 				pointerEvents="box-none"
 				behavior="padding"
-				keyboardVerticalOffset={insets.bottom}
-				className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
+				// Measured on a Pixel 10 (2026-10-13): with the keyboard hidden the padding
+				// behaviour still pads a bottom sheet ~9 dp off the screen edge. A sheet sits on
+				// the edge; the keyboard pushes it from there when one opens.
+				keyboardVerticalOffset={presentation === 'bottom' ? 0 : insets.bottom}
+				enabled={presentation !== 'bottom'}
+				// The sheet's height cap lives on the wrappers, not the panel: a percentage cap on
+				// the panel resolves against a wrapper that is itself sized by the panel, and the
+				// panel ends up clipped to 92% of its own content (same measurement).
+				className={cn(
+					'max-w-full',
+					fullHeight && 'h-full',
+					presentation === 'bottom' ? 'max-h-[92%] w-full' : 'max-h-full'
+				)}
 			>
 				<Animated.View
 					pointerEvents="box-none"
 					onAccessibilityEscape={onDismiss}
 					entering={OVERLAY_MOTION[presentation].entering}
 					exiting={OVERLAY_MOTION[presentation].exiting}
-					className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
+					className={cn(
+						'max-h-full max-w-full',
+						fullHeight && 'h-full',
+						presentation === 'bottom' && 'w-full'
+					)}
 				>
 					{children}
 				</Animated.View>

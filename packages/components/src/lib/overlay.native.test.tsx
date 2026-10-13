@@ -156,11 +156,19 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 			paddingRight: '12px',
 		});
 		const fullHeight = ['left', 'right', 'page'].includes(presentation);
+		const bottom = presentation === 'bottom';
+		// A bottom sheet sits on the screen edge: the keyboard wrapper is off (with the keyboard
+		// hidden it still padded the sheet ~9 dp up) and carries the sheet's height cap.
 		expect(mockViews).toContainEqual(
 			expect.objectContaining({
 				behavior: 'padding',
-				keyboardVerticalOffset: 34,
-				className: fullHeight ? 'max-h-full max-w-full h-full' : 'max-h-full max-w-full',
+				keyboardVerticalOffset: bottom ? 0 : 34,
+				enabled: !bottom,
+				className: bottom
+					? 'max-w-full max-h-[92%] w-full'
+					: fullHeight
+						? 'max-w-full h-full max-h-full'
+						: 'max-w-full max-h-full',
 				pointerEvents: 'box-none',
 			})
 		);
