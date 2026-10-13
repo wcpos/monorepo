@@ -240,6 +240,13 @@ describe('POSProducts query-state wiring', () => {
 		resetSurfaces();
 	});
 
+	it('the search surface focuses the input at once while the Products tab is focused', async () => {
+		render(<POSProducts />);
+		await act(() => invokeSurface('search'));
+		expect(mockNavigate).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(screen.getByTestId('search-products'));
+	});
+
 	it('the search surface brings an unfocused Products tab forward, then focuses once it is', async () => {
 		mockFocused = false;
 		const { rerender } = render(<POSProducts />);
