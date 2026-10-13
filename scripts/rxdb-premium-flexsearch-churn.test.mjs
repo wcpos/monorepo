@@ -63,6 +63,11 @@ function pristineSource(dist) {
 			assert.ok(source.includes(anchors[`${key}After`]), `missing installed ${key} rewrite`);
 			source = source.replace(anchors[`${key}After`], anchors[`${key}Before`]);
 		}
+		for (const key of ['liveDelete', 'replayOrder']) {
+			if (source.includes(anchors[`${key}After`])) {
+				source = source.replace(anchors[`${key}After`], anchors[`${key}Before`]);
+			}
+		}
 	}
 	return source;
 }
@@ -174,6 +179,7 @@ async function openPlugin(plugin, persisted = [], deferred = false) {
 	return {
 		instance,
 		collection,
+		emit,
 		flush: async () => {
 			while (pending.length) await emit(pending.shift());
 		},
@@ -592,6 +598,43 @@ for (const dist of ['esm', 'cjs']) {
 		assert.equal(after, before, 'reindexing a vocabulary already held must not grow the index');
 	});
 
+	test(`[${dist}] a cleanup DELETE event never re-indexes the removed append's stale text`, async (t) => {
+		const { instance, write, emit } = await openPlugin(loadPlugin(dist));
+		t.after(() => instance.close());
+		await write('quartz');
+		await write('sapphire');
+		await emit({
+			collectionName: 'test_flexsearch',
+			events: [
+				{
+					operation: 'DELETE',
+					documentData: { type: 'append', dataAr: [{ id: 'product', searchable: 'quartz' }] },
+				},
+			],
+		});
+		assert.deepEqual(instance.index.search('sapphire'), ['product']);
+		assert.deepEqual(instance.index.search('quartz'), []);
+	});
+
+	test(`[${dist}] boot replay applies appends in write order, not primary-key order`, async (t) => {
+		const persisted = [
+			{
+				type: 'append',
+				_data: { _meta: { lwt: 2 } },
+				dataAr: [{ id: 'product', searchable: 'sapphire' }],
+			},
+			{
+				type: 'append',
+				_data: { _meta: { lwt: 1 } },
+				dataAr: [{ id: 'product', searchable: 'quartz' }],
+			},
+		];
+		const { instance } = await openPlugin(loadPlugin(dist), persisted);
+		t.after(() => instance.close());
+		assert.deepEqual(instance.index.search('sapphire'), ['product']);
+		assert.deepEqual(instance.index.search('quartz'), []);
+	});
+
 	test(`[${dist}] boot replay shares digests with live writes and close clears them`, async (t) => {
 		const persisted = [
 			{
@@ -632,7 +675,7 @@ for (const anchors of DISTS) {
 		test(`[${dist}] anchors unverifiable — installed dist absent`, { skip: true }, () => {});
 		continue;
 	}
-	const keys = ['live', 'replay', 'pipeline', 'append', 'close'];
+	const keys = ['live', 'replay', 'pipeline', 'append', 'close', 'liveDelete', 'replayOrder'];
 	const pristine = pristineSource(dist);
 	test(`[${dist}] exact anchors patch idempotently and reject changed preludes`, () => {
 		withFixture(pristine, (path) => {

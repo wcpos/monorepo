@@ -6,6 +6,7 @@
  * it collides ('AaAa' and 'BBBB' agree), and a collision here silently freezes that
  * document's search results.
  * This does not compact existing append history or FlexSearch's empty token keys.
+ * Ignore cleanup DELETE events and replay appends in write order to preserve the newest text (#2501).
  *
  * Why not `pnpm patch`: rxdb-premium's dist/ is materialized by its own
  * license-gated postinstall, so it does not exist in the tarball pnpm patches.
@@ -235,6 +236,13 @@ export const DISTS = [
 	liveAfter: `${MARKER}(${liveBefore[0]},e.id,e.searchable)`,
 	replayBefore,
 	replayAfter: `${MARKER}(${replayBefore[0]},e.id,e.searchable)`,
+	// Cleanup's bulkRemove DELETE events carry the removed append's dataAr (#2501).
+	liveDeleteBefore: '"append"===e.documentData.type&&',
+	liveDeleteAfter: '"DELETE"!==e.operation&&"append"===e.documentData.type&&',
+	// find() returns appends in hash order, not write order (#2501).
+	replayOrderBefore: 'e.filter((e=>"append"===e.type)).forEach(',
+	replayOrderAfter:
+		'e.filter((e=>"append"===e.type)).sort(((x,y)=>x._data._meta.lwt-y._data._meta.lwt)).forEach(',
 	// Both handlers shadow the index variable; bind it to their destination instead.
 	pipelineBefore,
 	pipelineAfter: pipelineBefore.replace(
