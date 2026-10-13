@@ -37,15 +37,15 @@
 		"@wcpos/receipt-renderer": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"jpeg-js": "0.4.4",
-		"p-queue": "^9.3.3",
+		"p-queue": "^9.3.5",
 		"upng-js": "2.1.0",
-		"zod": "^4.6.5"
+		"zod": "^4.6.6"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.3",
 		"@types/upng-js": "2.1.5",
-		"jsdom": "^30.1.0",
-		"playwright": "1.63.0",
+		"jsdom": "^30.1.2",
+		"playwright": "1.64.0",
 		"pngjs": "3.4.0",
 		"react-dom": "19.3.0",
 		"vitest": "^4.1.10"

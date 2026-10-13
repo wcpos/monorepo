@@ -37,13 +37,13 @@
     "rxdb": "17.6.0",
     "rxdb-premium": "17.6.0",
     "rxjs": "7.8.2",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",
     "@types/jest": "^30.0.0",
-    "@types/lodash": "^4.17.25",
+    "@types/lodash": "^4.17.26",
     "jest": "^30.5.2",
-    "ts-jest": "^29.4.12"
+    "ts-jest": "^29.4.14"
   }
 }
