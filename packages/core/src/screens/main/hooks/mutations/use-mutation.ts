@@ -27,6 +27,12 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 interface Props {
 	collectionName: WriteableCollection;
 	endpoint?: string;
+	/**
+	 * Toast the generic "<Collection> #id saved" on success (default true). A caller that
+	 * toasts its own, more specific "Saved {name}" passes false, or one save shows two
+	 * success toasts. The success is still logged either way.
+	 */
+	showSuccessToast?: boolean;
 }
 
 class ActiveScopeChangedTwiceError extends Error {
@@ -48,7 +54,7 @@ function isWriteableCollection(name: string): name is WriteableCollection {
  * owns durable queue bookkeeping and later acknowledgements/conflicts. A rejected remote outcome
  * remains visible through the engine conflict surface; failure before durable enqueue is rolled back.
  */
-export const useMutation = ({ collectionName, endpoint }: Props) => {
+export const useMutation = ({ collectionName, endpoint, showSuccessToast = true }: Props) => {
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const collectionLabel = React.useMemo(() => {
@@ -102,7 +108,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		(document: Record<string, unknown>) => {
 			const payload = document.payload as Record<string, unknown> | undefined;
 			mutationLogger.success(t('common.saved_2', { id: payload?.id, title: collectionLabel }), {
-				showToast: true,
+				showToast: showSuccessToast,
 				context: {
 					documentId: payload?.id,
 					collectionName,
@@ -111,7 +117,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				},
 			});
 		},
-		[collectionLabel, collectionName, t]
+		[collectionLabel, collectionName, showSuccessToast, t]
 	);
 
 	const patch = React.useCallback(

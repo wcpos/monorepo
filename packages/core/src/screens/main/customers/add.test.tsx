@@ -10,6 +10,7 @@ import { AddCustomerScreen } from './add';
 type SubmitCustomer = (data: Record<string, unknown>) => Promise<void>;
 
 const mockCreate = jest.fn();
+const mockUseMutationProps = jest.fn();
 const mockFormat = jest.fn(() => 'Ada Lovelace');
 const mockLoggerSuccess = jest.fn();
 const mockLoggerError = jest.fn();
@@ -65,7 +66,10 @@ jest.mock('../components/customer/customer-form', () => ({
 }));
 
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ create: mockCreate }),
+	useMutation: (props: unknown) => {
+		mockUseMutationProps(props);
+		return { create: mockCreate };
+	},
 }));
 
 jest.mock('../hooks/use-customer-name-format', () => ({
@@ -94,6 +98,10 @@ it('formats the newly created customer from the raw record payload', async () =>
 	});
 
 	expect(mockFormat).toHaveBeenCalledWith(payload);
+	// The screen toasts "Saved {name}" itself, so the hook's generic toast stays off.
+	expect(mockUseMutationProps).toHaveBeenCalledWith(
+		expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
+	);
 	expect(mockLoggerSuccess).toHaveBeenCalledWith('common.saved', {
 		showToast: true,
 		context: {

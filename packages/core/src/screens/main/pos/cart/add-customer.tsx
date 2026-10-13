@@ -34,7 +34,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
  */
 function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const { create } = useMutation({ collectionName: 'customers' });
+	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();

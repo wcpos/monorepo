@@ -10,6 +10,7 @@ import { AddCustomerDialog, AddNewCustomer } from './add-customer';
 type SubmitCustomer = (data: Record<string, unknown>) => Promise<void>;
 
 const mockCreate = jest.fn();
+const mockUseMutationProps = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockFormat = jest.fn(() => 'Ada Lovelace');
 const mockLoggerSuccess = jest.fn();
@@ -75,7 +76,10 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ create: mockCreate }),
+	useMutation: (props: unknown) => {
+		mockUseMutationProps(props);
+		return { create: mockCreate };
+	},
 }));
 
 jest.mock('../../hooks/use-customer-name-format', () => ({
@@ -126,6 +130,10 @@ describe.each([
 		});
 		expect(mockFormat).toHaveBeenCalledWith(payload);
 		expect(toJSON).not.toHaveBeenCalled();
+		// The form toasts "Saved {name}" itself, so the hook's generic toast stays off.
+		expect(mockUseMutationProps).toHaveBeenCalledWith(
+			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
+		);
 	});
 
 	it('leaves a refused create to the one report useMutation already made', async () => {
