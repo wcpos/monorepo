@@ -55,6 +55,8 @@ export type OverlayScrimProps = {
 	accessible?: boolean;
 	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
 	accessibilityElementsHidden?: boolean;
+	/** Native: a scrim that cannot dismiss takes no touches (see OverlayShell). */
+	pointerEvents?: 'auto' | 'none';
 	onPress?: (event: GestureResponderEvent) => void;
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
