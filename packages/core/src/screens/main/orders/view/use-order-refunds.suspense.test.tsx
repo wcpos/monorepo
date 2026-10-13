@@ -81,7 +81,9 @@ jest.mock('./sections/pos-metadata', () => ({ POSMetadataSection: () => <div /> 
 // Stands in for the real section at the one thing that matters here: it reads the handle
 // `RefundsResourceBoundary` hands it, exactly as the section does (and suspends on it).
 jest.mock('./sections/refunds', () => {
-	const { useQuerySnapshot: read } = jest.requireActual('../../../../query/query-handles');
+	const { useQuerySnapshot: read } = jest.requireActual(
+		'../../../../query/query-handles'
+	) as typeof import('../../../../query/query-handles');
 	return {
 		RefundsFallback: ({ onRetry }: { onRetry: () => void }) => (
 			<button data-testid="refunds-fallback" onClick={onRetry} />
@@ -91,7 +93,7 @@ jest.mock('./sections/refunds', () => {
 			const { hits } = read(handle, ['hits']);
 			return (
 				<div data-testid="refunds-section">
-					{hits.map(({ record }: any) => record.payload.id).join(',')}
+					{hits.map(({ record }) => (record.payload as { id: number }).id).join(',')}
 				</div>
 			);
 		},
@@ -286,11 +288,13 @@ describe('local-first live order refunds', () => {
 		);
 		try {
 			await insert(4);
-			show();
+			const view = show();
 			await settle();
 			await React.act(async () => failing.error(new Error('local read failed')));
 			expect(screen.getByTestId('refunds-fallback')).toBeTruthy();
 			expect(byParent()).toHaveLength(1);
+			// From here every declaration stays in flight: the Retry's pull never settles on its own.
+			neverSettle();
 			fireEvent.click(screen.getByTestId('refunds-fallback'));
 			// Drop `handle.retry()` from `onReset` and the section rethrows the old failure.
 			await waitFor(() => expect(section()).toBe('4'));
@@ -298,6 +302,12 @@ describe('local-first live order refunds', () => {
 			// Drop `handle.declareOnce()` from `onReset` and no second pull is asked for.
 			await waitFor(() => expect(byParent()).toHaveLength(2));
 			expect(byParent()[1].forceRefresh).toBe(true);
+			view.unmount();
+			await settle();
+			// Drop the abort on unmount and the Retry's pull runs on: one release, not two.
+			expect(
+				engine.demandEvents.filter((event) => event === 'release:refunds-by-parent')
+			).toHaveLength(2);
 		} finally {
 			silence.mockRestore();
 		}

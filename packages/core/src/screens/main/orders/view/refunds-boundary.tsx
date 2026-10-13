@@ -22,6 +22,10 @@ export function RefundsBoundary({
 	orderId: number;
 }) {
 	const handle = useOrderRefunds(orderId);
+	// The Retry's re-arm is a separate pull: it is abandoned when this owner leaves or moves to
+	// another order, so a pull nobody will read cannot run on (Greptile on #2511).
+	const retryPull = React.useRef<AbortController | null>(null);
+	React.useEffect(() => () => retryPull.current?.abort(), [handle]);
 
 	function RefundsErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
 		return (
@@ -42,7 +46,9 @@ export function RefundsBoundary({
 			onReset={(details) => {
 				if (details.reason !== 'imperative-api') return;
 				handle.retry();
-				void handle.declareOnce();
+				retryPull.current?.abort();
+				retryPull.current = new AbortController();
+				void handle.declareOnce(retryPull.current.signal);
 			}}
 			resetKeys={[handle]}
 		>
