@@ -70,6 +70,11 @@ export function ReaderConnection({
 		}
 		if (!remembered || attempted.current || !driver?.discoverReaders || disabled) return;
 		attempted.current = true;
+		// Already holding the remembered reader (connected from Settings → Card readers, or the
+		// last sale): use it as it is. A discovery here would drop it first — the SDK refuses to
+		// scan while connected — and re-pair it seven seconds later (Pixel 10, 2026-10-13).
+		const held = driver.status$.get();
+		const alreadyHeld = held.connection === 'connected' && held.reader?.id === remembered;
 		let active = true;
 		const operation = { cancelled: false };
 		reconnect.current = operation;
@@ -78,6 +83,10 @@ export function ReaderConnection({
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- A fresh attempt clears the last attempt's verdict.
 		setFailed(false);
 		void (async () => {
+			if (alreadyHeld) {
+				pickTransport(held.reader!.transport);
+				return;
+			}
 			for (const item of deviceTransports(method)) {
 				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
 					(r) => r.id === remembered

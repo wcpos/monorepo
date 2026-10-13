@@ -742,6 +742,40 @@ it.each(['discovery', 'bootstrap'] as const)(
 	}
 );
 
+it('uses a remembered reader the driver already holds without a discovery (no re-pair)', async () => {
+	const reader = { id: 'remembered', label: 'Remembered', transport: 'bluetooth' as const };
+	const discoverReaders = jest.fn(async () => [reader]);
+	const connect = jest.fn(async () => {});
+	const base = createSimulatedDriver();
+	registerDriver({
+		...base,
+		discoverReaders,
+		connect,
+		status$: {
+			get: () => ({ ...base.status$.get(), connection: 'connected' as const, reader }),
+			subscribe: base.status$.subscribe,
+		},
+	});
+	const pickTransport = jest.fn();
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		rememberedReaderId: 'remembered',
+		pickTransport,
+		bootstrapReader: jest.fn(async () => ({ token: 'new' })),
+		deviceTransport: 'bluetooth' as const,
+	};
+	const rendered = render(<TenderPane flow={flow} format={String} />);
+	await act(async () => {});
+	// Connected from Settings: the sheet takes the reader as it is. A discovery would have
+	// dropped it (the SDK refuses to scan while connected) and re-paired it seconds later.
+	expect(discoverReaders).not.toHaveBeenCalled();
+	expect(connect).not.toHaveBeenCalled();
+	expect(pickTransport).toHaveBeenCalledWith('bluetooth');
+	rendered.unmount();
+});
+
 it('keeps typed entry when switching methods without taking money', () => {
 	const state = tenderReducer(
 		{ ...initialTenderState, view: 'amount', methodId: 'cash', entryMinor: 2000, entryDirty: true },
