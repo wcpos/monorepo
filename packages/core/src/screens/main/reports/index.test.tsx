@@ -5,13 +5,16 @@ import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
 import { utc } from '@date-fns/utc';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { compileQuery } from '../../../query/query-state-translator';
 import { ReportsScreen } from './index';
 
-import type { QueryStateOf } from '../../../query';
+import type { QueryHandle, QueryStateOf } from '../../../query';
+
+type FakeHandle = QueryHandle & { set: (partial: object) => void; retry: () => void };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
@@ -94,16 +97,32 @@ jest.mock('./bar', () => ({
 	},
 }));
 
-const mockBinding = {
-	resource: { kind: 'reports-orders-resource' },
-	active$: of(false),
-	total$: of(24),
-	sync: jest.fn(async () => undefined),
-};
-const mockUseCollectionBinding = jest.fn(
-	(_collection: unknown, _state: unknown, _options?: { storeScope?: 'pos' | 'sales' }) =>
-		mockBinding
+// One fake handle per query, as the registry's identity by key: an equal query is the same
+// handle, a new one (another register, another range) is a new handle.
+const mockHandles = new Map<string, FakeHandle>();
+let mockAnswered = true;
+const mockUseCollectionQueryHandle = jest.fn(
+	(collection: unknown, state: unknown, options?: { storeScope?: 'pos' | 'sales' }) => {
+		const key = JSON.stringify([collection, state, options ?? null]);
+		let handle = mockHandles.get(key);
+		if (!handle) {
+			handle = fakeQueryHandle(mockAnswered ? {} : { ready: false }, key) as FakeHandle;
+			mockHandles.set(key, handle);
+		}
+		return handle;
+	}
 );
+const latestHandle = (collection: string) => {
+	const index = mockUseCollectionQueryHandle.mock.calls.findLastIndex(
+		([name]) => name === collection
+	);
+	return mockUseCollectionQueryHandle.mock.results[index].value as FakeHandle;
+};
+beforeEach(() => {
+	mockHandles.clear();
+	mockAnswered = true;
+	mockProvided = null;
+});
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
 let mockStoreID: number | undefined = 9;
@@ -112,11 +131,11 @@ jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (
+		useCollectionQueryHandle: (
 			collection: unknown,
 			state: unknown,
 			options?: { storeScope?: 'pos' | 'sales' }
-		) => mockUseCollectionBinding(collection, state, options),
+		) => mockUseCollectionQueryHandle(collection, state, options),
 	};
 });
 jest.mock('@wcpos/query', () => ({
@@ -129,21 +148,39 @@ jest.mock('@wcpos/query', () => ({
 		throw new Error('legacy useQuery reached');
 	},
 }));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
+// The real react-error-boundary (the shared one pulls in a tooltip jest cannot parse): the
+// inner boundary's reset is part of the contract.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			FallbackComponent = () => null,
+			...props
+		}: React.PropsWithChildren<{ FallbackComponent?: React.ComponentType }>) => (
+			<ErrorBoundary FallbackComponent={FallbackComponent} {...props} />
+		),
+	};
+});
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) => (
 		<React.Suspense fallback={fallback ?? null}>{children}</React.Suspense>
 	),
 }));
-let mockReportsPending = false;
-const mockPendingReport = new Promise(() => {});
+// The readers read as the real ones do (`useQuerySnapshot`): suspend while unanswered, throw a
+// failure to the boundary.
+let mockProvided: { handle: QueryHandle; refundsHandle: QueryHandle } | null = null;
 jest.mock('./context', () => ({
 	...jest.requireActual('./context'),
-	ReportsRefunds: ({ children }: React.PropsWithChildren) => children,
-	ReportsProvider: ({ children }: { children: React.ReactNode }) => {
-		if (mockReportsPending) throw mockPendingReport;
+	ReportsRefunds: ({ children }: React.PropsWithChildren) => {
+		jest.requireActual('../../../query').useQuerySnapshot(mockProvided!.refundsHandle, []);
+		return <div data-testid="reports-refunds-read">{children}</div>;
+	},
+	ReportsProvider: ({
+		children,
+		...handles
+	}: React.PropsWithChildren<{ handle: QueryHandle; refundsHandle: QueryHandle }>) => {
+		mockProvided = handles;
+		jest.requireActual('../../../query').useQuerySnapshot(handles.handle, []);
 		return children;
 	},
 }));
@@ -180,10 +217,10 @@ jest.mock('../contexts/ui-settings', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
-	const call = mockUseCollectionBinding.mock.calls
+	const call = mockUseCollectionQueryHandle.mock.calls
 		.filter(([collection]) => collection === 'orders')
 		.at(-2);
-	if (!call) throw new Error('reports orders binding was not called');
+	if (!call) throw new Error('reports orders handle was not acquired');
 	return call[1] as QueryStateOf<'orders'>;
 }
 
@@ -205,7 +242,7 @@ describe('ReportsScreen query-state wiring', () => {
 		render(<ReportsScreen />);
 
 		const today = new Date(2026, 6, 15, 12);
-		expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object), {
+		expect(mockUseCollectionQueryHandle).toHaveBeenCalledWith('orders', expect.any(Object), {
 			storeScope: 'sales',
 		});
 		expect(latestState()).toEqual({
@@ -222,9 +259,9 @@ describe('ReportsScreen query-state wiring', () => {
 		});
 	});
 
-	it('the sales and comparison bindings are compiled with storeScope sales', () => {
+	it('the sales and comparison handles are acquired with storeScope sales', () => {
 		render(<ReportsScreen />);
-		const calls = mockUseCollectionBinding.mock.calls
+		const calls = mockUseCollectionQueryHandle.mock.calls
 			.filter(([collection]) => collection === 'orders')
 			.slice(-2);
 		expect(calls).toHaveLength(2);
@@ -242,7 +279,7 @@ describe('ReportsScreen query-state wiring', () => {
 	it("Free's register-scoped state still compiles as pos", () => {
 		mockPro = false;
 		render(<ReportsScreen />);
-		for (const [, state, options] of mockUseCollectionBinding.mock.calls
+		for (const [, state, options] of mockUseCollectionQueryHandle.mock.calls
 			.filter(([collection]) => collection === 'orders')
 			.slice(-2)) {
 			const queryState = state as QueryStateOf<'orders'>;
@@ -349,14 +386,14 @@ it('uses the viewed store midnight for Sales immediately on a cross-store select
 });
 
 // Revert: leave the orders provider mounted around both rooms.
-it('unmounts the Sales binding in Closures and remounts it only on returning to Sales', () => {
+it('the Sales handle is not acquired in Closures, and is again on returning to Sales', () => {
 	render(<ReportsScreen />);
-	mockUseCollectionBinding.mockClear();
+	mockUseCollectionQueryHandle.mockClear();
 	fireEvent.click(screen.getByTestId('till-closures'));
-	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('reports-back-sales'));
-	// The viewed-store directory can emit after mount; both renders use the Sales binding.
-	expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object), {
+	// The viewed-store directory can emit after mount; both renders acquire the Sales handle.
+	expect(mockUseCollectionQueryHandle).toHaveBeenCalledWith('orders', expect.any(Object), {
 		storeScope: 'sales',
 	});
 });
@@ -364,10 +401,10 @@ it('unmounts the Sales binding in Closures and remounts it only on returning to 
 // Revert: remove the capability boundary before local report readers mount.
 it('does not mount report readers for a cashier without report permission', () => {
 	mockCapabilities = [];
-	mockUseCollectionBinding.mockClear();
+	mockUseCollectionQueryHandle.mockClear();
 	mockClosureScope.mockClear();
 	render(<ReportsScreen />);
-	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('till-closures')).toBeNull();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
@@ -410,28 +447,47 @@ it('shows Sales actual scope initially and after a legacy filter changes', () =>
 	expect(mockBarScope).toHaveBeenLastCalledWith(expect.objectContaining({ registerId: 'other' }));
 });
 
-// Revert: let a pending Sales resource suspend the page bar and trap the room switch.
+// Revert: let an unanswered Sales handle suspend the page bar and trap the room switch.
 // The date button is the only way out of a slow range: the loading shell keeps it.
-it('keeps the date button while the Sales workspace is still loading', () => {
-	mockReportsPending = true;
+it('keeps the date button while the Sales handle has not answered', () => {
+	mockAnswered = false;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
-	try {
-		render(<ReportsScreen />);
-		expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
-		expect(screen.getByTestId('reports-period')).toBeTruthy();
-	} finally {
-		mockReportsPending = false;
-	}
+	render(<ReportsScreen />);
+	expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
+	expect(screen.getByTestId('reports-period')).toBeTruthy();
+	expect(screen.queryByTestId('legacy-register')).toBeNull();
 });
-it('can enter local Closures while the Sales workspace is still loading', () => {
-	mockReportsPending = true;
+it('can enter local Closures while the Sales handle has not answered', () => {
+	mockAnswered = false;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(mockClosureScope).toHaveBeenCalled();
+});
+
+// Revert: drop the inner boundary's onReset. A new sales query keeps the failed refunds handle,
+// and the reset would remount its reader over the old failure instead of asking again.
+it('a failed refunds read keeps the report, and the next sales query retries it', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
 	try {
 		render(<ReportsScreen />);
-		fireEvent.click(screen.getByTestId('till-closures'));
-		expect(mockClosureScope).toHaveBeenCalled();
+		const refunds = latestHandle('refunds');
+		expect(screen.getByTestId('reports-refunds-read')).toBeTruthy();
+
+		act(() => refunds.set({ error: new Error('refunds failed') }));
+		expect(screen.queryByTestId('reports-refunds-read')).toBeNull();
+		// The fallback is the report itself, without the refunds.
+		expect(screen.getByTestId('legacy-register')).toBeTruthy();
+
+		const retry = jest.fn(() => refunds.set({ error: null }));
+		refunds.retry = retry;
+		fireEvent.click(screen.getByTestId('legacy-register'));
+		expect(latestHandle('refunds')).toBe(refunds);
+		expect(retry).toHaveBeenCalled();
+		expect(screen.getByTestId('reports-refunds-read')).toBeTruthy();
 	} finally {
-		mockReportsPending = false;
+		errors.mockRestore();
 	}
 });
 
@@ -510,12 +566,12 @@ it('opens an unstamped last closure on the day used by the local list', () => {
 // Revert: return bare denial text without the phone drawer control.
 it('lets a denied cashier return to the drawer without mounting report readers', () => {
 	mockCapabilities = [];
-	mockUseCollectionBinding.mockClear();
+	mockUseCollectionQueryHandle.mockClear();
 	mockClosureScope.mockClear();
 	render(<ReportsScreen />);
 	fireEvent.click(screen.getByTestId('drawer-open-button'));
 	expect(mockOpenDrawer).toHaveBeenCalledTimes(1);
-	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
 });
 
@@ -582,7 +638,7 @@ it('binds the comparison with the same filters and a shifted date range', () => 
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	render(<ReportsScreen />);
 	const current = latestState();
-	const comparison = mockUseCollectionBinding.mock.calls
+	const comparison = mockUseCollectionQueryHandle.mock.calls
 		.filter(([collection]) => collection === 'orders')
 		.at(-1)![1] as QueryStateOf<'orders'>;
 	expect(comparison.filters).toEqual({ ...current.filters, dateRange: expect.any(Object) });
@@ -594,7 +650,7 @@ it('binds the comparison with the same filters and a shifted date range', () => 
 it('binds refunds by their date alone with the supported sort', () => {
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	render(<ReportsScreen />);
-	const state = mockUseCollectionBinding.mock.calls.findLast(
+	const state = mockUseCollectionQueryHandle.mock.calls.findLast(
 		([collection]) => collection === 'refunds'
 	)![1] as QueryStateOf<'refunds'>;
 	expect(state.filters).toEqual({ dateRange: latestState().filters.dateRange });

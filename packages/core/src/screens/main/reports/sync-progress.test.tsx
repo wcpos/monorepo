@@ -2,14 +2,14 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
+import { act, render, screen } from '@testing-library/react';
 
 import { ReportsSyncProgress } from './sync-progress';
 
-import type { QueryLaneProgress } from '../../../query';
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 
-let laneProgress: QueryLaneProgress | null = null;
+let mockHandle = fakeQueryHandle();
+let mockComparisonHandle = fakeQueryHandle();
 
 jest.mock('react-native', () => ({
 	View: ({
@@ -34,7 +34,7 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 
 jest.mock('./context', () => ({
-	useReportsBinding: () => ({ binding: { laneProgress$: of(laneProgress) } }),
+	useReportsHandles: () => ({ handle: mockHandle, comparisonHandle: mockComparisonHandle }),
 }));
 
 jest.mock('../../../contexts/translations', () => ({
@@ -43,17 +43,25 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 
 describe('ReportsSyncProgress', () => {
-	// Self-dismissing: the binding stops reporting progress the moment the lane's
+	beforeEach(() => {
+		mockHandle = fakeQueryHandle();
+		mockComparisonHandle = fakeQueryHandle();
+	});
+
+	// Self-dismissing: the handle stops reporting progress the moment the lane's
 	// continuation cursor is cleared, which is exactly when the range is complete.
 	it('renders nothing once the ranged lane has no continuation cursor left', () => {
-		laneProgress = null;
+		mockHandle.set({ laneProgress: { downloaded: 10, total: 20 } });
 		render(<ReportsSyncProgress />);
+		expect(screen.getByTestId('reports-sync-progress')).toBeInTheDocument();
+
+		act(() => mockHandle.set({ laneProgress: null }));
 
 		expect(screen.queryByTestId('reports-sync-progress')).not.toBeInTheDocument();
 	});
 
 	it('renders downloaded-of-total from the lane progress projection', () => {
-		laneProgress = { downloaded: 12_400, total: 30_000 };
+		mockHandle.set({ laneProgress: { downloaded: 12_400, total: 30_000 } });
 		render(<ReportsSyncProgress />);
 
 		expect(screen.getByTestId('reports-sync-progress-label')).toHaveTextContent(
@@ -66,12 +74,31 @@ describe('ReportsSyncProgress', () => {
 	// A server that sent no X-WP-Total leaves the denominator unknown; the count is still
 	// worth showing, but an unfillable bar is not.
 	it('falls back to a total-less line when the range size is unknown', () => {
-		laneProgress = { downloaded: 250, total: null };
+		mockHandle.set({ laneProgress: { downloaded: 250, total: null } });
 		render(<ReportsSyncProgress />);
 
 		expect(screen.getByTestId('reports-sync-progress-label')).toHaveTextContent(
 			'reports.downloading_orders_unknown_total:{"downloaded":250}'
 		);
 		expect(screen.queryByTestId('reports-sync-progress-bar')).not.toBeInTheDocument();
+	});
+
+	// The old stream said nothing before the read answered; a cold handle's lane is not news.
+	it('shows no progress while the handle is unanswered, even with a lane in flight', () => {
+		mockHandle.set({ ready: false, laneProgress: { downloaded: 40, total: 100 } });
+		render(<ReportsSyncProgress />);
+		expect(screen.queryByTestId('reports-sync-progress')).not.toBeInTheDocument();
+
+		act(() => mockHandle.set({ ready: true }));
+		expect(screen.getByTestId('reports-sync-progress-label')).toHaveTextContent(
+			'reports.downloading_orders:{"downloaded":40,"total":100}'
+		);
+	});
+
+	it('the comparison lane reads the comparison handle', () => {
+		mockComparisonHandle.set({ laneProgress: { downloaded: 5, total: 10 } });
+		render(<ReportsSyncProgress lane="comparison" />);
+		expect(screen.getByTestId('reports-comparison-sync-progress')).toBeInTheDocument();
+		expect(screen.queryByTestId('reports-sync-progress')).not.toBeInTheDocument();
 	});
 });
