@@ -205,6 +205,7 @@ describe('aggregateExistingCartQuantity', () => {
 		[1, 2],
 		['abc', 3],
 		[null, 3],
+		['-2', 3], // a negative value never inflates demand
 	])(
 		'counts a sibling of 3 net of its _reduced_stock %p as %p',
 		(reduced: unknown, expected: number) => {
