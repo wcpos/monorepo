@@ -644,6 +644,18 @@ for (const runtime of runtimes) {
 				let opened = await openWithRebuildEvents(runtime, basePath);
 				assert.deepEqual(await findAll(opened.collection), expected);
 				opened.stopCapture();
+				if (dieAt === 'empty') {
+					// Every index was persisted under the changelog's epoch, so the first reopen
+					// skips all of it; a rebuild here would mean the epoch skip was ignored.
+					assert.deepEqual(opened.events, [], 'no rebuild on the first reopen');
+				} else {
+					// An index that never persisted replays the whole changelog over its older
+					// rows. Only the op-by-op verifier may send that to a rebuild (never a
+					// double-apply, which the document assertion above would catch).
+					for (const event of opened.events) {
+						assert.match(event.reason, /^stale-changelog-op:/, 'rebuild reason');
+					}
+				}
 
 				await opened.db.close();
 
