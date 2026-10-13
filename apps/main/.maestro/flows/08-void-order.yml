@@ -159,7 +159,7 @@ appId: com.wcpos.main.dev
 - assertNotVisible:
     id: "cart-quantity-input"
 # Relaunch: the voided order must not come back. Tabs sort date_created ASC
-# (use-open-orders-resource.ts), so a resurrected order would sit at the END
+# (use-open-orders-handle.ts), so a resurrected order would sit at the END
 # of the strip beside the "+" tab; the strip auto-scrolls to the selected
 # "new" tab on mount. Requiring the "+" tab on screen first means the
 # negative assertion is looking exactly where a ghost would appear.

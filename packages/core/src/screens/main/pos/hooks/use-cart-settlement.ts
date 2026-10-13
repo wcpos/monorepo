@@ -65,7 +65,7 @@ function replayContentKey(order: CurrentOrderRecord): string {
 	]);
 }
 
-/** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
+/** The only status a POS cart is editable in — see use-open-orders-handle / use-new-order. */
 const POS_OPEN_STATUS = 'pos-open';
 
 const hasActiveCouponLines = (order: CurrentOrderRecord) =>

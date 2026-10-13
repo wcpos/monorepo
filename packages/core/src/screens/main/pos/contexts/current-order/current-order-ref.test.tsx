@@ -4,8 +4,8 @@
 import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
-import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
+
+import type { QueryHandle } from '@wcpos/query';
 
 import {
 	type CurrentOrderActions,
@@ -25,6 +25,15 @@ jest.mock('@wcpos/utils/platform', () => ({
 jest.mock('./use-new-order', () => ({
 	useNewOrder: () => ({ newOrder: { uuid: 'new-order' } }),
 }));
+
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => QueryHandle;
+};
+
+/** The open-orders handle the POS layout owns, answered with these hits. */
+function openOrdersHandle(hits: OpenOrderHit[]): QueryHandle {
+	return fakeQueryHandle({ ready: true, result: { hits } });
+}
 
 function orderRecord(uuid: string) {
 	return { uuid, payload: {} } as unknown as import('@wcpos/query').EngineRecord<'orders'>;
@@ -58,22 +67,16 @@ function ReadOnMarkerChange({ marker }: { marker: string }) {
 	return null;
 }
 
-function App({
-	marker,
-	resource,
-}: {
-	marker: string;
-	resource: ObservableResource<OpenOrderHit[]>;
-}) {
+function App({ marker, handle }: { marker: string; handle: QueryHandle }) {
 	return (
 		<React.Suspense fallback={null}>
-			{/* The provider takes the default-customer resource as a prop now: it is built by
+			{/* The provider takes the default-customer resource as a prop: it is built by
 			    `(pos)/_layout.tsx`, ABOVE this boundary, so a Suspense retry cannot rebuild it.
-			    `useNewOrder` is mocked here, so any resource stands in. */}
+			    `useNewOrder` is mocked here, so any value stands in. */}
 			<CurrentOrderProvider
-				resource={resource}
+				handle={handle}
 				scope="7:2:r1"
-				defaultCustomerResource={resource as never}
+				defaultCustomerResource={{} as never}
 				currentOrderUUID="order-a"
 			>
 				<CaptureActions />
@@ -97,13 +100,12 @@ describe('CurrentOrderProvider getCurrentOrderRecord', () => {
 	 * commit-synchronous (layout), so every post-commit reader sees the new order.
 	 */
 	it('resolves the just-switched order for readers that run before the provider passive effects', () => {
-		const orders$ = new BehaviorSubject([
+		const handle = openOrdersHandle([
 			{ id: 'order-a', record: orderRecord('record-a') },
 			{ id: 'order-b', record: orderRecord('record-b') },
 		]);
-		const resource = new ObservableResource(orders$);
 
-		const { rerender } = render(<App marker="initial" resource={resource} />);
+		const { rerender } = render(<App marker="initial" handle={handle} />);
 
 		expect(actions).toBeDefined();
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('record-a');
@@ -112,7 +114,7 @@ describe('CurrentOrderProvider getCurrentOrderRecord', () => {
 			// One batch: switch the order and give the reader a new marker so its passive
 			// effect re-fires in the same commit — before the provider's passive effects.
 			actions!.setCurrentOrderID('order-b');
-			rerender(<App marker="switched" resource={resource} />);
+			rerender(<App marker="switched" handle={handle} />);
 		});
 
 		const switchedRead = reads.find((read) => read.marker === 'switched');
