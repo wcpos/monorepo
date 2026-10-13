@@ -3,7 +3,6 @@ import { Platform, useWindowDimensions, View, type ViewInstance } from 'react-na
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useObservableSuspense } from 'observable-hooks';
 import isEqual from 'lodash/isEqual';
 
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
@@ -14,6 +13,8 @@ import { DeviceScope, useIsPhone, usePointer } from '@wcpos/components/lib/devic
 import { SlideOver } from '@wcpos/components/slide-over';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
+import { queryHandleResults$ } from '@wcpos/query';
+import type { QueryHandle } from '@wcpos/query';
 
 import { ManagementBar } from '../../components/management-bar';
 import { QuerySearchInput } from '../../components/query-search-input';
@@ -44,7 +45,8 @@ import { useUISettings } from '../../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../../hooks/use-referenced-customer-demand';
 import {
 	QueryStateProvider,
-	useCollectionBinding,
+	useCollectionQueryHandle,
+	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../../query';
@@ -61,7 +63,7 @@ import { useRowKeyboard } from './use-row-keyboard';
 import type { Row } from '../../../../table-types';
 import type { DataTableFeatures } from '../../components/data-table/v2';
 import type { SortFieldsByCollection } from '../../../../query/query-state-types';
-import type { FiltersOf, QueryStateOf } from '../../../../query';
+import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../../query';
 const cells = {
 	actions: Actions,
 	billing: Address,
@@ -115,18 +117,25 @@ function getInitialOrderSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
+// The list re-renders for the answer only; the table and the footer read their own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
 function OrdersList({
-	binding,
+	handle,
 	initialFilters,
 	onSelectedRow,
 }: {
-	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	/** The orders query handle (roadmap#423): the list and its table read its snapshot. */
+	handle: QueryHandle;
 	onSelectedRow: (node: ViewInstance | null) => void;
 	initialFilters: Partial<FiltersOf<'orders'>>;
 }) {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
-	const result = useObservableSuspense(binding.resource);
+	// Suspended on until the first answer (the screen's boundary draws the skeleton); a changed
+	// query keeps the current rows while the new handle answers (`useDeferredValue(handle)`).
+	const shown = React.useDeferredValue(handle);
+	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const { timezone } = useStoreDay();
 	const { heading } = useStoreDayLabel();
@@ -200,13 +209,9 @@ function OrdersList({
 				<DataTable<OrderListItem>
 					id="orders"
 					collectionName="orders"
-					binding={binding}
-					resource={binding.resource}
+					handle={handle}
 					sort={state.sort}
 					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
 					cells={cells}
 					estimatedItemSize={56}
 					renderItem={renderItem}
@@ -250,8 +255,11 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	useBarcode(actions.setSearch);
-	const binding = useCollectionBinding('orders', state);
-	useReferencedCustomerDemand(binding.result$);
+	const handle = useCollectionQueryHandle('orders', state);
+	// The customers the listed orders reference, asked for as the rows change: a reader of the
+	// handle (it keeps the read while subscribed and declares nothing itself).
+	const results$ = React.useMemo(() => queryHandleResults$(handle), [handle]);
+	useReferencedCustomerDemand(results$);
 	const t = useT();
 	const phone = useIsPhone();
 	const { width } = useWindowDimensions();
@@ -302,7 +310,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 							pointer={beside && !phone && width < ROWS_BESIDE_PANE_BELOW ? 'coarse' : undefined}
 						>
 							<OrdersList
-								binding={binding}
+								handle={handle}
 								initialFilters={initialFilters}
 								onSelectedRow={(node) => {
 									selectedRow.current = node;
