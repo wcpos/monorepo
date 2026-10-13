@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 import { VariationTableFooter } from './footer';
 
@@ -34,9 +34,14 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-let lastSyncButtonProps: { clearAndSync?: () => Promise<void> } | undefined;
+let lastSyncButtonProps:
+	{ clearAndSync?: () => Promise<void>; active?: boolean; sync?: () => Promise<void> } | undefined;
 jest.mock('../../../../components/sync-button', () => ({
-	SyncButton: (props: { clearAndSync?: () => Promise<void> }) => {
+	SyncButton: (props: {
+		clearAndSync?: () => Promise<void>;
+		active?: boolean;
+		sync?: () => Promise<void>;
+	}) => {
 		lastSyncButtonProps = props;
 		return null;
 	},
@@ -51,18 +56,25 @@ jest.mock('../../../../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 
-const binding = {
-	active$: of(false),
-	total$: of(2),
-	sync: jest.fn(async () => undefined),
+// A query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+
+// The local collection's total is 2 — a parent list, when there is one, outranks it.
+const handle = fakeQueryHandle({ total: 2 });
+const sync = jest.fn(async () => undefined);
+handle.sync = sync;
 
 describe('VariationTableFooter', () => {
 	it('uses the reactive parent variation count as the denominator', () => {
 		const variations$ = new BehaviorSubject([11, 12, 13, 14]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
 
 		expect(screen.getByText('Showing 2 of 4')).toBeTruthy();
 
@@ -77,7 +89,7 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject<number[]>([]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
 
 		expect(screen.getByText('Showing 2 of 2')).toBeTruthy();
 	});
@@ -89,10 +101,40 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject<number[]>([]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		// `binding.total$` is 2 — the stale local collection. It must not surface.
-		render(<VariationTableFooter binding={binding} parent={parent} count={0} />);
+		// The handle's `total` is 2 — the stale local collection. It must not surface.
+		render(<VariationTableFooter handle={handle} parent={parent} count={0} />);
 
 		expect(screen.getByText('Showing 0 of 0')).toBeTruthy();
+	});
+
+	// With no parent list the drawn handle's total is the denominator: the handle whose rows
+	// are counted, not the live one still loading.
+	it('takes the total from the drawn handle when the parent has no list', () => {
+		const variations$ = new BehaviorSubject<number[] | undefined>(undefined);
+		const parent = { id: 1, variations: undefined, variations$ } as never;
+		const drawn = fakeQueryHandle({ total: 9 });
+
+		render(<VariationTableFooter handle={handle} shown={drawn} parent={parent} count={2} />);
+
+		expect(screen.getByText('Showing 2 of 9')).toBeTruthy();
+		act(() => drawn.set({ total: null }));
+		expect(screen.getByText('Showing 2')).toBeTruthy();
+	});
+
+	// The spinner and the sync button belong to the live handle, not the drawn one.
+	it('spins and syncs with the live handle', async () => {
+		const variations$ = new BehaviorSubject([11, 12]);
+		const parent = { id: 1, variations: variations$.value, variations$ } as never;
+		const live = fakeQueryHandle({ active: true });
+		const liveSync = jest.fn(async () => undefined);
+		live.sync = liveSync;
+		const drawn = fakeQueryHandle({ active: false });
+
+		render(<VariationTableFooter handle={live} shown={drawn} parent={parent} count={2} />);
+
+		expect(lastSyncButtonProps).toMatchObject({ active: true, sync: liveSync });
+		act(() => live.set({ active: false }));
+		expect(lastSyncButtonProps).toMatchObject({ active: false });
 	});
 
 	// #1093: clear-and-refresh is a LOCAL cache eviction. It must ride the
@@ -102,13 +144,13 @@ describe('VariationTableFooter', () => {
 		const variations$ = new BehaviorSubject([11, 12]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
-		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
+		render(<VariationTableFooter handle={handle} parent={parent} count={2} />);
 
 		expect(collectionResetKeys).toContain('variations');
 		await act(async () => lastSyncButtonProps?.clearAndSync?.());
 
 		expect(clearAndSync).toHaveBeenCalledTimes(1);
-		expect(binding.sync).toHaveBeenCalled();
+		expect(sync).toHaveBeenCalled();
 		expect(engineWrite).not.toHaveBeenCalled();
 	});
 });

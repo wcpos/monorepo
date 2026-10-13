@@ -19,9 +19,13 @@ export function DataTableFooter({
 	sync,
 	count,
 	children,
+	total: held,
 }: BindingDataTableFooterProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, null);
+	const streamed = useObservableState(total$, null);
+	// A handle-backed table hands the total as a value in the same commit as `count`; the
+	// stream lands a commit later and would print the new count over the old denominator.
+	const total = held === undefined ? streamed : held;
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const actions = useQueryStateActions();
 	const t = useT();

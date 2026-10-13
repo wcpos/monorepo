@@ -2,8 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
-import { ObservableResource } from 'observable-hooks';
+import { BehaviorSubject } from 'rxjs';
 
 import type { EngineRecord } from '@wcpos/query';
 
@@ -40,8 +39,12 @@ jest.mock('../components/product/price-with-tax', () => ({
 jest.mock('../components/product/variable-product-row/variations/filters', () => ({
 	VariationsFilterBar: () => null,
 }));
+let mockFooterProps: { handle?: unknown; shown?: unknown; count?: number } = {};
 jest.mock('../components/product/variable-product-row/variations/footer', () => ({
-	VariationTableFooter: () => null,
+	VariationTableFooter: (props: { handle: unknown; shown: unknown; count: number }) => {
+		mockFooterProps = props;
+		return null;
+	},
 }));
 const record = {
 	uuid: 'one',
@@ -127,32 +130,66 @@ it('names the variation from its attributes and respects the variation capabilit
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 
-const mockVariationResult = new BehaviorSubject({
-	hits: [
-		{
-			id: 'variation',
-			record: {
-				uuid: 'variation',
-				remoteId: '22',
-				payload: { type: 'variation', name: 'Large', price: '14', stock_status: 'instock' },
-			},
-		},
-	],
-});
-const mockVariationBinding = {
-	resource: new ObservableResource(mockVariationResult),
-	active$: of(false),
-	total$: of(1),
-	sync: jest.fn(async () => undefined),
+// The variations query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
 };
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+const mockVariationHandle = fakeQueryHandle({
+	result: {
+		hits: [
+			{
+				id: 'variation',
+				record: {
+					uuid: 'variation',
+					remoteId: '22',
+					payload: { type: 'variation', name: 'Large', price: '14', stock_status: 'instock' },
+				},
+			},
+		],
+	},
+	total: 1,
+});
+const mockVariationSync = jest.fn(async () => undefined);
+mockVariationHandle.sync = mockVariationSync;
 const mockVariationState = jest.fn();
+const mockVariationOptions = jest.fn();
+let mockServedVariationHandle: FakeHandle = mockVariationHandle;
 jest.mock('../../../query', () => ({
 	...jest.requireActual('../../../query'),
-	useCollectionBinding: (_collection: unknown, state: unknown) => {
+	useCollectionQueryHandle: (_collection: unknown, state: unknown, options: unknown) => {
 		mockVariationState(state);
-		return mockVariationBinding;
+		mockVariationOptions(options);
+		return mockServedVariationHandle;
 	},
 }));
+// The real boundary with a reset control: the row wires `onReset` to the variations retry.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="variations-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
+	};
+});
 it('keeps touch variations inline, seeds relational matches and follows stock filters', async () => {
 	const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
 	const meta = {
@@ -175,10 +212,86 @@ it('keeps touch variations inline, seeds relational matches and follows stock fi
 	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
 	expect(screen.getByTestId('products-row-variation').textContent).toContain('Large');
 	expect(mockVariationState).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'large' }));
-	expect(mockVariationBinding.sync).toHaveBeenCalled();
+	expect(mockVariationOptions).toHaveBeenLastCalledWith({ remoteIds: ['22'] });
+	expect(mockVariationSync).toHaveBeenCalledTimes(1);
+	// The footer acts on the live handle and counts the drawn one (the same, once answered).
+	expect(mockFooterProps).toMatchObject({
+		handle: mockVariationHandle,
+		shown: mockVariationHandle,
+		count: 1,
+	});
 	meta.variationStockStatus = 'outofstock';
 	rerender(<VariableRow {...props} />);
 	expect(screen.queryByTestId('products-row-variation')).toBeNull();
 	await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
 	expect(expanded$.value.one).toBe(false);
+});
+
+// A failed variations read must stay inside the expanded row: the products list's boundary
+// above would replace the whole list, retry the products handle (which has not failed) and
+// remount the list with every row collapsed.
+it('keeps a failed variations read inside the row; its reset retries the variations handle', async () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	const failed = fakeQueryHandle({ ready: false, error: new Error('variations read failed') });
+	const retry = jest.fn(() => {
+		failed.set({ error: null, ready: false });
+	});
+	failed.retry = retry;
+	mockServedVariationHandle = failed;
+	const expanded$ = new BehaviorSubject<Record<string, boolean>>({});
+	const meta = {
+		expanded$,
+		setRowExpanded: (id: string, on: boolean) => expanded$.next({ [id]: on }),
+	};
+	const props = {
+		item: {
+			id: 'one',
+			original: {
+				record: { ...record, payload: { ...record.payload, type: 'variable', variations: [22] } },
+			},
+		},
+		table: { options: { meta } },
+	} as unknown as React.ComponentProps<typeof VariableRow>;
+	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+	try {
+		// The products list's boundary, with another row beside the variable one.
+		render(
+			<ErrorBoundary fallbackRender={() => <div data-testid="products-list-fallback" />}>
+				<div data-testid="products-row-other" />
+				<VariableRow {...props} />
+			</ErrorBoundary>
+		);
+		await act(async () => fireEvent.click(screen.getByTestId('products-row-one')));
+		expect(screen.getByTestId('variations-error-reset')).toBeTruthy();
+		expect(screen.queryByTestId('products-list-fallback')).toBeNull();
+		expect(screen.getByTestId('products-row-other')).toBeTruthy();
+		expect(screen.getByTestId('products-row-one')).toBeTruthy();
+
+		act(() => {
+			fireEvent.click(screen.getByTestId('variations-error-reset'));
+		});
+		expect(retry).toHaveBeenCalledTimes(1);
+		await act(async () =>
+			failed.set({
+				ready: true,
+				result: {
+					hits: [
+						{
+							id: 'variation',
+							record: {
+								uuid: 'variation',
+								remoteId: '22',
+								payload: { type: 'variation', name: 'Large', price: '14' },
+							},
+						},
+					],
+				},
+			})
+		);
+		expect(screen.getByTestId('products-row-variation').textContent).toContain('Large');
+		expect(screen.queryByTestId('variations-error-reset')).toBeNull();
+	} finally {
+		consoleError.mockRestore();
+		mockServedVariationHandle = mockVariationHandle;
+	}
 });
