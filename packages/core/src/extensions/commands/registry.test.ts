@@ -131,3 +131,16 @@ it('registers the eight v1 commands from the barrel side effect', () => {
 		);
 	});
 });
+
+it('the registered void command is refused until the void surface is mounted', () => {
+	jest.isolateModules(() => {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		require('./commands');
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const isolated = require('./registry') as typeof import('./registry');
+		const command = isolated.getCommands().find(({ id }) => id === 'pos.cart.void')!;
+		const ctx = (mounted: boolean) => ({ ...makeCtx(), hasSurface: () => mounted });
+		expect(command.when?.(ctx(false))).toBe(false);
+		expect(command.when?.(ctx(true))).toBe(true);
+	});
+});
