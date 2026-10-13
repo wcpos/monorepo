@@ -9,6 +9,7 @@
 		".": "./src/index.tsx",
 		"./extensions/actions": "./src/extensions/actions/index.ts",
 		"./extensions/commands": "./src/extensions/commands/index.ts",
+		"./extensions/hotkeys": "./src/extensions/hotkeys/index.ts",
 		"./extensions/slots": "./src/extensions/slots/index.ts",
 		"./contexts/app-state": "./src/contexts/app-state/index.tsx",
 		"./contexts/hydration-providers": "./src/contexts/hydration-providers.tsx",

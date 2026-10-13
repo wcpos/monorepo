@@ -144,3 +144,27 @@ it('the registered void command is refused until the void surface is mounted', (
 		expect(command.when?.(ctx(true))).toBe(true);
 	});
 });
+
+it('refuses the cart commands while the cart is not shown; search and help are not cart commands', () => {
+	jest.isolateModules(() => {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		require('./commands');
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const isolated = require('./registry') as typeof import('./registry');
+		const hidden = { ...makeCtx(), hasSurface: (target: string) => target !== 'cart' };
+		const shown = { ...makeCtx(), hasSurface: () => true };
+		for (const command of isolated.getCommands()) {
+			if (command.id === 'pos.help.open') expect(command.when).toBeUndefined();
+			else if (command.id === 'pos.search.focus') {
+				// The products panel shows beside the register picker: the route is enough.
+				expect(command.when?.(hidden)).toBe(true);
+				expect(command.when?.({ ...hidden, screen: { ...hidden.screen, route: 'other' } })).toBe(
+					false
+				);
+			} else {
+				expect([command.id, command.when?.(hidden)]).toEqual([command.id, false]);
+				expect([command.id, command.when?.(shown)]).toEqual([command.id, true]);
+			}
+		}
+	});
+});

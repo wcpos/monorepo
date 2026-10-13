@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { PosterTile, type PosterTileProps } from './index';
+import { PosterTile, type PosterTileProps, SCRIM_REACH, SCRIM_STOPS } from './index';
 
 let mockPressed = false;
 // Keep RNW's Pressable (press, ref); expose classes because Jest does not compile Uniwind.
@@ -118,6 +118,21 @@ it('draws the scrim over a picture, with the words in order', () => {
 	expect(screen.getByTestId('tile-12').querySelector('[data-image="tea.jpg"]')).not.toBeNull();
 });
 
+it('blurs the picture under the words on web, masked by the same fade, and not on a tint', () => {
+	const { rerender } = render(tile({ title: 'Tea' }));
+	const blur = JSON.parse(screen.getByTestId('poster-scrim-blur').dataset.style!);
+	expect(blur.backdropFilter).toBe('blur(6px)');
+	// Every stop, at its position: the same thirteen as the tint, as alpha.
+	expect(blur.maskImage).toBe(
+		`linear-gradient(to bottom, ${[
+			...SCRIM_STOPS.map(([at, of]) => `rgb(0 0 0 / ${of}) ${at * SCRIM_REACH}px`),
+			'#000 100%',
+		].join(', ')})`
+	);
+	rerender(tile({ picture: { kind: 'tint', tint: 1 }, title: 'Tea' }));
+	expect(screen.queryByTestId('poster-scrim-blur')).toBeNull();
+});
+
 it('puts the words straight on a tint, with the tint’s class and no scrim', () => {
 	render(tile({ picture: { kind: 'tint', tint: 4 }, title: 'Tea' }));
 	expect(screen.queryByTestId('poster-scrim')).toBeNull();
@@ -191,7 +206,10 @@ it('keeps the name when the words outgrow the square: the block clips at its foo
 	expect(words).toEqual(expect.arrayContaining(['bottom-0', 'max-h-full', 'overflow-hidden']));
 	// The name comes first in the block, so a clip at the foot takes the facts, not the name.
 	const block = screen.getByTestId('poster-scrim');
-	expect(block.firstChild?.textContent).toBe('Tea');
+	// (The web scrim's blur layer comes first, under the words; it holds no words.)
+	const blur = screen.getByTestId('poster-scrim-blur');
+	expect(block.firstChild).toBe(blur);
+	expect(blur.nextSibling?.textContent).toBe('Tea');
 	expect(block.lastChild).toBe(screen.getByTestId('facts'));
 });
 

@@ -6,8 +6,18 @@
 /** How far above the first line of words the fade reaches, in px. */
 export const SCRIM_REACH = 48;
 
-/** The card colour's opacity under the words: the plateau the fade eases up to. */
-export const SCRIM_STRENGTH = 0.85;
+/**
+ * The card colour's opacity under the words: the plateau the fade eases up to. Owner,
+ * 2026-10-13: "around 90 or 92", after 85 read thin over busy pictures.
+ */
+export const SCRIM_STRENGTH = 0.92;
+
+/**
+ * The blur under the words, in px, masked by the same fade so it has no edge. Drawn on web only
+ * for now: native draws it as a blurred copy of the picture under a gradient mask (roadmap
+ * `docs/research/2026-10-13-native-scrim-blur.md`), which is its own change once judged on a device.
+ */
+export const SCRIM_BLUR_PX = 6;
 
 /**
  * The fade, top-down, as `[at, of]`: `at` a fraction of the reach, `of` a fraction of the

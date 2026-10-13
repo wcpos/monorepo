@@ -27,8 +27,12 @@ export interface Command extends CommandDescriptor {
 	when?: (ctx: CommandContext) => boolean;
 	run: (ctx: CommandContext, args?: Readonly<Record<string, unknown>>) => Promise<void>;
 }
-/** What a mounted surface registers: the Pay button, the void button, the search input, the discount opener. */
-export type SurfaceTarget = 'pay' | 'void' | 'search' | 'discount';
+/**
+ * What a mounted surface registers: the Pay button, the void path, the search input, the discount
+ * opener, the help sheet's opener, and `cart`, which the cart column registers only while it shows
+ * the cart (not the register picker, the Open register card, the count or the loading rows).
+ */
+export type SurfaceTarget = 'pay' | 'void' | 'search' | 'discount' | 'help' | 'cart';
 export type RunOutcome = { outcome: 'ran' | 'refused' | 'failed' };
 
 /**
@@ -45,7 +49,7 @@ export interface CommandContext extends ActionContext {
 		selectOrder(target: string | 'previous' | 'next'): Promise<void>;
 		void(): Promise<void>;
 	};
-	focus(target: 'search' | 'discount'): Promise<void>;
+	focus(target: 'search' | 'discount' | 'help'): Promise<void>;
 	/** Whether a surface is mounted right now, for `when`: a verb over an unmounted one would fail. */
 	hasSurface(target: SurfaceTarget): boolean;
 	/** What `when` reads: `hasOpenOrder` is "not the blank cart", `openOrderCount` skips receipts. */

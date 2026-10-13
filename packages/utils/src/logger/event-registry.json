@@ -176,6 +176,18 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"type": "command.failed",
+		"domain": "CLIENT",
+		"label": "A shortcut did not finish",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "command.refused",
+		"domain": "CLIENT",
+		"label": "A shortcut was not available",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "connectivity.device-offline",
 		"domain": "CLIENT",
 		"label": "Device went offline",

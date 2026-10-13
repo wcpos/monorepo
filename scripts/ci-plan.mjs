@@ -24,6 +24,7 @@ const UNIT_PACKAGES = new Set([
 	'receipt-renderer',
 	'scanner',
 	'main',
+	'template-studio',
 ]);
 const WEB_SPEC = /^apps\/main\/e2e\/([A-Za-z0-9._-]+\.spec\.ts)$/;
 
@@ -55,14 +56,11 @@ export function classify(file) {
 		return 'web-helper';
 	// A package manifest keeps the dependency plan even in a leaf package (#1986 review).
 	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
+	if (file.startsWith('apps/template-studio/')) return 'studio-src';
 	// Leaf packages have no unit lane (their node:test files run as script tests in
 	// Lint), so their test files must not schedule the unit job: a narrowed run that
 	// selects nothing fails the "prove narrowed unit tests ran" guard (#1984).
-	if (
-		file.startsWith('packages/virtual-printer/') ||
-		file.startsWith('packages/eslint/') ||
-		file.startsWith('apps/template-studio/')
-	)
+	if (file.startsWith('packages/virtual-printer/') || file.startsWith('packages/eslint/'))
 		return 'leaf-package';
 	if (
 		!file.startsWith('scripts/') &&
@@ -278,6 +276,9 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 				const match = /^(?:packages\/([^/]+)|apps\/main)\//.exec(file);
 				if (!match) plan.unit = 'all';
 				else units.add(match[1] ?? 'main');
+				reasons.unit.add(rule);
+			} else if (rule === 'studio-src') {
+				units.add('template-studio');
 				reasons.unit.add(rule);
 			} else if (rule === 'package-src') {
 				// No native on a main-targeting PR for plain app/package source (owner ruling

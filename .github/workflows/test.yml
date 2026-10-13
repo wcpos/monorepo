@@ -73,6 +73,12 @@ jobs:
     if: needs.changes.outputs.unit != 'none'
     env:
       UNIT_PACKAGES: ${{ needs.changes.outputs.unit }}
+      PLUGIN_BRANCH: ${{ (github.base_ref || github.ref_name) == 'next' && 'next' || 'main' }}
+      # The plugin checkout needs the wcpos-bot app secrets, which GitHub withholds from
+      # Dependabot and from fork PRs; those runs skip the Template Studio lane explicitly.
+      PLUGIN_CHECKOUT: ${{ github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+      WCPOS_GALLERY_TEMPLATES_DIR: ${{ github.workspace }}/.plugin-checkout/woocommerce-pos/templates/gallery
+      WCPOS_GALLERY_REGISTRY_PATH: ${{ github.workspace }}/.plugin-checkout/woocommerce-pos/includes/Templates/Gallery_Registry.php
     permissions:
       contents: read
       issues: write
@@ -126,6 +132,31 @@ jobs:
             exit 1
           fi
 
+      - name: Generate plugin checkout token
+        if: env.PLUGIN_CHECKOUT == 'true' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
+        id: plugin-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.WCPOS_BOT_APP_ID }}
+          private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
+          owner: wcpos
+          repositories: woocommerce-pos
+          permission-contents: read
+
+      - name: Check out plugin gallery
+        if: env.PLUGIN_CHECKOUT == 'true' && (needs.changes.outputs.unit == 'all' || contains(format(',{0},', needs.changes.outputs.unit), ',template-studio,'))
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: wcpos/woocommerce-pos
+          ref: ${{ env.PLUGIN_BRANCH }}
+          token: ${{ steps.plugin-token.outputs.token }}
+          path: .plugin-checkout/woocommerce-pos
+          persist-credentials: false
+          sparse-checkout: |
+            templates/gallery
+            includes/Templates/Gallery_Registry.php
+          sparse-checkout-cone-mode: false
+
       - name: "\U0001F9EA Run vitest packages"
         run: |
           wants() { [ "$UNIT_PACKAGES" = all ] && return 0; case ",$UNIT_PACKAGES," in *",$1,"*) return 0;; esac; return 1; }
@@ -156,11 +187,17 @@ jobs:
           # receipt-renderer (3 suites) previously never ran in CI at all;
           # scanner (7 suites / 63 tests) was found dark by the CI-matrix
           # tripwire and joined here (ruling R15).
-          for pkg in printer receipt-renderer scanner; do
+          for pkg in printer receipt-renderer scanner template-studio; do
             wants "$pkg" || continue
+            # No app secrets (Dependabot, fork PR): no plugin checkout, so no Studio lane.
+            [ "$pkg" = template-studio ] && [ "$PLUGIN_CHECKOUT" != true ] && continue
             touch "$RUNNER_TEMP/ci-unit-executed"
             echo "::group::Testing @wcpos/$pkg"
-            pnpm --filter @wcpos/$pkg test || failed=1
+            if [ "$pkg" = template-studio ]; then
+              pnpm --filter @wcpos/template-studio exec vitest run --maxWorkers=2 || failed=1
+            else
+              pnpm --filter @wcpos/$pkg test || failed=1
+            fi
             echo "::endgroup::"
           done
 
@@ -201,7 +238,8 @@ jobs:
           fi
 
       - name: "\U0001F9FE Prove narrowed unit tests ran"
-        if: always() && needs.changes.outputs.unit != 'all'
+        # A Studio-only run without the app secrets is deliberately skipped, not an empty test selection.
+        if: always() && needs.changes.outputs.unit != 'all' && !(env.PLUGIN_CHECKOUT != 'true' && needs.changes.outputs.unit == 'template-studio')
         run: |
           ran=false; [ -f "$RUNNER_TEMP/ci-unit-executed" ] && ran=true
           for file in packages/*/test-results.json apps/main/test-results.json; do
