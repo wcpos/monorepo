@@ -281,13 +281,17 @@ describe('useMutation', () => {
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toBeInstanceOf(WriteOutcomeError);
 		expect(mockLoggerError).toHaveBeenCalledWith(
-			'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
+			'write-rejected (registration-error-email-exists)',
 			expect.objectContaining({
 				showToast: true,
 				toast: {
 					title: 'An account is already registered with your email address. Please log in.',
 				},
-				context: expect.objectContaining({ reason: 'registration-error-email-exists' }),
+				context: expect.objectContaining({
+					error:
+						'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
+					reason: 'registration-error-email-exists',
+				}),
 			})
 		);
 	});

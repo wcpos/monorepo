@@ -77,7 +77,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			const rejection =
 				error instanceof WriteOutcomeError && error.serverMessage ? error : undefined;
 			const serverMessage = rejection?.serverMessage;
-			mutationLogger.error(message, {
+			// The log message stays machine text (the store's sentence is localized and would
+			// split one Sentry issue per language); the sentence rides the toast and context.
+			const logMessage = rejection
+				? `${rejection.eventType} (${rejection.reason ?? 'no reason'})`
+				: message;
+			mutationLogger.error(logMessage, {
 				showToast: true,
 				code: pushFailureCode(error),
 				...(serverMessage ? { toast: { title: serverMessage } } : {}),
@@ -85,7 +90,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					collectionName,
 					endpoint,
 					operation: 'mutation',
-					...(rejection ? { reason: rejection.reason } : {}),
+					...(rejection ? { error: message, reason: rejection.reason } : {}),
 					...context,
 				},
 			});
