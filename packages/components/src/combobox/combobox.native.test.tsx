@@ -343,8 +343,9 @@ it('renders the phone sheet as a View with phone metrics, not primitive Content'
 	).toHaveBeenCalledWith(1);
 	expect(panel?.className).toContain('rounded-t-2xl');
 	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538 });
-	// The shell pads the safe area; the panel must not add the inset a second time.
-	expect(StyleSheet.flatten(panel?.style)).not.toHaveProperty('paddingBottom');
+	// The panel on the bottom edge paints the safe area itself (inset + 8), so the sheet reaches
+	// the edge in the panel's own colour; the shell pads nothing for it (overlay.tsx).
+	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ paddingBottom: 8 });
 });
 it('keeps the native anchored wrapper full-bleed and box-none', () => {
 	mockViews.length = 0;
