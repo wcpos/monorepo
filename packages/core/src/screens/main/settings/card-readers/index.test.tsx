@@ -130,6 +130,21 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	AlertDialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
+// The provider sheet renders inline while it is mounted.
+jest.mock('@wcpos/components/portal', () => ({
+	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/modal', () => ({
+	Modal: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	ModalContent: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	ModalHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	ModalTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	ModalClose: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<button data-testid={testID}>{children}</button>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
@@ -395,12 +410,82 @@ it("a provider whose SDK owns pairing gets one button that opens the provider's 
 		fireEvent.click(screen.getByTestId('reader-row-sumup-open-sdk'));
 	});
 	expect(driver.opened).toHaveBeenCalledTimes(1);
-	// Two providers: Connect a reader offers each by name.
+	// Two providers: Connect a reader opens a sheet offering each by name.
+	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+	fireEvent.click(screen.getByTestId('card-readers-connect'));
+	expect(screen.getByTestId('card-readers-provider-sheet').textContent).toContain(
+		'Connect a reader with'
+	);
 	expect(screen.getByTestId(`card-readers-connect-${deviceMethod.id}`)).toBeTruthy();
-	expect(screen.getByTestId('card-readers-connect-sumup')).toBeTruthy();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-connect-sumup'));
+	});
+	// Picking a provider closes the sheet and starts that provider.
+	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+	expect(driver.opened).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the action slot filled while connecting: a disabled Connecting… and the menu', async () => {
+	const driver = createSimulatedDriver();
+	let status: DriverStatus = { connection: 'disconnected', reader: null };
+	const listeners = new Set<(s: DriverStatus) => void>();
+	let finish!: () => void;
+	registerDriver({
+		...driver,
+		connect: async (reader) => {
+			status = { connection: 'connecting', reader };
+			listeners.forEach((listener) => listener(status));
+			await new Promise<void>((resolve) => {
+				finish = resolve;
+			});
+		},
+		status$: {
+			get: () => status,
+			subscribe: (listener) => {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			},
+		},
+	});
+	render(<CardReadersSettings />);
+	await flush();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('card-readers-connect'));
+	});
+	const row = `reader-row-${deviceMethod.id}`;
+	await act(async () => {
+		fireEvent.click(screen.getByTestId(`${row}-connect-sim-approve`));
+	});
+	const slot = screen.getByTestId(`${row}-connect`) as HTMLButtonElement;
+	expect(slot.textContent).toBe('Connecting…');
+	expect(slot.disabled).toBe(true);
+	expect(screen.getByTestId(`${row}-menu`)).toBeTruthy();
+	expect(screen.getByTestId(`${row}-line`).textContent).toContain('Connecting to');
+	await act(async () => {
+		finish();
+	});
 });
 
 describe('Tap to Pay row', () => {
+	// A real provider's name: the simulated provider gets no Tap to Pay row on a device.
+	const stripeMethod: PaymentMethodDescriptor = {
+		...deviceMethod,
+		capture: { ...deviceMethod.capture, provider: 'stripe-test' },
+	};
+	beforeEach(() => {
+		registerDriver({ ...createSimulatedDriver(), provider: 'stripe-test' });
+		mockMethods = [stripeMethod];
+	});
+
+	it('is not offered for the simulated provider on a device', async () => {
+		mockOS = 'android';
+		mockMethods = [deviceMethod];
+		render(<CardReadersSettings />);
+		await flush();
+		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeNull();
+		expect(screen.queryByTestId('card-readers-this-phone')).toBeNull();
+	});
+
 	it('is native-only, admin-only for Set up, and scans the tap_to_pay transport', async () => {
 		const web = render(<CardReadersSettings />);
 		await flush();
@@ -418,15 +503,23 @@ describe('Tap to Pay row', () => {
 		mockCaps = { canAcceptReaderTerms: false };
 		const cashier = render(<CardReadersSettings />);
 		await flush();
+		// One meta line says both things; no second "Not set up" under it.
 		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-line`).textContent).toBe(
-			'Ask an administrator to set this up'
+			'Not set up · ask an administrator'
 		);
+		expect(screen.queryByText('Not set up')).toBeNull();
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`)).toBeNull();
 		expect(screen.getByText('Tap to Pay on iPhone')).toBeTruthy();
 		cashier.unmount();
 		mockCaps = { canAcceptReaderTerms: true };
 		render(<CardReadersSettings />);
 		await flush();
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-line`).textContent).toBe(
+			'Not set up'
+		);
+		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`).textContent).toBe(
+			'Set up Tap to Pay'
+		);
 		await act(async () => {
 			fireEvent.click(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`));
 		});

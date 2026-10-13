@@ -4,14 +4,10 @@ import { Platform, View } from 'react-native';
 import * as Alert from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Modal, ModalClose, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
@@ -60,24 +56,30 @@ export function CardReadersSettings() {
 			status.reader !== null ||
 			remembered[method.id] !== undefined ||
 			actions.scan?.methodId === method.id ||
+			actions.working === method.id ||
 			Boolean(actions.errors[method.id])
 		);
 	});
+	// The phone itself (a connected or remembered Tap to Pay reader) sits under This phone.
+	const onPhone = (method: PaymentMethodDescriptor) =>
+		(actions.scan?.methodId === method.id
+			? actions.scan
+			: (getDriver(method.capture.provider)?.status$.get().reader ?? remembered[method.id])
+		)?.transport === 'tap_to_pay';
 	// Tap to Pay (the native app only; the browser has no NFC): the phone is a reader this provider
 	// can connect, offered as a row of its own until it is the connected one. The provider's terms
 	// (Apple's awareness moment and Terms sheet on iOS, the SDK's own on Android) come on the first
 	// connect; only an administrator may accept them (fail closed). Android needs the Stripe plugin
 	// options from roadmap#429 in the native build.
+	// The simulated provider gets no Tap to Pay row on a device: it is a development stand-in.
 	const tapToPay = devices.filter(
 		(method) =>
 			Platform.OS !== 'web' &&
+			method.capture.provider !== 'simulated' &&
 			deviceTransports(method).some((item) => item.transport === 'tap_to_pay') &&
 			getDriver(method.capture.provider)?.capabilities.discovery === 'harness' &&
-			getDriver(method.capture.provider)?.status$.get().reader?.transport !== 'tap_to_pay' &&
-			remembered[method.id]?.transport !== 'tap_to_pay'
+			!onPhone(method)
 	);
-	// Every provider stays offered: scanning again is how a reader is changed.
-	const connectable = devices;
 	// Named from the target, not the pending flag, so the title survives the dialog's exit.
 	const forgetName = actions.forgetTarget
 		? readerName(
@@ -88,90 +90,34 @@ export function CardReadersSettings() {
 			) || actions.forgetTarget.title
 		: '';
 
-	const connectButton = (variant: 'default' | 'outline') =>
-		connectable.length === 1 ? (
-			<Button
-				variant={variant}
-				leftIcon="plus"
-				disabled={actions.working !== null}
-				onPress={() => void actions.start(connectable[0])}
-				testID="card-readers-connect"
-			>
-				<Text>{t('settings.card_readers.connect_a_reader')}</Text>
-			</Button>
-		) : (
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant={variant}
-						leftIcon="plus"
-						disabled={actions.working !== null}
-						testID="card-readers-connect"
-					>
-						<Text>{t('settings.card_readers.connect_a_reader')}</Text>
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="start">
-					{connectable.map((method) => (
-						<DropdownMenuItem
-							key={method.id}
-							onPress={() => void actions.start(method)}
-							testID={`card-readers-connect-${method.id}`}
-						>
-							<Icon name="creditCard" />
-							<Text decodeHtml>{method.title}</Text>
-						</DropdownMenuItem>
-					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
-		);
+	const [picking, setPicking] = React.useState(false);
+	const row = (method: PaymentMethodDescriptor) => (
+		<ReaderRow
+			key={method.id}
+			method={method}
+			remembered={remembered[method.id] ?? null}
+			actions={actions}
+		/>
+	);
+	const phoneRows = rows.filter(onPhone);
+	const bluetoothRows = rows.filter((method) => !onPhone(method));
 
 	return (
 		<VStack className="gap-5">
-			<SettingsSection
-				first
-				title={t('settings.card_readers.readers')}
-				description={t('settings.card_readers.readers_description')}
-				testID="card-readers-list"
-			>
-				{devices.length === 0 ? (
-					<Text testID="card-readers-none" className="text-muted-foreground text-sm">
-						{t('settings.card_readers.no_device_methods')}
-					</Text>
-				) : rows.length === 0 && tapToPay.length === 0 ? (
-					<View
-						testID="card-readers-empty"
-						className="border-border items-center rounded-lg border border-dashed p-8"
-					>
-						<VStack className="max-w-sm items-center gap-3">
-							<View className="bg-muted rounded-lg p-3">
-								<Icon name="creditCard" variant="muted" size="2xl" />
-							</View>
-							<Text className="text-center font-medium">
-								{t('settings.card_readers.empty_title')}
-							</Text>
-							<Text className="text-muted-foreground text-center text-sm">
-								{t('settings.card_readers.empty_body')}
-							</Text>
-							<HStack className="flex-wrap items-center justify-center gap-2">
-								{connectButton('default')}
-								<DocsLink testID="card-readers-guide-link" href={CARD_READER_DOCS_URL}>
-									{t('settings.card_readers.reader_guide')}
-								</DocsLink>
-							</HStack>
-						</VStack>
-					</View>
-				) : (
-					<>
-						<View>
-							{rows.map((method) => (
-								<ReaderRow
-									key={method.id}
-									method={method}
-									remembered={remembered[method.id] ?? null}
-									actions={actions}
-								/>
-							))}
+			<Text className="text-muted-foreground">{t('settings.card_readers.description')}</Text>
+			{devices.length === 0 ? (
+				<Text testID="card-readers-none" className="text-muted-foreground text-sm">
+					{t('settings.card_readers.no_device_methods')}
+				</Text>
+			) : (
+				<>
+					{phoneRows.length > 0 || tapToPay.length > 0 ? (
+						<SettingsSection
+							first
+							title={t('settings.card_readers.section_this_phone')}
+							testID="card-readers-this-phone"
+						>
+							{phoneRows.map(row)}
 							{tapToPay.map((method) => (
 								<TapToPayRow
 									key={`ttp-${method.id}`}
@@ -181,17 +127,85 @@ export function CardReadersSettings() {
 									onSetUp={() => void actions.start(method, 'tap_to_pay')}
 								/>
 							))}
-						</View>
-						{/* Full width, with the guide on its own line beneath: never a shared line. */}
-						<VStack className="w-full gap-2 pt-2">
-							{connectButton('outline')}
-							<DocsLink testID="card-readers-having-trouble" href={CARD_READER_DOCS_URL}>
-								{t('settings.having_trouble')}
+						</SettingsSection>
+					) : null}
+					<SettingsSection
+						first
+						title={t('settings.card_readers.section_bluetooth')}
+						testID="card-readers-list"
+					>
+						{bluetoothRows.length === 0 ? (
+							<View
+								testID="card-readers-empty"
+								className="border-border rounded-lg border border-dashed px-3 py-5"
+							>
+								<Text className="text-muted-foreground text-center text-sm">
+									{t('settings.card_readers.empty_bluetooth')}
+								</Text>
+							</View>
+						) : (
+							bluetoothRows.map(row)
+						)}
+					</SettingsSection>
+					{/* The page's one call to action, full width; the guide is a quiet link beneath. */}
+					<VStack className="gap-1">
+						<Button
+							variant="outline-primary"
+							className="h-14"
+							leftIcon="plus"
+							disabled={actions.working !== null}
+							onPress={() =>
+								devices.length === 1 ? void actions.start(devices[0]) : setPicking(true)
+							}
+							testID="card-readers-connect"
+						>
+							<ButtonText>{t('settings.card_readers.connect_a_reader')}</ButtonText>
+						</Button>
+						<HStack className="justify-center py-2">
+							<DocsLink testID="card-readers-guide-link" href={CARD_READER_DOCS_URL}>
+								{t('settings.card_readers.reader_guide')}
 							</DocsLink>
-						</VStack>
-					</>
-				)}
-			</SettingsSection>
+						</HStack>
+					</VStack>
+				</>
+			)}
+
+			{picking ? (
+				<Portal name="card-readers-provider-sheet">
+					<Modal onClose={() => setPicking(false)}>
+						<ModalContent side="bottom" testID="card-readers-provider-sheet">
+							<ModalHeader>
+								<ModalTitle>{t('settings.card_readers.connect_with')}</ModalTitle>
+							</ModalHeader>
+							<VStack className="gap-1 px-4">
+								{devices.map((method) => (
+									<Button
+										key={method.id}
+										variant="ghost"
+										className="h-14 flex-row justify-start gap-3 px-1"
+										onPress={() => {
+											setPicking(false);
+											void actions.start(method);
+										}}
+										testID={`card-readers-connect-${method.id}`}
+									>
+										<View className="bg-muted size-10 items-center justify-center rounded-lg">
+											<Icon name="creditCard" variant="muted" size="lg" />
+										</View>
+										<Text className="flex-1 text-lg font-semibold" numberOfLines={1} decodeHtml>
+											{method.title}
+										</Text>
+										<Icon name="chevronRight" variant="muted" />
+									</Button>
+								))}
+								<ModalClose className="mt-2 h-14" testID="card-readers-provider-cancel">
+									<ButtonText>{t('common.cancel')}</ButtonText>
+								</ModalClose>
+							</VStack>
+						</ModalContent>
+					</Modal>
+				</Portal>
+			) : null}
 
 			<Alert.AlertDialog
 				open={actions.pendingForget !== null}
@@ -239,47 +253,45 @@ function TapToPayRow({
 	// Named for the phone in the cashier's hand: Apple's name on iOS, Android's on Android.
 	const android = Platform.OS === 'android';
 	return (
-		<View testID={`tap-to-pay-row-${method.id}`} className="gap-2 rounded-lg px-2 py-2.5">
+		<View
+			testID={`tap-to-pay-row-${method.id}`}
+			className="bg-card border-border gap-3 rounded-lg border p-3"
+		>
 			<HStack className="items-start gap-3">
-				<View className="bg-muted rounded-md p-2">
+				<View className="bg-muted size-10 items-center justify-center rounded-lg">
 					<Icon name="creditCard" variant="muted" size="lg" />
 				</View>
 				<VStack className="flex-1 gap-0.5">
-					<HStack className="items-center gap-1.5">
-						<Text className="shrink text-sm font-medium" numberOfLines={1}>
+					<HStack className="items-start gap-2">
+						<Text className="flex-1 text-lg font-semibold" numberOfLines={1}>
 							{android
 								? t('settings.card_readers.tap_to_pay_android')
 								: t('settings.card_readers.tap_to_pay')}
 						</Text>
 						<Text
-							className="text-muted-foreground border-border shrink rounded-full border px-1.5 text-xs"
+							className="text-muted-foreground bg-muted max-w-32 overflow-hidden rounded-full px-2 py-0.5 text-xs"
 							numberOfLines={1}
 							decodeHtml
 						>
 							{method.title}
 						</Text>
 					</HStack>
+					{/* One line: not set up, and who can set it up when this user cannot. */}
 					<Text
-						className="text-muted-foreground text-xs"
+						className="text-muted-foreground text-sm"
 						testID={`tap-to-pay-row-${method.id}-line`}
 					>
 						{canAccept
-							? android
-								? t('settings.card_readers.tap_to_pay_body_android')
-								: t('settings.card_readers.tap_to_pay_body')
-							: t('settings.card_readers.tap_to_pay_admin_only')}
+							? t('settings.card_readers.not_set_up')
+							: t('settings.card_readers.not_set_up_admin')}
 					</Text>
 				</VStack>
 			</HStack>
 			{canAccept ? (
 				<Button disabled={busy} onPress={onSetUp} testID={`tap-to-pay-row-${method.id}-set-up`}>
-					<ButtonText>{t('settings.card_readers.set_up')}</ButtonText>
+					<ButtonText>{t('settings.card_readers.set_up_tap_to_pay')}</ButtonText>
 				</Button>
-			) : (
-				<Text className="text-muted-foreground pl-12 text-xs">
-					{t('settings.card_readers.not_set_up')}
-				</Text>
-			)}
+			) : null}
 		</View>
 	);
 }
