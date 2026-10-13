@@ -1,6 +1,10 @@
 import { isMiscProductLine, MISC_PRODUCT_ID } from '@wcpos/sync-core';
 
-import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
+import {
+	aggregateExistingCartQuantity,
+	evaluateStockForCartChange,
+	reducedStockQuantity,
+} from './stock-guard';
 import { registerActionHook } from '../../../../extensions/actions';
 
 import type {
@@ -137,7 +141,8 @@ export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e,
 		lineItems,
 		productId: line.product_id ?? MISC_PRODUCT_ID,
 		variationId: line.variation_id ?? 0,
-		requestedQuantity: requested,
+		// A reopened order's line already took `_reduced_stock` units; only the rest is new demand.
+		requestedQuantity: Math.max(0, requested - reducedStockQuantity(line)),
 		excludedLineItemUuid: lineUuid,
 		name: line.name,
 	});

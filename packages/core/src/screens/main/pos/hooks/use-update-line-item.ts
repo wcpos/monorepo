@@ -9,6 +9,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartInvariant } from './cart-failure';
 import { useCartConfig } from './use-cart-config';
+import { reducedStockQuantity } from './stock-guard';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import {
@@ -282,10 +283,31 @@ export const useUpdateLineItem = () => {
 					newLineItems.push(newItem);
 				}
 
+				// The server restores stock per item from `_reduced_stock` on a cancel or refund, so the
+				// new lines share it in whole units, in order, the rest riding on the last: the sum holds.
+				// A value that reads as nothing (zero, negative, unreadable) is dropped from every half.
+				let reduced = reducedStockQuantity(lineItemToSplit);
+				const hasReducedMeta = (lineItemToSplit.meta_data ?? []).some(
+					(meta) => meta.key === '_reduced_stock'
+				);
+				const splitLineItems = !hasReducedMeta
+					? newLineItems // never reduced: split as before
+					: newLineItems.map((line, index) => {
+							const last = index === newLineItems.length - 1;
+							const share = last ? reduced : Math.min(Math.floor(line.quantity ?? 0), reduced);
+							reduced -= share;
+							const meta_data = (line.meta_data ?? []).flatMap((meta) => {
+								if (meta.key !== '_reduced_stock') return [meta];
+								if (share === 0) return []; // dropped, not '0': the server reads it as never reduced
+								return [{ ...meta, value: typeof meta.value === 'number' ? share : String(share) }];
+							});
+							return { ...line, meta_data };
+						});
+
 				// Replace the original item with the new items in the order
 				const updatedLineItems = [
 					...(order.payload.line_items ?? []).slice(0, lineItemIndex),
-					...newLineItems,
+					...splitLineItems,
 					...(order.payload.line_items ?? []).slice(lineItemIndex + 1),
 				];
 
