@@ -9,6 +9,7 @@ import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-mat
 
 import { useT } from '../../../../../contexts/translations';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
+import { readerName } from '../../../settings/card-readers/reader-name';
 import { deviceTransports } from './tiles';
 import { useDriverStatus } from './use-driver-status';
 
@@ -123,9 +124,11 @@ export function ReaderConnection({
 	}, [remembered, driver, method, disabled, connect, pickTransport]);
 	const connected = status.connection === 'connected' && !working;
 	let line: string;
+	// The name Settings → Card readers shows ("WisePad 3"), never the SDK key or the serial.
 	if (connected)
 		line = [
-			status.reader?.label ?? status.reader?.model ?? t('pos_checkout.reader_connected'),
+			readerName(status.reader, t),
+			t('pos_checkout.reader_connected'),
 			status.reader?.battery == null
 				? null
 				: t('pos_checkout.reader_battery_percent', { battery: status.reader.battery }),

@@ -193,10 +193,15 @@ function ModalOverlayNative({
 		<View
 			collapsable={false}
 			// A bottom sheet carries the bottom inset itself (in card colour); the scrim must not
-			// show as a grey bar under it (owner, 2026-10-13).
+			// show as a grey bar under it (owner, 2026-10-13). A full-size modal is a contained
+			// route whose host already sits under the status bar (the POS stack pads insets.top):
+			// a second top inset was the blank band over the pay sheet's title (Pixel 10).
 			style={[
 				StyleSheet.absoluteFill,
-				{ paddingTop: insets.top, paddingBottom: side === 'bottom' ? 0 : insets.bottom },
+				{
+					paddingTop: fill ? 0 : insets.top,
+					paddingBottom: side === 'bottom' ? 0 : insets.bottom,
+				},
 			]}
 			className={cn(
 				// last-child: the content wrapper; the first child is the scrim Pressable.
@@ -286,7 +291,8 @@ function ModalContent({
 					side === 'center'
 						? 'web:cursor-default border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
 						: 'z-50',
-					fullScreen && 'h-full w-full max-w-full rounded-none border-0 shadow-none',
+					// The title sits 8 under the status bar and the last row 8 above the bottom inset.
+					fullScreen && 'h-full w-full max-w-full rounded-none border-0 py-2 shadow-none',
 					OVERLAY_MOTION[side].enter,
 					className
 				)}
@@ -294,9 +300,11 @@ function ModalContent({
 				{...props}
 			>
 				<SideContext.Provider value={side}>{children}</SideContext.Provider>
-				<View className="absolute top-2 right-2">
-					<ModalClose className="web:transition-opacity web:hover:opacity-100 opacity-70" asChild>
-						<IconButton name="xmark" />
+				{/* Borderless and muted, 44 pt: the child's `default` variant overrides ModalClose's
+				    `outline`. Full screen lifts it to centre on the title row. */}
+				<View className={cn('absolute right-2', fullScreen ? 'top-0' : 'top-2')}>
+					<ModalClose asChild>
+						<IconButton name="xmark" variant="default" />
 					</ModalClose>
 				</View>
 			</Content>

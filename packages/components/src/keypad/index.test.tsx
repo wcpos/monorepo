@@ -95,3 +95,7 @@ it('disabled keys do not emit', () => {
 	fireEvent.click(screen.getByTestId('pad-key-1'));
 	expect(onPress).not.toHaveBeenCalled();
 });
+it('lets the digit carry the key', () => {
+	render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
+	expect(screen.getByText('1').dataset.classes).toContain('text-2xl');
+});

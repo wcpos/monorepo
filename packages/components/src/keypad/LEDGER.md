@@ -13,3 +13,4 @@ Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291
 3. An icon-only key carries a stable identifier — evidence: `numpad` line 6 as origin (`e513ffcb69`).
 4. An icon-only key takes a caller-supplied accessible name; its machine value is not a name — evidence: the page-bar review on wcpos/monorepo#2188 applied here; wcpos/roadmap#360.
 5. The disabled state is always an explicit boolean — evidence: `button` ledger line 1 as origin (`c99855da17`); Codex review on wcpos/monorepo#2189.
+6. The digit carries the key: `text-2xl` labels and `xl` icons inside the boxed key, for cash and card keypads alike — evidence: owner walk of the pay sheet on a Pixel 10 (2026-10-13), test "lets the digit carry the key" in `packages/components/src/keypad/index.test.tsx`.

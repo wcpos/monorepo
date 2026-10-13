@@ -20,12 +20,12 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { CARD_READER_DOCS_URL } from './docs';
+import { readerName } from './reader-name';
 import { useT } from '../../../../contexts/translations';
 import { getDriver } from '../../../../services/payment-drivers/registry';
 import { useDriverStatus } from '../../pos/checkout/tender/use-driver-status';
 
 import type { ReaderActions } from './use-reader-actions';
-import type { ReaderInfo } from '../../../../services/payment-drivers/types';
 import type { RememberedReader } from '../../pos/checkout/tender/remembered-readers';
 
 // Literal keys so the translation extractor sees them.
@@ -36,24 +36,7 @@ const ERROR_KEYS = {
 	open: 'settings.card_readers.could_not_open',
 } as const;
 
-// Stripe reports the SDK's device type; the cashier knows the name on the box.
-const MODEL_NAMES: Record<string, string> = {
-	wisePad3: 'WisePad 3',
-	stripeM2: 'Stripe Reader M2',
-	chipper2X: 'Chipper 2X',
-	wisePosE: 'WisePOS E',
-	stripeS700: 'Stripe Reader S700',
-};
-
-export function readerName(
-	reader: (Pick<ReaderInfo, 'label' | 'model'> & Partial<Pick<ReaderInfo, 'transport'>>) | null,
-	t: (key: string) => string
-): string {
-	if (!reader) return '';
-	if (reader.transport === 'tap_to_pay') return t('settings.card_readers.this_device');
-	const model = reader.model ? (MODEL_NAMES[reader.model] ?? reader.model) : null;
-	return model ?? reader.label;
-}
+export { readerName };
 
 /** The driver's availability turned into the one line the row shows instead of its actions. */
 function availabilityLine(
