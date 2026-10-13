@@ -66,9 +66,15 @@ function effectiveRows(collectionDir: string, indexId: number): IndexRow[] {
 		join(collectionDir, `index-${String(indexId).padStart(5, '0')}.txt`),
 		'utf8'
 	).trim();
-	const rows: IndexRow[] = raw ? JSON.parse(raw) : [];
+	// Since rxdb-premium 17.6.0 a cleanup persists `{changelogEpoch, changelogOperations, rows}`;
+	// a rebuild or a legacy file is still the bare row array.
+	const parsedIndex = raw ? JSON.parse(raw) : [];
+	const rows: IndexRow[] = Array.isArray(parsedIndex) ? parsedIndex : parsedIndex.rows;
 	const changelog = readFileSync(join(collectionDir, 'changelog.txt'), 'utf8');
-	const ops: ChangelogOp[] = changelog.trim() ? JSON.parse(`[${changelog}]`) : [];
+	// 17.6.0 also opens the changelog with an `{e: epoch}` header element; operations are arrays.
+	const ops: ChangelogOp[] = (changelog.trim() ? JSON.parse(`[${changelog}]`) : []).filter(
+		Array.isArray
+	);
 	for (const [opIndexId, position, type, row] of ops) {
 		if (opIndexId !== indexId) continue;
 		if (type === 'A') rows.splice(Math.min(position, rows.length), 0, row);
