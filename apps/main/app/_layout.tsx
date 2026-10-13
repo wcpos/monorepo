@@ -17,7 +17,6 @@ import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { ScaleProvider } from '@wcpos/core/contexts/scale';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
-import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
@@ -110,7 +109,6 @@ function RootStack() {
 
 	return (
 		<>
-			{hasStoreSession(appState) ? <CustomerDisplayServiceController /> : null}
 			<Stack screenOptions={{ headerShown: false }}>
 				{/* The whole session, not just the store database: the (app) stack calls
 				    useStoreSession on its first render, and a partially hydrated session
@@ -122,11 +120,6 @@ function RootStack() {
 			</Stack>
 		</>
 	);
-}
-
-function CustomerDisplayServiceController(): null {
-	useCustomerDisplayService();
-	return null;
 }
 
 /**
