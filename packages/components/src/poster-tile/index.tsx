@@ -56,7 +56,7 @@ export type PosterTileProps = {
 	facts?: React.ReactNode;
 	/** Greys the picture; the caller says "Sold out" in the money slot. */
 	out?: boolean;
-	/** The stack of cards behind the tile: a variable product, "tap to deal". */
+	/** The stack of cards behind the tile: any tile that deals more tiles out ("tap to deal"). */
 	stacked?: boolean;
 	/** The stack's style, for the Deal's fade (an animated style). */
 	stackStyle?: React.ComponentProps<typeof Animated.View>['style'];
@@ -210,7 +210,7 @@ function Mark({
  * card-colour scrim at its foot (wcpos/roadmap `docs/specs/2026-10-12-pos-product-tile-poster-spec.md`).
  * It knows nothing about products: a picture, marks and words. The frame keeps `m-1` and forwards
  * its ref, so the Deal measures and lifts it as before; a stack's cards are drawn inside that
- * frame, behind the square.
+ * frame, behind the card.
  */
 export const PosterTile = React.forwardRef<ViewInstance, PosterTileProps>(function PosterTile(
 	{

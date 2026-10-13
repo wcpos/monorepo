@@ -284,6 +284,8 @@ it('a variation tile is the add control, with exactly the row’s sanitised meta
 		'5.00',
 	]);
 	expect(screen.getByTestId('in-cart').textContent).toBe('3');
+	// A variation opens onto nothing: never a stack.
+	expect(screen.queryByTestId('poster-stack')).toBeNull();
 	fireEvent.click(tile);
 	expect(addVariation).toHaveBeenCalledWith(record, parent, [
 		{ attr_id: 1, display_key: 'Colour', display_value: 'Blue' },

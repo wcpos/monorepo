@@ -121,12 +121,17 @@ jest.mock('../deal-stack', () => ({
 	useDeal: () => ({ placeGrid }),
 	useAirspace: () => ({}),
 	useCopyPicture: () => undefined,
+	useDealCards: () => null,
 }));
 // The list renders every row it is handed, wrapped as its cells are (with the cell style the
 // grid asks for), and an end-reached is a scroll on it.
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
+		// Every term tile is a stack now: its cards are an animated view.
+		View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+			<div data-testid={testID}>{children}</div>
+		),
 		FlatList: ({
 			data,
 			renderItem,
@@ -165,6 +170,7 @@ jest.mock('react-native-reanimated', () => ({
 		),
 	},
 	useAnimatedRef: () => ({ current: null }),
+	useAnimatedStyle: (style: () => object) => style(),
 	useScrollViewOffset: () => ({ value: 0 }),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));

@@ -23,7 +23,11 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 // Off any dealt copy: a picture holds nothing (deal-stack.test.tsx covers the hold).
 const mockCopyPicture = jest.fn(() => undefined);
-jest.mock('../deal-stack', () => ({ useCopyPicture: () => mockCopyPicture() }));
+const mockDealCards = jest.fn(() => null);
+jest.mock('../deal-stack', () => ({
+	useCopyPicture: () => mockCopyPicture(),
+	useDealCards: () => mockDealCards(),
+}));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
 }));
@@ -173,6 +177,16 @@ describe('TermTile', () => {
 	});
 });
 
+it.each([
+	['a term with a picture', drinks, 'browse-term-7'],
+	['a term on its tint', snacks, 'browse-term-8'],
+	['All products', { kind: 'all' as const }, 'browse-all-products'],
+	['a shortcut', breakfast, 'browse-shortcut-qf-1'],
+])('draws %s as a stack: it opens onto more tiles', (_, term, testID) => {
+	render(<TermTile term={term} onPress={jest.fn()} />);
+	expect(screen.getByTestId(testID).querySelector('[data-testid="poster-stack"]')).not.toBeNull();
+});
+
 describe('ParentTermTile', () => {
 	it('holds the dealt copy only for a picture it shows: a tint deals at once', () => {
 		mockCopyPicture.mockClear();
@@ -196,8 +210,9 @@ describe('ParentTermTile', () => {
 		expect(screen.queryByText(/^\d+ products$/)).toBeNull();
 		const classes = screen.getByTestId('browse-parent').getAttribute('data-class-name')!.split(' ');
 		expect(classes).toContain('grow');
-		// Nothing stacks but a variable product.
-		expect(screen.queryByTestId('poster-stack')).toBeNull();
+		// Every tile that deals is a stack, its slot-0 copy too, fading with the Deal's cards.
+		expect(screen.getByTestId('poster-stack')).toBeTruthy();
+		expect(mockDealCards).toHaveBeenCalled();
 	});
 	it('moves its picture into slot 0 without fading it in again', () => {
 		render(<ParentTermTile term={drinks} onPress={jest.fn()} />);
