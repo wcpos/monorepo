@@ -27,16 +27,14 @@ import {
 import { LineItemsSection } from '../view/sections/line-items';
 import { PaymentSection } from '../view/sections/payment';
 import { POSMetadataSection } from '../view/sections/pos-metadata';
-import { RefundsFallback, RefundsSection, RefundsSkeleton } from '../view/sections/refunds';
+import { RefundsBoundary } from '../view/refunds-boundary';
 import { totalRefunded } from '../view/sections/total-refunded';
 import { TotalsSection } from '../view/sections/totals';
-import { useOrderRefunds } from '../view/use-order-refunds';
 import { OrderStatusBadge } from './cells/status';
 import { OrderActionsMenu } from './order-menu';
 import { InvoiceActions } from './invoice-actions';
 
 type Props = { selected: string; onClose: () => void };
-type OrderPayload = EngineRecord<'orders'>['payload'];
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
 export function OrderPane(props: Props) {
@@ -74,7 +72,6 @@ function OrderPaneContent({
 	const router = useRouter();
 	const { readOnly } = useProAccess();
 	const { format } = useCurrencyFormat({ currencySymbol: payload?.currency_symbol });
-	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
 	const focusClose = React.useCallback((node: ViewInstance | null) => {
 		// The pane is still sliding in when its close button mounts. A plain focus makes the
 		// browser scroll the frame that clips the pane to reveal the button, and the pane jumps.
@@ -158,13 +155,7 @@ function OrderPaneContent({
 				<LineItemsSection order={payload} />
 				<TotalsSection order={payload} />
 				{payload.id ? (
-					<RefundsBoundary
-						key={refundsRetryKey}
-						order={payload}
-						orderUuid={order.uuid}
-						orderId={payload.id}
-						onRetry={() => setRefundsRetryKey((key) => key + 1)}
-					/>
+					<RefundsBoundary order={payload} orderUuid={order.uuid} orderId={payload.id} />
 				) : null}
 				<CustomerNoteSection order={payload} />
 				<CustomerRail order={payload} />
@@ -201,38 +192,5 @@ function OrderPaneContent({
 				)}
 			</View>
 		</>
-	);
-}
-
-function RefundsBoundary({
-	order,
-	orderUuid,
-	orderId,
-	onRetry,
-}: {
-	order: OrderPayload;
-	orderUuid: string;
-	orderId: number;
-	onRetry: () => void;
-}) {
-	const resource = useOrderRefunds(orderId);
-	function RefundsErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
-		return (
-			<RefundsFallback
-				refunds={order.refunds}
-				currencySymbol={order.currency_symbol}
-				onRetry={() => {
-					onRetry();
-					resetErrorBoundary();
-				}}
-			/>
-		);
-	}
-	return (
-		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
-			<React.Suspense fallback={<RefundsSkeleton />}>
-				<RefundsSection order={order} orderUuid={orderUuid} resource={resource} />
-			</React.Suspense>
-		</ErrorBoundary>
 	);
 }
