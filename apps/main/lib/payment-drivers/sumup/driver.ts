@@ -172,10 +172,14 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		loggedIn &&
 		optedIn() &&
 		OFFLINE_READER_MODELS.has(status.reader?.model ?? '');
-	const sessionActive = (sdk: ReturnType<typeof native>) => {
+	// Whether a session runs, and whether this app started one SumUp has not confirmed uploaded
+	// (the native module answers without an SDK call when it has not, so a store that never
+	// opted in pays nothing). Gated on that marker, not the opt-in: a session survives the
+	// setting being turned off.
+	const offlineSession = (sdk: ReturnType<typeof native>) => {
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		return Promise.race([
-			sdk.offlineSessionActive(),
+			sdk.offlineSession(),
 			new Promise<never>((_, reject) => {
 				timer = setTimeout(
 					() => reject(new Error('SumUp did not report its offline session')),
@@ -200,13 +204,12 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			);
 		await permissions();
 		// While a session is active SumUp takes EVERY checkout offline. One starts only when the
-		// till is really offline; any other checkout (an offline-path leg with the network up
-		// included) first has SumUp upload and end it. Only an opted-in store can have one.
-		if (optedIn()) {
-			const active = await sessionActive(sdk);
-			if (input.offline && !online && !active) await sdk.startOfflineSession();
-			if ((!input.offline || online) && active) await sdk.uploadOffline();
-		}
+		// till is really offline (queuesOffline already required the opt-in); any other checkout,
+		// an offline-path leg with the network up included, first has SumUp upload and end it.
+		const session = await offlineSession(sdk);
+		if (input.offline && !online) {
+			if (!session.active) await sdk.startOfflineSession();
+		} else if (session.pending) await sdk.uploadOffline();
 		await sdk.prepareForCheckout().catch(rethrowPermissionError);
 		const checkout = sdk.checkout({
 			amount: input.row.amount,
@@ -270,13 +273,13 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			syncSkipped = true;
 			return;
 		}
-		if (syncing || !online || !loggedIn || !optedIn()) return;
+		if (syncing || !online || !loggedIn) return;
 		syncSkipped = false;
 		syncing = (async () => {
 			try {
 				const sdk = await ready();
-				await sdk.uploadOffline();
-				await sdk.prepareOffline();
+				if ((await offlineSession(sdk)).pending) await sdk.uploadOffline();
+				if (optedIn()) await sdk.prepareOffline();
 			} catch (error) {
 				// The reader is still there; the next reconnect or online payment tries again.
 				publish({ ...status, message: error instanceof Error ? error.message : String(error) });
@@ -313,7 +316,7 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 				// Account changes happen only from the cashier's explicit Connect Reader action.
 				if ((await sdk.isLoggedIn()) && (await sdk.merchant())?.merchantCode !== merchantCode) {
 					// SumUp uploads offline payments only under the account that took them.
-					if (optedIn()) await sdk.uploadOffline();
+					if ((await offlineSession(sdk)).pending) await sdk.uploadOffline();
 					await sdk.logout();
 				}
 				if (!(await sdk.isLoggedIn())) await sdk.login({});

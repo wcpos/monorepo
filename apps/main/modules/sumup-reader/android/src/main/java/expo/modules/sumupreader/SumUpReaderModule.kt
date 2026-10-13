@@ -1,6 +1,7 @@
 package expo.modules.sumupreader
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -60,6 +61,12 @@ class SumUpReaderModule : Module() {
     }
     try { call(settle) } catch (error: Exception) { busy = false; throw error }
   }
+  // Set when this app starts an offline session, cleared once SumUp has its payments: only this
+  // app starts sessions, so without it there is none and no SDK call is needed to say so.
+  private var sessionStarted: Boolean
+    get() = prefs()?.getBoolean("offlineSessionStarted", false) ?: false
+    set(value) { prefs()?.edit()?.putBoolean("offlineSessionStarted", value)?.apply() }
+  private fun prefs() = appContext.reactContext?.getSharedPreferences("wcpos.sumup", Context.MODE_PRIVATE)
   private fun uploadFailure(reason: OfflineUploadFailureReasons): String = when (reason) {
     is OfflineUploadFailureReasons.DifferentMerchant -> "Log in to the SumUp account that took the offline payments to upload them"
     is OfflineUploadFailureReasons.UserNotLoggedIn -> "Log in to SumUp first"
@@ -151,11 +158,13 @@ class SumUpReaderModule : Module() {
       requireSetup()
       SumUpAPI.prepareForCheckout()
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("offlineSessionActive") { promise: Promise ->
-      offline(promise) { settle ->
+    // pending: this app started a session SumUp has not confirmed uploaded; active: it is running.
+    AsyncFunction("offlineSession") { promise: Promise ->
+      if (!sessionStarted) promise.resolve(mapOf("active" to false, "pending" to false))
+      else offline(promise) { settle ->
         SumUpAPI.fetchCurrentOfflineSession(object : OfflineSessionCallback {
           override fun onSessionInfoReceived(state: OfflineSessionState) {
-            settle { resolve(state is OfflineSessionState.ActiveSession) }
+            settle { resolve(mapOf("active" to (state is OfflineSessionState.ActiveSession), "pending" to true)) }
           }
         })
       }
@@ -164,7 +173,7 @@ class SumUpReaderModule : Module() {
       offline(promise) { settle ->
         SumUpAPI.startOfflineSession(object : StartOfflineSessionCallback {
           override fun onResult(result: StartOfflineSessionResult) {
-            if (result is StartOfflineSessionResult.Success || result is StartOfflineSessionResult.SessionInProgress) settle { resolve(null) }
+            if (result is StartOfflineSessionResult.Success || result is StartOfflineSessionResult.SessionInProgress) settle { sessionStarted = true; resolve(null) }
             else settle { reject("ERR_SUMUP_OFFLINE", startFailure(result), null) }
           }
         })
@@ -177,7 +186,7 @@ class SumUpReaderModule : Module() {
         val stop = {
           SumUpAPI.stopOfflineSession(object : StopOfflineSessionCallback {
             override fun onResult(result: StopOfflineSessionResult) {
-              if (result is StopOfflineSessionResult.Success || result is StopOfflineSessionResult.NoActiveSession) settle { resolve(null) }
+              if (result is StopOfflineSessionResult.Success || result is StopOfflineSessionResult.NoActiveSession) settle { sessionStarted = false; resolve(null) }
               else settle { reject("ERR_SUMUP_OFFLINE", "SumUp could not end its offline session", null) }
             }
           })

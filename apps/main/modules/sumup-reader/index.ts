@@ -29,8 +29,11 @@ export type SumUpReader = {
 	readerStatus(): Promise<ReaderStatus | null>;
 	isTipOnReaderAvailable(): Promise<boolean>;
 	prepareForCheckout(): Promise<void>;
-	/** SumUp's offline session (Solo and Solo Lite): while active, EVERY checkout is offline. */
-	offlineSessionActive(): Promise<boolean>;
+	/**
+	 * SumUp's offline session (Solo and Solo Lite): while active, EVERY checkout is offline.
+	 * `pending`: this app started one SumUp has not confirmed uploaded (no SDK call when false).
+	 */
+	offlineSession(): Promise<{ active: boolean; pending: boolean }>;
 	startOfflineSession(): Promise<void>;
 	/** Uploads the stored offline payments and ends the session; rejects if the upload fails. */
 	uploadOffline(): Promise<void>;

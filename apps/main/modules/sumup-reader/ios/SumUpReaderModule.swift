@@ -50,9 +50,10 @@ public class SumUpReaderModule: Module {
     return ["connected": reader.isActive, "serial": reader.serialNumber,
             "model": model(reader.readerType), "battery": reader.batteryLevel]
   }
-  // Set when this app starts an offline session, cleared once SumUp has its payments. iOS
-  // answers "no session" and "unreadable" with the same undocumented error, so this tells them
-  // apart: an error with no session of ours is none; with one, it is treated as live.
+  // Set when this app starts an offline session, cleared once SumUp has its payments: only this
+  // app starts sessions, so without it there is none and no SDK call is needed to say so. With
+  // it, payments may be stored even when SumUp's details call errors (it answers "no session"
+  // and "unreadable" alike), so they are uploaded before any online checkout.
   private static let sessionKey = "wcpos.sumup.offlineSessionStarted"
   private static var sessionStarted: Bool {
     get { UserDefaults.standard.bool(forKey: sessionKey) }
@@ -136,12 +137,14 @@ public class SumUpReaderModule: Module {
       try self.requireSetup()
       SumUpSDK.prepareForCheckout()
     }.runOnQueue(.main)
-    AsyncFunction("offlineSessionActive") { (promise: Promise) in
+    // pending: this app started a session SumUp has not confirmed uploaded; active: it is running.
+    AsyncFunction("offlineSession") { (promise: Promise) in
+      guard Self.sessionStarted else { promise.resolve(["active": false, "pending": false]); return }
       try self.begin()
       SumUpSDK.getOfflineSessionDetails { details, _ in
         DispatchQueue.main.async {
           Self.busy = false
-          promise.resolve(details != nil || Self.sessionStarted)
+          promise.resolve(["active": details != nil, "pending": true])
         }
       }
     }.runOnQueue(.main)
@@ -160,11 +163,12 @@ public class SumUpReaderModule: Module {
       SumUpSDK.getOfflineSessionDetails { details, _ in
         DispatchQueue.main.async {
           let failure = "SumUp could not upload the offline payments; it will try again when online"
-          // After a failed upload the marker stays, so the next sync or online payment retries it.
-          let end = { (clear: Bool, error: Error?) in
+          // After a failed upload the session still ends (no online checkout may run offline) but
+          // the call rejects and the marker stays, so the next sync or online payment retries it.
+          let end = { (uploaded: Bool, error: Error?) in
             SumUpSDK.endOfflineSession { ended, endError in
-              if ended && clear { DispatchQueue.main.async { Self.sessionStarted = false } }
-              self.finish(promise, ended, error ?? endError, failure)
+              if ended && uploaded { DispatchQueue.main.async { Self.sessionStarted = false } }
+              self.finish(promise, ended && uploaded, error ?? endError, failure)
             }
           }
           if details == nil && !Self.sessionStarted { self.finish(promise, true, nil, failure); return }
