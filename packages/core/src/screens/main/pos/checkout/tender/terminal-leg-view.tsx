@@ -15,6 +15,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { describeEvent, type EventTone, failureReasonLabel, providerErrorMessage } from './labels';
 import { CapturedUnfinishedNotice } from './captured-unfinished-notice';
 import { useDriverStatus } from './use-driver-status';
+import { readerName } from '../../../settings/card-readers/reader-name';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useTheme } from '../../../../../contexts/theme';
 import { useT } from '../../../../../contexts/translations';
@@ -43,7 +44,11 @@ export function TerminalLegView({
 		hardware && 'readers' in hardware
 			? hardware.readers.find(({ id }) => id === readerId)
 			: undefined;
-	const readerLabel = reader?.label ?? readerId;
+	// One name app-wide: a Tap to Pay reader is "This device", as in Settings and the pay sheet.
+	const readerLabel =
+		row.transport === 'tap_to_pay'
+			? readerName({ label: readerId, transport: 'tap_to_pay' }, t)
+			: (reader?.label ?? readerId);
 	const driverStatus = useDriverStatus(
 		row.capture_mode === 'device' ? getDriver(row.provider) : undefined
 	);
@@ -59,8 +64,17 @@ export function TerminalLegView({
 				? 1
 				: 0;
 	const [currentStep, setCurrentStep] = React.useState(step);
+	const legReason = 'failureReason' in leg ? leg.failureReason : null;
+	// Confirming a cancel or a reader time-out is the void, not an approval: keep "On terminal".
+	const notApproved = legReason === 'timed_out' || legReason === 'cancelled';
 	// Final/cancelling snapshots drop the previous phase; retain the last visible step.
-	if (!final && leg.phase !== 'cancelling' && !leg.cancelRequested && step !== currentStep) {
+	if (
+		!final &&
+		leg.phase !== 'cancelling' &&
+		!leg.cancelRequested &&
+		!notApproved &&
+		step !== currentStep
+	) {
 		setCurrentStep(step);
 	}
 	const steps = [
@@ -72,15 +86,16 @@ export function TerminalLegView({
 	const failed = final && leg.outcome === 'failed';
 	// Nobody lost money on a cancel, a time-out or a release: the mark is grey, not red.
 	const ended = final && (leg.outcome === 'voided' || leg.outcome === 'released');
-	const failureReason = row.failure_reason ?? ('failureReason' in leg ? leg.failureReason : null);
+	const failureReason = row.failure_reason ?? legReason;
 	const reason = providerErrorMessage(leg.error) ?? failureReasonLabel(failureReason, t);
 	let status = t('pos_checkout.waiting_for_terminal');
 	let action: 'cancel' | 'capture' | 'cancelling' | 'release' | 'final' | 'none' = 'cancel';
 	if (final && ['failed', 'voided', 'released'].includes(leg.outcome ?? '')) {
+		// Timed out: the till's deadline, or the reader's own collect window running out.
 		status = failed
 			? t('pos_checkout.payment_failed_reason', { reason })
 			: leg.outcome === 'voided'
-				? leg.deadlineHandled
+				? leg.deadlineHandled || failureReason === 'timed_out'
 					? t('pos_checkout.payment_timed_out')
 					: t('pos_checkout.payment_cancelled_on_terminal')
 				: t('pos_checkout.payment_released');

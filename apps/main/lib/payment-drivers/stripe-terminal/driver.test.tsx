@@ -477,6 +477,17 @@ it('adopts a reader the SDK already holds once the hook carries it (connected be
 	expect(driver.status$.get().connection).toBe('connected');
 });
 
+// Tap to Pay on a Pixel 10 (2026-10-13): the SDK's 60 s collect window ran out with no card and
+// the till showed a red "reader_error" until the timeout was read as a timed-out payment.
+it('maps the SDK collect timeout to a timed-out cancel, not a reader error', async () => {
+	api.collectPaymentMethod.mockResolvedValue({
+		error: { code: 'CARD_READ_TIMED_OUT', message: 'Transaction timed out.' },
+	});
+	await expect(driver.collect(input)).resolves.toMatchObject({
+		outcome: 'cancelled',
+		failure_reason: 'timed_out',
+	});
+});
 it('a decline with neither a code nor a message still names a reason', async () => {
 	api.confirmPaymentIntent.mockResolvedValue({
 		error: { code: 'DECLINED_BY_STRIPE_API', declineCode: '', message: '' },

@@ -241,10 +241,14 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 									},
 								}
 							: {
+									// A reader time-out (its own collect window ran out) voids as `timed_out`:
+									// nobody at the till cancelled it.
 									reason:
 										result?.outcome === 'declined'
 											? (result.failure_reason ?? 'card_declined')
-											: cancelReason,
+											: result?.failure_reason === 'timed_out'
+												? 'timed_out'
+												: cancelReason,
 								}
 					);
 				} finally {

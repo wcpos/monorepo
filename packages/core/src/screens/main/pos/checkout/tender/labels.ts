@@ -70,6 +70,8 @@ const FAILURE_KEYS: Record<string, string> = {
 	reader_session_lost: 'pos_checkout.reader_session_lost',
 	card_declined: 'pos_checkout.reason_card_declined',
 	expired: 'pos_checkout.reason_expired',
+	// The reader's own collect window ran out with no card presented (Stripe CARD_READ_TIMED_OUT).
+	timed_out: 'pos_checkout.reason_timed_out',
 	cancelled: 'pos_checkout.reason_cancelled',
 	// A provider that reports a declined card and a cancel on the reader identically (SumUp:
 	// both are FAILED with no reason) must not be read back to the cashier as a cancel.
