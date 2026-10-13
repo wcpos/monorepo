@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +12,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Active } from './cells/active';
@@ -41,12 +40,13 @@ import { useMutation } from '../hooks/mutations/use-mutation';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
-	useCollectionBinding,
+	useCollectionQueryHandle,
+	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
 
-import type { QueryStateActions, QueryStateOf } from '../../../query';
+import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CouponRow = { record: EngineRecord<'coupons'> };
@@ -94,10 +94,21 @@ function getInitialCouponSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function CouponsList({ binding }: { binding: ReturnType<typeof useCollectionBinding<'coupons'>> }) {
+// The list re-renders for the answer only; the table and the footer read their own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
+function CouponsList({
+	handle,
+}: {
+	/** The coupons query handle (roadmap#423): the list and its table read its snapshot. */
+	handle: QueryHandle;
+}) {
 	const state = useQueryState<'coupons'>();
 	const actions = useQueryStateActions<'coupons'>();
-	const result = useObservableSuspense(binding.resource);
+	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
+	// query keeps the current rows while the new handle answers (`useDeferredValue(handle)`).
+	const shown = React.useDeferredValue(handle);
+	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
 	const emptyStore = !state.search && Object.keys(state.filters).length === 0;
@@ -139,13 +150,9 @@ function CouponsList({ binding }: { binding: ReturnType<typeof useCollectionBind
 				<DataTable<CouponRow>
 					id="coupons"
 					collectionName="coupons"
-					binding={binding}
-					resource={binding.resource}
+					handle={handle}
 					sort={state.sort}
 					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
 					cells={cells}
 					estimatedItemSize={56}
 					tableConfig={tableConfig}
@@ -189,15 +196,17 @@ function CouponsList({ binding }: { binding: ReturnType<typeof useCollectionBind
 /** The list: the part of the page the Free preview overlay covers. */
 function CouponsBody() {
 	const state = useQueryState<'coupons'>();
-	const binding = useCollectionBinding('coupons', state);
+	const handle = useCollectionQueryHandle('coupons', state);
 	return (
 		<View testID="coupons-body" className="flex-1">
 			<ErrorBoundary>
 				<FilterBar />
 			</ErrorBoundary>
-			<ErrorBoundary>
+			{/* A failed coupons read is thrown here; the fallback's reset asks the handle again, and
+			    a changed query (its handle is new) clears the fallback on its own. */}
+			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 				<Suspense fallback={<DataTableSkeleton id="coupons" />}>
-					<CouponsList binding={binding} />
+					<CouponsList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
 		</View>
