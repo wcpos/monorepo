@@ -170,8 +170,9 @@ function CustomersBody() {
 	const handle = useCollectionQueryHandle('customers', state);
 	return (
 		<View testID="customers-body" className="flex-1">
-			{/* A failed customers read is thrown here; the fallback's reset asks the handle again. */}
-			<ErrorBoundary onReset={() => handle.retry()}>
+			{/* A failed customers read is thrown here; the fallback's reset asks the handle again,
+			    and a changed query (its handle is new) clears the fallback on its own. */}
+			<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
 				<Suspense fallback={<DataTableSkeleton id="customers" />}>
 					<CustomersList handle={handle} />
 				</Suspense>

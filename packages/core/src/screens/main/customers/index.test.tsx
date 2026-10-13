@@ -82,9 +82,18 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/error-boundary', () => {
 	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
 	return {
-		ErrorBoundary: ({ children, onReset }: { children: React.ReactNode; onReset?: () => void }) => (
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
 			<ErrorBoundary
 				onReset={onReset}
+				resetKeys={resetKeys}
 				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
 					<button data-testid="customers-error-reset" onClick={() => resetErrorBoundary()} />
 				)}
@@ -412,6 +421,28 @@ it('throws a failed read to the boundary, whose reset asks the handle again and 
 				},
 			})
 		);
+		expect(screen.getByTestId('customers-row-one')).toBeTruthy();
+	} finally {
+		consoleError.mockRestore();
+		mockHandle = original;
+		mockPointer = 'fine';
+	}
+});
+it('clears the fallback on its own when the query changes after a failed read', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+	try {
+		render(<CustomersScreen />);
+		expect(screen.getByTestId('customers-error-reset')).toBeTruthy();
+		// A search from the bar outside the boundary: a new handle, answered.
+		mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
+		await act(async () => {
+			fireEvent.change(screen.getByTestId('search-customers'), { target: { value: 'ada' } });
+			jest.advanceTimersByTime(250);
+		});
+		expect(screen.queryByTestId('customers-error-reset')).toBeNull();
 		expect(screen.getByTestId('customers-row-one')).toBeTruthy();
 	} finally {
 		consoleError.mockRestore();
