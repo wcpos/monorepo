@@ -322,6 +322,12 @@ export function createStripeTerminalDriver({
 			if (api && !sdk) publish({ message: null });
 			sdk = api;
 			if (api) {
+				// The SDK reports "connected" before the hook has its `connectedReader` (a reader
+				// held across a JS reload, Pixel 10, 2026-10-13): the status then says connected
+				// with no reader, and the pay sheet re-discovers (drops and re-pairs) it. Adopt
+				// the reader as soon as the hook carries it.
+				if (status.connection === 'connected' && !status.reader && api.connectedReader)
+					connected(api.connectedReader);
 				bindings.forEach((bind) => bind(api));
 			} else lastMethodId = undefined;
 		},

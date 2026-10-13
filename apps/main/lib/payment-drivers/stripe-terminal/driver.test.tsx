@@ -467,6 +467,16 @@ it.each([
 		failure_reason: error.declineCode || error.apiError?.declineCode || 'declined',
 	});
 });
+it('adopts a reader the SDK already holds once the hook carries it (connected before connectedReader)', () => {
+	// A JS reload: the SDK says "connected" first, the hook's `connectedReader` lands on a later
+	// render. The status must end up with the reader, or the pay sheet re-pairs it.
+	driver.callbacks.onDidChangeConnectionStatus('connected');
+	expect(driver.status$.get()).toMatchObject({ connection: 'connected', reader: null });
+	driver.bindSdk({ ...api, connectedReader: rawReader } as unknown as Sdk);
+	expect(driver.status$.get().reader?.id).toBe(reader.serialNumber);
+	expect(driver.status$.get().connection).toBe('connected');
+});
+
 it('rejects SDK and unexpected thrown errors instead of inventing outcomes', async () => {
 	api.confirmPaymentIntent.mockResolvedValueOnce({
 		error: { code: 'NetworkError', message: 'network unavailable' },
