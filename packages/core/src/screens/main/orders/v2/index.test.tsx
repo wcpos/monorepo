@@ -351,6 +351,48 @@ it('uses the orders skeleton while the binding resource is unresolved', () => {
 		mockHandle = original;
 	}
 });
+it('keeps the current rows, not the skeleton, while a changed query’s handle answers, then shows its rows', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	const row = (id: string) => ({
+		id,
+		record: { uuid: id, payload: { number: id, date_created_gmt: '2026-09-17T01:00:00' } },
+	});
+	mockHandle = fakeQueryHandle({
+		result: { hits: [row('one')], searchActive: false, searchState: 'answered' },
+		total: 27,
+	});
+	try {
+		render(<OrdersScreen />);
+		expect(screen.getByTestId('orders-row-one')).toBeTruthy();
+		// The query changes (a header sort): the screen asks for a new handle, unanswered.
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		act(() =>
+			(
+				mockDataTableProps.actions as { setSort: (field: string, direction: string) => void }
+			).setSort('total', 'asc')
+		);
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith(
+			'orders',
+			expect.objectContaining({ sort: { field: 'total', direction: 'asc' } })
+		);
+		// The old rows stay; no skeleton.
+		expect(screen.getByTestId('orders-row-one')).toBeTruthy();
+		expect(screen.queryByTestId('skeleton-orders')).toBeNull();
+		await act(async () =>
+			next.set({
+				ready: true,
+				result: { hits: [row('two')], searchActive: false, searchState: 'answered' },
+			})
+		);
+		expect(screen.getByTestId('orders-row-two')).toBeTruthy();
+		expect(screen.queryByTestId('orders-row-one')).toBeNull();
+	} finally {
+		mockHandle = original;
+	}
+});
+
 it('keeps rows and shows the searching line only for pending results with rows', () => {
 	const original = mockHandle;
 	const source = {
