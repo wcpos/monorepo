@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { type QueryHandle, queryHandleAnswers$ } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 const logger = getLogger(['wcpos', 'pos', 'variations-popover']);
@@ -25,37 +26,33 @@ export const VARIATION_SYNC_RETRY_DELAYS_MS = [3000, 10000];
 // few seconds) and well inside the E2E flow's 20 s option-tap windows.
 export const VARIATION_SYNC_SETTLE_TIMEOUT_MS = 15000;
 
-type RefreshBinding = { sync(): Promise<unknown> };
-type ResultStream = {
-	result$?: { subscribe(next: (result: { count: number }) => void): { unsubscribe(): void } };
-};
-
 /**
- * Refresh a variations binding once per mount without blocking locally resident
+ * Refresh a variations handle once per mount without blocking locally resident
  * variations, then retry (bounded, logged) while no variation has materialized. The
  * popover has carried this since #1729/#1731; the drill-in pane (roadmap#388) shares it
  * so the default flow recovers from the same live failure.
  */
-export function useVariationsRefresh(binding: RefreshBinding) {
-	const initialBinding = React.useRef(binding);
+export function useVariationsRefresh(handle: QueryHandle) {
+	const initialHandle = React.useRef(handle);
 	React.useEffect(() => {
-		const openBinding = initialBinding.current;
-		// Unknown until the binding reports. An UNKNOWN count is retryable: a live
+		const openHandle = initialHandle.current;
+		// Unknown until the handle reports. An UNKNOWN count is retryable: a live
 		// query can delay its first emission while sync() hangs, and treating -1 as
 		// "variations present" would silence the settle timeout - the exact zero-log
 		// signature this effect exists to kill (CodeRabbit, #1731).
 		let variationCount = -1;
-		const subscription = (openBinding as RefreshBinding & ResultStream).result$?.subscribe(
-			(result) => {
-				variationCount = result.count;
-			}
-		);
+		// Every answer, failures skipped: a read that fails and is retried (the boundary's
+		// reset) still reports its count here, where a throwing stream would close for good.
+		const subscription = queryHandleAnswers$(openHandle).subscribe((result) => {
+			// `count` is optional on a result; the hits are what materialized.
+			variationCount = result.count ?? result.hits.length;
+		});
 		let cancelled = false;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let attempt = 0;
 		let settleTimer: ReturnType<typeof setTimeout> | undefined;
 		const attemptSync = () => {
-			// A retry timer scheduled while the count was 0 can fire AFTER result$
+			// A retry timer scheduled while the count was 0 can fire AFTER the handle
 			// reported variations - skip the redundant refresh (CodeRabbit, #1729).
 			if (cancelled || (attempt > 0 && variationCount > 0)) return;
 			attempt += 1;
@@ -78,7 +75,7 @@ export function useVariationsRefresh(binding: RefreshBinding) {
 				timer = setTimeout(attemptSync, delay);
 			};
 			settleTimer = setTimeout(() => proceed(true), VARIATION_SYNC_SETTLE_TIMEOUT_MS);
-			void openBinding
+			void openHandle
 				.sync()
 				.catch(() => undefined)
 				.then(() => proceed(false));
@@ -88,7 +85,7 @@ export function useVariationsRefresh(binding: RefreshBinding) {
 			cancelled = true;
 			if (timer !== undefined) clearTimeout(timer);
 			if (settleTimer !== undefined) clearTimeout(settleTimer);
-			subscription?.unsubscribe();
+			subscription.unsubscribe();
 		};
 	}, []);
 }

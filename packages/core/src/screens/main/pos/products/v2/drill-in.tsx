@@ -78,7 +78,12 @@ export function DrillIn({
 					initialSort={{ field: 'name', direction: 'asc' }}
 					initialFilters={{ status: 'publish' }}
 				>
+					{/* Keyed by product: the PaneStack reuses its detail across a pop and a tap on
+					    another product mid-slide, which would draw the first product's rows (the
+					    pane's stale-while-loading) under the second one's crumb until it answered.
+					    The dealt grid is already remounted per deal. */}
 					<VariationsPane
+						key={parent.uuid}
 						parent={parent}
 						stockStatus={stockStatus}
 						back={tiles ? back : undefined}

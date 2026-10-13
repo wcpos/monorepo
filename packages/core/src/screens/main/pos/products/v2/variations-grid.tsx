@@ -1,55 +1,57 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
-import { of } from 'rxjs';
 
 import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useDocField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { useQueryHandleFields } from '../../../../../query';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { DealCell, DealFade, FRONT, type Measurable, useAirspace, useDeal } from './deal-stack';
-import { ProductsFooter } from './footer';
+import { HandleProductsFooter } from './handle-footer';
 import { ParentTile, VariationPlaceholder, VariationTile } from './grid/variation-tile';
 
-import type { useCollectionBinding } from '../../../../../query';
+import type { SnapshotFields } from '../../../../../query';
 import type { GridFields } from './grid/product-tile';
 
-type Binding = ReturnType<typeof useCollectionBinding<'variations'>>;
 type Hit = { record: EngineRecord<'variations'> };
 
+const TOTAL_FIELD: SnapshotFields = ['total'];
+const ACTIVE_FIELD: SnapshotFields = ['active'];
+
 function VariationsFooter({
-	binding,
+	handle,
 	name,
 	parentCount,
 	shownCount,
 }: {
-	binding: Binding;
+	handle: QueryHandle;
 	name?: string;
 	parentCount: number | undefined;
 	shownCount: number;
 }) {
 	const t = useT();
-	// The parent is the denominator, floored at resident count; absent lists use the binding total.
-	const total$ = React.useMemo(
-		() => (parentCount === undefined ? binding.total$ : of(Math.max(parentCount, shownCount))),
-		[parentCount, shownCount, binding.total$]
-	);
+	// One unconditional read (hooks run every render): the footer re-renders for the answer
+	// and for `total`, used only when the parent lists no variations.
+	const { ready, total: handleTotal } = useQueryHandleFields(handle, TOTAL_FIELD);
+	// The parent is the denominator, floored at resident count; an absent list uses the
+	// handle's total, and only once it has answered (no denominator before the first answer).
+	const total =
+		parentCount === undefined ? (ready ? handleTotal : null) : Math.max(parentCount, shownCount);
 	return (
-		<ProductsFooter
+		<HandleProductsFooter
 			collectionName="variations"
-			active$={binding.active$}
-			total$={total$}
-			sync={binding.sync}
+			handle={handle}
+			total={total}
 			count={shownCount}
 		>
 			<Text className="text-muted-foreground text-sm" numberOfLines={1}>
 				{t('pos_products.n_variations_of', { count: parentCount ?? shownCount, name })}
 			</Text>
-		</ProductsFooter>
+		</HandleProductsFooter>
 	);
 }
 
@@ -61,13 +63,13 @@ function VariationsFooter({
 export function VariationsGrid({
 	parent,
 	back,
-	binding,
+	handle,
 	hits,
 	stockStatus,
 }: {
 	parent: EngineRecord<'products'>;
 	back: () => void;
-	binding: Binding;
+	handle: QueryHandle;
 	/** `undefined` until the query has answered. */
 	hits: Hit[] | undefined;
 	stockStatus?: string;
@@ -92,9 +94,8 @@ export function VariationsGrid({
 	// A cold drill-in answers empty at once and fills in when the refresh returns. While that
 	// refresh runs, every variation the parent lists and the query has not produced keeps a
 	// placeholder slot: the deal goes out complete, and the tiles land in slots already there.
-	// The binding's own activity flag (a plain observable, as the footer reads it).
-	const { active$ } = binding;
-	const refreshing = useObservableEagerState(active$);
+	// The handle's own activity flag, read without suspending: the grid never suspends.
+	const { active: refreshing } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const awaited =
 		hits === undefined || refreshing ? Math.max(0, (parentCount ?? 0) - (hits?.length ?? 0)) : 0;
 	const slots: (EngineRecord<'variations'> | null)[] = [
@@ -153,7 +154,7 @@ export function VariationsGrid({
 			</View>
 			<DealFade>
 				<VariationsFooter
-					binding={binding}
+					handle={handle}
 					name={name}
 					parentCount={parentCount}
 					shownCount={shownCount}

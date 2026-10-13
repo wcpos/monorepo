@@ -1,14 +1,12 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
-
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
@@ -21,19 +19,28 @@ import {
 	removeVariationMatch,
 	setVariationMatch,
 } from '../../../../components/product/variation-matches';
-import { useQueryState, useQueryStateActions } from '../../../../../../query';
+import {
+	useDrawnHandle,
+	useQueryHandleFields,
+	useQuerySnapshot,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../../../../query';
+
+import type { SnapshotFields } from '../../../../../../query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 
+// The readers re-render for the answer; the syncing hint alone follows `active`.
+const ANSWER_ONLY: SnapshotFields = [];
+const ACTIVE_FIELD: SnapshotFields = ['active'];
+
 interface VariationPopoverProps {
-	binding: Pick<
-		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
-		'resource' | 'active$'
-	>;
-	allVariationsResource?: ReturnType<
-		typeof import('../../../../../../query').useCollectionBinding<'variations'>
-	>['resource'];
+	/** The variations matching the picked attributes. */
+	handle: QueryHandle;
+	/** Every variation of the parent, for greying out options; `handle` when omitted. */
+	allVariationsHandle?: QueryHandle;
 	parent: EngineRecord<'products'>;
 	addToCart: (
 		variation: EngineRecord<'variations'>,
@@ -47,24 +54,35 @@ interface VariationPopoverProps {
  *
  */
 export function Variations({
-	binding,
-	allVariationsResource,
+	handle,
+	allVariationsHandle,
 	parent,
 	addToCart,
 	stockStatus,
 }: VariationPopoverProps) {
-	const result = useObservableSuspense(binding.resource);
-	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
+	// A pick is a new query: the previous answer stays drawn while it answers, never the
+	// popover's empty fallback (which React would hold for 300 ms) on every tap.
+	const shown = useDrawnHandle(handle);
+	// The drawn answer belongs to the previous pick while the new one settles.
+	const settling = shown !== handle;
+	const result = useQuerySnapshot(shown, ANSWER_ONLY).result;
+	const allVariationsResult = useQuerySnapshot(
+		useDrawnHandle(allVariationsHandle ?? handle),
+		ANSWER_ONLY
+	).result;
 	const hits = result.hits as { record: EngineRecord<'variations'> }[];
 	const allVariationHits = allVariationsResult.hits as { record: EngineRecord<'variations'> }[];
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const loading = useObservableEagerState(binding.active$);
+	const { active: loading } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	const selectedAttributes = useQueryState<
 		'variations',
 		import('../../../../../../query').VariationMatch[]
 	>((state) => state.filters.attributeMatches);
 	const actions = useQueryStateActions<'variations'>();
-	const selectedVariation = result.count === 1 && hits[0].record;
+	// The variation on show is the drawn answer's match. It is not the one to add while the pick
+	// settles: that would add the previous match under the new pick's attribute meta. The
+	// button stays in place (no jump per tap), disabled until the pick's own answer lands.
+	const matchedVariation = result.count === 1 && hits[0].record;
+	const selectedVariation = !settling && matchedVariation;
 	const parentAttributes = useRecordField(parent, (record) => record.payload.attributes);
 	const t = useT();
 	// The add is a local write that normally settles in milliseconds, but the
@@ -166,11 +184,12 @@ export function Variations({
 					})}
 				</VStack>
 			</ScrollView>
-			{selectedVariation ? (
+			{matchedVariation ? (
 				<VariationAddToCart
-					variation={selectedVariation}
+					variation={matchedVariation}
 					parent={parent}
 					adding={adding}
+					settling={settling}
 					onAddToCart={handleAddToCart}
 				/>
 			) : result.count === 0 ? (
@@ -212,11 +231,14 @@ function VariationAddToCart({
 	variation,
 	parent,
 	adding,
+	settling,
 	onAddToCart,
 }: {
 	variation: EngineRecord<'variations'>;
 	parent: EngineRecord<'products'>;
 	adding: boolean;
+	/** The pick's own answer has not landed: `variation` is the previous pick's match. */
+	settling: boolean;
 	onAddToCart: () => void;
 }) {
 	const stock = useVariationStock(variation, parent);
@@ -233,7 +255,7 @@ function VariationAddToCart({
 				testID="variation-popover-add-to-cart"
 				onPress={onAddToCart}
 				loading={adding}
-				disabled={preventOverselling === true && !stock.sellable}
+				disabled={settling || (preventOverselling === true && !stock.sellable)}
 			>
 				<ButtonText>{t('common.add_to_cart') + ': ' + format(Number(price ?? 0))}</ButtonText>
 			</Button>
