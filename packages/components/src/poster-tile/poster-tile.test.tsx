@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { PosterTile, type PosterTileProps } from './index';
+import { PosterTile, type PosterTileProps, SCRIM_REACH, SCRIM_STOPS } from './index';
 
 let mockPressed = false;
 // Keep RNW's Pressable (press, ref); expose classes because Jest does not compile Uniwind.
@@ -122,8 +122,12 @@ it('blurs the picture under the words on web, masked by the same fade, and not o
 	const { rerender } = render(tile({ title: 'Tea' }));
 	const blur = JSON.parse(screen.getByTestId('poster-scrim-blur').dataset.style!);
 	expect(blur.backdropFilter).toBe('blur(6px)');
-	expect(blur.maskImage).toMatch(
-		/^linear-gradient\(to bottom, rgb\(0 0 0 \/ 0\) 0px, .*#000 100%\)$/
+	// Every stop, at its position: the same thirteen as the tint, as alpha.
+	expect(blur.maskImage).toBe(
+		`linear-gradient(to bottom, ${[
+			...SCRIM_STOPS.map(([at, of]) => `rgb(0 0 0 / ${of}) ${at * SCRIM_REACH}px`),
+			'#000 100%',
+		].join(', ')})`
 	);
 	rerender(tile({ picture: { kind: 'tint', tint: 1 }, title: 'Tea' }));
 	expect(screen.queryByTestId('poster-scrim-blur')).toBeNull();
