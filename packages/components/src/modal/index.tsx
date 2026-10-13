@@ -129,9 +129,12 @@ function ModalAction({
 function ModalOverlayWeb({
 	className,
 	side = 'center',
+	// Native-only (the wrappers that must fill a full-size phone modal); kept off the DOM.
+	fill: _fill,
 	...props
 }: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
 	side?: ModalSide;
+	fill?: boolean;
 }) {
 	const { onClose } = useRootContext();
 	// Radix adds a content wrapper; SCRIM_WRAPPER sizes it as the panel's box (never
@@ -161,12 +164,16 @@ function ModalOverlayNative({
 	className,
 	children,
 	side = 'center',
+	fill = false,
 	...props
 }: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
 	side?: ModalSide;
+	/** A full-size phone modal: the keyboard and motion wrappers must fill the screen too. */
+	fill?: boolean;
 }) {
 	const { onClose } = useRootContext();
 	const fullHeight = side === 'left' || side === 'right';
+	const wrapperClass = fullHeight ? 'h-full' : fill ? 'h-full w-full' : undefined;
 	const insets = useSafeAreaInsets();
 
 	/**
@@ -204,13 +211,9 @@ function ModalOverlayNative({
 			<KeyboardAvoidingView
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
-				className={fullHeight ? 'h-full' : undefined}
+				className={wrapperClass}
 			>
-				<Animated.View
-					entering={entering[side]}
-					exiting={exiting[side]}
-					className={fullHeight ? 'h-full' : undefined}
-				>
+				<Animated.View entering={entering[side]} exiting={exiting[side]} className={wrapperClass}>
 					<>{children}</>
 				</Animated.View>
 			</KeyboardAvoidingView>
@@ -265,6 +268,7 @@ function ModalContent({
 	return (
 		<ModalOverlay
 			side={side}
+			fill={fullScreen}
 			className={fullScreen ? 'bg-card items-stretch justify-start p-0' : undefined}
 		>
 			<Content
@@ -273,7 +277,7 @@ function ModalContent({
 					side === 'center'
 						? 'web:cursor-default border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
 						: 'z-50',
-					fullScreen && 'h-full w-full max-w-full flex-1 rounded-none border-0 shadow-none',
+					fullScreen && 'h-full w-full max-w-full rounded-none border-0 shadow-none',
 					OVERLAY_MOTION[side].enter,
 					className
 				)}
