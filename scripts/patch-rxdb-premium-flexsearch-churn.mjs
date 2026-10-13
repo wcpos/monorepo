@@ -215,19 +215,19 @@ export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearc
 export const DISTS = [
 	{
 		dist: 'esm',
-		liveBefore: 's.add(e.id,e.searchable)',
+		liveBefore: 'r.add(e.id,e.searchable)',
 		replayBefore: 'o.add(e.id,e.searchable)',
-		pipelineBefore: 'l=await a.collection.addPipeline({destination:s,',
-		destination: 's',
-		appendBefore: 'i.push({id:o,searchable:r})}var l=',
+		pipelineBefore: 'l=await t.collection.addPipeline({destination:r,',
+		destination: 'r',
+		appendBefore: 'i.push({id:o,searchable:n})}var l=',
 	},
 	{
 		dist: 'cjs',
-		liveBefore: 'n.add(e.id,e.searchable)',
+		liveBefore: 's.add(e.id,e.searchable)',
 		replayBefore: 'l.add(e.id,e.searchable)',
-		pipelineBefore: 'h=await e.collection.addPipeline({destination:c,',
-		destination: 'c',
-		appendBefore: 'i.push({id:s,searchable:n})}var o=',
+		pipelineBefore: 'h=await e.collection.addPipeline({destination:n,',
+		destination: 'n',
+		appendBefore: 'i.push({id:o,searchable:s})}var c=',
 	},
 ].map(({ dist, liveBefore, replayBefore, pipelineBefore, appendBefore, destination }) => ({
 	dist,

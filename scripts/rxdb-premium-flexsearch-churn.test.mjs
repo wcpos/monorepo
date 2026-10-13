@@ -14,9 +14,9 @@ import { getCheckpointDoc, RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import {
+	wcposChangedSearchEntries as changedSearchEntries,
 	DISTS,
 	indexSearchText,
-	wcposChangedSearchEntries as changedSearchEntries,
 	MARKER,
 	PRELUDE,
 	preparePatch,
@@ -89,6 +89,7 @@ function loadPlugin(dist, source = patchedSource(dist), strict = false) {
 	const modules = {
 		'rxdb/plugins/core': core,
 		'./schema.js': schema,
+		'@babel/runtime/helpers/defineProperty': require('@babel/runtime/helpers/defineProperty'),
 		rxjs,
 		flexsearch: FlexSearch,
 		'@babel/runtime/helpers/interopRequireDefault': (value) => ({ default: value }),
@@ -97,11 +98,11 @@ function loadPlugin(dist, source = patchedSource(dist), strict = false) {
 		source = source
 			.replace('import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;')
 			.replace(
-				'import{getFlexsearchIndexSchema as t}from"./schema.js";',
-				'var t=schema.getFlexsearchIndexSchema;'
+				'import{getFlexsearchIndexSchema as a}from"./schema.js";',
+				'var a=schema.getFlexsearchIndexSchema;'
 			)
-			.replace('import{filter as a,mergeMap as i}from"rxjs";', 'var a=rxjs.filter,i=rxjs.mergeMap;')
-			.replace('import n from"flexsearch";', 'var n=FlexSearch;')
+			.replace('import{filter as t,mergeMap as i}from"rxjs";', 'var t=rxjs.filter,i=rxjs.mergeMap;')
+			.replace('import s from"flexsearch";', 'var s=FlexSearch;')
 			.replaceAll('export ', '');
 		source += ';Object.assign(exports,{RxFulltextSearch,addFulltextSearch});';
 	}

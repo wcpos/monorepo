@@ -66,11 +66,28 @@ function effectiveRows(collectionDir: string, indexId: number): IndexRow[] {
 		join(collectionDir, `index-${String(indexId).padStart(5, '0')}.txt`),
 		'utf8'
 	).trim();
-	const rows: IndexRow[] = raw ? JSON.parse(raw) : [];
+	// Since rxdb-premium 17.6.0 a cleanup persists `{changelogEpoch, changelogOperations, rows}`;
+	// a rebuild or a legacy file is still the bare row array.
+	const parsedIndex = raw ? JSON.parse(raw) : [];
+	const rows: IndexRow[] = Array.isArray(parsedIndex) ? parsedIndex : parsedIndex.rows;
 	const changelog = readFileSync(join(collectionDir, 'changelog.txt'), 'utf8');
-	const ops: ChangelogOp[] = changelog.trim() ? JSON.parse(`[${changelog}]`) : [];
+	// 17.6.0 also opens the changelog with an `{e: epoch}` header element; operations are arrays.
+	const entries: unknown[] = changelog.trim() ? JSON.parse(`[${changelog}]`) : [];
+	const header = entries[0];
+	const epoch = header && !Array.isArray(header) ? (header as { e?: string }).e : undefined;
+	const ops = entries.filter(Array.isArray) as ChangelogOp[];
+	// The same skip the storage applies on open: rows persisted under the changelog's current
+	// epoch already contain that index's first `changelogOperations` operations.
+	let alreadyApplied =
+		!Array.isArray(parsedIndex) && epoch && parsedIndex.changelogEpoch === epoch
+			? Number(parsedIndex.changelogOperations) || 0
+			: 0;
 	for (const [opIndexId, position, type, row] of ops) {
 		if (opIndexId !== indexId) continue;
+		if (alreadyApplied > 0) {
+			alreadyApplied -= 1;
+			continue;
+		}
 		if (type === 'A') rows.splice(Math.min(position, rows.length), 0, row);
 		else if (type === 'D' && position < rows.length) rows.splice(position, 1);
 		else if (type === 'R' && position < rows.length) rows[position] = row;
