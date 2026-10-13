@@ -41,6 +41,8 @@ Object.assign(jest.requireMock('react-native'), {
 });
 jest.requireMock('react-native-reanimated').default.View = Part;
 jest.requireMock('../keyboard-controller').KeyboardAvoidingView = Part;
+// The native shell reads the keyboard's state for its bottom sheet; these suites keep it hidden.
+jest.requireMock('../keyboard-controller').useKeyboardState = () => false;
 jest.requireMock('../text').Text = Part;
 function IconMock({ name, className }: { name: string; className?: string }) {
 	return <span data-icon={name} className={className} />;
