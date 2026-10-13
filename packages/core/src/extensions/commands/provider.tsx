@@ -78,7 +78,7 @@ export function CommandsProvider({ children }: { children: React.ReactNode }) {
 				},
 				void: () => invokeSurface('void'),
 			}),
-			focus: (target: 'search' | 'discount') => invokeSurface(target),
+			focus: (target: 'search' | 'discount' | 'help') => invokeSurface(target),
 			hasSurface,
 			screen: Object.freeze({ route, hasOpenOrder, openOrderCount, lineCount }),
 		});

@@ -6,7 +6,11 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { OpenOrders } from './index';
-import { invokeSurface, SurfaceNotMountedError } from '../../../../extensions/commands/surfaces';
+import {
+	hasSurface,
+	invokeSurface,
+	SurfaceNotMountedError,
+} from '../../../../extensions/commands/surfaces';
 
 let mockPosition = 'bottom';
 let mockIsNew = false;
@@ -205,4 +209,26 @@ it('registers the void path as the void surface while the column is mounted, she
 	expect(mockVoidOrder).toHaveBeenCalledTimes(2);
 	unmount();
 	await expect(invokeSurface('void')).rejects.toBeInstanceOf(SurfaceNotMountedError);
+});
+
+it('registers the cart surface only while the column shows the cart (roadmap#428)', () => {
+	mockIsNew = false;
+	mockStage = 'cart';
+	mockSession = { session: null, sessionsOn: true };
+	try {
+		// The Open register card: the column is mounted, the cart is not shown.
+		const { rerender, unmount } = render(<OpenOrders isColumn />);
+		expect(hasSurface('cart')).toBe(false);
+		expect(hasSurface('void')).toBe(true);
+		mockSession = { session: { id: 's', status: 'counting' }, sessionsOn: true };
+		rerender(<OpenOrders isColumn />);
+		expect(hasSurface('cart')).toBe(false);
+		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true };
+		rerender(<OpenOrders isColumn />);
+		expect(hasSurface('cart')).toBe(true);
+		unmount();
+		expect(hasSurface('cart')).toBe(false);
+	} finally {
+		mockSession = { session: null, sessionsOn: false };
+	}
 });

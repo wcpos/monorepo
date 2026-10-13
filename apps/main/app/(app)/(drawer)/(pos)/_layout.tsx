@@ -16,6 +16,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { CommandsProvider } from '@wcpos/core/extensions/commands';
+import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
@@ -136,8 +137,10 @@ export default function POSLayout() {
 								    mounts the screen afresh in the other tree — keeps the cashier's place. */}
 								<PersistedStateProvider>
 									<Suspense>
-										{/* The command context (roadmap#428): inside the current order, around the stack. */}
+										{/* The command context (roadmap#428): inside the current order, around the stack.
+										    The hotkeys bind its commands while the POS is mounted (web and Electron). */}
 										<CommandsProvider>
+											<Hotkeys />
 											<POSStack />
 										</CommandsProvider>
 									</Suspense>

@@ -124,3 +124,38 @@ test('--check sees every attention-reason key as a literal call', () => {
 	assert.match(output, /health\.database\.attention_reason_pull"/);
 	assert.match(output, /health\.database\.attention_reason_delete"/);
 });
+
+test('--check sees every command label as a literal call', () => {
+	const root = mkdtempSync(join(tmpdir(), 'wcpos-translations-commands-'));
+	const commandsPath = 'packages/core/src/extensions/commands/commands.ts';
+
+	writeFixtureFile(
+		root,
+		'packages/core/src/contexts/translations/locales/en/core.json',
+		JSON.stringify({}, null, '\t')
+	);
+	writeFixtureFile(
+		root,
+		commandsPath,
+		readFileSync(new URL(`../${commandsPath}`, import.meta.url), 'utf8')
+	);
+
+	const result = spawnSync(process.execPath, [scriptPath, root, '--check'], {
+		encoding: 'utf8',
+	});
+	const output = `${result.stdout}\n${result.stderr}`;
+
+	assert.notEqual(result.status, 0, output);
+	for (const key of [
+		'search_focus',
+		'checkout_open',
+		'cart_new',
+		'cart_previous',
+		'cart_next',
+		'cart_discount',
+		'cart_void',
+		'help_open',
+	]) {
+		assert.match(output, new RegExp(`pos_commands\\.${key}"`));
+	}
+});

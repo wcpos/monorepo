@@ -1910,6 +1910,8 @@
 	"health.logs.event.checkout_provenance_skipped": "Sale recorded without a register",
 	"health.logs.event.checkout_sent": "Sent the sale to the customer",
 	"health.logs.event.checkout_split_planned": "Split the bill",
+	"health.logs.event.command_failed": "A shortcut did not finish",
+	"health.logs.event.command_refused": "A shortcut was not available",
 	"health.logs.event.connectivity_device_offline": "Device went offline",
 	"health.logs.event.connectivity_restored": "Connection restored",
 	"health.logs.event.connectivity_website_unreachable": "Website is unreachable",
@@ -2665,5 +2667,7 @@
 	"pos_commands.cart_next": "Next cart",
 	"pos_commands.cart_discount": "Add discount",
 	"pos_commands.cart_void": "Void order",
-	"pos_commands.help_open": "Keyboard shortcuts"
+	"pos_commands.help_open": "Keyboard shortcuts",
+	"pos_commands.help_title": "Keyboard shortcuts",
+	"pos_commands.help_firefox_note": "On Windows, Alt+F and Alt+D may also open the Firefox menu."
 }
