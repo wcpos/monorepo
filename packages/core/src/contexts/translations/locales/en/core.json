@@ -1458,6 +1458,7 @@
 	"settings.refresh_devices": "Refresh",
 	"settings.restore_server_settings": "Restore server settings",
 	"settings.restore_server_settings_description": "These settings were copied from your WooCommerce store. Restoring will overwrite local changes with the server’s values.",
+	"settings.restore_server_settings_line": "Copied from your WooCommerce store; restoring overwrites local changes.",
 	"settings.round_tax_at_subtotal_level": "Round tax at subtotal level",
 	"settings.save_anyway": "Save without testing",
 	"settings.scale": "Scale",

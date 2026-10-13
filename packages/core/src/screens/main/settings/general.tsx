@@ -389,7 +389,7 @@ function GeneralSettingsForm({
 				</SettingsSection>
 
 				<SettingsDangerZone
-					description={t('settings.restore_server_settings_description')}
+					description={t('settings.restore_server_settings_line')}
 					buttonLabel={t('settings.restore_server_settings')}
 					onPress={() => setRestoreOpen(true)}
 					loading={loading}
