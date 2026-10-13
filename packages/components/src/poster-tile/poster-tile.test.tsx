@@ -137,7 +137,8 @@ it('puts the words straight on a tint, with the tint’s class and no scrim', ()
 	render(tile({ picture: { kind: 'tint', tint: 4 }, title: 'Tea' }));
 	expect(screen.queryByTestId('poster-scrim')).toBeNull();
 	expect(screen.getByTestId('poster-words').textContent).toBe('Tea');
-	expect(classes('tile-12')).toContain('bg-tile-tint-4');
+	// The whole card is the tint: the square and the band under it.
+	expect(classes('poster-card')).toContain('bg-tile-tint-4');
 });
 
 it('greys the picture of a tile that is out', () => {
@@ -224,4 +225,27 @@ it('veils a tint as it veils a picture while pressed, and only then', () => {
 	mockPressed = false;
 	rerender(tile({ title: 'Tea' }));
 	expect(screen.queryByTestId('poster-pressed')).toBeNull();
+});
+
+it('puts a band of the card under the square: card colour over a picture, the tint on a tint', () => {
+	const { rerender } = render(tile({ title: 'Tea' }));
+	const card = screen.getByTestId('poster-card');
+	// Square, then band, both inside the one bordered card.
+	expect(card.children[0]).toBe(screen.getByTestId('tile-12'));
+	expect(card.children[1]).toBe(screen.getByTestId('poster-band'));
+	expect(classes('poster-band')).toMatch(/^h-\[calc\(var\(--text-base\)/);
+	expect(classes('poster-card')).toContain('bg-card');
+	expect(classes('poster-card')).toContain('border-border');
+	expect(classes('tile-12')).not.toContain('border');
+	rerender(tile({ picture: { kind: 'tint', tint: 3 }, title: 'Tea' }));
+	expect(classes('poster-card')).toContain('bg-tile-tint-3');
+	expect(screen.getByTestId('poster-band')).toBeTruthy();
+});
+
+it('anchors the words to the card, not the square, so the money row sits on the band', () => {
+	render(tile({ title: 'Tea', money: '4.00' }));
+	const words = screen.getByTestId('poster-scrim');
+	expect(words.parentElement).toBe(screen.getByTestId('poster-card'));
+	expect(screen.getByTestId('tile-12').contains(words)).toBe(false);
+	expect(classes('poster-scrim').split(' ')).toContain('bottom-0');
 });

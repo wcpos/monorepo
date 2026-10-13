@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { useAnimatedStyle } from 'react-native-reanimated';
 
 import { Image } from '@wcpos/components/image';
-import { type PosterPicture, PosterTile, tintOf } from '@wcpos/components/poster-tile';
+import { POSTER_BAND, type PosterPicture, PosterTile, tintOf } from '@wcpos/components/poster-tile';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -250,7 +250,9 @@ export function ParentTile({
 export function VariationPlaceholder() {
 	return (
 		<View className="bg-muted m-1 grow rounded-lg" aria-busy testID="variation-placeholder">
+			{/* A Poster tile's own shape: the square and its band. */}
 			<View className="aspect-square" />
+			<View className={POSTER_BAND} />
 		</View>
 	);
 }

@@ -90,9 +90,9 @@ const breakfast = {
 	description: 'Hot Food + Bakery',
 };
 
-// The square, whatever its picture: the frame's first view after any stack.
+// The card, whatever its picture: the square and its band, which a tint fills whole.
 const square = (testID: string) =>
-	screen.getByTestId(testID).querySelector('[data-class-name*="aspect-square"]')!;
+	screen.getByTestId(testID).querySelector('[data-testid="poster-card"]')!;
 const squareClasses = (testID: string) => square(testID).getAttribute('data-class-name')!;
 
 describe('TermTile', () => {

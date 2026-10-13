@@ -177,6 +177,8 @@ it('holds a slot for every variation until the query answers, so the deal never 
 		true
 	);
 	expect(screen.getAllByTestId('variation-placeholder')).toHaveLength(4);
+	// A tile's own shape: the square and the Poster band under it.
+	expect(screen.getAllByTestId('variation-placeholder')[0].children).toHaveLength(2);
 	expect(screen.queryByTestId('variation-tile')).toBeNull();
 	// The breadcrumb is a row above the grid's card, not an overlay: the grid pads nothing and
 	// sits on the shared table surface (owner's pick A, 2026-10-05).

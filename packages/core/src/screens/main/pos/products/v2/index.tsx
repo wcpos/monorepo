@@ -166,9 +166,13 @@ function ProductsView({
 }
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
-// A Poster tile is its square and nothing under it: a grid row is the square plus the tile's two
+// A Poster tile is its square and its band: a grid row is the square, the band and the tile's two
 // 4 px `m-1` margins (the legacy grid adds a 120 px text block instead, `TILE_TEXT_BLOCK_PX`).
 const POSTER_ROW_MARGIN_PX = 8;
+// The band (`POSTER_BAND`) at the base text scale, about 48 px. An estimate for the first page
+// size and the skeleton only: the band itself is drawn from the type scale's variables.
+const POSTER_BAND_ESTIMATE_PX = 48;
+const POSTER_ROW_EXTRA_PX = POSTER_BAND_ESTIMATE_PX + POSTER_ROW_MARGIN_PX;
 function POSProductsContent({
 	showOutOfStock,
 	initialFilters,
@@ -295,7 +299,7 @@ function POSProductsContent({
 		actions.setPageSize,
 		viewMode,
 		gridColumns,
-		POSTER_ROW_MARGIN_PX
+		POSTER_ROW_EXTRA_PX
 	);
 	const [body, setBody] = React.useState({ width: 0, height: 0 });
 	// "No products yet" only when nothing narrows the baseline: no search and no filter beyond the
@@ -334,7 +338,7 @@ function POSProductsContent({
 					{
 						length: skeletonCount(
 							body.height,
-							viewMode === 'grid' ? body.width / gridColumns + POSTER_ROW_MARGIN_PX : TABLE_ROW_PX
+							viewMode === 'grid' ? body.width / gridColumns + POSTER_ROW_EXTRA_PX : TABLE_ROW_PX
 						),
 					},
 					(_, row) => (

@@ -399,6 +399,8 @@ it('holds a row of placeholders for products until the query answers', () => {
 	render(<TermLevelGrid {...level({ answer: undefined })} />);
 	// One row's worth on the two columns: the deal goes out with shape.
 	expect(screen.getAllByTestId('product-placeholder')).toHaveLength(2);
+	// A tile's own shape: the square and the Poster band under it.
+	expect(screen.getAllByTestId('product-placeholder')[0].children).toHaveLength(2);
 	expect(screen.getByTestId('cell-0').dataset.count).toBe('4');
 	expect(screen.queryByTestId('products-breadcrumb-detail')).toBeNull();
 	expect(screen.queryByTestId('no-data-message')).toBeNull();

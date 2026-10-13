@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import Animated, { useAnimatedRef, useScrollViewOffset } from 'react-native-reanimated';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
+import { POSTER_BAND } from '@wcpos/components/poster-tile';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, QueryHandle, useDocField } from '@wcpos/query';
 
@@ -116,7 +117,9 @@ const frontRow = ({ index }: { index: number }) => (index === 0 ? FRONT : undefi
 function ProductPlaceholder() {
 	return (
 		<View className="bg-muted m-1 grow rounded-lg" aria-busy testID="product-placeholder">
+			{/* A Poster tile's own shape: the square and its band. */}
 			<View className="aspect-square" />
+			<View className={POSTER_BAND} />
 		</View>
 	);
 }
