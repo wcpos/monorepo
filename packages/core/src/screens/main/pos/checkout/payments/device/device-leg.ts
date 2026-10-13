@@ -148,7 +148,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			capturing: true,
 			captureFailed: false,
 			error: null,
-			failureReason: result?.failure_reason ?? null,
+			// A reader-side cancel (the SDK's CANCELED, the Tap to Pay screen closed) carries no
+			// reason from any driver; it is named here so the view keeps the mark on the terminal
+			// step while the void confirms, as it does for a cashier cancel and a time-out.
+			failureReason:
+				result?.failure_reason ?? (result?.outcome === 'cancelled' ? 'cancelled' : null),
 		});
 		try {
 			if (input.resume && input.row.status === 'authorized') {
@@ -241,10 +245,15 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 									},
 								}
 							: {
+									// A reader time-out (its own collect window ran out) voids as `timed_out`:
+									// nobody at the till cancelled it. A cancel already requested at the till
+									// (or its deadline) wins over a time-out that lands at the same moment.
 									reason:
 										result?.outcome === 'declined'
 											? (result.failure_reason ?? 'card_declined')
-											: cancelReason,
+											: result?.failure_reason === 'timed_out' && !state.cancelRequested
+												? 'timed_out'
+												: cancelReason,
 								}
 					);
 				} finally {
@@ -288,7 +297,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		}
 		set({ phase: 'creating', deadlineAt: deps.now() + DEVICE_LEG_DEADLINE_MS });
 		timer = deps.setTimeout(() => {
-			if (active()) {
+			// A cancel the cashier already asked for keeps its own wording: the deadline only
+			// counts as the reason when nothing was requested before it.
+			if (active() && !state.cancelRequested) {
 				set({ deadlineHandled: true });
 				void cancel('deadline');
 			}

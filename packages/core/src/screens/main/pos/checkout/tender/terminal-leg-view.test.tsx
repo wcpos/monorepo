@@ -176,6 +176,12 @@ const cases: [Partial<TerminalLegState>, string, string[]][] = [
 		'Timed out — payment cancelled',
 		['retry', 'another'],
 	],
+	// The reader's own collect window ran out (Stripe CARD_READ_TIMED_OUT), not the till's deadline.
+	[
+		{ phase: 'final', outcome: 'voided', row: { ...row, failure_reason: 'timed_out' } },
+		'Timed out — payment cancelled',
+		['retry', 'another'],
+	],
 	[{ phase: 'final', outcome: 'released' }, 'Payment released', ['retry', 'another']],
 	[{ phase: 'idle' }, 'Waiting for the customer on the terminal', ['cancel']],
 ];
@@ -348,6 +354,40 @@ it('keeps Approved through cancellation and release', () => {
 	flow.update({ phase: 'polling', cancelRequested: true });
 	flow.update({ phase: 'final', outcome: 'released' });
 	expect(screen.getByTestId('checkout-terminal-step-2').getAttribute('aria-selected')).toBe('true');
+});
+
+// Tap to Pay on a Pixel 10 (2026-10-13): the SDK timed out with no card, the leg confirmed the
+// void, and the mark moved to Approved. Confirming a non-approval keeps "On terminal", grey.
+it.each(['timed_out', 'cancelled'])(
+	'keeps On terminal while a %s result is confirmed, and closes it grey',
+	(failureReason) => {
+		const device = { ...row, capture_mode: 'device', failure_reason: null } as PaymentRow;
+		const flow = renderLeg({ row: device, phase: 'collecting', failureReason: null });
+		flow.update({ phase: 'confirming', failureReason });
+		flow.update({ phase: 'final', outcome: 'voided' });
+		expect(screen.getByTestId('checkout-terminal-status').textContent).toBe(
+			failureReason === 'timed_out' ? 'Timed out — payment cancelled' : 'Payment cancelled'
+		);
+		const node = screen.getByTestId('checkout-terminal-step-1');
+		expect(node.getAttribute('aria-selected')).toBe('true');
+		expect(node.innerHTML.includes('bg-muted-foreground')).toBe(true);
+	}
+);
+
+it('names a Tap to Pay reader "This device", not its id', () => {
+	const uuid = '2f6b80ca-0000-4000-8000-000000000000';
+	renderLeg({
+		row: {
+			...row,
+			capture_mode: 'device',
+			transport: 'tap_to_pay',
+			provider_refs: { reader: uuid },
+		},
+		reader: uuid,
+	});
+	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain(
+		'terminal · This device'
+	);
 });
 
 const tile = (method: PaymentMethodDescriptor) => ({

@@ -558,6 +558,10 @@ export function createStripeTerminalDriver({
 				const decline = failure.declineCode || failure.apiError?.declineCode || null;
 				if (confirming && (decline || sameCode(failure.code, 'DECLINED_BY_STRIPE_API')))
 					return failed('declined', decline || failure.message || 'card_declined');
+				// The SDK's own collect window ran out with no card presented ("Transaction timed
+				// out"): the payment did not happen, it is not a reader fault. Both bridges send
+				// `CARD_READ_TIMED_OUT` (iOS maps SCPErrorCardReadTimedOut to it in Errors.swift).
+				if (sameCode(failure.code, 'CARD_READ_TIMED_OUT')) return failed('cancelled', 'timed_out');
 				throw new Error(failure.message);
 			}
 		},

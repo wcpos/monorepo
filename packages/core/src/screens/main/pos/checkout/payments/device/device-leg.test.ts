@@ -220,6 +220,16 @@ it.each(['declined', 'cancelled'] as const)(
 		if (outcome === 'cancelled') expect(c.get).not.toHaveBeenCalled();
 	}
 );
+// Tap to Pay on a Pixel 10 (2026-10-13): the SDK's own collect window ran out with no card.
+it('voids a reader time-out as timed_out, not as a cashier cancel', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.collection.resolve({ ...approved, outcome: 'cancelled', failure_reason: 'timed_out' });
+	await start;
+	expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/leg/void', { reason: 'timed_out' });
+	expect(c.leg.getState()).toMatchObject({ outcome: 'voided', failureReason: 'timed_out' });
+});
 it('does not report paid from a successful HTTP response with a pending row', async () => {
 	const c = setup();
 	c.post.mockResolvedValue({ data: { payment: row } });
@@ -284,6 +294,40 @@ it('a refused capture the store cannot explain stays held for retry', async () =
 	c.collection.resolve(approved);
 	await start;
 	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
+});
+it('a cashier cancel that lands as the reader times out still voids as cashier', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	c.collection.resolve({
+		outcome: 'cancelled',
+		failure_reason: 'timed_out',
+		provider_refs: {},
+		receipt: {},
+		amount: null,
+		transport: 'bluetooth',
+	});
+	await start;
+	expect(c.leg.getState().outcome).toBe('voided');
+	const voidCall = c.post.mock.calls.find(([url]) => url.endsWith('/void'));
+	expect(voidCall?.[1]).toEqual({ reason: 'cashier' });
+});
+it('a reader-side cancel with no reason is named cancelled at confirm, and voids as cashier', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.collection.resolve({
+		outcome: 'cancelled',
+		provider_refs: {},
+		receipt: {},
+		amount: null,
+		transport: 'bluetooth',
+	});
+	await start;
+	expect(c.leg.getState()).toMatchObject({ outcome: 'voided', failureReason: 'cancelled' });
+	const voidCall = c.post.mock.calls.find(([url]) => url.endsWith('/void'));
+	expect(voidCall?.[1]).toEqual({ reason: 'cashier' });
 });
 it('cancel waits for collection; a late successful result is still verified', async () => {
 	const c = setup();
@@ -440,6 +484,19 @@ it('offline, a cancel the reader refuses leaves the leg waiting for the reader',
 	expect(c.leg.getState().outcome).toBe('captured');
 	expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
 	expect(c.post).not.toHaveBeenCalled();
+});
+it('the deadline does not claim a cancel the cashier already asked for', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	await jest.advanceTimersByTimeAsync(120000);
+	expect(c.leg.getState().deadlineHandled).toBe(false);
+	expect(c.driver.cancel).toHaveBeenCalledTimes(1);
+	c.collection.resolve({ ...approved, outcome: 'cancelled' });
+	await start;
+	const voidCall = c.post.mock.calls.find(([url]) => url.endsWith('/void'));
+	expect(voidCall?.[1]).toEqual({ reason: 'cashier' });
 });
 it('deadline requests cancellation at 120 seconds, and waits for the reader', async () => {
 	const c = setup();

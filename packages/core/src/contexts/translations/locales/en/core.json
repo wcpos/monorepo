@@ -248,6 +248,7 @@
 	"pos_checkout.payment_released": "Payment released",
 	"pos_checkout.reason_card_declined": "Card declined",
 	"pos_checkout.reason_expired": "Timed out on the terminal",
+	"pos_checkout.reason_timed_out": "The reader waited for a card and none came",
 	"pos_checkout.reason_cancelled": "Cancelled on the terminal",
 	"pos_checkout.reason_declined_or_cancelled": "Declined or cancelled on the terminal",
 	"pos_checkout.reason_refused": "The store refused this payment",
