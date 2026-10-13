@@ -92,7 +92,6 @@ export function CardReadersSettings() {
 		connectable.length === 1 ? (
 			<Button
 				variant={variant}
-				size={variant === 'outline' ? 'sm' : undefined}
 				leftIcon="plus"
 				disabled={actions.working !== null}
 				onPress={() => void actions.start(connectable[0])}
@@ -105,7 +104,6 @@ export function CardReadersSettings() {
 				<DropdownMenuTrigger asChild>
 					<Button
 						variant={variant}
-						size={variant === 'outline' ? 'sm' : undefined}
 						leftIcon="plus"
 						disabled={actions.working !== null}
 						testID="card-readers-connect"
@@ -184,12 +182,13 @@ export function CardReadersSettings() {
 								/>
 							))}
 						</View>
-						<HStack className="flex-wrap items-center gap-2 pt-2">
+						{/* Full width, with the guide on its own line beneath: never a shared line. */}
+						<VStack className="w-full gap-2 pt-2">
 							{connectButton('outline')}
 							<DocsLink testID="card-readers-having-trouble" href={CARD_READER_DOCS_URL}>
 								{t('settings.having_trouble')}
 							</DocsLink>
-						</HStack>
+						</VStack>
 					</>
 				)}
 			</SettingsSection>
@@ -237,48 +236,50 @@ function TapToPayRow({
 	onSetUp: () => void;
 }) {
 	const t = useT();
+	// Named for the phone in the cashier's hand: Apple's name on iOS, Android's on Android.
+	const android = Platform.OS === 'android';
 	return (
-		<View testID={`tap-to-pay-row-${method.id}`} className="gap-1 rounded-lg px-2 py-2.5">
-			<HStack className="flex-wrap items-center gap-x-3 gap-y-2">
+		<View testID={`tap-to-pay-row-${method.id}`} className="gap-2 rounded-lg px-2 py-2.5">
+			<HStack className="items-start gap-3">
 				<View className="bg-muted rounded-md p-2">
 					<Icon name="creditCard" variant="muted" size="lg" />
 				</View>
-				<VStack className="min-w-40 flex-1 gap-0.5">
-					<Text className="text-sm font-medium">{t('settings.card_readers.tap_to_pay')}</Text>
-					<HStack className="flex-wrap items-center gap-x-1.5">
-						<Text
-							className="text-muted-foreground text-xs"
-							testID={`tap-to-pay-row-${method.id}-line`}
-						>
-							{canAccept
-								? t('settings.card_readers.tap_to_pay_body')
-								: t('settings.card_readers.tap_to_pay_admin_only')}
+				<VStack className="flex-1 gap-0.5">
+					<HStack className="items-center gap-1.5">
+						<Text className="shrink text-sm font-medium" numberOfLines={1}>
+							{android
+								? t('settings.card_readers.tap_to_pay_android')
+								: t('settings.card_readers.tap_to_pay')}
 						</Text>
 						<Text
-							className="text-muted-foreground border-border rounded-full border px-1.5 text-xs"
+							className="text-muted-foreground border-border shrink rounded-full border px-1.5 text-xs"
+							numberOfLines={1}
 							decodeHtml
 						>
 							{method.title}
 						</Text>
 					</HStack>
+					<Text
+						className="text-muted-foreground text-xs"
+						testID={`tap-to-pay-row-${method.id}-line`}
+					>
+						{canAccept
+							? android
+								? t('settings.card_readers.tap_to_pay_body_android')
+								: t('settings.card_readers.tap_to_pay_body')
+							: t('settings.card_readers.tap_to_pay_admin_only')}
+					</Text>
 				</VStack>
-				<HStack className="ml-auto items-center gap-2">
-					{canAccept ? (
-						<Button
-							size="sm"
-							disabled={busy}
-							onPress={onSetUp}
-							testID={`tap-to-pay-row-${method.id}-set-up`}
-						>
-							<ButtonText>{t('settings.card_readers.set_up')}</ButtonText>
-						</Button>
-					) : (
-						<Text className="text-muted-foreground text-xs">
-							{t('settings.card_readers.not_set_up')}
-						</Text>
-					)}
-				</HStack>
 			</HStack>
+			{canAccept ? (
+				<Button disabled={busy} onPress={onSetUp} testID={`tap-to-pay-row-${method.id}-set-up`}>
+					<ButtonText>{t('settings.card_readers.set_up')}</ButtonText>
+				</Button>
+			) : (
+				<Text className="text-muted-foreground pl-12 text-xs">
+					{t('settings.card_readers.not_set_up')}
+				</Text>
+			)}
 		</View>
 	);
 }

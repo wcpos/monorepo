@@ -1315,6 +1315,8 @@
 	"settings.card_readers.this_device": "This device",
 	"settings.card_readers.tap_to_pay": "Tap to Pay on iPhone",
 	"settings.card_readers.tap_to_pay_body": "Take contactless payments with this iPhone",
+	"settings.card_readers.tap_to_pay_android": "Tap to Pay on Android",
+	"settings.card_readers.tap_to_pay_body_android": "Take contactless payments with this phone",
 	"settings.card_readers.tap_to_pay_admin_only": "Ask an administrator to set this up",
 	"settings.card_readers.not_set_up": "Not set up",
 	"settings.card_readers.set_up": "Set up",

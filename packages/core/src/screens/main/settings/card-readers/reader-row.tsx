@@ -16,6 +16,7 @@ import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { CARD_READER_DOCS_URL } from './docs';
 import { useT } from '../../../../contexts/translations';
@@ -104,7 +105,7 @@ export function ReaderRow({
 	const name = scan && !reader ? t('settings.card_readers.new_reader') : readerName(reader, t);
 	const serial = reader?.serial ?? (reader && reader.id !== name ? reader.id : null);
 
-	// One line of state under the name; the actions on the right follow it.
+	// One line of state under the name; the actions get a full-width row of their own below.
 	let line: React.ReactNode = null;
 	let lineClass = 'text-muted-foreground text-xs';
 	let below: React.ReactNode = null;
@@ -160,7 +161,6 @@ export function ReaderRow({
 							) : null}
 						</VStack>
 						<Button
-							size="sm"
 							disabled={working}
 							loading={working}
 							onPress={() => void actions.connect(method, candidate)}
@@ -176,7 +176,6 @@ export function ReaderRow({
 					</DocsLink>
 					<Button
 						variant="ghost-quiet"
-						size="sm"
 						onPress={actions.cancelScan}
 						testID={`reader-row-${method.id}-cancel-scan`}
 					>
@@ -194,40 +193,44 @@ export function ReaderRow({
 			? method.provider_data.location_name
 			: null;
 	return (
-		<View testID={`reader-row-${method.id}`} className="gap-1 rounded-lg px-2 py-2.5">
-			<HStack className="flex-wrap items-center gap-x-3 gap-y-2">
+		<View testID={`reader-row-${method.id}`} className="gap-2 rounded-lg px-2 py-2.5">
+			{/* Stacked lines, never a wrap: name and provider, serial and location, then the state. */}
+			<HStack className="items-start gap-3">
 				<View className="bg-muted rounded-md p-2">
 					<Icon name="creditCard" variant={connected ? 'success' : 'muted'} size="lg" />
 				</View>
-				<VStack className="min-w-40 flex-1 gap-0.5">
-					<Text className="text-sm font-medium" numberOfLines={1}>
-						{name || method.title}
-					</Text>
-					<HStack className="flex-wrap items-center gap-x-1.5">
-						{serial ? (
-							<Text className="text-muted-foreground font-mono text-xs" numberOfLines={1}>
-								{serial}
-							</Text>
-						) : null}
+				<VStack className="flex-1 gap-0.5">
+					<HStack className="items-center gap-1.5">
+						<Text className="shrink text-sm font-medium" numberOfLines={1}>
+							{name || method.title}
+						</Text>
 						<Text
 							testID={`reader-row-${method.id}-provider`}
-							className="text-muted-foreground border-border rounded-full border px-1.5 text-xs"
+							className="text-muted-foreground border-border shrink rounded-full border px-1.5 text-xs"
+							numberOfLines={1}
 							decodeHtml
 						>
 							{method.title}
 						</Text>
-						{locationName ? (
-							<Text
-								testID={`reader-row-${method.id}-location`}
-								className="text-muted-foreground text-xs"
-								numberOfLines={1}
-							>
-								· {locationName}
-							</Text>
-						) : null}
 					</HStack>
-				</VStack>
-				<HStack className="ml-auto flex-wrap items-center gap-2">
+					{serial || locationName ? (
+						<HStack className="items-center gap-1.5">
+							{serial ? (
+								<Text className="text-muted-foreground shrink font-mono text-xs" numberOfLines={1}>
+									{serial}
+								</Text>
+							) : null}
+							{locationName ? (
+								<Text
+									testID={`reader-row-${method.id}-location`}
+									className="text-muted-foreground shrink text-xs"
+									numberOfLines={1}
+								>
+									{serial ? `· ${locationName}` : locationName}
+								</Text>
+							) : null}
+						</HStack>
+					) : null}
 					{connected ? (
 						<HStack testID={`reader-row-${method.id}-status`} className="items-center gap-1.5">
 							<View className="bg-success size-2 rounded-full" />
@@ -241,10 +244,20 @@ export function ReaderRow({
 							</Text>
 						</HStack>
 					) : null}
+					{line ? (
+						<Text testID={`reader-row-${method.id}-line`} className={lineClass}>
+							{line}
+						</Text>
+					) : null}
+				</VStack>
+			</HStack>
+			{below ? <View className="pl-12">{below}</View> : null}
+			{/* The actions are a full-width row of their own: nothing shares a line with free text. */}
+			{!scan || found === null ? (
+				<HStack className="w-full items-center gap-2">
 					{scan && found === null ? (
 						<Button
 							variant="ghost-quiet"
-							size="sm"
 							onPress={actions.cancelScan}
 							testID={`reader-row-${method.id}-cancel-scan`}
 						>
@@ -254,8 +267,7 @@ export function ReaderRow({
 					{error ? (
 						<>
 							<Button
-								variant="outline"
-								size="sm"
+								className="flex-1"
 								disabled={busy}
 								// A failed Tap to Pay set-up retries Tap to Pay, not a Bluetooth scan.
 								onPress={() => void actions.start(method, error.transport)}
@@ -263,15 +275,21 @@ export function ReaderRow({
 							>
 								<ButtonText>{t('settings.card_readers.try_again')}</ButtonText>
 							</Button>
-							<DocsLink testID={`reader-row-${method.id}-help`} href={CARD_READER_DOCS_URL}>
-								{t('settings.card_readers.help')}
-							</DocsLink>
+							<Button
+								variant="outline"
+								className="flex-1"
+								rightIcon="arrowUpRight"
+								onPress={() => void openExternalURL(CARD_READER_DOCS_URL)}
+								testID={`reader-row-${method.id}-help`}
+							>
+								<ButtonText>{t('settings.card_readers.help')}</ButtonText>
+							</Button>
 						</>
 					) : null}
 					{sdkUi && !error ? (
 						<Button
 							variant="outline"
-							size="sm"
+							className="flex-1"
 							// Signing in is what the SDK's own screen is for; every other block stays a block.
 							disabled={
 								busy ||
@@ -294,7 +312,7 @@ export function ReaderRow({
 					{!sdkUi && !scan && !error && !connected && status.connection === 'disconnected' ? (
 						<Button
 							variant="outline"
-							size="sm"
+							className="flex-1"
 							disabled={busy || Boolean(unavailable)}
 							loading={working}
 							onPress={() => void actions.start(method, reader?.transport)}
@@ -306,7 +324,7 @@ export function ReaderRow({
 					{connected && !sdkUi ? (
 						<Button
 							variant="outline"
-							size="sm"
+							className="flex-1"
 							disabled={working}
 							loading={working}
 							onPress={() => void actions.disconnect(method)}
@@ -345,13 +363,7 @@ export function ReaderRow({
 						</DropdownMenu>
 					) : null}
 				</HStack>
-			</HStack>
-			{line ? (
-				<Text testID={`reader-row-${method.id}-line`} className={`${lineClass} pl-12`}>
-					{line}
-				</Text>
 			) : null}
-			{below ? <View className="pl-12">{below}</View> : null}
 			{__DEV__ && devControls.length > 0 && connected ? (
 				<HStack className="flex-wrap gap-2 pt-1 pl-12">
 					{devControls.map((control) => (

@@ -146,6 +146,37 @@ export function TenderCheckout({ order }: Props) {
 		);
 	}
 
+	const tabs = (
+		<SegmentedControl
+			className={compact ? 'flex-1' : undefined}
+			value={flow.state.tab}
+			onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+			segments={[
+				{
+					value: 'payments',
+					label: t('pos_checkout.payments_tab'),
+					testID: 'checkout-tab-payments',
+				},
+				{
+					value: 'legacy',
+					label: t('pos_checkout.legacy_tab'),
+					testID: 'checkout-tab-legacy',
+				},
+			]}
+		/>
+	);
+	const cancelPayment =
+		flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
+			<Button
+				variant="ghost-destructive"
+				size={compact ? undefined : 'sm'}
+				testID="checkout-cancel-payment"
+				onPress={() => flow.dispatch({ type: 'request-cancel' })}
+			>
+				<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
+			</Button>
+		) : null;
+
 	return (
 		<Modal onClose={handleClose}>
 			<ModalContent testID="checkout-dialog" size={compact ? 'full' : '2xl'} className="h-full">
@@ -161,32 +192,8 @@ export function TenderCheckout({ order }: Props) {
 									: t('pos_checkout.checkout')}
 							</Text>
 						</ModalTitle>
-						<SegmentedControl
-							value={flow.state.tab}
-							onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-							segments={[
-								{
-									value: 'payments',
-									label: t('pos_checkout.payments_tab'),
-									testID: 'checkout-tab-payments',
-								},
-								{
-									value: 'legacy',
-									label: t('pos_checkout.legacy_tab'),
-									testID: 'checkout-tab-legacy',
-								},
-							]}
-						/>
-						{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
-							<Button
-								variant="ghost-destructive"
-								size="sm"
-								testID="checkout-cancel-payment"
-								onPress={() => flow.dispatch({ type: 'request-cancel' })}
-							>
-								<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
-							</Button>
-						) : null}
+						{compact ? null : tabs}
+						{compact ? null : cancelPayment}
 					</HStack>
 				</ModalHeader>
 				<ModalBody className="flex-1 px-0" contentContainerStyle={{ flexGrow: 1 }}>
@@ -195,6 +202,13 @@ export function TenderCheckout({ order }: Props) {
 						    point before goods change hands, and it is the only screen in front
 						    of the cashier once checkout is open. */}
 						<View className="px-3">
+							{/* On a phone the header is the title and the close; the switch gets a row. */}
+							{compact ? (
+								<HStack className="items-center gap-2 pb-2">
+									{tabs}
+									{cancelPayment}
+								</HStack>
+							) : null}
 							<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
 							{storageDegraded ? (
 								<View className="border-destructive bg-destructive/10 rounded-md border p-3">

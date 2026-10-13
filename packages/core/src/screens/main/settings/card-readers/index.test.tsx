@@ -6,6 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { CARD_READER_DOCS_URL } from './docs';
 import { CardReadersSettings } from './index';
 import { method as deviceMethod } from '../../pos/checkout/payments/device/fixtures.test-utils';
 import { registerDriver } from '../../../../services/payment-drivers/registry';
@@ -80,6 +81,10 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ testID, onPress }: { testID?: string; onPress?: () => void }) => (
 		<button data-testid={testID} onClick={onPress} />
 	),
+}));
+const mockOpenExternalURL = jest.fn();
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
 }));
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -263,7 +268,9 @@ it('shows a failed connect as one line with Try again, and the update progress a
 		'Could not connect: not supported at this location'
 	);
 	expect(screen.getByTestId(`${row}-retry`)).toBeTruthy();
-	expect(screen.getByTestId(`${row}-help`)).toBeTruthy();
+	// Help is a full-width button now, still opening the reader docs.
+	fireEvent.click(screen.getByTestId(`${row}-help`));
+	expect(mockOpenExternalURL).toHaveBeenCalledWith(CARD_READER_DOCS_URL);
 	// The list went with the choice; the error is the row's one line.
 	expect(screen.queryByTestId(`${row}-found`)).toBeNull();
 	// Try again scans afresh and clears the error.
@@ -404,6 +411,8 @@ describe('Tap to Pay row', () => {
 		const android = render(<CardReadersSettings />);
 		await flush();
 		expect(screen.getByTestId(`tap-to-pay-row-${deviceMethod.id}`)).toBeTruthy();
+		// Named for the platform: an Android phone never reads "on iPhone".
+		expect(screen.getByText('Tap to Pay on Android')).toBeTruthy();
 		android.unmount();
 		mockOS = 'ios';
 		mockCaps = { canAcceptReaderTerms: false };
@@ -413,6 +422,7 @@ describe('Tap to Pay row', () => {
 			'Ask an administrator to set this up'
 		);
 		expect(screen.queryByTestId(`tap-to-pay-row-${deviceMethod.id}-set-up`)).toBeNull();
+		expect(screen.getByText('Tap to Pay on iPhone')).toBeTruthy();
 		cashier.unmount();
 		mockCaps = { canAcceptReaderTerms: true };
 		render(<CardReadersSettings />);
