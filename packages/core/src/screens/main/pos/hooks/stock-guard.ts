@@ -44,6 +44,23 @@ function normalizeDecimal(value: number): number {
 	return Number(value.toFixed(DECIMAL_PRECISION));
 }
 
+type StockLine = Pick<CartLineStockIdentity, 'quantity' | 'meta_data'>;
+
+/**
+ * The units a reopened order's line already took from stock (`_reduced_stock`); 0 when absent,
+ * unreadable or negative. Its product's stock_quantity is already lowered by them.
+ */
+export function reducedStockQuantity(line: StockLine): number {
+	const value = line.meta_data?.find((meta) => meta.key === '_reduced_stock')?.value;
+	return Math.max(0, Number(value) || 0);
+}
+
+/** The units a line still has to take from stock: its quantity net of `_reduced_stock`. */
+export function netLineQuantity(line: StockLine): number {
+	const quantity = Number.isFinite(line.quantity) ? (line.quantity as number) : 0;
+	return Math.max(0, normalizeDecimal(quantity - reducedStockQuantity(line)));
+}
+
 function isExcludedLine(lineItem: CartLineStockIdentity, excludedLineItemUuid?: string): boolean {
 	return Boolean(
 		excludedLineItemUuid && wooMetaCarrier.lineUuid(lineItem) === excludedLineItemUuid
@@ -75,8 +92,7 @@ export function aggregateExistingCartQuantity({
 			return total;
 		}
 
-		const quantity = Number.isFinite(lineItem.quantity) ? (lineItem.quantity as number) : 0;
-		return normalizeDecimal(total + quantity);
+		return normalizeDecimal(total + netLineQuantity(lineItem));
 	}, 0);
 }
 

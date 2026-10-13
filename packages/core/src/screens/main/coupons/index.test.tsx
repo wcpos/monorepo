@@ -4,25 +4,28 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject, of, Subject } from 'rxjs';
-import { ObservableResource } from 'observable-hooks';
 
 import { CouponsScreen } from './index';
 
 import type { QueryStateOf } from '../../../query';
 
+// The coupons query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+const answered = (hits: unknown[] = []) =>
+	fakeQueryHandle({
+		result: { hits, searchActive: false, searchState: 'answered' },
+		total: 27,
+	});
 let mockCanCreate = true;
 const mockPush = jest.fn();
-const mockSync = jest.fn(async () => undefined);
-const mockBinding = {
-	resource: new ObservableResource(
-		new BehaviorSubject({ hits: [], searchState: 'answered', searchActive: false })
-	),
-	active$: of(false),
-	total$: of(27),
-	sync: mockSync,
-};
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
+let mockHandle: FakeHandle = answered();
+const mockUseCollectionQueryHandle = jest.fn((_collection: unknown, _state: unknown) => mockHandle);
+let mockPointer = 'fine';
 const mockPatch = jest.fn();
 let mockDataTableProps: Record<string, unknown> = {};
 let mockTooltipProps: { showOnNative?: boolean } = {};
@@ -34,8 +37,8 @@ jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
 
@@ -80,9 +83,31 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
+// The real boundary with a reset control: the screen wires `onReset` to the handle's retry.
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
+	return {
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="coupons-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
+	};
+});
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: React.Suspense,
 }));
@@ -111,7 +136,22 @@ jest.mock('@wcpos/components/tooltip', () => ({
 jest.mock('../components/data-table/v2', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
-		return <div data-testid="coupons-table" />;
+		// The real table draws the deferred handle's rows and suspends on an unanswered one.
+		const handle = React.useDeferredValue(props.handle as FakeHandle);
+		const snapshot = React.useSyncExternalStore(handle.subscribe, () => handle.value);
+		if (!snapshot.ready) throw handle.whenAnswered();
+		const { result } = snapshot;
+		const renderItem = props.renderItem as
+			((args: { item: { original: { record: { uuid: string } } } }) => React.ReactNode) | undefined;
+		return (
+			<div data-testid="coupons-table">
+				{(result.hits as { record: { uuid: string } }[]).map((hit) => (
+					<React.Fragment key={hit.record.uuid}>
+						{renderItem ? renderItem({ item: { original: hit } }) : null}
+					</React.Fragment>
+				))}
+			</div>
+		);
 	},
 }));
 jest.mock('../components/data-table/v2/skeleton', () => ({
@@ -143,7 +183,7 @@ jest.mock('../hooks/mutations/use-mutation', () => ({
 jest.mock('../hooks/use-date-format', () => ({
 	useDateFormat: (value: string | undefined) => value ?? '',
 }));
-jest.mock('./filter-bar', () => ({ FilterBar: () => null }));
+jest.mock('./filter-bar', () => ({ FilterBar: () => <div data-testid="coupons-filter-bar" /> }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/active', () => ({ Active: () => null }));
@@ -158,8 +198,8 @@ jest.mock('./cells/status', () => ({ Status: () => null }));
 jest.mock('./cells/usage', () => ({ Usage: () => null }));
 
 function latestState(): QueryStateOf<'coupons'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('coupons binding was not called');
+	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
+	if (!call) throw new Error('coupons handle was not asked for');
 	return call[1] as QueryStateOf<'coupons'>;
 }
 
@@ -172,11 +212,12 @@ describe('CouponsScreen query-state wiring', () => {
 		mockSortBy = 'date_created_gmt';
 		mockSortDirection = 'desc';
 		mockReadOnly = false;
+		mockPointer = 'fine';
 	});
 
 	afterEach(() => jest.useRealTimers());
 
-	it('binds engine coupons with the existing default sort and page size', () => {
+	it('asks for the coupons handle with the existing default sort and page size', () => {
 		render(<CouponsScreen />);
 
 		expect(latestState()).toEqual({
@@ -186,13 +227,22 @@ describe('CouponsScreen query-state wiring', () => {
 			limit: 10,
 		});
 		expect(mockDataTableProps).toMatchObject({
-			resource: mockBinding.resource,
+			handle: mockHandle,
 			sort: { field: 'date_created_gmt', direction: 'desc' },
-			active$: mockBinding.active$,
-			total$: mockBinding.total$,
-			sync: mockBinding.sync,
 		});
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith('coupons', latestState());
 		expect(mockDataTableProps).not.toHaveProperty('query');
+		expect(mockDataTableProps).not.toHaveProperty('resource');
+	});
+
+	it('patches an inline edit through the coupons mutation', () => {
+		render(<CouponsScreen />);
+		const { meta } = mockDataTableProps.tableConfig as {
+			meta: { onChange: (args: { document: unknown; changes: unknown }) => void };
+		};
+		const document = { uuid: 'one' };
+		meta.onChange({ document, changes: { code: 'SAVE10' } });
+		expect(mockPatch).toHaveBeenCalledWith({ document, data: { code: 'SAVE10' } });
 	});
 
 	it('keeps the upgrade tooltip available when adding is read-only', () => {
@@ -203,7 +253,7 @@ describe('CouponsScreen query-state wiring', () => {
 		expect(mockTooltipProps.showOnNative).toBe(true);
 	});
 
-	it('initializes binding sort from valid persisted coupon settings', () => {
+	it('initializes the query sort from valid persisted coupon settings', () => {
 		mockSortBy = 'status';
 		mockSortDirection = 'asc';
 
@@ -305,19 +355,125 @@ jest.mock('../components/management-bar', () => ({
 	),
 }));
 jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
-jest.mock('./row', () => ({ CouponRow: () => null }));
+jest.mock('./row', () => ({
+	CouponRow: ({ record }: { record: { uuid: string } }) => (
+		<div data-testid={`coupons-row-${record.uuid}`} />
+	),
+}));
 jest.mock('./cells/date', () => ({ DateCell: () => null }));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-it('shows a skeleton while the resource suspends', () => {
-	const resource = mockBinding.resource;
-	mockBinding.resource = new ObservableResource(new Subject());
-	render(<CouponsScreen />);
-	expect(screen.getByTestId('skeleton-coupons')).toBeTruthy();
-	mockBinding.resource = resource;
+it('shows a skeleton while the handle is unanswered', () => {
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({ ready: false });
+	try {
+		const { unmount } = render(<CouponsScreen />);
+		expect(screen.getByTestId('skeleton-coupons')).toBeTruthy();
+		expect(screen.queryByTestId('coupons-table')).toBeNull();
+		unmount();
+	} finally {
+		mockHandle = original;
+	}
+});
+it('keeps the current rows, not the skeleton, while a changed query’s handle answers, then shows its rows', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	const row = (id: string) => ({ id, record: { uuid: id } });
+	mockHandle = answered([row('one')]);
+	try {
+		render(<CouponsScreen />);
+		expect(screen.getByTestId('coupons-row-one')).toBeTruthy();
+		// The query changes (a header sort): the screen asks for a new handle, unanswered.
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		act(() =>
+			(
+				mockDataTableProps.actions as { setSort: (field: string, direction: string) => void }
+			).setSort('status', 'asc')
+		);
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith(
+			'coupons',
+			expect.objectContaining({ sort: { field: 'status', direction: 'asc' } })
+		);
+		// The old rows stay; no skeleton.
+		expect(screen.getByTestId('coupons-row-one')).toBeTruthy();
+		expect(screen.queryByTestId('skeleton-coupons')).toBeNull();
+		await act(async () =>
+			next.set({
+				ready: true,
+				result: { hits: [row('two')], searchActive: false, searchState: 'answered' },
+			})
+		);
+		expect(screen.getByTestId('coupons-row-two')).toBeTruthy();
+		expect(screen.queryByTestId('coupons-row-one')).toBeNull();
+	} finally {
+		mockHandle = original;
+		mockPointer = 'fine';
+	}
+});
+it('throws a failed read to the boundary, whose reset asks the handle again and draws its answer', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+	const retry = jest.fn(() => {
+		failed.set({ error: null, ready: false });
+	});
+	failed.retry = retry;
+	mockHandle = failed;
+	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+	try {
+		render(<CouponsScreen />);
+		expect(screen.getByTestId('coupons-error-reset')).toBeTruthy();
+		expect(screen.queryByTestId('coupons-table')).toBeNull();
+		// The filter bar stands in its own boundary: a failed read leaves it up.
+		expect(screen.getByTestId('coupons-filter-bar')).toBeTruthy();
+		// The reset retries through the handle; the reader suspends on the retry.
+		act(() => {
+			fireEvent.click(screen.getByTestId('coupons-error-reset'));
+		});
+		expect(retry).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('skeleton-coupons')).toBeTruthy();
+		await act(async () =>
+			failed.set({
+				ready: true,
+				result: {
+					hits: [{ id: 'one', record: { uuid: 'one' } }],
+					searchActive: false,
+					searchState: 'answered',
+				},
+			})
+		);
+		expect(screen.getByTestId('coupons-row-one')).toBeTruthy();
+	} finally {
+		consoleError.mockRestore();
+		mockHandle = original;
+		mockPointer = 'fine';
+	}
+});
+it('clears the fallback on its own when the query changes after a failed read', async () => {
+	mockPointer = 'coarse';
+	const original = mockHandle;
+	mockHandle = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+	const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+	try {
+		render(<CouponsScreen />);
+		expect(screen.getByTestId('coupons-error-reset')).toBeTruthy();
+		// A search from the bar outside the boundary: a new handle, answered.
+		mockHandle = answered([{ id: 'one', record: { uuid: 'one' } }]);
+		await act(async () => {
+			fireEvent.change(screen.getByTestId('search-coupons'), { target: { value: 'ten' } });
+			jest.advanceTimersByTime(250);
+		});
+		expect(screen.queryByTestId('coupons-error-reset')).toBeNull();
+		expect(screen.getByTestId('coupons-row-one')).toBeTruthy();
+	} finally {
+		consoleError.mockRestore();
+		mockHandle = original;
+		mockPointer = 'fine';
+	}
 });
 it.each([
 	[true, true],
@@ -356,21 +512,21 @@ jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 
 it('shows retained rows as searching only while results are pending', () => {
-	const original = mockBinding.resource;
-	const source = new BehaviorSubject({
+	const original = mockHandle;
+	const source = {
 		hits: [{ id: 'one', record: { uuid: 'one' } }],
 		searchState: 'pending',
 		searchActive: true,
-	});
-	mockBinding.resource = new ObservableResource(source) as typeof original;
+	};
+	mockHandle = fakeQueryHandle({ result: source, total: 27 });
 	try {
 		const { unmount } = render(<CouponsScreen />);
 		expect(screen.getByTestId('coupons-searching-line')).toBeTruthy();
-		act(() => source.next({ ...source.value, searchState: 'answered' }));
+		act(() => mockHandle.set({ result: { ...source, searchState: 'answered' } }));
 		expect(screen.queryByTestId('coupons-searching-line')).toBeNull();
 		unmount();
 	} finally {
-		mockBinding.resource = original;
+		mockHandle = original;
 	}
 });
 

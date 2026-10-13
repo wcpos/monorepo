@@ -211,3 +211,42 @@ it('guards a numeric-string quantity should a caller pass one, and leaves non-nu
 	expect(await stockGuardOnUpdate(ctx, junkEvent, junk)).toBe('saved');
 	expect(junk).toHaveBeenCalledWith(junkEvent);
 });
+it.each([
+	{ reduced: '3', quantity: 10, allowed: true },
+	{ reduced: '3', quantity: 11, allowed: false },
+	{ reduced: undefined, quantity: 8, allowed: false },
+])(
+	'nets a reopened line of 3 (_reduced_stock $reduced) raised to $quantity against stock 7',
+	async ({ reduced, quantity, allowed }) => {
+		readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 7, backorders: 'no' });
+		const line = {
+			product_id: 1,
+			quantity: 3,
+			name: 'Item',
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: 'line' },
+				...(reduced === undefined ? [] : [{ key: '_reduced_stock', value: reduced }]),
+			],
+		};
+		const result = await stockGuardOnUpdate(
+			ctx,
+			{
+				...e,
+				event: 'cart.line.update',
+				payload: {
+					type: 'line_items',
+					lineUuid: 'line',
+					line,
+					lineItems: [line],
+					changes: { quantity },
+					options: {},
+				},
+			},
+			next
+		);
+		const denied = {
+			deny: expect.objectContaining({ detail: expect.objectContaining({ available: 7 }) }),
+		};
+		expect(result).toEqual(allowed ? 'saved' : denied);
+	}
+);
