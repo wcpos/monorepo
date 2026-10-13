@@ -14,8 +14,8 @@ export const SCRIM_STRENGTH = 0.92;
 
 /**
  * The blur under the words, in px, masked by the same fade so it has no edge. Drawn on web only
- * until native can mask a blur (research in progress: roadmap
- * `docs/research/2026-10-13-native-scrim-blur.md` when it lands).
+ * for now: native draws it as a blurred copy of the picture under a gradient mask (roadmap
+ * `docs/research/2026-10-13-native-scrim-blur.md`), which is its own change once judged on a device.
  */
 export const SCRIM_BLUR_PX = 6;
 
