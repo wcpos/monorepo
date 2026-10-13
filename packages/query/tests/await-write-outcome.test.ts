@@ -4,6 +4,7 @@ import {
 	awaitWriteOutcome,
 	WriteDeferredError,
 	WriteOutcomeError,
+	WriteOutcomeTimeoutError,
 } from '../src/await-write-outcome';
 
 function createEngine(options: { authRequired?: boolean } = {}) {
@@ -88,15 +89,19 @@ describe('awaitWriteOutcome', () => {
 			mutationId: 'mutation-1',
 			status: 403,
 			reason: 'woocommerce_rest_cannot_delete',
+			serverMessage: 'Sorry, you are not allowed to delete this order.',
 		});
 
 		const error = await outcome.catch((caught: unknown) => caught);
 		expect(error).toBeInstanceOf(WriteOutcomeError);
 		expect(error).toMatchObject({
 			name: 'WriteOutcomeError',
+			message:
+				'write-rejected for mutation "mutation-1": Sorry, you are not allowed to delete this order.',
 			eventType: 'write-rejected',
 			status: 403,
 			reason: 'woocommerce_rest_cannot_delete',
+			serverMessage: 'Sorry, you are not allowed to delete this order.',
 		});
 	});
 
@@ -166,6 +171,69 @@ describe('awaitWriteOutcome', () => {
 
 			await expect(outcome).rejects.toThrow('Timed out waiting for mutation "mutation-1"');
 			expect(unsubscribe).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('carries a snapshot of the push state on a timeout', async () => {
+		jest.useFakeTimers();
+		try {
+			const { engine } = createEngine();
+			(engine.status as jest.Mock).mockReturnValue({
+				connectivity: 'online',
+				authRequired: false,
+				writeSessionHeld: true,
+				gatedBy: null,
+				queueDepth: 3,
+				lanes: {
+					'write-drain': {
+						lastError: 'HTTP 503',
+						lastTick: { atMs: 1_000, status: 'error' },
+						nextDueAtMs: 9_000,
+					},
+				},
+			});
+			const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 25 });
+
+			jest.advanceTimersByTime(25);
+
+			const error = await outcome.catch((caught: unknown) => caught);
+			expect(error).toBeInstanceOf(WriteOutcomeTimeoutError);
+			expect(error).toMatchObject({
+				message: 'Timed out waiting for mutation "mutation-1"',
+				diagnostics: {
+					connectivity: 'online',
+					authRequired: false,
+					writeSessionHeld: true,
+					gatedBy: null,
+					queueDepth: 3,
+					writeDrainLastTickAtMs: 1_000,
+					writeDrainLastTickStatus: 'error',
+					writeDrainLastError: 'HTTP 503',
+					writeDrainNextDueAtMs: 9_000,
+				},
+			});
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('still rejects with the timeout when the status snapshot throws', async () => {
+		jest.useFakeTimers();
+		try {
+			const { engine } = createEngine();
+			const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 25 });
+			(engine.status as jest.Mock).mockImplementation(() => {
+				throw new Error('disposed');
+			});
+
+			jest.advanceTimersByTime(25);
+
+			await expect(outcome).rejects.toMatchObject({
+				name: 'WriteOutcomeTimeoutError',
+				diagnostics: {},
+			});
 		} finally {
 			jest.useRealTimers();
 		}

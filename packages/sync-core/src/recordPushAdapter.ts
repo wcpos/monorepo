@@ -444,7 +444,25 @@ export function readServerMessage(
 	if (fatal !== undefined) return fatal;
 	if (typeof body.message !== 'string') return undefined;
 	const message = stripTags(body.message);
-	return message.length > 0 ? message : undefined;
+	if (message.length === 0) return undefined;
+	const params = body.code === 'rest_invalid_param' ? readInvalidParams(body.data) : undefined;
+	return params ?? message;
+}
+
+/**
+ * WordPress's `rest_invalid_param` message only lists the failing keys; WHY each failed is in
+ * `data.params` (`{ email: 'Invalid email address.' }`). Each entry names its key, so it
+ * replaces the message rather than trailing it: the ledger's 200-character cap cuts from the
+ * end, which is where the reasons would sit.
+ */
+function readInvalidParams(data: unknown): string | undefined {
+	if (typeof data !== 'object' || data === null) return undefined;
+	const params = (data as Record<string, unknown>).params;
+	if (typeof params !== 'object' || params === null) return undefined;
+	const entries = Object.entries(params)
+		.filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+		.map(([key, reason]) => `${key}: ${stripTags(reason)}`);
+	return entries.length > 0 ? entries.join('; ') : undefined;
 }
 
 /**

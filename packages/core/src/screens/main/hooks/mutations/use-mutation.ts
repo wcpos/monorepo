@@ -7,9 +7,9 @@ import {
 	COLLECTION_VOCABULARY,
 	useQueryRuntime,
 	type WriteableCollection,
+	WriteOutcomeError,
 } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	documentRecordId,
@@ -19,6 +19,7 @@ import {
 	useLocalMutation,
 } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
+import { pushFailureCode } from '../../contexts/push-failure-code';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
@@ -69,13 +70,27 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const handleError = React.useCallback(
 		(error: unknown, context?: Record<string, unknown>) => {
 			const message = getErrorMessage(error);
-			mutationLogger.error(message, {
+			// A store refusal carries the store's own (already localized) sentence, e.g.
+			// "An account is already registered with your email address"; the error's
+			// message is only the machine `write-rejected for mutation "<uuid>"`. It is the
+			// explicit toast title, or the code's generic summary would replace it.
+			const rejection =
+				error instanceof WriteOutcomeError && error.serverMessage ? error : undefined;
+			const serverMessage = rejection?.serverMessage;
+			// The log message stays machine text (the store's sentence is localized and would
+			// split one Sentry issue per language); the sentence rides the toast and context.
+			const logMessage = rejection
+				? `${rejection.eventType} (${rejection.reason ?? 'no reason'})`
+				: message;
+			mutationLogger.error(logMessage, {
 				showToast: true,
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: pushFailureCode(error),
+				...(serverMessage ? { toast: { title: serverMessage } } : {}),
 				context: {
 					collectionName,
 					endpoint,
 					operation: 'mutation',
+					...(rejection ? { error: message, reason: rejection.reason } : {}),
 					...context,
 				},
 			});

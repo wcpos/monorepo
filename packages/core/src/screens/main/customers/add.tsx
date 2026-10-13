@@ -43,7 +43,8 @@ export function AddCustomerScreen() {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				// create() logs and toasts its own failure; reporting it here too doubled it.
+				const savedDoc = await create({ data }).catch(() => undefined);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its payload.
 					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;

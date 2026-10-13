@@ -5,7 +5,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, WriteOutcomeError } from '@wcpos/query';
 
 import { useMutation } from './use-mutation';
 
@@ -26,6 +26,8 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteDeferredError: jest.requireActual('@wcpos/query').WriteDeferredError,
+	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
 }));
 
 jest.mock('./use-local-mutation', () => ({
@@ -260,5 +262,37 @@ describe('useMutation', () => {
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toThrow('write-rejected for mutation "mutation-1"');
 		expect(resident.remove).not.toHaveBeenCalled();
+	});
+
+	it("toasts the server's own sentence when a create is rejected", async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeError(
+				'write-rejected',
+				'mutation-1',
+				400,
+				'registration-error-email-exists',
+				'An account is already registered with your email address. Please log in.'
+			)
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await expect(
+			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
+		).rejects.toBeInstanceOf(WriteOutcomeError);
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'write-rejected (registration-error-email-exists)',
+			expect.objectContaining({
+				showToast: true,
+				toast: {
+					title: 'An account is already registered with your email address. Please log in.',
+				},
+				context: expect.objectContaining({
+					error:
+						'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
+					reason: 'registration-error-email-exists',
+				}),
+			})
+		);
 	});
 });
