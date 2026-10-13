@@ -34,12 +34,11 @@ export function SessionHoldBanner() {
 	const previousAccessToken = React.useRef(accessToken);
 	const [recovered, setRecovered] = React.useState(false);
 	const held = status.writeSessionHeld || status.authRequired;
-	const previousStatus = React.useRef(status);
-	// Recovery hides the stale hold only until the engine publishes its next snapshot.
-	// eslint-disable-next-line react-hooks/refs -- Compare snapshots before rendering the recovery state.
-	if (previousStatus.current !== status) {
-		// eslint-disable-next-line react-hooks/refs -- Record the snapshot before the conditional rerender.
-		previousStatus.current = status;
+	// Recovery hides the stale hold only until the engine publishes its next snapshot
+	// (previous-value-in-state: a new snapshot identity resets the flag during render).
+	const [seenStatus, setSeenStatus] = React.useState(status);
+	if (seenStatus !== status) {
+		setSeenStatus(status);
 		if (recovered) setRecovered(false);
 	}
 
