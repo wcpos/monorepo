@@ -2,7 +2,7 @@ import { sqliteTransaction } from 'rxdb/plugins/storage-sqlite';
 
 import type { SQLiteBasics, SQLiteDatabaseClass } from 'rxdb/plugins/storage-sqlite';
 
-// Guards `patches/rxdb@17.5.0.patch` (sqlite-helpers): RxDB chains every transaction on one
+// Guards `patches/rxdb@17.6.0.patch` (sqlite-helpers): RxDB chains every transaction on one
 // promise per database. Upstream, a handler that throws leaves a REJECTED link in that chain,
 // so every later `.then` is skipped and every later write replays the same error until the
 // process dies — the till could not save an order for the rest of a session (Pixel, 2026-10-06).
