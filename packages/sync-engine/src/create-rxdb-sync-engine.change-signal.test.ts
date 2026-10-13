@@ -510,12 +510,12 @@ describe('sync("change-signal") through the public handle', () => {
 		const customerIncludes: string[] = [];
 		const engine = engineWith({
 			storage: memoryEngineStorage(),
-			fetch: (url, init) => {
+			fetch: (url) => {
 				const u = new URL(url);
 				if (u.pathname.endsWith('/customers')) {
 					customerIncludes.push(u.searchParams.get('include') ?? '');
 				}
-				return server.fetch(url, init);
+				return server.fetch(url);
 			},
 			identity: freshIdentity(),
 		});

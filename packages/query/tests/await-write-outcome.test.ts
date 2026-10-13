@@ -96,6 +96,8 @@ describe('awaitWriteOutcome', () => {
 		expect(error).toBeInstanceOf(WriteOutcomeError);
 		expect(error).toMatchObject({
 			name: 'WriteOutcomeError',
+			message:
+				'write-rejected for mutation "mutation-1": Sorry, you are not allowed to delete this order.',
 			eventType: 'write-rejected',
 			status: 403,
 			reason: 'woocommerce_rest_cannot_delete',
@@ -211,6 +213,26 @@ describe('awaitWriteOutcome', () => {
 					writeDrainLastError: 'HTTP 503',
 					writeDrainNextDueAtMs: 9_000,
 				},
+			});
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('still rejects with the timeout when the status snapshot throws', async () => {
+		jest.useFakeTimers();
+		try {
+			const { engine } = createEngine();
+			const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 25 });
+			(engine.status as jest.Mock).mockImplementation(() => {
+				throw new Error('disposed');
+			});
+
+			jest.advanceTimersByTime(25);
+
+			await expect(outcome).rejects.toMatchObject({
+				name: 'WriteOutcomeTimeoutError',
+				diagnostics: {},
 			});
 		} finally {
 			jest.useRealTimers();

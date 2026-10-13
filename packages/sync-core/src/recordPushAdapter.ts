@@ -445,14 +445,15 @@ export function readServerMessage(
 	if (typeof body.message !== 'string') return undefined;
 	const message = stripTags(body.message);
 	if (message.length === 0) return undefined;
-	const params = readInvalidParams(body.data);
-	return params === undefined ? message : `${message} (${params})`;
+	const params = body.code === 'rest_invalid_param' ? readInvalidParams(body.data) : undefined;
+	return params ?? message;
 }
 
 /**
- * WordPress's `rest_invalid_param` names the failing keys in its message but puts WHY each
- * failed in `data.params` (`{ email: 'Invalid email address.' }`); without it the report
- * cannot say which value was refused.
+ * WordPress's `rest_invalid_param` message only lists the failing keys; WHY each failed is in
+ * `data.params` (`{ email: 'Invalid email address.' }`). Each entry names its key, so it
+ * replaces the message rather than trailing it: the ledger's 200-character cap cuts from the
+ * end, which is where the reasons would sit.
  */
 function readInvalidParams(data: unknown): string | undefined {
 	if (typeof data !== 'object' || data === null) return undefined;

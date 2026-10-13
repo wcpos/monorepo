@@ -127,7 +127,11 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
 	});
 
-	it('still searches remotely at exactly the plugin limits', async () => {
+	it.each([
+		['10 words', 'a b c d e f g h i j'],
+		// 256 code points, 512 UTF-16 units: the plugin counts characters, not units.
+		['256 astral characters', '😀'.repeat(256)],
+	])('still searches remotely at exactly the plugin limits (%s)', async (_label, term) => {
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,
@@ -135,7 +139,7 @@ describe('createVariationsSchedulerFetcher', () => {
 			fetcher,
 			exactSkuLeg: () => false,
 		});
-		const queryKey = `variations:search:${encodeURIComponent('a b c d e f g h i j')}`;
+		const queryKey = `variations:search:${encodeURIComponent(term)}`;
 
 		await schedulerFetcher(variationTask({ id: `${queryKey}:windowed`, queryKey }));
 

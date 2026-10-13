@@ -17,7 +17,8 @@ export class WriteOutcomeError extends Error {
 		reason?: string,
 		serverMessage?: string
 	) {
-		super(`${eventType} for mutation "${mutationId}"`);
+		// The server's sentence rides the message too, so every caller's logged `error` says why.
+		super(`${eventType} for mutation "${mutationId}"${serverMessage ? `: ${serverMessage}` : ''}`);
 		this.name = 'WriteOutcomeError';
 		this.eventType = eventType;
 		this.status = status;

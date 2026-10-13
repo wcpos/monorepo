@@ -82,6 +82,8 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 					}
 				}
 			} catch (error) {
+				// Only what follows a successful create reaches here (the success toast, the
+				// order patch); create() failures are reported by create() itself.
 				const errorMessage = getErrorMessage(error);
 				cartLogger.error('Failed to save customer', {
 					showToast: true,

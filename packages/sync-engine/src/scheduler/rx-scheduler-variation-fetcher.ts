@@ -125,6 +125,8 @@ export function createVariationsSchedulerFetcher(
 ): SchedulerFetcher {
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
 		const term = assertVariationSearchTask(task).trim();
+		// Past the plugin's limits the term is treated as empty: both legs skip and coverage
+		// records complete, so the scheduler stops re-asking a query the plugin always 400s.
 		const search = withinPluginSearchLimits(term) ? term : '';
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);

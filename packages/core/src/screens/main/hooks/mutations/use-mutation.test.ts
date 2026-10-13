@@ -26,6 +26,7 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteDeferredError: jest.requireActual('@wcpos/query').WriteDeferredError,
 	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
 }));
 
@@ -280,13 +281,13 @@ describe('useMutation', () => {
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toBeInstanceOf(WriteOutcomeError);
 		expect(mockLoggerError).toHaveBeenCalledWith(
-			'An account is already registered with your email address. Please log in.',
+			'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({
-					reason: 'registration-error-email-exists',
-					error: 'write-rejected for mutation "mutation-1"',
-				}),
+				toast: {
+					title: 'An account is already registered with your email address. Please log in.',
+				},
+				context: expect.objectContaining({ reason: 'registration-error-email-exists' }),
 			})
 		);
 	});
