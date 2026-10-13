@@ -198,6 +198,27 @@ describe('aggregateExistingCartQuantity', () => {
 			})
 		).toBe(1);
 	});
+
+	it.each([
+		['3', 0],
+		['1', 2],
+		[1, 2],
+		['abc', 3],
+		[null, 3],
+	])(
+		'counts a sibling of 3 net of its _reduced_stock %p as %p',
+		(reduced: unknown, expected: number) => {
+			expect(
+				aggregateExistingCartQuantity({
+					lineItems: [
+						{ product_id: 10, quantity: 3, meta_data: [{ key: '_reduced_stock', value: reduced }] },
+					],
+					productId: 10,
+					product: { manage_stock: true },
+				})
+			).toBe(expected);
+		}
+	);
 });
 
 describe('readStockDocument and resolveStockOwnerId', () => {

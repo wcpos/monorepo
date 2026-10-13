@@ -23,6 +23,7 @@ const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 let mockLineItemQuantity = 1;
+let mockReducedStock: unknown;
 
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = {
@@ -123,6 +124,9 @@ jest.mock('../contexts/current-order', () => ({
 									tax_status: 'taxable',
 								}),
 							},
+							...(mockReducedStock === undefined
+								? []
+								: [{ key: '_reduced_stock', value: mockReducedStock }]),
 						],
 					},
 					{
@@ -192,6 +196,7 @@ describe('useUpdateLineItem', () => {
 		mockGetCurrentOrderCalls = 0;
 		mockLocalPatch.mockResolvedValue({ changes: {} });
 		mockLineItemQuantity = 1;
+		mockReducedStock = undefined;
 		mockReadCatalog.mockResolvedValue({
 			manage_stock: true,
 			stock_quantity: 10,
@@ -616,6 +621,41 @@ describe('useUpdateLineItem', () => {
 			undefined,
 		]);
 	});
+
+	it.each([
+		{ quantity: 3, reduced: '2', expected: ['1', '1', undefined] },
+		{ quantity: 3, reduced: '3', expected: ['1', '1', '1'] },
+		{ quantity: 2, reduced: '5', expected: ['1', '4'] },
+		{ quantity: 2, reduced: 5, expected: [1, 4] },
+		{ quantity: 2.5, reduced: '2', expected: ['1', '1', undefined] },
+		{ quantity: 3, reduced: undefined, expected: [undefined, undefined, undefined] },
+	])(
+		'splits a line of $quantity sharing _reduced_stock $reduced as $expected',
+		async ({ quantity, reduced, expected }) => {
+			mockLineItemQuantity = quantity;
+			mockReducedStock = reduced;
+			const { result } = renderHook(() => useUpdateLineItem());
+
+			await act(async () => {
+				await result.current.splitLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3');
+			});
+
+			const lines = (
+				mockLocalPatch.mock.calls[0][0].data.line_items as {
+					quantity?: number;
+					meta_data?: { key?: string; value?: unknown }[];
+				}[]
+			).slice(1, -1);
+			expect(lines.map((line) => line.quantity)).toEqual(
+				quantity === 2.5 ? [1, 1, 0.5] : expected.map(() => 1)
+			);
+			expect(
+				lines.map((line) => line.meta_data?.filter((meta) => meta.key === '_reduced_stock'))
+			).toEqual(
+				expected.map((value) => (value === undefined ? [] : [{ key: '_reduced_stock', value }]))
+			);
+		}
+	);
 
 	it('reports the invariant when split targets a missing line item without a toast', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
