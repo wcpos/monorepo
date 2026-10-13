@@ -6,7 +6,8 @@
  * boundary above the creator is no help: React unwinds to it and discards everything below,
  * the resource included, so every retry built another one that suspended for the reason its
  * predecessor did (#1707). Moving the creation up one level — above the boundary — is the whole
- * fix; there is no cache here.
+ * fix; there is no cache here. On the handle the same holds for the OWNER: its retain effect
+ * starts the read, so an owner inside the boundary would never start it at all.
  */
 import * as React from 'react';
 
@@ -39,18 +40,44 @@ jest.mock('@wcpos/components/combobox', () => ({
 	ComboboxValue: () => null,
 }));
 jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../../query', () => ({
-	useGuardedExtension: () => ({}),
-	useSearchSelect: () => ({}),
-	// Faithful to the real binding at the one thing this file measures: the resource lives on
-	// the FIBER (`useState`), so a render React discards takes it with it.
-	useAllCategoriesBinding: () => {
-		const react = jest.requireActual('react') as typeof React;
-		const hooks = jest.requireActual('observable-hooks');
-		const [resource] = react.useState(() => new hooks.ObservableResource(result$));
-		return { resource };
-	},
-}));
+jest.mock('../../../../query', () => {
+	const handles = jest.requireActual<typeof import('../../../../query/query-handles')>(
+		'../../../../query/query-handles'
+	);
+	const { createQueryHandle } = jest.requireActual<typeof import('@wcpos/query')>('@wcpos/query');
+	return {
+		useGuardedExtension: () => ({}),
+		useSearchSelect: () => ({}),
+		useDrawnHandle: handles.useDrawnHandle,
+		useQuerySnapshot: handles.useQuerySnapshot,
+		// Faithful to the real hook at the one thing this file measures: the handle is held on
+		// the FIBER (a memo, outside any registry) and retained from an effect, so a render React
+		// discards takes it with it, and only a committed owner starts its read.
+		useAllCategoriesHandle: () => {
+			const react = jest.requireActual('react') as typeof React;
+			const handle = react.useMemo(
+				() =>
+					createQueryHandle(
+						{} as never,
+						{
+							key: 'categories',
+							result$: () => result$ as never,
+							demands: [],
+							activeCollections: [],
+							censusScoped: false,
+							observeActive: () => {
+								throw new Error('no activity to observe');
+							},
+						},
+						{ hits: [] } as never
+					),
+				[]
+			);
+			react.useEffect(() => handle.retain(), [handle]);
+			return handle;
+		},
+	};
+});
 
 /** Lets every pending microtask (and the React retry it schedules) run. */
 async function settle() {

@@ -39,8 +39,9 @@ import {
  * How a categories stage learns about a category created after the app booted — traced, since
  * the spec's whole first assertion rests on it:
  *
- *  - Mounting the stage declares the taxonomy binding's demand (`useEngineBinding`'s standing
- *    declaration, `packages/core/src/query/query-bindings.ts` 273–400, `declare(true)`); for
+ *  - Mounting the stage declares the taxonomy handle's demand (the owner's retain in
+ *    `useAllTermsHandle`, `packages/core/src/query/terms-handles.ts`, starts the handle's
+ *    `createDemand` declaration in `packages/query/src/query-handle.ts`); for
  *    `products/categories` that demand is one `kind: 'refresh'` requirement
  *    (`query-state-translator.ts` 648–668).
  *  - The require plane runs that refresh as an on-demand reference pull

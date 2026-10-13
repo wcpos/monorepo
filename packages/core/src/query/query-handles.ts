@@ -12,7 +12,20 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged, filter, map, Observable, of, switchMap } from 'rxjs';
+import {
+	auditTime,
+	combineLatest,
+	defer,
+	distinctUntilChanged,
+	exhaustMap,
+	filter,
+	map,
+	merge,
+	Observable,
+	of,
+	switchMap,
+	take,
+} from 'rxjs';
 
 import {
 	acquireQueryHandle,
@@ -23,6 +36,7 @@ import {
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
 	observeCollectionActive,
+	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryHandle,
 	queryHandleResource,
@@ -31,13 +45,18 @@ import {
 	type QueryResult,
 	type QuerySnapshot,
 	releaseHandles,
+	useLocalQuery$,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
 import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RemoteId } from '@wcpos/sync-core';
 
-import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
+import {
+	compileQuery,
+	requirementsForCompiledQuery,
+	translateLogsQueryState,
+} from './query-state-translator';
 import { useScopeKey } from './scope-key';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
@@ -271,7 +290,37 @@ export type CollectionHandleInput<C extends CollectionHandleKey> = {
 export type EngineQueryHandleInput = {
 	descriptor: EngineQueryDescriptor;
 	compiled: CompiledQuery;
+	/** Not live: re-check at most this often after a write (see `recheckedRead$`). */
+	recheckMs?: number;
 };
+
+/**
+ * A read answered once, then asked again at most once per `windowMs` after its collection is
+ * written — never a live query, whose every write re-runs it. A write starts the window; more
+ * writes inside it are the same re-check, and the answer converges at the window's end. A new
+ * database (scope move, reset) is asked at once.
+ */
+function recheckedRead$<T>(
+	read$: Observable<T>,
+	collection$: Observable<{ eventBulks$: Observable<unknown> } | null>,
+	windowMs: number
+): Observable<T> {
+	const once$ = defer(() => read$.pipe(take(1)));
+	return collection$.pipe(
+		distinctUntilChanged(),
+		switchMap((collection) =>
+			collection
+				? merge(
+						once$,
+						collection.eventBulks$.pipe(
+							auditTime(windowMs),
+							exhaustMap(() => once$)
+						)
+					)
+				: once$
+		)
+	);
+}
 
 /**
  * One descriptor read with one demand as a handle: the collection's own activity and census,
@@ -287,17 +336,27 @@ export function acquireEngineQueryHandle(
 ): QueryHandle<QueryResult<RxCollection>> {
 	return acquireQueryHandle(engine, key, (registry) => {
 		const id = `qh${nextHandleId++}`;
-		const { descriptor, compiled } = build(id);
+		const { descriptor, compiled, recheckMs } = build(id);
 		const engineCollection = engineCollectionNameFor(compiled.collection);
 		const search = (descriptor.read?.search ?? descriptor.search)?.trim();
 		return createQueryHandle(
 			engine,
 			{
 				key,
-				result$: (target) =>
-					observeEngineQuery(target, descriptor).pipe(
+				result$: (target) => {
+					const live$ = observeEngineQuery(target, descriptor).pipe(
 						map((result) => ({ ...result, searchActive: Boolean(search) }))
-					),
+					);
+					return recheckMs === undefined
+						? live$
+						: recheckedRead$(
+								live$,
+								observeEngineDatabases(target).pipe(
+									map((database) => database?.collections[engineCollection] ?? null)
+								),
+								recheckMs
+							);
+				},
 				demands: [createDemand(engine, id, demandPlanFor(compiled))],
 				activeCollections: [engineCollection],
 				censusScoped: compiled.censusScoped,
@@ -308,6 +367,33 @@ export function acquireEngineQueryHandle(
 			registry
 		);
 	});
+}
+
+/**
+ * A handle with nothing to ask: no engine read (its answer is the empty result), no demand, no
+ * activity. What a disabled read hands its readers, so they keep one shape — a disabled read's
+ * empty answer IS its answer. Like any handle it is unanswered (`ready: false`) until its first
+ * reader or owner starts it; it answers on that start, synchronously.
+ */
+export function acquireEmptyQueryHandle(
+	engine: RxdbSyncEngine,
+	key: string
+): QueryHandle<QueryResult<RxCollection>> {
+	return acquireQueryHandle(engine, key, (registry) =>
+		createQueryHandle(
+			engine,
+			{
+				key,
+				result$: () => of(emptyResult()),
+				demands: [],
+				activeCollections: [],
+				censusScoped: false,
+				observeActive: observeCollectionActive,
+			},
+			emptyResult(),
+			registry
+		)
+	);
 }
 
 /**
@@ -442,6 +528,51 @@ export function useProductsQueryHandle(
 	}, [engine, key]);
 	// The owner retains: the demand is declared while this screen holds the handle; readers
 	// (the grid, a footer, a count badge) come and go and only keep the read.
+	React.useEffect(() => handle.retain(), [handle]);
+	return handle;
+}
+
+/**
+ * The logs ledger's handle: a local query (the logs live in the store database, never the
+ * engine), so no demand, no activity, no census. Its total is the result's own `count` — the
+ * local count of every matching row, which IS the whole set for a local-only collection; the
+ * handle's `total` stays null (it is read only from a demand's coverage).
+ *
+ * One handle per local read, outside the registry: a store switch hands `useLocalQuery$` a new
+ * database and so a new observable, and a new observable is a new handle. (A storage recovery
+ * does not: the observable follows the replacement collection itself, through `reset$`.) Only
+ * the observable is built here, so the handle's retain is what runs the read.
+ */
+export function useLogsQueryHandle(
+	state: QueryStateOf<'logs'>
+): QueryHandle<QueryResult<RxCollection>> {
+	const { engine } = useQueryRuntime();
+	const translated = translateLogsQueryState(state);
+	const key = canonicalQueryKey(['logs', translated]);
+	const { result$ } = useLocalQuery$({
+		collectionName: 'logs',
+		selector: translated.selector,
+		sort: translated.sort,
+		limit: translated.limit,
+		search: translated.search,
+	});
+	const handle = React.useMemo(
+		() =>
+			createQueryHandle(
+				engine,
+				{
+					key,
+					result$: () => result$ as unknown as Observable<QueryResult<RxCollection>>,
+					demands: [],
+					activeCollections: [],
+					censusScoped: false,
+					observeActive: observeCollectionActive,
+				},
+				emptyResult()
+			),
+		[engine, key, result$]
+	);
+	// The screen owns the read; the ledger draws it inside its boundary.
 	React.useEffect(() => handle.retain(), [handle]);
 	return handle;
 }

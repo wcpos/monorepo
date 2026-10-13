@@ -12,7 +12,8 @@ export {
 	useLocalCollection$,
 } from './use-local-collection';
 export type { LocalCollectionReset, LocalDatabaseWithReset } from './use-local-collection';
-export { useLocalQuery } from './use-local-query';
+export { useLocalQuery, useLocalQuery$ } from './use-local-query';
+export { useOwnedResource } from './use-owned-resource';
 export {
 	awaitWriteOutcome,
 	awaitWriteSettlement,

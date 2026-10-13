@@ -4,46 +4,28 @@ import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
-	defer,
 	firstValueFrom,
 	from,
-	merge,
 	Observable,
 	of,
 	race,
 	timer,
 } from 'rxjs';
-import {
-	auditTime,
-	distinctUntilChanged,
-	exhaustMap,
-	filter,
-	map,
-	shareReplay,
-	switchMap,
-	take,
-} from 'rxjs/operators';
+import { filter, map, shareReplay } from 'rxjs/operators';
 
 import {
 	ATTEMPTED,
-	censusTotal$,
-	coverageProjection$,
 	coverageTargetFor,
 	declareRequirements,
 	type DemandReadiness,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
-	exhaustedFromCoverage$,
-	NO_CENSUS_TOTAL$,
 	NOT_ATTEMPTED,
 	observeCollectionActive,
-	observeEngineDatabases,
-	observeEngineQuery,
 	type QueryLaneProgress,
 	type QueryResult,
 	readinessFrom,
 	releaseHandles,
-	useLocalQuery,
 	useQueryRuntime,
 	useSearchFields,
 } from '@wcpos/query';
@@ -57,11 +39,7 @@ import {
 	useProductsQueryHandle,
 	useQueryBindingFor,
 } from './query-handles';
-import {
-	compileQuery,
-	requirementsForCompiledQuery,
-	translateLogsQueryState,
-} from './query-state-translator';
+import { compileQuery, requirementsForCompiledQuery } from './query-state-translator';
 import { useCoverageGeneration, useScopeKey } from './scope-key';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
@@ -97,33 +75,6 @@ export interface QueryBinding {
 
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const INACTIVE$ = of(false);
-const NOT_PENDING$ = of(false);
-const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
-const NO_LANE_PROGRESS$ = of(null as QueryLaneProgress | null);
-
-function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
-	const key = JSON.stringify({ ...descriptor, read: undefined });
-	return React.useMemo(
-		() => ({
-			...(JSON.parse(key) as EngineQueryDescriptor),
-			...(descriptor.read ? { read: descriptor.read } : {}),
-		}),
-		[key, descriptor.read]
-	);
-}
-
-function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
-	const [resource] = React.useState(() => new ObservableResource(observable$));
-	React.useEffect(() => {
-		// Reloading retains the current value while the new query loads and clears terminal errors.
-		if (resource.input$ !== observable$) resource.reload(observable$);
-	}, [observable$, resource]);
-	React.useEffect(() => {
-		// The resource owns the direct RxDB/db$ subscription for this binding.
-		return () => resource.destroy();
-	}, [resource]);
-	return resource;
-}
 
 type DemandProjection = {
 	coverageTarget$: Observable<CoverageTarget | null>;
@@ -145,7 +96,6 @@ type DemandProjection = {
 function useDemand(
 	engine: RxdbSyncEngine,
 	id: string,
-	descriptor: EngineQueryDescriptor,
 	enabled: boolean,
 	compiled: CompiledQuery
 ): DemandProjection {
@@ -161,7 +111,7 @@ function useDemand(
 	const [fetched$] = React.useState(() => new BehaviorSubject(false));
 	const ready = React.useRef<Promise<DemandReadiness>>(Promise.resolve(ATTEMPTED));
 	const demandKey = JSON.stringify(compiled.demand);
-	const engineCollection = engineCollectionNameFor(descriptor.collection);
+	const engineCollection = engineCollectionNameFor(compiled.collection);
 	const coverageGeneration = useCoverageGeneration(engine, engineCollection);
 	/**
 	 * Handles whose effect has torn down but whose successor has not declared
@@ -293,7 +243,6 @@ function useDemand(
 		coverageTarget$,
 		compiled,
 		demandKey,
-		descriptor.collection,
 		enabled,
 		engine,
 		engineCollection,
@@ -416,162 +365,38 @@ function useSearchFieldsFor(collection: LegacyCollectionName): string[] | undefi
 	return useSearchFields(collection) as string[] | undefined;
 }
 
-function emptyResult(): QueryResult<RxCollection> {
-	return { searchActive: false, count: 0, hits: [] };
-}
-
-export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
-	const translated = translateLogsQueryState(state);
-	const local = useLocalQuery({
-		collectionName: 'logs',
-		selector: translated.selector,
-		sort: translated.sort,
-		limit: translated.limit,
-		search: translated.search,
-	});
-	return {
-		resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
-		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
-		total$: local.total$,
-		laneProgress$: NO_LANE_PROGRESS$,
-		active$: INACTIVE$,
-		pending$: NOT_PENDING$,
-		exhausted$: UNKNOWN_EXHAUSTED$,
-		sync: async () => undefined,
-	};
-}
-
 /**
- * A read answered once, then asked again at most once per `windowMs` after its collection is
- * written — never a live query, whose every write re-runs it. A write starts the window; more
- * writes inside it are the same re-check, and the answer converges at the window's end. A new
- * database (scope move, reset) is asked at once.
+ * A compiled query's DEMAND and nothing else — no read, no projections: the standing
+ * declaration while `enabled`, its readiness barrier and re-arm, and the collection's pull
+ * activity. What the coupon replay waits on before it scans the residents itself (it reads no
+ * query; see `useAppliedCouponReferenceDemand`).
  */
-function recheckedRead$<T>(
-	read$: Observable<T>,
-	collection$: Observable<{ eventBulks$: Observable<unknown> } | null>,
-	windowMs: number
-): Observable<T> {
-	const once$ = defer(() => read$.pipe(take(1)));
-	return collection$.pipe(
-		distinctUntilChanged(),
-		switchMap((collection) =>
-			collection
-				? merge(
-						once$,
-						collection.eventBulks$.pipe(
-							auditTime(windowMs),
-							exhaustMap(() => once$)
-						)
-					)
-				: once$
-		)
-	);
-}
-
-function useEngineBinding(
-	descriptorInput: EngineQueryDescriptor,
+function useEngineDemand(
 	compiled: CompiledQuery,
-	enabled = true,
-	compiledId?: string,
-	/** Not live: re-check at most this often after a write (see `recheckedRead$`). */
-	recheckMs?: number
-): QueryBinding & {
-	result$: Observable<QueryResult<RxCollection>>;
+	enabled: boolean
+): {
+	active$: Observable<boolean>;
 	whenReady(): Promise<DemandReadiness>;
 	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
 	generation: number;
 } {
-	const runtime = useQueryRuntime();
-	const generatedId = React.useId();
-	const bindingId = compiledId ?? generatedId;
-	const searchFields = useSearchFieldsFor(descriptorInput.collection);
-	const read = React.useMemo(
-		() => (descriptorInput.read ? { ...descriptorInput.read, searchFields } : undefined),
-		[descriptorInput.read, searchFields]
-	);
-	const descriptor = useStableDescriptor({
-		...descriptorInput,
-		searchFields,
-		read,
-	});
-	const demand = useDemand(runtime.engine, bindingId, descriptor, enabled, compiled);
+	const { engine } = useQueryRuntime();
+	const id = React.useId();
+	const demand = useDemand(engine, id, enabled, compiled);
+	const engineCollection = engineCollectionNameFor(compiled.collection);
 	const active$ = React.useMemo(
 		() =>
 			enabled
-				? observeCollectionActive(
-						runtime.engine,
-						engineCollectionNameFor(descriptor.collection)
-					).pipe(shareReplay({ bufferSize: 1, refCount: true }))
-				: INACTIVE$,
-		[descriptor.collection, enabled, runtime.engine]
-	);
-	const result$ = React.useMemo(() => {
-		if (!enabled) return of(emptyResult());
-		const read$ = observeEngineQuery(runtime.engine, descriptor).pipe(
-			map((result) => ({
-				...result,
-				searchActive: Boolean((descriptor.read?.search ?? descriptor.search)?.trim()),
-			}))
-		);
-		const collectionName = engineCollectionNameFor(descriptor.collection);
-		return (
-			recheckMs === undefined
-				? read$
-				: recheckedRead$(
-						read$,
-						observeEngineDatabases(runtime.engine).pipe(
-							map((database) => database?.collections[collectionName] ?? null)
-						),
-						recheckMs
+				? observeCollectionActive(engine, engineCollection).pipe(
+						shareReplay({ bufferSize: 1, refCount: true })
 					)
-		).pipe(shareReplay({ bufferSize: 1, refCount: true }));
-	}, [descriptor, enabled, recheckMs, runtime.engine]);
-	const census$ = React.useMemo(
-		() =>
-			compiled.censusScoped
-				? censusTotal$(runtime.engine, engineCollectionNameFor(descriptor.collection))
-				: NO_CENSUS_TOTAL$,
-		[compiled.censusScoped, descriptor.collection, runtime.engine]
+				: INACTIVE$,
+		[enabled, engine, engineCollection]
 	);
-	const projection$ = React.useMemo(
-		() =>
-			coverageProjection$(
-				runtime.engine,
-				result$,
-				demand.coverageTarget$,
-				census$,
-				compiled.coverage
-			),
-		[census$, demand.coverageTarget$, result$, runtime.engine, compiled.coverage]
-	);
-	const resource = useObservableResource(result$);
-	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
-	const laneProgress$ = React.useMemo(
-		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
-		[projection$]
-	);
-	const exhausted$ = React.useMemo(
-		() => exhaustedFromCoverage$(runtime.engine, demand.searchLane$, demand.fetched$),
-		[demand.fetched$, demand.searchLane$, runtime.engine]
-	);
-	// Memoised for the same reason as the projections above: consumers hold the binding and
-	// compare it, so a fresh object per render is churn they cannot memoise away.
+	const { whenReady, declareOnce, generation } = demand;
 	return React.useMemo(
-		() => ({
-			resource,
-			result$,
-			active$,
-			pending$: demand.pending$,
-			exhausted$,
-			total$,
-			laneProgress$,
-			sync: demand.sync,
-			whenReady: demand.whenReady,
-			declareOnce: demand.declareOnce,
-			generation: demand.generation,
-		}),
-		[resource, result$, active$, exhausted$, total$, laneProgress$, demand]
+		() => ({ active$, whenReady, declareOnce, generation }),
+		[active$, declareOnce, generation, whenReady]
 	);
 }
 
@@ -767,191 +592,6 @@ export function useSearchSelect(
 
 export type SearchSelect = ReturnType<typeof useSearchSelect>;
 
-/**
- * Whether a (non-empty) result's rows were read from the database the engine has active now: a
- * read's replayed answer can be the previous scope's for the moment between a scope switch and
- * the new database's first answer. With no active database to compare (or a row that does not
- * say where it came from), it is taken as read.
- */
-function readFromActiveScope(engine: RxdbSyncEngine, result: QueryResult<RxCollection>): boolean {
-	const active = engine.active()?.database;
-	const source = result.hits[0]?.record.collection?.database;
-	return !active || !source || source === active;
-}
-
-/**
- * Full reference-lane residents of one product taxonomy: the category tree, the browse tiles.
- * `residentsOnly` reads what the till holds and declares no refresh — for a surface that only
- * summarises (the settings dialog's counts), so opening it pulls nothing; the reference seed
- * lane and the stage's own binding keep the residents current.
- *
- * Except an empty collection: a fresh till holds no terms until the reference lane lands, and
- * no residents is not an answer then. While it has none, a residents-only binding declares ONE
- * refresh, and its `result$` withholds the empty answer until that refresh has settled — met,
- * released or failed — so a still-loading source reads unanswered, never empty. The refresh,
- * once declared, stands until it settles (releasing it mid-pull would abort it) and is then
- * dropped; an empty answer after that is the collection's own. Residents present: no demand.
- * The one-shot is the ENGINE's, the collection's and the SCOPE's: a cross-site change (a new
- * engine from `QueryProvider`) and a same-site store or cashier switch (the same engine,
- * `scope.switch()`, which bumps every collection's coverage generation — as a collection reset
- * does) both start over, so the new scope's empty collection is pulled too.
- */
-export function useAllTermsBinding(
-	collection: 'products/categories' | 'products/tags' | 'products/brands',
-	enabled = true,
-	{ residentsOnly = false }: { residentsOnly?: boolean } = {}
-) {
-	const bindingId = React.useId();
-	const { engine } = useQueryRuntime();
-	// The scope the engine reads now: a same-site switch keeps the engine and changes its
-	// database in place, and bumps this generation (so does a reset of the collection).
-	const generation = useCoverageGeneration(engine, engineCollectionNameFor(collection));
-	// The empty-collection refresh: 'idle' until an empty answer, 'pull' while declared, then
-	// 'done' — for the engine, collection and generation it was recorded under; any other
-	// reads 'idle'.
-	const [refreshFor, setRefreshFor] = React.useState<{
-		engine: RxdbSyncEngine;
-		collection: string;
-		generation: number;
-		phase: 'idle' | 'pull' | 'done';
-	}>({ engine, collection, generation, phase: 'idle' });
-	const refresh =
-		refreshFor.engine === engine &&
-		refreshFor.collection === collection &&
-		refreshFor.generation === generation
-			? refreshFor.phase
-			: 'idle';
-	const pulling = residentsOnly && refresh === 'pull';
-	const compiled = React.useMemo(() => {
-		const query = compileQuery(
-			collection,
-			{
-				search: '',
-				filters: {},
-				sort: { field: 'name', direction: 'asc' },
-			},
-			{ id: bindingId }
-		);
-		return residentsOnly && !pulling ? { ...query, demand: [] } : query;
-	}, [bindingId, collection, pulling, residentsOnly]);
-	const binding = useEngineBinding(
-		{
-			collection,
-			selector: {},
-			sort: [{ name: 'asc' }],
-		},
-		compiled,
-		enabled,
-		bindingId
-	);
-	const watchEmpty = residentsOnly && enabled && refresh === 'idle';
-	const residents$ = binding.result$;
-	React.useEffect(() => {
-		if (!watchEmpty) return undefined;
-		const subscription = residents$.subscribe((result) => {
-			if (result.hits.length === 0)
-				setRefreshFor({ engine, collection, generation, phase: 'pull' });
-		});
-		return () => subscription.unsubscribe();
-	}, [collection, engine, generation, residents$, watchEmpty]);
-	// Runs after the demand effect (declared earlier, inside `useEngineBinding`), so the barrier
-	// it waits on is the refresh this commit declared.
-	const { whenReady } = binding;
-	React.useEffect(() => {
-		if (!pulling || !enabled) return undefined;
-		let live = true;
-		void whenReady().then(() => {
-			if (live) setRefreshFor({ engine, collection, generation, phase: 'done' });
-		});
-		return () => {
-			live = false;
-		};
-	}, [collection, enabled, engine, generation, pulling, whenReady]);
-	// A disabled binding's empty answer is its answer (it is never pending).
-	const withholdEmpty = residentsOnly && enabled && refresh !== 'done';
-	// The withheld stream is one per SCOPE: a same-site switch keeps the engine (and so the very
-	// same `residents$`), and its new scope may be empty — a stream kept across the switch would
-	// withhold the new scope's empty answer while its pull runs, and `useAnswerOf` would go on
-	// showing the old scope's terms. A new stream is unanswered until it emits. And it passes
-	// only the ACTIVE scope's rows: the engine swaps the database first and bumps the generation
-	// a microtask later, before the new database's read has answered, so `residents$` still
-	// replays the old scope's terms to the new stream — they are not this scope's answer.
-	const withheldFor = withholdEmpty ? generation : null;
-	const result$ = React.useMemo(
-		() =>
-			withheldFor === null
-				? residents$
-				: residents$.pipe(
-						filter((result) => result.hits.length > 0 && readFromActiveScope(engine, result))
-					),
-		[engine, residents$, withheldFor]
-	);
-	return React.useMemo(() => ({ ...binding, result$ }), [binding, result$]);
-}
-
-export function useAllCategoriesBinding() {
-	return useAllTermsBinding('products/categories');
-}
-
-/**
- * How often the existence read may re-check after a product write. Which zero-count terms a
- * POS-only product keeps on the stage changes when the catalogue does, not per sale — and
- * every sale writes stock, so a live read would re-run per sale. Half a minute keeps a newly
- * synced product's term appearing promptly without paying for the read on every write.
- */
-export const EXISTENCE_RECHECK_MS = 30_000;
-
-/**
- * The local products carrying any of `termIds` in one taxonomy — the same taxonomy filter a
- * category/tag/brand pill applies (categories and brands are promoted id columns; tags are a
- * payload scan, bounded here by the re-check window). Local only, no remote pull: whether a
- * zero-count term has products is decided by what the till has synced, since the catalogue
- * recount is the storefront's. An empty id list would compile to no filter (every product), so
- * the binding is disabled then: no read at all.
- *
- * Not live: answered once, then re-checked at most every `EXISTENCE_RECHECK_MS` after a write.
- * The engine has no field projection, so the answer is still the matching records.
- */
-export function useProductsCarryingTermsBinding(
-	taxonomy: 'categories' | 'tags' | 'brands',
-	termIds: readonly number[],
-	{ showOutOfStock = false }: { showOutOfStock?: boolean } = {}
-) {
-	const bindingId = React.useId();
-	const idsKey = [...new Set(termIds)].sort((a, b) => a - b).join(',');
-	const compiled = React.useMemo(() => {
-		const ids = idsKey === '' ? [] : idsKey.split(',').map(Number);
-		const query = compileQuery(
-			'products',
-			{
-				search: '',
-				// The selling surface's baseline, so a lifted term opens onto something: published
-				// only (a cached draft must not keep its zero-count term on the stage), and in stock
-				// unless the merchant shows out-of-stock products. Catalogue visibility is not
-				// filtered — a published product hidden from the catalogue is what this read is for.
-				filters: {
-					categories: [],
-					tags: [],
-					brands: [],
-					status: 'publish',
-					...(showOutOfStock ? {} : { stock_status: 'instock' }),
-					[taxonomy]: ids,
-				},
-				sort: { field: 'name', direction: 'asc' },
-			},
-			{ id: bindingId }
-		);
-		return { ...query, demand: [] };
-	}, [bindingId, idsKey, showOutOfStock, taxonomy]);
-	return useEngineBinding(
-		{ collection: compiled.collection, read: compiled.read },
-		compiled,
-		idsKey !== '',
-		bindingId,
-		EXISTENCE_RECHECK_MS
-	);
-}
-
 /** How long the coupon replay waits for its reference pull before giving up on it. */
 const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
 
@@ -1032,18 +672,6 @@ function withDeadline<T>(
 	});
 }
 
-const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
-	collection: 'coupons',
-	selector: {},
-	sort: [{ code: 'asc' }],
-};
-
-const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
-	collection: 'products/categories',
-	selector: {},
-	sort: [{ name: 'asc' }],
-};
-
 const COUPON_REPLAY_COUPONS_COMPILED = compileQuery(
 	'coupons',
 	{
@@ -1112,16 +740,8 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	whenSettledInBackground: (signal: AbortSignal) => Promise<boolean>;
 	generation: number;
 } {
-	const coupons = useEngineBinding(
-		COUPON_REPLAY_COUPONS_DESCRIPTOR,
-		COUPON_REPLAY_COUPONS_COMPILED,
-		hasAppliedCoupons
-	);
-	const categories = useEngineBinding(
-		COUPON_REPLAY_CATEGORIES_DESCRIPTOR,
-		COUPON_REPLAY_CATEGORIES_COMPILED,
-		hasAppliedCoupons
-	);
+	const coupons = useEngineDemand(COUPON_REPLAY_COUPONS_COMPILED, hasAppliedCoupons);
+	const categories = useEngineDemand(COUPON_REPLAY_CATEGORIES_COMPILED, hasAppliedCoupons);
 	const quiet$ = React.useMemo(
 		() =>
 			combineLatest([coupons.active$, categories.active$]).pipe(

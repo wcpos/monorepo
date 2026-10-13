@@ -1,25 +1,18 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-import { combineLatest, defer, from, of, throwError } from 'rxjs';
-import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
+import { combineLatest, from, of, throwError } from 'rxjs';
+import { catchError, map, shareReplay, switchMap } from 'rxjs/operators';
 
 import { buildScanSearchSelector } from '@wcpos/sync-core';
 
 import { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
-import { useQueryRuntime } from './provider';
 import { useLocalCollection$ } from './use-local-collection';
+import { useOwnedResource } from './use-owned-resource';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
-import type { MonoTypeOperatorFunction, Observable } from 'rxjs';
-import type {
-	MangoQuerySelector,
-	MangoQuerySortPart,
-	RxCollection,
-	RxDatabase,
-	RxDocument,
-} from 'rxdb';
+import type { MonoTypeOperatorFunction } from 'rxjs';
+import type { MangoQuerySelector, MangoQuerySortPart, RxCollection, RxDocument } from 'rxdb';
 
 type LocalDocumentData = Record<string, unknown>;
 type LocalDocument = RxDocument<LocalDocumentData>;
@@ -127,9 +120,12 @@ function localQueryResult$(collection: LocalCollection, options: LocalQueryOptio
 	);
 }
 
-/** Direct local-only query binding. It never registers engine demand. */
-export const useLocalQuery = (options: LocalQueryOptions) => {
-	const runtime = useQueryRuntime();
+/**
+ * The local-only query's observables, and nothing subscribed: the caller decides when the read
+ * runs (a query handle's retain). `result$` follows the collection (see useLocalCollection$);
+ * `total$` is the matching count. It never registers engine demand.
+ */
+export const useLocalQuery$ = (options: LocalQueryOptions) => {
 	const collectionName = options.collectionName;
 	const key = JSON.stringify(options);
 	const stableOptions = React.useMemo(() => JSON.parse(key) as LocalQueryOptions, [key]);
@@ -147,26 +143,19 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 			),
 		[collection$, stableOptions]
 	);
-	// One resource for the hook's lifetime (mirrors useObservableResource in
-	// @wcpos/core query-bindings): reloading retains the current value while the
-	// new query loads and clears terminal errors, so a descriptor change never
-	// blanks a mounted consumer.
-	const [resource] = React.useState(() => new ObservableResource(result$));
-	const resourceRef = React.useRef(resource);
 	const total$ = React.useMemo(
 		() => result$.pipe(map((result) => result.count ?? result.hits.length)),
 		[result$]
 	);
+	return { result$, total$ };
+};
 
-	React.useEffect(() => {
-		if (resource.input$ !== result$) resource.reload(result$);
-	}, [resource, result$]);
-
-	React.useEffect(() => {
-		const lifetimeResource = resourceRef.current;
-		// The resource owns the local RxDB subscriptions for this hook.
-		return () => lifetimeResource.destroy();
-	}, []);
-
+/** Direct local-only query binding. It never registers engine demand. */
+export const useLocalQuery = (options: LocalQueryOptions) => {
+	const { result$, total$ } = useLocalQuery$(options);
+	// The hook's resource: a changed query reloads it (the current window stays while the new
+	// one loads), and it reads only once the caller commits — a caller that owns the read's
+	// lifetime itself takes `useLocalQuery$`.
+	const resource = useOwnedResource(result$);
 	return { resource, result$, total$ };
 };

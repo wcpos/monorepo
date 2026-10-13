@@ -7,25 +7,32 @@ import { render, screen } from '@testing-library/react';
 
 import { GroupedNames } from './grouped-names';
 
-const mockUseCollectionBinding = jest.fn(
-	(_collection: unknown, _state: unknown, _options: unknown) => ({
-		resource: {
-			value: {
+// The grouped products' handle as a reader sees it (one answered snapshot).
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle;
+};
+const mockUseCollectionQueryHandle = jest.fn(
+	(_collection: unknown, _state: unknown, _options: unknown) =>
+		fakeQueryHandle({
+			result: {
 				hits: [
 					{ record: { payload: { name: 'Hat' } } },
 					{ record: { payload: { name: 'Scarf' } } },
 				],
 			},
-		},
-	})
+		})
 );
 
 jest.mock('../../../../query', () => ({
-	useCollectionBinding: (collection: unknown, state: unknown, options: unknown) =>
-		mockUseCollectionBinding(collection, state, options),
+	useCollectionQueryHandle: (collection: unknown, state: unknown, options: unknown) =>
+		mockUseCollectionQueryHandle(collection, state, options),
+	// The real reader: the list reads the handle's snapshot the way the screens do.
+	useQuerySnapshot: jest.requireActual<typeof import('../../../../query/query-handles')>(
+		'../../../../query/query-handles'
+	).useQuerySnapshot,
 }));
-jest.mock('observable-hooks', () => ({
-	useObservableSuspense: (resource: { value: unknown }) => resource.value,
+jest.mock('@wcpos/components/suspense', () => ({
+	Suspense: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
@@ -44,7 +51,7 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 describe('GroupedNames', () => {
-	it('reads grouped products through a finite-id collection binding', () => {
+	it('reads grouped products through a finite-id collection handle', () => {
 		const Cell = GroupedNames as unknown as React.ComponentType<Record<string, unknown>>;
 		render(
 			<Cell
@@ -57,7 +64,7 @@ describe('GroupedNames', () => {
 			/>
 		);
 
-		expect(mockUseCollectionBinding).toHaveBeenCalledWith(
+		expect(mockUseCollectionQueryHandle).toHaveBeenCalledWith(
 			'products',
 			expect.objectContaining({ limit: 2 }),
 			{ remoteIds: ['12', '34'] }
