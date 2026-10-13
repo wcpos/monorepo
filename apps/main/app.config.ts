@@ -204,6 +204,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 						// (EAS build 8c72b2ba). Store and adhoc builds keep the template's four ABIs.
 						...(isDev ? { buildArchs: ['arm64-v8a', 'x86_64'] } : {}),
 					},
+					ios: {
+						// Build expo-modules-core from source. Expo's prebuilt ExpoModulesCore
+						// (58.0.16) binds the Swift back-deployment symbol
+						// `_swift_allocateMetadataPack` to ExpoModulesJSI, which Xcode 27 builds
+						// from source with that symbol hidden, so every iOS build on this lane
+						// since the SDK 58 line (EAS and local alike) died in dyld at launch:
+						// "Symbol not found: _swift_allocateMetadataPack ... Expected in:
+						// ExpoModulesJSI" (2026-10-13; EAS build 38d6adeb, local Xcode 27.0).
+						// One toolchain for both frameworks and the app launches; the cost is
+						// expo-modules-core's compile time per clean build. Revisit when Expo
+						// rebuilds the artefacts for Xcode 27.
+						usePrecompiledModules: false,
+					},
 				},
 			],
 			[
