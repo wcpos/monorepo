@@ -71,18 +71,19 @@ The context is frozen; nothing in it is a React object.
 A mounted surface registers its handler while mounted: `registerSurface(target, handler)`
 returns the detach, so an effect is the whole registration.
 
-| Target     | Registered by                                           | Handler                  |
-| ---------- | ------------------------------------------------------- | ------------------------ |
-| `pay`      | `PayButton` (`pos/cart/buttons/pay.tsx`)                | `handlePay`              |
-| `void`     | `VoidButton` (`pos/cart/buttons/void.tsx`)              | `handleRemove`           |
-| `search`   | the products screen's search input                      | focus the input          |
-| `discount` | `AddCartItemsMenu` (`pos/cart/add-cart-items-menu.tsx`) | open the discount dialog |
+| Target     | Registered by                                           | Handler                    |
+| ---------- | ------------------------------------------------------- | -------------------------- |
+| `pay`      | `PayButton` (`pos/cart/buttons/pay.tsx`)                | `handlePay`                |
+| `void`     | the cart column (`pos/cart/index.tsx`)                  | `useVoidOrder().voidOrder` |
+| `search`   | the products screen's search input                      | focus the input            |
+| `discount` | `AddCartItemsMenu` (`pos/cart/add-cart-items-menu.tsx`) | open the discount dialog   |
 
 `invokeSurface(target)` runs the newest registration and rejects with `SurfaceNotMountedError`
 when none is mounted. A detach removes only its own entry. So the command does what the button
-does, while the button exists. The void button lives in the order sheet, so `pos.cart.void`'s
-`when` reads `hasSurface('void')` and the command is _refused_ (an info row) while the sheet is
-closed; its move to the cart column is PR 1b of roadmap#428. Surfaces register through
+does, while the button exists. The void button lives in the order sheet, which renders nothing
+while closed, so its path is the hook `useVoidOrder` (`pos/hooks/use-void-order.ts`): the button
+presses it and the cart column registers it, so `pos.cart.void`'s `hasSurface('void')` is true
+whenever the cart column is mounted, sheet open or not. Surfaces register through
 `useRegisterSurface(target, handler)`, which registers once on mount and always invokes the latest
 handler, so a key landing between a render and an effect flush never runs a previous cart's path.
 
