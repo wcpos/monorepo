@@ -213,7 +213,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					// requires TerminalApplicationDelegate.onCreate in MainApplication.onCreate() and
 					// an early return in that subprocess; the plugin injects both at prebuild. The
 					// guard sits before React Native and Expo start-up, so the subprocess skips them
-					// and the printer, SumUp and WebRTC plugins below. The plugin puts the delegate
+					// and the printer, SumUp and WebRTC modules' native start-up. The plugin puts the delegate
 					// call ahead of the guard (Stripe's Expo example gets the same order); the device
 					// check on roadmap#429 settles whether that matters.
 					appDelegate: true,
