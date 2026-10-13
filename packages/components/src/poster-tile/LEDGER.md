@@ -8,7 +8,7 @@ Seeded 2026-10-12 with the component, from the Poster spec (wcpos/roadmap `docs/
 
 ## Lines
 
-1. The scrim is the card colour at 85 %, eased in over 48 px above the first line of words and flat under them, thirteen stops (`SCRIM_STOPS`); reach and strength are constants, not settings — evidence: owner decision 4, 2026-10-12 ("card colour, eased, 85, 48"), spec § The scrim.
+1. The scrim is the card colour at 92 %, eased in over 48 px above the first line of words and flat under them, thirteen stops (`SCRIM_STOPS`); reach and strength are constants, not settings — evidence: owner decision 4, 2026-10-12 ("card colour, eased, 85, 48"), spec § The scrim; raised to 92 by the owner on 2026-10-13 ("around 90 or 92") after 85 read thin over busy pictures on dev-next.
 2. No scrim is drawn when every word slot is empty; the marks still show — evidence: spec § The scrim; test: `poster-tile.test.tsx`.
 3. A tint square carries its words directly, with no scrim; `picture.tint` is the token number `bg-tile-tint-N`, and `tintOf` is the one place the rule picking it lives — evidence: spec § No picture.
 4. The frame keeps `m-1`, `grow` / `flex-1`, `lifted` (opacity 0) and forwards its ref to the `Pressable`, so the Deal measures and lifts it as it did the old tiles — evidence: spec § Behaviour that must not move.
@@ -18,3 +18,4 @@ Seeded 2026-10-12 with the component, from the Poster spec (wcpos/roadmap `docs/
 8. `picture.kind = 'slot'` lets the caller render the picture itself. DEVIATION from the spec's three picture kinds, recorded: a product's picture needs its own Suspense boundary, attachment hook, render probes and the Deal's `useCopyPicture`, which belong to the products screen, not to this component — evidence: plan `docs/superpowers/plans/2026-10-12-pos-poster-tile.md`, Task 2.
 9. `mark.kind = 'glyph'` (All products' grid, a shortcut's sliders) is a CLARIFICATION of the spec's marks; on a tint a folder or glyph sits in the tint without its circle, as the prototype draws it — evidence: plan Task 2; prototype `.fglyph`.
 10. The words' block is never taller than the square and clips at its bottom, so on a narrow tile (8 columns) the facts go first and the name, money and sub stay — evidence: review of monorepo#2485; test: `poster-tile.test.tsx`.
+11. On web the picture under the words is blurred (`SCRIM_BLUR_PX`, 6 px, a `backdrop-filter` layer under the words) and masked by the same thirteen stops, so the blur fades in exactly with the tint and has no edge. Native draws no blur until it can mask one (research: roadmap `docs/research/2026-10-13-native-scrim-blur.md` when it lands) — evidence: owner on dev-next, 2026-10-13 (plateau "around 90 or 92" and a slight blur under the words); test: `poster-tile.test.tsx`.
