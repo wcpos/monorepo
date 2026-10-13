@@ -25,17 +25,26 @@ const allRates = [
 	{ id: 1, class: 'standard', country: '', state: '', cities: [], postcodes: [] },
 	{ id: 2, class: 'reduced-rate', country: '', state: '', cities: [], postcodes: [] },
 ];
-const mockResource = { hits: allRates.map((payload) => ({ record: { payload } })) };
+const mockResult = { hits: allRates.map((payload) => ({ record: { payload } })) };
 
 /**
  * Swappable so the address tests can supply country-specific rates; reset in `beforeEach`.
  */
-let activeResource: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResource;
+let activeResult: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResult;
 
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => ({
-	resource: activeResource,
-}));
-const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
+// The tax-rates query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+// Built on the first acquire, so it answers with the `activeResult` the test has set by then.
+let mockHandle: FakeHandle | null = null;
+const mockUseCollectionQueryHandle = jest.fn(
+	(_collection: unknown, _state: unknown) =>
+		(mockHandle ??= fakeQueryHandle({ result: activeResult }))
+);
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
@@ -46,21 +55,8 @@ jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
-	};
-});
-
-/**
- * Only `useObservableSuspense` is stubbed — the rest of observable-hooks runs for real
- * against real subjects, because subscription identity is precisely what these tests are
- * about.
- */
-jest.mock('observable-hooks', () => {
-	const actual = jest.requireActual('observable-hooks');
-	return {
-		...actual,
-		useObservableSuspense: (resource: unknown) => mockUseObservableSuspense(resource),
+		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
 
@@ -115,15 +111,16 @@ function makeOrder(meta: OrderMeta[] = []): TestOrderRecord {
 }
 
 function latestState(): QueryStateOf<'tax-rates'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('provider tax-rates binding was not called');
+	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
+	if (!call) throw new Error('provider tax-rates handle was not acquired');
 	return call[1] as QueryStateOf<'tax-rates'>;
 }
 
 beforeEach(() => {
 	jest.clearAllMocks();
 	storeSubjects.tax_based_on$.next('base');
-	activeResource = mockResource;
+	activeResult = mockResult;
+	mockHandle = null;
 });
 
 describe('TaxRatesProvider query-state consumption', () => {
@@ -136,7 +133,12 @@ describe('TaxRatesProvider query-state consumption', () => {
 		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
 	}
 
-	it('owns an all-rates binding and does not republish its query object', () => {
+	function AllRatesProbe() {
+		const { allRates: published } = useTaxSettings();
+		return <output data-testid="all-rate-ids">{published.map((rate) => rate.id).join(',')}</output>;
+	}
+
+	it('owns an all-rates handle and does not republish its query object', () => {
 		render(
 			<TaxRatesProvider>
 				<ContextProbe />
@@ -149,7 +151,7 @@ describe('TaxRatesProvider query-state consumption', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		});
-		expect(mockUseObservableSuspense).toHaveBeenCalledWith(mockResource);
+		expect(mockUseCollectionQueryHandle.mock.calls.at(-1)?.[0]).toBe('tax-rates');
 		const context = JSON.parse(screen.getByTestId('context').textContent ?? '') as Record<
 			string,
 			unknown
@@ -159,10 +161,55 @@ describe('TaxRatesProvider query-state consumption', () => {
 		expect(context).not.toHaveProperty('taxQuery');
 	});
 
+	it('publishes the rates the acquired handle answers with', () => {
+		render(
+			<TaxRatesProvider>
+				<AllRatesProbe />
+			</TaxRatesProvider>
+		);
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+
+		act(() => mockHandle?.set({ result: { hits: [{ record: { payload: allRates[1] } }] } }));
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('2');
+	});
+
+	/**
+	 * A coverage-generation bump (the tax-rates modal's clear-and-sync) moves the scope key, so
+	 * the provider is handed a fresh, unanswered handle. The POS body must keep the current
+	 * rates until it answers: suspending would swap it for the provider's `null` fallback.
+	 */
+	it('keeps the current rates published while a changed handle answers', async () => {
+		const tree = () => (
+			<React.Suspense fallback={<div data-testid="route-fallback" />}>
+				<TaxRatesProvider>
+					<AllRatesProbe />
+				</TaxRatesProvider>
+			</React.Suspense>
+		);
+		const { rerender } = render(tree());
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		await act(async () => rerender(tree()));
+		expect(mockUseCollectionQueryHandle).toHaveReturnedWith(next);
+		// A suspended update HIDES revealed content (`display: none`) rather than unmounting
+		// it, so the text alone would survive a blanked body: visibility is the instrument.
+		const probe = screen.getByTestId('all-rate-ids');
+		expect(probe.style.display).not.toBe('none');
+		expect(probe.textContent).toBe('1,2');
+		expect(screen.queryByTestId('route-fallback')).toBeNull();
+
+		await act(async () =>
+			next.set({ ready: true, result: { hits: [{ record: { payload: allRates[0] } }] } })
+		);
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1');
+	});
+
 	it('uses the plain payload id as the equal-priority tax-rate tiebreak', () => {
 		const higherPayloadId = { ...allRates[0], id: 9, country: 'US', priority: 1 };
 		const lowerPayloadId = { ...allRates[0], id: 4, country: 'US', priority: 1 };
-		activeResource = {
+		activeResult = {
 			hits: [
 				{ record: { payload: higherPayloadId }, document: { ...higherPayloadId, id: 1 } },
 				{ record: { payload: lowerPayloadId }, document: { ...lowerPayloadId, id: 2 } },
@@ -336,7 +383,7 @@ describe('tax follows the customer address', () => {
 	}
 
 	beforeEach(() => {
-		activeResource = { hits: [usRate, gbRate].map((payload) => ({ record: { payload } })) };
+		activeResult = { hits: [usRate, gbRate].map((payload) => ({ record: { payload } })) };
 	});
 
 	it('re-filters the rates when the billing address changes', () => {

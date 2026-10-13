@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableSuspense } from 'observable-hooks';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Modal,
@@ -17,13 +17,18 @@ import {
 } from '@wcpos/components/modal';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
 import { useT } from '../../../contexts/translations';
-import { useCollectionBinding, useQueryState } from '../../../query';
+import {
+	useCollectionQueryHandle,
+	useDrawnHandle,
+	useQuerySnapshot,
+	useQueryState,
+} from '../../../query';
 import { useExtraData } from '../contexts/extra-data';
 
 import type { TaxRateData } from '../contexts/tax-rates';
@@ -37,30 +42,34 @@ interface QueryResult {
 	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
-type TaxRatesBinding = ReturnType<typeof useCollectionBinding<'tax-rates'>>;
-
 /**
- * The binding is built HERE, and the reader below sits inside its own `Suspense`.
- *
- * A resource built inside the boundary that suspends on it is discarded with the aborted
- * render and rebuilt by every retry, which never ends (#1707) — the modal's own boundary in
- * `index.tsx` sits ABOVE this component, so it cannot help. Creating the binding above a
- * boundary of our own makes this component commit alongside the fallback, so the retry reads
- * back the resource the first attempt already subscribed.
+ * The handle is acquired HERE; the reader below sits inside its own `Suspense`. The owner's
+ * retain is an effect, so it must commit for the read to start: an owner that also read would
+ * suspend uncommitted, nothing would retain the handle, and the fallback would never leave.
+ * Identity by key holds only once a handle has started, so that would hide wherever another
+ * owner holds the key (the POS tax provider holds this Tier-0 key): the reader would get the
+ * started handle. The modal's boundary in `index.tsx` is above this component and its reset
+ * cannot reach the handle, so the error boundary is ours.
  */
 export function TaxRates() {
 	const state = useQueryState<'tax-rates'>();
-	const binding = useCollectionBinding('tax-rates', state);
+	const handle = useCollectionQueryHandle('tax-rates', state);
 
 	return (
-		<Suspense>
-			<TaxRatesContent binding={binding} />
-		</Suspense>
+		<ErrorBoundary onReset={() => handle.retry()} resetKeys={[handle]}>
+			<Suspense>
+				<TaxRatesContent handle={handle} />
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 
-function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
-	const result = useObservableSuspense(binding.resource) as QueryResult;
+function TaxRatesContent({ handle }: { handle: QueryHandle }) {
+	// A changed handle (a scope bump from clear-and-sync) keeps the current rates on screen
+	// until it answers, instead of swapping the revealed modal for its fallback.
+	const shown = useDrawnHandle(handle);
+	// The answer only: the footer reads `active` and `total` itself.
+	const result = useQuerySnapshot(shown, []).result as QueryResult;
 	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as TaxClass[] | undefined;
@@ -113,12 +122,7 @@ function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
 							</TabsContent>
 						))}
 					</Tabs>
-					<TaxRatesFooter
-						count={rates.length}
-						active$={binding.active$}
-						total$={binding.total$}
-						sync={binding.sync}
-					/>
+					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 				</View>
 				<ModalFooter>
 					<ModalClose>{t('common.close')}</ModalClose>

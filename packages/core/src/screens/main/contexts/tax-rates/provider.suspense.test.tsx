@@ -1,19 +1,16 @@
 /**
  * @jest-environment jsdom
  *
- * `TaxSettingsProvider` built its tax-rates binding and read it with `useObservableSuspense` in
- * the SAME component. A resource built during render is discarded with the aborted render when
- * the component suspends before its subtree has ever committed, so every Suspense retry built
- * another one that suspended for exactly the reason its predecessor did — a loop, not a load
- * (#1707). A tax-rates query's first emission is always async, and the nearest boundary was the
- * per-route one, whose PRODUCTION fallback is `null`: a blank POS body under a painted header.
+ * #1707 on the handle: the OWNER (`TaxSettingsProvider`) acquires the tax-rates handle and
+ * retains it from an effect, above the `Suspense` its reader (`TaxSettingsFromRates`) suspends
+ * on. An owner that also read would suspend uncommitted: nothing would retain the handle, the
+ * read would never start, `whenAnswered()` would never settle, and the fallback would never
+ * leave. The nearest boundary above is the route's, whose PRODUCTION fallback is `null`: a
+ * blank POS body under a painted header.
  *
- * The fix is the boundary, not a cache: the binding is built in `TaxSettingsProvider`, which
- * now renders the `Suspense` and the reader below it, so it commits alongside the fallback and
- * the retry reads back the resource the first attempt already subscribed.
- *
- * `packages/query/tests/suspense-boundary-placement.test.tsx` is the same claim without the app
- * around it.
+ * The mock hook is faithful to `useCollectionQueryHandle` where this file measures: the handle
+ * is memoised on the fiber, joins the by-key registry only once retained (the real one claims
+ * the key on start) and leaves it on the last release, and its read starts on that retain.
  */
 import * as React from 'react';
 
@@ -22,15 +19,41 @@ import { Observable } from 'rxjs';
 
 import { TaxRatesProvider } from './provider';
 
-let subscribes = 0;
-let result$: Observable<{ hits: unknown[] }>;
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+	retained: number;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>, key?: string) => FakeHandle;
+};
 
-/** Emits one microtask after each subscribe — the shape of an engine query's first value. */
-const asyncRates = () =>
-	new Observable<{ hits: unknown[] }>((subscriber) => {
-		subscribes++;
-		void Promise.resolve().then(() => subscriber.next({ hits: [] }));
-	});
+let mockCreated: FakeHandle[] = [];
+let mockRegistry = new Map<string, FakeHandle>();
+/** Whether a started read answers; off for the still-loading case. */
+let mockAnswers = true;
+
+/** One handle per key while retained; a handle never retained never joined the registry. */
+function mockAcquire(key: string): FakeHandle {
+	const live = mockRegistry.get(key);
+	if (live) return live;
+	const handle = fakeQueryHandle({ ready: false }, key);
+	mockCreated.push(handle);
+	const retain = handle.retain;
+	handle.retain = () => {
+		mockRegistry.set(key, handle);
+		const release = retain();
+		const leave = () => {
+			release();
+			if (handle.retained === 0 && mockRegistry.get(key) === handle) mockRegistry.delete(key);
+		};
+		// The owner's retain starts the read; its first answer is one microtask later.
+		if (mockAnswers) {
+			void Promise.resolve().then(() => handle.set({ ready: true, result: { hits: [] } }));
+		}
+		return leave;
+	};
+	return handle;
+}
 
 const store = {
 	calc_taxes$: new Observable(() => undefined),
@@ -39,23 +62,23 @@ const store = {
 };
 
 jest.mock('../../../../query', () => ({
+	...jest.requireActual('../../../../query'),
 	QueryStateProvider: ({ children }: { children: React.ReactNode }) => children,
 	useQueryState: () => ({}),
-	// Faithful to the real binding at the one thing this file measures: the resource lives on
-	// the FIBER (`useState`), so a render React discards takes it with it and the next attempt
-	// subscribes again. Caching it outside React here would hide the very loop under test.
-	useCollectionBinding: () => {
-		const react = jest.requireActual('react') as typeof React;
-		const hooks = jest.requireActual('observable-hooks');
-		const [resource] = react.useState(() => new hooks.ObservableResource(result$));
-		return { result$, resource };
+	useCollectionQueryHandle: (_collection: unknown, state: unknown) => {
+		const key = JSON.stringify(state);
+		const handle = React.useMemo(() => mockAcquire(key), [key]);
+		React.useEffect(() => handle.retain(), [handle]);
+		return handle;
 	},
 }));
 jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
 	useDocField: () => undefined,
 	useRecordField: () => undefined,
 }));
 jest.mock('@wcpos/sync-core', () => ({
+	...jest.requireActual('@wcpos/sync-core'),
 	wooMetaCarrier: { readIdentity: () => ({}), taxBasedOnOverride: () => undefined },
 }));
 jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({ store }) }));
@@ -85,12 +108,13 @@ async function settle() {
 }
 
 beforeEach(() => {
-	subscribes = 0;
-	result$ = asyncRates();
+	mockCreated = [];
+	mockRegistry = new Map();
+	mockAnswers = true;
 });
 
 describe('the tax settings provider', () => {
-	it('mounts its children on the first emission, having subscribed the rates once', async () => {
+	it('mounts its children on the first answer, having acquired and retained the rates once', async () => {
 		render(
 			<React.Suspense fallback={<div data-testid="route-fallback" />}>
 				<TaxRatesProvider>
@@ -101,18 +125,16 @@ describe('the tax settings provider', () => {
 		await settle();
 
 		expect(await screen.findByTestId('pos-body')).toBeTruthy();
-		// The count is the instrument: one subscription means every retry read back the
-		// resource the first attempt already had in flight, instead of building another.
-		expect(subscribes).toBe(1);
+		// The instruments: one handle for the stable key, held by the owner's one retain.
+		expect(mockCreated).toHaveLength(1);
+		expect(mockCreated[0]?.retained).toBe(1);
 	});
 
 	it('does not escape to the route boundary while the rates are still loading', async () => {
 		// The suspension has to cost the provider's own fallback, never the screen: escaping to
 		// expo-router's per-route boundary, whose production fallback is `null`, is how a
 		// waiting query became a blank body.
-		result$ = new Observable<{ hits: unknown[] }>(() => {
-			subscribes++;
-		});
+		mockAnswers = false;
 		render(
 			<React.Suspense fallback={<div data-testid="route-fallback" />}>
 				<TaxRatesProvider>
@@ -124,6 +146,8 @@ describe('the tax settings provider', () => {
 
 		expect(screen.queryByTestId('route-fallback')).toBeNull();
 		expect(screen.queryByTestId('pos-body')).toBeNull();
-		expect(subscribes).toBe(1);
+		// The owner committed beside the fallback and holds the one handle while it waits.
+		expect(mockCreated).toHaveLength(1);
+		expect(mockCreated[0]?.retained).toBe(1);
 	});
 });
