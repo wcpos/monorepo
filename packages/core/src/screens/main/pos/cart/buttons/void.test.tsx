@@ -318,7 +318,7 @@ describe('VoidButton', () => {
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 	});
 
-	it('does not convert on a late refusal after the cashier already undid the void', async () => {
+	it('does not convert on a late refusal after the cashier already undid the void, but settles its dead letter', async () => {
 		let releaseLateWatch: (() => void) | undefined;
 		mockOutcomes = ['timeout'];
 		const lateRejection = new Promise<never>((_resolve, reject) => {
@@ -335,25 +335,53 @@ describe('VoidButton', () => {
 			.mockImplementationOnce(original)
 			.mockImplementationOnce(() => lateRejection);
 
+		try {
+			render(<VoidButton />);
+			fireEvent.click(screen.getByTestId('void-button'));
+
+			await waitFor(() =>
+				expect(mockCartLogger.success).toHaveBeenCalledWith(
+					'pos_cart.order_removed',
+					expect.any(Object)
+				)
+			);
+			const toastOptions = mockCartLogger.success.mock.calls[0][1];
+			await toastOptions.toast.action.onClick(); // undo
+			releaseLateWatch?.();
+
+			// The restored order must not keep a "Save refused" dead letter behind it.
+			await waitFor(() =>
+				expect(mockEngine.resolveConflict).toHaveBeenCalledWith('delete-1', 'discard')
+			);
+			expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+			expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
+		} finally {
+			query.awaitWriteOutcome = original;
+		}
+	});
+
+	it('an Undo pressed while a late conversion is in flight keeps the order selected', async () => {
+		mockOutcomes = ['timeout', 'rejected'];
+		let releaseConversion!: () => void;
+		mockPatchAndEnqueueEngineResident.mockImplementationOnce(
+			() => new Promise<void>((resolve) => (releaseConversion = resolve))
+		);
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
+		// The late refusal has arrived and its conversion is waiting on the enqueue.
+		await waitFor(() => expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalled());
+		mockCartLogger.success.mock.calls[0][1].toast.action.onClick(); // undo
+		await waitFor(() => expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-1'));
+		releaseConversion();
+
 		await waitFor(() =>
 			expect(mockCartLogger.success).toHaveBeenCalledWith(
-				'pos_cart.order_removed',
+				'pos_cart.order_voided_kept_pending',
 				expect.any(Object)
 			)
 		);
-		const toastOptions = mockCartLogger.success.mock.calls[0][1];
-		await toastOptions.toast.action.onClick(); // undo
-		releaseLateWatch?.();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
-		expect(mockEngine.resolveConflict).not.toHaveBeenCalled();
-		expect(mockSetCurrentOrderID).not.toHaveBeenCalledWith('');
-		query.awaitWriteOutcome = original;
+		expect(mockSetCurrentOrderID.mock.calls).toEqual([['order-1']]);
 	});
 
 	it('surfaces an error toast and no success toast when the delete write fails', async () => {

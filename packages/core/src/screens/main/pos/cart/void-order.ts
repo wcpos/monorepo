@@ -61,6 +61,19 @@ export async function voidOrder(
 	input: VoidOrderInput
 ): Promise<VoidOrderResult> {
 	const { recordId, registerId } = input;
+	// A refused delete is answered once the order is converted or restored, so its dead letter is
+	// settled: left in the queue it reads as "Save refused" on the order's tab for ever. Discard
+	// keeps the resident (a delete is never a born-local create) and drops only the delete's own
+	// bookkeeping; the queued pending or restoring update still protects the record from the
+	// re-pull that discard schedules. Not awaited: the outcome stands either way, and the re-pull
+	// is a fetch.
+	const settleRefusedDelete = (deleteMutationId: string) => {
+		void manager.engine.resolveConflict(deleteMutationId, 'discard').catch((error: unknown) => {
+			voidLogger.warn('Could not settle the refused delete of a void', {
+				context: { orderId: recordId, mutationId: deleteMutationId, error: getErrorMessage(error) },
+			});
+		});
+	};
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
 	// fallback is an atomic patch-and-enqueue to status 'pending' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
@@ -72,16 +85,7 @@ export async function voidOrder(
 			changes: { status: 'pending' },
 			registerId,
 		});
-		// The conversion answered the refusal, so its dead letter is settled: left in the queue it
-		// reads as "Save refused" on the order's tab for ever. Discard keeps the resident (a delete
-		// is never a born-local create) and drops only the delete's own bookkeeping; the queued
-		// pending update still protects the record from the re-pull that discard schedules.
-		// Not awaited: the void stands either way, and the re-pull is a fetch.
-		void manager.engine.resolveConflict(deleteMutationId, 'discard').catch((error: unknown) => {
-			voidLogger.warn('Could not settle the refused delete of a void kept as pending', {
-				context: { orderId: recordId, mutationId: deleteMutationId, error: getErrorMessage(error) },
-			});
-		});
+		settleRefusedDelete(deleteMutationId);
 	};
 
 	const receipt = await requestServerDelete(manager.engine, { collection: 'orders', recordId });
@@ -111,7 +115,12 @@ export async function voidOrder(
 		}).then(
 			() => null,
 			async (lateError) => {
-				if (!isCannotDelete(lateError) || input.undone()) return null;
+				if (!isCannotDelete(lateError)) return null;
+				// Undone already: the order is restored, so only the dead letter needs settling.
+				if (input.undone()) {
+					settleRefusedDelete(receipt.mutationId);
+					return null;
+				}
 				await convertToPending(receipt.mutationId);
 				return 'kept-pending' as const;
 			}
