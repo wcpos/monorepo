@@ -2,6 +2,8 @@ package expo.modules.sumupreader
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import com.sumup.merchant.reader.api.SumUpAPI
 import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpPayment
@@ -9,8 +11,10 @@ import com.sumup.reader.sdk.api.SumUpState
 import com.sumup.merchant.reader.models.SavedCardReaderDetailsResult
 import com.sumup.checkout.core.models.TransactionInfo
 import com.sumup.contract.offline.OfflineSessionState
+import com.sumup.contract.offline.OfflineUploadFailureReasons
 import com.sumup.merchant.reader.offline.callbacks.OfflineSessionCallback
 import com.sumup.merchant.reader.offline.callbacks.SecurityPatchUpdateCallback
+import com.sumup.merchant.reader.offline.callbacks.UploadOfflineTransactionsStatusListener
 import com.sumup.merchant.reader.offline.session.domain.contracts.StartOfflineSessionCallback
 import com.sumup.merchant.reader.offline.session.domain.contracts.StopOfflineSessionCallback
 import com.sumup.merchant.reader.offline.session.domain.model.OfflineOperationResult.StartOfflineSessionResult
@@ -45,10 +49,21 @@ class SumUpReaderModule : Module() {
     return mapOf("connected" to SumUpAPI.isCardReaderConnected(), "serial" to reader.serialNumber,
       "model" to reader.readerType?.toString(), "battery" to reader.lastKnownBatteryPercentage)
   }
-  // SumUp's offline calls must be serial and never run under one of its screens.
-  private fun requireIdle() {
+  // SumUp's offline calls must be serial and never overlap one of its screens: each one holds
+  // `busy` until its callback (any thread) settles back on the main thread.
+  private fun offline(promise: Promise, call: ((Promise.() -> Unit) -> Unit) -> Unit) {
     requireSetup()
     if (busy) throw CodedException("ERR_SUMUP_BUSY", "A SumUp operation is already in progress", null)
+    busy = true
+    val settle: (Promise.() -> Unit) -> Unit = { outcome ->
+      Handler(Looper.getMainLooper()).post { busy = false; promise.outcome() }
+    }
+    try { call(settle) } catch (error: Exception) { busy = false; throw error }
+  }
+  private fun uploadFailure(reason: OfflineUploadFailureReasons): String = when (reason) {
+    is OfflineUploadFailureReasons.DifferentMerchant -> "Log in to the SumUp account that took the offline payments to upload them"
+    is OfflineUploadFailureReasons.UserNotLoggedIn -> "Log in to SumUp first"
+    else -> "SumUp could not upload the offline payments; it will try again when online"
   }
   private fun startFailure(result: StartOfflineSessionResult): String = when (result) {
     is StartOfflineSessionResult.NotEligible -> "This SumUp reader cannot take offline payments"
@@ -137,36 +152,53 @@ class SumUpReaderModule : Module() {
       SumUpAPI.prepareForCheckout()
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("offlineSessionActive") { promise: Promise ->
-      requireSetup()
-      SumUpAPI.fetchCurrentOfflineSession(object : OfflineSessionCallback {
-        override fun onSessionInfoReceived(state: OfflineSessionState) { promise.resolve(state is OfflineSessionState.ActiveSession) }
-      })
+      offline(promise) { settle ->
+        SumUpAPI.fetchCurrentOfflineSession(object : OfflineSessionCallback {
+          override fun onSessionInfoReceived(state: OfflineSessionState) {
+            settle { resolve(state is OfflineSessionState.ActiveSession) }
+          }
+        })
+      }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("startOfflineSession") { promise: Promise ->
-      requireIdle()
-      SumUpAPI.startOfflineSession(object : StartOfflineSessionCallback {
-        override fun onResult(result: StartOfflineSessionResult) {
-          if (result is StartOfflineSessionResult.Success || result is StartOfflineSessionResult.SessionInProgress) promise.resolve(null)
-          else promise.reject("ERR_SUMUP_OFFLINE", startFailure(result), null)
-        }
-      })
+      offline(promise) { settle ->
+        SumUpAPI.startOfflineSession(object : StartOfflineSessionCallback {
+          override fun onResult(result: StartOfflineSessionResult) {
+            if (result is StartOfflineSessionResult.Success || result is StartOfflineSessionResult.SessionInProgress) settle { resolve(null) }
+            else settle { reject("ERR_SUMUP_OFFLINE", startFailure(result), null) }
+          }
+        })
+      }
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("stopOfflineSession") { promise: Promise ->
-      requireIdle()
-      SumUpAPI.stopOfflineSession(object : StopOfflineSessionCallback {
-        override fun onResult(result: StopOfflineSessionResult) {
-          if (result is StopOfflineSessionResult.Success || result is StopOfflineSessionResult.NoActiveSession) promise.resolve(null)
-          else promise.reject("ERR_SUMUP_OFFLINE", "SumUp could not end its offline session", null)
+    // Upload what the device holds, then end the session (stop with nothing left to upload).
+    // Nothing stored is not a failure; any other upload failure leaves the session running.
+    AsyncFunction("uploadOffline") { promise: Promise ->
+      offline(promise) { settle ->
+        val stop = {
+          SumUpAPI.stopOfflineSession(object : StopOfflineSessionCallback {
+            override fun onResult(result: StopOfflineSessionResult) {
+              if (result is StopOfflineSessionResult.Success || result is StopOfflineSessionResult.NoActiveSession) settle { resolve(null) }
+              else settle { reject("ERR_SUMUP_OFFLINE", "SumUp could not end its offline session", null) }
+            }
+          })
         }
-      })
+        SumUpAPI.uploadOfflineTransactions(object : UploadOfflineTransactionsStatusListener {
+          override fun onUploadSuccess() { Handler(Looper.getMainLooper()).post { stop() } }
+          override fun onUploadFailure(error: OfflineUploadFailureReasons) {
+            if (error is OfflineUploadFailureReasons.NoOfflineTransactions) Handler(Looper.getMainLooper()).post { stop() }
+            else settle { reject("ERR_SUMUP_OFFLINE", uploadFailure(error), null) }
+          }
+        })
+      }
     }.runOnQueue(Queues.MAIN)
     // Only the public API refreshes the offline limits in 7.1.0; without them start refuses.
     AsyncFunction("prepareOffline") { promise: Promise ->
-      requireIdle()
-      SumUpAPI.updateOfflineSecurityPatch(object : SecurityPatchUpdateCallback {
-        override fun onSuccess() { promise.resolve(null) }
-        override fun onFailure() { promise.reject("ERR_SUMUP_OFFLINE", "SumUp could not download its offline limits", null) }
-      })
+      offline(promise) { settle ->
+        SumUpAPI.updateOfflineSecurityPatch(object : SecurityPatchUpdateCallback {
+          override fun onSuccess() { settle { resolve(null) } }
+          override fun onFailure() { settle { reject("ERR_SUMUP_OFFLINE", "SumUp could not download its offline limits", null) } }
+        })
+      }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("checkout") { options: Map<String, Any>, promise: Promise ->
       val builder = SumUpPayment.builder()

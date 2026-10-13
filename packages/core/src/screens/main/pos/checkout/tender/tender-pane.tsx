@@ -233,6 +233,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			</Button>
 		);
 	});
+	// One rule: the picked card-reader tile settles later (the payment takes the offline path and
+	// its driver can queue it). It outranks the change and part-payment lines.
+	const settlesLater = flow.tiles.find((tile) => tile.method.id === method?.id)?.settlesLater;
 	const hint = missing
 		? t('pos_checkout.enter_field', { label: missing.label })
 		: noChange
@@ -240,14 +243,16 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					amount: format(flow.balanceMinor),
 					method: method?.title,
 				})
-			: flow.entryChangeMinor > 0
-				? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
-				: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
-					? plan
-						? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
-						: t('pos_checkout.part_payment_left', { left: format(left) })
-					: !flow.online && method?.capture.mode === 'device'
-						? t('pos_checkout.offline_card_may_decline')
+			: settlesLater
+				? t('pos_checkout.offline_card_may_decline')
+				: flow.entryChangeMinor > 0
+					? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
+					: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+						? plan
+							? t('pos_checkout.less_than_planned', {
+									amount: format(due - flow.entryAppliedMinor),
+								})
+							: t('pos_checkout.part_payment_left', { left: format(left) })
 						: '';
 	const commit = method
 		? (fields

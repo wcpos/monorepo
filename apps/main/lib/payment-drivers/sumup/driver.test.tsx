@@ -70,7 +70,7 @@ function sdkMock() {
 		checkout: jest.fn().mockResolvedValue(success),
 		offlineSessionActive: jest.fn().mockResolvedValue(false),
 		startOfflineSession: jest.fn().mockResolvedValue(undefined),
-		stopOfflineSession: jest.fn().mockResolvedValue(undefined),
+		uploadOffline: jest.fn().mockResolvedValue(undefined),
 		prepareOffline: jest.fn().mockResolvedValue(undefined),
 		addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
 	};
@@ -256,7 +256,7 @@ it.each(['SOLO_LITE', 'SOLO'])(
 		expect(sdk.startOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
 			sdk.checkout.mock.invocationCallOrder[0]
 		);
-		expect(sdk.stopOfflineSession).not.toHaveBeenCalled();
+		expect(sdk.uploadOffline).not.toHaveBeenCalled();
 		// A session SumUp already holds (it survives app restarts) is reused, not restarted.
 		sdk.offlineSessionActive.mockResolvedValue(true);
 		await driver.collect(offlineInput);
@@ -298,17 +298,53 @@ it('stops before checkout when SumUp refuses to start an offline session', async
 	await expect(driver.collect(offlineInput)).rejects.toThrow('not enabled offline payments');
 	expect(sdk.checkout).not.toHaveBeenCalled();
 });
-it('ends an active offline session before an online payment, and refuses one it cannot end', async () => {
+it('has SumUp upload and end an active session before an online payment, and refuses if it cannot', async () => {
 	sdk.offlineSessionActive.mockResolvedValue(true);
 	await expect(driver.collect(input)).resolves.toMatchObject({ outcome: 'captured' });
-	expect(sdk.stopOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
+	expect(sdk.uploadOffline.mock.invocationCallOrder[0]).toBeLessThan(
 		sdk.checkout.mock.invocationCallOrder[0]
 	);
 	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
 	sdk.checkout.mockClear();
-	sdk.stopOfflineSession.mockRejectedValue(new Error('SumUp could not end its offline session'));
-	await expect(driver.collect(input)).rejects.toThrow('could not end');
+	sdk.uploadOffline.mockRejectedValue(new Error('SumUp could not upload the offline payments'));
+	await expect(driver.collect(input)).rejects.toThrow('could not upload');
 	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+it('does not ask about offline sessions for a store that never opted in', async () => {
+	resolveMethod.mockReturnValue({
+		...descriptor,
+		capabilities: { ...descriptor.capabilities, offline: 'none' },
+	});
+	await expect(driver.collect(input)).resolves.toMatchObject({ outcome: 'captured' });
+	expect(sdk.offlineSessionActive).not.toHaveBeenCalled();
+	expect(sdk.uploadOffline).not.toHaveBeenCalled();
+});
+it('refuses an online payment when SumUp never says whether a session is active', async () => {
+	jest.useFakeTimers();
+	try {
+		sdk.offlineSessionActive.mockReturnValue(new Promise(() => {}));
+		const collected = driver.collect(input);
+		const settled = expect(collected).rejects.toThrow('did not report its offline session');
+		await jest.advanceTimersByTimeAsync(5000);
+		await settled;
+		expect(sdk.checkout).not.toHaveBeenCalled();
+	} finally {
+		jest.useRealTimers();
+	}
+});
+it('takes an offline-path payment online when the network is up: no session, still an authorization', async () => {
+	sdk.readerStatus.mockResolvedValue({ ...saved, model: 'SOLO_LITE' });
+	await driver.initialize();
+	driver.setOnline(true);
+	await expect(driver.collect(offlineInput)).resolves.toMatchObject({ outcome: 'authorized' });
+	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
+	sdk.offlineSessionActive.mockResolvedValue(true);
+	sdk.checkout.mockClear();
+	await driver.collect(offlineInput);
+	expect(sdk.startOfflineSession).not.toHaveBeenCalled();
+	expect(sdk.uploadOffline.mock.invocationCallOrder[0]).toBeLessThan(
+		sdk.checkout.mock.invocationCallOrder[0]
+	);
 });
 it('never calls a payment SumUp took offline captured', async () => {
 	sdk.checkout.mockResolvedValue({ ...success, offline: true });
@@ -317,44 +353,82 @@ it('never calls a payment SumUp took offline captured', async () => {
 		provider_refs: { transaction_code: 'TX1', foreign_transaction_id: 'leg' },
 	});
 });
-it('back online, ends the offline session so SumUp uploads, and refreshes its limits', async () => {
+it('back online, has SumUp upload its offline payments, and refreshes its limits', async () => {
 	mockOnlineStatus = 'online-website-available';
-	sdk.offlineSessionActive.mockResolvedValue(true);
 	let tree!: ReactTestRenderer;
 	await act(async () => {
 		tree = create(<SumUpDriverBridge driver={driver} methods={[descriptor]} />);
 	});
-	expect(sdk.stopOfflineSession).toHaveBeenCalledTimes(1);
-	expect(sdk.stopOfflineSession.mock.invocationCallOrder[0]).toBeLessThan(
+	expect(sdk.uploadOffline).toHaveBeenCalledTimes(1);
+	expect(sdk.uploadOffline.mock.invocationCallOrder[0]).toBeLessThan(
 		sdk.prepareOffline.mock.invocationCallOrder[0]
 	);
-	// A failed refresh is a message, not a lost reader.
-	sdk.offlineSessionActive.mockResolvedValue(false);
-	sdk.prepareOffline.mockRejectedValue(new Error('SumUp could not download its offline limits'));
-	await act(async () => tree.update(<SumUpDriverBridge driver={driver} methods={[descriptor]} />));
+	// A failed upload or refresh is a message, not a lost reader.
+	sdk.uploadOffline.mockRejectedValue(new Error('SumUp could not upload the offline payments'));
 	await act(async () => driver.syncOffline());
 	expect(driver.status$.get()).toMatchObject({
 		connection: 'connected',
-		message: 'SumUp could not download its offline limits',
+		message: 'SumUp could not upload the offline payments',
 	});
+	await act(async () => tree.unmount());
+});
+it('does not end the session when the till drops offline again before the refresh settles', async () => {
+	mockOnlineStatus = 'online-website-available';
+	let finishBootstrap!: (handoff: Record<string, unknown>) => void;
+	bootstrap.mockReturnValue(new Promise((resolve) => (finishBootstrap = resolve)));
+	let tree!: ReactTestRenderer;
+	await act(async () => {
+		tree = create(<SumUpDriverBridge driver={driver} methods={[descriptor]} />);
+	});
+	mockOnlineStatus = 'offline';
+	await act(async () => tree.update(<SumUpDriverBridge driver={driver} methods={[descriptor]} />));
+	await act(async () => finishBootstrap({ affiliate_key: 'key', merchant_code: 'M1' }));
+	expect(sdk.uploadOffline).not.toHaveBeenCalled();
 	await act(async () => tree.unmount());
 });
 it('starts a checkout only after a running offline sync has finished', async () => {
 	await driver.initialize();
-	let finishStop!: () => void;
-	sdk.offlineSessionActive.mockResolvedValueOnce(true);
-	sdk.stopOfflineSession.mockImplementationOnce(
-		() => new Promise<void>((resolve) => (finishStop = resolve))
+	driver.setOnline(true);
+	let finishUpload!: () => void;
+	sdk.uploadOffline.mockImplementationOnce(
+		() => new Promise<void>((resolve) => (finishUpload = resolve))
 	);
 	const sync = driver.syncOffline();
 	const collected = driver.collect(input);
 	await act(async () => {});
 	expect(sdk.checkout).not.toHaveBeenCalled();
-	await act(async () => finishStop());
+	await act(async () => finishUpload());
 	await sync;
 	await expect(collected).resolves.toMatchObject({ outcome: 'captured' });
 	expect(sdk.prepareOffline.mock.invocationCallOrder[0]).toBeLessThan(
 		sdk.checkout.mock.invocationCallOrder[0]
+	);
+});
+it('never syncs during a checkout, and runs a reconnect sync it skipped once the checkout ends', async () => {
+	await driver.initialize();
+	let finishCheckout!: (result: typeof success) => void;
+	sdk.checkout.mockReturnValueOnce(new Promise((resolve) => (finishCheckout = resolve)));
+	const collected = driver.collect(input);
+	await act(async () => {});
+	expect(sdk.checkout).toHaveBeenCalled();
+	driver.setOnline(true);
+	expect(driver.syncOffline()).toBeUndefined();
+	expect(sdk.uploadOffline).not.toHaveBeenCalled();
+	await act(async () => finishCheckout(success));
+	await collected;
+	await act(async () => {});
+	expect(sdk.uploadOffline).toHaveBeenCalledTimes(1);
+	expect(sdk.prepareOffline).toHaveBeenCalledTimes(1);
+});
+it('has SumUp upload offline payments before logging out of another account, and keeps the login if it cannot', async () => {
+	await driver.initialize();
+	sdk.merchant.mockResolvedValue({ merchantCode: 'OTHER', currencyCode: 'USD' });
+	sdk.uploadOffline.mockRejectedValueOnce(new Error('SumUp could not upload the offline payments'));
+	await expect(driver.openReaderSettings()).rejects.toThrow('could not upload');
+	expect(sdk.logout).not.toHaveBeenCalled();
+	await driver.openReaderSettings();
+	expect(sdk.uploadOffline.mock.invocationCallOrder[1]).toBeLessThan(
+		sdk.logout.mock.invocationCallOrder[0]
 	);
 });
 it('leaves SumUp offline sessions alone without the opt-in or while offline', async () => {
@@ -368,7 +442,7 @@ it('leaves SumUp offline sessions alone without the opt-in or while offline', as
 	resolveMethod.mockReturnValue(descriptor);
 	mockOnlineStatus = 'offline';
 	await act(async () => tree.update(<SumUpDriverBridge driver={driver} methods={[descriptor]} />));
-	expect(sdk.offlineSessionActive).not.toHaveBeenCalled();
+	expect(sdk.uploadOffline).not.toHaveBeenCalled();
 	expect(sdk.prepareOffline).not.toHaveBeenCalled();
 	await act(async () => tree.unmount());
 });

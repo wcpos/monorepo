@@ -19,11 +19,14 @@ export function SumUpDriverBridge({
 	// Reconcile an external SDK on startup, descriptor refresh, app foreground and reconnect;
 	// online, an offline SumUp session ends so its payments upload for Pro to find.
 	React.useEffect(() => {
+		// The driver reads connectivity when the sync runs, so a refresh that outlives a drop
+		// back offline does not end the session.
+		driver.setOnline(online);
 		const refresh = () => {
 			void driver
 				.initialize()
 				.then(driver.refreshStatus)
-				.then(() => (online ? driver.syncOffline() : undefined))
+				.then(driver.syncOffline)
 				.catch(driver.reportError);
 		};
 		refresh();

@@ -50,14 +50,22 @@ public class SumUpReaderModule: Module {
     return ["connected": reader.isActive, "serial": reader.serialNumber,
             "model": model(reader.readerType), "battery": reader.batteryLevel]
   }
-  // SumUp's offline calls must be serial and never run under one of its screens.
-  private func requireIdle() throws {
-    try requireSetup()
-    guard !Self.busy else { throw Exception(name: "SumUpBusy", description: "A SumUp operation is already in progress") }
+  // Set when this app starts an offline session, cleared once SumUp has its payments. iOS
+  // answers "no session" and "unreadable" with the same undocumented error, so this tells them
+  // apart: an error with no session of ours is none; with one, it is treated as live.
+  private static let sessionKey = "wcpos.sumup.offlineSessionStarted"
+  private static var sessionStarted: Bool {
+    get { UserDefaults.standard.bool(forKey: sessionKey) }
+    set { UserDefaults.standard.set(newValue, forKey: sessionKey) }
   }
-  private func settle(_ promise: Promise, _ success: Bool, _ error: Error?, _ failure: String) {
-    if success { promise.resolve(nil) }
-    else { promise.reject("SumUpOffline", error?.localizedDescription ?? failure) }
+  // SumUp's offline calls must be serial and never overlap one of its screens: each holds
+  // `busy` (begin) until its completion settles back on the main queue.
+  private func finish(_ promise: Promise, _ success: Bool, _ error: Error?, _ failure: String) {
+    DispatchQueue.main.async {
+      Self.busy = false
+      if success { promise.resolve(nil) }
+      else { promise.reject("SumUpOffline", error?.localizedDescription ?? failure) }
+    }
   }
   private func emitStatus() {
     sendEvent("onReaderStatus", ["reader": status() as Any? ?? NSNull()])
@@ -128,26 +136,52 @@ public class SumUpReaderModule: Module {
       try self.requireSetup()
       SumUpSDK.prepareForCheckout()
     }.runOnQueue(.main)
-    // getOfflineSessionDetails answers an error when no session is active.
     AsyncFunction("offlineSessionActive") { (promise: Promise) in
-      try self.requireSetup()
-      SumUpSDK.getOfflineSessionDetails { details, _ in promise.resolve(details != nil) }
-    }.runOnQueue(.main)
-    AsyncFunction("startOfflineSession") { (promise: Promise) in
-      try self.requireIdle()
-      SumUpSDK.startOfflineSession { success, error in
-        self.settle(promise, success, error, "SumUp could not start an offline session")
+      try self.begin()
+      SumUpSDK.getOfflineSessionDetails { details, _ in
+        DispatchQueue.main.async {
+          Self.busy = false
+          promise.resolve(details != nil || Self.sessionStarted)
+        }
       }
     }.runOnQueue(.main)
-    AsyncFunction("stopOfflineSession") { (promise: Promise) in
-      try self.requireIdle()
-      SumUpSDK.endOfflineSession { success, error in
-        self.settle(promise, success, error, "SumUp could not end its offline session")
+    AsyncFunction("startOfflineSession") { (promise: Promise) in
+      try self.begin()
+      SumUpSDK.startOfflineSession { success, error in
+        if success { DispatchQueue.main.async { Self.sessionStarted = true } }
+        self.finish(promise, success, error, "SumUp could not start an offline session")
+      }
+    }.runOnQueue(.main)
+    // Upload what the device holds and end the session. endOfflineSession does not report a
+    // failed upload, so it only ends a session with nothing approved in it, or one SumUp can no
+    // longer read after a failed upload (ending is always permitted and keeps stored payments).
+    AsyncFunction("uploadOffline") { (promise: Promise) in
+      try self.begin()
+      SumUpSDK.getOfflineSessionDetails { details, _ in
+        DispatchQueue.main.async {
+          let failure = "SumUp could not upload the offline payments; it will try again when online"
+          // After a failed upload the marker stays, so the next sync or online payment retries it.
+          let end = { (clear: Bool, error: Error?) in
+            SumUpSDK.endOfflineSession { ended, endError in
+              if ended && clear { DispatchQueue.main.async { Self.sessionStarted = false } }
+              self.finish(promise, ended, error ?? endError, failure)
+            }
+          }
+          if details == nil && !Self.sessionStarted { self.finish(promise, true, nil, failure); return }
+          if let details, details.approvedTransactionsCount == 0 { end(true, nil); return }
+          SumUpSDK.uploadOfflineSession { success, error in
+            DispatchQueue.main.async {
+              if success { Self.sessionStarted = false; self.finish(promise, true, nil, failure) }
+              else if details == nil { end(false, error) }
+              else { self.finish(promise, false, error, failure) }
+            }
+          }
+        }
       }
     }.runOnQueue(.main)
     // The SDK downloads its offline limits itself after login; SumUp discourages calling
     // setupOfflineSession by hand, so there is nothing to prepare on iOS.
-    AsyncFunction("prepareOffline") { try self.requireIdle() }.runOnQueue(.main)
+    AsyncFunction("prepareOffline") { try self.requireSetup() }.runOnQueue(.main)
     AsyncFunction("checkout") { (options: SumUpCheckoutOptions, promise: Promise) in
       let controller = try self.controller()
       let total = NSDecimalNumber(string: options.amount, locale: Locale(identifier: "en_US_POSIX"))

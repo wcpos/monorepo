@@ -32,8 +32,8 @@ export type SumUpReader = {
 	/** SumUp's offline session (Solo and Solo Lite): while active, EVERY checkout is offline. */
 	offlineSessionActive(): Promise<boolean>;
 	startOfflineSession(): Promise<void>;
-	/** Ends the session and uploads the stored payments. */
-	stopOfflineSession(): Promise<void>;
+	/** Uploads the stored offline payments and ends the session; rejects if the upload fails. */
+	uploadOffline(): Promise<void>;
 	/** Downloads SumUp's offline limits (Android); iOS does this itself after login. */
 	prepareOffline(): Promise<void>;
 	checkout(options: {
