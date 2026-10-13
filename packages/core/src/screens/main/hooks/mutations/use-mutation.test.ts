@@ -226,6 +226,41 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('toasts its generic success by default', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith(
+			'common.saved_2',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	// A caller that toasts its own, more specific "Saved {name}" turns the generic
+	// "Customer #id saved" off, or the cashier sees two success toasts for one save.
+	it('logs but does not toast its generic success when the caller owns the toast', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const customer = {
+			uuid: 'customer-local-uuid',
+			collection: { name: 'customers' },
+			payload: { id: 42, first_name: 'Ada' },
+		} as unknown as EngineRecord<'customers'>;
+		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
+		const { result } = renderHook(() =>
+			useMutation({ collectionName: 'customers', showSuccessToast: false })
+		);
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledTimes(2);
+		for (const [, options] of mockLoggerSuccess.mock.calls) {
+			expect(options).toEqual(expect.objectContaining({ showToast: false }));
+		}
+	});
+
 	it('hands the engine a structured-cloneable customer payload', async () => {
 		// The web storage lives in a Worker and Electron's behind ipcRenderer, so the
 		// enqueued payload crosses `postMessage`. Sourcing it from `resident.get()`

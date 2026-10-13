@@ -22,7 +22,7 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
  *
  */
 export function AddCustomerScreen() {
-	const { create } = useMutation({ collectionName: 'customers' });
+	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const router = useRouter();

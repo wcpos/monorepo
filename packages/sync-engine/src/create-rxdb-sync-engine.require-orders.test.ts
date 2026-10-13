@@ -700,6 +700,14 @@ describe('require() for orders (the durable path)', () => {
 				message: 'require: scheduler drain failed 1 task(s)',
 			})
 		);
+		// The declarer's failure is the ONE error-level report of this task failure
+		// (Sentry captures error level only); nothing else reports it a second time.
+		expect(
+			harness.diagnostics.mock.calls
+				.map(([event]) => event as { type: string; level: string })
+				.filter((event) => event.level === 'error')
+				.map((event) => event.type)
+		).toEqual(['coverage.require.error']);
 	});
 
 	it('carries the detail of a foreign error, not just its name', async () => {
