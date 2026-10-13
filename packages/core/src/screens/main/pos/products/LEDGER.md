@@ -31,3 +31,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 ## v1 screen deleted (added 2026-10-13)
 
 `index.tsx` (the v1 `POSProducts`) and `index.test.tsx` are deleted: the register panel and the routes mount `v2/` (roadmap#423, R8). `cellsForRow` moved to `v2/cells-for-row.ts`. Line 1’s “relational products/variations binding” is the products query handle (`useProductsQueryHandle`); line 14’s evidence is `v2/index.tsx` (the filter-slot channels). No line is struck.
+
+## Relational search is a descriptor feature (added 2026-10-13)
+
+The products/variations join (direct hits ∪ parents of matching children, one windowed `$in` read, `childrenSearchCount` and `parentSearchTerm` on each hit) is now `EngineQueryDescriptor.relation`, performed by `observeEngineQuery` (roadmap#423 R4 step 2). The products handle is the generic read with a relation line plus one owned targeted demand for the result's `relatedIds` (declared only while owned, new set before old released). Line 1’s binding is unchanged in behaviour; no line is struck.

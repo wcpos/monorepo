@@ -9,6 +9,9 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ViewOrderModal } from './modal';
 
 const push = jest.fn();
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => unknown;
+};
 const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 23858, status: 'completed' },
@@ -90,8 +93,9 @@ jest.mock('./sections/refunds', () => ({
 jest.mock('./sections/totals', () => ({
 	TotalsSection: () => <div />,
 }));
+let mockRefundsHandle: unknown = {};
 jest.mock('./use-order-refunds', () => ({
-	useOrderRefunds: () => ({}),
+	useOrderRefunds: () => mockRefundsHandle,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
@@ -148,10 +152,9 @@ it.each([12, undefined])('opens the receipt for refund %s only when it has an id
 	const sections = jest.requireMock('./sections/refunds');
 	const actual = jest.requireActual('./sections/refunds');
 	const section = jest.spyOn(sections, 'RefundsSection').mockImplementation(actual.RefundsSection);
-	const observable = jest
-		.spyOn(jest.requireMock('observable-hooks'), 'useObservableSuspense')
-		.mockReturnValueOnce(mockOrder)
-		.mockReturnValue([{ id, total: '-5.00' }]);
+	mockRefundsHandle = fakeQueryHandle({
+		result: { hits: [{ id: 'refund', record: { payload: { id, total: '-5.00' } } }] },
+	});
 	push.mockClear();
 	try {
 		render(<ViewOrderModal resource={{} as never} />);
@@ -167,6 +170,6 @@ it.each([12, undefined])('opens the receipt for refund %s only when it has an id
 		}
 	} finally {
 		section.mockRestore();
-		observable.mockRestore();
+		mockRefundsHandle = {};
 	}
 });

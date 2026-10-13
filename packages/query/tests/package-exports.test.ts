@@ -38,7 +38,7 @@ const metroContext: ResolutionContext = {
 	nodeModulesPaths: [path.join(repoRoot, 'node_modules')],
 	originModulePath: path.join(
 		repoRoot,
-		'packages/core/src/screens/main/pos/contexts/current-order/use-open-orders-resource.ts'
+		'packages/core/src/screens/main/pos/contexts/current-order/use-open-orders-handle.ts'
 	),
 	preferNativePlatform: true,
 	redirectModulePath: (modulePath) => modulePath,

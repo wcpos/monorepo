@@ -1,8 +1,10 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
+import type { QueryHandle, QueryResult } from '@wcpos/query';
+
+import { useQuerySnapshot } from '../../../../../query/query-handles';
 import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,
@@ -12,8 +14,9 @@ import {
 import { useNewOrder } from './use-new-order';
 
 import type { DefaultCustomerResource } from './use-new-order';
+import type { RxCollection } from 'rxdb';
 
-export { useOpenOrdersResource } from './use-open-orders-resource';
+export { useOpenOrdersHandle } from './use-open-orders-handle';
 export {
 	CurrentOrderActionsContext,
 	CurrentOrderContext,
@@ -29,8 +32,9 @@ export {
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	resource: ObservableResource<OpenOrderHit[]>;
-	/** Whose open orders `resource` holds; see `CurrentOrderContextProps.openOrdersScope`. */
+	/** Owned by `(pos)/_layout.tsx`, above this boundary — see `useOpenOrdersHandle`. */
+	handle: QueryHandle<QueryResult<RxCollection>>;
+	/** Whose open orders `handle` holds; see `CurrentOrderContextProps.openOrdersScope`. */
 	scope: string;
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
 	defaultCustomerResource: DefaultCustomerResource;
@@ -47,13 +51,14 @@ interface CurrentOrderContextProviderProps {
  */
 export function CurrentOrderProvider({
 	children,
-	resource,
+	handle,
 	scope,
 	defaultCustomerResource,
 	currentOrderUUID,
 }: CurrentOrderContextProviderProps) {
 	const { newOrder } = useNewOrder(defaultCustomerResource);
-	const openOrders = useObservableSuspense(resource);
+	const { hits } = useQuerySnapshot(handle, ['hits']);
+	const openOrders = hits as OpenOrderHit[];
 	const router = useRouter();
 
 	// Internal state is the source of truth, initialized from route param

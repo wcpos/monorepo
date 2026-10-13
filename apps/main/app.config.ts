@@ -209,6 +209,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			[
 				'@stripe/stripe-terminal-react-native',
 				{
+					// Tap to Pay on Android reads the card in a separate process of this app. Stripe
+					// requires TerminalApplicationDelegate.onCreate in MainApplication.onCreate() and
+					// an early return in that subprocess; the plugin injects both at prebuild. The
+					// guard sits before React Native and Expo start-up, so the subprocess skips them
+					// and the printer, SumUp and WebRTC modules' native start-up. The plugin puts the delegate
+					// call ahead of the guard (Stripe's Expo example gets the same order); the device
+					// check on roadmap#429 settles whether that matters.
+					appDelegate: true,
+					tapToPayCheck: true,
 					bluetoothBackgroundMode: true,
 					locationWhenInUsePermission:
 						'WCPOS uses your location to connect card readers and accept payments.',

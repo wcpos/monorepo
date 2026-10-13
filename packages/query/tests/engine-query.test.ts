@@ -1,10 +1,9 @@
 import { waitFor } from '@testing-library/react';
-import { firstValueFrom, of, Subject } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { fillWithDefaultSettings } from 'rxdb';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { observeEngineQuery } from '../src/engine-query';
 import {
@@ -759,6 +758,239 @@ describe('observeEngineQuery across a store switch', () => {
 			subscription.unsubscribe();
 			await bootScope.close();
 			await activeScopeDatabase.close();
+		}
+	});
+});
+
+describe('a descriptor relation', () => {
+	const relation = {
+		collection: 'variations' as const,
+		parentKey: 'parent_id',
+		searchFields: ['sku'],
+	};
+
+	/** Hits as `{ id, childrenSearchCount, parentSearchTerm }`, sorted by id. */
+	function summary(result: Awaited<ReturnType<typeof firstAnswer>>) {
+		return result.hits
+			.map(({ id, childrenSearchCount, parentSearchTerm }) => ({
+				id,
+				childrenSearchCount,
+				parentSearchTerm,
+			}))
+			.sort((left, right) => left.id.localeCompare(right.id));
+	}
+
+	function firstAnswer(database: RxDatabase, descriptor: Parameters<typeof observeEngineQuery>[1]) {
+		return firstValueFrom(observeEngineQuery(createFakeEngine(database), descriptor));
+	}
+
+	it('unions direct hits with the parents of matching children, counting the children', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'shirt', id: 10, name: 'Blue Shirt' }),
+			engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }),
+			engineProduct({ uuid: 'sock', id: 30, name: 'Sock' }),
+		]);
+		await database.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat-1' }),
+			engineVariation({ uuid: 'hat-2', id: 22, parent_id: 20, sku: 'blue-hat-2' }),
+			engineVariation({ uuid: 'sock-1', id: 31, parent_id: 30, sku: 'red-sock' }),
+		]);
+		try {
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				search: 'blue',
+				searchFields: ['name'],
+				relation,
+			});
+			// Catches: dropping the children leg (hat vanishes), dropping the direct leg (shirt
+			// vanishes), a count that does not accumulate per parent (hat reads 1), and a hit
+			// without the term.
+			expect(summary(result)).toEqual([
+				{ id: 'hat', childrenSearchCount: 2, parentSearchTerm: 'blue' },
+				{ id: 'shirt', childrenSearchCount: 0, parentSearchTerm: 'blue' },
+			]);
+			expect(result.searchActive).toBe(true);
+			expect(result.searchState).toBe('answered');
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('credits a parent only through the children the relation selector admits', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }),
+			engineProduct({ uuid: 'cap', id: 40, name: 'Cap' }),
+		]);
+		await database.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'hat-draft',
+				id: 21,
+				parent_id: 20,
+				sku: 'blue-hat',
+				status: 'draft',
+			}),
+			engineVariation({
+				uuid: 'cap-live',
+				id: 41,
+				parent_id: 40,
+				sku: 'blue-cap',
+				status: 'publish',
+			}),
+		]);
+		try {
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				search: 'blue',
+				searchFields: ['name'],
+				relation: { ...relation, selector: { status: 'publish' } },
+			});
+			// Catches: the children leg ignoring `relation.selector` (the draft would credit hat).
+			expect(result.hits.map((hit) => hit.id)).toEqual(['cap']);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('applies the parent window after the union', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'zulu', id: 10, name: 'Zulu Shirt' }),
+			engineProduct({ uuid: 'alpha', id: 20, name: 'Alpha Shirt' }),
+		]);
+		await database.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'zulu-1', id: 11, parent_id: 10, sku: 'shared-1' }),
+			engineVariation({ uuid: 'zulu-2', id: 12, parent_id: 10, sku: 'shared-2' }),
+			engineVariation({ uuid: 'alpha-1', id: 21, parent_id: 20, sku: 'shared-3' }),
+		]);
+		try {
+			const base = {
+				collection: 'products' as const,
+				search: 'shared',
+				searchFields: ['name'],
+				sort: [{ name: 'asc' as const }],
+				relation,
+			};
+			// Catches: the window applied to a leg instead of the union (a limited children leg
+			// sorted by id names only zulu), or the window dropped from the final read (two hits).
+			const one = await firstAnswer(database, { ...base, limit: 1 });
+			expect(one.hits.map((hit) => hit.id)).toEqual(['alpha']);
+			// Catches: a union that is not de-duplicated by parent (zulu twice for two children).
+			const two = await firstAnswer(database, { ...base, limit: 2 });
+			expect(two.hits.map((hit) => hit.id)).toEqual(['alpha', 'zulu']);
+			expect(two.hits.map((hit) => hit.childrenSearchCount)).toEqual([1, 2]);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('is ignored without a search term', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'shirt', id: 10, name: 'Shirt' }),
+			engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }),
+		]);
+		try {
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				search: '  ',
+				searchFields: ['name'],
+				relation,
+			});
+			// Catches: the join running on an empty term (searchActive/relatedIds would appear).
+			expect(result.hits.map((hit) => hit.id).sort()).toEqual(['hat', 'shirt']);
+			expect(result.relatedIds).toBeUndefined();
+			expect(result.searchActive).toBeUndefined();
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('lists every parent the children named in relatedIds, resident or not', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
+		await database.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat' }),
+			engineVariation({ uuid: 'orphan-1', id: 991, parent_id: 99, sku: 'blue-orphan' }),
+		]);
+		try {
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				search: 'blue',
+				searchFields: ['name'],
+				relation,
+			});
+			// Catches: relatedIds derived from resident hits (99 would be lost — the owner's
+			// targeted demand is what fetches it), or a non-resident id leaking into hits.
+			expect([...(result.relatedIds ?? [])].sort((a, b) => a - b)).toEqual([20, 99]);
+			expect(result.hits.map((hit) => hit.id)).toEqual(['hat']);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('is pending while the database is unbound and answered once bound', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.insert(engineProduct({ uuid: 'hat', id: 20, name: 'Hat' }));
+		await database.collections.variations.insert(
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat' })
+		);
+		const pending = createPendingFakeEngine(database);
+		const listeners = new Set<(current: RxDatabase | null) => void>();
+		pending.engine.db$ = (listener) => {
+			listeners.add(listener);
+			listener(null);
+			return () => listeners.delete(listener);
+		};
+		const states: (string | undefined)[] = [];
+		let ids: string[] = [];
+		const subscription = observeEngineQuery(pending.engine, {
+			collection: 'products',
+			search: 'blue',
+			searchFields: ['name'],
+			relation,
+		}).subscribe((result) => {
+			states.push(result.searchState);
+			ids = result.hits.map((hit) => hit.id);
+		});
+		try {
+			// Catches: an unbound join emitting an empty 'answered' (the #1733 "not found" lie).
+			expect(states).toEqual(['pending']);
+			listeners.forEach((listener) => listener(database as never));
+			await waitFor(() => expect(states.at(-1)).toBe('answered'));
+			expect(ids).toEqual(['hat']);
+		} finally {
+			subscription.unsubscribe();
+			pending.open();
+			await database.close();
+		}
+	});
+
+	it("keeps the parent's own selector over the union (selector face)", async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'draft-hat', id: 20, name: 'Hat', status: 'draft' }),
+			engineProduct({ uuid: 'live-cap', id: 40, name: 'Cap', status: 'publish' }),
+		]);
+		await database.collections.variations.bulkInsert([
+			engineVariation({ uuid: 'hat-1', id: 21, parent_id: 20, sku: 'blue-hat' }),
+			engineVariation({ uuid: 'cap-1', id: 41, parent_id: 40, sku: 'blue-cap' }),
+		]);
+		try {
+			const result = await firstAnswer(database, {
+				collection: 'products',
+				selector: { status: 'publish' },
+				search: 'blue',
+				searchFields: ['name'],
+				relation,
+			});
+			// Catches: the final read replacing the descriptor's selector with the uuid window
+			// (the draft parent would re-enter through its child).
+			expect(result.hits.map((hit) => hit.id)).toEqual(['live-cap']);
+			expect(result.relatedIds?.length).toBe(2);
+		} finally {
+			await database.close();
 		}
 	});
 });

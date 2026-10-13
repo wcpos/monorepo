@@ -118,6 +118,26 @@ describe('useDefaultCustomer', () => {
 		expect(() => captured!.defaultCustomerResource.read()).toThrow(failure);
 	});
 
+	it('retry() asks the customers handle again and the resource yields its answer', () => {
+		mockDefaultCustomerID = 42;
+		const failure = new Error('customers read failed');
+		const handle = fakeQueryHandle({ ready: false, error: failure });
+		const retry = jest.spyOn(handle, 'retry').mockImplementation(() => handle.set({ error: null }));
+		mockUseCollectionQueryHandle.mockReturnValue(handle);
+		act(() => {
+			create(<Harness />);
+		});
+		expect(() => captured!.defaultCustomerResource.read()).toThrow(failure);
+
+		act(() => captured!.retry());
+		// Mutation: skip `handle.retry()` → the handle keeps its failure and nothing re-reads.
+		expect(retry).toHaveBeenCalledTimes(1);
+		const customer = { id: 42, billing: {}, shipping: {} };
+		act(() => handle.set({ ready: true, result: { hits: [{ id: '42', record: customer }] } }));
+		// Mutation: skip the resource's retry → it rethrows the old failure.
+		expect(captured!.defaultCustomerResource.read()).toBe(customer);
+	});
+
 	it('releases its reader of the customers handle on unmount', () => {
 		const counted = countedHandle();
 		mockUseCollectionQueryHandle.mockReturnValue(counted.handle);

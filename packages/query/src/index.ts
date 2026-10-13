@@ -14,6 +14,7 @@ export {
 export type { LocalCollectionReset, LocalDatabaseWithReset } from './use-local-collection';
 export { useLocalQuery$ } from './use-local-query';
 export { useOwnedResource } from './use-owned-resource';
+export type { OwnedResource } from './use-owned-resource';
 export {
 	awaitWriteOutcome,
 	awaitWriteSettlement,
@@ -48,6 +49,7 @@ export {
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,
+	type EngineQueryRelation,
 } from './engine-query';
 export {
 	META_FIELD_PREFIX,

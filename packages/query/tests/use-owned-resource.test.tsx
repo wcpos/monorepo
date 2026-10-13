@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, throwError } from 'rxjs';
 
 import { useOwnedResource } from '../src/use-owned-resource';
 
@@ -32,7 +32,7 @@ describe('useOwnedResource', () => {
 		const counted = countedSource('a');
 		const livesAtRender: number[] = [];
 		renderHook(() => {
-			const resource = useOwnedResource(counted.source$);
+			const { resource } = useOwnedResource(counted.source$);
 			livesAtRender.push(counted.live);
 			return resource;
 		});
@@ -42,7 +42,7 @@ describe('useOwnedResource', () => {
 
 	it('holds exactly one live read and a live resource after Strict Mode replays it', () => {
 		const counted = countedSource('a');
-		const { result, unmount } = renderHook(() => useOwnedResource(counted.source$), {
+		const { result, unmount } = renderHook(() => useOwnedResource(counted.source$).resource, {
 			reactStrictMode: true,
 		});
 		// Strict Mode ran the initializer twice and the mount effect's cleanup and setup again:
@@ -60,7 +60,7 @@ describe('useOwnedResource', () => {
 	it('reloads onto a changed source, keeping the current value until it answers', () => {
 		const first = countedSource('a');
 		const second = new Subject<string>();
-		const { result, rerender } = renderHook(({ source$ }) => useOwnedResource(source$), {
+		const { result, rerender } = renderHook(({ source$ }) => useOwnedResource(source$).resource, {
 			initialProps: { source$: first.source$ },
 		});
 		const resource = result.current;
@@ -72,5 +72,49 @@ describe('useOwnedResource', () => {
 		expect(result.current.read()).toBe('a');
 		act(() => second.next('c'));
 		expect(result.current.read()).toBe('c');
+	});
+
+	it('retries a failure that came before any value: readers suspend until the source answers', () => {
+		const failure = new Error('read failed');
+		let attempt = 0;
+		const answers = new Subject<string>();
+		const source$ = new Observable<string>((subscriber) => {
+			attempt += 1;
+			return (attempt === 1 ? throwError(() => failure) : answers).subscribe(subscriber);
+		});
+		const { result } = renderHook(() => useOwnedResource(source$));
+		expect(() => result.current.resource.read()).toThrow(failure);
+
+		act(() => result.current.retry());
+		// Mutation: retry by `reload()` alone → read() returns undefined instead of suspending.
+		expect(() => result.current.resource.read()).toThrow(expect.any(Promise) as never);
+		act(() => answers.next('a'));
+		// Mutation: rebuild without re-reading the source → no answer ever lands.
+		expect(result.current.resource.read()).toBe('a');
+	});
+
+	it('retries a failure after a value by reloading, keeping the value while the source answers', () => {
+		const failure = new Error('read failed');
+		const answers = new Subject<string>();
+		let attempt = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			attempt += 1;
+			if (attempt === 1) {
+				subscriber.next('a');
+				subscriber.error(failure);
+				return undefined;
+			}
+			return answers.subscribe(subscriber);
+		});
+		const { result } = renderHook(() => useOwnedResource(source$));
+		const resource = result.current.resource;
+		expect(() => resource.read()).toThrow(failure);
+
+		act(() => result.current.retry());
+		// Mutation: always rebuild → a new resource, and the readers lose the value they had.
+		expect(result.current.resource).toBe(resource);
+		expect(resource.read()).toBe('a');
+		act(() => answers.next('b'));
+		expect(resource.read()).toBe('b');
 	});
 });
