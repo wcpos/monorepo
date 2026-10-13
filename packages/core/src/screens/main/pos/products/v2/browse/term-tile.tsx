@@ -7,6 +7,7 @@ import {
 	type PosterMark,
 	type PosterPicture,
 	PosterTile,
+	SCRIM_BLUR_RADIUS,
 	tintOf,
 } from '@wcpos/components/poster-tile';
 import { Image } from '@wcpos/components/image';
@@ -59,6 +60,23 @@ function TermImage({
 	);
 }
 
+/**
+ * A term's image blurred, for the Poster's native scrim (web never mounts it). Bare: it holds no
+ * dealt copy and reports no failure (the sharp one does both).
+ */
+function TermImageBlurred({ src, recyclingKey }: { src: string; recyclingKey: string }) {
+	return (
+		<Image
+			source={{ uri: src }}
+			blurRadius={SCRIM_BLUR_RADIUS}
+			recyclingKey={`${recyclingKey}:blur`}
+			contentFit="cover"
+			className="h-full w-full"
+			transition={0}
+		/>
+	);
+}
+
 /** A term's picture: its image, or its tint when it has none or the image fails. */
 function useTermPicture(term: BrowseTerm, still?: boolean): PosterPicture {
 	const src = term.kind === 'term' ? (term.imageSrc ?? '') : '';
@@ -77,6 +95,7 @@ function useTermPicture(term: BrowseTerm, still?: boolean): PosterPicture {
 				onFailed={() => setFailed(src)}
 			/>
 		),
+		blurred: <TermImageBlurred key={src} src={src} recyclingKey={termKey(term)} />,
 	};
 }
 

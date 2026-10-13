@@ -46,6 +46,7 @@
 		"@expo/dom-webview": "~58.0.2",
 		"@expo/metro-runtime": "~58.0.14",
 		"@react-native-community/netinfo": "12.0.1",
+		"@react-native-masked-view/masked-view": "0.3.2",
 		"@sentry/react-native": "~8.28.0",
 		"@shopify/flash-list": "2.3.2",
 		"@shopify/react-native-skia": "2.13.1",

@@ -62,9 +62,17 @@ jest.mock('@wcpos/components/icon', () => ({
 }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+// The scrim shows what the tile hands it for native's blur beside the words.
 jest.mock('@wcpos/components/poster-tile/scrim', () => ({
-	Scrim: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<div data-testid={testID}>{children}</div>
+	Scrim: ({
+		children,
+		testID,
+		blur,
+	}: React.PropsWithChildren<{ testID: string; blur?: React.ReactNode }>) => (
+		<>
+			<div data-testid="scrim-blur-node">{blur}</div>
+			<div data-testid={testID}>{children}</div>
+		</>
 	),
 }));
 jest.mock('../../../../components/product/price-with-tax', () => ({
@@ -85,6 +93,7 @@ jest.mock('../../grid/tile-image', () => ({
 		}, [onFailed]);
 		return <span data-testid="tile-image" />;
 	},
+	TileImageBlurred: () => <span data-testid="tile-image-blurred" />,
 }));
 jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
@@ -394,6 +403,18 @@ it('counts a drill tile’s options, and stacks only a drill tile', () => {
 	expect(screen.getByText('3 options')).not.toBeNull();
 	// The stack has no stock of its own.
 	expect(screen.queryByTestId('product-tile-stock-12')).toBeNull();
+});
+
+it('hands the scrim a blurred twin of its picture for native, and none on a tint', () => {
+	const pictured = { ...record, payload: { ...record.payload, images: [{ src: 'tea.jpg' }] } };
+	const { rerender } = render(<ProductTile record={pictured} gridFields={gridFields} />);
+	expect(screen.getByTestId('tile-image')).toBeTruthy();
+	const twin = screen.getByTestId('scrim-blur-node');
+	expect(twin.querySelector('[data-testid="tile-image-blurred"]')).not.toBeNull();
+	// Not inside the square: it belongs to the scrim.
+	expect(screen.getByTestId('poster-picture').contains(twin)).toBe(false);
+	rerender(<ProductTile record={record} gridFields={gridFields} />);
+	expect(screen.queryByTestId('tile-image-blurred')).toBeNull();
 });
 
 it('falls back to the tint of its first category, or its name, when the picture fails', () => {

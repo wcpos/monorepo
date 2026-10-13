@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * The Poster tile's scrim, decided 2026-10-12 as "card colour, eased, 85, 48" (wcpos/roadmap
  * `docs/specs/2026-10-12-pos-product-tile-poster-spec.md` § The scrim). Constants, not settings.
@@ -13,11 +15,24 @@ export const SCRIM_REACH = 48;
 export const SCRIM_STRENGTH = 0.92;
 
 /**
- * The blur under the words, in px, masked by the same fade so it has no edge. Drawn on web only
- * for now: native draws it as a blurred copy of the picture under a gradient mask (roadmap
- * `docs/research/2026-10-13-native-scrim-blur.md`), which is its own change once judged on a device.
+ * The blur under the words, in px, masked by the same fade so it has no edge. Web draws it with
+ * `backdrop-filter`; native cannot mask a live blur, so it draws a blurred copy of the picture
+ * under a gradient mask (`@react-native-masked-view/masked-view`) at `SCRIM_BLUR_RADIUS` (roadmap
+ * `docs/research/2026-10-13-native-scrim-blur.md`). Not yet judged on a device.
  */
 export const SCRIM_BLUR_PX = 6;
+
+/**
+ * expo-image's `blurRadius` for the native scrim's blurred copy, so it reads as `SCRIM_BLUR_PX`.
+ * iOS: SDImageBlurTransformer blurs at radius / 2, so twice the px. Android: Glide's
+ * BlurTransformation blurs after a x4 downsample, so radius x 4 is roughly px; 2 is a first guess,
+ * to be judged on the Pixel. Web never mounts the copy.
+ */
+export const SCRIM_BLUR_RADIUS: number = Platform.select({
+	ios: SCRIM_BLUR_PX * 2,
+	android: 2,
+	default: SCRIM_BLUR_PX,
+});
 
 /**
  * The fade, top-down, as `[at, of]`: `at` a fraction of the reach, `of` a fraction of the
@@ -38,6 +53,20 @@ export const SCRIM_STOPS: readonly (readonly [at: number, of: number])[] = [
 	[0.81, 0.738],
 	[1, 1],
 ];
+
+/**
+ * The scrim's gradient at a measured height (native draws it in fractions of the block): the
+ * thirteen stops, then the plateau at the bottom edge, fourteen in all, offsets clamped to [0, 1].
+ * `of` is a fraction of the strength: the tint multiplies it by `SCRIM_STRENGTH`, the blur's mask
+ * takes it as alpha. One list for both, so the blur fades in exactly with the tint.
+ */
+export function scrimStopsFor(height: number): { offset: number; of: number }[] {
+	if (!(height > 0)) return [];
+	return [...SCRIM_STOPS, [height / SCRIM_REACH, 1] as const].map(([at, of]) => ({
+		offset: Math.max(0, Math.min(1, (at * SCRIM_REACH) / height)),
+		of,
+	}));
+}
 
 /**
  * The band of card under the square, so every tile is the same height whatever it says: the

@@ -9,12 +9,12 @@ import { MAX_FONT_SCALE } from '../lib/scale';
 const BAND_FALLBACK = 48;
 
 /**
- * The band (native): the same four terms as `POSTER_BAND` (one `leading-tight` line of name,
- * one money line at 1.35, the 2 px gap and the 10 px foot), read from the type scale's variables
- * and scaled by the OS text size as `Text` scales the words, capped at `MAX_FONT_SCALE`. A class
- * cannot follow the font scale, so a one-line name and the money row overflowed the band.
+ * The band's height (native): the same four terms as `POSTER_BAND` (one `leading-tight` line of
+ * name, one money line at 1.35, the 2 px gap and the 10 px foot), read from the type scale's
+ * variables and scaled by the OS text size as `Text` scales the words, capped at `MAX_FONT_SCALE`.
+ * The scrim reads it too, to line its blurred copy of the picture up with the square.
  */
-export function PosterBand({ style, ...props }: ViewProps & { className?: string }) {
+export function usePosterBandHeight(): number {
 	const { fontScale } = useWindowDimensions();
 	const [base, lineHeight, spacing] = useCSSVariable([
 		'--text-base',
@@ -23,9 +23,16 @@ export function PosterBand({ style, ...props }: ViewProps & { className?: string
 	]).map((value) => Number.parseFloat(String(value)));
 	const scale = Math.min(fontScale || 1, MAX_FONT_SCALE);
 	const line = Number.isFinite(lineHeight) ? lineHeight : base * 1.35;
-	const height =
-		Number.isFinite(base) && Number.isFinite(spacing)
-			? (base * 1.25 + line) * scale + spacing * 3
-			: BAND_FALLBACK * scale;
+	return Number.isFinite(base) && Number.isFinite(spacing)
+		? (base * 1.25 + line) * scale + spacing * 3
+		: BAND_FALLBACK * scale;
+}
+
+/**
+ * The band (native), at `usePosterBandHeight`. A class cannot follow the font scale, so a
+ * one-line name and the money row overflowed the band.
+ */
+export function PosterBand({ style, ...props }: ViewProps & { className?: string }) {
+	const height = usePosterBandHeight();
 	return <View {...props} style={[{ height }, style]} />;
 }

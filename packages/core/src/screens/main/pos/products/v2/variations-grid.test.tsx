@@ -132,7 +132,7 @@ jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: order }),
 }));
 jest.mock('../../hooks/use-add-variation', () => ({ useAddVariation: () => ({ addVariation }) }));
-jest.mock('../grid/tile-image', () => ({ TileImage: () => null }));
+jest.mock('../grid/tile-image', () => ({ TileImage: () => null, TileImageBlurred: () => null }));
 jest.mock('./rows/in-cart-count', () => ({
 	InCartCount: ({ count }: { count: number }) => <output data-testid="in-cart">{count}</output>,
 }));

@@ -37,9 +37,15 @@ const BLUR = {
  * The words' block with the card-colour fade behind it (web, and Electron), over a blur of the
  * picture under the words. The native one is
  * `scrim.native.tsx`, drawn with react-native-svg: this file is the default so that a runner with
- * no platform (jest) never loads the native renderer.
+ * no platform (jest) never loads the native renderer. `blur` (native's blurred copy of the
+ * picture) is ignored and never mounted: `backdrop-filter` already blurs what is under the block.
  */
-export function Scrim({ style, children, ...props }: ViewProps & { className?: string }) {
+export function Scrim({
+	style,
+	children,
+	blur: _blur,
+	...props
+}: ViewProps & { className?: string; blur?: React.ReactNode }) {
 	return (
 		<View {...props} style={[GRADIENT, style]}>
 			{/* First in the tree, so the words paint above it. */}
