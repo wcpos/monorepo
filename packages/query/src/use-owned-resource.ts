@@ -34,7 +34,20 @@ function gated<T>(source: Observable<T>): Held<T> {
  * the replayed cleanup, builds ONE live replacement itself and hands it to a reducer that only
  * stores it: one live read of `source$` after the replay, and a live resource for the readers.
  */
-export function useOwnedResource<T>(source$: Observable<T>): ObservableResource<T> {
+export type OwnedResource<T> = {
+	resource: ObservableResource<T>;
+	/**
+	 * Read `source$` again after a failure, for the owner's ErrorBoundary reset (call it in
+	 * `onReset`, before the readers remount). A resource holding a value reloads, which clears
+	 * its error and keeps the value while the source answers. One that failed before its first
+	 * value cannot suspend again (`ObservableResource.reload` only re-suspends a resource that
+	 * is still suspended, so its readers would read `undefined`): it is replaced by a fresh one,
+	 * which suspends them until the source answers.
+	 */
+	retry: () => void;
+};
+
+export function useOwnedResource<T>(source$: Observable<T>): OwnedResource<T> {
 	const [held, replace] = React.useReducer((_held: Held<T>, next: Held<T>) => next, source$, gated);
 	const heldRef = React.useRef(held);
 	const sourceRef = React.useRef(source$);
@@ -65,5 +78,20 @@ export function useOwnedResource<T>(source$: Observable<T>): ObservableResource<
 		held.resource.reload(source$);
 	}, [held, source$]);
 
-	return held.resource;
+	const retry = React.useCallback(() => {
+		const current = heldRef.current;
+		if (current.resource.isDestroyed) return;
+		if (current.resource.valueRef$$.value !== undefined) {
+			current.resource.reload();
+			return;
+		}
+		const next = gated(sourceRef.current);
+		loadedRef.current = sourceRef.current;
+		heldRef.current = next;
+		next.open();
+		current.resource.destroy();
+		replace(next);
+	}, []);
+
+	return { resource: held.resource, retry };
 }
