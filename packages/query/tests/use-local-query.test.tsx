@@ -87,6 +87,29 @@ describe('useLocalQuery', () => {
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(1);
 	});
 
+	it('hands back a live resource after Strict Mode replays its effects', async () => {
+		await localDB.collections.logs.bulkInsert([
+			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one' },
+		]);
+		const engine = createFakeEngine(engineDB);
+		// Strict Mode runs the mount effect's cleanup and setup again over the same refs: the
+		// resource that cleanup destroyed is terminal, so the replayed setup swaps in a live one.
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<QueryProvider localDB={localDB} engine={engine} locale="en">
+				{children}
+			</QueryProvider>
+		);
+		const { result } = renderHook(
+			() => useLocalQuery({ collectionName: 'logs', sort: [{ timestamp: 'desc' }], limit: 1 }),
+			{ wrapper, reactStrictMode: true }
+		);
+
+		await waitFor(() =>
+			expect(result.current.resource.valueRef$$.value?.current?.hits).toHaveLength(1)
+		);
+		expect(result.current.resource.isDestroyed).toBe(false);
+	});
+
 	it('returns an empty result when the logs collection is unavailable', async () => {
 		const engine = createFakeEngine(engineDB);
 		const wrapper = ({ children }: { children: React.ReactNode }) => (

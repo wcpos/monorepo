@@ -131,6 +131,30 @@ describe('the default customer resource', () => {
 		expect(subscribes).toBe(1);
 	});
 
+	it('hands its readers a live resource after Strict Mode replays its effects', async () => {
+		// Strict Mode runs the mount effect's cleanup and setup again over the SAME state: the
+		// resource that cleanup destroyed is terminal, so the replayed setup must swap in a live one.
+		const handed: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'][] = [];
+		function StrictCreator() {
+			const { defaultCustomerResource } = useDefaultCustomer();
+			handed.push(defaultCustomerResource);
+			return (
+				<React.Suspense fallback={<div data-testid="own-fallback" />}>
+					<Reader resource={defaultCustomerResource} />
+				</React.Suspense>
+			);
+		}
+		render(
+			<React.StrictMode>
+				<StrictCreator />
+			</React.StrictMode>
+		);
+		await settle();
+
+		expect((await screen.findByTestId('default-customer')).textContent).toBe('7');
+		expect(handed.at(-1)?.isDestroyed).toBe(false);
+	});
+
 	it('loops when the creator is inside the boundary — the shape this replaced', async () => {
 		// The control, in one file with its fix. `CreatorAndReader` is `GeneralSettings` and
 		// `useNewOrder` as they were: build and read in one component, boundary above.
