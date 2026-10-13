@@ -71,6 +71,8 @@ jest.mock('../hooks/use-void-order', () => ({
 		storageDegraded: false,
 	}),
 }));
+let mockScreenFocused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockScreenFocused }));
 jest.mock('./v2/tabs', () => ({
 	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => Promise<void> }) => (
 		<button data-testid="open-orders" onClick={() => void onCoverChange(true)} />
@@ -229,7 +231,16 @@ it('registers the cart surface only while the column shows the cart (roadmap#428
 		// Covered by the open-orders list: inert, so no cart command may reach it (Codex on #2521).
 		fireEvent.click(screen.getByTestId('open-orders'));
 		expect(hasSurface('cart')).toBe(false);
+		// The phone tabs keep the cart mounted behind Products: an unfocused screen drops it too.
+		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true };
 		unmount();
+		mockScreenFocused = false;
+		const second = render(<OpenOrders isColumn />);
+		expect(hasSurface('cart')).toBe(false);
+		mockScreenFocused = true;
+		second.rerender(<OpenOrders isColumn />);
+		expect(hasSurface('cart')).toBe(true);
+		second.unmount();
 		expect(hasSurface('cart')).toBe(false);
 	} finally {
 		mockSession = { session: null, sessionsOn: false };

@@ -19,9 +19,11 @@ const mockMode = { receiptOrders: new Set<string>(), selectedReceiptOrder: null 
 const mockCurrent = { uuid: 'b', payload: { line_items: [{}] } };
 const mockOpenOrders = [{ id: 'a' }, { id: 'b' }];
 
+let mockFocused = true;
 jest.mock('expo-router', () => ({
 	useSegments: () => ['(app)', '(drawer)', '(pos)', '(columns)', 'cart'],
 }));
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
@@ -75,18 +77,22 @@ const ran = (command: string, source = 'key') =>
 		context: { type: 'command.run', command, source },
 	});
 
-function mount() {
-	return render(
+function Mounted() {
+	return (
 		<CommandsProvider>
 			<Hotkeys />
 			<input data-testid="search" />
 		</CommandsProvider>
 	);
 }
+function mount() {
+	return render(<Mounted />);
+}
 
 let detachCart: () => void;
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockFocused = true;
 	resetSurfaces();
 	// The cart column registers `cart` while it shows the cart.
 	detachCart = registerSurface('cart', () => undefined);
@@ -185,6 +191,43 @@ it('Alt+/ over the open sheet closes it; another chord closes it first, then run
 	} finally {
 		jest.useRealTimers();
 	}
+});
+
+it('binds nothing while the POS screen is not the focused drawer screen, and closes the sheet', async () => {
+	const { rerender } = mount();
+	await act(async () => {
+		fireEvent.keyDown(document.body, chord('Slash', '/'));
+	});
+	expect(screen.getByTestId('hotkeys-help-sheet')).toBeTruthy();
+	mockFocused = false;
+	rerender(<Mounted />);
+	expect(screen.queryByTestId('hotkeys-help-sheet')).toBeNull();
+	await act(async () => {
+		fireEvent.keyDown(document.body, ALT_N);
+	});
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+});
+
+it('leaves a key another handler answered, and a dead key inside a field, alone', async () => {
+	mount();
+	const prevented = createEvent.keyDown(document.body, ALT_N);
+	prevented.preventDefault();
+	await act(async () => {
+		fireEvent(document.body, prevented);
+	});
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+	const input = document.createElement('input');
+	document.body.appendChild(input);
+	input.focus();
+	await act(async () => {
+		fireEvent.keyDown(input, { ...ALT_N, key: 'Dead' });
+	});
+	expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+	await act(async () => {
+		fireEvent.keyDown(document.body, { ...ALT_N, key: 'Dead' });
+	});
+	expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+	input.remove();
 });
 
 it('renders nothing on native', () => {

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
@@ -126,7 +127,9 @@ function CartColumn({
 	// The cart commands' `inCart` reads this: the column is mounted behind the picker, the card and
 	// the count too, and a key must not void or switch an order the cashier cannot see (#428).
 	// Shown AND not covered by the open-orders list (inert, out of the accessibility tree).
-	useRegisterSurface('cart', NOOP, cartShown && !cartCovered);
+	// …and the screen holding it focused: the phone tabs keep the cart mounted behind Products.
+	const screenFocused = useIsFocused();
+	useRegisterSurface('cart', NOOP, cartShown && !cartCovered && screenFocused);
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');
