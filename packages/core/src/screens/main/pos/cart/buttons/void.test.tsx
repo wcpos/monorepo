@@ -717,8 +717,10 @@ describe('VoidButton', () => {
 			'removed',
 			'kept-cancelled',
 		]);
+		// `status` is the order's status before the void on both rows; `outcome` tells them apart.
+		expect(rows[1][2].context.status).toBe(rows[0][2].context.status);
 		expect(rows[1][2].context).toEqual(
-			expect.objectContaining({ late: true, status: 'cancelled', sessionId: 'session-1' })
+			expect.objectContaining({ late: true, status: 'pos-open', sessionId: 'session-1' })
 		);
 		expect(rows[1][2].actor).toEqual({ id: '9', name: 'Demo Cashier' });
 	});

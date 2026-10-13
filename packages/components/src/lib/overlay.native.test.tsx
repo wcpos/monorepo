@@ -41,8 +41,11 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
+let mockKeyboardVisible = false;
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: <T,>(select: (state: { isVisible: boolean }) => T) =>
+		select({ isVisible: mockKeyboardVisible }),
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('react-native-reanimated', () => {
@@ -197,6 +200,24 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
 	}
 );
+
+it("turns a bottom sheet's keyboard wrapper on only while the keyboard is up", () => {
+	// Hidden: the it.each above pins it off (`enabled: !bottom`).
+	mockKeyboardVisible = true;
+	try {
+		render(
+			<OverlayShell presentation="bottom" open Scrim={Pressable}>
+				<View />
+			</OverlayShell>
+		);
+		// A searchable picker opens the keyboard on mount; the wrapper pushes the sheet above it.
+		expect(mockViews).toContainEqual(
+			expect.objectContaining({ behavior: 'padding', enabled: true, keyboardVerticalOffset: 0 })
+		);
+	} finally {
+		mockKeyboardVisible = false;
+	}
+});
 
 it('takes no touches on a blocking scrim (a confirmation)', () => {
 	render(

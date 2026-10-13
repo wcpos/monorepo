@@ -212,7 +212,8 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 						orderId: (orderPayload.id as number | undefined) ?? null,
 						orderUUID: recordId,
 						orderNumber: (orderPayload.number as string | undefined) ?? null,
-						status: 'cancelled',
+						// The status before the void, as on the first row; the outcome says what happened.
+						status: (orderPayload.status as string | undefined) ?? '',
 						outcome: 'kept-cancelled',
 						late: true,
 						registerId: registerId ?? null,

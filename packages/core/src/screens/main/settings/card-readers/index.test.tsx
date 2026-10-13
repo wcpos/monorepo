@@ -393,6 +393,16 @@ it('Cancel during a scan frees the row and drops the late result', async () => {
 	expect(screen.getByTestId('card-readers-empty')).toBeTruthy();
 });
 
+it.each([
+	[null, 'default'],
+	[{ id: 'solo', label: 'Solo Lite', serial: 'SU-1', transport: 'bluetooth' as const }, 'outline'],
+])('Connect a reader is the primary only while no reader is held (%j)', (reader, variant) => {
+	registerDriver(sdkUiDriver(reader));
+	mockMethods = [deviceMethod, sumupMethod];
+	render(<CardReadersSettings />);
+	expect(screen.getByTestId('card-readers-connect').getAttribute('data-variant')).toBe(variant);
+});
+
 it("a provider whose SDK owns pairing gets one button that opens the provider's screen", async () => {
 	const driver = sdkUiDriver({
 		id: 'solo',

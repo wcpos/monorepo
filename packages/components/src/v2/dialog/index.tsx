@@ -126,6 +126,7 @@ function DialogPanel(allProps: DialogContentProps) {
 		onInteractOutside,
 		testID,
 		ref,
+		style,
 		...props
 	} = rest;
 	const {
@@ -171,7 +172,8 @@ function DialogPanel(allProps: DialogContentProps) {
 				className
 			)}
 			testID={testID}
-			style={inset}
+			// A caller's style adds to the inset; it never replaces it.
+			style={[inset, style]}
 			{...EXIT_MARK}
 			{...props}
 		>

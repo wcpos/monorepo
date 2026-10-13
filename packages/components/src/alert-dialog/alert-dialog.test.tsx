@@ -91,7 +91,7 @@ it('is a blocking confirmation whose phone sheet pads the bottom inset', () => {
 		expect(shell).toHaveBeenLastCalledWith(expect.objectContaining({ blocking: true }), undefined);
 		expect(inset).toHaveBeenLastCalledWith(16, 'bottom');
 		expect(content).toHaveBeenLastCalledWith(
-			expect.objectContaining({ style: { paddingBottom: 50 } }),
+			expect.objectContaining({ style: [{ paddingBottom: 50 }, undefined] }),
 			undefined
 		);
 	} finally {

@@ -36,6 +36,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireActual('react-native').View,
+	useKeyboardState: () => false,
 }));
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),

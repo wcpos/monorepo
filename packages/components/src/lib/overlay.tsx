@@ -24,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { KeyboardAvoidingView } from '../keyboard-controller';
+import { KeyboardAvoidingView, useKeyboardState } from '../keyboard-controller';
 import {
 	EASE,
 	EASE_EXIT,
@@ -44,6 +44,8 @@ const isWeb = Platform.OS === 'web';
  * scrim. Native's primitives unmount at once and Reanimated plays the exit on the way out.
  */
 export const OVERLAY_EXIT_MOUNTED = isWeb;
+// Only the native shell has a keyboard wrapper; web never reads the keyboard's state.
+const useKeyboardVisible = isWeb ? () => false : () => useKeyboardState((state) => state.isVisible);
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
 export type OverlayScrimProps = {
 	ref?: React.Ref<never>;
@@ -303,6 +305,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		children,
 	} = props;
 	const insets = useSafeAreaInsets();
+	const keyboardVisible = useKeyboardVisible();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
@@ -525,9 +528,10 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				behavior="padding"
 				// Measured on a Pixel 10 (2026-10-13): with the keyboard hidden the padding
 				// behaviour still pads a bottom sheet ~9 dp off the screen edge. A sheet sits on
-				// the edge; the keyboard pushes it from there when one opens.
+				// the edge, so its wrapper is on only while the keyboard is up, and pushes the
+				// sheet (a searchable picker opens the keyboard on mount) from the edge.
 				keyboardVerticalOffset={presentation === 'bottom' ? 0 : insets.bottom}
-				enabled={presentation !== 'bottom'}
+				enabled={presentation !== 'bottom' || keyboardVisible}
 				// The sheet's height cap lives on the wrappers, not the panel: a percentage cap on
 				// the panel resolves against a wrapper that is itself sized by the panel, and the
 				// panel ends up clipped to 92% of its own content (same measurement).

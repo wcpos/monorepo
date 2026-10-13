@@ -160,6 +160,7 @@ jest.mock('../../../hooks/use-engine-document', () => ({
 jest.mock('observable-hooks', () => ({ useObservableSuspense: (record: unknown) => record }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),

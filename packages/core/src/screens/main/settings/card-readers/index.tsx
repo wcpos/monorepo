@@ -90,6 +90,10 @@ export function CardReadersSettings() {
 			) || actions.forgetTarget.title
 		: '';
 
+	// A reader held by any provider (the row's ⋮ offers to release it) makes Connect secondary.
+	const readerHeld = devices.some((method) =>
+		Boolean(getDriver(method.capture.provider)?.status$.get().reader)
+	);
 	const [picking, setPicking] = React.useState(false);
 	const row = (method: PaymentMethodDescriptor) => (
 		<ReaderRow
@@ -147,10 +151,11 @@ export function CardReadersSettings() {
 							bluetoothRows.map(row)
 						)}
 					</SettingsSection>
-					{/* The page's one call to action, full width; the guide is a quiet link beneath. */}
+					{/* The page's call to action, full width: the primary while no reader is held,
+					    secondary beside one; the guide is a quiet link beneath. */}
 					<VStack className="gap-1">
 						<Button
-							variant="outline-primary"
+							variant={readerHeld ? 'outline' : 'default'}
 							className="h-14"
 							leftIcon="plus"
 							disabled={actions.working !== null}

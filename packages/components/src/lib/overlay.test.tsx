@@ -31,8 +31,10 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+const mockUseKeyboardState = jest.fn();
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: (...args: unknown[]) => mockUseKeyboardState(...args),
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('react-native-reanimated', () => {
@@ -175,6 +177,8 @@ it('lets a blocking scrim keep its clicks on web, where the panel sits inside it
 		</OverlayShell>
 	);
 	expect(mockScrimProps.at(-1)?.pointerEvents).toBeUndefined();
+	// Web has no keyboard wrapper and never reads the keyboard's state.
+	expect(mockUseKeyboardState).not.toHaveBeenCalled();
 	// Web pads nothing: the inset is a native sheet's.
 	expect(screen.getByTestId('inset')).toHaveAttribute('data-inset', 'undefined');
 });

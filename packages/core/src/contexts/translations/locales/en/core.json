@@ -951,7 +951,7 @@
 	"pos_cart.order_sent": "Order sent to the server",
 	"pos_cart.order_meta": "Order Meta",
 	"pos_cart.order_removed": "Order removed",
-	"pos_cart.order_voided_cancelled": "Order voided and cancelled on the store",
+	"pos_cart.order_voided_cancelled": "Order voided and marked cancelled",
 	"pos_cart.percent": "Percent",
 	"pos_cart.percentage_discount": "Percentage discount",
 	"pos_cart.percentage_of_cart_total": "Percentage of Cart Total",

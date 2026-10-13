@@ -166,7 +166,11 @@ jest.mock('@rn-primitives/dialog', () => {
 				role="dialog"
 				data-testid={testID}
 				className={className}
-				style={style as React.CSSProperties}
+				style={
+					jest
+						.requireActual<typeof import('react-native')>('react-native')
+						.StyleSheet.flatten(style) as React.CSSProperties
+				}
 				ref={ref}
 			>
 				{children}

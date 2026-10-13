@@ -1,6 +1,6 @@
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { activeAwaitingCustomer, derive, readLedger } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -30,7 +30,9 @@ export function TabChip({
 	const t = useT();
 	const rows = readLedger(payload.meta_data);
 	const stage = resolveStage(order.uuid, mode, rows);
-	const { balance } = derive(payload.total, rows, methods, { dp: store.price_num_decimals ?? 2 });
+	// The latest store document, not the session's snapshot (see checkout's use-tender-flow).
+	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
+	const { balance } = derive(payload.total, rows, methods, { dp });
 	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
 	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
 	// Contract 1.2: a sent order waits for its customer; its receipt moment is not a Paid one.

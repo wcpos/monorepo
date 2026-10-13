@@ -29,6 +29,7 @@ function AlertDialogContent({
 	className,
 	portalHost,
 	inline,
+	style,
 	...props
 }: AlertDialogPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const { open } = AlertDialogPrimitive.useRootContext();
@@ -61,7 +62,8 @@ function AlertDialogContent({
 					open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
 					className
 				)}
-				style={inset}
+				// A caller's style adds to the inset; it never replaces it.
+				style={[inset, style]}
 				{...props}
 			/>
 		</OverlayShell>

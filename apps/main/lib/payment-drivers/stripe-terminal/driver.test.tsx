@@ -477,6 +477,23 @@ it('adopts a reader the SDK already holds once the hook carries it (connected be
 	expect(driver.status$.get().connection).toBe('connected');
 });
 
+it('a decline with neither a code nor a message still names a reason', async () => {
+	api.confirmPaymentIntent.mockResolvedValue({
+		error: { code: 'DECLINED_BY_STRIPE_API', declineCode: '', message: '' },
+	});
+	await expect(driver.collect(input)).resolves.toMatchObject({
+		outcome: 'declined',
+		failure_reason: 'card_declined',
+	});
+});
+it('a Tap to Pay reader the SDK reports connected keeps its transport', () => {
+	driver.bindSdk({
+		...api,
+		connectedReader: { ...rawReader, deviceType: 'tapToPay' },
+	} as unknown as Sdk);
+	driver.callbacks.onDidChangeConnectionStatus('connected');
+	expect(driver.status$.get().reader?.transport).toBe('tap_to_pay');
+});
 it('an adopted Tap to Pay reader keeps its transport', () => {
 	driver.callbacks.onDidChangeConnectionStatus('connected');
 	driver.bindSdk({

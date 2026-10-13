@@ -48,6 +48,7 @@ jest.mock('react-native', () => {
 });
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: () => false,
 }));
 
 jest.mock('react-native-gesture-handler', () => ({
