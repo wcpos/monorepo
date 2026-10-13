@@ -10,7 +10,7 @@ import { getVariablePrices } from '../../../../components/product/get-variable-p
 import { PriceWithTax, TaxLine } from '../../../../components/product/price-with-tax';
 import { displayStockStatus } from '../../../../components/product/resolve-stock';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
-import { TileImage } from '../../grid/tile-image';
+import { TileImage, TileImageBlurred } from '../../grid/tile-image';
 
 /*
  * What a product or a variation puts in the Poster tile's slots, from the record and the
@@ -203,6 +203,8 @@ export function useProductPicture(
 	return {
 		kind: 'slot',
 		children: <TileImage record={record} still={still} cover onFailed={onFailed} />,
+		// The native scrim's frosted fade.
+		blurred: <TileImageBlurred record={record} />,
 	};
 }
 

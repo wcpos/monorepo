@@ -28,7 +28,7 @@ jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
 jest.mock('../../../components/product/price-with-tax', () => ({ PriceWithTax: () => null }));
-jest.mock('./tile-image', () => ({ TileImage: () => null }));
+jest.mock('./tile-image', () => ({ TileImage: () => null, TileImageBlurred: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));

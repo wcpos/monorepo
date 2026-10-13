@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import { Image } from '@wcpos/components/image';
+import { SCRIM_BLUR_RADIUS } from '@wcpos/components/poster-tile';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
@@ -109,6 +110,43 @@ export function TileImage({
 				cover={cover}
 				onFailed={onFailed}
 			/>
+		</Suspense>
+	);
+}
+
+function TileImageBlurredInner({
+	record,
+	imageUrl,
+}: {
+	record: EngineRecord<'products'>;
+	imageUrl: string;
+}) {
+	// The same resolution as the sharp picture's, so the same (already warm) resource.
+	const { uri, error } = useImageAttachment(record, imageUrl);
+	if (!uri || error) return null;
+	return (
+		<Image
+			source={{ uri }}
+			blurRadius={SCRIM_BLUR_RADIUS}
+			recyclingKey={`${record.uuid}:blur`}
+			contentFit="cover"
+			className="h-full w-full"
+			transition={0}
+		/>
+	);
+}
+
+/**
+ * The product's picture blurred, for the Poster's native scrim (web never mounts it). A bare
+ * twin of `TileImage`: no probes, no hold on the Deal's copy, no fallback; while the attachment
+ * resolves, and when it fails, there is nothing to draw (the sharp one reports the failure).
+ */
+export function TileImageBlurred({ record }: { record: EngineRecord<'products'> }) {
+	const images = useRecordField(record, (productRecord) => productRecord.payload.images);
+	const imageUrl = get(images, [0, 'src'], '') as string;
+	return (
+		<Suspense fallback={null}>
+			<TileImageBlurredInner record={record} imageUrl={imageUrl} />
 		</Suspense>
 	);
 }
