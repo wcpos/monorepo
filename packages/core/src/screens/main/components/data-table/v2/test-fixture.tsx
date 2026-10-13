@@ -30,6 +30,8 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, selector: (value: unknown) => unknown) =>
 		selector({ columns: state.columns }),
+	// The handle source's streams come from the handle itself.
+	queryHandleResults$: jest.requireActual('@wcpos/query').queryHandleResults$,
 }));
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
@@ -144,8 +146,9 @@ export function reset() {
 		searchState: 'answered',
 	};
 }
-export function renderTable(overrides: Record<string, unknown> = {}) {
-	return render(
+/** The table under a query-state provider; `renderTable` renders it, a test can rerender it. */
+export function tableTree(overrides: Record<string, unknown> = {}) {
+	return (
 		<QueryStateProvider
 			collection="products"
 			initialPageSize={1}
@@ -164,6 +167,9 @@ export function renderTable(overrides: Record<string, unknown> = {}) {
 			/>
 		</QueryStateProvider>
 	);
+}
+export function renderTable(overrides: Record<string, unknown> = {}) {
+	return render(tableTree(overrides));
 }
 
 // Native shared values are event-owned here; preserve their identity across rerenders.

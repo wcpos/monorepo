@@ -301,7 +301,8 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 			}
 		>
 			<View className="min-w-0 flex-1">
-				<ErrorBoundary>
+				{/* A failed orders read is thrown here; the fallback's reset asks the handle again. */}
+				<ErrorBoundary onReset={() => handle.retry()}>
 					<Suspense fallback={<DataTableSkeleton id="orders" />}>
 						{/* Beside the pane the list has the pane's width left: below the desktop
 						    breakpoint nine columns cannot share it, so the list keeps the row grammar

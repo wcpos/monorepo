@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +12,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
-import type { EngineRecord } from '@wcpos/query';
+import type { EngineRecord, QueryHandle } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -34,12 +33,13 @@ import { useUISettings } from '../contexts/ui-settings';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
-	useCollectionBinding,
+	useCollectionQueryHandle,
+	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
 
-import type { QueryStateActions, QueryStateOf } from '../../../query';
+import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CustomerRow = { record: EngineRecord<'customers'> };
@@ -83,14 +83,21 @@ function getInitialCustomerSort(
 	};
 }
 
+// The list re-renders for the answer only; the table and the footer read their own fields.
+const ANSWER_ONLY: SnapshotFields = [];
+
 function CustomersList({
-	binding,
+	handle,
 }: {
-	binding: ReturnType<typeof useCollectionBinding<'customers'>>;
+	/** The customers query handle (roadmap#423): the list and its table read its snapshot. */
+	handle: QueryHandle;
 }) {
 	const state = useQueryState<'customers'>();
 	const actions = useQueryStateActions<'customers'>();
-	const result = useObservableSuspense(binding.resource);
+	// Suspended on until the first answer (the body's boundary draws the skeleton); a changed
+	// query keeps the current rows while the new handle answers (`useDeferredValue(handle)`).
+	const shown = React.useDeferredValue(handle);
+	const { result } = useQuerySnapshot(shown, ANSWER_ONLY);
 	const deferredResult = React.useDeferredValue(result);
 	const pending = deferredResult.searchState === 'pending' && deferredResult.hits.length > 0;
 	const emptyStore = !state.search;
@@ -114,16 +121,11 @@ function CustomersList({
 				<DataTable<CustomerRow>
 					id="customers"
 					collectionName="customers"
-					binding={binding}
-					resource={binding.resource}
+					handle={handle}
 					sort={state.sort}
 					actions={tableActions}
-					active$={binding.active$}
-					total$={binding.total$}
-					sync={binding.sync}
 					cells={cells}
 					estimatedItemSize={56}
-
 					renderItem={
 						pointer === 'coarse'
 							? ({ item }) => (
@@ -165,12 +167,13 @@ function CustomersList({
 /** The list: the part of the page the Free preview overlay covers. */
 function CustomersBody() {
 	const state = useQueryState<'customers'>();
-	const binding = useCollectionBinding('customers', state);
+	const handle = useCollectionQueryHandle('customers', state);
 	return (
 		<View testID="customers-body" className="flex-1">
-			<ErrorBoundary>
+			{/* A failed customers read is thrown here; the fallback's reset asks the handle again. */}
+			<ErrorBoundary onReset={() => handle.retry()}>
 				<Suspense fallback={<DataTableSkeleton id="customers" />}>
-					<CustomersList binding={binding} />
+					<CustomersList handle={handle} />
 				</Suspense>
 			</ErrorBoundary>
 		</View>
