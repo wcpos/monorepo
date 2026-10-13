@@ -138,6 +138,17 @@ allowBuilds:
   "uniwind": true
   "unrs-resolver": true
 patchedDependencies:
+  # @expo/cli spawns `expo-updates runtimeversion:resolve` (a fresh node process that
+  # re-evaluates app.config.ts) on EVERY manifest request, even when runtimeVersion is a
+  # plain string that the CLI returns verbatim. Native E2E pins a string runtime
+  # (WCPOS_E2E_RUNTIME_VERSION), and on the loaded macOS runner the dev launcher's
+  # manifest request then took 3.6-15 s against its hard 10 s timeout — iOS relaunches died
+  # on "There was a problem loading the project" (apps/main/.maestro/README.md §4). The
+  # patch reads a string runtime from the already-evaluated config; policy objects (local
+  # dev, `fingerprint`) still go through the CLI. Drop when @expo/cli does this itself;
+  # @expo/cli 58 on `next` has the same per-request spawn, so a main->next sync must port
+  # the patch to that version (pinned by scripts/expo-cli-manifest-runtime.test.mjs).
+  "@expo/cli@57.0.16": "patches/@expo__cli@57.0.16.patch"
   # Backport of flash-list 2.2.2's guard in RVLayoutManager.modifyLayout: when the data
   # array shrinks, `layoutInfo` still carries the indices of ViewHolders measured before
   # the shrink, and the unguarded `this.layouts[index].width = ...` in processLayoutInfo
