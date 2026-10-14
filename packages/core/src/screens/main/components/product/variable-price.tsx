@@ -1,9 +1,12 @@
+import * as React from 'react';
+
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { getVariablePrices } from './get-variable-prices';
-import { useT } from '../../../../contexts/translations';
-import { moneyRow } from '../../pos/products/v2/grid/tile-words';
+import { PriceWithTax } from './price-with-tax';
 
 import type { VariablePrices } from './get-variable-prices';
 
@@ -13,6 +16,7 @@ type PriceKey = keyof VariablePrices;
  *
  */
 export function VariableProductPrice({
+	table,
 	row,
 	column,
 }: CellContext<{ record: EngineRecord<'products'> }, 'price' | 'regular_price' | 'sale_price'>) {
@@ -30,9 +34,6 @@ export function VariableProductPrice({
 	}));
 	const variablePrices = getVariablePrices(metaData, owner);
 	const key = column.id as PriceKey;
-	const t = useT();
-	const onSale = useRecordField(row.original.record, ({ payload }) => payload.on_sale);
-	const show = column.columnDef.meta?.show ?? (() => false);
 	const safeTaxStatus = taxStatus || 'none';
 
 	if (!variablePrices || !variablePrices[key]) {
@@ -41,25 +42,32 @@ export function VariableProductPrice({
 
 	const range = variablePrices[key];
 
-	return moneyRow({
-		price: range.min,
-		regularPrice: variablePrices.regular_price?.min,
-		onSale,
-		taxStatus: safeTaxStatus,
-		taxClass,
-		taxDisplay: show('tax') ? 'text' : 'tooltip',
-		from: range.min !== range.max,
-		t,
-		gridFields: {
-			name: false,
-			price: true,
-			tax: show('tax'),
-			on_sale: show('on_sale'),
-			category: false,
-			sku: false,
-			barcode: false,
-			stock_quantity: false,
-			cost_of_goods_sold: false,
-		},
-	});
+	if (range.min === range.max) {
+		return (
+			<PriceWithTax
+				price={range.max}
+				taxStatus={safeTaxStatus}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
+			/>
+		);
+	}
+
+	return (
+		<HStack className="flex-wrap justify-end gap-1">
+			<PriceWithTax
+				price={range.min}
+				taxStatus={safeTaxStatus}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
+			/>
+			<Text> - </Text>
+			<PriceWithTax
+				price={range.max}
+				taxStatus={safeTaxStatus}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
+			/>
+		</HStack>
+	);
 }

@@ -26,7 +26,7 @@ import { Price } from '../cells/price';
 import { VariationType } from '../cells/type';
 import { SKU } from '../cells/sku';
 import { COGS } from '../cells/cogs';
-import { ProductVariationImage } from '../../../components/product/variation-image';
+import { PosVariationImage } from '../cells/variation-image';
 
 import type { SnapshotFields } from '../../../../../query';
 
@@ -152,7 +152,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 					sku: SKU,
 					type: VariationType,
 					cost_of_goods_sold: COGS,
-					image: ProductVariationImage,
+					image: PosVariationImage,
 					actions: () => null,
 				}}
 				// The rows travel with their pane; none of them animates on its own.

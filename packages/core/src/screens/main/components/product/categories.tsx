@@ -34,6 +34,7 @@ export function ProductCategories({
 					{index > 0 && ', '}
 					<Text
 						className="text-foreground text-sm"
+						accessibilityRole="button"
 						decodeHtml
 						onPress={() =>
 							cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])

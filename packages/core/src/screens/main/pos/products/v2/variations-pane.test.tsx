@@ -153,6 +153,7 @@ jest.mock('./footer', () => ({
 	),
 }));
 jest.mock('../cells/price', () => ({ Price: () => null }));
+jest.mock('../cells/variation-image', () => ({ PosVariationImage: () => null }));
 jest.mock('../cells/sku', () => ({ SKU: () => null }));
 jest.mock('../cells/cogs', () => ({ COGS: () => null }));
 jest.mock('../../../components/product/variation-image', () => ({

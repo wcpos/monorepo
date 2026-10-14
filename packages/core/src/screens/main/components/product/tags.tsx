@@ -38,6 +38,7 @@ export function ProductTags({
 					{index > 0 && ', '}
 					<Text
 						className="text-foreground text-sm"
+						accessibilityRole="button"
 						decodeHtml
 						onPress={() =>
 							tag.id === undefined ? undefined : meta.actions.setFilter('tags', [tag.id])

@@ -23,6 +23,16 @@ jest.mock('@wcpos/components/button', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+// The taxonomy cells are plain text now (2026-10-14): each name is a pressable Text.
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
+		<span onClick={onPress}>{children}</span>
+	),
+	TextClassContext: jest.requireActual('react').createContext(undefined),
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 jest.mock('../../hooks/use-stock-status-label', () => ({
 	useStockStatusLabel: () => ({ getLabel: (value: string) => value }),
 }));
@@ -72,14 +82,15 @@ function renderCell(cell: CellName) {
 
 describe('product filter cells', () => {
 	it.each([
-		['brands', { brands: [12] }],
-		['categories', { categories: [23] }],
-		['tags', { tags: [34] }],
-		['stock_status', { stock_status: 'instock' }],
-	] as const)('filters by %s through the narrow table-meta action', (cell, expected) => {
+		['brands', { brands: [12] }, 'Acme'],
+		['categories', { categories: [23] }, 'Shirts'],
+		['tags', { tags: [34] }, 'Sale'],
+		['stock_status', { stock_status: 'instock' }, null],
+	] as const)('filters by %s through the narrow table-meta action', (cell, expected, name) => {
 		renderCell(cell);
 
-		fireEvent.click(screen.getByRole('button'));
+		// A taxonomy name is a pressable Text; the stock status is still a button.
+		fireEvent.click(name ? screen.getByText(name) : screen.getByRole('button'));
 
 		expect(JSON.parse(screen.getByTestId('product-filters').textContent ?? '{}')).toMatchObject(
 			expected

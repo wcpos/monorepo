@@ -8,9 +8,9 @@ import { Type } from '../cells/type';
 import { SKU } from '../cells/sku';
 import { StockQuantity } from '../cells/stock-quantity';
 import { VariableActions } from '../cells/variable-actions';
-import { ProductImage } from '../../../components/product/image';
-import { VariableProductImage } from '../../../components/product/variable-image';
-import { VariableProductPrice } from '../../../components/product/variable-price';
+import { PosProductImage } from '../cells/image';
+import { PosVariableProductImage } from '../cells/variable-image';
+import { PosVariablePrice } from '../cells/variable-price';
 
 import type { Row } from '../../../../../table-types';
 import type { DataTableFeatures } from '../../../components/data-table/v2';
@@ -20,7 +20,7 @@ type ProductRow = { record: EngineRecord<'products'> };
 const cells = {
 	simple: {
 		actions: Actions,
-		image: ProductImage,
+		image: PosProductImage,
 		name: Name,
 		price: Price,
 		sku: SKU,
@@ -30,9 +30,9 @@ const cells = {
 	},
 	variable: {
 		actions: VariableActions,
-		image: VariableProductImage,
+		image: PosVariableProductImage,
 		name: Name,
-		price: VariableProductPrice,
+		price: PosVariablePrice,
 		stock_quantity: StockQuantity,
 		sku: SKU,
 		type: Type,

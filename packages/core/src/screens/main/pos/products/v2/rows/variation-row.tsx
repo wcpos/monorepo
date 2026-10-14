@@ -5,6 +5,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 
 import { DataTableRow } from '../../../../components/data-table/v2/rows';
+import { resolveVariationName } from '../../../../components/product/resolve-variation-name';
 import { InCartCount, useVariationCount } from './product-row';
 import { useAddVariation } from '../../../hooks/use-add-variation';
 
@@ -20,6 +21,7 @@ type Props = {
 export function VariationRow({ item, parent }: Props) {
 	const variation = item.original.record;
 	const attributes = useDocField(variation, (value) => value.payload.attributes);
+	const name = useDocField(variation, (value) => resolveVariationName(value.payload));
 	const count = useVariationCount(variation);
 	const { addVariation } = useAddVariation();
 	const add = () =>
@@ -37,6 +39,8 @@ export function VariationRow({ item, parent }: Props) {
 			item={item}
 			testID={`data-table-row-variation-${variation.remoteId ?? variation.uuid}`}
 			onPress={add}
+			// The row's name, for when the Actions column is hidden and the row is the add control.
+			accessibilityLabel={name}
 			trailing={
 				<InCartCount
 					product={variation.uuid}

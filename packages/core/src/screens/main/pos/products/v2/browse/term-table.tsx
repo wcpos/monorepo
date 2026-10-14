@@ -18,7 +18,7 @@ import { VariableProductRow } from '../rows/variable-product-row';
 import { BrowseRootFooter } from './browse-root-footer';
 import { type BrowseTerm, termKey } from './browse-source';
 import { type LevelAnswer, useLevelSnapshot } from './level-snapshot';
-import { TermRow } from './term-row';
+import { TermRow, useImageColumnShown } from './term-row';
 import { useArmedEndReached } from './use-armed-end-reached';
 
 import type { QueryStateActions, QueryStateOf, SnapshotFields } from '../../../../../../query';
@@ -44,6 +44,7 @@ export function BrowseRootTable({
 	/** No level is over the root: the shared query is the root's (its footer's numbers). */
 	settled?: boolean;
 }) {
+	const showImage = useImageColumnShown();
 	const rows = React.useMemo(() => [ALL, ...terms], [terms]);
 	return (
 		// The rows sit on the same card as the products table (no header row: a term has one cell);
@@ -56,7 +57,7 @@ export function BrowseRootTable({
 						keyExtractor={(term) => termKey(term)}
 						renderItem={({ item }) => (
 							<VirtualizedList.Item>
-								<TermRow term={item} onPress={onOpen} />
+								<TermRow term={item} onPress={onOpen} showImage={showImage} />
 							</VirtualizedList.Item>
 						)}
 						estimatedItemSize={60}
@@ -120,6 +121,7 @@ function HeldRows({
 	children: BrowseTerm[];
 	onOpenTerm: (term: BrowseTerm) => void;
 }) {
+	const showImage = useImageColumnShown();
 	// The same virtualized list the subcategories-only pane scrolls: a long child set stays
 	// reachable while the products are still on their way.
 	const rows = React.useMemo<LevelRow[]>(
@@ -135,7 +137,7 @@ function HeldRows({
 					renderItem={({ item }) => (
 						<VirtualizedList.Item>
 							{'term' in item ? (
-								<TermRow term={item.term} onPress={onOpenTerm} />
+								<TermRow term={item.term} onPress={onOpenTerm} showImage={showImage} />
 							) : (
 								<RowPlaceholder />
 							)}
@@ -197,6 +199,7 @@ export function TermLevelTable({
 	/** index.tsx's `noDataMessage`: the level answered with no products and has no child terms. */
 	empty: React.ReactNode;
 }) {
+	const showImage = useImageColumnShown();
 	const t = useT();
 	// This pane's own answer, held while the shared query is another level's (level-snapshot.ts).
 	const shown = useLevelSnapshot(answer, settled);
@@ -292,7 +295,7 @@ export function TermLevelTable({
 									return (
 										<VirtualizedList.Item>
 											{'term' in row ? (
-												<TermRow term={row.term} onPress={onOpenTerm} />
+												<TermRow term={row.term} onPress={onOpenTerm} showImage={showImage} />
 											) : 'held' in row ? (
 												<RowPlaceholder />
 											) : row.record.payload.type === 'variable' ? (
@@ -326,7 +329,7 @@ export function TermLevelTable({
 								keyExtractor={(child) => termKey(child)}
 								renderItem={({ item }) => (
 									<VirtualizedList.Item>
-										<TermRow term={item} onPress={onOpenTerm} />
+										<TermRow term={item} onPress={onOpenTerm} showImage={showImage} />
 									</VirtualizedList.Item>
 								)}
 								estimatedItemSize={60}

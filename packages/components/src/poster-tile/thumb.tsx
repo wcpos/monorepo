@@ -37,9 +37,9 @@ export function PosterThumb({
 				</View>
 			)}
 			<View
-				className={`h-full w-full overflow-hidden rounded-lg border ${tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`}`}
+				className={`h-full w-full overflow-hidden rounded-lg border ${tint === null ? 'bg-card border-border' : `${TINTS[tint]} border-transparent`} ${out ? 'opacity-40' : ''}`}
 			>
-				<View className={`h-full w-full ${out ? 'opacity-40' : ''}`}>
+				<View className="h-full w-full">
 					{picture.kind === 'slot' ? (
 						picture.children
 					) : picture.kind === 'image' || picture.kind === 'mosaic' ? (

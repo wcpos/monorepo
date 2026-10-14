@@ -16,17 +16,27 @@ import { termTestId } from './term-tile';
 export const TERM_IMAGE_COLUMN_WIDTH = 68;
 
 /** A term as a row of the products card: thumb, name and count, a chevron at the end. */
+/**
+ * Whether the products table's image column is on: a term row shows its thumb with it. Read by
+ * the lists that mount term rows, never by the row (the gallery mounts rows with no settings).
+ */
+export function useImageColumnShown() {
+	const { uiSettings } = useUISettings('pos-products');
+	return uiSettings.columns.find((column) => column.key === 'image')?.show !== false;
+}
+
 export function TermRow({
 	term,
 	onPress,
+	showImage = true,
 }: {
 	term: BrowseTerm;
 	onPress: (term: BrowseTerm) => void;
+	/** The image column is on (`useImageColumnShown`). */
+	showImage?: boolean;
 }) {
 	const t = useT();
 	const pointer = usePointer();
-	const { uiSettings } = useUISettings('pos-products');
-	const showImage = uiSettings.columns.find((column) => column.key === 'image')?.show;
 	const name = term.kind === 'all' ? t('pos_products.browse_all_products') : term.name;
 	// The storefront's count; a term kept for its POS-only products has none to show.
 	const sub =

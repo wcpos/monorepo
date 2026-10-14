@@ -44,10 +44,13 @@ export function ProductRow({
 	const record = item.original.record;
 	const { addProduct } = useAddProduct();
 	const count = useProductCount(record);
+	const name = useDocField(record, (value) => value.payload.name) as string;
 	return (
 		<DataTableRow
 			item={item}
 			onPress={() => addProduct(record)}
+			// The row's name, for when the Actions column is hidden and the row is the add control.
+			accessibilityLabel={name}
 			trailing={
 				<InCartCount
 					product={record.uuid}

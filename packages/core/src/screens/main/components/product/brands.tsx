@@ -37,6 +37,7 @@ export function ProductBrands({
 					{index > 0 && ', '}
 					<Text
 						className="text-foreground text-sm"
+						accessibilityRole="button"
 						decodeHtml
 						onPress={() =>
 							brand.id === undefined ? undefined : meta.actions.setFilter('brands', [brand.id])

@@ -67,7 +67,7 @@ import { useSystemBack } from './browse/use-system-back';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { ProductVariationActions } from '../cells/variation-actions';
 import { ProductVariationName } from '../cells/variation-name';
-import { ProductVariationImage } from '../../../components/product/variation-image';
+import { PosVariationImage } from '../cells/variation-image';
 import { useMountProbe, useRenderProbe } from '../render-probe';
 
 import type { Row } from '../../../../../table-types';
@@ -465,7 +465,7 @@ function POSProductsContent({
 						>),
 						actions: ProductVariationActions,
 						name: ProductVariationName,
-						image: ProductVariationImage,
+						image: PosVariationImage,
 					})[column.id as keyof ReturnType<typeof cellsForRow>],
 				variationStockStatus: stockStatusFilter,
 			},

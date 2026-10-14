@@ -1,30 +1,48 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { usePointer } from '@wcpos/components/lib/device';
-import { PosterThumb, tintOf } from '@wcpos/components/poster-tile';
+// import Svg, { Line } from 'react-native-svg';
+
+import { Image } from '@wcpos/components/image';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useImageAttachment } from '../../hooks/use-image-attachment';
-import { displayStockStatus } from './resolve-stock';
+import { PRODUCT_IMAGE_PLACEHOLDER } from './product-image-placeholder';
 import { resolveImageSrc } from './resolve-image-src';
+import { useImageAttachment } from '../../hooks/use-image-attachment';
 
+/**
+ *
+ */
 export function ProductVariationImage({
 	row,
 }: CellContext<{ record: EngineRecord<'variations'> }, 'image'>) {
-	const payload = useRecordField(row.original.record, (record) => record.payload);
-	const imageURL = resolveImageSrc(payload);
+	/**
+	 * Both wire shapes, not just `image`: the wcpos/v2 lane serializes variations
+	 * through the products controller, so a 1.10.0+ store sends `images[]` and the
+	 * singular `image` is empty. Reading only `image` blanked every variation
+	 * thumbnail in the list (#1577).
+	 */
+	const imageURL = useRecordField(row.original.record, (record) => resolveImageSrc(record.payload));
 	const { uri, error } = useImageAttachment(row.original.record, imageURL ?? '');
-	const pointer = usePointer();
+
 	return (
-		<PosterThumb
-			picture={
-				!imageURL || error
-					? { kind: 'tint', tint: tintOf(payload.parent_id ?? payload.name ?? '') }
-					: { kind: 'image', source: { uri }, recyclingKey: row.original.record.uuid }
-			}
-			out={displayStockStatus(payload) === 'outofstock'}
-			size={pointer === 'coarse' ? 'md' : 'sm'}
-		/>
+		<>
+			{/* <View className="absolute left-0 top-0 h-full w-5">
+				<Svg width="100%">
+					<Line x1="50%" y1="0" x2="50%" y2="100%" stroke="#E2E8F0" strokeWidth="1" />
+					<Line x1="50%" y1="50%" x2="100%" y2="50%" stroke="#E2E8F0" strokeWidth="1" />
+				</Svg>
+			</View> */}
+			<View className="w-full pl-3">
+				<Image
+					source={{ uri: error ? PRODUCT_IMAGE_PLACEHOLDER : uri }}
+					recyclingKey={row.original.record.uuid}
+					className="h-20 w-full rounded"
+					// The placeholder is the absence of an image, not one arriving: it does not fade in.
+					{...(error ? { transition: 0 } : {})}
+				/>
+			</View>
+		</>
 	);
 }
