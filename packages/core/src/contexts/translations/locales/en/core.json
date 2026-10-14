@@ -963,6 +963,7 @@
 	"pos_cart.search_coupons": "Search coupons...",
 	"pos_cart.select_coupon": "Select coupon...",
 	"pos_cart.shipping_method": "Shipping Method",
+	"pos_cart.update_line_not_found": "Couldn't update that item — it's no longer in the cart.",
 	"pos_cart.update_fee_not_found": "Couldn't update that fee — it's no longer in the cart.",
 	"pos_cart.update_shipping_not_found": "Couldn't update that shipping — it's no longer in the cart.",
 	"pos_cart.shipping_method_title": "Shipping Method Title",
