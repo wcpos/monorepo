@@ -51,3 +51,7 @@ The defect is the gate. #1057 removed the config-flag refusal from `scripts/opfs
 - `index.web.ts` states `multiInstance: true` explicitly with a comment pointing at this section. No silent rxdb default.
 - `adapters/default/multi-instance-ruling.test.ts` pins all three platforms and fails with this rationale.
 - Any PR that touches `params.multiInstance` in `opfs-targeted-recovery.mjs`, the flag in an adapter, or `patch-rxdb-premium-changelog-identity.mjs` must cite #1057, #1987 and this section.
+
+## Decision: a worker whose RXDB_VERSION changes needs a new bundle minor
+
+The web POS pairs the main-thread RxDB from jsDelivr `wcpos/web-bundle@<plugin major.minor>` (the highest `v<major.minor>.N` tag) with the OPFS worker the **plugin** vendors, and rxdb's `storage-remote` refuses a worker whose `RXDB_VERSION` is not an exact match (`RM1`). Plugins already installed keep their old worker but load the newest tag on their lane, so a worker whose `RXDB_VERSION` changed can never be tagged onto a lane that already has tags: it ships on a new minor (new plugin minor, new bundle lane), never as a patch. On 2026-10-14 a 17.6.0 worker tagged `v1.10.41` onto the 17.4.0 lane broke every web POS on an older plugin. `scripts/release/check-worker-rxdb-lane.sh` enforces this (and refuses publishing to a lane that a higher lane has frozen) in `publish-web-bundle.yml` for `bundle_branch=main`, and `scripts/release/tag-web-bundle.sh` runs the same check before it cuts a lane tag. Desktop and native are immune: each ships its RxDB and its worker together.
