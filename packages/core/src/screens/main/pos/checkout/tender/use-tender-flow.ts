@@ -59,6 +59,7 @@ import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { useTheme } from '../../../../../contexts/theme';
@@ -1268,7 +1269,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (savingProvenance) {
 				logger.error('Checkout failed', {
-					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					// The provenance push reports nothing itself; a refused session keeps AUTH101.
+					code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
 					context: {

@@ -8,13 +8,8 @@ import {
 	WRITEABLE_REMOTE_ID_FIELD,
 	type WriteableCollection,
 } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
-import { useT } from '../../../contexts/translations';
-import { pushFailureCode } from './push-failure-code';
 import { documentRecordId, findEngineResident } from '../hooks/mutations/use-local-mutation';
-
-const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
 // Slow stores answer order pushes after 15 s (Sentry CHECKOUT101); 45 s covers the
 // write drain's 30 s request timeout plus its first retry. Pay spins and stays disabled.
@@ -70,10 +65,13 @@ export async function enqueueDocumentWrite(
  * Enqueue the current engine resident through the write plane. The passed legacy document is used
  * only for identity: its fields may be stale after an optimistic resident patch. Order pushes wait
  * for a terminal outcome because checkout requires the rematerialized Woo id.
+ *
+ * A failure is thrown, not reported: every caller logs and toasts it once with its own context
+ * (reporting here too doubled the cashier's toast and the Sentry event). Map its code with
+ * `pushFailureCode` so a refused session still reads as AUTH101.
  */
 export const usePushDocument = () => {
 	const runtime = useQueryRuntime();
-	const t = useT();
 
 	return React.useCallback(
 		async (document: AnyRxDocument) => {
@@ -85,37 +83,22 @@ export const usePushDocument = () => {
 			const recordId = documentRecordId(latest);
 			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
 
-			try {
-				const { receipt, resident } = await enqueueDocumentWrite(runtime, document);
+			const { receipt, resident } = await enqueueDocumentWrite(runtime, document);
 
-				let currentResident = resident;
-				if (collectionName === 'orders') {
-					await awaitWriteOutcome(runtime.engine, receipt.mutationId, {
-						timeoutMs: ORDER_WRITE_OUTCOME_TIMEOUT_MS,
-					});
-					const refreshed = await findEngineResident(runtime, collectionName, recordId);
-					if (!refreshed) {
-						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
-					}
-					currentResident = refreshed;
-				}
-
-				return currentResident;
-			} catch (error) {
-				const message = getErrorMessage(error);
-				syncLogger.error('Failed to send document to server', {
-					showToast: true,
-					code: pushFailureCode(error),
-					toast: { title: t('common.failed_to_send_to_server') },
-					context: {
-						documentId: recordId,
-						collectionName,
-						error: message,
-					},
+			let currentResident = resident;
+			if (collectionName === 'orders') {
+				await awaitWriteOutcome(runtime.engine, receipt.mutationId, {
+					timeoutMs: ORDER_WRITE_OUTCOME_TIMEOUT_MS,
 				});
-				throw error;
+				const refreshed = await findEngineResident(runtime, collectionName, recordId);
+				if (!refreshed) {
+					throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
+				}
+				currentResident = refreshed;
 			}
+
+			return currentResident;
 		},
-		[runtime, t]
+		[runtime]
 	);
 };

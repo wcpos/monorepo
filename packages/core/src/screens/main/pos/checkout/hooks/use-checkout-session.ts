@@ -22,6 +22,7 @@ import {
 	PaymentGatewayContract,
 	supportsCheckoutContract,
 } from '../../../hooks/payment-gateway-contract';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -240,7 +241,13 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				registerId = committed.registerId;
 				sessionId = committed.sessionId;
 			} catch (error) {
-				if (signal.aborted) return;
+				if (signal.aborted) {
+					// The checkout closed before the commit settled; nothing else reports this push.
+					checkoutLogger.debug('Contract checkout preparation failed after it closed', {
+						context: { error: error instanceof Error ? error.message : String(error) },
+					});
+					return;
+				}
 				if (error instanceof LiveTabNotOwnedError) throw error;
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(checkoutLogger, t);
@@ -249,8 +256,10 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				const message = t('pos_cart.checkout_failed');
 				setError(message);
 				checkoutLogger.error(message, {
-					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					// The provenance push reports nothing itself; a refused session keeps AUTH101.
+					code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
+					context: { error: error instanceof Error ? error.message : String(error) },
 				});
 				return;
 			}

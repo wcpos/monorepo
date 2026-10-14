@@ -472,7 +472,6 @@
 	"common.failed_to_save_customer": "Failed to save customer",
 	"common.failed_to_save_order": "Failed to save order",
 	"common.failed_to_save_to_local_database": "Failed to save to local database: {error}",
-	"common.failed_to_send_to_server": "Failed to send to server",
 	"common.failed_to_update_local_document": "Failed to update local document: {error}",
 	"common.featured": "Featured",
 	"common.filter_bar": "Filter bar",

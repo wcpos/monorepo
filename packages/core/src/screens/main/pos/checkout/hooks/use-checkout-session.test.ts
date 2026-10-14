@@ -47,6 +47,15 @@ jest.mock('../../../../../contexts/translations', () => ({
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+	// pushFailureCode tests these with instanceof and reads `status`.
+	WriteDeferredError: class WriteDeferredError extends Error {
+		status?: number;
+		constructor(mutationId: string, status?: number) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+			this.status = status;
+		}
+	},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: false } }),
@@ -645,13 +654,28 @@ describe('contract provenance preparation', () => {
 		});
 		expect(result.current.error).toBe('pos_cart.checkout_failed');
 		expect(result.current.loading).toBe(false);
+		// The one report carries the cause: the push behind it reports nothing itself.
 		expect(mockCheckoutError).toHaveBeenCalledWith('pos_cart.checkout_failed', {
 			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 			showToast: true,
+			context: { error: 'journal unavailable' },
 		});
 		expect(mockProvenancePatch).not.toHaveBeenCalled();
 		expect(mockProvenancePush).not.toHaveBeenCalled();
 		expect(mockPost).not.toHaveBeenCalled();
+	});
+	it('reports a provenance push refused for the session as AUTH101', async () => {
+		const { WriteDeferredError } = jest.requireMock('@wcpos/query');
+		mockProvenancePush.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401));
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(() => result.current.startCheckout());
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockCheckoutError).toHaveBeenCalledTimes(1);
+		expect(mockCheckoutError).toHaveBeenCalledWith(
+			'pos_cart.checkout_failed',
+			expect.objectContaining({ code: 'AUTH101' })
+		);
 	});
 	it.each(['patch', 'push'])('posts nothing if the provenance %s fails', async (failure) => {
 		if (failure === 'patch') mockProvenancePatch.mockResolvedValueOnce(undefined as never);

@@ -3,6 +3,9 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { WriteDeferredError } from '@wcpos/query';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { EditOrderMetaForm } from './form';
 
 const mockPatch = jest.fn(),
@@ -79,8 +82,32 @@ jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: 
 jest.mock('../../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { id: 2 }, wpCredentials: { id: 7 } }),
 }));
-jest.mock('@wcpos/query', () => ({
-	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
+jest.mock('@wcpos/query', () => {
+	// pushFailureCode tests these with instanceof.
+	class WriteDeferredError extends Error {
+		status?: number;
+		constructor(mutationId: string, status?: number) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+			this.status = status;
+		}
+	}
+	return {
+		useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
+		WriteDeferredError,
+		WriteOutcomeError: class WriteOutcomeError extends Error {},
+	};
+});
+const mockLogError = jest.fn(),
+	mockLogWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	...jest.requireActual('@wcpos/utils/logger'),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLogError(...args),
+		warn: (...args: unknown[]) => mockLogWarn(...args),
+		success: jest.fn(),
+		info: jest.fn(),
+		debug: jest.fn(),
+	}),
 }));
 jest.mock('../../../../../../query', () => ({
 	useSearchSelect: () => ({ search: '', setSearch: jest.fn() }),
@@ -178,6 +205,28 @@ it('restores status and metadata after a rejected push, pushes the revert, keeps
 	expect(mockPatch.mock.invocationCallOrder[1]).toBeLessThan(mockPush.mock.invocationCallOrder[1]);
 	expect(mockMove).not.toHaveBeenCalled();
 	expect(mockClose).not.toHaveBeenCalled();
+});
+// usePushDocument reports nothing (the caller owns the one report), so this form must.
+it('reports a refused send once, as AUTH101, and records a failed revert send at warn', async () => {
+	mockPush
+		.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401))
+		.mockRejectedValueOnce(new Error('offline'));
+	await save('completed');
+	await confirm();
+	await act(async () => undefined);
+
+	expect(mockLogError).toHaveBeenCalledTimes(1);
+	expect(mockLogError).toHaveBeenCalledWith(
+		'Failed to save order',
+		expect.objectContaining({ showToast: true, code: ERROR_CODES.SESSION_EXPIRED })
+	);
+	expect(mockLogWarn).toHaveBeenCalledWith(
+		'Failed to send the reverted order',
+		expect.objectContaining({ code: ERROR_CODES.SYNC_UNEXPECTED })
+	);
+	expect(
+		mockLogWarn.mock.calls.find(([, options]) => (options as { showToast?: boolean })?.showToast)
+	).toBeUndefined();
 });
 it('does not re-send the hand-off when the revert patch itself fails', async () => {
 	mockPush.mockRejectedValueOnce(new Error('offline'));

@@ -131,6 +131,15 @@ jest.mock('@wcpos/query', () => ({
 		engine: { require: mockEngineRequire, adoptOrderSnapshot: mockAdoptOrderSnapshot },
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+	// pushFailureCode tests these with instanceof and reads `status`.
+	WriteDeferredError: class WriteDeferredError extends Error {
+		status?: number;
+		constructor(mutationId: string, status?: number) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+			this.status = status;
+		}
+	},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 let mockRegisterId: string | null = null;
 let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
@@ -2096,6 +2105,37 @@ it.each([false, true])(
 		}
 	}
 );
+
+// usePushDocument reports nothing: the pay-page preparation is the one report, and a refused
+// session behind the provenance push keeps its AUTH101 instead of the generic checkout code.
+it('reports a provenance push refused for the session once, as AUTH101', async () => {
+	jest.clearAllMocks();
+	mockOnlineStatus = 'online-website-available';
+	const order = makeOrder();
+	mockLocalPatch.mockResolvedValue(order);
+	const { WriteDeferredError } = jest.requireMock('@wcpos/query');
+	mockPushDocument.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401));
+	const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+	const view = render(
+		<PaymentWebview
+			order={order}
+			setLoading={jest.fn()}
+			setFrameStatus={jest.fn()}
+			onStockRejection={() => false}
+		/>
+	);
+	try {
+		await act(async () => {});
+		const checkoutFailures = jest
+			.mocked(logger.error)
+			.mock.calls.filter(([message]) => message === 'Checkout failed');
+		expect(checkoutFailures).toHaveLength(1);
+		expect(checkoutFailures[0][1]).toEqual(expect.objectContaining({ code: 'AUTH101' }));
+	} finally {
+		view.unmount();
+		mockOnlineStatus = 'offline';
+	}
+});
 
 describe('PaymentWebview register gate', () => {
 	beforeEach(() => {

@@ -40,10 +40,21 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => manager,
+	// pushFailureCode tests these with instanceof and reads `status`.
+	WriteDeferredError: class WriteDeferredError extends Error {
+		status?: number;
+		constructor(mutationId: string, status?: number) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+			this.status = status;
+		}
+	},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
-	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLoggerError(...args),
+	}),
 }));
 jest.mock('../../../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../../../jest/translate')>(
@@ -353,6 +364,31 @@ it('does not post or enqueue a payment when the provenance push rejects', async 
 		expect.objectContaining({
 			code: 'CHECKOUT101',
 		})
+	);
+	// The push reports nothing itself: the one report carries its cause.
+	expect(mockLoggerError).toHaveBeenCalledTimes(1);
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({
+			context: { error: 'provenance_save_failed', cause: 'push failed' },
+		})
+	);
+});
+
+it('reports a provenance push refused for the session as AUTH101, once', async () => {
+	const { WriteDeferredError } = jest.requireMock('@wcpos/query');
+	onlineStatus = 'online-website-available';
+	mockPushDocument.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401));
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(
+		result.current(order, method, { session: gateSession(), amount: 100 })
+	).resolves.toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
+
+	expect(mockLoggerError).toHaveBeenCalledTimes(1);
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({ code: 'AUTH101' })
 	);
 });
 
