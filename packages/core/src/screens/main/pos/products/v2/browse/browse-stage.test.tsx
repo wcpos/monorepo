@@ -130,6 +130,7 @@ jest.mock('../../../../../../contexts/translations', () => ({
 }));
 // The device's persisted pos-products settings; a header sort writes sortBy/sortDirection here.
 const settingsAtRest = () => ({
+	columns: [{ key: 'image', show: true }],
 	gridColumns: 2,
 	gridFields: { name: true },
 	sortBy: 'name',

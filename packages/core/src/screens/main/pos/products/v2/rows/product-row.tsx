@@ -25,16 +25,32 @@ export function useProductCount(record: EngineRecord<'products'>) {
 						.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
 	);
 }
+export function useVariationCount(record: EngineRecord<'variations'>) {
+	const { currentOrderRecord } = useCurrentOrder();
+	return useDocField(currentOrderRecord, (value) =>
+		record.remoteId == null
+			? 0
+			: (value.payload.line_items ?? [])
+					.filter(
+						(line: { variation_id?: number }) => line.variation_id === Number(record.remoteId)
+					)
+					.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
+	);
+}
+
 export function ProductRow({
 	item,
 }: Pick<React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'products'> }>>, 'item'>) {
 	const record = item.original.record;
 	const { addProduct } = useAddProduct();
 	const count = useProductCount(record);
+	const name = useDocField(record, (value) => value.payload.name) as string;
 	return (
 		<DataTableRow
 			item={item}
 			onPress={() => addProduct(record)}
+			// The row's name, for when the Actions column is hidden and the row is the add control.
+			accessibilityLabel={name}
 			trailing={
 				<InCartCount
 					product={record.uuid}

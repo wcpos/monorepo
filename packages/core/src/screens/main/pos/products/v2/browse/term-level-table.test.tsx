@@ -5,6 +5,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { TermLevelTable } from './term-table';
 
+jest.mock('../../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: { columns: [{ key: 'image', show: true }] } }),
+}));
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number }) =>
 		vars?.count !== undefined ? `${vars.count} ${key}` : key,

@@ -46,6 +46,7 @@ export function moneyRow({
 	gridFields,
 	from,
 	out,
+	taxDisplay,
 	t,
 }: {
 	price?: string | null;
@@ -57,22 +58,35 @@ export function moneyRow({
 	/** A variable product whose range has a width: its minimum is a "from" price. */
 	from?: boolean;
 	out?: boolean;
+	/** Table cells keep the tax tooltip/text and align their money to the right. */
+	taxDisplay?: 'text' | 'tooltip';
 	t: T;
 }): React.ReactNode {
 	if (out) {
 		return gridFields.price || gridFields.stock_quantity ? (
-			<Text className="font-bold">{t('pos_products.sold_out')}</Text>
+			<Text className={taxDisplay ? 'text-muted-foreground font-bold' : 'font-bold'}>
+				{t('pos_products.sold_out')}
+			</Text>
 		) : null;
 	}
 	// A variable product's range may lack a sub-range: what is not there is not shown (never 0).
-	const struck = gridFields.on_sale && onSale && regularPrice != null;
+	const struck =
+		gridFields.on_sale && onSale && regularPrice != null && (!taxDisplay || regularPrice !== '');
+	const muted = taxDisplay ? 'text-muted-foreground' : 'text-foreground/70';
 	if (!gridFields.price || (price == null && !struck)) return null;
 	const tax = { taxStatus: (taxStatus || 'none') as TaxStatus, taxClass: taxClass ?? '' };
 	return (
-		<View className="flex-row flex-wrap items-baseline gap-x-1.5">
-			{from && <Text className="text-foreground/70 text-xs">{t('common.from')}</Text>}
+		<View
+			className={`flex-row flex-wrap items-baseline gap-x-1.5 ${taxDisplay ? 'justify-end' : ''}`}
+		>
+			{from && <Text className={`${muted} text-xs`}>{t('common.from')}</Text>}
 			{price != null && (
-				<PriceWithTax price={price} {...tax} taxDisplay="none" className="font-bold" />
+				<PriceWithTax
+					price={price}
+					{...tax}
+					taxDisplay={taxDisplay ?? 'none'}
+					className="font-bold"
+				/>
 			)}
 			{struck && (
 				<>
@@ -83,12 +97,12 @@ export function moneyRow({
 						price={regularPrice}
 						{...tax}
 						taxDisplay="none"
-						className="text-foreground/70 text-xs"
+						className={`${muted} text-xs`}
 						strikethrough
 					/>
 				</>
 			)}
-			{gridFields.tax && price != null && (
+			{!taxDisplay && gridFields.tax && price != null && (
 				<TaxLine price={price} {...tax} className="text-foreground/70 text-xs" />
 			)}
 		</View>

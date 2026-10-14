@@ -23,7 +23,8 @@ import { displayStockStatus } from '../../../../components/product/resolve-stock
 import { resolveVariationName } from '../../../../components/product/resolve-variation-name';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import { useImageAttachment } from '../../../../hooks/use-image-attachment';
-import { useCurrentOrder } from '../../../contexts/current-order';
+import { useVariationCount } from '../rows/product-row';
+import { OptionChips } from '../option-chips';
 import { useAddVariation } from '../../../hooks/use-add-variation';
 import { useDealCards } from '../deal-stack';
 import { InCartCount } from '../rows/in-cart-count';
@@ -40,19 +41,6 @@ type Attributes = import('@wcpos/database').ProductVariationDocument['attributes
 
 // The Poster cover, as the product tile's picture.
 const COVER = { contentFit: 'cover' } as const;
-
-function useVariationCount(record: EngineRecord<'variations'>) {
-	const { currentOrderRecord } = useCurrentOrder();
-	return useDocField(currentOrderRecord, (value) =>
-		record.remoteId == null
-			? 0
-			: (value.payload.line_items ?? [])
-					.filter(
-						(line: { variation_id?: number }) => line.variation_id === Number(record.remoteId)
-					)
-					.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
-	);
-}
 
 function VariationImageInner({
 	record,
@@ -158,9 +146,6 @@ export function VariationTile({
 	const name = resolveVariationName(payload);
 	const id = record.remoteId ?? record.uuid;
 	const attributes = (sanitizeVariationAttributesRead(payload.attributes) as Attributes) ?? [];
-	const options = attributes
-		.map((attribute) => (typeof attribute.option === 'string' ? attribute.option.trim() : ''))
-		.filter((option) => option !== '');
 	const out = stock === 'outofstock';
 	const mark = stockMark({
 		gridFields,
@@ -196,18 +181,7 @@ export function VariationTile({
 						<Text className="text-foreground/70 text-xs" numberOfLines={1} decodeHtml>
 							{parentName}
 						</Text>
-						<View className="flex-row flex-wrap gap-1">
-							{(options.length > 0 ? options : [name]).map((option, index) => (
-								<Text
-									key={index}
-									className="bg-foreground/12 rounded px-1.5 py-px text-xs font-bold"
-									numberOfLines={1}
-									decodeHtml
-								>
-									{option}
-								</Text>
-							))}
-						</View>
+						<OptionChips attributes={attributes} fallback={name} />
 					</View>
 				)
 			}

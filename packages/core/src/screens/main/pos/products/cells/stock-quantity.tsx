@@ -1,55 +1,41 @@
 import * as React from 'react';
 
-import isFinite from 'lodash/isFinite';
-
-import type { CellContext } from '@wcpos/core/table-types';
-import { Text } from '@wcpos/components/text';
+import { StockPill } from '@wcpos/components/poster-tile';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { useNumberFormat } from '../../../hooks/use-number-format';
+import { displayStockStatus } from '../../../components/product/resolve-stock';
+import { stockMark } from '../v2/grid/tile-words';
 
-type Props = CellContext<
-	{
-		record: EngineRecord<'products'> | EngineRecord<'variations'>;
-	},
-	string
-> & {
-	className?: string;
-	withText?: boolean;
+type Props = {
+	row: { original: { record: EngineRecord<'products'> | EngineRecord<'variations'> } };
 };
 
 /**
  *
  */
-export function StockQuantity({ row, className, withText = false }: Props) {
-	const stockQuantity = useRecordField(
-		row.original.record,
-		(product) => product.payload.stock_quantity
-	);
-	const manageStock = useRecordField(
-		row.original.record,
-		(product) => product.payload.manage_stock
-	);
-	const { format } = useNumberFormat();
+export function StockQuantity({ row }: Props) {
+	const payload = useRecordField(row.original.record, (record) => record.payload);
 	const t = useT();
-
-	/**
-	 * Early exit
-	 */
-	if (!manageStock || !isFinite(stockQuantity)) {
-		return null;
-	}
-
-	if (withText) {
-		return (
-			<Text className={className}>
-				{t('pos_products.in_stock', { quantity: format(stockQuantity) })}
-			</Text>
-		);
-	}
-
-	return manageStock && isFinite(stockQuantity) ? (
-		<Text className={className}>{format(stockQuantity)}</Text>
-	) : null;
+	const stock = stockMark({
+		gridFields: {
+			name: false,
+			price: false,
+			tax: false,
+			on_sale: false,
+			category: false,
+			sku: false,
+			barcode: false,
+			stock_quantity: true,
+			cost_of_goods_sold: false,
+		},
+		manageStock: payload.manage_stock,
+		stockQuantity: payload.stock_quantity,
+		lowStockAmount: payload.low_stock_amount,
+		status: displayStockStatus(payload),
+		t,
+	});
+	if (!stock) return null;
+	if (stock.mark.kind === 'count') return <StockPill {...stock.mark} label={stock.label} />;
+	return stock.mark.kind === 'backorder' ? <StockPill backorder label={stock.label} /> : null;
 }

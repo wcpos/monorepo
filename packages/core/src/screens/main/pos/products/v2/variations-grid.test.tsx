@@ -16,6 +16,9 @@ const order = {
 		],
 	},
 };
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('../../hooks/use-add-product', () => ({ useAddProduct: () => ({}) }));
+jest.mock('../../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (record: object, select: (value: object) => unknown) => select(record),
 	useRecordField: (record: object, select: (value: object) => unknown) => select(record),

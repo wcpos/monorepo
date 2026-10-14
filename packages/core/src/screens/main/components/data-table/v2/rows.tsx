@@ -36,9 +36,9 @@ export function DataTableRow<TData extends RowData>({
 	testID?: string;
 	trailing?: React.ReactNode;
 	/**
-	 * Set by a caller whose row IS the control (no trailing button, no controls in its
-	 * cells): the row then takes the button role and this name. Callers with controls
-	 * inside the cells leave it unset, so no button nests in a button on web.
+	 * The row's name for when it is the only control: with the trailing control gone (the
+	 * Actions column hidden) the row takes the button role and this name; while a trailing
+	 * button is present it is ignored, so no button nests in a button on web.
 	 */
 	accessibilityLabel?: string;
 }) {
@@ -60,11 +60,16 @@ export function DataTableRow<TData extends RowData>({
 	// React reports it on web. The pressable covers every other cell.
 	const actions = cells.find((cell) => cell.column.id === 'actions');
 	const body = cells.filter((cell) => cell.column.id !== 'actions');
-	const primary = body.filter((cell) => cell.column.id !== 'price');
+	const image = body.find((cell) => cell.column.id === 'image');
+	const primary = body.filter((cell) => cell.column.id !== 'price' && cell.column.id !== 'image');
 	// A table whose settings HIDE the actions column hides the trailing control with it, as the
 	// old table did; a table with no actions column at all shows the caller's control.
 	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
 	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
+	// A caller may name the row for the case where its trailing control is gone (the Actions
+	// column hidden): then the row is the only add control and takes the button role; with a
+	// trailing button present it stays a plain pressable, so no button nests in a button on web.
+	const rowIsControl = accessibilityLabel !== undefined && trailingNode == null;
 	return (
 		// The row's testID names the whole row, trailing control included, as the old table's
 		// did: specs find a row's `+` inside the row, so the id must not sit on the pressable alone.
@@ -77,8 +82,8 @@ export function DataTableRow<TData extends RowData>({
 				// No `accessibilityRole="button"` by default: on web that renders a <button>, and the
 				// cells may carry their own controls (category chips, an edit icon), which may not
 				// nest in one. A caller whose row is the only control names it (`accessibilityLabel`).
-				accessibilityRole={accessibilityLabel ? 'button' : undefined}
-				accessibilityLabel={accessibilityLabel}
+				accessibilityRole={rowIsControl ? 'button' : undefined}
+				accessibilityLabel={rowIsControl ? accessibilityLabel : undefined}
 				onPress={
 					onPress
 						? (event) => {
@@ -121,6 +126,9 @@ export function DataTableRow<TData extends RowData>({
 						))
 					) : (
 						<>
+							{image && (
+								<View style={getColumnStyle(image.column.columnDef.meta)}>{content(image)}</View>
+							)}
 							<View className="min-w-0 flex-1">{primary.map(content)}</View>
 							{body.filter((cell) => cell.column.id === 'price').map(content)}
 						</>

@@ -1,4 +1,10 @@
 {
+	"pos_products.option": "Option",
+	"pos_products.type_simple": "Simple",
+	"pos_products.type_variable": "Variable",
+	"pos_products.type_variation": "Variation",
+	"pos_products.type_grouped": "Grouped",
+	"pos_products.type_external": "External",
 	"actions.hook_timeout": "A checkout rule timed out, so this action was refused",
 	"actions.hook_failed": "A checkout rule failed, so this action was refused",
 	"actions.hook_disabled": "A checkout rule is switched off until the app restarts, so this action was refused",

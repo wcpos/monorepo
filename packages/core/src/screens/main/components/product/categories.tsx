@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -29,21 +28,22 @@ export function ProductCategories({
 	 * @NOTE - Don't use a unique key here, index is sufficient
 	 */
 	return (
-		<HStack className="w-full flex-wrap gap-1">
-			{(categories || []).map((cat, index) => (
-				<ButtonPill
-					variant="ghost-primary"
-					size="xs"
-					key={index}
-					onPress={() =>
-						cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])
-					}
-				>
-					<ButtonText numberOfLines={1} decodeHtml>
+		<Text className="w-full text-sm" numberOfLines={1}>
+			{categories.map((cat, index) => (
+				<React.Fragment key={index}>
+					{index > 0 && ', '}
+					<Text
+						className="text-foreground text-sm"
+						accessibilityRole="button"
+						decodeHtml
+						onPress={() =>
+							cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])
+						}
+					>
 						{cat.name}
-					</ButtonText>
-				</ButtonPill>
+					</Text>
+				</React.Fragment>
 			))}
-		</HStack>
+		</Text>
 	);
 }

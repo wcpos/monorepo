@@ -1,10 +1,9 @@
-import * as React from 'react';
-
-import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { PriceWithTax } from '../../../components/product/price-with-tax';
+import { useT } from '../../../../../contexts/translations';
+import { displayStockStatus } from '../../../components/product/resolve-stock';
+import { moneyRow } from '../v2/grid/tile-words';
 
 /**
  *
@@ -19,9 +18,13 @@ export function Price({ row, column }: CellContext<{ record: EngineRecord<'produ
 	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
 	const onSale = useRecordField(row.original.record, (product) => product.payload.on_sale);
 
+	const t = useT();
+	const out = useRecordField(
+		row.original.record,
+		({ payload }) => displayStockStatus(payload) === 'outofstock'
+	);
 	const meta = column.columnDef.meta;
 	const show = meta?.show ?? (() => false);
-	const showRegularPrice = show('on_sale') && onSale;
 
 	/**
 	 *
@@ -29,28 +32,25 @@ export function Price({ row, column }: CellContext<{ record: EngineRecord<'produ
 	const taxDisplay = show('tax') ? ('text' as const) : ('tooltip' as const);
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 
-	return showRegularPrice ? (
-		<VStack space="xs" className="justify-end">
-			<PriceWithTax
-				price={regular_price ?? ''}
-				taxStatus={safeTaxStatus}
-				taxClass={taxClass ?? ''}
-				taxDisplay={taxDisplay}
-				strikethrough
-			/>
-			<PriceWithTax
-				price={price ?? ''}
-				taxStatus={safeTaxStatus}
-				taxClass={taxClass ?? ''}
-				taxDisplay={taxDisplay}
-			/>
-		</VStack>
-	) : (
-		<PriceWithTax
-			price={price ?? ''}
-			taxStatus={safeTaxStatus}
-			taxClass={taxClass ?? ''}
-			taxDisplay={taxDisplay}
-		/>
-	);
+	return moneyRow({
+		price: price ?? '',
+		regularPrice: regular_price,
+		onSale,
+		taxStatus: safeTaxStatus,
+		taxClass,
+		taxDisplay,
+		out,
+		t,
+		gridFields: {
+			name: false,
+			price: true,
+			tax: show('tax'),
+			on_sale: show('on_sale'),
+			category: false,
+			sku: false,
+			barcode: false,
+			stock_quantity: false,
+			cost_of_goods_sold: false,
+		},
+	});
 }

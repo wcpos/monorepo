@@ -9,8 +9,8 @@ import { of } from 'rxjs';
 import { cellsForRow, POSProducts } from './index';
 import { invokeSurface, resetSurfaces } from '../../../../../extensions/commands/surfaces';
 import { PersistedStateProvider } from '../../../../../contexts/persisted-state';
-import { ProductImage } from '../../../components/product/image';
-import { VariableProductImage } from '../../../components/product/variable-image';
+import { PosProductImage } from '../cells/image';
+import { PosVariableProductImage } from '../cells/variable-image';
 
 import type { QueryStateOf } from '../../../../../query';
 
@@ -191,6 +191,11 @@ jest.mock('../cells/variable-actions', () => ({ VariableActions: () => null }));
 jest.mock('../cells/variation-actions', () => ({ ProductVariationActions: () => null }));
 jest.mock('../cells/variation-name', () => ({ ProductVariationName: () => null }));
 jest.mock('../../../components/product/image', () => ({ ProductImage: () => null }));
+// The POS table's own cells (2026-10-14): the Poster thumbs and the from-price.
+jest.mock('../cells/image', () => ({ PosProductImage: () => null }));
+jest.mock('../cells/variable-image', () => ({ PosVariableProductImage: () => null }));
+jest.mock('../cells/variable-price', () => ({ PosVariablePrice: () => null }));
+jest.mock('../cells/variation-image', () => ({ PosVariationImage: () => null }));
 jest.mock('../../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
 jest.mock('../../../components/product/variable-image', () => ({
 	VariableProductImage: () => null,
@@ -217,8 +222,8 @@ describe('cellsForRow', () => {
 		const row = (type: 'simple' | 'variable') =>
 			({ original: { record: { payload: { type } } } }) as Parameters<typeof cellsForRow>[0];
 
-		expect(cellsForRow(row('variable')).image).toBe(VariableProductImage);
-		expect(cellsForRow(row('simple')).image).toBe(ProductImage);
+		expect(cellsForRow(row('variable')).image).toBe(PosVariableProductImage);
+		expect(cellsForRow(row('simple')).image).toBe(PosProductImage);
 	});
 });
 
