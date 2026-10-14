@@ -2,9 +2,6 @@
 	"packages/core/src/screens/main/pos/cart/buttons/edit-order-meta/form.tsx": {
 		"local-write": 3
 	},
-	"packages/core/src/screens/main/pos/cart/totals/customer-note.tsx": {
-		"local-write": 1
-	},
 	"packages/core/src/screens/main/pos/checkout/payments/use-gateway-payment.ts": {
 		"engine-write": 1
 	},
