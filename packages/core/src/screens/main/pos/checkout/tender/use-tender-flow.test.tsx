@@ -313,6 +313,9 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
+	// pushFailureCode tests these with instanceof.
+	WriteDeferredError: class WriteDeferredError extends Error {},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, dismissTo: mockDismissTo }),

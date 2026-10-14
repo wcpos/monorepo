@@ -65,8 +65,9 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 			setLoading(true);
 			try {
 				// Our own "{name} saved" below replaces the generic toast (showSuccessToast: false).
-				// create() logs and toasts its own failure; reporting it here too showed the
-				// cashier two toasts for one refusal. The form stays open.
+				// The create is queued, not awaited, so a store refusal arrives later through the
+				// engine; what can reject here (an enqueue failure, a scope change) create() has
+				// already reported, so it is not reported twice. The form stays open.
 				const savedDoc = await create({ data }).catch(() => undefined);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its

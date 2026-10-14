@@ -131,6 +131,9 @@ jest.mock('@wcpos/query', () => ({
 		engine: { require: mockEngineRequire, adoptOrderSnapshot: mockAdoptOrderSnapshot },
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+	// pushFailureCode tests these with instanceof.
+	WriteDeferredError: class WriteDeferredError extends Error {},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 let mockRegisterId: string | null = null;
 let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';

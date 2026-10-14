@@ -15,6 +15,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { completionMetaFor, persistSaleProvenance, refreshOrderRecord } from '../sale-completion';
@@ -86,12 +87,26 @@ export function useRecordManualPayment(
 				completionMeta: (meta) =>
 					completionMetaFor(ctx, meta, { sessionId, extraMeta: input.extraMeta }),
 				persistProvenance: async () => {
-					await persistSaleProvenance(ctx, {
-						order,
-						sessionId,
-						online: true,
-						extraMeta: input.extraMeta,
-					});
+					try {
+						await persistSaleProvenance(ctx, {
+							order,
+							sessionId,
+							online: true,
+							extraMeta: input.extraMeta,
+						});
+					} catch (error) {
+						// recordManualPayment turns this into its `provenance_save_failed` outcome,
+						// which the tender reports; the push itself reports nothing, so its cause
+						// (a refused session, a timeout) is kept here. Warn: not a second Sentry event.
+						logger.warn('Sale provenance could not be sent', {
+							code: pushFailureCode(error),
+							context: {
+								orderId: order.uuid,
+								error: error instanceof Error ? error.message : String(error),
+							},
+						});
+						throw error;
+					}
 					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
 				},
 				// The order's own currency wins (see use-tender-flow); the store's only when it has none.

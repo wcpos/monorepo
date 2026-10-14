@@ -11,6 +11,7 @@ const mockGet = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
 const mockT = jest.fn();
 const mockEngineRequire = jest.fn((_input: unknown) => ({
 	ready: Promise.resolve(),
@@ -40,10 +41,16 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => manager,
+	// pushFailureCode tests these with instanceof.
+	WriteDeferredError: class WriteDeferredError extends Error {},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
-	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		warn: (...args: unknown[]) => mockLoggerWarn(...args),
+	}),
 }));
 jest.mock('../../../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../../../jest/translate')>(
@@ -353,6 +360,12 @@ it('does not post or enqueue a payment when the provenance push rejects', async 
 		expect.objectContaining({
 			code: 'CHECKOUT101',
 		})
+	);
+	// The push reports nothing itself: its cause rides a warn beside the one error report.
+	expect(mockLoggerError).toHaveBeenCalledTimes(1);
+	expect(mockLoggerWarn).toHaveBeenCalledWith(
+		'Sale provenance could not be sent',
+		expect.objectContaining({ context: expect.objectContaining({ error: 'push failed' }) })
 	);
 });
 

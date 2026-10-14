@@ -260,7 +260,7 @@ describe('usePushDocument', () => {
 			ERROR_CODES.INSUFFICIENT_ROLE,
 		],
 	])(
-		'throws and logs the failure code when an order write outcome is %s',
+		'throws without reporting, and maps the failure code, when an order write outcome is %s',
 		async (_label, error, code) => {
 			const resident: Record<string, unknown> = {
 				remoteId: null,
@@ -279,10 +279,9 @@ describe('usePushDocument', () => {
 			const { result } = renderHook(() => usePushDocument());
 
 			await expect(result.current(doc as never)).rejects.toThrow(error.message);
-			expect(getLogger(['wcpos', 'sync', 'push']).error).toHaveBeenCalledWith(
-				'Failed to send document to server',
-				expect.objectContaining({ code })
-			);
+			// The caller owns the one report (log + toast); a second here doubled both.
+			expect(getLogger(['wcpos', 'sync', 'push']).error).not.toHaveBeenCalled();
+			expect(pushFailureCode(error)).toBe(code);
 		}
 	);
 

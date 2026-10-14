@@ -47,6 +47,9 @@ jest.mock('../../../../../contexts/translations', () => ({
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+	// pushFailureCode tests these with instanceof.
+	WriteDeferredError: class WriteDeferredError extends Error {},
+	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: false } }),
@@ -645,9 +648,11 @@ describe('contract provenance preparation', () => {
 		});
 		expect(result.current.error).toBe('pos_cart.checkout_failed');
 		expect(result.current.loading).toBe(false);
+		// The one report carries the cause: the push behind it reports nothing itself.
 		expect(mockCheckoutError).toHaveBeenCalledWith('pos_cart.checkout_failed', {
 			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 			showToast: true,
+			context: { error: 'journal unavailable' },
 		});
 		expect(mockProvenancePatch).not.toHaveBeenCalled();
 		expect(mockProvenancePush).not.toHaveBeenCalled();

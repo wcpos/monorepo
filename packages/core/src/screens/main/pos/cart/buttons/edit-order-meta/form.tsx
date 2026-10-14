@@ -45,7 +45,6 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import { useSearchSelect } from '../../../../../../query';
@@ -53,6 +52,7 @@ import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
 import { CustomerList } from '../../../../components/customer-select';
 import { OrderStatusSelect } from '../../../../components/order/order-status-select';
+import { pushFailureCode } from '../../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../../contexts/use-push-document';
 import { useCashierLabel } from '../../../../hooks/use-cashier-label';
 import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
@@ -180,12 +180,20 @@ export function EditOrderMetaForm({
 				// so the revert is pushed too — the last write wins and the server ends up
 				// where the cart is. Only once the revert actually landed locally: pushing a
 				// resident that still carries the hand-off would re-send what we are undoing.
-				// pushDocument toasts its own failure.
-				if (reverted) void pushDocument(order).catch(() => undefined);
+				// The failure below is the cashier's one report; a revert that also fails to send
+				// is recorded beside it (warn: the error above is already the Sentry event).
+				if (reverted) {
+					void pushDocument(order).catch((revertError: unknown) =>
+						cartLogger.warn('Failed to send the reverted order', {
+							code: pushFailureCode(revertError),
+							context: { orderId: previous.id, error: getErrorMessage(revertError) },
+						})
+					);
+				}
 			}
 			cartLogger.error('Failed to save order', {
 				showToast: true,
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: pushFailureCode(error),
 				toast: { title: t('common.failed_to_save_order') },
 				context: { orderId: previous.id, error: getErrorMessage(error) },
 			});

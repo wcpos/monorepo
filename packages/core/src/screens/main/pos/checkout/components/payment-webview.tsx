@@ -32,6 +32,7 @@ import { useAppState, useStoreSession } from '../../../../../contexts/app-state'
 import { useT } from '../../../../../contexts/translations';
 import { useAccessTokenRefresher } from '../../../../../hooks/use-access-token-refresher';
 import { useCurrentOrderActions } from '../../contexts/current-order';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 
@@ -331,7 +332,8 @@ export function PaymentWebview({
 					return;
 				}
 				orderLogger.error('Checkout failed', {
-					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					// The provenance push reports nothing itself; a refused session keeps AUTH101.
+					code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
 					context: { error: getErrorMessage(error) },
