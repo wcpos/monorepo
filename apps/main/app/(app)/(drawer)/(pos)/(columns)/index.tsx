@@ -15,12 +15,15 @@ import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 
 import { POSProductsPane } from '../../../../../components/pos-products-pane';
 
+/** The tab bar's own bottom padding (`py-2`), kept above the home indicator. */
+const TAB_BAR_PADDING = 8;
+
 /**
  *
  */
 export default function ResizablePOSColumns() {
 	const { screenSize } = useTheme();
-	const { bottom } = useSafeAreaInsets();
+	const { top, bottom } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
 
 	// Check if we're at a /cart route (with or without orderId)
@@ -43,9 +46,13 @@ export default function ResizablePOSColumns() {
 
 	// On small screens, render a tab-like UI with Products and Cart tabs
 	// This handles the case when user resizes from large to small screen
+	// Every surface that touches a screen edge pads its own inset inside its own background
+	// (EdgeColumn, pos/columns/LEDGER.md line 6): here both tabs sit on `bg-background` at the
+	// top, so the container pads the status bar in that colour, and the tab bar pads the home
+	// indicator in its card colour.
 	if (screenSize === 'sm') {
 		return (
-			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
+			<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
 				{/* Tab content. Both panes stay MOUNTED and toggle visibility: POSProducts
 				    owns the barcode scan subscription, and the POS section owns scans
 				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
@@ -68,7 +75,11 @@ export default function ResizablePOSColumns() {
 					</Suspense>
 				</View>
 				{/* Tab bar */}
-				<View className="border-border bg-card flex-row justify-around border-t py-2">
+				<View
+					testID="pos-tab-bar"
+					className="border-border bg-card flex-row justify-around border-t pt-2"
+					style={{ paddingBottom: bottom + TAB_BAR_PADDING }}
+				>
 					<Pressable
 						testID="pos-tab-products"
 						onPress={() => setActiveTab('products')}
@@ -102,8 +113,9 @@ export default function ResizablePOSColumns() {
 		);
 	}
 
+	// The columns run edge to edge; each pads its own insets (EdgeColumn).
 	return (
-		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
+		<View testID="screen-pos" style={{ flex: 1 }}>
 			<POSColumns />
 			{/* The logged-in entry screen: time-to-interactive is the till's mount, the
 			    moment after hydration the cashier first sees the register (lib/observe.ts). */}

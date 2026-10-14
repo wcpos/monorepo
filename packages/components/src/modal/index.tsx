@@ -193,13 +193,14 @@ function ModalOverlayNative({
 		<View
 			collapsable={false}
 			// A bottom sheet carries the bottom inset itself (in card colour); the scrim must not
-			// show as a grey bar under it (owner, 2026-10-13). A full-size modal is a contained
-			// route whose host already sits under the status bar (the POS stack pads insets.top):
-			// a second top inset was the blank band over the pay sheet's title (Pixel 10).
+			// show as a grey bar under it (owner, 2026-10-13). A full-size modal's scrim IS its card
+			// (`bg-card`, see ModalContent): it runs under the status bar and pads the inset inside
+			// its own colour, because its host no longer does (the POS root never pads an inset:
+			// owner, iPad, 2026-10-14; ledger line 17).
 			style={[
 				StyleSheet.absoluteFill,
 				{
-					paddingTop: fill ? 0 : insets.top,
+					paddingTop: insets.top,
 					paddingBottom: side === 'bottom' ? 0 : insets.bottom,
 				},
 			]}
