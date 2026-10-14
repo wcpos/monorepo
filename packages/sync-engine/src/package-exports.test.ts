@@ -40,6 +40,9 @@ describe('package exports', () => {
 				// never by a copy of it in the UI (#1546).
 				'heldOpenCartMutations',
 				'OPEN_CART_ORDER_STATUS',
+				// @wcpos/query's catalogue-search blob reads through it, so no
+				// unsubscribed full-read RxQuery stays cached (#2502).
+				'findAllUncached',
 			].sort()
 		);
 	});
