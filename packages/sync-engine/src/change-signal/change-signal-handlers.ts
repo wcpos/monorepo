@@ -41,7 +41,11 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
-import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+import {
+	hasPendingLocalWork,
+	withoutLocallyProtected,
+	withoutUnchanged,
+} from '../write-path/local-work-guard';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -190,15 +194,19 @@ async function pullByIds(
 			d.projectMaterialized(payload, ctx.barcodeSelectors?.())
 		);
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
+		const stored = await collection.findByIds(documents.map(({ uuid }) => uuid as string)).exec();
 		const applicable = await withoutLocallyProtected(
 			collection as never,
-			documents as { uuid: string }[]
+			documents as { uuid: string }[],
+			stored
 		);
 		if (persist) await persist(applicable);
 		else {
-			if (applicable.length > 0)
+			// Skip proven-unchanged rows: an identical upsert still bumps `_rev` and emits.
+			const changed = withoutUnchanged(collection as never, stored, applicable);
+			if (changed.length > 0)
 				assertBulkSuccess(
-					await collection.bulkUpsert(applicable as never[]),
+					await collection.bulkUpsert(changed as never[]),
 					'change-signal-handlers upsert'
 				);
 			const rows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
@@ -280,13 +288,16 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
 		d.project(payload, ctx.barcodeSelectors?.())
 	);
+	const stored = await collection.findByIds(documents.map(({ uuid }) => uuid as string)).exec();
 	const applicable = await withoutLocallyProtected(
 		collection as never,
-		documents as { uuid: string }[]
+		documents as { uuid: string }[],
+		stored
 	);
-	if (applicable.length > 0) {
+	const changed = withoutUnchanged(collection as never, stored, applicable);
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
@@ -320,13 +331,16 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 		throw new Error(`${d.collection} refresh: incomplete-snapshot; repeated record in page walk`);
 	}
 	const documents = [...documentsByUuid.values()];
+	const stored = await collection.findByIds(documents.map(({ uuid }) => uuid as string)).exec();
 	const applicable = await withoutLocallyProtected(
 		collection as never,
-		documents as { uuid: string }[]
+		documents as { uuid: string }[],
+		stored
 	);
-	if (applicable.length > 0) {
+	const changed = withoutUnchanged(collection as never, stored, applicable);
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
