@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{hstack,icon,pressable,text,textarea,tooltip,vstack}`.
 
+2026-10-14: the v1 `customer-note.tsx` file cited as evidence in lines 2–3 was deleted; the surviving note editor is `v2/order-sheet.tsx`. The historical inline-note behaviours are n/a for v2, as recorded for the same line numbers in `v2/LEDGER.md`.
+
 ## Lines
 
 1. In itemized tax display, combine product and shipping tax for each rate; otherwise show the aggregate, with inclusion/exclusion context — shipping tax must not vanish from the visible tax breakdown — evidence: `pos/cart/totals/taxes.tsx:34`, “tax_total and shipping_tax_total are separate, but we will display together” — platform: all.

@@ -32,11 +32,6 @@ if (__DEV__) {
 	// 	addRxPlugin(RxDBDevModePlugin);
 	// }
 	addRxPlugin(RxDBDevModePlugin);
-	// add debugging
-	// import('pouchdb-debug').then((pouchdbDebug) => {
-	// 	PouchDB.plugin(pouchdbDebug.default);
-	// 	PouchDB.debug.enable('*');
-	// });
 }
 
 // default plugins

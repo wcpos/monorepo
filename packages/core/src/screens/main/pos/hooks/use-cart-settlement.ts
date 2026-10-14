@@ -87,9 +87,8 @@ type ReplayContinuation = {
 /**
  * The cart's single writer.
  *
- * Split out of useCartLines for #1472. useCartLines is mounted three times on the
- * cart surface — cart/table.tsx, cart/totals.tsx and use-order-totals.ts — and each
- * instance owned its own write state. While settlement only ran for couponed carts
+ * Split out of useCartLines for #1472. Each instance owned its own write state.
+ * While settlement only ran for couponed carts
  * that was survivable; once settle became the writer for EVERY cart change it meant
  * three concurrent writes per edit, each with its own idea of what had already been
  * written.

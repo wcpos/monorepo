@@ -184,7 +184,6 @@ jest.mock('../hooks/use-date-format', () => ({
 	useDateFormat: (value: string | undefined) => value ?? '',
 }));
 jest.mock('./filter-bar', () => ({ FilterBar: () => <div data-testid="coupons-filter-bar" /> }));
-jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/active', () => ({ Active: () => null }));
 jest.mock('./cells/discount-type', () => ({ DiscountType: () => null }));
