@@ -94,5 +94,9 @@ expect_status "--worker-optional keeps the frozen-lane refusal" fail run MOCK_TA
 expect_status "unreadable lane worker fails closed" fail run MOCK_TAGS=$'v1.12.0' "$CHECK" "$tmpdir/w-176.js" 1.12.3
 expect_status "bad app version fails closed" fail run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/w-174.js" 1.10
 
+expect_status "worker matching the bundle's rxdb passes" pass run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/w-174.js" 1.10.31 --bundle-rxdb 17.4.0
+expect_status "rxdb bumped but worker not rebuilt fails" fail run MOCK_TAGS="$lane110" "$CHECK" "$tmpdir/w-174.js" 1.10.31 --bundle-rxdb 17.6.0
+expect_eq "and says to rebuild the worker" 1 "$(grep -c 'rebuild the worker' "$tmpdir/out")"
+
 if [[ $failures -gt 0 ]]; then echo "$failures check-worker-rxdb-lane test(s) failed" >&2; exit 1; fi
 echo "All check-worker-rxdb-lane tests passed."

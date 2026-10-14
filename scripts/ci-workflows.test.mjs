@@ -507,6 +507,10 @@ test('a main-branch web bundle is gated on its worker RXDB_VERSION against its l
 	assert.ok(steps.indexOf('🔨 Build web bundle') < steps.indexOf(gate.name));
 	assert.ok(steps.indexOf(gate.name) < steps.findIndex((name) => name.startsWith('🚀 Publish')));
 	assert.match(gate.run, /check-worker-rxdb-lane\.sh" apps\/web\/build\/opfs\.worker\.js "\$APP_VERSION"/);
+	// The worker must also be the rxdb the main thread was built with.
+	assert.match(gate.run, /--bundle-rxdb "\$BUNDLE_RXDB"/);
+	// The frozen-lane override is opt-in per dispatch, never the default.
+	assert.equal(publish.on.workflow_dispatch.inputs.allow_frozen_lane.default, false);
 	// tag-web-bundle.sh reads the app version at the SHA in the commit message.
 	const checkout = findStep(publish, 'publish', '📥 Check out monorepo');
 	assert.match(checkout.with.ref, /steps\.monorepo-sha\.outputs\.sha/);

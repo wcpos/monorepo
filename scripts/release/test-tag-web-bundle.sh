@@ -45,6 +45,13 @@ expect_status "refuses an unrelated commit" fail monorepo_sha_from_message <<<'d
 expect_eq "reads x-jsd-version" 1.11.1 "$(printf 'HTTP/2 200\r\nx-jsd-version: 1.11.1\r\nx-jsd-version-type: version\r\n' | jsd_version)"
 expect_eq "no header, no version" "" "$(printf 'HTTP/2 404\r\n' | jsd_version)"
 
+# --- tag_action ---
+all=$'v1.10.40\nv1.11.0\nv1.11.1'
+expect_eq "untagged commit: create the next tag" "create v1.11.2" "$(tag_action 1.11 "" <<<"$all")"
+expect_eq "commit holds the lane's newest tag: resume" "resume v1.11.1" "$(tag_action 1.11 v1.11.1 <<<"$all")"
+expect_status "commit holds an older tag: refuse" fail tag_action 1.11 v1.11.0 <<<"$all"
+expect_status "commit holds another lane's tag: refuse" fail tag_action 1.11 v1.10.40 <<<"$all"
+
 # --- --dry-run end to end ---
 cat > "$tmpdir/gh" <<'MOCK'
 #!/usr/bin/env bash
@@ -76,8 +83,12 @@ expect_status "dry run refuses a frozen lane" fail run MOCK_VERSION=1.10.32 MOCK
 expect_status "dry run on a new lane passes" pass run MOCK_VERSION=1.12.0 MOCK_TAGS="$tags" \
 	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.7.0 "$TAG" bundlesha --dry-run
 expect_eq "new lane starts at .0" 1 "$(grep -c 'would tag v1.12.0 at' "$tmpdir/out")"
-expect_status "refuses a commit that already carries a tag" fail run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.1 \
+expect_status "refuses a commit that carries an older tag" fail run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.0 \
 	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+
+expect_status "a commit holding the lane's newest tag resumes" pass run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.1 \
+	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "and says it would resume" 1 "$(grep -c 'already v1.11.1; would resume' "$tmpdir/out")"
 
 if [[ $failures -gt 0 ]]; then echo "$failures tag-web-bundle test(s) failed" >&2; exit 1; fi
 echo "All tag-web-bundle tests passed."
