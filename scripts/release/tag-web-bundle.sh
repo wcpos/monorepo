@@ -96,6 +96,26 @@ wait_for_cdn() {
 	done
 }
 
+# The ~14 MB hashed entry metadata.json names: jsDelivr's first origin fetch of it
+# often times out and caches a 404, so GET it until it is a 200, purging between
+# tries. Small files serving the new tag do not mean the POS can load.
+warm_entry() { # $1 lane
+	local entry url attempt
+	entry=$(curl -s --fail --connect-timeout 10 --max-time 30 "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/metadata.json" \
+		| jq -er '.fileMetadata.web.bundle') || { echo "could not read the entry from @$1/build/metadata.json" >&2; return 1; }
+	url="https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/${entry}"
+	for attempt in 1 2 3 4 5 6; do
+		if curl -s --fail --connect-timeout 10 --max-time 120 -o /dev/null "$url"; then
+			echo "@$1/build/${entry} -> 200"
+			return 0
+		fi
+		echo "@$1/build/${entry} not served (try ${attempt}); purging it"
+		curl -s --connect-timeout 10 --max-time 60 -o /dev/null "https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/${entry}" || true
+		sleep "$CDN_POLL_INTERVAL"
+	done
+	return 1
+}
+
 purge_cdn() { # $1 lane
 	local path code
 	for path in "" /build/metadata.json /build/opfs.worker.js /build/index.html; do
@@ -155,7 +175,11 @@ main() {
 		echo "FAIL: @${lane} does not serve ${tag} on every path after the purge; re-run this command to purge and verify again" >&2
 		return 1
 	fi
-	echo "LIVE: @${lane} serves ${tag} (metadata.json, opfs.worker.js, index.html)"
+	if ! warm_entry "$lane"; then
+		echo "FAIL: @${lane} serves ${tag} but not its JS entry; re-run this command to purge and verify again" >&2
+		return 1
+	fi
+	echo "LIVE: @${lane} serves ${tag} (metadata.json, opfs.worker.js, index.html, the JS entry)"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
