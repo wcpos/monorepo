@@ -52,6 +52,25 @@ chmod +x "$tmpdir/curl404/curl"
 expect_eq "a failed CDN response reads as no version, without aborting" "" \
 	"$(set -euo pipefail; PATH="$tmpdir/curl404:$PATH" cdn_version 1.11 index.html)"
 
+# --- warm_entry ---
+mkdir -p "$tmpdir/cdn"
+cat > "$tmpdir/cdn/curl" <<'MOCK'
+#!/usr/bin/env bash
+args="$*"
+case "$args" in
+	*purge.jsdelivr.net*) exit 0 ;;
+	*/build/metadata.json*) echo '{"fileMetadata":{"web":{"bundle":"_expo/static/js/web/entry-abc.js"}}}' ;;
+	*/build/_expo/static/js/web/entry-abc.js*)
+		n=$(( $(cat "$MOCK_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$MOCK_COUNT"
+		[[ "$n" -ge "${MOCK_ENTRY_OK_AT:-99}" ]] || exit 22 ;;
+	*) exit 64 ;;
+esac
+MOCK
+chmod +x "$tmpdir/cdn/curl"
+warm() { (set -euo pipefail; PATH="$tmpdir/cdn:$PATH" MOCK_COUNT="$tmpdir/count-$1" MOCK_ENTRY_OK_AT="$1" CDN_POLL_INTERVAL=0 warm_entry 1.11); }
+expect_status "an entry served on the third GET is warm" pass warm 3
+expect_status "an entry never served fails" fail warm 99
+
 # --- tag_action ---
 all=$'v1.10.40\nv1.11.0\nv1.11.1'
 expect_eq "untagged commit: create the next tag" "create v1.11.2" "$(tag_action 1.11 "" <<<"$all")"
