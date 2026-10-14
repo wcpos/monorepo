@@ -5,7 +5,6 @@ import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { couponsLiteral } from './schemas/coupons';
 import { customersLiteral } from './schemas/customers';
-// import { logsLiteral } from './schemas/logs';
 import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';

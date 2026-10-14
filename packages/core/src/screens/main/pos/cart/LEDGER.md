@@ -6,7 +6,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{button,card,collapsible,combobox,dialog,docs-link,dropdown-menu,error-boundary,form,hstack,icon,icon-button,input,status-badge,suspense,table,tabs,text,toast,toggle-group,tooltip,vstack}`; helpers/types from `combobox/types`, `lib/use-hierarchy`, `lib/utils`.
 
-2026-10-14: the v1 `table.tsx`, `tabs.tsx`, `tab-chip.tsx` and `cart-header.tsx` files cited as evidence in lines 4–6, 11, 13 and 15 were deleted; every one of those behaviours is carried by the `v2/` owner named for the same line number in `v2/LEDGER.md`.
+2026-10-14: the v1 `table.tsx`, `tabs.tsx`, `tab-chip.tsx` and `cart-header.tsx` files cited as evidence in lines 4–7, 11, 13, 15, 17 and 79 were deleted; those behaviours are carried by the `v2/` owners named for the same line numbers in `v2/LEDGER.md`, except line 79, which names `v2/tab-chip.tsx` here.
 
 ## Lines
 

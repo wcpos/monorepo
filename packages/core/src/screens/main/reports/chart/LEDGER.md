@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{text,vstack}` and `@wcpos/components/lib/utils`.
 
+2026-10-14: `findClosestPoint.ts` cited by line 13 was deleted (no importers); `chart.tsx` uses its local `findClosestPointIndex`.
+
 ## Lines
 
 1. Load the web chart lazily through Skia initialization, locating CanvasKit assets using the installed package version — preserves the web-specific rendering bootstrap — evidence: `72b86c5541 2025-03-06 add expo-font`; current entry point `reports/chart/index.web.tsx:17–23` — platform: web, Electron.

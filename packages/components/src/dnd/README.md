@@ -109,7 +109,7 @@ function ParentList() {
 
 ## Migration from Legacy API
 
-The old `@mgcrea/react-native-dnd` based API is still exported for backward compatibility but will be removed in a future version. Migrate to the new `SortableList` API:
+The old `@mgcrea/react-native-dnd` based API was removed. Migrate to the new `SortableList` API:
 
 ```tsx
 // Old API (deprecated)

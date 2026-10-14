@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-// import Svg, { Line } from 'react-native-svg';
-
 import { Image } from '@wcpos/components/image';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';

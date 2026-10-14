@@ -255,8 +255,8 @@ function Item({ children, ...props }: ItemProps<any>) {
 		virtualizerRef.current = rowVirtualizer;
 	});
 
-	// Stable ref callback that only measures when the DOM node changes (mirrors
-	// createStableMeasureRef), avoiding repeated measureElement calls during parent
+	// Stable ref callback that only measures when the DOM node changes,
+	// avoiding repeated measureElement calls during parent
 	// re-renders. Refs are read inside the callback body, never during render.
 	const previousNodeRef = React.useRef<Element | null>(null);
 	const measureRef = React.useCallback((node: Element | null) => {
