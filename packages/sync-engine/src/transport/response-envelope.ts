@@ -85,10 +85,15 @@ function wrapResponse(
 		},
 	});
 }
+// expo's winter runtime installs DOMException on native (require-plane.ts
+// already constructs one there); the Error fallback is the same shape expo's
+// own FetchResponse.abort uses for a runtime without it.
 const abortReason = (signal: AbortSignal): unknown =>
 	signal.reason instanceof Error
 		? signal.reason
-		: new DOMException('The operation was aborted.', 'AbortError');
+		: typeof DOMException !== 'undefined'
+			? new DOMException('The operation was aborted.', 'AbortError')
+			: Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
 
 /** Unwrap opted-in metadata; unrequested traffic returns untouched without reading its body. */
 export async function hydrateResponse(
