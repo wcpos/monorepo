@@ -126,7 +126,7 @@ The `e2e-product-writer` (shop_manager) identity exists on every dev server with
 
 This repo has two permanent trunks:
 
-- **`main`** — the **stable**, released line: app 1.10.x patches, plugins and the web lane at 1.11 (`@1.11`).
+- **`main`** — the **stable**, released line (1.11.x now: the app, the plugins and the web lane `@1.11`; patches ship from here).
 - **`next`** — the **in-development** major (2.0, versioned `2.0.0` in `apps/main/package.json`).
 
 Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
