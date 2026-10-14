@@ -30,9 +30,10 @@ name: Publish Web Bundle
 # and rxdb's remote storage refuses any RXDB_VERSION mismatch (RM1). So the build
 # is refused when its opfs.worker.js RXDB_VERSION differs from the lane's highest
 # tag (that change needs a new minor), or when a higher lane already has tags
-# (this lane is frozen). This lane builds no opfs.worker.js, so the RXDB
-# comparison passes vacuously (--worker-optional); the frozen-lane refusal still
-# applies. The lane is apps/main/package.json's major.minor at the built SHA; the
+# (this lane is frozen; the allow_frozen_lane input overrides that part only), or
+# when the worker is not the rxdb the bundle was built with. This lane builds no
+# opfs.worker.js, so both RXDB comparisons pass vacuously (--worker-optional);
+# the frozen-lane refusal still applies. The lane is apps/main/package.json's major.minor at the built SHA; the
 # gate script comes from THIS workflow revision, like the release gate. On
 # 2026-10-14 a 17.6.0 worker tagged v1.10.41 on the 17.4.0 lane broke every web
 # POS on an older plugin. See scripts/release/check-worker-rxdb-lane.sh.
@@ -59,6 +60,10 @@ on:
         description: Type "I accept a red main" to override the release gate
         type: string
         default: ''
+      allow_frozen_lane:
+        description: bundle_branch=main only — build for a lane a higher lane has frozen (a deliberate patch to old plugins; the RXDB_VERSION check still applies)
+        type: boolean
+        default: false
 
 concurrency:
   group: publish-web-bundle-${{ github.event.inputs.bundle_branch }}
@@ -177,10 +182,14 @@ jobs:
         if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch == 'main' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          ALLOW_FROZEN_LANE: ${{ github.event.inputs.allow_frozen_lane }}
         run: |
           set -euo pipefail
           APP_VERSION=$(jq -er .version apps/main/package.json)
-          bash "$RUNNER_TEMP/check-worker-rxdb-lane.sh" apps/web/build/opfs.worker.js "$APP_VERSION" --worker-optional
+          BUNDLE_RXDB=$(jq -er .version node_modules/rxdb/package.json)
+          args=(--worker-optional --bundle-rxdb "$BUNDLE_RXDB")
+          if [ "$ALLOW_FROZEN_LANE" = true ]; then args+=(--allow-frozen-lane); fi
+          bash "$RUNNER_TEMP/check-worker-rxdb-lane.sh" apps/web/build/opfs.worker.js "$APP_VERSION" "${args[@]}"
 
       # The secrets context is not available in a step `if`, and a job-level env
       # would hand the token to every step — including the caller-supplied

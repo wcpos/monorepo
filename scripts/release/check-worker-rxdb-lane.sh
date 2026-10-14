@@ -2,6 +2,7 @@
 # Release gate: may this OPFS worker ship on the web-bundle lane its app version names?
 #
 #   check-worker-rxdb-lane.sh <worker-file> <app-version> [--allow-frozen-lane] [--worker-optional]
+#                             [--bundle-rxdb <version>]
 #
 # The web POS pairs the jsDelivr bundle at @<plugin major.minor> (the highest
 # v<major.minor>.N tag on wcpos/web-bundle) with the OPFS worker the PLUGIN
@@ -14,7 +15,9 @@
 # Fails when:
 #   - the worker's RXDB_VERSION is unreadable or ambiguous (fail closed);
 #   - the lane's highest tag carries a worker with a different RXDB_VERSION;
-#   - a higher lane already has tags (this lane is frozen), unless --allow-frozen-lane.
+#   - a higher lane already has tags (this lane is frozen), unless --allow-frozen-lane;
+#   - --bundle-rxdb names the rxdb the main thread was built with and the worker
+#     differs (rxdb bumped, worker not rebuilt: the lane check alone would pass).
 # A lane with no tags passes ("new lane"). --worker-optional passes the RXDB
 # comparison vacuously when <worker-file> does not exist (lanes with no OPFS worker).
 #
@@ -125,19 +128,27 @@ check_worker_lane() {
 }
 
 main() {
-	local allow_frozen=false optional=false args=() tags
+	local allow_frozen=false optional=false bundle_rxdb="" args=() tags mine
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--allow-frozen-lane) allow_frozen=true ;;
 			--worker-optional) optional=true ;;
+			--bundle-rxdb) bundle_rxdb="${2:-}"; shift ;;
 			-*) echo "unknown option $1" >&2; return 2 ;;
 			*) args+=("$1") ;;
 		esac
 		shift
 	done
 	if [[ ${#args[@]} -ne 2 ]]; then
-		echo "usage: $0 <worker-file> <app-version> [--allow-frozen-lane] [--worker-optional]" >&2
+		echo "usage: $0 <worker-file> <app-version> [--allow-frozen-lane] [--worker-optional] [--bundle-rxdb <version>]" >&2
 		return 2
+	fi
+	if [[ -n "$bundle_rxdb" && -f "${args[0]}" ]]; then
+		mine=$(worker_rxdb_version < "${args[0]}") || { echo "FAIL: ${args[0]}" >&2; return 1; }
+		if [[ "$mine" != "$bundle_rxdb" ]]; then
+			echo "FAIL: worker RXDB_VERSION ${mine} != the bundle's rxdb ${bundle_rxdb}; rebuild the worker (pnpm build:opfs-worker)" >&2
+			return 1
+		fi
 	fi
 	tags=$(list_bundle_tags) || { echo "FAIL: could not list ${WEB_BUNDLE_REPO} tags" >&2; return 1; }
 	check_worker_lane "${args[0]}" "${args[1]}" "$allow_frozen" "$optional" "$tags"
