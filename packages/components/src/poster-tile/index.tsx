@@ -5,7 +5,9 @@ import Animated from 'react-native-reanimated';
 
 import { Icon, type IconName } from '../icon';
 import { Image } from '../image';
-import { Text } from '../text';
+import { Mark } from './mark';
+import { StockPill } from './stock-pill';
+import { CARD, CIRCLE, FAR, NEAR, TINTS } from './style';
 import { PosterBand } from './band';
 import { Scrim } from './scrim';
 import { POSTER_BAND, SCRIM_BLUR_RADIUS, SCRIM_REACH } from './scrim-stops';
@@ -13,7 +15,8 @@ import { type Tint, tintOf } from './tint-of';
 
 import type { ImageSource } from 'expo-image';
 
-export { POSTER_BAND, PosterBand, tintOf, type Tint };
+export { POSTER_BAND, PosterBand, StockPill, tintOf, type Tint };
+export { PosterThumb, type PosterThumbProps } from './thumb';
 export {
 	SCRIM_BLUR_RADIUS,
 	SCRIM_REACH,
@@ -86,15 +89,6 @@ export type PosterTileProps = {
 	children?: never;
 };
 
-// Literal classes, so the stylesheet keeps them.
-const TINTS = [
-	'bg-tile-tint-0',
-	'bg-tile-tint-1',
-	'bg-tile-tint-2',
-	'bg-tile-tint-3',
-	'bg-tile-tint-4',
-	'bg-tile-tint-5',
-] as const;
 const VEIL = 'bg-foreground/10 absolute inset-0';
 // The words' block, at the foot of the card. Never taller than the card: on a narrow tile
 // what overflows is clipped at the bottom (the facts), so the name, money and sub stay.
@@ -107,12 +101,6 @@ const LIFTED = { opacity: 0 };
 const STILL = { transition: 0 };
 // The native scrim's blurred copy of the picture: blurred at decode, and never fading in on its own.
 const BLURRED = { blurRadius: SCRIM_BLUR_RADIUS, transition: 0 };
-// The two cards under a stacked tile, inside the 8 px the two `m-1` margins leave between tiles.
-const NEAR = { top: 3, left: 3, right: -3, bottom: -3 };
-const FAR = { top: 6, left: 6, right: -6, bottom: -6, opacity: 0.6 };
-const CARD = 'bg-card border-border absolute rounded-lg border';
-const CIRCLE = 'bg-card border-border size-6 items-center justify-center rounded-full border';
-const PILL = 'h-5.5 flex-row items-center gap-1 rounded-full px-2';
 
 function hasWords(...slots: React.ReactNode[]) {
 	return slots.some((slot) => slot != null && slot !== false && slot !== '');
@@ -199,54 +187,6 @@ function BlurredPicture({ picture }: { picture: PosterPicture }) {
 		default:
 			return null;
 	}
-}
-
-function Mark({
-	mark,
-	label,
-	testID,
-	bare,
-}: {
-	mark: PosterMark;
-	label?: string;
-	testID?: string;
-	/** On a tint a glyph sits in the tint itself, without its circle. */
-	bare?: boolean;
-}) {
-	if (mark.kind === 'count') {
-		const tone = mark.low ? 'text-warning-foreground' : 'text-foreground';
-		return (
-			<View
-				className={`${PILL} ${mark.low ? 'bg-warning' : 'bg-card border-border border'}`}
-				accessibilityLabel={label}
-				testID={testID}
-			>
-				<Icon name="box" size="xs" className={tone} />
-				<Text className={`text-xs font-bold tabular-nums ${tone}`}>{mark.value}</Text>
-			</View>
-		);
-	}
-	if (mark.kind === 'backorder') {
-		return (
-			<View
-				className={`${PILL} bg-card border-border border`}
-				accessibilityLabel={label}
-				testID={testID}
-			>
-				<Icon name="clock" size="xs" className="text-muted-foreground" />
-				<Text className="text-muted-foreground text-xs font-bold">{label}</Text>
-			</View>
-		);
-	}
-	return (
-		<View className={bare ? undefined : CIRCLE} accessibilityLabel={label} testID={testID}>
-			<Icon
-				name={mark.kind === 'folder' ? 'folder' : mark.name}
-				size={bare ? 'lg' : 'sm'}
-				className="text-muted-foreground"
-			/>
-		</View>
-	);
 }
 
 /**

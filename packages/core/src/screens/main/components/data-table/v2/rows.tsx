@@ -60,7 +60,8 @@ export function DataTableRow<TData extends RowData>({
 	// React reports it on web. The pressable covers every other cell.
 	const actions = cells.find((cell) => cell.column.id === 'actions');
 	const body = cells.filter((cell) => cell.column.id !== 'actions');
-	const primary = body.filter((cell) => cell.column.id !== 'price');
+	const image = body.find((cell) => cell.column.id === 'image');
+	const primary = body.filter((cell) => cell.column.id !== 'price' && cell.column.id !== 'image');
 	// A table whose settings HIDE the actions column hides the trailing control with it, as the
 	// old table did; a table with no actions column at all shows the caller's control.
 	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
@@ -121,6 +122,9 @@ export function DataTableRow<TData extends RowData>({
 						))
 					) : (
 						<>
+							{image && (
+								<View style={getColumnStyle(image.column.columnDef.meta)}>{content(image)}</View>
+							)}
 							<View className="min-w-0 flex-1">{primary.map(content)}</View>
 							{body.filter((cell) => cell.column.id === 'price').map(content)}
 						</>

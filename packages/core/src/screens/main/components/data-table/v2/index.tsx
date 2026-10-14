@@ -93,6 +93,7 @@ interface CommonProps<TData extends RowData> {
 		table: any;
 	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
 	cells?: CellMap;
+	columnLabels?: Record<string, string>;
 	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap;
 	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
 	/** Off for a table that borrows another's settings id (the variations pane): a header sort must not rewrite the products sort. */
@@ -233,6 +234,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 		renderItem,
 		cells,
 		cellsForRow,
+		columnLabels,
 		renderHeader,
 		persistSort = true,
 		tableConfig,
@@ -264,8 +266,8 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 	};
 
 	const columns = React.useMemo(
-		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
-		[uiColumns, getUILabel, cells, cellsForRow]
+		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow, columnLabels),
+		[uiColumns, getUILabel, cells, cellsForRow, columnLabels]
 	);
 
 	const columnVisibility = React.useMemo(
@@ -471,7 +473,8 @@ function buildColumns<TData extends RowData>(
 	columns: any,
 	getUILabel: (key: string) => string,
 	cells?: CellMap,
-	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap
+	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap,
+	columnLabels?: Record<string, string>
 ): ColumnDef<DataTableRow, unknown, DataTableFeatures>[] {
 	return columns.map((c: any) => {
 		return {
@@ -491,7 +494,7 @@ function buildColumns<TData extends RowData>(
 				const Cell = rowCells?.[c.key] ?? RecordTextCell;
 				return <Cell {...info} />;
 			},
-			header: c.hideLabel ? '' : getUILabel(c.key),
+			header: c.hideLabel ? '' : (columnLabels?.[c.key] ?? getUILabel(c.key)),
 		};
 	});
 }

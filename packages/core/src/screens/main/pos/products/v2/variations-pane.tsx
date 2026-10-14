@@ -23,6 +23,7 @@ import { OwnFooter, OwnFooterContext, type OwnFooterNumbers } from './own-footer
 import { VariationsGrid } from './variations-grid';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from '../cells/price';
+import { VariationType } from '../cells/type';
 import { SKU } from '../cells/sku';
 import { COGS } from '../cells/cogs';
 import { ProductVariationImage } from '../../../components/product/variation-image';
@@ -138,6 +139,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 			<DataTable<{ record: EngineRecord<'variations'> }>
 				id="pos-products"
 				persistSort={false}
+				columnLabels={{ name: t('pos_products.option') }}
 				collectionName="variations"
 				handle={handle}
 				tableConfig={{ data: hits }}
@@ -148,6 +150,7 @@ function VariationsTable({ parent, handle, stockStatus }: Props & { handle: Quer
 					price: Price,
 					stock_quantity: VariationStock,
 					sku: SKU,
+					type: VariationType,
 					cost_of_goods_sold: COGS,
 					image: ProductVariationImage,
 					actions: () => null,

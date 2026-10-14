@@ -25,6 +25,19 @@ export function useProductCount(record: EngineRecord<'products'>) {
 						.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
 	);
 }
+export function useVariationCount(record: EngineRecord<'variations'>) {
+	const { currentOrderRecord } = useCurrentOrder();
+	return useDocField(currentOrderRecord, (value) =>
+		record.remoteId == null
+			? 0
+			: (value.payload.line_items ?? [])
+					.filter(
+						(line: { variation_id?: number }) => line.variation_id === Number(record.remoteId)
+					)
+					.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
+	);
+}
+
 export function ProductRow({
 	item,
 }: Pick<React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'products'> }>>, 'item'>) {

@@ -84,7 +84,13 @@ jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('./rows/product-row', () => ({
+	useVariationCount: () => 0,
+	InCartCount: ({ empty }: { empty: React.ReactNode }) => empty,
+}));
+jest.mock('../cells/variation-name', () => ({ ProductVariationName: () => null }));
+jest.mock('../cells/stock-quantity', () => ({ StockQuantity: () => null }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: React.PropsWithChildren) => children,
 }));

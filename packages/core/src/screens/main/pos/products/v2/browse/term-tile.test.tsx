@@ -7,6 +7,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { TermRow } from './term-row';
 import { ParentTermTile, TermTile } from './term-tile';
 
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'fine' }));
+jest.mock('../../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: { columns: [{ key: 'image', show: true }] } }),
+}));
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: { count?: number }) =>
 		key === 'pos_products.n_products'

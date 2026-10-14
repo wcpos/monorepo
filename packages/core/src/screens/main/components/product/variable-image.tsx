@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { Pressable } from 'react-native';
 
-import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Image } from '@wcpos/components/image';
+import { usePointer } from '@wcpos/components/lib/device';
+import { PosterThumb, tintOf } from '@wcpos/components/poster-tile';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -18,9 +18,10 @@ export function VariableProductImage({
 	row,
 	table,
 }: CellContext<{ record: EngineRecord<'products'> }, 'image'>) {
-	const images = useRecordField(row.original.record, (record) => record.payload.images);
-	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri } = useImageAttachment(row.original.record, imageURL ?? '');
+	const payload = useRecordField(row.original.record, (record) => record.payload);
+	const imageURL = payload.images?.[0]?.src;
+	const pointer = usePointer();
+	const { uri, error } = useImageAttachment(row.original.record, imageURL ?? '');
 
 	/**
 	 * Use setRowExpanded from table meta to bypass TanStack's buggy updater function
@@ -41,11 +42,15 @@ export function VariableProductImage({
 	}, [row.id, isExpanded, setRowExpanded]);
 
 	return (
-		<Pressable onPress={handlePress} className="h-20 w-full">
-			<Image
-				source={{ uri }}
-				recyclingKey={row.original.record.uuid}
-				className="h-full w-full rounded"
+		<Pressable onPress={handlePress} className="self-start">
+			<PosterThumb
+				picture={
+					!imageURL || error
+						? { kind: 'tint', tint: tintOf(payload.categories?.[0]?.id ?? payload.name ?? '') }
+						: { kind: 'image', source: { uri }, recyclingKey: row.original.record.uuid }
+				}
+				stacked
+				size={pointer === 'coarse' ? 'md' : 'sm'}
 			/>
 		</Pressable>
 	);

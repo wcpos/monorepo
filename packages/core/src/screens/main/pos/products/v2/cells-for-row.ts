@@ -4,6 +4,7 @@ import { Actions } from '../cells/actions';
 import { COGS } from '../cells/cogs';
 import { Name } from '../cells/name';
 import { Price } from '../cells/price';
+import { Type } from '../cells/type';
 import { SKU } from '../cells/sku';
 import { StockQuantity } from '../cells/stock-quantity';
 import { VariableActions } from '../cells/variable-actions';
@@ -23,6 +24,7 @@ const cells = {
 		name: Name,
 		price: Price,
 		sku: SKU,
+		type: Type,
 		stock_quantity: StockQuantity,
 		cost_of_goods_sold: COGS,
 	},
@@ -33,6 +35,7 @@ const cells = {
 		price: VariableProductPrice,
 		stock_quantity: StockQuantity,
 		sku: SKU,
+		type: Type,
 		cost_of_goods_sold: COGS,
 	},
 };

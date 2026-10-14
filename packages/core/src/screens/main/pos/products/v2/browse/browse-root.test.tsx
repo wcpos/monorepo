@@ -13,7 +13,9 @@ jest.mock('../../../../../../contexts/translations', () => ({
 		vars?.count !== undefined ? `${vars.count} ${key}` : key,
 }));
 jest.mock('../../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { gridColumns: 2 } }),
+	useUISettings: () => ({
+		uiSettings: { gridColumns: 2, columns: [{ key: 'image', show: true }] },
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: Record<string, unknown>, read: (value: Record<string, unknown>) => unknown) =>
@@ -24,7 +26,10 @@ jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 	useCopyPicture: () => undefined,
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => false }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => false,
+	usePointer: () => 'fine',
+}));
 // The term level's leaves (term-grid.tsx) are native motion and the till's furniture; only the
 // root term set is on stage here.
 jest.mock('@wcpos/components/breadcrumb', () => ({ Breadcrumb: () => null }));

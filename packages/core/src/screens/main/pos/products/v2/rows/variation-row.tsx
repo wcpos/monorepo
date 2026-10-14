@@ -1,15 +1,15 @@
 import * as React from 'react';
 
-import { Text } from '@wcpos/components/text';
-import { StatusBadge } from '@wcpos/components/status-badge';
+import { IconButton } from '@wcpos/components/icon-button';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 
 import { DataTableRow } from '../../../../components/data-table/v2/rows';
-import { resolveVariationName } from '../../../../components/product/resolve-variation-name';
-import { displayStockStatus } from '../../../../components/product/resolve-stock';
-import { useStockStatusLabel } from '../../../../hooks/use-stock-status-label';
+import { InCartCount, useVariationCount } from './product-row';
 import { useAddVariation } from '../../../hooks/use-add-variation';
+
+export { ProductVariationName as VariationName } from '../../cells/variation-name';
+export { StockQuantity as VariationStock } from '../../cells/stock-quantity';
 
 type Attributes = import('@wcpos/database').ProductVariationDocument['attributes'];
 
@@ -17,33 +17,10 @@ type Props = {
 	item: React.ComponentProps<typeof DataTableRow<{ record: EngineRecord<'variations'> }>>['item'];
 	parent: EngineRecord<'products'>;
 };
-export function VariationName({ row }: { row: Props['item'] }) {
-	const payload = useDocField(row.original.record, (value) => value.payload);
-	return (
-		<>
-			<Text decodeHtml>{resolveVariationName(payload)}</Text>
-			<Text className="text-muted-foreground text-sm" decodeHtml>
-				{(sanitizeVariationAttributesRead(payload.attributes) as Attributes)
-					?.map((attribute) => `${attribute.name}: ${attribute.option}`)
-					.join(', ')}
-			</Text>
-		</>
-	);
-}
-export function VariationStock({ row }: { row: Props['item'] }) {
-	const stock = useDocField(row.original.record, (value) => displayStockStatus(value.payload));
-	const { getLabel } = useStockStatusLabel();
-	return (
-		<StatusBadge
-			label={getLabel(stock ?? 'instock')}
-			variant={stock === 'lowstock' ? 'warning' : stock === 'outofstock' ? 'error' : 'success'}
-		/>
-	);
-}
 export function VariationRow({ item, parent }: Props) {
 	const variation = item.original.record;
 	const attributes = useDocField(variation, (value) => value.payload.attributes);
-	const payload = useDocField(variation, (value) => value.payload);
+	const count = useVariationCount(variation);
 	const { addVariation } = useAddVariation();
 	const add = () =>
 		addVariation(
@@ -60,9 +37,23 @@ export function VariationRow({ item, parent }: Props) {
 			item={item}
 			testID={`data-table-row-variation-${variation.remoteId ?? variation.uuid}`}
 			onPress={add}
-			// The row is the add control here (no trailing button), so it carries the name. Its
-			// Price cell's tax tooltip is a passive trigger inside the row, not a <button>.
-			accessibilityLabel={resolveVariationName(payload)}
+			trailing={
+				<InCartCount
+					product={variation.uuid}
+					count={count}
+					onPress={add}
+					empty={
+						<IconButton
+							name="circlePlus"
+							testID="add-variation-to-cart-button"
+							onPress={(e) => {
+								e.stopPropagation();
+								void add();
+							}}
+						/>
+					}
+				/>
+			}
 		/>
 	);
 }
