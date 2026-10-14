@@ -30,6 +30,9 @@ let shouldFailOnCreate = false;
 jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
 	getAllCollectionDocuments: jest.fn().mockResolvedValue([]),
+	// The query-cache helpers (#2502 H9); real behaviour is pinned in search-rebuild.test.ts.
+	countRxQuerySubscribers: jest.fn(() => 1),
+	uncacheRxQuery: jest.fn(),
 }));
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
