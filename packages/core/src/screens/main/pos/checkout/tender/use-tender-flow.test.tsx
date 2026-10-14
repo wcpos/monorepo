@@ -2194,10 +2194,9 @@ describe('provider completion provenance before intent', () => {
 		act(() => result.current.pickMethod('terminal'));
 		await act(async () => result.current.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
-		expect(mockError).toHaveBeenCalledWith(
-			'Checkout failed',
-			expect.objectContaining({ code: 'AUTH101' })
-		);
+		const failures = mockError.mock.calls.filter(([message]) => message === 'Checkout failed');
+		expect(failures).toHaveLength(1);
+		expect(failures[0][1]).toEqual(expect.objectContaining({ code: 'AUTH101' }));
 	});
 	it('does not stamp a partial server leg', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
