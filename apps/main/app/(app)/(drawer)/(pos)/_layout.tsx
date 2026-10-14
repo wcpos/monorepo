@@ -3,7 +3,7 @@ import { Platform, View, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
@@ -14,6 +14,7 @@ import { registerPortalContainer } from '@wcpos/components/lib/portal-container'
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
+import { useTitleBarStrip } from '@wcpos/core/contexts/title-bar-strip';
 import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
 import { CommandsProvider } from '@wcpos/core/extensions/commands';
 import { Hotkeys } from '@wcpos/core/extensions/hotkeys';
@@ -167,6 +168,21 @@ function POSStack() {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUniwind();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	// The root never pads a SYSTEM inset: every surface that touches a screen edge runs its own
+	// background through the inset and pads inside it (EdgeColumn, the phone tab container,
+	// the full-size modal), so the status bar floats over the column it sits on (owner, iPad,
+	// 2026-10-14: a flat grey band under the status bar and the home indicator).
+	// The one exception is the desktop's title-bar strip, which DesktopWindowChrome folds into
+	// `insets.top`: it is not a system bar but the till's topmost row (the register bar portals
+	// into it across the full width), so it stays one ground, here on the root.
+	const { height: stripHeight } = useTitleBarStrip();
+	const edgeTop = Math.max(0, insets.top - stripHeight);
+	// With the upgrade notice showing, the notice owns the top edge (it pads `edgeTop` inside its
+	// own colour), so nothing below it touches the top edge: the stack reads a top inset of 0.
+	const stackInsets = React.useMemo(
+		() => ({ ...insets, top: showUpgrade ? 0 : edgeTop }),
+		[insets, showUpgrade, edgeTop]
+	);
 	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
@@ -179,35 +195,41 @@ function POSStack() {
 				<View
 					ref={registerPOSContainer}
 					className="bg-background flex-1"
-					style={{ paddingTop: insets.top }}
+					style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
 				>
 					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
-					{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
-					<Stack
-						screenOptions={{
-							animation: 'none',
-							headerShown: false,
-							contentStyle: { backgroundColor: screenBackgroundColor },
-						}}
-					>
-						<Stack.Screen name="index" />
-						<Stack.Screen
-							name="(modals)/cart/[orderId]/checkout"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
+					{showUpgrade && (
+						<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
+							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
+						</View>
+					)}
+					<SafeAreaInsetsContext.Provider value={stackInsets}>
+						<Stack
+							screenOptions={{
+								animation: 'none',
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
 							}}
-						/>
-						<Stack.Screen
-							name="(modals)/cart/receipt/[orderId]"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
-							}}
-						/>
-					</Stack>
+						>
+							<Stack.Screen name="index" />
+							<Stack.Screen
+								name="(modals)/cart/[orderId]/checkout"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/cart/receipt/[orderId]"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+						</Stack>
+					</SafeAreaInsetsContext.Provider>
 				</View>
 				{/**
 				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider

@@ -60,7 +60,10 @@ jest.mock('expo-observe', () => {
 		},
 	};
 });
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
+// iPad-like insets: a status bar at the top and a home indicator at the bottom.
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
+}));
 jest.mock('@wcpos/core/contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
@@ -431,4 +434,40 @@ describe('small POS columns interactive timing', () => {
 			expect(mockMarkInteractive).toHaveBeenCalledTimes(1);
 		}
 	);
+});
+
+// Every edge-touching surface pads its own inset inside its own background; the root never
+// does (owner, iPad, 2026-10-14: grey bands under the status bar and the home indicator).
+describe('safe-area insets belong to the surfaces at the edges', () => {
+	/** The flattened style of the one host node with this testID. */
+	const hostStyle = (testID: string) => {
+		const [node] = view!.root
+			.findAllByProps({ testID })
+			.filter((candidate) => typeof candidate.type === 'string');
+		const style = [node.props.style].flat(Infinity).filter(Boolean);
+		return Object.assign({}, ...style) as { paddingTop?: number; paddingBottom?: number };
+	};
+
+	it('pads each wide column, never the screen-pos root', () => {
+		mockScreenSize = 'lg';
+		renderColumns('left');
+
+		const root = hostStyle('screen-pos');
+		expect(root.paddingTop).toBeUndefined();
+		expect(root.paddingBottom).toBeUndefined();
+		for (const column of ['pos-products-column', 'pos-cart-column']) {
+			expect(hostStyle(column)).toMatchObject({ paddingTop: 24, paddingBottom: 20 });
+		}
+	});
+
+	it('on the phone fallback, pads the status bar on the container and the home indicator in the tab bar', () => {
+		mockScreenSize = 'sm';
+		renderColumns('left');
+
+		const root = hostStyle('screen-pos');
+		expect(root.paddingTop).toBe(24);
+		expect(root.paddingBottom).toBeUndefined();
+		// The tab bar's own `py-2` (8) stays above the home indicator, inside the card colour.
+		expect(hostStyle('pos-tab-bar').paddingBottom).toBe(20 + 8);
+	});
 });

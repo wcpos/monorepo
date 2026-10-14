@@ -13,6 +13,7 @@ import { useCurrentOrder } from '../contexts/current-order';
 import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
+import { EdgeColumn } from './edge-column';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 
@@ -86,6 +87,9 @@ export function POSColumns() {
 									minSize={25}
 									id={descriptor.id}
 								>
+									{/* Each panel's content is an EdgeColumn in the colour that content paints, so
+									    the column runs through both safe-area insets and the resize handle runs
+									    the full screen height (ledger line 6). */}
 									{descriptor.id === PRODUCTS_ENTRY_ID ? (
 										<Animated.View
 											key={selectedReceiptOrder ? `receipt:${selectedReceiptOrder}` : stage}
@@ -94,19 +98,29 @@ export function POSColumns() {
 											style={{ flex: 1 }}
 										>
 											{selectedReceiptOrder ? (
-												<ReceiptStage orderUuid={selectedReceiptOrder} compact={false} />
+												<EdgeColumn testID="pos-receipt-column" className="bg-card">
+													<ReceiptStage orderUuid={selectedReceiptOrder} compact={false} />
+												</EdgeColumn>
 											) : stage === 'checkout' ? (
-												// Keyed by order: two orders in checkout must not share one keypad reducer.
-												<CheckoutColumn
-													key={currentOrderRecord.uuid}
-													order={currentOrderRecord as EngineRecord<'orders'>}
-												/>
+												<EdgeColumn testID="pos-checkout-column" className="bg-card">
+													{/* Keyed by order: two orders in checkout must not share one keypad reducer. */}
+													<CheckoutColumn
+														key={currentOrderRecord.uuid}
+														order={currentOrderRecord as EngineRecord<'orders'>}
+													/>
+												</EdgeColumn>
 											) : (
-												element
+												<EdgeColumn testID="pos-products-column" className="bg-background">
+													{element}
+												</EdgeColumn>
 											)}
 										</Animated.View>
 									) : (
-										element
+										// The cart (and any other panel) paints the card colour (`OpenOrders` in
+										// its column is `bg-card`).
+										<EdgeColumn testID={`pos-${descriptor.id}-column`} className="bg-card">
+											{element}
+										</EdgeColumn>
 									)}
 								</Panel>
 							</React.Fragment>

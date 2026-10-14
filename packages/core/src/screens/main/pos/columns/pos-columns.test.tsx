@@ -56,6 +56,10 @@ jest.mock('react-native-reanimated', () => ({
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
+// iPad-like insets: a status bar at the top and a home indicator at the bottom.
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
+}));
 jest.mock('@wcpos/components/panels', () => ({
 	Panel: ({ children, testID, defaultSize }: PanelProps) => (
 		<div data-testid={testID} data-default-size={defaultSize}>
@@ -139,5 +143,40 @@ describe('POSColumns', () => {
 				.getByTestId('pos-resize-handle')
 				.compareDocumentPosition(screen.getByTestId('pos-products-panel'))
 		).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+	it('runs every column edge to edge: each pads both insets inside itself, the panels do not', () => {
+		const padded = (testID: string) => {
+			const { paddingTop, paddingBottom } = screen.getByTestId(testID).style;
+			return { paddingTop, paddingBottom };
+		};
+		const edge = { paddingTop: '24px', paddingBottom: '20px' };
+		const { rerender } = render(<POSColumns />);
+		expect(padded('pos-products-column')).toEqual(edge);
+		expect(padded('pos-cart-column')).toEqual(edge);
+		expect(screen.getByTestId('pos-products-column').contains(screen.getByTestId('products'))).toBe(
+			true
+		);
+		expect(
+			screen.getByTestId('pos-cart-column').contains(screen.getByTestId('open-orders-strip'))
+		).toBe(true);
+		// The panels (and so the root) carry no inset: the resize handle runs the full height.
+		expect(padded('pos-products-panel')).toEqual({ paddingTop: '', paddingBottom: '' });
+		expect(padded('pos-cart-panel')).toEqual({ paddingTop: '', paddingBottom: '' });
+
+		// The products pane's alternates pad the same way, in their own colour.
+		mockStage = 'checkout';
+		rerender(<POSColumns />);
+		expect(padded('pos-checkout-column')).toEqual(edge);
+		expect(
+			screen.getByTestId('pos-checkout-column').contains(screen.getByTestId('checkout-tender-pane'))
+		).toBe(true);
+		mockReceipt = 'paid-order';
+		rerender(<POSColumns />);
+		expect(padded('pos-receipt-column')).toEqual(edge);
+		expect(
+			screen
+				.getByTestId('pos-receipt-column')
+				.contains(screen.getByTestId('checkout-receipt-stage'))
+		).toBe(true);
 	});
 });

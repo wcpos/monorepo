@@ -80,7 +80,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 
 export default function TabsLayout() {
 	const { screenSize } = useTheme();
-	const { bottom } = useSafeAreaInsets();
+	const { top } = useSafeAreaInsets();
 
 	const tabPressListener = React.useMemo(
 		() => ({
@@ -96,15 +96,19 @@ export default function TabsLayout() {
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
 	if (screenSize !== 'sm') {
+		// The columns run edge to edge; each pads its own insets (EdgeColumn).
 		return (
-			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
+			<View testID="screen-pos" style={{ flex: 1 }}>
 				<POSColumns />
 			</View>
 		);
 	}
 
+	// Both tab screens sit on `bg-background` at the top (the register bar has no fill of its
+	// own), so the container pads the status bar in that same colour: no band. The tab bar pads
+	// the home indicator inside its own card colour (React Navigation reads `insets.bottom`).
 	return (
-		<View testID="screen-pos" className="bg-background flex-1">
+		<View testID="screen-pos" className="bg-background flex-1" style={{ paddingTop: top }}>
 			<ThemedTabs tabPressListener={tabPressListener} />
 		</View>
 	);
