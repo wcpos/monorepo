@@ -9,6 +9,7 @@ import { PosterThumb, tintOf } from '@wcpos/components/poster-tile';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
+import { useT } from '../../../../../contexts/translations';
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
 
 /**
@@ -22,6 +23,7 @@ export function PosVariableProductImage({
 	const payload = useRecordField(row.original.record, (record) => record.payload);
 	const imageURL = payload.images?.[0]?.src;
 	const pointer = usePointer();
+	const t = useT();
 	const { uri, error } = useImageAttachment(row.original.record, imageURL ?? '');
 
 	/**
@@ -43,7 +45,13 @@ export function PosVariableProductImage({
 	}, [row.id, isExpanded, setRowExpanded]);
 
 	return (
-		<Pressable onPress={handlePress} className="self-start">
+		<Pressable
+			onPress={handlePress}
+			className="self-start"
+			accessibilityRole="button"
+			accessibilityLabel={t('common.variations')}
+			accessibilityState={{ expanded: isExpanded }}
+		>
 			<PosterThumb
 				picture={
 					!imageURL || error
