@@ -5,7 +5,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, WriteOutcomeError } from '@wcpos/query';
 
 import { useMutation } from './use-mutation';
 
@@ -26,6 +26,8 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteDeferredError: jest.requireActual('@wcpos/query').WriteDeferredError,
+	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
 }));
 
 jest.mock('./use-local-mutation', () => ({
@@ -192,16 +194,6 @@ describe('useMutation', () => {
 		expect(mockLoggerSuccess).not.toHaveBeenCalledWith('common.saved_2', expect.anything());
 	});
 
-	it('leaves the toast to a caller that announces the create itself', async () => {
-		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
-		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
-
-		await act(() => result.current.create({ data: { first_name: 'Ada' }, toast: false }));
-
-		expect(mockWrite).toHaveBeenCalled();
-		expect(mockLoggerSuccess).not.toHaveBeenCalled();
-	});
-
 	it('preserves an engine record UUID when a customer patch does not update', async () => {
 		const customer = {
 			uuid: 'customer-local-uuid',
@@ -244,6 +236,41 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('toasts its generic success by default', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith(
+			'common.saved_2',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	// A caller that toasts its own, more specific "Saved {name}" turns the generic
+	// "Customer #id saved" off, or the cashier sees two success toasts for one save.
+	it('logs but does not toast its generic success when the caller owns the toast', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const customer = {
+			uuid: 'customer-local-uuid',
+			collection: { name: 'customers' },
+			payload: { id: 42, first_name: 'Ada' },
+		} as unknown as EngineRecord<'customers'>;
+		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
+		const { result } = renderHook(() =>
+			useMutation({ collectionName: 'customers', showSuccessToast: false })
+		);
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledTimes(2);
+		for (const [, options] of mockLoggerSuccess.mock.calls) {
+			expect(options).toEqual(expect.objectContaining({ showToast: false }));
+		}
+	});
+
 	it('hands the engine a structured-cloneable customer payload', async () => {
 		// The web storage lives in a Worker and Electron's behind ipcRenderer, so the
 		// enqueued payload crosses `postMessage`. Sourcing it from `resident.get()`
@@ -280,5 +307,37 @@ describe('useMutation', () => {
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toThrow('write-rejected for mutation "mutation-1"');
 		expect(resident.remove).not.toHaveBeenCalled();
+	});
+
+	it("toasts the server's own sentence when a create is rejected", async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeError(
+				'write-rejected',
+				'mutation-1',
+				400,
+				'registration-error-email-exists',
+				'An account is already registered with your email address. Please log in.'
+			)
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await expect(
+			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
+		).rejects.toBeInstanceOf(WriteOutcomeError);
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'write-rejected (registration-error-email-exists)',
+			expect.objectContaining({
+				showToast: true,
+				toast: {
+					title: 'An account is already registered with your email address. Please log in.',
+				},
+				context: expect.objectContaining({
+					error:
+						'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
+					reason: 'registration-error-email-exists',
+				}),
+			})
+		);
 	});
 });

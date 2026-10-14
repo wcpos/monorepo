@@ -2,6 +2,7 @@ import {
 	buildClientHeaders,
 	buildRequestPreamble,
 	type RequestPreambleContext,
+	toPreambleSite,
 } from './request-preamble';
 
 const url = 'https://shop.test/blog/wp-json/wcpos/v2/orders/42';
@@ -23,6 +24,7 @@ it.each([
 		client: { ...context.client, platform },
 		site: { use_protocol_headers: capability },
 	});
+	expect(new URL(result.url).searchParams.has('_wcpos_nocache')).toBe(false);
 	expect(result.headers.get('X-WCPOS-Protocol')).toBe(headers ? '2' : null);
 	expect(result.headers.get('X-WCPOS-Client')).toBe(headers ? `${platform}/test` : null);
 	expect(new URL(result.url).searchParams.get('wcpos_protocol')).toBe(params ? '2' : null);
@@ -250,4 +252,38 @@ it('the echo probe keeps both channels on a refreshed token', () => {
 	);
 	expect(new URL(result.url).searchParams.get('authorization')).toBe('Bearer xxx.xxx');
 	expect(result.headers.get('Authorization')).toBe('Bearer abc.def');
+});
+
+it.each([undefined, 'GET', 'get', 'HEAD', 'head'])(
+	'cache-busted reads get a fresh key and preserve other params (%s)',
+	(method) => {
+		const request = { url: `${url}?tag=a&tag=b`, method };
+		const ctx = { ...context, site: { use_cache_buster: true } };
+		const first = new URL(buildRequestPreamble(ctx, request).url);
+		const second = new URL(buildRequestPreamble(ctx, request).url);
+		expect(first.searchParams.get('_wcpos_nocache')).toBeTruthy();
+		expect(second.searchParams.get('_wcpos_nocache')).not.toBe(
+			first.searchParams.get('_wcpos_nocache')
+		);
+		expect(first.searchParams.getAll('tag')).toEqual(['a', 'b']);
+	}
+);
+it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('does not bust write URLs (%s)', (method) => {
+	const result = buildRequestPreamble(
+		{ ...context, site: { use_cache_buster: true } },
+		{ url, method }
+	);
+	expect(new URL(result.url).searchParams.has('_wcpos_nocache')).toBe(false);
+});
+it('does not add a key when explicitly disabled', () => {
+	expect(
+		new URL(prepare({ site: { use_cache_buster: false } }).url).searchParams.has('_wcpos_nocache')
+	).toBe(false);
+});
+it('busts the cache probe when requested', () => {
+	const result = prepare({ purpose: 'probe-cache', site: { use_cache_buster: true } });
+	expect(new URL(result.url).searchParams.get('_wcpos_nocache')).toBeTruthy();
+});
+it('copies the persisted cache-buster flag into the preamble site', () => {
+	expect(toPreambleSite({ use_cache_buster: true }).use_cache_buster).toBe(true);
 });

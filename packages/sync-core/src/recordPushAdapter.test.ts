@@ -685,6 +685,48 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		).rejects.toMatchObject({ serverMessage: 'Invalid parameter(s): billing' });
 	});
 
+	it('keeps the message when params are a plain list of names (rest_missing_callback_param)', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_missing_callback_param',
+						message: 'Missing parameter(s): email',
+						data: { status: 400, params: ['email'] },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Missing parameter(s): email' });
+	});
+
+	it('names each invalid param and its message for rest_invalid_param', async () => {
+		const events: SyncEvent[] = [];
+		const expected =
+			'billing: billing[country] is not a valid country.; email: Invalid email address.';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): billing, email',
+						data: {
+							status: 400,
+							params: {
+								billing: 'billing[country] is not a valid country.',
+								email: 'Invalid email address.',
+							},
+							details: {},
+						},
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ serverMessage: expected });
+		expect(events[0]).toMatchObject({ fields: { serverMessage: expected } });
+	});
+
 	it('keeps the location under the observer’s 200-character cap: first line only, budgeted, host path dropped', async () => {
 		const longFirstLine = `Uncaught Exception: ${'x'.repeat(300)}`;
 		await expect(

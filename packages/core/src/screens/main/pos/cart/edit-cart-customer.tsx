@@ -75,7 +75,7 @@ export function EditCartCustomerForm() {
 		[taxIdsProxy]
 	);
 	const setCartCustomer = useSetCartCustomer();
-	const { patch } = useMutation({ collectionName: 'customers' });
+	const { patch } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const runtime = useQueryRuntime();
 	const { onOpenChange } = useRootContext();
 	const { format } = useCustomerNameFormat();

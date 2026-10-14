@@ -22,6 +22,7 @@ export {
 	type WriteSettlement,
 	WriteDeferredError,
 	WriteOutcomeError,
+	WriteOutcomeTimeoutError,
 } from './await-write-outcome';
 export type { QueryResult } from './query-result';
 export {

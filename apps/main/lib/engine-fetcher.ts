@@ -62,6 +62,7 @@ export type EngineFetcherAuth = {
 	/** These ride the same live-options ref as the auth flags: cache hits mutate it
 	 * in place, so a probe-driven transport flip reaches the cached fetcher. */
 	useRestRouteParam?: boolean;
+	useCacheBuster?: boolean;
 	useProtocolHeaders?: boolean;
 };
 
@@ -169,6 +170,7 @@ export function createEngineFetcher(input: {
 					site: {
 						use_jwt_as_param: input.auth.useJwtAsParam,
 						use_rest_route_param: input.auth.useRestRouteParam,
+						use_cache_buster: input.auth.useCacheBuster,
 						use_protocol_headers: input.auth.useProtocolHeaders,
 					},
 					accessToken: token,

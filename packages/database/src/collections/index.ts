@@ -89,6 +89,11 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// declared fields only, so existing documents need no change.
 			return oldDoc;
 		},
+		7(oldDoc) {
+			// v7 adds the optional `use_cache_buster` flag (1.10.x's v6, #2523); absent reads as
+			// no cache key, so existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

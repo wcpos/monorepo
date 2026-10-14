@@ -387,10 +387,14 @@ export function createLiveChangeSignalSource(
 			// default, which would pull/tombstone the WRONG record type with the
 			// changed record's numeric id. The cursor still advances past dropped
 			// rows via the server's echoed `since`, so they are never re-fetched.
+			// Rows whose id is not a safe integer > 0 are dropped the same way. Customer 0
+			// is WCPOS's Guest sentinel (GUEST_CUSTOMER_ID), a local pseudo-record, never a
+			// server record: there is nothing to fetch or prune for it, and one such row
+			// would otherwise fail the remote-id mint for the whole batch forever.
 			const rows: SequenceLogRow[] = [];
 			for (const row of envelope.changes) {
 				const collection = toHybridCollection(row.collection);
-				if (collection === undefined) {
+				if (collection === undefined || !Number.isSafeInteger(row.id) || row.id <= 0) {
 					continue;
 				}
 				rows.push({

@@ -126,8 +126,8 @@ The `e2e-product-writer` (shop_manager) identity exists on every dev server with
 
 This repo has two permanent trunks:
 
-- **`main`** — the **stable**, released line (1.9.x patches ship from here).
-- **`next`** — the **in-development** major/minor (1.10, then 1.11, 2.0 …).
+- **`main`** — the **stable**, released line (1.11.x patches ship from here; web lane `@1.11`).
+- **`next`** — the **in-development** major (2.0, versioned `2.0.0` in `apps/main/package.json`).
 
 Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
 
@@ -137,5 +137,5 @@ The WordPress plugin loads the POS JS/CSS from `https://cdn.jsdelivr.net/gh/wcpo
 
 - **`next` lane → `@next`** — `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next`. The `next` _branch_ of `wcpos/web-bundle` **is** the dev lane's tag; there is no versioned or prerelease tag for `next`, and nobody should ask for one. Publishing it deploys the page: `gh workflow run publish-web-bundle.yml --ref next -f monorepo_ref=next -f bundle_branch=next -f override_release_gate='I accept a red main'` (`--ref next`: the dispatch runs the workflow FILE at that ref, and the dev-next worker check below exists only on `next` until a main sync; `monorepo_ref` is a branch name or a FULL SHA, the checkout step rejects a short SHA). `dev-next.wcpos.com` reads `@next` (`WCPOS_WEB_BUNDLE_REF=next` in its `wp-config.php`).
   - **The storage worker is not in the bundle.** The plugin serves `sqlite.worker.js` (`Frontend.php` hands the app `opfsWorker`), and on dev-next the active plugin is **woocommerce-pos-pro**, whose *vendored copy* of the free plugin is what the page loads — the free plugin dir there is inactive and its own deploy changes nothing. When `apps/main/public/sqlite.worker.js` changes (an rxdb bump), the bundle boots against a stale worker and every tab fails with `RxDB RM1 mainVersion X remoteVersion Y` → "Failed to create user database". The order is: (1) re-vendor the worker in `wcpos/woocommerce-pos` `next` (`assets/js/sqlite.worker.js`, byte-identical to `web-bundle@next`'s), merge; (2) `gh workflow run deploy-dev.yml --repo wcpos/woocommerce-pos-pro --ref next` (Pro runs `composer update` against free `dev-next` at build time); (3) verify by fetching the worker URL the POS page emits, not the free plugin's path. The publish workflow's last step checks dev-next for exactly this and names the two deploys when it fails.
-- **Released lane → `@<major.minor>`** — e.g. `@1.10` today, and `@1.11` once `next` moves to `main`. The plugin derives that ref from its own version, and the release train cuts the tag; `publish-web-bundle.yml` never does.
+- **Released lane → `@<major.minor>`** — `@1.11` today (since 2026-10-14; `@1.10` stays frozen at `v1.10.40` for plugins ≤ 1.10.27). A worker whose `RXDB_VERSION` changes needs a NEW minor ref, never a patch on an existing one: plugins in the field keep their vendored worker, and RxDB remote storage refuses any version mismatch (`RM1`). The plugin derives that ref from its own version, and the release train cuts the tag; `publish-web-bundle.yml` never does.
 - Publishing to the web-bundle `main` _branch_ is staging only. It moves nothing a released plugin loads.

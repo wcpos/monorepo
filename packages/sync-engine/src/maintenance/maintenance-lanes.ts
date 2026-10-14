@@ -541,18 +541,23 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.failureLost > 0 ||
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
-		// Only an actual fetch failure is an ERROR — including `failureLost`, where the
-		// fetch threw and only the failure write was lost. `completionLost`/`renewalLost`
-		// mean another owner took the row mid-flight: a contention release, routine on a
-		// slow server. Logging them red put "could not load" rows in front of cashiers
-		// for drains that lost a benign race (2026-08-12 HAR), so they are warnings.
+		// A failed task (including `failureLost`, where the fetch threw and only the
+		// failure write was lost) is a WARNING here, never an error. This row is an
+		// aggregate: counters only, no cause. Each failure is already reported on its
+		// own — the transport row carries the status and path, and a declarer's
+		// `coverage.require.error` carries its requirement — and the Sentry sink
+		// captures every error-level log, so an error-level summary sent each failure
+		// to Sentry a second (or third) time as an unactionable SYNC321.
+		// `completionLost`/`renewalLost` mean another owner took the row mid-flight: a
+		// contention release, routine on a slow server (2026-08-12 HAR), also a warning.
 		// `claimLost` stays INFO: the row was never claimed, so no work was attempted.
 		const drainLevel =
-			result.failed > 0 || result.failureLost > 0
-				? 'error'
-				: result.completionLost > 0 || result.renewalLost > 0
-					? 'warn'
-					: 'info';
+			result.failed > 0 ||
+			result.failureLost > 0 ||
+			result.completionLost > 0 ||
+			result.renewalLost > 0
+				? 'warn'
+				: 'info';
 		deps.diagnostics({
 			type: 'queue.scheduler.drain',
 			level: drainLevel,

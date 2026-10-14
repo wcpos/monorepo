@@ -113,6 +113,12 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
  */
 export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
 
+/** The URL a native WebView navigation event names, when it names one. */
+function navigationURL(event: unknown): string | null {
+	const url = (event as { nativeEvent?: { url?: unknown } } | undefined)?.nativeEvent?.url;
+	return typeof url === 'string' && url !== '' ? url : null;
+}
+
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
 	/** `stage` when hosted in the wide checkout pane, where no checkout route exists to replace. */
@@ -234,6 +240,17 @@ export function PaymentWebview({
 	const frameExpired = React.useRef(false);
 	const sessionRefreshRefused = React.useRef(false);
 
+	// Android's react-native-webview (13.16.1, RNCWebViewClient.onReceivedError)
+	// reports a failed navigation as a FINISH and then an error, so `onLoad` fires
+	// for a document that never loaded. `loadSinceStartRef` holds the URL of a load
+	// counted since the last navigation start, so an error naming that same URL can
+	// take it back (iOS and web errors never follow a load of their own URL — the
+	// web iframe names no URL at all);
+	// `erroredURLRef` is the URL that failed, whose error page then fires a
+	// load-start of its own (doUpdateVisitedHistory) that must not re-gate the
+	// frame behind a spinner. iOS and web never load a failed document.
+	const loadSinceStartRef = React.useRef<string | null>(null);
+	const erroredURLRef = React.useRef<string | null>(null);
 	const frameKey = `${retryToken}:${autoReloads}:${sessionReloads}`;
 
 	// Create a logger with order context
@@ -774,7 +791,7 @@ export function PaymentWebview({
 	 * completed sale.
 	 */
 	const onWebViewLoaded = React.useCallback(
-		(_event: unknown) => {
+		(event: unknown) => {
 			// The store's order-pay template registers its `wcpos-process-payment`
 			// listener in a synchronous <head> script, so the frame's load event is
 			// strictly after that listener exists. It is the strongest readiness
@@ -783,6 +800,8 @@ export function PaymentWebview({
 			if (sessionRefreshInFlight.current || frameExpired.current) return;
 			setFrameStatus('ready');
 			frameSettledRef.current = true;
+			loadSinceStartRef.current = navigationURL(event);
+			erroredURLRef.current = null;
 
 			loadCountRef.current += 1;
 			if (loadCountRef.current < 2) {
@@ -811,19 +830,35 @@ export function PaymentWebview({
 	 * is inert. That residual web gap is one of the reasons a store-side ack is
 	 * the real fix rather than this gate.
 	 */
-	const onWebViewLoadStart = React.useCallback(() => {
-		// An expired frame stays failed: its navigation must not reopen the gate.
-		if (frameExpired.current) return;
-		setFrameStatus('loading');
-		// Only the first document is watched. Later navigations are the gateway's
-		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
-		// business, and a remount there would put the pay page back under a sale
-		// that may already be paid.
-		if (loadCountRef.current === 0) {
-			frameSettledRef.current = false;
-			setNavigationStarts((n) => n + 1);
-		}
-	}, [setFrameStatus]);
+	const onWebViewLoadStart = React.useCallback(
+		(event?: unknown) => {
+			// An expired frame stays failed: its navigation must not reopen the gate.
+			if (frameExpired.current) return;
+			const url = navigationURL(event);
+			// The error page of the navigation that just failed (Android): the frame
+			// stays in the state the error reported, so the cashier keeps the Retry or
+			// the failure notice instead of a spinner nothing will end.
+			if (
+				erroredURLRef.current !== null &&
+				url !== null &&
+				(url === erroredURLRef.current || url.startsWith('chrome-error://'))
+			) {
+				return;
+			}
+			erroredURLRef.current = null;
+			loadSinceStartRef.current = null;
+			setFrameStatus('loading');
+			// Only the first document is watched. Later navigations are the gateway's
+			// (a redirect, the post-payment hop); a stalled one is the fallback poll's
+			// business, and a remount there would put the pay page back under a sale
+			// that may already be paid.
+			if (loadCountRef.current === 0) {
+				frameSettledRef.current = false;
+				setNavigationStarts((n) => n + 1);
+			}
+		},
+		[setFrameStatus]
+	);
 
 	/**
 	 * A load that errors produces no load event, so the gate has to be told or it
@@ -833,6 +868,14 @@ export function PaymentWebview({
 	 */
 	const onWebViewError = React.useCallback(
 		(event: unknown) => {
+			// A load counted for this navigation was Android's synthetic finish for
+			// the document that just failed: it never loaded, so it does not count.
+			const failedURL = navigationURL(event);
+			if (failedURL !== null && loadSinceStartRef.current === failedURL) {
+				loadCountRef.current = Math.max(0, loadCountRef.current - 1);
+			}
+			loadSinceStartRef.current = null;
+			erroredURLRef.current = failedURL ?? '';
 			setFrameStatus(loadCountRef.current === 0 ? 'stalled' : 'failed');
 			frameSettledRef.current = true;
 			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
@@ -865,6 +908,8 @@ export function PaymentWebview({
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
 		frameSettledRef.current = false;
+		loadSinceStartRef.current = null;
+		erroredURLRef.current = null;
 		setFrameStatus(prepared === 'failed' ? 'stalled' : 'loading');
 		return () => setFrameStatus('loading');
 	}, [paymentURLWithToken, frameKey, prepared, setFrameStatus]);
