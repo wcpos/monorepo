@@ -7,12 +7,18 @@ import { of } from 'rxjs';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useRegisterSession } from './use-register-session';
-import { RegisterSessionBridge } from './bridge';
+import { RegisterSessionBridge, sameStore } from './bridge';
 import { drainRegisterSessionQueue } from './queue';
 import { refreshSessions } from './refresh';
 
-const sessions = { find: () => ({ $: of([]) }) };
+const sessions = {
+	find: () => ({ $: of([]) }),
+	findOne: () => ({ exec: async () => ({ id: 'session' }) }),
+};
 let observed: unknown = null;
+let registerDoc: unknown = { sites: {} };
+let storeId: number | null = 1;
+const closure = jest.fn();
 jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
@@ -27,12 +33,13 @@ jest.mock('../../contexts/app-state', () => {
 	const session = () => ({
 		userDB,
 		site,
-		store: { id: 1, register_sessions: true },
+		store: { id: storeId, register_sessions: true },
 		wpCredentials: { capabilities: [] },
 	});
 	return { useStoreSession: session, useAppState: session };
 });
-jest.mock('../register/register-document', () => ({ readRegister: async () => ({ sites: {} }) }));
+jest.mock('../register/register-document', () => ({ readRegister: async () => registerDoc }));
+jest.mock('./session-store', () => ({ writeClosure: (...args: unknown[]) => closure(...args) }));
 const movements = sessions;
 const http = {};
 
@@ -62,6 +69,61 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	drain.mockReset().mockResolvedValue(undefined);
 	refresh.mockReset().mockResolvedValue(undefined);
+	closure.mockReset().mockResolvedValue(undefined);
+	registerDoc = { sites: {} };
+	storeId = 1;
+});
+
+const reservationFor = (store_id: number | null) => ({
+	sites: {
+		site: {
+			registers: {
+				register: {
+					closure_reservation: {
+						applied: false,
+						row: { store_id, session_id: 'session', counted: { cash: '10' } },
+					},
+				},
+			},
+		},
+	},
+});
+
+it.each([
+	['NULL, as the server returns it for an unassigned register', null],
+	['0, as the local draft wrote it', 0],
+])(
+	'recovers an interrupted close on the single store whose reservation carries %s',
+	async (_, store_id) => {
+		storeId = 0;
+		registerDoc = reservationFor(store_id);
+		render(<RegisterSessionBridge />);
+
+		await waitFor(() => expect(closure).toHaveBeenCalledTimes(1));
+		expect(closure.mock.calls[0][0]).toMatchObject({ session: { id: 'session' }, counted: '10' });
+	}
+);
+
+it('leaves a reservation that belongs to another store alone', async () => {
+	storeId = 2;
+	registerDoc = reservationFor(3);
+	render(<RegisterSessionBridge />);
+
+	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+	expect(closure).not.toHaveBeenCalled();
+});
+
+it.each([
+	[null, 0, true],
+	[0, null, true],
+	[undefined, 0, true],
+	[null, null, true],
+	[2, 2, true],
+	[null, 2, false],
+	[2, 0, false],
+	[2, 3, false],
+])('sameStore(%p, %p) is %p', (a, b, expected) => {
+	expect(sameStore(a, b)).toBe(expected);
 });
 
 afterEach(() => {
