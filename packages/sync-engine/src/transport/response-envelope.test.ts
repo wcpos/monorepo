@@ -137,15 +137,17 @@ describe('hydrateResponse', () => {
 		await expect(hydrated.json()).rejects.toBe(reason);
 	});
 
-	it('names an abort without a reason as an AbortError', async () => {
-		const controller = new AbortController();
-		const signal = controller.signal;
-		controller.abort();
+	it('names an abort without a reason as an AbortError (React Native drops abort reasons)', async () => {
+		// RN's abort-controller polyfill ignores reasons, so on device the signal is
+		// aborted with `reason` undefined — the branch that builds the AbortError.
+		const signal = { aborted: true, reason: undefined } as unknown as AbortSignal;
 		const response = new Response('[{"id":', { status: 200 });
 
 		const hydrated = await hydrateResponse(response, { envelopeRequested: true, signal });
 
-		await expect(hydrated.json()).rejects.toMatchObject({ name: 'AbortError' });
+		const failure = await hydrated.json().catch((error: unknown) => error);
+		expect(failure).toBeInstanceOf(Error);
+		expect(failure).toMatchObject({ name: 'AbortError' });
 	});
 
 	it('keeps a parse failure a parse failure when nothing aborted the request', async () => {
