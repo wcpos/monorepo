@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
 import { useUpdateCartLine as useWriter } from './use-update-cart-line';
+import * as actions from '../../../../extensions/actions';
 import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -108,6 +109,36 @@ beforeEach(() => {
 		return document;
 	});
 });
+
+afterEach(() => jest.restoreAllMocks());
+
+it('an increment of a vanished line falls back silently', async () => {
+	const dispatch = jest.spyOn(actions, 'dispatchAction');
+	const { result } = renderHook(useWriter);
+	await act(async () => {
+		expect(await result.current.incrementLineItem('gone', 1)).toBeUndefined();
+	});
+	expect(mockWarn).not.toHaveBeenCalled();
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(dispatch).not.toHaveBeenCalled();
+	expect(mockPatch).not.toHaveBeenCalled();
+});
+
+it.each([
+	['fee_lines', 'fee'],
+	['shipping_lines', 'shipping'],
+] as const)(
+	'dispatches %s with empty options rather than undefined members',
+	async (type, uuid) => {
+		const dispatch = jest.spyOn(actions, 'dispatchAction');
+		const { result } = renderHook(useWriter);
+		await act(async () => {
+			await result.current.updateCartLine(type, uuid, {});
+		});
+		const payload = dispatch.mock.calls[0][0].input.payload;
+		expect('options' in payload && payload.options).toStrictEqual({});
+	}
+);
 
 it('reports a stale line item edit without dispatching', async () => {
 	const seen = jest.fn(async (_ctx, e, next) => next(e));

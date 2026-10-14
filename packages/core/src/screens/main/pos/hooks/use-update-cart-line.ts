@@ -11,6 +11,7 @@ import { useActionContext } from './use-action-context';
 import { useCartConfig } from './use-cart-config';
 import { extractLineItemData } from './utils';
 import {
+	type ActionContext,
 	dispatchAction,
 	isActionRefusal,
 	presentActionRefusal,
@@ -56,23 +57,35 @@ const lineInfo = {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'line-item']),
 		label: 'Line item',
 		site: 'useUpdateLineItem',
-		staleKey: 'pos_cart.update_line_not_found',
+		stale: (t: ActionContext['t']) => t('pos_cart.update_line_not_found'),
 	},
 	fee_lines: {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'fee-line']),
 		label: 'Fee line',
 		site: 'useUpdateFeeLine',
-		staleKey: 'pos_cart.update_fee_not_found',
+		stale: (t: ActionContext['t']) => t('pos_cart.update_fee_not_found'),
 	},
 	shipping_lines: {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'shipping-line']),
 		label: 'Shipping line',
 		site: 'useUpdateShippingLine',
-		staleKey: 'pos_cart.update_shipping_not_found',
+		stale: (t: ActionContext['t']) => t('pos_cart.update_shipping_not_found'),
 	},
 } as const;
 
-/** The bottom handler for cart.line.update; every edit captures its order at press time. */
+/**
+ * The bottom handler for cart.line.update takes the order it must operate on rather than
+ * resolving the CURRENT one.
+ *
+ * These mutations are queued, so execution can be arbitrarily later than the press. If
+ * this resolved `getCurrentOrderRecord()` at execution time, a cashier who switched order tabs
+ * while a mutation was still queued would have it applied to the wrong order: the queue is
+ * keyed by the order that was selected at enqueue time, so the edit either lands in the
+ * new order or is silently dropped when its line is not found there.
+ *
+ * The caller captures the order at press time and threads it through. `getLatest()` still
+ * gets the freshest revision — of that order.
+ */
 export const useUpdateCartLine = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { localPatch } = useLocalMutation();
@@ -159,12 +172,13 @@ export const useUpdateCartLine = () => {
 			const json = order.toMutableJSON().payload;
 			const line = json[type]?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 			if (!line) {
+				if (typeof changes === 'number') return;
 				const info = lineInfo[type];
 				reportStaleCartLine(
 					info.logger,
 					`${info.label} update targeted a line that is no longer in the cart`,
 					{
-						toastTitle: ctx.t(info.staleKey),
+						toastTitle: info.stale(ctx.t),
 						context: { uuid, orderId: order.payload.id },
 					}
 				);
@@ -187,7 +201,10 @@ export const useUpdateCartLine = () => {
 								: changes,
 						line,
 						lineItems: json.line_items ?? [],
-						options: { skipStockGuard: options?.skipStockGuard },
+						options:
+							options?.skipStockGuard === undefined
+								? {}
+								: { skipStockGuard: options.skipStockGuard },
 					},
 				},
 				bottom: (e) => write(target, type, uuid, { ...e.payload.changes }),
