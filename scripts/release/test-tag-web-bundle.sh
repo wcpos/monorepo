@@ -79,56 +79,74 @@ expect_status "commit holds an older tag: refuse" fail tag_action 1.11 v1.11.0 <
 expect_status "commit holds another lane's tag: refuse" fail tag_action 1.11 v1.10.40 <<<"$all"
 
 # --- --dry-run end to end ---
+# A ref's build/ is the directory $MOCK_DIR/ref-<ref>; the bundle commit is `bundlesha`.
 cat > "$tmpdir/gh" <<'MOCK'
 #!/usr/bin/env bash
 args="$*"
+ref="${args##*ref=}"; ref="${ref%% *}"
 case "$args" in
 	*"git/refs"*) echo "dry run must not create a ref" >&2; exit 99 ;;
-	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha0000000000000000000000000000000 ;;
+	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .commit.message") printf '%s\n' "$MOCK_MSG" ;;
-	*"repos/wcpos/monorepo/contents/package.json?ref="*)
-		printf '{"dependencies":{"rxdb":"%s"}}\n' "${MOCK_PIN:-${MOCK_RXDB_bundlesha0000000000000000000000000000000:-17.6.0}}" ;;
+	*"repos/wcpos/monorepo/contents/package.json?ref="*) printf '{"dependencies":{"rxdb":"%s"}}\n' "$MOCK_PIN" ;;
 	*"repos/wcpos/monorepo/contents/apps/main/package.json"*) printf '{"version":"%s"}\n' "$MOCK_VERSION" ;;
 	*"/tags --jq .[] | select"*) printf '%s\n' "${MOCK_TAGGED_AS:-}" ;;
-	*"contents/build?ref="*)
-		[[ -z "${MOCK_LIST_FAIL:-}" ]] || exit 1
-		[[ -n "${MOCK_NO_WORKER:-}" ]] || echo opfs.worker.js; echo metadata.json ;;
 	*"/tags"*) printf '%s\n' "$MOCK_TAGS" ;;
-	*"contents/build/opfs.worker.js?ref="*)
-		ref="${args##*ref=}"; ref="${ref%% *}"
-		v="MOCK_RXDB_${ref//[.-]/_}"; printf 'var Ze="%s";' "${!v:-}" ;;
+	*"contents/build?ref="*)
+		[[ "${MOCK_LIST_FAIL:-}" != "$ref" && -d "$MOCK_DIR/ref-$ref" ]] || exit 1
+		ls "$MOCK_DIR/ref-$ref"; echo metadata.json ;;
+	*"contents/build/"*"?ref="*)
+		name="${args##*contents/build/}"; name="${name%%\?*}"
+		cat "$MOCK_DIR/ref-$ref/$name" 2>/dev/null || { echo '{"message":"Not Found"}'; exit 1; } ;;
 	*) echo "unexpected gh $args" >&2; exit 64 ;;
 esac
 MOCK
 chmod +x "$tmpdir/gh"
-run() { env PATH="$tmpdir:$PATH" MOCK_MSG="chore(release): build web bundle (@main from monorepo $msha)" "$@"; }
+# at <ref> <name>=<rxdb>...: that ref's build/ holds exactly those workers.
+at() {
+	local d="$tmpdir/ref-$1" spec
+	shift
+	rm -rf "$d"; mkdir -p "$d"
+	for spec in "$@"; do printf 'var Ze="%s";' "${spec#*=}" > "$d/${spec%%=*}"; done
+}
+run() { env PATH="$tmpdir:$PATH" MOCK_DIR="$tmpdir" MOCK_MSG="chore(release): build web bundle (@main from monorepo $msha)" "$@"; }
 tags=$'v1.10.40\nv1.11.0\nv1.11.1'
+tags20=$'v1.11.1\nv2.0.0'
+at v1.10.40 opfs.worker.js=17.4.0 indexeddb.worker.js=16.21.1
+at v1.11.1 opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+at v2.0.0 sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
 
-expect_status "dry run on the newest lane passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+at bundlesha opfs.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+expect_status "dry run on the newest lane passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 expect_eq "dry run prints the next patch tag" 1 "$(grep -c 'would tag v1.11.2 at bundlesha' "$tmpdir/out")"
-expect_status "dry run refuses an RXDB_VERSION change on a tagged lane" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.7.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
-expect_status "dry run refuses a frozen lane" fail run MOCK_VERSION=1.10.32 MOCK_TAGS="$tags" \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.4.0 MOCK_RXDB_v1_10_40=17.4.0 "$TAG" bundlesha --dry-run
-expect_status "dry run on a new lane passes" pass run MOCK_VERSION=1.12.0 MOCK_TAGS="$tags" \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.7.0 "$TAG" bundlesha --dry-run
-expect_eq "new lane starts at .0" 1 "$(grep -c 'would tag v1.12.0 at' "$tmpdir/out")"
-expect_status "refuses a commit that carries an older tag" fail run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.0 \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
-
-expect_status "a commit holding the lane's newest tag resumes" pass run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.1 \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+expect_status "refuses a commit that carries an older tag" fail run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 MOCK_TAGGED_AS=v1.11.0 "$TAG" bundlesha --dry-run
+expect_status "a commit holding the lane's newest tag resumes" pass run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 MOCK_TAGGED_AS=v1.11.1 "$TAG" bundlesha --dry-run
 expect_eq "and says it would resume" 1 "$(grep -c 'already v1.11.1; would resume' "$tmpdir/out")"
-
-expect_status "a bundle with no OPFS worker passes vacuously" pass run MOCK_VERSION=2.0.0 MOCK_TAGS="$tags" MOCK_NO_WORKER=1 "$TAG" bundlesha --dry-run
-expect_eq "and still names the tag" 1 "$(grep -c 'would tag v2.0.0 at' "$tmpdir/out")"
-expect_status "a bundle with no OPFS worker is still refused on a frozen lane" fail run MOCK_VERSION=1.10.32 MOCK_TAGS="$tags" MOCK_NO_WORKER=1 "$TAG" bundlesha --dry-run
-expect_status "a failed build/ listing fails closed, never reads as no worker" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_LIST_FAIL=1 "$TAG" bundlesha --dry-run
-
-expect_status "a stale worker (rxdb bumped, worker not rebuilt) is refused" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 \
-	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+expect_status "a stale worker (rxdb bumped, worker not rebuilt) is refused" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run
 expect_eq "and says to rebuild the worker" 1 "$(grep -c 'rebuild the worker' "$tmpdir/out")"
+expect_status "a failed build/ listing of the bundle fails closed" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 MOCK_LIST_FAIL=bundlesha "$TAG" bundlesha --dry-run
+
+at bundlesha opfs.worker.js=17.7.0 indexeddb.worker.js=16.21.1
+expect_status "dry run refuses an RXDB_VERSION change on a tagged lane" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run
+expect_status "dry run on a new lane passes" pass run MOCK_VERSION=1.12.0 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run
+expect_eq "new lane starts at .0" 1 "$(grep -c 'would tag v1.12.0 at' "$tmpdir/out")"
+
+at bundlesha opfs.worker.js=17.4.0 indexeddb.worker.js=16.21.1
+expect_status "dry run refuses a frozen lane" fail run MOCK_VERSION=1.10.32 MOCK_TAGS="$tags" MOCK_PIN=17.4.0 "$TAG" bundlesha --dry-run
+
+# 2.x: the bundle carries sqlite + indexeddb and no OPFS worker.
+at bundlesha sqlite.worker.js=17.6.0 indexeddb.worker.js=16.21.1
+expect_status "2.x bundle matching its lane passes (no OPFS worker on either side)" pass run MOCK_VERSION=2.0.1 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "and checks both of its workers" 2 "$(grep -c 'matches v2.0.0 on lane 2.0' "$tmpdir/out")"
+expect_status "2.x bundle is still refused on a frozen lane" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+at bundlesha sqlite.worker.js=17.7.0 indexeddb.worker.js=16.21.1
+expect_status "2.x: a moved sqlite worker is refused" fail run MOCK_VERSION=2.0.1 MOCK_TAGS="$tags20" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run
+at bundlesha sqlite.worker.js=17.6.0 indexeddb.worker.js=17.6.0
+expect_status "2.x: a moved indexeddb worker is refused" fail run MOCK_VERSION=2.0.1 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+at bundlesha sqlite.worker.js=17.6.0
+expect_status "2.x: a dropped indexeddb worker is refused" fail run MOCK_VERSION=2.0.1 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+at bundlesha
+expect_status "a bundle with no vendored worker is refused" fail run MOCK_VERSION=2.1.0 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 
 if [[ $failures -gt 0 ]]; then echo "$failures tag-web-bundle test(s) failed" >&2; exit 1; fi
 echo "All tag-web-bundle tests passed."
