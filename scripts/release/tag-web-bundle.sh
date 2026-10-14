@@ -80,8 +80,12 @@ bundle_has_worker() { # $1 bundle sha
 	if grep -qx "${WORKER_PATH_IN_BUNDLE#build/}" <<<"$names"; then echo yes; else echo no; fi
 }
 
+# A 404/5xx (jsDelivr can carry x-jsd-version on one), a timeout or a dropped
+# connection reads as no version, so the caller's poll retries until its deadline.
 cdn_version() { # $1 lane, $2 path under build/
-	curl -sI --connect-timeout 10 --max-time 30 "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$2" | jsd_version
+	local headers
+	headers=$(curl -sI --fail --connect-timeout 10 --max-time 30 "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$2") || return 0
+	jsd_version <<<"$headers"
 }
 
 # Polls until every path in $4.. serves version $2 on lane $1, or $3 seconds pass.

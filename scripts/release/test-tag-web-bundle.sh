@@ -45,6 +45,13 @@ expect_status "refuses an unrelated commit" fail monorepo_sha_from_message <<<'d
 expect_eq "reads x-jsd-version" 1.11.1 "$(printf 'HTTP/2 200\r\nx-jsd-version: 1.11.1\r\nx-jsd-version-type: version\r\n' | jsd_version)"
 expect_eq "no header, no version" "" "$(printf 'HTTP/2 404\r\n' | jsd_version)"
 
+# --- cdn_version ---
+mkdir -p "$tmpdir/curl404"
+printf '#!/usr/bin/env bash\nprintf "HTTP/2 404\\r\\nx-jsd-version: 1.11.1\\r\\n"; exit 22\n' > "$tmpdir/curl404/curl"
+chmod +x "$tmpdir/curl404/curl"
+expect_eq "a failed CDN response reads as no version, without aborting" "" \
+	"$(set -euo pipefail; PATH="$tmpdir/curl404:$PATH" cdn_version 1.11 index.html)"
+
 # --- tag_action ---
 all=$'v1.10.40\nv1.11.0\nv1.11.1'
 expect_eq "untagged commit: create the next tag" "create v1.11.2" "$(tag_action 1.11 "" <<<"$all")"
