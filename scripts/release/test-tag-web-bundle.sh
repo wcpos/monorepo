@@ -35,6 +35,8 @@ expect_eq "parses the build commit message" "$msha" \
 	"$(printf 'chore(release): build web bundle (@main from monorepo %s)\n' "$msha" | monorepo_sha_from_message)"
 expect_eq "parses a short SHA" eea33c50 \
 	"$(printf 'chore(release): build web bundle (@main from monorepo eea33c50)\n\nbody' | monorepo_sha_from_message)"
+expect_eq "parses next's message shape (SHA, then the input ref)" "$msha" \
+	"$(printf 'chore(release): build web bundle (@main from monorepo %s, ref release/2.0.1)\n' "$msha" | monorepo_sha_from_message)"
 expect_status "refuses a branch-name ref" fail monorepo_sha_from_message <<<'chore(release): build web bundle (@main from monorepo main)'
 expect_status "refuses a @next build" fail monorepo_sha_from_message <<<"chore(release): build web bundle (@next from monorepo $msha)"
 expect_status "refuses an unrelated commit" fail monorepo_sha_from_message <<<'docs: readme'

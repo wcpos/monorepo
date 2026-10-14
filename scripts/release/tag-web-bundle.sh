@@ -24,9 +24,11 @@ CDN_VERIFY_SECONDS=120
 
 # stdin: bundle commit message. stdout: the monorepo SHA. Only @main builds are released.
 monorepo_sha_from_message() {
-	local first ref
+	local first ref re
 	IFS= read -r first || true
-	if [[ ! "$first" =~ ^chore\(release\):\ build\ web\ bundle\ \(@([^ ]+)\ from\ monorepo\ ([^ ]+)\)$ ]]; then
+	# `next`'s workflow appends `, ref <input ref>` after the SHA.
+	re='^chore\(release\): build web bundle \(@([^ ]+) from monorepo ([^ ,)]+)(, ref [^)]*)?\)$'
+	if [[ ! "$first" =~ $re ]]; then
 		echo "not a web-bundle build commit: '$first'" >&2
 		return 1
 	fi
