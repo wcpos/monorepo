@@ -18,6 +18,17 @@ import {
 	useRegisterSessionCollection,
 } from './use-register-session-collections';
 
+/**
+ * Free's single store is id 0 on the client, while the server keeps NULL for a session on an
+ * unassigned register (`store_id` is BIGINT NULL, and Store Reach reads 0 and NULL as the same
+ * "no store"). A reservation acknowledged by the server therefore carries NULL where the local
+ * draft carried 0; both name this store, so recovery must not stall on the spelling.
+ */
+export function sameStore(a: number | null | undefined, b: number | null | undefined): boolean {
+	const unassigned = (id: number | null | undefined) => id == null || id === 0;
+	return unassigned(a) ? unassigned(b) : a === b;
+}
+
 export function RegisterSessionBridge() {
 	const { userDB, site, store } = useStoreSession();
 	const { engine } = useQueryRuntime();
@@ -50,7 +61,7 @@ export function RegisterSessionBridge() {
 					(await readRegister(userDB))?.sites[site.uuid!]?.registers?.[registerId ?? '']
 						?.closure_reservation
 			);
-			if (reservation && !reservation.applied && reservation.row.store_id === (store.id ?? null)) {
+			if (reservation && !reservation.applied && sameStore(reservation.row.store_id, store.id)) {
 				const session = await sessions.findOne(reservation.row.session_id).exec();
 				if (session)
 					await staged('closure', () =>
