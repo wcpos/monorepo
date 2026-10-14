@@ -36,6 +36,7 @@ import {
 	type TargetedDescriptor,
 	type UpsertRefreshDescriptor,
 } from '../collections/collection-descriptors';
+import { findAllUncached } from '../collections/find-all-uncached';
 import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import {
 	removeManifestByWooIds,
@@ -333,7 +334,7 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 	// Prune by the fetched KEEP-SET of storage ids (uuid keys) — id-space
 	// discipline per the terms flip: storage ids only, never Woo ids.
 	const kept = new Set(documents.map((doc) => (doc as { uuid: string }).uuid));
-	const existing = await collection.find().exec();
+	const existing = await findAllUncached(collection);
 	const doomed = existing
 		.filter((doc) => !hasPendingLocalWork(doc.toJSON()))
 		.map((doc) => (doc as { primary: string }).primary)
@@ -419,7 +420,7 @@ async function loadSyncedTargetedDocs(
 			candidate.shape === 'targeted' && candidate.hybrid === collection
 	);
 	if (!descriptor) return [];
-	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+	const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 	return docs.map((doc) => {
 		const json = doc.toJSON() as {
 			uuid: string;
@@ -450,7 +451,7 @@ async function rebaselineTargeted(
 			candidate.shape === 'targeted' && candidate.hybrid === collection
 	);
 	if (!descriptor) return { requested: 0, applied: 0, pruned: 0 };
-	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+	const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 	const wooIds = new Set<number>();
 	for (const doc of docs) {
 		const json = doc.toJSON() as Record<string, unknown> & {
@@ -519,7 +520,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 						candidate.shape === 'targeted' && candidate.hybrid === collection
 				);
 				if (!descriptor) return 0;
-				const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+				const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 				const wooIds = new Set<number>();
 				for (const doc of docs) {
 					const json = doc.toJSON() as Record<string, unknown> & {
