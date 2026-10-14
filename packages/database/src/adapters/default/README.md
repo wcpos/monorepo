@@ -64,3 +64,7 @@ The current contract gives up multiple simultaneously live tabs, not the require
 - `adapters/storage/storage-engines.ts` records both eras and selects the current engine.
 - `adapters/default/multi-instance-ruling.test.ts` pins the engine/flag pair and platform flags.
 - Changes to an adapter's flag or `storage-engines.ts` must preserve the pair and cite #1057, #2146, #2242 and this Decision section.
+
+## Decision: a worker whose RXDB_VERSION changes needs a new bundle minor
+
+The released web POS pairs the main-thread RxDB from jsDelivr `wcpos/web-bundle@<plugin major.minor>` (the highest `v<major.minor>.N` tag) with the storage worker the **plugin** vendors, and rxdb's `storage-remote` refuses a worker whose `RXDB_VERSION` is not an exact match (`RM1`). Plugins already installed keep their old worker but load the newest tag on their lane, so a worker whose `RXDB_VERSION` changed can never be tagged onto a lane that already has tags: it ships on a new minor (new plugin minor, new bundle lane), never as a patch. On 2026-10-14 a 17.6.0 worker tagged `v1.10.41` onto the 1.10 lane (17.4.0) broke every web POS on an older plugin. `scripts/release/check-worker-rxdb-lane.sh` enforces this in `publish-web-bundle.yml` for `bundle_branch=main`, and `scripts/release/tag-web-bundle.sh` runs it before cutting a lane tag. Both check `opfs.worker.js`, which this lane's bundle does not carry, so here the comparison passes vacuously; the refusal to publish to a lane a higher lane has frozen still applies.
