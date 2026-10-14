@@ -25,16 +25,6 @@ export function StateSelectBase({
 		[states]
 	);
 
-	// /**
-	//  * HACK: if old state value is set and country changes
-	//  */
-	// React.useEffect(() => {
-	// 	const selected = options.find((option) => option.value === value);
-	// 	if (!isEmpty(value) && !selected) {
-	// 		onChange('');
-	// 	}
-	// }, [onChange, options, value]);
-
 	return (
 		<OptionSelect
 			options={options}

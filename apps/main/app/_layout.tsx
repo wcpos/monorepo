@@ -34,22 +34,6 @@ import '../polyfills';
 WebBrowser.maybeCompleteAuthSession();
 
 /**
- * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
- */
-// function UniwindInsetSync() {
-// 	const insets = React.useContext(SafeAreaInsetsContext);
-
-// 	// Sync insets to Uniwind when they change
-// 	React.useEffect(() => {
-// 		if (insets) {
-// 			Uniwind.updateInsets(insets);
-// 		}
-// 	}, [insets]);
-
-// 	return null;
-// }
-
-/**
  * Restores the saved theme from the store document on app startup.
  * Returns true when theme restoration is complete.
  */

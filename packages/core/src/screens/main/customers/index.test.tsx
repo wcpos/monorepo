@@ -172,7 +172,6 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 		known: false,
 	}),
 }));
-jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
 jest.mock('./cells/avatar', () => ({ Avatar: () => null }));

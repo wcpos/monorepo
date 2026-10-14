@@ -165,7 +165,6 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 jest.mock('./use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
 jest.mock('../components/product/filter-bar', () => ({ FilterBar: () => null }));
-jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/barcode', () => ({ Barcode: () => null }));
 jest.mock('./cells/cogs', () => ({ COGS: () => null }));
