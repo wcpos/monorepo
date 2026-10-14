@@ -3,6 +3,49 @@ import { describe, expect, it } from 'vitest';
 import { readServerSentence, readWpFatalDetail } from './serverSentence';
 
 describe('readServerSentence', () => {
+	it('prefers the fatal detail only on a 5xx', () => {
+		const body = {
+			code: 'rest_invalid_param',
+			message: '<p>Invalid parameter(s): email</p>',
+			data: { error: { message: 'Out of memory' }, params: { email: 'Invalid email address.' } },
+		};
+		expect(readServerSentence(body, 500)).toBe('Out of memory');
+		expect(readServerSentence(body, 400)).toBe('email: Invalid email address.');
+	});
+
+	it('returns undefined for a null, string or array body', () => {
+		for (const body of [
+			null,
+			undefined,
+			'error',
+			5,
+			true,
+			[],
+			Object.assign([], { message: 'Not a body' }),
+		]) {
+			expect(readServerSentence(body, 500)).toBeUndefined();
+		}
+	});
+
+	it('keeps the message when params carry no string reasons', () => {
+		expect(
+			readServerSentence(
+				{
+					code: 'rest_invalid_param',
+					message: '<p>Invalid parameter(s): email</p>',
+					data: { params: { email: 123, billing: null } },
+				},
+				400
+			)
+		).toBe('Invalid parameter(s): email');
+	});
+
+	it('passes a status of null or undefined as "not a fatal"', () => {
+		const body = { message: 'Validation error', data: { error: { message: 'Diagnostic' } } };
+		expect(readServerSentence(body, null)).toBe('Validation error');
+		expect(readServerSentence(body, undefined)).toBe('Validation error');
+	});
+
 	it('keeps a lone `<` as text and stays linear on a run of them', () => {
 		const run = '<'.repeat(5_000);
 		expect(

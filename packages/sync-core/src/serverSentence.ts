@@ -1,5 +1,5 @@
 /**
- * The server's own sentence for a refused push, read from a WP REST error body.
+ * The server's own sentence for a refused request, read from a WP REST error body.
  *
  * A WordPress fatal (memory exhausted, a plugin's uncaught exception) answers
  * 500 as `{ code: 'internal_server_error', message: '<p>There has been a
@@ -13,19 +13,21 @@
  * fallback (#2439).
  */
 export function readServerSentence(
-	body: Record<string, unknown> | null,
-	status: number
+	body: unknown,
+	status: number | null | undefined
 ): string | undefined {
-	if (body === null) return undefined;
+	if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
+	const error = body as Record<string, unknown>;
 	// Only a 5xx is a fatal. A 4xx may carry a caller-defined `data.error` object
 	// of its own (a gateway diagnostic under a validation message), and there the
 	// top-level message is the one written for the cashier.
-	const fatal = status >= 500 ? readWpFatalDetail(body.data) : undefined;
+	const fatal =
+		typeof status === 'number' && status >= 500 ? readWpFatalDetail(error.data) : undefined;
 	if (fatal !== undefined) return fatal;
-	if (typeof body.message !== 'string') return undefined;
-	const message = stripTags(body.message);
+	if (typeof error.message !== 'string') return undefined;
+	const message = stripTags(error.message);
 	if (message.length === 0) return undefined;
-	const params = body.code === 'rest_invalid_param' ? readInvalidParams(body.data) : undefined;
+	const params = error.code === 'rest_invalid_param' ? readInvalidParams(error.data) : undefined;
 	return params ?? message;
 }
 
