@@ -40,7 +40,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
  */
 function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const { create } = useMutation({ collectionName: 'customers' });
+	const { create } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();
@@ -64,9 +64,10 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				// Our own "{name} saved" below replaces the generic toast.
-				const savedDoc = await create({ data, toast: false });
-				// create() has already reported a failed enqueue; the form stays open.
+				// Our own "{name} saved" below replaces the generic toast (showSuccessToast: false).
+				// create() logs and toasts its own failure; reporting it here too showed the
+				// cashier two toasts for one refusal. The form stays open.
+				const savedDoc = await create({ data }).catch(() => undefined);
 				if (savedDoc) {
 					// create() returns the raw engine record — the customer body is its
 					// payload. Snapshot it rather than reading fields off the record:
@@ -121,6 +122,8 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 					}
 				}
 			} catch (error) {
+				// Only what follows a successful create reaches here (the success toast, the
+				// order patch); create() failures are reported by create() itself.
 				const errorMessage = getErrorMessage(error);
 				cartLogger.error('Failed to save customer', {
 					showToast: true,

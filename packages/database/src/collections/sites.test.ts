@@ -1,7 +1,7 @@
 import { sitesLiteral } from './schemas/sites';
 
 describe('sites migration strategy', () => {
-	it.each([5, 6])('migration %i leaves existing documents unchanged', async (version) => {
+	it.each([5, 6, 7])('migration %i leaves existing documents unchanged', async (version) => {
 		const { userCollections } = await import('./index');
 		const migrate = userCollections.sites.migrationStrategies?.[version];
 		if (!migrate) throw new Error(`sites migration ${version} missing`);
@@ -10,8 +10,8 @@ describe('sites migration strategy', () => {
 		expect(migrate(oldDoc, undefined as never)).toBe(oldDoc);
 	});
 
-	it('uses schema version 6', () => {
-		expect(sitesLiteral.version).toBe(6);
+	it('uses schema version 7', () => {
+		expect(sitesLiteral.version).toBe(7);
 	});
 });
 

@@ -86,6 +86,30 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 		]);
 	});
 
+	it('drops rows whose id is not a safe integer above zero', async () => {
+		const source = createLiveChangeSignalSource({
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			fetcher: async (url) =>
+				new URL(url).pathname.endsWith('/changes/tick')
+					? new Response(null, { status: 404 })
+					: Response.json({
+							changes: [
+								{ sequence: 7, id: 0, deleted: 1, collection: 'customers' },
+								{ sequence: 8, id: -3, deleted: 0, collection: 'customers' },
+								{ sequence: 9, id: 1.5, deleted: 0, collection: 'customers' },
+								{ sequence: 10, id: 44, deleted: 1, collection: 'customers' },
+							],
+							checkpoint: { since: 10, head: 10 },
+							complete: true,
+						}),
+		});
+
+		const page = await source.pollSequenceLog({ cursor: { sequence: 6 }, limit: 100 });
+
+		expect(page.rows.map((row) => row.id)).toEqual([44]);
+		expect(page.cursor).toEqual({ sequence: 10 });
+	});
+
 	it('leaves head undefined when the checkpoint omits it', async () => {
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',

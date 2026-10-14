@@ -459,6 +459,45 @@ describe('scheduler drain through the public handle', () => {
 		await engine.dispose();
 	});
 
+	// SYNC321 triage: the drain row is an AGGREGATE (counters, no cause). Each failed
+	// task's cause is reported on its own (the transport row; the declarer's
+	// coverage.require.error), so an error-level summary sent every failure to Sentry
+	// a second time. The summary is a warning; it still names the failure count.
+	it('logs a drain with a failed task as a warning, not an error', async () => {
+		const server = scriptedOrderServer();
+		const failingFetch = async (url: string): Promise<Response> => {
+			if (new URL(url).pathname.endsWith('/orders')) {
+				return new Response('{"code":"internal_server_error"}', {
+					status: 500,
+					headers: { 'content-type': 'application/json' },
+				});
+			}
+			return server.fetch(url);
+		};
+		const diagnostics = vi.fn();
+		const engine = engineWith(failingFetch, { diagnostics });
+		await engine.ready;
+		expect((await engine.sync('order-window-seed')).status).toBe('ran');
+		diagnostics.mockClear();
+
+		expect((await engine.sync('scheduler-drain')).status).toBe('ran');
+
+		const events = diagnostics.mock.calls.map(
+			([event]) => event as { type: string; level: string; fields?: Record<string, unknown> }
+		);
+		const drain = events.filter((event) => event.type === 'queue.scheduler.drain');
+		expect(drain).toHaveLength(1);
+		expect(drain[0]!.level).toBe('warn');
+		expect(drain[0]!.fields?.failed).toBeGreaterThan(0);
+		const tick = events.filter(
+			(event) => event.type === 'maintenance.lane.tick' && event.fields?.lane === 'scheduler-drain'
+		);
+		expect(tick).toHaveLength(1);
+		expect(tick[0]!.level).toBe('warn');
+		expect(events.filter((event) => event.level === 'error')).toEqual([]);
+		await engine.dispose();
+	});
+
 	it('drain with nothing queued reports ran with no server traffic', async () => {
 		const server = scriptedOrderServer();
 		const diagnostics = vi.fn();

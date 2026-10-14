@@ -1048,6 +1048,54 @@ describe('require() for search — the public search-demand verb', () => {
 		await harness.engine.dispose();
 	});
 
+	it('does not report an ANDROID-shaped cancel (headers in, body cut empty) as an error', async () => {
+		// expo's Android fetch (57.0.14, NativeResponse.onResponse) marks the body
+		// COMPLETE after request.cancel(), so a search released once its headers
+		// had arrived resolved text() with an empty body: JSON.parse threw
+		// "Unexpected end of input" and the release reported SYNC321 at ERROR level
+		// (Android phone, run 38458577411). Same diagnostic assertion as above.
+		const headersIn = Promise.withResolvers<AbortSignal>();
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			awaitReady: false,
+			fetch: async (url: string, init?: RequestInit) => {
+				if (!new URL(url).pathname.endsWith('/products')) return json([]);
+				const signal = init?.signal;
+				if (!signal) throw new Error('search request missing abort signal');
+				const body = new ReadableStream<Uint8Array>({
+					start(controller) {
+						headersIn.resolve(signal);
+						// The native side closes the stream with nothing delivered.
+						signal.addEventListener('abort', () => controller.close(), { once: true });
+					},
+				});
+				return new Response(body, {
+					status: 200,
+					headers: { 'content-type': 'application/json' },
+				});
+			},
+		});
+		await harness.engine.ready;
+
+		const handle = harness.engine.require({
+			id: 'android-cancel-classification',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		await headersIn.promise;
+		handle.release();
+		await expect(handle.ready).resolves.toMatchObject({ action: 'released' });
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(harness.diagnostics.filter((event) => event.type === 'coverage.require.error')).toEqual(
+			[]
+		);
+		await harness.engine.dispose();
+	});
+
 	it('dedupes concurrent identical search declarations in memory', async () => {
 		const server = scriptedProductSearchProxy([productPayload(321, 'Keyboard')]);
 		const engine = engineWith(server.fetch);

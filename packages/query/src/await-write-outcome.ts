@@ -7,6 +7,7 @@ export class WriteOutcomeError extends Error {
 	eventType: 'write-rejected' | 'write-conflict';
 	status?: number;
 	reason?: string;
+	/** The server's own (already localized) sentence; `reason` is the machine code. */
 	serverMessage?: string;
 
 	constructor(
@@ -16,12 +17,48 @@ export class WriteOutcomeError extends Error {
 		reason?: string,
 		serverMessage?: string
 	) {
-		super(`${eventType} for mutation "${mutationId}"`);
+		// The server's sentence rides the message too, so every caller's logged `error` says why.
+		super(`${eventType} for mutation "${mutationId}"${serverMessage ? `: ${serverMessage}` : ''}`);
 		this.name = 'WriteOutcomeError';
 		this.eventType = eventType;
 		this.status = status;
 		this.reason = reason;
 		this.serverMessage = serverMessage;
+	}
+}
+
+/**
+ * No terminal outcome arrived in time. `diagnostics` is the engine's push state at that moment:
+ * timeouts where no push request went out at all (Sentry CHECKOUT101) carried nothing to say why.
+ */
+export class WriteOutcomeTimeoutError extends Error {
+	diagnostics: Record<string, unknown>;
+
+	constructor(mutationId: string, diagnostics: Record<string, unknown>) {
+		super(`Timed out waiting for mutation "${mutationId}"`);
+		this.name = 'WriteOutcomeTimeoutError';
+		this.diagnostics = diagnostics;
+	}
+}
+
+function pushStateSnapshot(engine: Pick<RxdbSyncEngine, 'status'>): Record<string, unknown> {
+	// A diagnostic must never replace the timeout verdict it annotates.
+	try {
+		const status = engine.status();
+		const drain = status.lanes['write-drain'];
+		return {
+			connectivity: status.connectivity,
+			authRequired: status.authRequired,
+			writeSessionHeld: status.writeSessionHeld,
+			gatedBy: status.gatedBy,
+			queueDepth: status.queueDepth,
+			writeDrainLastTickAtMs: drain.lastTick?.atMs ?? null,
+			writeDrainLastTickStatus: drain.lastTick?.status ?? null,
+			writeDrainLastError: drain.lastError,
+			writeDrainNextDueAtMs: drain.nextDueAtMs ?? null,
+		};
+	} catch {
+		return {};
 	}
 }
 
@@ -117,7 +154,7 @@ export function awaitWriteOutcome(
 		let settled = false;
 		let unsubscribe: (() => void) | undefined;
 		const timeout = setTimeout(() => {
-			finish(() => reject(new Error(`Timed out waiting for mutation "${mutationId}"`)));
+			finish(() => reject(new WriteOutcomeTimeoutError(mutationId, pushStateSnapshot(engine))));
 		}, timeoutMs);
 
 		const finish = (settle: () => void) => {

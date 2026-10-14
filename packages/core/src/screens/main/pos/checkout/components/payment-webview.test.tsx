@@ -278,6 +278,182 @@ describe('PaymentWebview load watchdog', () => {
 		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 
+	// react-native-webview 13.16.1 on Android (RNCWebViewClient.onReceivedError)
+	// emits a FINISH before the error "to simulate" iOS, so `onLoad` fires for a
+	// document that never loaded, then `onError`; the error page's history entry
+	// then fires `onLoadStart` for the same URL (doUpdateVisitedHistory). Run
+	// 38478468639 (Android phone, flow 04): net::ERR_SOCKET_NOT_CONNECTED on the
+	// pay page left Process Payment spinning with no Retry for 8 minutes.
+	describe('Android: a load that ends in an error', () => {
+		const PAY_URL = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+		const failedNavigation = (url: string) => {
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url, loading: false } });
+			});
+			act(() => {
+				webViewProps.onError({
+					nativeEvent: { url, code: -6, description: 'net::ERR_SOCKET_NOT_CONNECTED' },
+				});
+			});
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url } });
+			});
+		};
+
+		it('on the first document is a stall the cashier can retry, not a spinner', () => {
+			const { setFrameStatus, rerender } = renderFrame();
+
+			failedNavigation(PAY_URL);
+
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+
+			// The cashier's Retry is a fresh navigation that loads.
+			rerender(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+					retryToken={1}
+				/>
+			);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: PAY_URL, loading: false } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+		});
+
+		it('on a later navigation is a failure, not a spinner, and offers no reload', () => {
+			const { setFrameStatus } = renderFrame();
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: PAY_URL, loading: false } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+
+			// Android sends no load-start before a navigation fails (it comes from
+			// the history update): the synthetic finish and the error arrive first.
+			const gateway = 'https://gateway.example.com/hosted/abc';
+			failedNavigation(gateway);
+
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+			act(() => {
+				jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+			});
+			expect(webViewMounts).toBe(1);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		});
+	});
+
+	// iOS (WKWebView) and web (<iframe>) never fire `onLoad` for a failed document,
+	// so the Android fix must leave their sequences exactly as they were.
+	describe('iOS and web sequences are unchanged', () => {
+		it('iOS: a first-document error is a stall; a loaded document then gates ready', () => {
+			const { setFrameStatus } = renderFrame();
+			const url = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url } });
+				webViewProps.onError({ nativeEvent: { url, code: -1009, description: 'offline' } });
+			});
+			expect(setFrameStatus.mock.calls.map(([status]) => status)).toEqual([
+				'loading',
+				'loading',
+				'stalled',
+			]);
+		});
+
+		it('iOS: a new navigation after a failed redirect re-gates the frame', () => {
+			const { setFrameStatus } = renderFrame();
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: 'https://shop.example.com/pay' } });
+			});
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url: 'https://gateway.example.com/a' } });
+				webViewProps.onError({
+					nativeEvent: { url: 'https://gateway.example.com/a', code: -1009, description: 'x' },
+				});
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url: 'https://shop.example.com/received' } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: 'https://shop.example.com/received' } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+		});
+
+		it('iOS: a form post back to the loaded URL that errors stays a failure, never a Retry', () => {
+			// The pay page loaded, the cashier pressed, the order-pay form POSTed back
+			// to its own URL and that navigation failed: a sale may be paid, so the
+			// load-start in between must keep the earlier load counted.
+			const { setFrameStatus } = renderFrame();
+			const pay = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: pay } });
+			});
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url: pay } });
+				webViewProps.onError({ nativeEvent: { url: pay, code: -1005, description: 'lost' } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+			act(() => {
+				jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+			});
+			expect(webViewMounts).toBe(1);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		});
+
+		it('a load after an error clears it: a later navigation to that URL re-gates the frame', () => {
+			const { setFrameStatus } = renderFrame();
+			const url = 'https://shop.example.com/wcpos-checkout/order-pay/42?token=jwt-token';
+			act(() => {
+				webViewProps.onError({ nativeEvent: { url, code: -1009, description: 'offline' } });
+			});
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+			act(() => {
+				webViewProps.onLoadStart({ nativeEvent: { url } });
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+		});
+
+		it('web: an iframe error after a load stays a failure (the iframe names no URL)', () => {
+			const { setFrameStatus } = renderFrame();
+			act(() => {
+				webViewProps.onLoad({});
+			});
+			act(() => {
+				webViewProps.onError({});
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		});
+
+		it('iOS: an error naming another URL than the loaded document stays a failure', () => {
+			const { setFrameStatus } = renderFrame();
+			act(() => {
+				webViewProps.onLoad({ nativeEvent: { url: 'https://shop.example.com/pay' } });
+			});
+			act(() => {
+				webViewProps.onError({
+					nativeEvent: { url: 'https://gateway.example.com/a', code: -1009, description: 'x' },
+				});
+			});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		});
+
+		it('web: an iframe load with no navigation events still gates ready', () => {
+			const { setFrameStatus } = renderFrame();
+			act(() => {
+				webViewProps.onLoad({});
+			});
+			expect(setFrameStatus.mock.calls.map(([status]) => status)).toEqual(['loading', 'ready']);
+		});
+	});
+
 	it('a load event before the deadline disarms the watchdog', () => {
 		const { setFrameStatus } = renderFrame();
 

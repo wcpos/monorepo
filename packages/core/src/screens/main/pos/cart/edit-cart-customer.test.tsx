@@ -15,6 +15,7 @@ const formValues = {
 };
 const localPatch = jest.fn(() => Promise.resolve());
 const patchCustomer = jest.fn(() => Promise.resolve(null));
+const mockUseMutationProps = jest.fn();
 const onOpenChange = jest.fn();
 const customerFindOne = jest.fn();
 let canEditCustomers = true;
@@ -126,7 +127,10 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
 jest.mock('../../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ patch: patchCustomer }),
+	useMutation: (props: unknown) => {
+		mockUseMutationProps(props);
+		return { patch: patchCustomer };
+	},
 }));
 jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Ada' }),
@@ -187,6 +191,10 @@ describe('EditCartCustomerForm', () => {
 				document: customer,
 				data: formValues,
 			})
+		);
+		// The form toasts "Saved {name}" itself, so the hook's generic toast stays off.
+		expect(mockUseMutationProps).toHaveBeenCalledWith(
+			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
 		);
 	});
 

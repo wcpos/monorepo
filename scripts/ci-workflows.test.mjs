@@ -2745,9 +2745,19 @@ test('relaunch recovery retries one launch and preserves each caller readiness t
 // store-url-input NOT being visible — so a healthy run never pays a second
 // uninstall+reinstall and cold-start deep link (PR #1760). Both shapes must
 // carry the identical wrapper; this finds it wherever it lives.
+// The leg's launch link sits behind a `notVisible` scheme-prompt gate (run
+// 38464219303): this returns that gated link command, or undefined.
+const SCHEME_PROMPT = 'Open in .*WCPOS.*';
+function gatedLaunchLink(commands = []) {
+	return commands.find(
+		(command) =>
+			command.runFlow?.when?.notVisible === SCHEME_PROMPT &&
+			String(command.runFlow.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://')
+	)?.runFlow.commands[0];
+}
+
 function coldStartRetry(flow, filename) {
-	const issuesLink = (command) =>
-		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://');
+	const issuesLink = (command) => Boolean(gatedLaunchLink(command.retry?.commands));
 	const topLevel = flow.find(issuesLink)?.retry;
 	if (topLevel) return topLevel;
 	const recovery = flow.find(
@@ -2791,8 +2801,28 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 		const wrapper = coldStartRetry(readMaestroFlow(filename), filename);
 		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
+		// A leg starts by answering a still-pending prompt from the previous leg
+		// (logged) or, with none up, (re-)issuing the launch link — never both,
+		// or SpringBoard delivers two links and the dev launcher loads the app
+		// twice (run 38464219303: flow 02 crashed on the discarded instance).
+		const [pendingPrompt, gatedLink] = wrapper.commands;
+		assert.equal(
+			pendingPrompt.runFlow?.when?.visible,
+			SCHEME_PROMPT,
+			`${filename}: the leg must first check for the previous leg's scheme prompt`
+		);
 		assert.match(
-			String(wrapper.commands[0].openLink ?? ''),
+			String(pendingPrompt.runFlow.commands?.[0]?.evalScript ?? ''),
+			/WCPOS_E2E scheme prompt from the previous launch leg/,
+			`${filename}: answering a pending prompt instead of re-linking must be logged`
+		);
+		assert.equal(
+			gatedLink.runFlow?.when?.notVisible,
+			SCHEME_PROMPT,
+			`${filename}: the launch link must be gated on no pending scheme prompt`
+		);
+		assert.match(
+			String(gatedLaunchLink([gatedLink])?.openLink ?? ''),
 			/^wcpos-dev:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
 		);

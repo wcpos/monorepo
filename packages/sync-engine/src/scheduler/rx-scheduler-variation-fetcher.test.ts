@@ -103,6 +103,44 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result).toMatchObject({ documentCount: WOO_REST_MAX_PER_PAGE + 1, completed: true });
 	});
 
+	it.each([
+		['more than 10 words', 'a b c d e f g h i j k'],
+		['more than 256 characters', 'x'.repeat(257)],
+	])('sends no remote search for a term with %s', async (_label, term) => {
+		const repo = repository();
+		const fetcher = vi.fn(async () => new Response(null, { status: 400 }));
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repo,
+			fetcher,
+		});
+		const queryKey = `variations:search:${encodeURIComponent(term)}`;
+
+		const result = await schedulerFetcher(variationTask({ id: `${queryKey}:windowed`, queryKey }));
+
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+	});
+
+	it.each([
+		['10 words', 'a b c d e f g h i j'],
+		// 256 code points, 512 UTF-16 units: the plugin counts characters, not units.
+		['256 astral characters', '😀'.repeat(256)],
+	])('still searches remotely at exactly the plugin limits (%s)', async (_label, term) => {
+		const fetcher = vi.fn(async () => response([]));
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repository(),
+			fetcher,
+			exactSkuLeg: () => false,
+		});
+		const queryKey = `variations:search:${encodeURIComponent(term)}`;
+
+		await schedulerFetcher(variationTask({ id: `${queryKey}:windowed`, queryKey }));
+
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
 	it('runs both legs for a two-character search', async () => {
 		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createVariationsSchedulerFetcher({

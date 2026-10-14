@@ -38,7 +38,24 @@ env:
 - retry:
     maxRetries: 1
     commands:
-      - openLink: "wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      # Re-issue the link only when the PREVIOUS leg's scheme prompt is not still
+      # pending. That prompt can surface more than 60 s late, after leg 1's last
+      # prompt check, during the required wait that cannot answer it (run
+      # 38464219303, iOS phone): leg 2 re-issued the link while it was up,
+      # both prompts got "Open", SpringBoard delivered BOTH links when the app
+      # finally started 3 min later, the dev launcher loaded the app twice, and
+      # flow 02 crashed on the discarded instance ("ExpoFabricView: The app context
+      # has been lost"). With a prompt up, answer it below instead; one link, one load.
+      - runFlow:
+          when:
+            visible: "Open in .*WCPOS.*"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E scheme prompt from the previous launch leg still up, answering it instead of re-issuing the link')}"
+      - runFlow:
+          when:
+            notVisible: "Open in .*WCPOS.*"
+          commands:
+            - openLink: "wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       # Launch blockers. The dev client's own overlays (floating dev-menu button,
       # menu-at-launch, onboarding card) are switched OFF by default in the
       # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only

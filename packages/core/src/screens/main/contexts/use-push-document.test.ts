@@ -7,6 +7,7 @@ import { WriteDeferredError, WriteOutcomeError } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { pushFailureCode } from './push-failure-code';
 import { usePushDocument } from './use-push-document';
 
 jest.mock('../pos/contexts/current-order/temporary-order', () => ({
@@ -284,4 +285,12 @@ describe('usePushDocument', () => {
 			);
 		}
 	);
+
+	it('keeps the auth codes and falls back to the caller code for any other failure', () => {
+		const fallback = ERROR_CODES.CHECKOUT_FAILED_CART_SAFE;
+		expect(pushFailureCode(new WriteDeferredError('mutation-1', 401), fallback)).toBe(
+			ERROR_CODES.SESSION_EXPIRED
+		);
+		expect(pushFailureCode(new Error('Timed out waiting for mutation'), fallback)).toBe(fallback);
+	});
 });

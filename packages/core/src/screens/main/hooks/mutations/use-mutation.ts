@@ -7,9 +7,9 @@ import {
 	COLLECTION_VOCABULARY,
 	useQueryRuntime,
 	type WriteableCollection,
+	WriteOutcomeError,
 } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	documentRecordId,
@@ -19,6 +19,7 @@ import {
 	useLocalMutation,
 } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
+import { pushFailureCode } from '../../contexts/push-failure-code';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
@@ -26,6 +27,12 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 interface Props {
 	collectionName: WriteableCollection;
 	endpoint?: string;
+	/**
+	 * Toast the generic "<Collection> #id saved" on success (default true). A caller that
+	 * toasts its own, more specific "Saved {name}" passes false, or one save shows two
+	 * success toasts. The success is still logged either way.
+	 */
+	showSuccessToast?: boolean;
 }
 
 class ActiveScopeChangedTwiceError extends Error {
@@ -47,7 +54,7 @@ function isWriteableCollection(name: string): name is WriteableCollection {
  * owns durable queue bookkeeping and later acknowledgements/conflicts. A rejected remote outcome
  * remains visible through the engine conflict surface; failure before durable enqueue is rolled back.
  */
-export const useMutation = ({ collectionName, endpoint }: Props) => {
+export const useMutation = ({ collectionName, endpoint, showSuccessToast = true }: Props) => {
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const collectionLabel = React.useMemo(() => {
@@ -69,13 +76,27 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const handleError = React.useCallback(
 		(error: unknown, context?: Record<string, unknown>) => {
 			const message = getErrorMessage(error);
-			mutationLogger.error(message, {
+			// A store refusal carries the store's own (already localized) sentence, e.g.
+			// "An account is already registered with your email address"; the error's
+			// message is only the machine `write-rejected for mutation "<uuid>"`. It is the
+			// explicit toast title, or the code's generic summary would replace it.
+			const rejection =
+				error instanceof WriteOutcomeError && error.serverMessage ? error : undefined;
+			const serverMessage = rejection?.serverMessage;
+			// The log message stays machine text (the store's sentence is localized and would
+			// split one Sentry issue per language); the sentence rides the toast and context.
+			const logMessage = rejection
+				? `${rejection.eventType} (${rejection.reason ?? 'no reason'})`
+				: message;
+			mutationLogger.error(logMessage, {
 				showToast: true,
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: pushFailureCode(error),
+				...(serverMessage ? { toast: { title: serverMessage } } : {}),
 				context: {
 					collectionName,
 					endpoint,
 					operation: 'mutation',
+					...(rejection ? { error: message, reason: rejection.reason } : {}),
 					...context,
 				},
 			});
@@ -92,7 +113,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				? t('common.saved_2', { id: payload?.id, title: collectionLabel })
 				: t('common.saved', { name: collectionLabel });
 			mutationLogger.success(message, {
-				showToast: true,
+				showToast: showSuccessToast,
 				context: {
 					documentId: payload?.id,
 					collectionName,
@@ -101,7 +122,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				},
 			});
 		},
-		[collectionLabel, collectionName, t]
+		[collectionLabel, collectionName, showSuccessToast, t]
 	);
 
 	const patch = React.useCallback(
@@ -122,12 +143,9 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		async ({
 			data,
 			awaitRemoteId = false,
-			toast = true,
 		}: {
 			data: Record<string, unknown>;
 			awaitRemoteId?: boolean;
-			/** False when the caller announces the save itself, so the cashier sees one toast. */
-			toast?: boolean;
 		}) => {
 			if (!isWriteableCollection(collectionName)) {
 				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
@@ -203,7 +221,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					}
 					currentResident = refreshed;
 				}
-				if (toast) handleSuccess(currentResident as unknown as Record<string, unknown>);
+				handleSuccess(currentResident as unknown as Record<string, unknown>);
 				return currentResident;
 			} catch (error) {
 				handleError(error);

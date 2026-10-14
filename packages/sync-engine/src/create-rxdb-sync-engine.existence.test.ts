@@ -685,6 +685,105 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	// Owner ruling 2026-10-13: storage recovery may DROP a damaged manifest row
+	// (scripts/opfs-targeted-recovery.mjs, SERVER_REBUILT_COLLECTIONS). The gap must read as
+	// "unknown, re-verify", never as "gone from the server": a wrong reading prunes real orders.
+	it('reads a dropped manifest row as unknown: re-checks its bucket, never prunes, re-primes it', async () => {
+		const fetches: string[] = [];
+		// 18947 shares bucket 18 with rows that survive; 27001 was the only row in bucket 27.
+		const dropped = [18947, 27001];
+		const server = [18934, 18947, 18950, 27001].map((id) => ({
+			id,
+			digest: String(id),
+			object_type: 'order',
+		}));
+		const fetcher = vi.fn(async (url: string) => {
+			fetches.push(url);
+			const parsed = new URL(url);
+			const orders = parsed.searchParams.get('collection') === 'orders' ? server : [];
+			if (parsed.pathname.endsWith('/digests')) {
+				const ids = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
+				return json({ digests: orders.filter((row) => ids.includes(row.id)) });
+			}
+			if (parsed.pathname.endsWith('/integrity/scan')) return json(scanEnvelope(url, orders));
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				const bucket = Number(parsed.searchParams.get('bucket'));
+				const size = Number(parsed.searchParams.get('bucket_size'));
+				return json({ ids: orders.filter((row) => Math.floor(row.id / size) === bucket) });
+			}
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		const diagnostics = vi.fn();
+		const e = engine(fetcher, { diagnostics });
+		await e.ready;
+		const db = e.active()!.database.collections;
+		for (const { id } of server) {
+			await seed(db.orders as never, {
+				posUserId: '',
+				posStoreId: '',
+				uuid: `o${id}`,
+				remoteId: remoteId(id),
+				remoteKey: String(remoteId(id) ?? ''),
+				number: String(id),
+				dateCreatedGmt: '2026-01-01T00:00:00',
+				status: 'completed',
+				total: '1',
+				customerId: 0,
+				payload: { id },
+				sync: { revision: 'r', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+			if (!dropped.includes(id))
+				await seed(db.existenceManifestOrders as never, {
+					remoteId: String(id),
+					wooId: id,
+					digest: String(id),
+					objectType: 'order',
+				});
+		}
+
+		const bucketFetches = () =>
+			fetches.filter((url) => {
+				const parsed = new URL(url);
+				return (
+					parsed.pathname.endsWith('/integrity/bucket') &&
+					parsed.searchParams.get('collection') === 'orders'
+				);
+			});
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		// The gap makes bucket 18 disagree with the server's, so it is drilled; bucket 27 now holds
+		// no row, so it is not walked at all...
+		expect(bucketFetches().map((url) => new URL(url).searchParams.get('bucket'))).toEqual(['18']);
+		// ...and the server-side id with no local row is "missing", never a prune.
+		const reconcile = diagnostics.mock.calls
+			.map(([event]) => event)
+			.find((event) => event.type === 'coverage.existence-reconcile');
+		expect(reconcile?.fields).toMatchObject({ pruned: 0, missing: 1 });
+		for (const { id } of server) expect(await db.orders.findOne(`o${id}`).exec()).not.toBeNull();
+
+		// The next prime re-verifies both ids against the server and restores their rows.
+		await expect(e.sync('existence-prime')).resolves.toMatchObject({ status: 'ran' });
+		const reprimed = fetches.flatMap((url) => {
+			const parsed = new URL(url);
+			return parsed.pathname.endsWith('/digests') &&
+				parsed.searchParams.get('collection') === 'orders'
+				? (parsed.searchParams.get('include')?.split(',') ?? [])
+				: [];
+		});
+		for (const id of dropped) {
+			expect(reprimed).toContain(String(id));
+			expect((await db.existenceManifestOrders.findOne(String(id)).exec())?.toJSON()).toMatchObject(
+				{ wooId: id, digest: String(id) }
+			);
+		}
+
+		// Converged: the bucket matches again, so the next audit drills nothing.
+		const settled = bucketFetches().length;
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		expect(bucketFetches()).toHaveLength(settled);
+		await e.dispose();
+	});
+
 	it('resetCollection clears the matching existence manifest so the next prime repopulates it', async () => {
 		const fetcher = vi.fn(async (url: string) => {
 			const parsed = new URL(url);
@@ -818,6 +917,64 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(report.error).toMatch(/unusable products envelope/i);
 		expect(bucketFetches).toBe(0);
 		expect(e.status().lanes['existence-reconcile'].lastError).toBe(report.error);
+		await e.dispose();
+	});
+
+	// The plugin's Digest_Index sends '' for a side with no rows in that bucket (XOR of nothing).
+	function emptySideEnvelope(url: string, storedCount: number) {
+		const envelope = scanEnvelope(url, []);
+		return {
+			...envelope,
+			changes: [
+				{
+					bucket: 0,
+					stored_count: storedCount,
+					current_count: 1,
+					stored_digest: '',
+					current_digest: '1',
+					match: false,
+				},
+			],
+		};
+	}
+
+	it("accepts the plugin's empty digest for a side whose count is zero", async () => {
+		const e = engine(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/scan')) return json(emptySideEnvelope(url, 0));
+			if (parsed.pathname.endsWith('/integrity/bucket')) return json({ ids: [] });
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		await e.ready;
+		await seed(e.active()!.database.collections.existenceManifest as never, {
+			remoteId: '1',
+			wooId: 1,
+			digest: '1',
+			objectType: 'product',
+		});
+
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		await e.dispose();
+	});
+
+	it('rejects an empty digest alongside a non-zero count', async () => {
+		const e = engine(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/scan')) return json(emptySideEnvelope(url, 1));
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		await e.ready;
+		await seed(e.active()!.database.collections.existenceManifest as never, {
+			remoteId: '1',
+			wooId: 1,
+			digest: '1',
+			objectType: 'product',
+		});
+
+		const report = await e.sync('existence-reconcile');
+
+		expect(report).toMatchObject({ status: 'error' });
+		expect(report.error).toMatch(/unusable products envelope/i);
 		await e.dispose();
 	});
 
