@@ -6,11 +6,10 @@
 # 1. Reads the bundle commit's message for the monorepo SHA it was built from
 #    (`chore(release): build web bundle (@main from monorepo <sha>)`).
 # 2. Reads apps/main/package.json at that SHA; its major.minor is the lane.
-# 3. Runs check-worker-rxdb-lane.sh against the bundle's own build/opfs.worker.js
-#    (RXDB_VERSION must match the rxdb pinned at that SHA and the lane's highest
-#    tag; frozen lanes refused). A
-#    bundle with no OPFS worker (2.x, built from `next`) passes that comparison
-#    vacuously; the frozen-lane refusal still applies.
+# 3. Runs check-worker-rxdb-lane.sh against every vendored worker the bundle
+#    commit carries (opfs, sqlite, indexeddb): each must match the same worker at
+#    the lane's highest tag, the built ones must match the rxdb pinned at that
+#    SHA, and frozen lanes are refused.
 # 4. Creates v<major.minor>.<N+1> (or .0 on a new lane) at the bundle commit.
 # 5. Waits up to 5 minutes for jsDelivr @<major.minor> to resolve the new tag,
 #    purges, and re-verifies.
@@ -73,13 +72,6 @@ tag_action() {
 	return 1
 }
 
-# stdout: yes/no. A failed listing fails (exit 1), never reads as "no worker".
-bundle_has_worker() { # $1 bundle sha
-	local names
-	names=$(gh api "repos/${WEB_BUNDLE_REPO}/contents/build?ref=$1" --jq '.[].name') || return 1
-	if grep -qx "${WORKER_PATH_IN_BUNDLE#build/}" <<<"$names"; then echo yes; else echo no; fi
-}
-
 # A 404/5xx (jsDelivr can carry x-jsd-version on one), a timeout or a dropped
 # connection reads as no version, so the caller's poll retries until its deadline.
 cdn_version() { # $1 lane, $2 path under build/
@@ -125,16 +117,17 @@ warm_entry() { # $1 lane
 	return 1
 }
 
-purge_cdn() { # $1 lane
-	local path code
-	for path in "" /build/metadata.json /build/opfs.worker.js /build/index.html; do
-		code=$(curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w '%{http_code}' "https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1${path}" || echo 000)
-		echo "purge @$1${path} -> HTTP ${code}"
+purge_cdn() { # $1 lane, $2.. the bundle's vendored workers
+	local lane="$1" path code
+	shift
+	for path in "" /build/metadata.json /build/index.html "${@/#//build/}"; do
+		code=$(curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w '%{http_code}' "https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@${lane}${path}" || echo 000)
+		echo "purge @${lane}${path} -> HTTP ${code}"
 	done
 }
 
 main() {
-	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane bundle_rxdb tags existing has_worker worker action tag
+	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane bundle_rxdb tags existing names name dir action tag workers=() verify
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--dry-run) dry_run=true ;;
@@ -159,16 +152,17 @@ main() {
 	tags=$(list_bundle_tags)
 	existing=$(gh api --paginate "repos/${WEB_BUNDLE_REPO}/tags" --jq ".[] | select(.commit.sha == \"${sha}\") | .name")
 	action=$(printf '%s\n' "$tags" | tag_action "$lane" "$existing")
-	worker=$(mktemp)
-	trap 'rm -f "$worker"' RETURN
-	has_worker=$(bundle_has_worker "$sha") || { echo "FAIL: could not list build/ at ${sha}" >&2; return 1; }
-	if [[ "$has_worker" == yes ]]; then
-		fetch_bundle_worker "$sha" > "$worker" || { echo "FAIL: could not read ${WORKER_PATH_IN_BUNDLE} at ${sha}" >&2; return 1; }
-	else
-		rm -f "$worker"
-	fi
-	check_bundle_rxdb "$worker" "$bundle_rxdb"
-	check_worker_lane "$worker" "$version" "$allow_frozen" true "$tags"
+	# A failed listing fails closed; it never reads as "no workers".
+	names=$(list_bundle_build "$sha") || { echo "FAIL: could not list build/ at ${sha}" >&2; return 1; }
+	dir=$(mktemp -d)
+	trap 'rm -rf "$dir"' RETURN
+	for name in "${VENDORED_WORKERS[@]}"; do
+		grep -qx "$name" <<<"$names" || continue
+		fetch_bundle_file "$sha" "$name" > "$dir/$name" || { echo "FAIL: could not read build/${name} at ${sha}" >&2; return 1; }
+		workers+=("$name")
+	done
+	check_bundle_rxdb "$dir" "$bundle_rxdb"
+	check_worker_lane "$dir" "$version" "$allow_frozen" false "$tags"
 
 	tag="${action#* }"
 	if [[ "$dry_run" == true ]]; then
@@ -184,9 +178,8 @@ main() {
 	fi
 
 	wait_for_cdn "$lane" "${tag#v}" "$CDN_POLL_SECONDS" metadata.json || echo "@${lane} has not resolved ${tag} yet; purging"
-	purge_cdn "$lane"
-	verify=(metadata.json index.html)
-	[[ "$has_worker" == yes ]] && verify+=(opfs.worker.js)
+	purge_cdn "$lane" "${workers[@]}"
+	verify=(metadata.json index.html "${workers[@]}")
 	if ! wait_for_cdn "$lane" "${tag#v}" "$CDN_VERIFY_SECONDS" "${verify[@]}"; then
 		echo "FAIL: @${lane} does not serve ${tag} on every path after the purge; re-run this command to purge and verify again" >&2
 		return 1

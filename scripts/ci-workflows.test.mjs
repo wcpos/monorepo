@@ -525,9 +525,11 @@ test('a main-branch web bundle is gated on its worker RXDB_VERSION against its l
 	assert.ok(steps.indexOf(stage.name) < steps.indexOf('📥 Check out monorepo'));
 	assert.ok(steps.indexOf('🔨 Build web bundle') < steps.indexOf(gate.name));
 	assert.ok(steps.indexOf(gate.name) < steps.findIndex((name) => name.startsWith('🚀 Publish')));
-	// This lane builds no opfs.worker.js: the comparison is vacuous, the frozen-lane refusal is not.
-	assert.match(gate.run, /check-worker-rxdb-lane\.sh" apps\/web\/build\/opfs\.worker\.js "\$APP_VERSION"/);
-	assert.match(gate.run, /args=\(--worker-optional --bundle-rxdb "\$BUNDLE_RXDB"\)/);
+	// The whole build directory: every worker the plugin vendors (sqlite, indexeddb, opfs).
+	assert.match(gate.run, /check-worker-rxdb-lane\.sh" apps\/web\/build "\$APP_VERSION"/);
+	assert.match(gate.run, /args=\(--bundle-rxdb "\$BUNDLE_RXDB"\)/);
+	// A bundle with no worker at all is a broken build, not a vacuous pass.
+	assert.doesNotMatch(gate.run, /--worker-optional/);
 	// The frozen-lane override is opt-in per dispatch, never the default.
 	assert.equal(publish.on.workflow_dispatch.inputs.allow_frozen_lane.default, false);
 	// tag-web-bundle.sh reads the app version at the SHA in the commit message.
