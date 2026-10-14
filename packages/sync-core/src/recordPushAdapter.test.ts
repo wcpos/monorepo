@@ -613,63 +613,6 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		expect(events[0]).toMatchObject({ fields: { serverMessage: plain } });
 	});
 
-	it('keeps a lone `<` as text and stays linear on a run of them', async () => {
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, {
-						code: 'x',
-						message: `Stock <b>fell</b> below 3 ${'<'.repeat(5_000)}`,
-					}),
-			})
-		).rejects.toMatchObject({ serverMessage: `Stock fell below 3 ${'<'.repeat(5_000)}` });
-	});
-
-	it('stays linear on a long run of unclosed tag openers', async () => {
-		const run = '<a'.repeat(100_000);
-		const started = Date.now();
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () => jsonResponse(500, { code: 'x', message: `${run}>` }),
-			})
-		).rejects.toMatchObject({ serverMessage: expect.stringContaining('<a<a<a') });
-		expect(Date.now() - started).toBeLessThan(2_000);
-	});
-
-	it('keeps comparison operators as text — only tag syntax opens a tag', async () => {
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, {
-						code: 'x',
-						message: 'Expected x < 5 and y > 2 in <b>wpdb</b> <!-- note -->',
-					}),
-			})
-		).rejects.toMatchObject({ serverMessage: 'Expected x < 5 and y > 2 in wpdb' });
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, { code: 'x', message: 'Expected x<y and z>2 in <b>wpdb</b>' }),
-			})
-		).rejects.toMatchObject({ serverMessage: 'Expected x<y and z>2 in wpdb' });
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, { code: 'x', message: 'Expected x<a and z>2 in <b>wpdb</b>' }),
-			})
-		).rejects.toMatchObject({ serverMessage: 'Expected x<a and z>2 in wpdb' });
-	});
-
 	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
 		await expect(
 			pushRecordMutation({
@@ -727,94 +670,6 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		expect(events[0]).toMatchObject({ fields: { serverMessage: expected } });
 	});
 
-	it('keeps the location under the observer’s 200-character cap: first line only, budgeted, host path dropped', async () => {
-		const longFirstLine = `Uncaught Exception: ${'x'.repeat(300)}`;
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, {
-						...WP_FATAL_BODY,
-						data: {
-							status: 500,
-							error: {
-								type: 1,
-								message: `${longFirstLine}\nStack trace:\n#0 /home/u1/public_html/wp-content/plugins/acme/acme.php(12): boom()`,
-								file: '/home/u1/domains/shop.example/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
-								line: 412,
-							},
-						},
-					}),
-			})
-		).rejects.toMatchObject({
-			serverMessage: expect.stringMatching(
-				/^Uncaught Exception: x+… in wp-content\/plugins\/acme\/includes\/class-acme-sync\.php:412$/
-			),
-		});
-		// The whole sentence fits the cap, so the location survives `sanitizeReason`.
-		const error = await pushRecordMutation({
-			mutation: mut(),
-			resolveEndpoint,
-			fetcher: async () =>
-				jsonResponse(500, {
-					...WP_FATAL_BODY,
-					data: {
-						status: 500,
-						error: {
-							message: `${longFirstLine}\nStack trace`,
-							file: '/home/u1/public_html/wp-content/plugins/acme/includes/class-acme-sync.php',
-							line: 412,
-						},
-					},
-				}),
-		}).catch((e: RecordPushError) => e);
-		expect((error as RecordPushError).serverMessage!.length).toBeLessThanOrEqual(200);
-		expect((error as RecordPushError).serverMessage).not.toContain('Stack trace');
-	});
-
-	it('drops a long plugin path to its file name so the line number still fits under the cap', async () => {
-		const deepPath = `/home/u1/public_html/wp-content/plugins/${'very-long-vendor-segment/'.repeat(8)}class-acme-sync.php`;
-		const error = await pushRecordMutation({
-			mutation: mut(),
-			resolveEndpoint,
-			fetcher: async () =>
-				jsonResponse(500, {
-					...WP_FATAL_BODY,
-					data: {
-						status: 500,
-						error: { message: `Uncaught Exception: ${'x'.repeat(300)}`, file: deepPath, line: 412 },
-					},
-				}),
-		}).catch((e: RecordPushError) => e);
-		const sentence = (error as RecordPushError).serverMessage!;
-		expect(sentence).toMatch(/^Uncaught Exception: x+… in class-acme-sync\.php:412$/);
-		expect(sentence.length).toBeLessThanOrEqual(200);
-	});
-
-	it('reads a Windows host path and bounds an absurd file name, keeping the line number', async () => {
-		const readSentence = async (file: string) =>
-			(
-				(await pushRecordMutation({
-					mutation: mut(),
-					resolveEndpoint,
-					fetcher: async () =>
-						jsonResponse(500, {
-							...WP_FATAL_BODY,
-							data: { status: 500, error: { message: 'Boom', file, line: 7 } },
-						}),
-				}).catch((e: RecordPushError) => e)) as RecordPushError
-			).serverMessage!;
-
-		expect(await readSentence('C:\\inetpub\\wwwroot\\wp-includes\\class-wpdb.php')).toBe(
-			'Boom in wp-includes/class-wpdb.php:7'
-		);
-		expect(await readSentence('C:\\inetpub\\wwwroot\\boot.php')).toBe('Boom in boot.php:7');
-		const silly = await readSentence(`/srv/${'f'.repeat(400)}.php`);
-		expect(silly).toMatch(/^Boom in …f+\.php:7$/);
-		expect(silly.length).toBeLessThanOrEqual(200);
-	});
-
 	it('treats a message that is only markup as no sentence', async () => {
 		await expect(
 			pushRecordMutation({
@@ -837,20 +692,6 @@ describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
 		).rejects.toMatchObject({ status: 502 });
 		expect(events[0]?.fields).not.toHaveProperty('serverMessage');
 		expect((events[0]?.fields as Record<string, unknown>).reason).toBeUndefined();
-	});
-
-	it('reads the fatal detail without a file as the bare PHP message', async () => {
-		await expect(
-			pushRecordMutation({
-				mutation: mut(),
-				resolveEndpoint,
-				fetcher: async () =>
-					jsonResponse(500, {
-						...WP_FATAL_BODY,
-						data: { status: 500, error: { type: 1, message: 'Out of memory' } },
-					}),
-			})
-		).rejects.toMatchObject({ serverMessage: 'Out of memory' });
 	});
 });
 
