@@ -180,8 +180,8 @@ export function EditOrderMetaForm({
 				// so the revert is pushed too — the last write wins and the server ends up
 				// where the cart is. Only once the revert actually landed locally: pushing a
 				// resident that still carries the hand-off would re-send what we are undoing.
-				// The failure below is the cashier's one report; a revert that also fails to send
-				// is recorded beside it (warn: the error above is already the Sentry event).
+				// The 'Failed to save order' error below is the cashier's one report (and the
+				// Sentry event); a revert that also fails to send is recorded beside it at warn.
 				if (reverted) {
 					void pushDocument(order).catch((revertError: unknown) =>
 						cartLogger.warn('Failed to send the reverted order', {

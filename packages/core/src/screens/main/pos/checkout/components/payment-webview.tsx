@@ -320,7 +320,13 @@ export function PaymentWebview({
 				}
 				setPreparation({ key: preparationKey, status: 'ready', sessionId: committed.sessionId });
 			} catch (error) {
-				if (!active) return;
+				if (!active) {
+					// The cashier left before the commit settled; nothing else reports this push.
+					orderLogger.debug('Pay-page preparation failed after the view closed', {
+						context: { error: getErrorMessage(error) },
+					});
+					return;
+				}
 				setPreparation({
 					key: preparationKey,
 					status: 'failed',

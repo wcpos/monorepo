@@ -77,6 +77,7 @@ export function useRecordManualPayment(
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
+			let provenanceError: unknown;
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
@@ -95,16 +96,9 @@ export function useRecordManualPayment(
 							extraMeta: input.extraMeta,
 						});
 					} catch (error) {
-						// recordManualPayment turns this into its `provenance_save_failed` outcome,
-						// which the tender reports; the push itself reports nothing, so its cause
-						// (a refused session, a timeout) is kept here. Warn: not a second Sentry event.
-						logger.warn('Sale provenance could not be sent', {
-							code: pushFailureCode(error),
-							context: {
-								orderId: order.uuid,
-								error: error instanceof Error ? error.message : String(error),
-							},
-						});
+						// recordManualPayment turns this into its `provenance_save_failed` outcome;
+						// the push itself reports nothing, so the cause is kept for that one report.
+						provenanceError = error;
 						throw error;
 					}
 					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
@@ -196,10 +190,24 @@ export function useRecordManualPayment(
 			});
 			if (outcome.kind === 'failed') {
 				logger.error('Checkout failed', {
-					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					// A refused session behind the provenance push still reads as AUTH101.
+					code:
+						provenanceError === undefined
+							? ERROR_CODES.CHECKOUT_FAILED_CART_SAFE
+							: pushFailureCode(provenanceError, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
-					context: { error: outcome.reason },
+					context: {
+						error: outcome.reason,
+						...(provenanceError === undefined
+							? {}
+							: {
+									cause:
+										provenanceError instanceof Error
+											? provenanceError.message
+											: String(provenanceError),
+								}),
+					},
 				});
 			}
 			return outcome;

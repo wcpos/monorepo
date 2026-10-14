@@ -241,7 +241,13 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				registerId = committed.registerId;
 				sessionId = committed.sessionId;
 			} catch (error) {
-				if (signal.aborted) return;
+				if (signal.aborted) {
+					// The checkout closed before the commit settled; nothing else reports this push.
+					checkoutLogger.debug('Contract checkout preparation failed after it closed', {
+						context: { error: error instanceof Error ? error.message : String(error) },
+					});
+					return;
+				}
 				if (error instanceof LiveTabNotOwnedError) throw error;
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(checkoutLogger, t);

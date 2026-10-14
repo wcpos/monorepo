@@ -313,8 +313,14 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
-	// pushFailureCode tests these with instanceof.
-	WriteDeferredError: class WriteDeferredError extends Error {},
+	// pushFailureCode tests these with instanceof and reads `status`.
+	WriteDeferredError: class WriteDeferredError extends Error {
+		status?: number;
+		constructor(mutationId: string, status?: number) {
+			super(`write-deferred (${status}) for mutation "${mutationId}"`);
+			this.status = status;
+		}
+	},
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 jest.mock('expo-router', () => ({
@@ -2179,6 +2185,18 @@ describe('provider completion provenance before intent', () => {
 				showToast: true,
 				toast: { title: 'pos_cart.checkout_failed' },
 			})
+		);
+	});
+	it('reports a provenance push refused for the session as AUTH101', async () => {
+		const { WriteDeferredError } = jest.requireMock('@wcpos/query');
+		mockPushDocument.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'Checkout failed',
+			expect.objectContaining({ code: 'AUTH101' })
 		);
 	});
 	it('does not stamp a partial server leg', async () => {
