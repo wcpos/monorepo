@@ -4,7 +4,6 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Quantity } from './quantity-keypad';
-import { Quantity as OldQuantity } from '../../cells/quantity';
 import { openLineQuantity, scrollToLine } from '../../../conditions/use-cart-conditions';
 
 const mockUpdateLineItem = jest.fn();
@@ -43,16 +42,13 @@ jest.mock('../../../../components/number-input', () => ({
 	),
 }));
 
-it.each([
-	['old', OldQuantity],
-	['v2', Quantity],
-] as const)('%s keeps the quantity id/value and commits the same hook arguments', (_name, Cell) => {
+it('keeps the quantity id/value and commits the same hook arguments', () => {
 	mockUpdateLineItem.mockClear();
 	const props = {
 		row: { original: { uuid: 'line-1', type: 'line_items', item: { quantity: 20 } } },
 		column: { columnDef: { meta: { show: () => false } } },
 	} as unknown as React.ComponentProps<typeof Quantity>;
-	render(<Cell {...props} />);
+	render(<Quantity {...props} />);
 	const input = screen.getByTestId('cart-quantity-input') as HTMLInputElement;
 	expect(input.value).toBe('20');
 	fireEvent.change(input, { target: { value: '3' } });

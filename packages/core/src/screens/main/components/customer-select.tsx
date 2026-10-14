@@ -197,12 +197,6 @@ function CustomerSelectItem({
 					<Text>{format(customer)}</Text>
 
 					<Text className="text-secondary text-sm">{customer.email}</Text>
-					{/* {(customer.billing.company || customer.billing.phone) && (
-						<Text className="text-sm">
-							{customer.billing.company}{' '}
-							{customer.billing.phone ? `• ${customer.billing.phone}` : ''}
-						</Text>
-					)} */}
 				</VStack>
 			</HStack>
 		);

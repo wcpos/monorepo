@@ -78,6 +78,15 @@ _Avoid_: queryKey grammar, descriptor string (in caller-facing documentation)
 
 ## Language — Logs
 
+**Server sentence**:
+The one plain-text sentence a WordPress REST error body gives for its cause — a
+PHP fatal's first line plus its WordPress-relative location on a 5xx, else each
+invalid param's reason, else the top-level message without its HTML. The fatal
+form is built to fit the 200-character quote cap; the ledger observer caps the
+rest when it quotes them.
+_Avoid_: server message (the field `serverMessage` keeps its name), error message,
+reason (`reason` is the body's `code`).
+
 **Error code**:
 A registry code (`SYNC104` style) from `error-registry.json`; a SPECIFIC code
 exists iff the merchant response differs, and generic codes are the explicit

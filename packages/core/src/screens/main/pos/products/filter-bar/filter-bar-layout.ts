@@ -69,11 +69,9 @@ export const filterBarItemSchema = z.discriminatedUnion('type', [
 	quickFilterSchema,
 ]);
 
-export type BuiltInPillId = (typeof BUILT_IN_PILL_IDS)[number];
 export type QuickFilterCondition = z.infer<typeof quickFilterConditionSchema>;
 export type QuickFilterSort = z.infer<typeof quickFilterSortSchema>;
 export type QuickFilter = z.infer<typeof quickFilterSchema>;
-export type BuiltInPill = z.infer<typeof builtInPillSchema>;
 export type FilterBarItem = z.infer<typeof filterBarItemSchema>;
 
 export const DEFAULT_FILTER_BAR: FilterBarItem[] = BUILT_IN_PILL_IDS.map((id) => ({

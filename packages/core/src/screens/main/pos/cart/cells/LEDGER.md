@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{dialog,error-boundary,hstack,icon,icon-button,image,text,tooltip,vstack}`.
 
+2026-10-14: the v1 `actions.tsx`, `quantity.tsx`, `product-name.tsx` and `product-total.tsx` files cited as evidence in lines 1–3, 6, 8–10 and 12 were deleted, along with the v1-only `fee-name.tsx`, `price.tsx` and `shipping-title.tsx`; their surviving owners are `v2/cells/line-strip.tsx`, `v2/cells/quantity-keypad.tsx`, `v2/cells/product-name.tsx`, `v2/cells/product-total.tsx`, `v2/cells/fee-name.tsx`, `v2/cells/price.tsx` and `v2/cells/shipping-title.tsx`, as accounted for in `v2/LEDGER.md`.
+
 ## Lines
 
 1. Forward every remove press to `pulseRemove`, which alone owns re-entrancy through mutation settlement — a second cell latch became permanent when a quantity pulse cancelled removal — evidence: `pos/cart/cells/actions.tsx:31–39`, “One owner for the guard”; `ad2d8f59bd 2026-08-30 fix(pos): drop the cell-level remove latch, leave the guard in pulseRemove` — platform: all.

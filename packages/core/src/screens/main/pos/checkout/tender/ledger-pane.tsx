@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
@@ -87,36 +86,6 @@ export function LedgerLines({
 				</HStack>
 			) : null}
 		</VStack>
-	);
-}
-
-/**
- * The phone form of the same pane. The lines and the order total are not what a
- * cashier needs mid-tender on a small screen — the balance is — so the bar shows
- * the balance and a payment count, and expands to the payments taken.
- */
-export function BalanceBar({ flow, format }: Omit<Props, 'lines'>) {
-	const t = useT();
-	const count = flow.liveRows.length;
-
-	return (
-		<Collapsible className="border-border bg-muted/40 gap-2 rounded-md border p-3">
-			<CollapsibleTrigger testID="checkout-balance-bar">
-				<HStack className="flex-1 items-center justify-between">
-					<BalanceHeadline flow={flow} format={format} compact />
-					{count > 0 ? (
-						<Text className="text-muted-foreground text-xs">
-							{t('pos_checkout.payments_taken', { count })}
-						</Text>
-					) : null}
-				</HStack>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
-				<VStack space="sm">
-					<LedgerLegs view={flow} format={format} />
-				</VStack>
-			</CollapsibleContent>
-		</Collapsible>
 	);
 }
 

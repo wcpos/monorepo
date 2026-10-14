@@ -11,18 +11,7 @@ const middlewaresPlugin: RxPlugin = {
 	 * You can manipulate every prototype in this list:
 	 * @link https://github.com/pubkey/rxdb/blob/master/src/plugin.ts#L22
 	 */
-	prototypes: {
-		/**
-		 * add a function to RxCollection so you can call 'myCollection.hello()'
-		 *
-		 * @param {object} prototype of RxCollection
-		 */
-		// RxCollection: (proto: any) => {
-		// 	proto.hello = function () {
-		// 		return 'world';
-		// 	};
-		// },
-	},
+	prototypes: {},
 
 	/**
 	 * some methods are static and can be overwritten in the overwriteable-object

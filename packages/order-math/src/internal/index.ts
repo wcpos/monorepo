@@ -25,7 +25,7 @@
  *
  * Runtime paths that legitimately need the money primitives, and are NOT part of
  * any migration:
- *   - `hooks/use-tax-display-values` and `hooks/use-calculate-taxes-from-value`
+ *   - `hooks/use-tax-display-values`
  *     — product/tax display.
  *   - `orders/refund/calculate-refund` — refunds.
  *   - `pos/hooks/use-add-coupon`, `pos/hooks/use-recalculate-coupons`,

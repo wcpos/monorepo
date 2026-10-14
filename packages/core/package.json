@@ -104,7 +104,6 @@
 	"dependencies": {
 		"@date-fns/tz": "^1.5.0",
 		"@date-fns/utc": "^2.1.1",
-		"@hookform/error-message": "^2.0.1",
 		"@hookform/resolvers": "^5.9.1",
 		"@novu/js": "^3.19.2",
 		"@tanstack/react-table": "^9.2.8",
@@ -129,7 +128,6 @@
 		"react-error-boundary": "^6.1.6",
 		"react-i18next": "^17.0.16",
 		"react-number-format": "^5.4.5",
-		"react-thermal-printer": "0.22.0",
 		"react-to-print": "^3.3.0",
 		"rxjs": "7.8.2",
 		"semver": "^7.8.5",
@@ -141,7 +139,6 @@
 	"devDependencies": {
 		"@testing-library/jest-dom": "^7.0.1",
 		"@testing-library/react": "^16.3.3",
-		"@types/core-js": "^2.5.8",
 		"@types/jest": "^30.0.0",
 		"@types/lodash": "^4.17.26",
 		"@types/mustache": "^4.2.6",

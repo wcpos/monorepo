@@ -5,8 +5,6 @@ import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { couponsLiteral } from './schemas/coupons';
 import { customersLiteral } from './schemas/customers';
-// import { gatewaysLiteral } from './schemas/gateways';
-// import { logsLiteral } from './schemas/logs';
 import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
@@ -271,15 +269,6 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 };
 
 /**
- * Logs
- */
-// const logsTyped = toTypedRxJsonSchema(logsLiteral);
-// export const LogSchema: RxJsonSchema<LogDocument> = logsLiteral;
-// export type LogDocument = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsTyped>;
-// export type LogCollection = RxCollection<LogDocument>;
-// const logs: RxCollectionCreator<LogDocument> = { schema: logsLiteral };
-
-/**
  * Products
  */
 type ProductDocumentType = WithJsonMetaData<
@@ -401,15 +390,6 @@ export type RefundCollection = RxCollection<RefundDocumentType>;
 type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxRatesLiteral>;
 export type TaxRateDocument = RxDocument<TaxRateDocumentType>;
 export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
-
-/**
- * Gateways
- */
-// const gatewaysTyped = toTypedRxJsonSchema(gatewaysLiteral);
-// export const GatewaySchema: RxJsonSchema<GatewayDocument> = gatewaysLiteral;
-// export type GatewayDocument = ExtractDocumentTypeFromTypedRxJsonSchema<typeof gatewaysTyped>;
-// export type GatewayCollection = RxCollection<GatewayDocument>;
-// const payment_gateways: RxCollectionCreator<GatewayDocument> = { schema: gatewaysLiteral };
 
 /**
  * Logs

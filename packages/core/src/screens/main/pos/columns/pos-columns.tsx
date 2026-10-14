@@ -17,9 +17,6 @@ import { EdgeColumn } from './edge-column';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 
-// Ruled on wcpos/roadmap#165 from the prototype comparison (fade vs rise/slide/instant).
-export const CHECKOUT_SWAP_FADE_MS = 180;
-
 const PRODUCTS_ENTRY_ID = 'products';
 
 /** This slot grants no host methods: the panels are pure layout. */

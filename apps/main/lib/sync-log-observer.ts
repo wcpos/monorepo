@@ -1,3 +1,4 @@
+import { SERVER_SENTENCE_MAX_CHARS } from '@wcpos/sync-core';
 import type {
 	SyncEvent,
 	SyncEventFields,
@@ -132,7 +133,9 @@ function sanitizeReason(value: unknown): string | undefined {
 		// space, which ends the match.
 		.replace(/\?[^\s)]+/g, '[redacted]')
 		.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted]');
-	return sanitized.length > 200 ? `${sanitized.slice(0, 199)}…` : sanitized;
+	return sanitized.length > SERVER_SENTENCE_MAX_CHARS
+		? `${sanitized.slice(0, SERVER_SENTENCE_MAX_CHARS - 1)}…`
+		: sanitized;
 }
 
 /**

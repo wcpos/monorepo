@@ -1,23 +1,6 @@
-import { KNOWN_KINDS } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import type { TileDisabledReason } from './tiles';
-
-/**
- * Cashier-facing wording for the open vocabularies in the payments contract.
- *
- * `kind` and `status` are open by design: a descriptor may name a value this
- * build has never seen. Rather than render a raw wire value at a till, an
- * unknown one falls back to the neutral "Other" bucket the contract defines —
- * the tile is disabled-with-reason anyway, so the label never has to explain
- * something the app cannot do.
- */
-
-export function kindLabelKey(kind: string): string {
-	return KNOWN_KINDS.some((known) => known === kind)
-		? `pos_checkout.kind_${kind}`
-		: 'pos_checkout.kind_other';
-}
 
 const STATUS_KEYS: Record<PaymentRow['status'], string> = {
 	pending: 'pos_checkout.status_pending',
