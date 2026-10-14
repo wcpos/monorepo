@@ -273,10 +273,6 @@ describe('parse-wp-error', () => {
 		});
 	});
 
-	// WordPress wraps a PHP fatal in `internal_server_error` whose `message` is the
-	// localized "critical error" boilerplate; the error itself — the sentence that
-	// names the cause — is `data.error` ({ type, message, file, line }), present
-	// only when the site exposes error details (#2439, plugin #2157).
 	describe('parseWpError', () => {
 		it('names each invalid param and its reason for rest_invalid_param', () => {
 			const parsed = parseWpError(
@@ -303,6 +299,10 @@ describe('parse-wp-error', () => {
 		});
 	});
 
+	// WordPress wraps a PHP fatal in `internal_server_error` whose `message` is the
+	// localized "critical error" boilerplate; the error itself — the sentence that
+	// names the cause — is `data.error` ({ type, message, file, line }), present
+	// only when the site exposes error details (#2439, plugin #2157).
 	describe('WordPress fatal detail', () => {
 		const fatalBody = {
 			code: 'internal_server_error',
