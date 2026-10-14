@@ -43,6 +43,12 @@ if [[ -f "$REAL_WORKER" ]]; then
 	expect_status "reads exactly one version from the repo's real worker" pass worker_rxdb_version < "$REAL_WORKER"
 fi
 
+# --- pinned_rxdb ---
+expect_eq "reads an exact rxdb pin" 17.6.0 "$(pinned_rxdb <<<'{"dependencies":{"rxdb":"17.6.0"}}')"
+expect_status "a range is not a pin" fail pinned_rxdb <<<'{"dependencies":{"rxdb":"^17.6.0"}}'
+expect_status "no rxdb fails closed" fail pinned_rxdb <<<'{"dependencies":{}}'
+expect_eq "the repo's root package.json pins rxdb" 1 "$(pinned_rxdb < "$SCRIPT_DIR/../../package.json" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$')"
+
 # --- lane_of_version ---
 expect_eq "lane of 1.10.31" 1.10 "$(lane_of_version 1.10.31)"
 expect_status "lane of 1.10 fails closed" fail lane_of_version 1.10

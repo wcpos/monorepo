@@ -7,7 +7,8 @@
 #    (`chore(release): build web bundle (@main from monorepo <sha>)`).
 # 2. Reads apps/main/package.json at that SHA; its major.minor is the lane.
 # 3. Runs check-worker-rxdb-lane.sh against the bundle's own build/opfs.worker.js
-#    (RXDB_VERSION must match the lane's highest tag; frozen lanes refused).
+#    (RXDB_VERSION must match the rxdb pinned at that SHA and the lane's highest
+#    tag; frozen lanes refused).
 # 4. Creates v<major.minor>.<N+1> (or .0 on a new lane) at the bundle commit.
 # 5. Waits up to 5 minutes for jsDelivr @<major.minor> to resolve the new tag,
 #    purges, and re-verifies.
@@ -100,7 +101,7 @@ purge_cdn() { # $1 lane
 }
 
 main() {
-	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane tags existing worker action tag
+	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha version lane bundle_rxdb tags existing worker action tag
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--dry-run) dry_run=true ;;
@@ -118,6 +119,8 @@ main() {
 	version=$(gh api "repos/${MONOREPO_REPO}/contents/apps/main/package.json?ref=${monorepo_sha}" \
 		-H 'Accept: application/vnd.github.raw' | jq -er .version)
 	lane=$(lane_of_version "$version")
+	bundle_rxdb=$(gh api "repos/${MONOREPO_REPO}/contents/package.json?ref=${monorepo_sha}" \
+		-H 'Accept: application/vnd.github.raw' | pinned_rxdb)
 	echo "bundle ${sha} <- monorepo ${monorepo_sha} (app ${version}, lane ${lane})"
 
 	tags=$(list_bundle_tags)
@@ -126,6 +129,7 @@ main() {
 	worker=$(mktemp)
 	trap 'rm -f "$worker"' RETURN
 	fetch_bundle_worker "$sha" > "$worker" || { echo "FAIL: could not read ${WORKER_PATH_IN_BUNDLE} at ${sha}" >&2; return 1; }
+	check_bundle_rxdb "$worker" "$bundle_rxdb"
 	check_worker_lane "$worker" "$version" "$allow_frozen" false "$tags"
 
 	tag="${action#* }"

@@ -75,6 +75,29 @@ next_tag() {
 	if [[ -z "$n" ]]; then printf 'v%s.0\n' "$1"; else printf 'v%s.%s\n' "$1" "$((n + 1))"; fi
 }
 
+# stdin: a package.json. stdout: its exact rxdb pin; fails on a range or none.
+pinned_rxdb() {
+	local v
+	v=$(jq -r '.dependencies.rxdb // .devDependencies.rxdb // empty')
+	if [[ ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		echo "rxdb is not pinned to an exact x.y.z ('${v}')" >&2
+		return 1
+	fi
+	printf '%s\n' "$v"
+}
+
+# $1 worker file (absent: nothing to compare), $2 the rxdb the main thread was built with.
+# rxdb bumped but the worker not rebuilt would otherwise pass the lane check.
+check_bundle_rxdb() {
+	local mine
+	[[ -f "$1" ]] || return 0
+	mine=$(worker_rxdb_version < "$1") || { echo "FAIL: $1" >&2; return 1; }
+	if [[ "$mine" != "$2" ]]; then
+		echo "FAIL: worker RXDB_VERSION ${mine} != the bundle's rxdb $2; rebuild the worker (pnpm build:opfs-worker)" >&2
+		return 1
+	fi
+}
+
 # --- network (isolated so tests can mock `gh`) ---
 list_bundle_tags() {
 	gh api --paginate "repos/${WEB_BUNDLE_REPO}/tags" --jq '.[].name'
@@ -128,7 +151,7 @@ check_worker_lane() {
 }
 
 main() {
-	local allow_frozen=false optional=false bundle_rxdb="" args=() tags mine
+	local allow_frozen=false optional=false bundle_rxdb="" args=() tags
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--allow-frozen-lane) allow_frozen=true ;;
@@ -143,13 +166,7 @@ main() {
 		echo "usage: $0 <worker-file> <app-version> [--allow-frozen-lane] [--worker-optional] [--bundle-rxdb <version>]" >&2
 		return 2
 	fi
-	if [[ -n "$bundle_rxdb" && -f "${args[0]}" ]]; then
-		mine=$(worker_rxdb_version < "${args[0]}") || { echo "FAIL: ${args[0]}" >&2; return 1; }
-		if [[ "$mine" != "$bundle_rxdb" ]]; then
-			echo "FAIL: worker RXDB_VERSION ${mine} != the bundle's rxdb ${bundle_rxdb}; rebuild the worker (pnpm build:opfs-worker)" >&2
-			return 1
-		fi
-	fi
+	if [[ -n "$bundle_rxdb" ]]; then check_bundle_rxdb "${args[0]}" "$bundle_rxdb" || return 1; fi
 	tags=$(list_bundle_tags) || { echo "FAIL: could not list ${WEB_BUNDLE_REPO} tags" >&2; return 1; }
 	check_worker_lane "${args[0]}" "${args[1]}" "$allow_frozen" "$optional" "$tags"
 }

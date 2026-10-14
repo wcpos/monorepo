@@ -60,6 +60,8 @@ case "$args" in
 	*"git/refs"*) echo "dry run must not create a ref" >&2; exit 99 ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha0000000000000000000000000000000 ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .commit.message") printf '%s\n' "$MOCK_MSG" ;;
+	*"repos/wcpos/monorepo/contents/package.json?ref="*)
+		printf '{"dependencies":{"rxdb":"%s"}}\n' "${MOCK_PIN:-${MOCK_RXDB_bundlesha0000000000000000000000000000000:-}}" ;;
 	*"repos/wcpos/monorepo/contents/apps/main/package.json"*) printf '{"version":"%s"}\n' "$MOCK_VERSION" ;;
 	*"/tags --jq .[] | select"*) printf '%s\n' "${MOCK_TAGGED_AS:-}" ;;
 	*"/tags"*) printf '%s\n' "$MOCK_TAGS" ;;
@@ -89,6 +91,10 @@ expect_status "refuses a commit that carries an older tag" fail run MOCK_VERSION
 expect_status "a commit holding the lane's newest tag resumes" pass run MOCK_VERSION=1.11.1 MOCK_TAGS="$tags" MOCK_TAGGED_AS=v1.11.1 \
 	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
 expect_eq "and says it would resume" 1 "$(grep -c 'already v1.11.1; would resume' "$tmpdir/out")"
+
+expect_status "a stale worker (rxdb bumped, worker not rebuilt) is refused" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 \
+	MOCK_RXDB_bundlesha0000000000000000000000000000000=17.6.0 MOCK_RXDB_v1_11_1=17.6.0 "$TAG" bundlesha --dry-run
+expect_eq "and says to rebuild the worker" 1 "$(grep -c 'rebuild the worker' "$tmpdir/out")"
 
 if [[ $failures -gt 0 ]]; then echo "$failures tag-web-bundle test(s) failed" >&2; exit 1; fi
 echo "All tag-web-bundle tests passed."
