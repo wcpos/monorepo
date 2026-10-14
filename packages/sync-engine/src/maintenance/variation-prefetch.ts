@@ -4,6 +4,7 @@ import {
 	COLLECTION_DESCRIPTORS,
 	type TargetedDescriptor,
 } from '../collections/collection-descriptors';
+import { findAllUncached } from '../collections/find-all-uncached';
 import { type HandlerContext, pullTargetedByIds } from '../change-signal/change-signal-handlers';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 
@@ -123,11 +124,9 @@ async function missingVariationIds(
 ): Promise<number[]> {
 	if (ids.length === 0) return [];
 	const remoteIds = ids.map(remoteIdOrNull).filter((id) => id !== null);
-	const docs = await database.collections[descriptor.collection]
-		.find({
-			selector: { [descriptor.wooIdField]: { $in: remoteIds } } as never,
-		})
-		.exec();
+	const docs = await findAllUncached(database.collections[descriptor.collection], {
+		selector: { [descriptor.wooIdField]: { $in: remoteIds } } as never,
+	});
 	const present = new Set(
 		docs
 			.map((doc) => remoteIdOrNull(doc.toJSON()[descriptor.wooIdField]))
@@ -139,9 +138,9 @@ async function residentVariableParentFingerprint(
 	database: RxDatabase,
 	descriptor: TargetedDescriptor
 ): Promise<string> {
-	const docs = await database.collections[descriptor.collection]
-		.find({ selector: { type: 'variable' } })
-		.exec();
+	const docs = await findAllUncached(database.collections[descriptor.collection], {
+		selector: { type: 'variable' },
+	});
 	const parentSignatures = docs
 		.flatMap((doc) => {
 			const json = doc.toJSON() as Record<string, unknown> & {
@@ -220,9 +219,10 @@ async function runVariationPrefetch(
 		};
 	}
 
-	const parentDocs = await deps.database.collections[productsDescriptor.collection]
-		.find({ selector: { type: 'variable' } })
-		.exec();
+	const parentDocs = await findAllUncached(
+		deps.database.collections[productsDescriptor.collection],
+		{ selector: { type: 'variable' } }
+	);
 	throwIfAborted(deps.signal);
 	const parents = parentDocs
 		.flatMap((doc) => {
