@@ -29,24 +29,12 @@ import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import {
-	type ActionEventInput,
-	dispatchAction,
-	isActionRefusal,
-	TENDER_COMMIT_EVENT,
-	TENDER_GUARD_IDS,
-} from '../../../../../extensions/actions';
-import './tender-guards';
+import { isActionRefusal } from '../../../../../extensions/actions';
 import '../cash-rounding-hook';
-import { enqueueOrderMutation, type OrderMutationContext } from '../../hooks/order-mutation-queue';
-import { conditionRules } from '../../conditions/evaluate';
-import { countConditionsInSlot } from '../../conditions/snapshot';
 import { useActionContext } from '../../hooks/use-action-context';
 import { useCartConfig } from '../../hooks/use-cart-config';
-import {
-	RegisterSessionRequiredError,
-	requireOpenSession,
-} from '../../../../../services/register-session/session-store';
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import { commitSale, type StampedSale } from '../commit-sale';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
@@ -123,9 +111,9 @@ import {
 	type TenderTile,
 } from './tiles';
 
-const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
+import type { OrderMutationContext } from '../../hooks/order-mutation-queue';
 
-type TenderPayload = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'];
+const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 
 /** The notes a cashier is handed: the balance itself, then the next whole 5, 10 and 50. */
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
@@ -694,7 +682,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const journaledPlan = fixedAmount ? null : state.plan;
 		// The amounts the chain settled on (a hook may rewrite them, cash rounding does): every
 		// step after the dispatch, the mirror-error paths below included, reads these.
-		let committed = null as TenderPayload | null;
+		let committed = null as StampedSale | null;
 		const completionFacts = ({
 			amountMinor,
 			balanceMinor,
@@ -706,13 +694,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			preLegBalanceMinor: balanceMinor,
 			amountMinor,
 		});
-		const commitTender = async (
-			e: ActionEventInput<typeof TENDER_COMMIT_EVENT>,
-			queue: OrderMutationContext
-		) => {
-			committed = e.payload;
+		const commitTender = async (sale: StampedSale, queue: OrderMutationContext) => {
+			committed = sale;
 			// Shadows the render-time balance on purpose: nothing below reads the keypad's facts.
-			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = e.payload;
+			const { registerId, sessionId, amountMinor, balanceMinor, roundingMinor } = sale;
 			const splitMeta = journaledPlan
 				? [
 						splitPlanMeta({
@@ -771,13 +756,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const patchFees = async (data: ReturnType<typeof withFees>) => {
 				if (!(await localPatch({ document: target, data }))) throw new Error('rounding_fee_failed');
 			};
-			// The gate only looked the session up (a guard has no effects before `next`); the
-			// pre-action write `requireOpenSession` makes belongs here, before the attempt record.
-			// It also re-reads the id, so a session closed between
-			// the gate and this line is caught by the existing RegisterSessionRequiredError path.
-			const writtenSessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
-			// A replacement session invalidates the facts the gate approved; its stamped id is binding.
-			if (writtenSessionId !== sessionId) throw new RegisterSessionRequiredError();
 			await recordSaleAttempt(ctx, {
 				order,
 				source:
@@ -1016,7 +994,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							row: outcome.row,
 							order: outcome.order,
 							mirrorFailed: false,
-							...completionFacts(e.payload),
+							...completionFacts(sale),
 						},
 						queue
 					).finally(() => tenderRecorded(outcome.row, 'online'));
@@ -1065,7 +1043,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
-			const tendered = method.capabilities.change ? fromMinor(e.payload.tenderedMinor, dp) : null;
+			const tendered = method.capabilities.change ? fromMinor(sale.tenderedMinor, dp) : null;
 			const paymentId = roundingMinor !== 0 ? uuidv4() : undefined;
 			if (paymentId) await patchFees(roundingFee(target.getLatest().payload, paymentId));
 			// A leg that did not land takes its rounding with it: the next tender may be a card.
@@ -1099,7 +1077,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						source: 'manual',
 						...outcome,
 						mirrorFailed: false,
-						...completionFacts(e.payload),
+						...completionFacts(sale),
 					},
 					queue
 				).finally(() => tenderRecorded(outcome.row, outcome.via));
@@ -1122,53 +1100,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 		};
 		try {
-			const outcome = await enqueueOrderMutation(order.uuid, async (queue) => {
-				// The keypad's facts were read at render; a cart edit queued just before Pay has
-				// now been applied. If it moved the balance, the entry no longer describes this
-				// order: refuse here, before any gate or leg, and let the cashier look again.
-				const latest = order.getLatest().payload;
-				const latestBalanceMinor = toMinor(
-					derive(latest.total, readLedger(latest.meta_data), methods, { dp }).balance,
-					dp
-				);
-				if (latestBalanceMinor !== balanceMinor)
-					return {
-						deny: {
-							reasonKey: 'pos_checkout.order_changed_retry',
-							detail: { balanceMinor, latestBalanceMinor },
-						},
-					};
-				// The conditions are counted here too, not at the press: the gate judges the lines
-				// this commit will settle, after any write queued ahead (roadmap#62).
-				const rules = conditionRules(actionCtx.store.preventOverselling);
-				const unmet = await countConditionsInSlot(queue.order ?? order, actionCtx, rules);
-				return dispatchAction({
-					event: TENDER_COMMIT_EVENT,
-					// Money path: refuse rather than run unguarded if the registering import were ever lost.
-					requiredGuards: TENDER_GUARD_IDS,
-					token: queue.dispatchToken,
-					ctx: actionCtx,
-					input: {
-						orderId: order.uuid,
-						actor: actionActor,
-						source: 'user',
-						payload: {
-							methodId: method?.id ?? null,
-							mode: balanceMinor === 0 ? 'zero-balance' : (method?.capture.mode ?? null),
-							amountMinor: enteredLegMinor,
-							tenderedMinor: entryMinor,
-							balanceMinor,
-							roundingMinor: 0,
-							completing: enteredLegMinor === balanceMinor,
-							bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-							registerId: null,
-							sessionId: null,
-							conditions: { unmet },
-						},
+			const outcome = await commitSale(
+				{ ...ctx, actionCtx, actionActor, dp },
+				{
+					order,
+					methodId: method?.id ?? null,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					amounts: {
+						kind: 'entry',
+						expectedBalanceMinor: balanceMinor,
+						amountMinor: enteredLegMinor,
+						tenderedMinor: entryMinor,
+						captureMode: method?.capture.mode ?? null,
 					},
-					bottom: (e) => commitTender(e, queue),
-				});
-			});
+				},
+				commitTender
+			);
 			if (isActionRefusal(outcome)) {
 				presentTenderRefusal(actionCtx, outcome, logger, t, orderContext);
 				return;
@@ -1211,7 +1158,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						order: outcome.order,
 						mirrorFailed: true,
 						// A mirror error is thrown from inside the handler: the chain has settled the amounts.
-						...completionFacts(committed as TenderPayload),
+						...completionFacts(committed as StampedSale),
 					}).finally(() => tenderRecorded(outcome.row, 'online'));
 				} else if (outcome.kind === 'settled') {
 					await completeOrderFlow({ source: 'gateway-settled', order: outcome.order });
@@ -1263,7 +1210,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					source: 'manual',
 					...outcome,
 					mirrorFailed: true,
-					...completionFacts(committed as TenderPayload),
+					...completionFacts(committed as StampedSale),
 				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
