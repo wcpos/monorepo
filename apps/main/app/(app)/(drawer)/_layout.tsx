@@ -10,7 +10,7 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { DrawerContent as DrawerContentV2 } from '@wcpos/core/screens/main/components/drawer-content/v2';
+import { DrawerContent as DrawerContentV2 } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
