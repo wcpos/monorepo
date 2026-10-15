@@ -47,6 +47,8 @@ const SOURCE_ROOTS = [
 ];
 
 export const BOTTOM_HANDLERS = new Set([
+	// checkout.tender.commit: shared dispatch and stamped-session check.
+	'packages/core/src/screens/main/pos/checkout/commit-sale.ts',
 	// cart.line.add: the queued cart-line writer.
 	'packages/core/src/screens/main/pos/hooks/use-add-item-to-order.ts',
 	// cart.line.update: the shared writer (actions ledger 35).
