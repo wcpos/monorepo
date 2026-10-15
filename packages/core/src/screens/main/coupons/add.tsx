@@ -6,7 +6,12 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
@@ -42,7 +47,7 @@ export function AddCouponScreen() {
 	);
 
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" size="lg">
 				<ModalHeader>
 					<ModalTitle>
@@ -58,6 +63,6 @@ export function AddCouponScreen() {
 					/>
 				</ErrorBoundary>
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }

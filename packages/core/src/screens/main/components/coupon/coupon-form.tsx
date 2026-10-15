@@ -17,7 +17,7 @@ import {
 	FormToggleGroup,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalBody, ModalFooter } from '@wcpos/components/modal';
+import { DialogBody as ModalBody, DialogFooter as ModalFooter } from '@wcpos/components/v2/dialog';
 
 import { CollapsibleSection } from './collapsible-section';
 import { couponFormSchema } from './coupon-schema';

@@ -11,6 +11,7 @@ import { RefundOrderModal } from './orders/refund/modal';
 import { EditProductModal } from './products/edit/product/modal';
 import { EditVariationModal } from './products/edit/variation/modal';
 import { EditCustomer } from './customers/edit/edit-customer';
+import { EditCoupon } from './coupons/edit/edit-coupon';
 
 let mockPhone = false;
 let mockRecord: { uuid: string; payload: { id: number; name: string; code: string } } | null;
@@ -121,6 +122,8 @@ jest.mock('./hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Customer' }),
 }));
 
+jest.mock('./coupons/edit/form', () => ({ EditCouponForm: () => null }));
+
 beforeEach(() => jest.clearAllMocks());
 
 // Removing route would close the primitive instead of navigating back; reverting to Modal
@@ -129,6 +132,7 @@ describe.each([
 	['product', EditProductModal, 'w-lg'],
 	['variation', EditVariationModal, 'w-lg'],
 	['customer', EditCustomer, 'w-160'],
+	['coupon', EditCoupon, 'w-lg'],
 	['order edit', EditOrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
 ] as const)('%s route shell', (_name, Screen, width) => {
