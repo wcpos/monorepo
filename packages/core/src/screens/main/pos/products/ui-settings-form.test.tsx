@@ -10,7 +10,7 @@ import { BehaviorSubject } from 'rxjs';
 import type { FormItemProps } from '@wcpos/components/form';
 
 import { UISettingsForm } from './ui-settings-form';
-import { useBrowseCounts } from './v2/browse/use-browse-terms';
+import { useBrowseCounts } from './browse/use-browse-terms';
 
 import type { ControllerProps, FieldValues } from 'react-hook-form';
 
@@ -217,7 +217,7 @@ jest.mock('../../../../contexts/translations', () => ({
 		vars?.count !== undefined ? `${vars.count} ${key}` : key,
 }));
 // The counts come from the term handles; the row's states are what is tested here.
-jest.mock('./v2/browse/use-browse-terms', () => ({ useBrowseCounts: jest.fn() }));
+jest.mock('./browse/use-browse-terms', () => ({ useBrowseCounts: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('../../../../../../query/src/records/use-record-field')
 		.useDocField,

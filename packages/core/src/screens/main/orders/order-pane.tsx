@@ -42,7 +42,7 @@ export function OrderPane(props: Props) {
 	// The record is local and answers within a frame, but not during the first render.
 	// Suspending on it commits the fallback, and React holds a committed fallback for 300 ms:
 	// a grey block in the pane for the whole of its slide. Awaited here instead, the swap is
-	// immediate (see `pos/products/v2/variations-pane.tsx`).
+	// immediate (see `pos/products/variations-pane.tsx`).
 	// A record that fails counts as answered: the content rethrows it into the boundary.
 	const answered = useFirstAnswer(resource);
 	const skeleton = <View testID="order-pane-skeleton" className="bg-muted m-4 h-48 rounded" />;

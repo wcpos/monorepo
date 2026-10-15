@@ -6,7 +6,7 @@ import {
 	DEFAULT_FILTER_BAR,
 	migrateLegacyQuickFilters,
 } from '../../pos/products/filter-bar/filter-bar-layout';
-import { BROWSE_BY } from '../../pos/products/v2/browse/browse-source';
+import { BROWSE_BY } from '../../pos/products/browse/browse-source';
 
 // Define a type for the keys of initialSettings
 type InitialSettingsKey = keyof typeof initialSettings;

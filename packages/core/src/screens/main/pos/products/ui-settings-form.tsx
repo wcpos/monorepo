@@ -26,8 +26,8 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { MetaDataKeysField } from './meta-data-keys-field';
-import { type BrowseBy, readBrowseBy } from './v2/browse/browse-source';
-import { useBrowseCounts } from './v2/browse/use-browse-terms';
+import { type BrowseBy, readBrowseBy } from './browse/browse-source';
+import { useBrowseCounts } from './browse/use-browse-terms';
 import { SORT_FIELD_VALUES } from './filter-bar/filter-bar-layout';
 import { useT } from '../../../../contexts/translations';
 import {
