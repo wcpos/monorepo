@@ -44,21 +44,21 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1', isNew: mockIsNew } }),
 }));
 jest.mock('../hooks/use-cart-settlement', () => ({ useCartSettlement: () => undefined }));
-jest.mock('./v2/table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
+jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
 jest.mock('./conditions-notice', () => ({ CartConditionsNotice: () => null }));
 jest.mock('../conditions/use-cart-conditions', () => ({
 	CartConditionsProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
-jest.mock('./v2/empty-cart', () => ({ EmptyCart: () => <div data-testid="cart-empty" /> }));
-jest.mock('./v2/foot', () => ({
+jest.mock('./cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
+jest.mock('./empty-cart', () => ({ EmptyCart: () => <div data-testid="cart-empty" /> }));
+jest.mock('./foot', () => ({
 	CartFoot: ({ onOpenSheet }: { onOpenSheet: () => void }) => (
 		<div data-testid="checkout-button" onClick={onOpenSheet} />
 	),
 }));
-jest.mock('./v2/order-sheet', () => ({
+jest.mock('./order-sheet', () => ({
 	OrderSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="order-sheet" /> : null),
 }));
 const mockVoidOrder = jest.fn();
@@ -73,7 +73,7 @@ jest.mock('../hooks/use-void-order', () => ({
 }));
 let mockScreenFocused = true;
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockScreenFocused }));
-jest.mock('./v2/tabs', () => ({
+jest.mock('./tabs', () => ({
 	OpenOrderTabs: ({ onCoverChange }: { onCoverChange: (covered: boolean) => Promise<void> }) => (
 		<button data-testid="open-orders" onClick={() => void onCoverChange(true)} />
 	),

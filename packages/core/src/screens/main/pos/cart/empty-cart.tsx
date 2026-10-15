@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 
-import { useT } from '../../../../../contexts/translations';
+import { useT } from '../../../../contexts/translations';
 
 /**
  * What the cart column shows with nothing in the cart: the fresh cart before its first

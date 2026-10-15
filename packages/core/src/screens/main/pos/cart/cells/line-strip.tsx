@@ -21,14 +21,14 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { editOffset, releaseOutcome, removeOffset, removePoint } from './line-strip.geometry';
-import { useT } from '../../../../../../contexts/translations';
-import { useRemoveLineItem } from '../../../hooks/use-remove-line-item';
-import { EditCartItemButton } from '../../cells/edit-cart-item-button';
-import { EditLineItem } from '../../cells/edit-line-item';
-import { EditFeeLine } from '../../cells/edit-fee-line';
-import { EditShippingLine } from '../../cells/edit-shipping-line';
+import { useT } from '../../../../../contexts/translations';
+import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
+import { EditCartItemButton } from './edit-cart-item-button';
+import { EditLineItem } from './edit-line-item';
+import { EditFeeLine } from './edit-fee-line';
+import { EditShippingLine } from './edit-shipping-line';
 
-import type { CartLine } from '../../../hooks/utils';
+import type { CartLine } from '../../hooks/utils';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 /** How far a hovered row rests to the left: enough of the strip's red edge to read as "there is something under here". */

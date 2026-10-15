@@ -5,11 +5,11 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useT } from '../../../../../../contexts/translations';
-import { NumberInput } from '../../../../components/number-input';
-import { lineRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
-import { useSplitLineItem } from '../../../hooks/use-split-line-item';
-import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
+import { useT } from '../../../../../contexts/translations';
+import { NumberInput } from '../../../components/number-input';
+import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
+import { useSplitLineItem } from '../../hooks/use-split-line-item';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;

@@ -26,29 +26,29 @@ import { Text } from '@wcpos/components/text';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { useDocField } from '@wcpos/query';
 
-import { useT } from '../../../../../contexts/translations';
+import { useT } from '../../../../contexts/translations';
 import { LineStrip } from './cells/line-strip';
 import { type LineSort, sortLines } from './sort-lines';
-import { FeeAndShippingTotal } from '../cells/fee-and-shipping-total';
+import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';
 import { FeeName } from './cells/fee-name';
-import { FeePrice } from '../cells/fee-price';
-import { LineItemImage } from '../cells/image';
+import { FeePrice } from './cells/fee-price';
+import { LineItemImage } from './cells/image';
 import { Price } from './cells/price';
 import { ProductName } from './cells/product-name';
 import { ProductTotal } from './cells/product-total';
 import { Quantity } from './cells/quantity-keypad';
-import { RegularPrice } from '../cells/regular_price';
-import { ShippingPrice } from '../cells/shipping-price';
+import { RegularPrice } from './cells/regular_price';
+import { ShippingPrice } from './cells/shipping-price';
 import { ShippingTitle } from './cells/shipping-title';
-import { Subtotal } from '../cells/subtotal';
-import { useUISettings } from '../../../contexts/ui-settings';
-import { type CurrentOrderRecord, useCurrentOrder } from '../../contexts/current-order';
-import { useCartLines } from '../../hooks/use-cart-lines';
+import { Subtotal } from './cells/subtotal';
+import { useUISettings } from '../../contexts/ui-settings';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+import { useCartLines } from '../hooks/use-cart-lines';
 import { EmptyCart } from './empty-cart';
-import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../../hooks/utils';
-import { SKU } from '../cells/sku';
+import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
+import { SKU } from './cells/sku';
 
-import type { Column, ColumnDef } from '../../../../../table-types';
+import type { Column, ColumnDef } from '../../../../table-types';
 const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
 /**
  * Item gives way (the decided cart board: `44px 1fr 70px 80px`). The amount columns hold a
@@ -304,7 +304,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 					// Measurement tooling must stay outside ordinary application bundles (ledger 16).
 
 					(
-						require('../../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../../e2e/cart-add-timing-readout')
+						require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
 					).CartAddTimingCommit,
 					{ orderId: currentOrderRecord.uuid, lines: line_items }
 				)}

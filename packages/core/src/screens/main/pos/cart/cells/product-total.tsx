@@ -7,8 +7,8 @@ import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../../../../contexts/app-state';
-import { useCurrentOrderCurrencyFormat } from '../../../../hooks/use-current-order-currency-format';
+import { useAppState } from '../../../../../contexts/app-state';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;

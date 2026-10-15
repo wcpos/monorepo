@@ -25,15 +25,15 @@ jest.mock('@wcpos/components/lib/motion', () => ({
 	EASE_EXIT: 'exit',
 	PANEL_SLIDE_OUT: 200,
 }));
-jest.mock('../../../hooks/use-remove-line-item', () => ({
+jest.mock('../../hooks/use-remove-line-item', () => ({
 	useRemoveLineItem: () => ({ removeLineItem: mockRemoveLineItem }),
 }));
-jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
-jest.mock('../../cells/edit-cart-item-button', () => ({ EditCartItemButton: () => null }));
-jest.mock('../../cells/edit-line-item', () => ({ EditLineItem: () => null }));
-jest.mock('../../cells/edit-fee-line', () => ({ EditFeeLine: () => null }));
-jest.mock('../../cells/edit-shipping-line', () => ({ EditShippingLine: () => null }));
+jest.mock('./edit-cart-item-button', () => ({ EditCartItemButton: () => null }));
+jest.mock('./edit-line-item', () => ({ EditLineItem: () => null }));
+jest.mock('./edit-fee-line', () => ({ EditFeeLine: () => null }));
+jest.mock('./edit-shipping-line', () => ({ EditShippingLine: () => null }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
