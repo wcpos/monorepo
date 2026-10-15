@@ -203,6 +203,16 @@ export function peekRedirectLoginUrl(): string | null {
 }
 
 /**
+ * Lets a consumer that lost its site state on reload (the demo button)
+ * recognise its own pending result without consuming it.
+ */
+export function peekRedirectClaim(): { loginUrl: string; claimKey: string | null } | null {
+	captureRedirectResult();
+	if (!pending || pending.loginUrl === null) return null;
+	return { loginUrl: pending.loginUrl, claimKey: pending.claimKey };
+}
+
+/**
  * Test-only: reset module state between tests.
  */
 export function __resetRedirectResultForTesting(): void {
