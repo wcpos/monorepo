@@ -133,7 +133,7 @@ jest.mock('../../../components/data-table/v2', () => ({
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
 }));
-jest.mock('../grid', () => ({
+jest.mock('./grid/product-grid', () => ({
 	ProductGrid: (props: Record<string, unknown>) => {
 		mockGridProps = props;
 		return <div />;
@@ -527,10 +527,8 @@ describe('POSProducts query-state wiring', () => {
 	it('drops a product drill when a browse source takes over, and does not bring it back', () => {
 		mockViewMode = 'grid';
 		const { rerender } = render(<POSProducts />);
-		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
-			onDrill: (record: unknown) => void;
-		}>;
-		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
 		expect(mockFilterBarProps.level).toBe('variations');
 
 		mockBrowseBy = 'categories';
@@ -561,10 +559,8 @@ describe('POSProducts query-state wiring', () => {
 		mockViewMode = 'grid';
 		render(<POSProducts />);
 		expect(mockSystemBack!()).toBe(false);
-		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
-			onDrill: (record: unknown) => void;
-		}>;
-		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
 		expect(mockFilterBarProps.level).toBe('variations');
 		let handled: boolean | undefined;
 		act(() => {
@@ -578,10 +574,8 @@ describe('POSProducts query-state wiring', () => {
 	it('drops a product drill when the scope changes', () => {
 		mockViewMode = 'grid';
 		const { rerender } = render(<POSProducts />);
-		const VariableTile = mockGridProps.variableTile as (props: object) => React.ReactElement<{
-			onDrill: (record: unknown) => void;
-		}>;
-		act(() => VariableTile({}).props.onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
+		const onDrill = mockGridProps.onDrill as (record: unknown) => void;
+		act(() => onDrill({ uuid: 'hoodie', payload: { type: 'variable' } }));
 		expect(mockFilterBarProps.level).toBe('variations');
 
 		mockScopeKey = '0:1';

@@ -5,10 +5,10 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { QueryStateProvider } from '../../../../../query/query-state-store';
+import { QueryStateProvider } from '../../../../../../query/query-state-store';
 import { ProductGridFooter } from './grid-footer';
 
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/loader', () => ({
 	Loader: () => <span data-testid="loader" />,
 }));

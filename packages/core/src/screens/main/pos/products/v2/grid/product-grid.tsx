@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
-import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord, QueryHandle, QueryResult } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
@@ -13,23 +12,24 @@ import {
 	useQueryHandleFields,
 	useQueryHandleValue,
 	useQuerySnapshot,
-} from '../../../../../query';
+} from '../../../../../../query';
 import {
 	logResultEmission,
 	markSyncActive,
 	probeEvent,
 	RENDER_PROBE_ENABLED,
 	useRenderProbe,
-} from '../render-probe';
+} from '../../render-probe';
 import { ProductGridFooter } from './grid-footer';
+import { TileGrid, useGridColumns } from './tile-grid';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
-import { useT } from '../../../../../contexts/translations';
-import { useUISettings } from '../../../contexts/ui-settings';
-import { ProductsFooter } from '../v2/footer';
+import { useT } from '../../../../../../contexts/translations';
+import { useUISettings } from '../../../../contexts/ui-settings';
+import { ProductsFooter } from '../footer';
 
 import type { RxCollection } from 'rxdb';
-import type { QueryStateActions, SnapshotFields } from '../../../../../query';
+import type { QueryStateActions, SnapshotFields } from '../../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 
@@ -111,8 +111,8 @@ const GRID_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
-	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
-	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
+	onDrill: React.ComponentProps<typeof VariableProductTile>['onDrill'];
+	variationsStyle: string;
 	/** The products query handle (roadmap#423): one snapshot, read here, nowhere else. */
 	handle: QueryHandle<ProductsResult>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
@@ -134,11 +134,11 @@ export function ProductGrid({
 	handle,
 	actions,
 	noDataMessage,
-	tile: Tile = ProductTile,
-	variableTile: VariableTile = VariableProductTile,
+	onDrill,
+	variationsStyle,
 }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
-	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
+	const gridColumns = useGridColumns();
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
 	const t = useT();
 
@@ -175,8 +175,8 @@ export function ProductGrid({
 		actions,
 		uiSettings,
 		t,
-		Tile,
-		VariableTile,
+		onDrill,
+		variationsStyle,
 		noDataMessage,
 	});
 
@@ -189,9 +189,9 @@ export function ProductGrid({
 	);
 
 	/**
-	 * Chunk flat product list into rows of N
+	 * Keep readable hits; the tile grid owns chunking and padding.
 	 */
-	const { rows, skippedStaleHits } = React.useMemo(() => {
+	const { products, skippedStaleHits } = React.useMemo(() => {
 		const products = deferredResult.hits.reduce<ProductHit[]>((acc, hit) => {
 			try {
 				// Replication can briefly leave deferred hits pointing at stale RxDB docs.
@@ -204,12 +204,8 @@ export function ProductGrid({
 			}
 			return acc;
 		}, []);
-		const chunked: ProductHit[][] = [];
-		for (let i = 0; i < products.length; i += gridColumns) {
-			chunked.push(products.slice(i, i + gridColumns));
-		}
-		return { rows: chunked, skippedStaleHits: deferredResult.hits.length - products.length };
-	}, [deferredResult.hits, gridColumns]);
+		return { products, skippedStaleHits: deferredResult.hits.length - products.length };
+	}, [deferredResult.hits]);
 	// What the footers report as "loaded": the rows the grid actually built, not the hits it
 	// was handed — replication churn can hand over stale hits that are skipped above, and the
 	// loaded-count is a referent E2E reads (#1345), so it must count rendered rows.
@@ -231,53 +227,44 @@ export function ProductGrid({
 		// deal's every move — owner, 2026-10-05). The footer beneath is the table's footer row.
 		<View className="flex h-full flex-col px-1">
 			{RENDER_PROBE_ENABLED ? <EmissionProbe handle={handle} /> : null}
-			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
-				<VirtualizedList.List
-					data={rows}
-					renderItem={({ item: row }) => (
-						<VirtualizedList.Item>
-							<View className="flex-row">
-								{row?.map(({ record }) =>
-									record.payload.type === 'variable' ? (
-										<VariableTile key={record.uuid} record={record} gridFields={gridFields} />
-									) : (
-										<Tile key={record.uuid} record={record} gridFields={gridFields} />
-									)
-								)}
-								{/* Spacers for incomplete last row */}
-								{row &&
-									row.length < gridColumns &&
-									Array.from({ length: gridColumns - row.length }).map((_, i) => (
-										<View key={`spacer-${i}`} className="m-1 flex-1" />
-									))}
-							</View>
-						</VirtualizedList.Item>
-					)}
-					estimatedItemSize={200}
-					onEndReachedThreshold={0.1}
-					onEndReached={handleEndReached}
-					ListFooterComponent={
-						<ProductGridFooter
-							engine={engine}
-							renderedCount={renderedCount}
-							hitCount={deferredResult.hits.length}
+			<TileGrid
+				testID="pos-products-grid-scroller"
+				tiles={products}
+				renderTile={({ record }) =>
+					record.payload.type === 'variable' ? (
+						<VariableProductTile
+							key={record.uuid}
+							record={record}
+							gridFields={gridFields}
+							onDrill={onDrill}
+							variationsStyle={variationsStyle}
 						/>
-					}
-					ListEmptyComponent={() => (
-						<View className="items-center justify-center p-4">
-							{/* "No products found" may only ever mean the search ANSWERED with
+					) : (
+						<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
+					)
+				}
+				onEndReached={handleEndReached}
+				footer={
+					<ProductGridFooter
+						engine={engine}
+						renderedCount={renderedCount}
+						hitCount={deferredResult.hits.length}
+					/>
+				}
+				empty={() => (
+					<View className="items-center justify-center p-4">
+						{/* "No products found" may only ever mean the search ANSWERED with
 							    nothing; a pending search says so instead (#1733). */}
-							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
-								<Text testID="search-pending-message">{t('common.searching')}</Text>
-							) : (
-								(noDataMessage ?? (
-									<Text testID="no-data-message">{t('common.no_products_found')}</Text>
-								))
-							)}
-						</View>
-					)}
-				/>
-			</VirtualizedList.Root>
+						{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
+							<Text testID="search-pending-message">{t('common.searching')}</Text>
+						) : (
+							(noDataMessage ?? (
+								<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+							))
+						)}
+					</View>
+				)}
+			/>
 			<GridStatusFooter handle={handle} shown={shown} count={renderedCount} />
 		</View>
 	);

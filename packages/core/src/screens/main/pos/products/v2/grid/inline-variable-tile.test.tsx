@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { VariableProductTile } from './variable-product-tile';
+import { VariableProductTile } from './inline-variable-tile';
 
 // The popover root is the tile's box: it carries the size class.
 jest.mock('@wcpos/components/popover', () => ({
@@ -18,16 +18,16 @@ jest.mock('@wcpos/components/popover', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: object, select: (value: object) => unknown) => select(record),
 }));
-jest.mock('../cells/variations-popover', () => ({
+jest.mock('../../cells/variations-popover', () => ({
 	useProductsStockStatusFilter: () => undefined,
 	VariationsPopover: () => null,
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../hooks/use-add-variation', () => ({ useAddVariation: () => ({}) }));
-jest.mock('../../../hooks/use-currency-format', () => ({
+jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../hooks/use-add-variation', () => ({ useAddVariation: () => ({}) }));
+jest.mock('../../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
 }));
-jest.mock('../../../components/product/price-with-tax', () => ({ PriceWithTax: () => null }));
+jest.mock('../../../../components/product/price-with-tax', () => ({ PriceWithTax: () => null }));
 jest.mock('./tile-image', () => ({ TileImage: () => null, TileImageBlurred: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
