@@ -14,6 +14,7 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { engineWarn } from '../engine-logger';
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
@@ -573,7 +574,7 @@ export class EngineOrderRepository {
 		unprotected: OrderDocument[];
 		protectedRemoteIds: Set<RemoteId>;
 	}> {
-		const docs = (await this.db.orders.find().exec()).map(
+		const docs = (await findAllUncached(this.db.orders)).map(
 			(doc) => doc.toJSON() as unknown as OrderDocument
 		);
 		const protectedRemoteIds = new Set<RemoteId>();

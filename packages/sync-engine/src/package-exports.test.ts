@@ -43,6 +43,9 @@ describe('package exports', () => {
 				// logger instead of the engine importing the app's: apps/main routes this
 				// process-wide warn sink to the category the engine used before.
 				'setSyncEngineLogger',
+				// @wcpos/query's catalogue-search blob reads through it, so no
+				// unsubscribed full-read RxQuery stays cached (#2502).
+				'findAllUncached',
 			].sort()
 		);
 	});
