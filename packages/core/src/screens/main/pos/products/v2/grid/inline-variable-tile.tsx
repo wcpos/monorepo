@@ -7,12 +7,12 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useProductsStockStatusFilter, VariationsPopover } from '../cells/variations-popover';
-import { useT } from '../../../../../contexts/translations';
-import { getVariablePrices } from '../../../components/product/get-variable-prices';
-import { PriceWithTax } from '../../../components/product/price-with-tax';
-import { useAddVariation } from '../../hooks/use-add-variation';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useProductsStockStatusFilter, VariationsPopover } from '../../cells/variations-popover';
+import { useT } from '../../../../../../contexts/translations';
+import { getVariablePrices } from '../../../../components/product/get-variable-prices';
+import { PriceWithTax } from '../../../../components/product/price-with-tax';
+import { useAddVariation } from '../../../hooks/use-add-variation';
+import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import { TileImage } from './tile-image';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];

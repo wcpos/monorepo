@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { VariableProductTile as InlineTile } from '../../grid/variable-product-tile';
+import { VariableProductTile as InlineTile } from './inline-variable-tile';
 import { DealStagedContext } from '../deal-stack';
 import { ProductTile } from './product-tile';
 

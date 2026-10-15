@@ -10,7 +10,7 @@ import { getVariablePrices } from '../../../../components/product/get-variable-p
 import { PriceWithTax, TaxLine } from '../../../../components/product/price-with-tax';
 import { displayStockStatus } from '../../../../components/product/resolve-stock';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
-import { TileImage, TileImageBlurred } from '../../grid/tile-image';
+import { TileImage, TileImageBlurred } from './tile-image';
 
 /*
  * What a product or a variation puts in the Poster tile's slots, from the record and the

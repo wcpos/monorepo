@@ -86,7 +86,7 @@ jest.mock('../../../../components/product/price-with-tax', () => ({
 jest.mock('../../../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
 // A picture that fails to load says so, as `TileImage` does before it paints.
 let mockImageFails = false;
-jest.mock('../../grid/tile-image', () => ({
+jest.mock('./tile-image', () => ({
 	TileImage: ({ onFailed }: { onFailed?: () => void }) => {
 		jest.requireActual('react').useLayoutEffect(() => {
 			if (mockImageFails) onFailed?.();
@@ -98,7 +98,7 @@ jest.mock('../../grid/tile-image', () => ({
 jest.mock('../deal-stack', () => ({
 	DealStagedContext: jest.requireActual('react').createContext(null),
 }));
-jest.mock('../../grid/variable-product-tile', () => ({
+jest.mock('./inline-variable-tile', () => ({
 	VariableProductTile: ({ record, grow }: { record: { uuid: string }; grow?: boolean }) => (
 		<div data-testid="inline-tile" data-grow={String(!!grow)}>
 			{record.uuid}

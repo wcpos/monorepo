@@ -133,7 +133,7 @@ jest.mock('../../../components/data-table/v2', () => ({
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
 }));
-jest.mock('../grid', () => ({
+jest.mock('./grid/product-grid', () => ({
 	ProductGrid: (props: Record<string, unknown>) => {
 		mockGridProps = props;
 		return <div />;

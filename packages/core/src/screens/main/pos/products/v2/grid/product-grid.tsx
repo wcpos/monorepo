@@ -13,23 +13,23 @@ import {
 	useQueryHandleFields,
 	useQueryHandleValue,
 	useQuerySnapshot,
-} from '../../../../../query';
+} from '../../../../../../query';
 import {
 	logResultEmission,
 	markSyncActive,
 	probeEvent,
 	RENDER_PROBE_ENABLED,
 	useRenderProbe,
-} from '../render-probe';
+} from '../../render-probe';
 import { ProductGridFooter } from './grid-footer';
-import { ProductTile } from './product-tile';
-import { VariableProductTile } from './variable-product-tile';
-import { useT } from '../../../../../contexts/translations';
-import { useUISettings } from '../../../contexts/ui-settings';
-import { ProductsFooter } from '../v2/footer';
+import { ProductTile } from '../../grid/product-tile';
+import { VariableProductTile } from './inline-variable-tile';
+import { useT } from '../../../../../../contexts/translations';
+import { useUISettings } from '../../../../contexts/ui-settings';
+import { ProductsFooter } from '../footer';
 
 import type { RxCollection } from 'rxdb';
-import type { QueryStateActions, SnapshotFields } from '../../../../../query';
+import type { QueryStateActions, SnapshotFields } from '../../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 

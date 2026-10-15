@@ -9,7 +9,7 @@ import { useT } from '../../../../../contexts/translations';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useAddProduct } from '../../hooks/use-add-product';
-import { TileImage } from './tile-image';
+import { TileImage } from '../v2/grid/tile-image';
 
 interface GridFields {
 	name: boolean;

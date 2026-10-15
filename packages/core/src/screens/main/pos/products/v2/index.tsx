@@ -25,7 +25,7 @@ import { useRegisterSession } from '../../../../../services/register-session/use
 import { CameraScanButton } from '../camera-scan-button';
 import { CameraScannerPanel } from '../camera-scanner-panel';
 import { StorageOutageBanner } from '../storage-outage-banner';
-import { ProductGrid } from '../grid';
+import { ProductGrid } from './grid/product-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from '../fit-page-size';
 import { usePanelSide } from '../../contexts/overlay-side/v2';
 import { UISettingsForm } from '../ui-settings-form';

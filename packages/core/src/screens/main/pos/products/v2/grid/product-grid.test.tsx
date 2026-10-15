@@ -7,7 +7,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { ProductGrid } from './index';
+import { ProductGrid } from './product-grid';
 
 let mockResult: { hits: object[] };
 let mockReady = true;
@@ -42,7 +42,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 }));
-jest.mock('../../../../../query', () => ({
+jest.mock('../../../../../../query', () => ({
 	// The Suspense-native reader, as the grid sees it: an answer, or a thrown promise / error.
 	useQuerySnapshot: () => {
 		if (mockError) throw mockError;
@@ -60,8 +60,8 @@ jest.mock('../../../../../query', () => ({
 		return jest.fn();
 	},
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../contexts/ui-settings', () => ({
+jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: { gridColumns$: 3, gridFields$: {} },
 	}),
@@ -97,12 +97,14 @@ jest.mock('./grid-footer', () => ({
 		</>
 	),
 }));
-jest.mock('./product-tile', () => ({ ProductTile: () => <div data-testid="default-tile" /> }));
-jest.mock('./variable-product-tile', () => ({
+jest.mock('../../grid/product-tile', () => ({
+	ProductTile: () => <div data-testid="default-tile" />,
+}));
+jest.mock('./inline-variable-tile', () => ({
 	VariableProductTile: () => <div data-testid="default-variable-tile" />,
 }));
 // The caption row the table view draws, values in (the tax notice is its own default child).
-jest.mock('../v2/footer', () => ({
+jest.mock('../footer', () => ({
 	ProductsFooter: ({
 		collectionName,
 		count,
