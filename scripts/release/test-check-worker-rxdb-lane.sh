@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$SCRIPT_DIR/check-worker-rxdb-lane.sh"
 REAL_WORKER="$SCRIPT_DIR/../../apps/main/public/sqlite.worker.js"
-# shellcheck source=check-worker-rxdb-lane.sh
+# shellcheck source=scripts/release/check-worker-rxdb-lane.sh
 source "$CHECK"
 
 tmpdir="$(mktemp -d)"

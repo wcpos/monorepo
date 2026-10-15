@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TAG="$SCRIPT_DIR/tag-web-bundle.sh"
-# shellcheck source=tag-web-bundle.sh
+# shellcheck source=scripts/release/tag-web-bundle.sh
 source "$TAG"
 
 tmpdir="$(mktemp -d)"
@@ -52,39 +52,43 @@ chmod +x "$tmpdir/curl404/curl"
 expect_eq "a failed CDN response reads as no version, without aborting" "" \
 	"$(set -euo pipefail; PATH="$tmpdir/curl404:$PATH" cdn_version 1.11 index.html)"
 
-# --- warm_entry ---
+# --- content verification: status-only checks must reject cached error bodies ---
 mkdir -p "$tmpdir/cdn"
 cat > "$tmpdir/cdn/curl" <<'MOCK'
 #!/usr/bin/env bash
-args="$*"
-case "$args" in
-	*purge.jsdelivr.net*) exit 0 ;;
-	*/build/metadata.json*) echo '{"fileMetadata":{"web":{"bundle":"_expo/static/js/web/entry-abc.js"}}}' ;;
-	*/build/_expo/static/js/web/entry-abc.js*)
+globoff=false; head=false
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-g) globoff=true ;;
+		-I) head=true ;;
+		-o) shift; body="$1" ;;
+		https://*) url="$1" ;;
+	esac
+	shift
+done
+[[ "$globoff" == true ]] || exit 64
+printf '%s\n' "$url" >> "$MOCK_LOG"
+case "$url" in
+	*purge.jsdelivr.net*) printf '{}' > "$body"; printf 200 ;;
+	*)
 		n=$(( $(cat "$MOCK_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$MOCK_COUNT"
-		[[ "$n" -ge "${MOCK_ENTRY_OK_AT:-99}" ]] || exit 22 ;;
-	*) exit 64 ;;
+		if [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
+			printf good > "$body"
+		else
+			printf '429: Too Many Requests' > "$body"
+		fi
+		if [[ "$head" == true ]]; then printf 'x-jsd-version: %s\r\n' "${MOCK_VERSION:-1.11.1}" > "$body"; fi
+		printf '%s' "${MOCK_HTTP:-200}"
+		exit "${MOCK_EXIT:-0}" ;;
 esac
 MOCK
 chmod +x "$tmpdir/cdn/curl"
-warm() { (set -euo pipefail; PATH="$tmpdir/cdn:$PATH" MOCK_COUNT="$tmpdir/count-$1" MOCK_ENTRY_OK_AT="$1" CDN_POLL_INTERVAL=0 warm_entry 1.11); }
-expect_status "an entry served on the third GET is warm" pass warm 3
-expect_status "an entry never served fails" fail warm 99
-
-# --- tag_action ---
-all=$'v1.10.40\nv1.11.0\nv1.11.1'
-expect_eq "untagged commit: create the next tag" "create v1.11.2" "$(tag_action 1.11 "" <<<"$all")"
-expect_eq "commit holds the lane's newest tag: resume" "resume v1.11.1" "$(tag_action 1.11 v1.11.1 <<<"$all")"
-expect_status "commit holds an older tag: refuse" fail tag_action 1.11 v1.11.0 <<<"$all"
-expect_status "commit holds another lane's tag: refuse" fail tag_action 1.11 v1.10.40 <<<"$all"
-
-# --- --dry-run end to end ---
-# A ref's build/ is the directory $MOCK_DIR/ref-<ref>; the bundle commit is `bundlesha`.
 cat > "$tmpdir/gh" <<'MOCK'
 #!/usr/bin/env bash
 args="$*"
 ref="${args##*ref=}"; ref="${ref%% *}"
 case "$args" in
+	'api repos/wcpos/web-bundle/git/trees/v1.11.1?recursive=1') cat "$MOCK_TREE"; exit "${MOCK_GH_EXIT:-0}" ;;
 	*"git/refs"*) echo "dry run must not create a ref" >&2; exit 99 ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .sha") echo bundlesha ;;
 	*"repos/wcpos/web-bundle/commits/"*" --jq .commit.message") printf '%s\n' "$MOCK_MSG" ;;
@@ -102,6 +106,82 @@ case "$args" in
 esac
 MOCK
 chmod +x "$tmpdir/gh"
+export MOCK_COUNT="$tmpdir/count" MOCK_LOG="$tmpdir/requests" MOCK_TREE="$tmpdir/tree"
+good_sha=$(printf good | git hash-object --stdin)
+entry='_expo/static/js/web/[orderId]-abc.js'
+cdn() { (PATH="$tmpdir/cdn:$tmpdir:$PATH" CDN_POLL_INTERVAL=0 "$@"); }
+expect_eq "version lookup disables URL globbing" 1.11.1 "$(cdn cdn_version 1.11 "$entry")"
+mkdir -p "$tmpdir/build/_expo/static/js/web"
+printf good > "$tmpdir/build/$entry"
+printf metadata > "$tmpdir/build/metadata.json"
+expect_eq "directory hashes and sorts relative paths" \
+	"$(printf '%s %s\n%s metadata.json' "$good_sha" "$entry" "$(git hash-object "$tmpdir/build/metadata.json")")" \
+	"$(expected_from_dir "$tmpdir/build")"
+cat > "$MOCK_TREE" <<JSON
+{"truncated":false,"tree":[
+{"type":"blob","path":"build/metadata.json","sha":"$good_sha"},
+{"type":"blob","path":"build/index.html","sha":"$good_sha"},
+{"type":"blob","path":"build/opfs.worker.js","sha":"$good_sha"},
+{"type":"blob","path":"build/sqlite.worker.js","sha":"$good_sha"},
+{"type":"tree","path":"build/_expo","sha":"ignored"},
+{"type":"blob","path":"README.md","sha":"ignored"},
+{"type":"blob","path":"build/$entry","sha":"$good_sha"}]}
+JSON
+expect_eq "tree keeps only build blobs, sorted and prefix stripped" \
+	"$(printf '%s %s\n' "$good_sha" "$entry" "$good_sha" index.html "$good_sha" metadata.json "$good_sha" opfs.worker.js "$good_sha" sqlite.worker.js)" \
+	"$(cdn expected_from_tree v1.11.1)"
+for path in metadata.json index.html opfs.worker.js sqlite.worker.js; do
+	expect_status "unhashed: $path" pass is_unhashed_path "$path"
+done
+for path in "$entry" _expo/static/js/web/entry-abc.js _expo/static/css/global-abc.css nested/opfs.worker.js; do
+	expect_status "hashed: $path" fail is_unhashed_path "$path"
+done
+expect_status "matching bytes pass (bracket URL needs globoff)" pass cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+rm -f "$MOCK_COUNT"
+MOCK_OK_AT=999 expect_status "HTTP 200 with a cached 429 body fails" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+cp "$tmpdir/out" "$tmpdir/diagnosis"
+expect_status "diagnosis includes cached error text" pass grep -q '429: Too Many Requests' "$tmpdir/diagnosis"
+expect_status "diagnosis includes byte count" pass grep -q '22 bytes' "$tmpdir/diagnosis"
+MOCK_HTTP=404 expect_status "404 fails even with matching bytes" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+MOCK_EXIT=16 expect_status "transport failure fails even with matching bytes" fail cdn verify_cdn_path 1.11 "$entry" "$good_sha"
+rm -f "$MOCK_COUNT" "$MOCK_LOG"
+MOCK_OK_AT=3 expect_status "wrong twice then correct passes" pass cdn verify_cdn_paths 1.11 5 <<<"$good_sha $entry"
+expect_eq "exact failing path purged twice" \
+	"$(printf 'https://purge.jsdelivr.net/gh/wcpos/web-bundle@1.11/build/%s\n' "$entry" "$entry")" \
+	"$(grep 'purge.jsdelivr.net' "$MOCK_LOG")"
+rm -f "$MOCK_COUNT" "$MOCK_LOG"
+MOCK_OK_AT=4 expect_status "verified paths are not fetched again" pass cdn verify_cdn_paths 1.11 5 \
+	<<<"$(printf '%s ready.js\n%s %s' "$good_sha" "$good_sha" "$entry")"
+expect_eq "ready path fetched only once" 1 "$(grep -c '/ready.js' "$MOCK_LOG")"
+MOCK_OK_AT=999 expect_status "wrong path fails at deadline" fail cdn verify_cdn_paths 1.11 0 <<<"$good_sha $entry"
+expect_eq "deadline failure names remaining path" 1 "$(grep -Fc "FAIL: @1.11/build/$entry" "$tmpdir/out")"
+expect_status "empty inventory cannot pass" fail cdn verify_cdn_paths 1.11 0 </dev/null
+MOCK_GH_EXIT=1 expect_status "tree API error cannot pass" fail cdn expected_from_tree v1.11.1
+sed 's/"truncated":false/"truncated":true/' "$MOCK_TREE" > "$tmpdir/truncated-tree"
+MOCK_TREE="$tmpdir/truncated-tree" expect_status "truncated tree cannot pass" fail cdn expected_from_tree v1.11.1
+phase() { (CDN_HASHED_DEADLINE_SECONDS=0; CDN_UNHASHED_DEADLINE_SECONDS=5; CDN_VERIFY_SECONDS=0; verify_lane_live 1.11 v1.11.1); }
+rm -f "$MOCK_COUNT" "$MOCK_LOG"
+MOCK_OK_AT=999 expect_status "phase A fails on cached error body" fail cdn phase
+expect_eq "phase A never purges metadata" 0 "$(grep -c 'purge.jsdelivr.net.*/metadata.json' "$MOCK_LOG" || true)"
+expect_status "both phases verify successfully" pass cdn phase
+expect_eq "LIVE includes all verified counts" 1 "$(grep -c '1 hashed files and 4 unhashed files' "$tmpdir/out")"
+expect_eq "phase B purges metadata" 1 "$(grep -c 'purge.jsdelivr.net.*/metadata.json' "$MOCK_LOG")"
+for path in index.html opfs.worker.js sqlite.worker.js; do
+	expect_eq "phase B purges $path" 1 "$(grep -c "purge.jsdelivr.net.*/$path" "$MOCK_LOG")"
+done
+MOCK_BAD_PATH=metadata.json expect_status "wrong unhashed bytes fail phase B" fail cdn phase
+MOCK_VERSION=1.11.0 expect_status "matching bytes but stale version fails phase B" fail cdn phase
+expect_status "library can run standalone" pass cdn bash "$SCRIPT_DIR/cdn-verify.sh" 1.11 0 <<<"$good_sha $entry"
+
+# --- tag_action ---
+all=$'v1.10.40\nv1.11.0\nv1.11.1'
+expect_eq "untagged commit: create the next tag" "create v1.11.2" "$(tag_action 1.11 "" <<<"$all")"
+expect_eq "commit holds the lane's newest tag: resume" "resume v1.11.1" "$(tag_action 1.11 v1.11.1 <<<"$all")"
+expect_status "commit holds an older tag: refuse" fail tag_action 1.11 v1.11.0 <<<"$all"
+expect_status "commit holds another lane's tag: refuse" fail tag_action 1.11 v1.10.40 <<<"$all"
+
+# --- --dry-run end to end ---
+# A ref's build/ is the directory $MOCK_DIR/ref-<ref>; the bundle commit is `bundlesha`.
 # at <ref> <name>=<rxdb>...: that ref's build/ holds exactly those workers.
 at() {
 	local d="$tmpdir/ref-$1" spec
