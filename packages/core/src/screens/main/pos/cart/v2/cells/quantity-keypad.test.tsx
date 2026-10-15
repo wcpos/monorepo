@@ -7,8 +7,12 @@ import { Quantity } from './quantity-keypad';
 import { openLineQuantity, scrollToLine } from '../../../conditions/use-cart-conditions';
 
 const mockUpdateLineItem = jest.fn();
+const mockSplitLineItem = jest.fn();
+jest.mock('../../../hooks/use-split-line-item', () => ({
+	useSplitLineItem: () => ({ splitLineItem: mockSplitLineItem }),
+}));
 jest.mock('../../../hooks/use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ updateLineItem: mockUpdateLineItem, splitLineItem: jest.fn() }),
+	useUpdateLineItem: () => ({ updateLineItem: mockUpdateLineItem }),
 }));
 jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // The conditions module's own reads (store session) are not under test here.
@@ -72,4 +76,16 @@ it('a mounted keypad is what the notice opens; it registers no scroll of its own
 	unmount();
 	openLineQuantity('line-q');
 	expect(document.activeElement).not.toBe(input);
+});
+
+it('the Split link passes its line uuid to the split hook', () => {
+	mockSplitLineItem.mockClear();
+	const props = {
+		row: { original: { uuid: 'line-split', type: 'line_items', item: { quantity: 3 } } },
+		column: { columnDef: { meta: { show: () => true } } },
+	} as unknown as React.ComponentProps<typeof Quantity>;
+	render(<Quantity {...props} />);
+	fireEvent.click(screen.getByTestId('cart-line-split'));
+	expect(mockSplitLineItem).toHaveBeenCalledTimes(1);
+	expect(mockSplitLineItem).toHaveBeenCalledWith('line-split');
 });
