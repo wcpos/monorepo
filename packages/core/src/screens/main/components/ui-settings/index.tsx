@@ -125,7 +125,11 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side = '
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose testID="ui-settings-close">{t('common.close')}</DialogClose>
-						<Button variant="outline-error" onPress={handleButtonPress}>
+						<Button
+							testID="ui-settings-restore-defaults"
+							variant="outline-error"
+							onPress={handleButtonPress}
+						>
 							{t('common.restore_default_settings')}
 						</Button>
 					</DialogFooter>
