@@ -5,7 +5,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { displayStockStatus } from '../../../components/product/resolve-stock';
-import { stockMark } from '../v2/grid/tile-words';
+import { stockMark } from '../tiles/tile-words';
 
 type Props = {
 	row: { original: { record: EngineRecord<'products'> | EngineRecord<'variations'> } };

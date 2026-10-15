@@ -7,7 +7,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { OptionChips } from '../v2/option-chips';
+import { OptionChips } from '../option-chips';
 import { StockQuantity } from './stock-quantity';
 import { resolveVariationName } from '../../../components/product/resolve-variation-name';
 

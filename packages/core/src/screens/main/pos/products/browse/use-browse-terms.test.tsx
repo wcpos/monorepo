@@ -1,0 +1,451 @@
+/** @jest-environment jsdom */
+import { act, renderHook } from '@testing-library/react';
+
+import { useDocField } from '@wcpos/query';
+
+import { useAllTermsHandle, useProductsCarryingTermsHandle } from '../../../../../query';
+import { useT } from '../../../../../contexts/translations';
+import { useUISettings } from '../../../contexts/ui-settings';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import {
+	projectShortcuts,
+	projectTerms,
+	useBrowseCounts,
+	useBrowseTerms,
+} from './use-browse-terms';
+
+import type { BrowseBy, BrowseTerm } from './browse-source';
+
+// The projections are pure; the hooks they sit beside are mocked out of the import graph.
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
+jest.mock('@wcpos/query', () => ({ useDocField: jest.fn() }));
+jest.mock('../../../../../query', () => ({
+	useAllTermsHandle: jest.fn(),
+	useProductsCarryingTermsHandle: jest.fn(),
+	// The real reader: the hook reads each handle's snapshot as the stage does.
+	useQueryHandleFields: jest.requireActual<typeof import('../../../../../query/query-handles')>(
+		'../../../../../query/query-handles'
+	).useQueryHandleFields,
+}));
+jest.mock('../../../../../contexts/translations', () => ({ useT: jest.fn() }));
+jest.mock('../../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
+jest.mock('../../../hooks/use-currency-format', () => ({ useCurrencyFormat: jest.fn() }));
+
+const rec = (payload: Record<string, unknown>) => ({ payload });
+/** The products UI settings each `useDocField` selector reads. */
+const settings = (value: Record<string, unknown>) =>
+	(useDocField as jest.Mock).mockImplementation(
+		(_doc: unknown, select: (settings: Record<string, unknown>) => unknown) => select(value)
+	);
+// The existence read's answer when nothing is lifted.
+const NONE_CARRIED = new Set<number>();
+
+describe('projectTerms', () => {
+	const records = [
+		rec({
+			id: 1,
+			name: 'Drinks',
+			parent: 0,
+			menu_order: 1,
+			count: 12,
+			image: { src: 'https://x/d.jpg' },
+			display: 'both',
+		}),
+		rec({ id: 2, name: 'Hot', parent: 1, menu_order: 1, count: 6 }),
+		rec({ id: 3, name: 'Cold', parent: 1, menu_order: 2, count: 6, image: null }),
+		rec({ id: 4, name: 'Empty', parent: 0, count: 0 }),
+	];
+	it('projects a hierarchical source into roots, children and id sets', () => {
+		const terms = projectTerms(records as never, 'categories', NONE_CARRIED);
+		expect(terms.rootsOf().map((t) => t.kind === 'term' && t.name)).toEqual(['Drinks']);
+		const drinks = terms.rootsOf()[0];
+		expect(terms.childrenOf(drinks).map((t) => t.kind === 'term' && t.name)).toEqual([
+			'Hot',
+			'Cold',
+		]);
+		expect(terms.idsFor(drinks)).toEqual([1, 2, 3]);
+		expect(drinks.kind === 'term' && drinks.imageSrc).toBe('https://x/d.jpg');
+		const cold = terms.childrenOf(drinks)[1];
+		expect(cold.kind === 'term' && cold.imageSrc).toBeUndefined();
+	});
+	it('projects a flat source by name with no children', () => {
+		const terms = projectTerms(
+			[rec({ id: 9, name: 'Vegan', count: 2 }), rec({ id: 8, name: 'Decaf', count: 1 })] as never,
+			'tags',
+			NONE_CARRIED
+		);
+		expect(terms.rootsOf().map((t) => t.kind === 'term' && t.name)).toEqual(['Decaf', 'Vegan']);
+		expect(terms.childrenOf(terms.rootsOf()[0])).toEqual([]);
+		expect(terms.idsFor(terms.rootsOf()[0])).toEqual([8]);
+	});
+	it('keeps a zero-count term a synced product carries', () => {
+		const terms = projectTerms(records as never, 'categories', new Set([4]));
+		expect(terms.rootsOf().map((t) => t.kind === 'term' && t.name)).toEqual(['Empty', 'Drinks']);
+		expect(terms.all?.map((t) => t.kind === 'term' && t.name)).toContain('Empty');
+	});
+	it('has no terms until the collection has answered', () => {
+		expect(projectTerms(undefined, 'categories', NONE_CARRIED).all).toBeUndefined();
+		expect(projectTerms([], 'categories', NONE_CARRIED).all).toEqual([]);
+	});
+	it('has no terms while the existence read of its zero-count terms is pending', () => {
+		const terms = projectTerms(records as never, 'categories', undefined);
+		expect(terms.all).toBeUndefined();
+		expect(terms.rootsOf()).toEqual([]);
+	});
+});
+
+describe('projectShortcuts', () => {
+	it('turns the stored quick filters into shortcut terms in order, described', () => {
+		const items = [
+			{ type: 'pill', id: 'stock_status', show: true },
+			{
+				type: 'quick',
+				id: 'qf-2',
+				label: 'Breakfast',
+				conditions: [{ field: 'categories', value: [3, 4] }],
+			},
+			{
+				type: 'quick',
+				id: 'qf-1',
+				label: 'Under 3',
+				conditions: [{ field: 'price', value: { max: 3 } }],
+			},
+		];
+		const terms = projectShortcuts(items as never, (qf) => `desc:${qf.label}`);
+		expect(
+			terms.rootsOf().map((t) => t.kind === 'shortcut' && [t.id, t.name, t.description])
+		).toEqual([
+			['qf-2', 'Breakfast', 'desc:Breakfast'],
+			['qf-1', 'Under 3', 'desc:Under 3'],
+		]);
+		expect(terms.quickFilterFor(terms.rootsOf()[0])?.label).toBe('Breakfast');
+		expect(terms.idsFor(terms.rootsOf()[0])).toEqual([]);
+	});
+});
+
+type Payload = Record<string, unknown>;
+type Result = { hits: { record: { payload: Payload } }[] };
+const result = (payloads: Payload[]): Result => ({
+	hits: payloads.map((payload) => ({ record: { payload } })),
+});
+
+type FakeHandle = {
+	value: { ready: boolean; hits: unknown[] };
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>, key?: string) => FakeHandle;
+};
+
+/**
+ * The hook's handles as the real ones behave: one handle per read, unanswered (`ready: false`)
+ * until its read answers — a disabled read answers empty at once — and keeping its last answer
+ * once it has, so a source switched back to is its own handle again. `pend` drives the one
+ * demand flag the hook reads, `pending`, on every handle asked for.
+ */
+function fakeHandles() {
+	const handles = new Map<string, FakeHandle>();
+	let pending = false;
+	return {
+		read(key: string, answered?: Result) {
+			let handle = handles.get(key);
+			if (!handle) {
+				handle = fakeQueryHandle(
+					answered ? { result: answered, pending } : { ready: false, pending },
+					key
+				);
+				handles.set(key, handle);
+			}
+			return handle;
+		},
+		emit(key: string, payloads: Payload[]) {
+			act(() => handles.get(key)!.set({ ready: true, result: result(payloads) }));
+		},
+		pend(next: boolean) {
+			pending = next;
+			act(() => handles.forEach((handle) => handle.set({ pending: next })));
+		},
+	};
+}
+
+/** The products read beside a terms handle: disabled (answered empty) with no ids. */
+function fakeCarrying() {
+	const fake = fakeHandles();
+	const keyOf = (taxonomy: string, ids: readonly number[]) =>
+		`${taxonomy}:${[...ids].sort((a, b) => a - b).join(',')}`;
+	(useProductsCarryingTermsHandle as jest.Mock).mockImplementation(
+		(taxonomy: string, ids: readonly number[]) =>
+			fake.read(keyOf(taxonomy, ids), ids.length === 0 ? result([]) : undefined)
+	);
+	return {
+		emit: (taxonomy: string, ids: number[], payloads: Payload[]) =>
+			fake.emit(keyOf(taxonomy, ids), payloads),
+	};
+}
+
+describe('useBrowseCounts', () => {
+	// One terms handle per source, as the dialog's three hooks hold, and the sources whose
+	// answer the hook reports withheld.
+	let terms: Record<string, ReturnType<typeof fakeHandles>>;
+	let withheld: Set<string>;
+	beforeEach(() => {
+		withheld = new Set();
+		terms = {
+			'products/categories': fakeHandles(),
+			'products/tags': fakeHandles(),
+			'products/brands': fakeHandles(),
+		};
+		(useAllTermsHandle as jest.Mock).mockImplementation((collection: string) => ({
+			handle: terms[collection].read(collection),
+			withheld: withheld.has(collection),
+		}));
+		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		settings({ filterBar: [] });
+	});
+	it("counts each source's root terms, and nothing for a source that has not answered", () => {
+		fakeCarrying();
+		settings({
+			filterBar: [
+				{ type: 'pill', id: 'stock_status', show: true },
+				{
+					type: 'quick',
+					id: 'qf-1',
+					label: 'Under 3',
+					conditions: [{ field: 'price', value: { max: 3 } }],
+				},
+			],
+		});
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 2, name: 'Hot', parent: 1, count: 6 },
+			{ id: 3, name: 'Food', parent: 0, count: 4 },
+		]);
+		terms['products/brands'].emit('products/brands', []);
+		expect(counts.current).toEqual({ categories: 2, tags: undefined, brands: 0, shortcuts: 1 });
+	});
+	// Opening the dialog pulls nothing it holds: thousands of tags, or a brands route that 404s
+	// before WooCommerce 9.4, must not be fetched on a settings tap (an empty source is pulled
+	// once by the handle itself — see `query-handles.engine.test.tsx`).
+	it('reads every source from resident terms only, and asks the stage baseline of the products', () => {
+		(useAllTermsHandle as jest.Mock).mockClear();
+		fakeCarrying();
+		(useProductsCarryingTermsHandle as jest.Mock).mockClear();
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseCounts());
+		const termCalls = (useAllTermsHandle as jest.Mock).mock.calls;
+		expect(new Set(termCalls.map((call) => JSON.stringify(call)))).toEqual(
+			new Set(
+				['products/categories', 'products/tags', 'products/brands'].map((collection) =>
+					JSON.stringify([collection, true, { residentsOnly: true }])
+				)
+			)
+		);
+		expect(
+			(useProductsCarryingTermsHandle as jest.Mock).mock.calls.every(
+				(call) => call[2]?.showOutOfStock === true
+			)
+		).toBe(true);
+	});
+	// A cold collection's local read answers empty at once; its refresh has not landed yet.
+	it('counts nothing for a cold source while its refresh is pending, then its answer', () => {
+		fakeCarrying();
+		terms['products/categories'].pend(true);
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', []);
+		expect(counts.current.categories).toBeUndefined();
+
+		// Settled — met, or failed offline — an empty answer is one.
+		terms['products/categories'].pend(false);
+		expect(counts.current.categories).toBe(0);
+	});
+	// A fresh till's residents-only read: empty until its one refresh settles, and the hook says
+	// so — the empty answer is withheld, not a count of zero (dimmed).
+	it('counts nothing for a source whose answer is withheld, then its answer', () => {
+		fakeCarrying();
+		withheld.add('products/categories');
+		const { result: counts, rerender } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', []);
+		expect(counts.current.categories).toBeUndefined();
+
+		withheld.delete('products/categories');
+		rerender();
+		expect(counts.current.categories).toBe(0);
+	});
+	it('keeps a warm source counted while a refresh is pending', () => {
+		fakeCarrying();
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+		]);
+		terms['products/categories'].pend(true);
+		expect(counts.current.categories).toBe(1);
+	});
+	// A POS-only store: every term is zero-count, kept only by the products that carry it. The
+	// products read starts disabled (no terms yet) and answers empty — that answer is not the
+	// zero-count terms' answer.
+	it('counts nothing for a source whose zero-count terms are still being looked for', () => {
+		const carrying = fakeCarrying();
+		const { result: counts } = renderHook(() => useBrowseCounts());
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		expect(counts.current.categories).toBeUndefined();
+
+		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
+		expect(counts.current.categories).toBe(2);
+
+		// A changed id set is a new read, pending until it answers: the stage holds its list, but
+		// a held list is not a count — the row shows none (and is not dimmed).
+		terms['products/categories'].emit('products/categories', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(counts.current.categories).toBeUndefined();
+		carrying.emit('categories', [5, 6], [{ categories: [{ id: 5 }] }, { categories: [{ id: 6 }] }]);
+		expect(counts.current.categories).toBe(3);
+	});
+});
+
+describe('useBrowseTerms', () => {
+	// The handles each render asked for, once each (a render may run twice before it commits).
+	const asked = (hook: unknown) => [
+		...new Set((hook as jest.Mock).mock.calls.map((call) => JSON.stringify(call.slice(0, 2)))),
+	];
+	// One terms handle per read for the stage; a source change asks for another.
+	let terms: ReturnType<typeof fakeHandles>;
+	beforeEach(() => {
+		(useAllTermsHandle as jest.Mock).mockReset();
+		(useProductsCarryingTermsHandle as jest.Mock).mockReset();
+		terms = fakeHandles();
+		(useAllTermsHandle as jest.Mock).mockImplementation((collection: string, enabled: boolean) => ({
+			handle: terms.read(`${collection}:${enabled}`, enabled ? undefined : result([])),
+			withheld: false,
+		}));
+		fakeCarrying();
+		(useUISettings as jest.Mock).mockReturnValue({ uiSettings: {} });
+		settings({ filterBar: [] });
+		(useT as jest.Mock).mockReturnValue((key: string) => key);
+		(useCurrencyFormat as jest.Mock).mockReturnValue({ format: String });
+	});
+	it('reads only the active taxonomy', () => {
+		renderHook(() => useBrowseTerms('tags'));
+		expect(asked(useAllTermsHandle)).toEqual(['["products/tags",true]']);
+		expect(asked(useProductsCarryingTermsHandle)).toEqual(['["tags",[]]']);
+	});
+	it("fetches the stage's terms, and lifts a zero-count term only inside the stock baseline", () => {
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useAllTermsHandle as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			residentsOnly: false,
+		});
+		expect((useProductsCarryingTermsHandle as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: false,
+		});
+
+		settings({ filterBar: [], showOutOfStock: true });
+		renderHook(() => useBrowseTerms('tags'));
+		expect((useProductsCarryingTermsHandle as jest.Mock).mock.calls.at(-1)?.[2]).toEqual({
+			showOutOfStock: true,
+		});
+	});
+	it('reads no taxonomy for the shortcuts', () => {
+		renderHook(() => useBrowseTerms('shortcuts'));
+		expect(asked(useAllTermsHandle)).toEqual(['["products/categories",false]']);
+	});
+	// The open term's count drops to zero beside another zero-count term: the existence read for
+	// the new id set has not answered, and the last one never asked about this term. The list is
+	// held as it was (no blink), the newly-zero term in it, and marked pending.
+	it('holds the visible list, pending, while a term that has just dropped to zero count is looked for', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		carrying.emit('categories', [5], [{ categories: [{ id: 5 }] }]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(false);
+
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 0 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5, 1]);
+		expect(browse.current.pending).toBe(true);
+		// Answered without a product carrying Drinks: it goes, and the list is no longer held.
+		carrying.emit('categories', [1, 5], [{ categories: [{ id: 5 }] }]);
+		expect(browse.current.all?.map((term) => term.kind === 'term' && term.id)).toEqual([5]);
+		expect(browse.current.pending).toBe(false);
+	});
+
+	// A term new to the source at zero count (a fresh record from taxonomy sync) was never shown:
+	// while its existence read is pending it is unknown, and unknown is hidden — never a live
+	// tile that blinks out when the read answers. The terms shown before are held meanwhile.
+	it('hides a newly synced zero-count term until its existence read answers, holding the terms shown before', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// Visible {Drinks}; Counter (zero count) was asked about and is not carried: hidden.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+		]);
+		carrying.emit('categories', [5], []);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		// Kiosk syncs in at zero count: the read for {Counter, Kiosk} is pending — Drinks stays,
+		// Kiosk is not shown as live.
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 5, name: 'Counter', parent: 0, count: 0 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		// A product carries Kiosk: shown.
+		carrying.emit('categories', [5, 6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+		// Answered again with nothing carrying it: hidden.
+		carrying.emit('categories', [5, 6], []);
+		expect(ids()).toEqual([1]);
+	});
+
+	it('holds the terms shown before while the FIRST zero-count term is looked for, the new one hidden', () => {
+		const carrying = fakeCarrying();
+		const { result: browse } = renderHook(() => useBrowseTerms('categories'));
+		const ids = () => browse.current.all?.map((term) => term.kind === 'term' && term.id).sort();
+		// No zero-count terms: nothing to look for, the list is settled.
+		terms.emit('products/categories:true', [{ id: 1, name: 'Drinks', parent: 0, count: 12 }]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(false);
+
+		terms.emit('products/categories:true', [
+			{ id: 1, name: 'Drinks', parent: 0, count: 12 },
+			{ id: 6, name: 'Kiosk', parent: 0, count: 0 },
+		]);
+		expect(ids()).toEqual([1]);
+		expect(browse.current.pending).toBe(true);
+		carrying.emit('categories', [6], [{ categories: [{ id: 6 }] }]);
+		expect(ids()).toEqual([1, 6]);
+		expect(browse.current.pending).toBe(false);
+	});
+
+	it("has no terms after a source switch until the new source's own query answers", () => {
+		const names = (all: BrowseTerm[] | undefined) =>
+			all?.map((term) => term.kind === 'term' && term.name);
+		const { result: browse, rerender } = renderHook(({ source }) => useBrowseTerms(source), {
+			initialProps: { source: 'categories' as BrowseBy },
+		});
+		terms.emit('products/categories:true', [{ id: 1, name: 'Drinks', parent: 0, count: 12 }]);
+		expect(names(browse.current.all)).toEqual(['Drinks']);
+
+		rerender({ source: 'tags' });
+		expect(browse.current.all).toBeUndefined();
+		terms.emit('products/tags:true', [{ id: 9, name: 'Vegan', count: 2 }]);
+		expect(names(browse.current.all)).toEqual(['Vegan']);
+	});
+});
