@@ -1,12 +1,9 @@
-import { isGuestCustomer } from '@wcpos/sync-core';
-
 import { calculateCartLine } from './cart-line';
 import { recalculateCoupons } from './internal/coupons/recalculate';
-import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
+import { couponValidationContext, resolveCouponReplay } from './internal/coupons/context';
 import { validateCoupon } from './internal/coupons/validate';
-import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
 import { calculateOrderTotals, type OrderTotals } from './internal/order-totals';
-import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
+import { extractFeeLineData } from './internal/lines/pos-data';
 import {
 	isActiveCouponLine,
 	isActiveFeeLine,
@@ -15,7 +12,6 @@ import {
 } from './snapshot';
 
 import type { CartConfig } from './config';
-import type { CouponLineItem } from './internal/coupons/helpers';
 import type { CartSnapshot } from './snapshot';
 import type {
 	CouponContext,
@@ -160,73 +156,6 @@ function computeChanged(snapshot: CartSnapshot, patch: SettlePatch): boolean {
 }
 
 /**
- * Build the candidate-validation context EXACTLY as `use-add-coupon.ts` builds
- * it today: item price = parseFloat(total)/quantity, on_sale from
- * `_woocommerce_pos_data` price < regular_price, cartSubtotal = Σ
- * parseFloat(subtotal) over active lines, customer identity from the snapshot.
- */
-function buildValidationContext(args: {
-	snapshot: CartSnapshot;
-	activeLineItems: readonly LineItemInput[];
-	appliedCouponLines: readonly (CouponLineInput & { code: string })[];
-	coupons: CouponContext['coupons'];
-	enrichedCategories: Map<number, { id: number }[]>;
-	now: number;
-}) {
-	const { snapshot, activeLineItems, appliedCouponLines, coupons, enrichedCategories, now } = args;
-
-	const lineItems: CouponLineItem[] = activeLineItems.map((item) => {
-		const qty = item.quantity || 1;
-		const posData = parsePosData(item);
-		const posPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
-		const posRegular =
-			posData?.regular_price != null ? parseFloat(String(posData.regular_price)) : NaN;
-		const onSale =
-			Number.isFinite(posPrice) && Number.isFinite(posRegular) && posRegular > 0
-				? posPrice < posRegular
-				: false;
-		return {
-			product_id: item.product_id!,
-			quantity: qty,
-			price: parseFloat(item.total || '0') / qty,
-			subtotal: item.subtotal || '0',
-			total: item.total || '0',
-			categories: enrichedCategories.get(item.product_id!) || [],
-			on_sale: onSale,
-		};
-	});
-
-	const cartSubtotal = activeLineItems.reduce(
-		(sum, item) => sum + parseFloat(item.subtotal || '0'),
-		0
-	);
-
-	const appliedCoupons = appliedCouponLines.map((cl) => cl.code);
-	const appliedCouponsWithIndividualUse: string[] = [];
-	for (const cl of appliedCouponLines) {
-		const applied = coupons.get(cl.code.toLowerCase());
-		if (applied?.individual_use && cl.code) {
-			appliedCouponsWithIndividualUse.push(cl.code);
-		}
-	}
-
-	return {
-		lineItems,
-		appliedCoupons,
-		appliedCouponsWithIndividualUse,
-		cartSubtotal,
-		// QUIRK(parity): mirrors use-add-coupon.ts — `|| ''` preserved verbatim, and the
-		// guest customer (and absent customer_id) maps to null for the email-based used_by check.
-		customerEmail: snapshot.billing?.email || '',
-		customerId:
-			snapshot.customer_id == null || isGuestCustomer(snapshot.customer_id)
-				? null
-				: snapshot.customer_id,
-		now,
-	};
-}
-
-/**
  * Steps 5-7 of the pipeline, over whatever lines the caller settled on: percent
  * fees recomputed on that basis → order totals → the money patch.
  *
@@ -359,27 +288,14 @@ export function settleCart(
 	// CouponInput in the context. No partial output. (Sanctioned crash fix (a):
 	// today this throws inside an uncaught subscription.)
 	const neededCodes = [...new Set([...activeCodes, ...candidateCodes])];
-	const availableCoupons = options?.coupons?.coupons;
-	const missingCodes = neededCodes.filter((code) => !availableCoupons?.has(code));
-	if (missingCodes.length > 0) {
-		return { ok: false, error: { code: 'missing_coupon', missingCodes }, warnings };
-	}
-
-	// 2. Category enrichment — once, shared by validation and replay
-	// (wc_get_product_cat_ids parity: ancestors included).
-	const enrichedCategories = new Map<number, { id: number }[]>();
-	if (options?.coupons) {
-		const direct = new Map<number, { id: number }[]>();
-		for (const [productId, categories] of options.coupons.productCategories) {
-			direct.set(productId, [...categories]);
-		}
-		const enriched = enrichCategoriesWithAncestors(
-			direct,
-			new Map(options.coupons.categoryParents ?? [])
-		);
-		for (const [productId, categories] of enriched) {
-			enrichedCategories.set(productId, categories);
-		}
+	const coupons = options?.coupons ?? { coupons: new Map(), productCategories: new Map() };
+	const replayContext = resolveCouponReplay(coupons, neededCodes);
+	if (!replayContext.ok) {
+		return {
+			ok: false,
+			error: { code: 'missing_coupon', missingCodes: replayContext.missingCodes },
+			warnings,
+		};
 	}
 
 	// 3. Validation stage — each candidate validated, in order, against the cart
@@ -402,18 +318,20 @@ export function settleCart(
 			})
 			.reverse();
 		const activeLineItems = lineItems.filter((item) => isActiveLineItem(item));
-		const context = buildValidationContext({
-			snapshot,
-			activeLineItems,
-			appliedCouponLines,
-			coupons: availableCoupons!,
-			enrichedCategories,
+		const context = {
+			...couponValidationContext({
+				lineItems: activeLineItems,
+				appliedCouponLines,
+				coupons,
+				billing: snapshot.billing,
+				customer_id: snapshot.customer_id,
+			}),
 			now: options.validate.now,
-		});
+		};
 
 		for (let i = 0; i < candidateCodes.length; i++) {
 			const code = candidateCodes[i];
-			const coupon = availableCoupons!.get(code)!;
+			const coupon = coupons.coupons.get(code)!;
 			const result = validateCoupon(coupon, context);
 			if (!result.valid) {
 				return {
@@ -428,7 +346,7 @@ export function settleCart(
 			}
 			context.appliedCoupons.push(code);
 			if (coupon.individual_use) {
-				context.appliedCouponsWithIndividualUse.push(code);
+				context.appliedCouponsWithIndividualUse!.push(code);
 			}
 		}
 	}
@@ -438,12 +356,10 @@ export function settleCart(
 	let postReplayLineItems: LineItemInput[] | undefined;
 	let postReplayCouponLines: CouponLineInput[] | undefined;
 	if (activeCouponLines.length > 0) {
-		const couponConfigs = toCouponConfigs(activeCodes, availableCoupons!);
-
 		const replay = recalculateCoupons({
 			lineItems,
 			couponLines,
-			couponConfigs,
+			couponConfigs: replayContext.couponConfigs,
 			pricesIncludeTax: config.pricesIncludeTax,
 			calcDiscountsSequentially: config.calcDiscountsSequentially,
 			// QUIRK(parity): replay taxes are recomputed from config.rates UNGATED by
@@ -455,7 +371,7 @@ export function settleCart(
 				order: number;
 				class?: string;
 			}[],
-			productCategories: enrichedCategories,
+			productCategories: replayContext.productCategories,
 			taxRoundAtSubtotal: config.taxRoundAtSubtotal,
 			dp: config.dp,
 		});
