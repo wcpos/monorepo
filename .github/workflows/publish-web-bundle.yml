@@ -94,6 +94,9 @@ jobs:
         if: ${{ github.event.inputs.bundle_branch == 'main' }}
         run: cp scripts/release/check-worker-rxdb-lane.sh "$RUNNER_TEMP/check-worker-rxdb-lane.sh"
 
+      - name: 📌 Stage CDN verification from the workflow revision
+        run: cp scripts/release/cdn-verify.sh "$RUNNER_TEMP/cdn-verify.sh"
+
       - name: 🔎 Resolve the requested monorepo SHA
         id: monorepo-sha
         env:
@@ -194,6 +197,7 @@ jobs:
           cp "$MAPS_DIR"/*.js "$JS_DIR/"
 
       - name: 🚀 Publish to web-bundle@${{ github.event.inputs.bundle_branch }}
+        id: published
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
@@ -226,18 +230,41 @@ jobs:
           git add -A
           if git diff --staged --quiet; then
             echo "No bundle changes to publish."
+            echo "published=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_SHA})"
           git push origin "$BRANCH"
+          echo "published=true" >> "$GITHUB_OUTPUT"
 
-      - name: 🧹 Purge jsDelivr
+      - name: 🧹 Purge and verify jsDelivr
+        if: ${{ steps.published.outputs.published == 'true' }}
         env:
           BRANCH: ${{ github.event.inputs.bundle_branch }}
         run: |
-          set -e
-          for f in metadata.json index.html; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://purge.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/${f}" || echo "000")
-            echo "purge @${BRANCH}/build/${f} -> HTTP ${code}"
-          done
+          set -euo pipefail
+          source "$RUNNER_TEMP/cdn-verify.sh"
+          BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
+          purge_cdn_root "$BRANCH"
+          expected=$(expected_from_dir "$BUILD_DIR")
+          hashed=""; unhashed=""; n=0; m=0
+          while read -r sha path; do
+            if is_unhashed_path "$path"; then
+              unhashed+="$sha $path"$'\n'; m=$((m + 1))
+            else
+              hashed+="$sha $path"$'\n'; n=$((n + 1))
+            fi
+          done <<< "$expected"
+          if ! printf '%s' "$hashed" | verify_cdn_paths "$BRANCH" "$CDN_HASHED_DEADLINE_SECONDS"; then
+            echo "::error::jsDelivr does not serve the bytes of the published hashed files on @${BRANCH}; metadata.json was not purged, so stores still load the previous build. Re-run the workflow to retry."
+            exit 1
+          fi
+          while read -r sha path; do
+            [[ -z "$path" ]] || purge_cdn_path "$BRANCH" "$path"
+          done <<< "$unhashed"
+          if ! printf '%s' "$unhashed" | verify_cdn_paths "$BRANCH" "$CDN_UNHASHED_DEADLINE_SECONDS"; then
+            echo "::error::jsDelivr does not serve the published metadata.json/index.html/workers on @${BRANCH} after the purge; re-run the workflow to purge and verify again."
+            exit 1
+          fi
           echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"
+          echo "Verified by content: ${n} hashed files and ${m} unhashed files"
