@@ -10,7 +10,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { cn } from '@wcpos/components/lib/utils';

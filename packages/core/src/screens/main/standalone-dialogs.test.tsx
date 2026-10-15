@@ -6,6 +6,7 @@ import type { ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 
+import { Version } from './components/drawer-content/version';
 import { PrinterDialogLayout } from './settings/printer/dialog/printer-dialog-layout';
 
 import type { PrinterFormValues } from './settings/printer/schema';
@@ -55,17 +56,39 @@ jest.mock('@rn-primitives/dialog', () => {
 	return {
 		Root: ({
 			children,
-			open = false,
-			onOpenChange = () => {},
-		}: React.PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>) => (
-			<Context.Provider value={{ open, onOpenChange }}>{children}</Context.Provider>
-		),
+			open: controlledOpen,
+			onOpenChange,
+		}: React.PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>) => {
+			const [localOpen, setOpen] = React.useState(false);
+			return (
+				<Context.Provider
+					value={{
+						open: controlledOpen ?? localOpen,
+						onOpenChange: (next) => {
+							setOpen(next);
+							onOpenChange?.(next);
+						},
+					}}
+				>
+					{children}
+				</Context.Provider>
+			);
+		},
 		Portal: mockView,
-		Content: ({ children, className, testID }: ViewProps) => (
-			<div role="dialog" className={className} data-testid={testID}>
-				{children}
-			</div>
-		),
+		Trigger: ({ children }: React.PropsWithChildren) => {
+			const { onOpenChange } = React.useContext(Context);
+			return React.isValidElement<{ onPress?: () => void }>(children)
+				? React.cloneElement(children, { onPress: () => onOpenChange(true) })
+				: null;
+		},
+		Content: ({ children, className, testID }: ViewProps) => {
+			const { open } = React.useContext(Context);
+			return open ? (
+				<div role="dialog" className={className} data-testid={testID}>
+					{children}
+				</div>
+			) : null;
+		},
 		Overlay: mockView,
 		Title: mockView,
 		Close: ({ children }: React.PropsWithChildren) => {
@@ -123,4 +146,23 @@ it.each([false, true])('printer keeps its wide desktop panel or phone page (phon
 	expect(screen.getByText('Save printer').parentElement).toHaveClass('border-t');
 	fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 	expect(close).toHaveBeenCalledWith(false);
+});
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/core/hooks/use-app-info', () => ({
+	useAppInfo: () => ({ appVersion: 'test-build', platformVersion: 'test-build', platform: 'web' }),
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+
+// Reverting About loses the v2 close selector; making it a side panel changes its phone presentation.
+it.each([false, true])('About opens centred and small, then closes (phone=%s)', (phone) => {
+	mockPhone = phone;
+	render(<Version />);
+	expect(screen.queryByRole('dialog')).toBeNull();
+	fireEvent.click(screen.getByText('v test-build'));
+	expect(screen.getByRole('dialog')).toHaveClass('w-80', 'rounded-lg');
+	expect(screen.getByText('common.about_wcpos')).toBeInTheDocument();
+	fireEvent.click(screen.getByTestId('dialog-close'));
+	expect(screen.queryByRole('dialog')).toBeNull();
 });
