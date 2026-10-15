@@ -39,6 +39,35 @@ const compoundRate10 = {
 };
 
 describe('calculateCouponDiscountTaxSplit', () => {
+	describe('prices include tax (tax-inclusive)', () => {
+		it('extracts tax from an inclusive discount with per-item rounding', () => {
+			// WC calc_inclusive_tax: 11 - 11/1.1 = 1; discount = 11 - 1 = 10.
+			const result = calculateCouponDiscountTaxSplit(
+				[{ product_id: 1, discount: 11 }],
+				[{ product_id: 1, tax_class: '' }],
+				[standardRate10],
+				{ pricesIncludeTax: true, taxRoundAtSubtotal: false, dp: 2 }
+			);
+
+			expect(result.discount_tax).toBe('1');
+			expect(result.discount).toBe('10');
+		});
+
+		it('rounds inclusive discount tax to 6dp when rounding at subtotal', () => {
+			// WC calc_inclusive_tax: 1.37 - 1.37/1.1 = 0.124545454... -> 6dp 0.124545.
+			// Discount = 1.37 - 0.124545 = 1.245455.
+			const result = calculateCouponDiscountTaxSplit(
+				[{ product_id: 1, discount: 1.37 }],
+				[{ product_id: 1, tax_class: '' }],
+				[standardRate10],
+				{ pricesIncludeTax: true, taxRoundAtSubtotal: true, dp: 2 }
+			);
+
+			expect(result.discount_tax).toBe('0.124545');
+			expect(result.discount).toBe('1.245455');
+		});
+	});
+
 	describe('ex-tax discounts (prices include tax, already converted)', () => {
 		it('calculates tax on an ex-tax discount for a single item at 10%', () => {
 			// Original tax-inclusive discount was $1, converted to ex-tax: $1/1.1 = $0.909091
