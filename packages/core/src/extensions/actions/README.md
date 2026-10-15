@@ -102,7 +102,7 @@ intent meta, so both hooks hand their line to the same recalculate-and-patch), `
 (one writer, `use-set-cart-customer.ts`, for the picker, the new-customer form and the address edit;
 the address edit dispatches with the customer unchanged). A coupon refusal reaches the cashier
 through the coupon field's own error line, not a toast. `cart.line.split` is admitted by the
-2026-10-15 amendment for the same plugin-integration consumers. With it the cart domain is complete: every
+2026-10-15 amendment for the same plugin-integration consumers. With these the cart domain is complete: every
 price-affecting cart write goes through the chain, and the fence allowlist holds only the void (its
 own ruling), the payments mirrors, settlement, the order-meta form and the customer note.
 `cart.order.void` (ruled 2026-10-12): the button counts the payments ledger once into

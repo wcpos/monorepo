@@ -98,7 +98,8 @@ export const useSplitLineItem = () => {
 				async (target, queue) => {
 					const order = target.getLatest();
 					const lineItems = order.toMutableJSON().payload.line_items ?? [];
-					const line = lineItems.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
+					const index = lineItems.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
+					const line = index === -1 ? undefined : lineItems[index];
 					if (!line) {
 						reportStaleCartLine(cartLogger, 'Split targeted a line that is no longer in the cart', {
 							toastTitle: ctx.t('pos_cart.remove_line_not_found'),
@@ -108,7 +109,6 @@ export const useSplitLineItem = () => {
 					}
 					if ((line.quantity ?? 0) <= 1) return;
 					const { lines, warnings } = splitLine(line, cartConfig);
-					reportEngineWarnings(warnings, { orderId: order.uuid, site: 'splitLineItem' });
 					return dispatchAction({
 						event: 'cart.line.split',
 						token: queue.dispatchToken,
@@ -120,15 +120,15 @@ export const useSplitLineItem = () => {
 							payload: { lineUuid: uuid, line, lines, lineItems },
 						},
 						bottom: (e) => {
+							// `index` was found in this same snapshot of `order`, so it still points at the line.
 							const currentLines = order.payload.line_items ?? [];
-							const index = currentLines.findIndex(
-								(item) => wooMetaCarrier.lineUuid(item) === uuid
-							);
 							const line_items = [
 								...currentLines.slice(0, index),
 								...e.payload.lines.map((item) => ({ ...item })),
 								...currentLines.slice(index + 1),
 							];
+							// Reported here, after the chain, so a refused split logs nothing.
+							reportEngineWarnings(warnings, { orderId: order.uuid, site: 'splitLineItem' });
 							return localPatch({ document: order, data: { line_items } });
 						},
 					});
