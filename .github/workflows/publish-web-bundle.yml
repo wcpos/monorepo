@@ -247,10 +247,15 @@ jobs:
 
           # Publish via a fresh clone of web-bundle on the target branch, decoupled
           # from the apps/web submodule (so a deps re-check during the build can't
-          # reset the submodule out from under us).
+          # reset the submodule out from under us). Full history without blobs, not
+          # --depth 1: the retention below asks `git log -1 -- <path>` when each
+          # file was last published, and a shallow clone answers "the tip" for every
+          # file, so nothing ever aged out while publishes were under a day apart
+          # (web-bundle@next carried chunks from 2026-10-13 on 2026-10-15). Blobless
+          # history for this repo is ~6 MB and ~5 s; checkout fetches HEAD's files.
           WB="$RUNNER_TEMP/web-bundle"
           rm -rf "$WB"
-          git clone --depth 1 --branch "$BRANCH" \
+          git clone --filter=blob:none --branch "$BRANCH" \
             "https://x-access-token:${GH_TOKEN}@github.com/wcpos/web-bundle.git" "$WB"
 
           # Lay the fresh build over build/, then drop only what the new build does not
