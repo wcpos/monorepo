@@ -15,9 +15,16 @@ function enrichedCategories(coupons: CouponContext): Map<number, { id: number }[
 	);
 }
 
+/**
+ * The replay inputs for the cart's active codes. `requiredCodes` (default: the
+ * active codes) is the presence gate — settle also requires its candidates to
+ * be in the context — but configs are built for the active codes only: a
+ * candidate is validated, never replayed.
+ */
 export function resolveCouponReplay(
 	coupons: CouponContext,
-	activeCodes: readonly string[]
+	activeCodes: readonly string[],
+	requiredCodes: readonly string[] = activeCodes
 ):
 	| {
 			ok: true;
@@ -25,7 +32,7 @@ export function resolveCouponReplay(
 			productCategories: Map<number, { id: number }[]>;
 	  }
 	| { ok: false; missingCodes: readonly string[] } {
-	const missingCodes = activeCodes.filter((code) => !coupons.coupons.has(code));
+	const missingCodes = requiredCodes.filter((code) => !coupons.coupons.has(code));
 	if (missingCodes.length > 0) return { ok: false, missingCodes };
 	return {
 		ok: true,
@@ -34,15 +41,23 @@ export function resolveCouponReplay(
 	};
 }
 
+/** A validation context without the clock; its individual-use list is always present. */
+export type CouponValidationContextDraft = Omit<
+	CouponValidationContext,
+	'now' | 'appliedCouponsWithIndividualUse'
+> & { appliedCouponsWithIndividualUse: string[] };
+
 export function couponValidationContext(args: {
 	lineItems: readonly LineItemInput[];
 	appliedCouponLines: readonly (CouponLineInput & { code: string })[];
 	billing?: { email?: string | null };
 	customer_id?: number | null;
 	coupons: CouponContext;
-}): Omit<CouponValidationContext, 'now'> {
+	/** Ancestor-enriched categories already built (by `resolveCouponReplay`); built here when absent. */
+	productCategories?: ReadonlyMap<number, { id: number }[]>;
+}): CouponValidationContextDraft {
 	const { lineItems, appliedCouponLines, billing, customer_id, coupons } = args;
-	const categories = enrichedCategories(coupons);
+	const categories = args.productCategories ?? enrichedCategories(coupons);
 	const validationLines: CouponLineItem[] = lineItems.map((item) => {
 		const qty = item.quantity || 1;
 		return {

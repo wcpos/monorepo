@@ -289,7 +289,8 @@ export function settleCart(
 	// today this throws inside an uncaught subscription.)
 	const neededCodes = [...new Set([...activeCodes, ...candidateCodes])];
 	const coupons = options?.coupons ?? { coupons: new Map(), productCategories: new Map() };
-	const replayContext = resolveCouponReplay(coupons, neededCodes);
+	// Configs are built for the active codes only; candidates are validated, not replayed.
+	const replayContext = resolveCouponReplay(coupons, activeCodes, neededCodes);
 	if (!replayContext.ok) {
 		return {
 			ok: false,
@@ -323,6 +324,7 @@ export function settleCart(
 				lineItems: activeLineItems,
 				appliedCouponLines,
 				coupons,
+				productCategories: replayContext.productCategories,
 				billing: snapshot.billing,
 				customer_id: snapshot.customer_id,
 			}),
@@ -346,7 +348,7 @@ export function settleCart(
 			}
 			context.appliedCoupons.push(code);
 			if (coupon.individual_use) {
-				context.appliedCouponsWithIndividualUse!.push(code);
+				context.appliedCouponsWithIndividualUse.push(code);
 			}
 		}
 	}

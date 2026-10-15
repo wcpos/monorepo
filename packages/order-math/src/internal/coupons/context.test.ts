@@ -34,6 +34,24 @@ it('resolveCouponReplay applies toCouponConfigs defaults', () => {
 	});
 });
 
+it('replay configs are built from applied codes, not candidates', () => {
+	const withCandidate: CouponContext = {
+		...coupons,
+		coupons: new Map([
+			...coupons.coupons,
+			['bonus', { code: 'bonus', discount_type: 'fixed_cart', amount: '5' }],
+		]),
+	};
+	const result = resolveCouponReplay(withCandidate, ['solo'], ['solo', 'bonus']);
+	expect(result.ok).toBe(true);
+	if (!result.ok) throw new Error('missing coupon');
+	expect([...result.couponConfigs.keys()]).toEqual(['solo']);
+	expect(resolveCouponReplay(withCandidate, ['solo'], ['solo', 'gone'])).toEqual({
+		ok: false,
+		missingCodes: ['gone'],
+	});
+});
+
 it('resolveCouponReplay enriches with ancestors', () => {
 	const result = resolveCouponReplay(coupons, []);
 	expect(result.ok).toBe(true);

@@ -275,6 +275,10 @@ describe('useAddCoupon engine reads', () => {
 		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
 		const { result } = renderHook(() => useAddCoupon());
 		await expect(result.current.addCoupon('  BONUS ')).resolves.toEqual({ success: true });
+		// The new line carries the lowercase code, not the catalog's case.
+		expect(recalculate).toHaveBeenCalledWith(expect.anything(), [
+			expect.objectContaining({ code: 'bonus' }),
+		]);
 	});
 
 	it('returns not found for an unknown discount_type without dispatching', async () => {

@@ -105,7 +105,8 @@ export const useAddCoupon = () => {
 				const couponData = coupon;
 
 				const newCouponLineData = {
-					code: couponData.code,
+					// Coupon line codes are lowercase, whatever case the catalog stores.
+					code: couponData.code.toLowerCase(),
 					discount: '0',
 					discount_tax: '0',
 					meta_data: [] as MetaDataEntry[],
