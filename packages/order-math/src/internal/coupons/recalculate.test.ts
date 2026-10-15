@@ -158,6 +158,211 @@ describe('recalculateCoupons', () => {
 		});
 	});
 
+	describe('#2356 order-item tax parity: fixed_product and exclusive prices', () => {
+		const taxRates = [
+			{ id: 3, rate: '4.0000', priority: 1, compound: false, order: 0, class: 'standard' },
+			{ id: 5, rate: '1.0000', priority: 2, compound: true, order: 0, class: 'standard' },
+			{ id: 4, rate: '5.0000', priority: 3, compound: true, order: 0, class: 'standard' },
+		];
+
+		function replay(
+			discountType: 'percent' | 'fixed_cart' | 'fixed_product',
+			pricesIncludeTax: boolean,
+			taxRoundAtSubtotal: boolean,
+			rates = taxRates
+		) {
+			return recalculateCoupons(
+				makeInput({
+					lineItems: [
+						{
+							...makePosLineItem(1, 25, 25),
+							tax_class: '',
+							subtotal: pricesIncludeTax ? '22.667102' : '25',
+						},
+						makePosLineItem(2, 5, 5, 1, 'none'),
+					],
+					couponLines: [makeCouponLine('parity')],
+					couponConfigs: new Map([
+						[
+							'parity',
+							makeConfig({
+								discount_type: discountType,
+								amount:
+									discountType === 'percent' ? '10' : discountType === 'fixed_cart' ? '1' : '1.37',
+							}),
+						],
+					]),
+					taxRates: rates,
+					pricesIncludeTax,
+					calcDiscountsSequentially: false,
+					taxRoundAtSubtotal,
+					dp: 2,
+				})
+			);
+		}
+
+		// #2356 divergence: client 2.612158, WooCommerce 2.61 (coupon_lines[0].discount).
+		// WC_Discounts::apply_coupon_fixed_product: wc_add_number_precision(1.37) = 137
+		// cents per qty-1 item, neither capped; discounts 1.37 + 1.37 = 2.74.
+		// WC_Abstract_Order::set_item_discount_amounts -> WC_Tax::calc_tax(..., true)
+		// -> calc_inclusive_tax: id 4 = 1.37 - 1.37/1.05 = 0.065238095...;
+		// id 5 = 1.37/1.05 - 1.37/1.05/1.01 = 0.012918434...;
+		// id 3 = (1.37/1.05/1.01)*0.04/1.04 = 0.049686287....
+		// WC_Tax::round (6dp HALF_UP): 0.065238 + 0.012918 + 0.049686 = 0.127842.
+		// Net discount = 1.37 - 0.127842 = 1.242158; set_total/wc_format_decimal
+		// stores 22.667102 - 1.242158 = 21.424944; non-taxable total = 5 - 1.37 = 3.63.
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(21.424944):
+		// id 3 = net*0.04 = 0.85699776; id 5 = net*1.04*0.01 = 0.2228194176;
+		// id 4 = net*1.04*1.01*0.05 = 1.12523805888. WC_Tax::round stores
+		// 0.856998, 0.222819, 1.125238; WC_Order_Item_Product::set_taxes (off)
+		// sums wc_round_tax_total (2dp HALF_DOWN): 0.86 + 0.22 + 1.13 = 2.21.
+		// WC_Abstract_Order::set_coupon_discount_amounts sums the inclusive discount
+		// taxes above, then wc_round_tax_total(0.127842) = 0.13 (2dp HALF_DOWN);
+		// coupon discount = 2.74 - 0.13 = 2.61; discount_tax = 0.13.
+		it.failing('E: inclusive fixed_product 1.37 with round-at-subtotal off', () => {
+			const { lineItems, couponLines } = replay('fixed_product', true, false);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(21.424944);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.856998);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.222819);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.125238);
+			expect(Number(line.total_tax)).toBe(2.21);
+			expect(Number(lineItems[1].total)).toBe(3.63);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.13);
+			expect(Number(couponLines[0].discount)).toBe(2.61);
+		});
+
+		// WC_Discounts::apply_coupon_fixed_product: wc_add_number_precision(1.37) = 137
+		// cents per qty-1 item, neither capped; discounts 1.37 + 1.37 = 2.74.
+		// WC_Abstract_Order::set_item_discount_amounts -> WC_Tax::calc_inclusive_tax:
+		// id 4 = 1.37 - 1.37/1.05 = 0.065238095...;
+		// id 5 = 1.37/1.05 - 1.37/1.05/1.01 = 0.012918434...;
+		// id 3 = (1.37/1.05/1.01)*0.04/1.04 = 0.049686287....
+		// WC_Tax::round (6dp HALF_UP): 0.065238 + 0.012918 + 0.049686 = 0.127842.
+		// Net discount = 1.242158; set_total/wc_format_decimal stores
+		// 22.667102 - 1.242158 = 21.424944; non-taxable total = 5 - 1.37 = 3.63.
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(21.424944):
+		// id 3 = net*0.04 = 0.85699776; id 5 = net*1.04*0.01 = 0.2228194176;
+		// id 4 = net*1.04*1.01*0.05 = 1.12523805888. WC_Tax::round (6dp HALF_UP)
+		// stores 0.856998, 0.222819, 1.125238; WC_Order_Item_Product::set_taxes (on)
+		// sums them without cent rounding: total_tax = 2.205055.
+		// WC_Abstract_Order::set_coupon_discount_amounts (on) keeps the inclusive
+		// discount tax sum 0.127842; coupon discount = 2.74 - 0.127842 = 2.612158.
+		it('F: inclusive fixed_product 1.37 with round-at-subtotal on', () => {
+			const { lineItems, couponLines } = replay('fixed_product', true, true);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(21.424944);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.856998);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.222819);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.125238);
+			expect(Number(line.total_tax)).toBe(2.205055);
+			expect(Number(lineItems[1].total)).toBe(3.63);
+			expect(Number(couponLines[0].discount)).toBe(2.612158);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.127842);
+		});
+
+		// WC_Discounts::apply_coupon_percent: wc_add_number_precision gives 2500/500
+		// cents; floor(2500*0.10) = 250 and floor(500*0.10) = 50, no remainder.
+		// WC_Abstract_Order::set_item_discount_amounts (exclusive) subtracts directly:
+		// 25 - 2.50 = 22.5; non-taxable 5 - 0.50 = 4.5 (no rounding needed).
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(22.5):
+		// id 3 = 22.5*0.04 = 0.9; id 5 = 22.5*1.04*0.01 = 0.234;
+		// id 4 = 22.5*1.04*1.01*0.05 = 1.1817; WC_Tax::round (6dp HALF_UP)
+		// leaves all unchanged. WC_Order_Item_Product::set_taxes (off) sums
+		// wc_round_tax_total (2dp HALF_UP): 0.90 + 0.23 + 1.18 = 2.31.
+		// WC_Abstract_Order::set_coupon_discount_amounts -> calc_tax(2.5, rates, false):
+		// 2.5*0.04 = 0.1; 2.5*1.04*0.01 = 0.026; 2.5*1.04*1.01*0.05 = 0.1313.
+		// WC_Tax::round leaves each unchanged at 6dp; sum = 0.2573, then
+		// wc_round_tax_total (2dp HALF_UP) = 0.26. Exclusive discount = 2.5 + 0.5 = 3.
+		it('G: exclusive percent 10 with round-at-subtotal off', () => {
+			const { lineItems, couponLines } = replay('percent', false, false);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(22.5);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.9);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.234);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.1817);
+			expect(Number(line.total_tax)).toBe(2.31);
+			expect(Number(lineItems[1].total)).toBe(4.5);
+			expect(Number(couponLines[0].discount)).toBe(3);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.26);
+		});
+
+		// WC_Discounts::apply_coupon_fixed_cart: wc_add_number_precision(1) = 100
+		// cents / 2 units = 50 cents each (floor unchanged, no remainder), allocated
+		// by apply_coupon_fixed_product. WC_Abstract_Order::set_item_discount_amounts
+		// (exclusive): 25 - 0.5 = 24.5; non-taxable 5 - 0.5 = 4.5.
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(24.5):
+		// id 3 = 24.5*0.04 = 0.98; id 5 = 24.5*1.04*0.01 = 0.2548;
+		// id 4 = 24.5*1.04*1.01*0.05 = 1.28674; WC_Tax::round (6dp HALF_UP)
+		// leaves each unchanged. WC_Order_Item_Product::set_taxes (off) sums
+		// wc_round_tax_total (2dp HALF_UP): 0.98 + 0.25 + 1.29 = 2.52.
+		// WC_Abstract_Order::set_coupon_discount_amounts -> calc_tax(0.5, rates, false):
+		// 0.5*0.04 = 0.02; 0.5*1.04*0.01 = 0.0052; 0.5*1.04*1.01*0.05 = 0.02626.
+		// WC_Tax::round leaves each unchanged at 6dp; sum = 0.05146, then
+		// wc_round_tax_total (2dp HALF_UP) = 0.05. Exclusive discount = 0.5 + 0.5 = 1.
+		it('H: exclusive fixed_cart 1 with round-at-subtotal off', () => {
+			const { lineItems, couponLines } = replay('fixed_cart', false, false);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(24.5);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.98);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.2548);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.28674);
+			expect(Number(line.total_tax)).toBe(2.52);
+			expect(Number(lineItems[1].total)).toBe(4.5);
+			expect(Number(couponLines[0].discount)).toBe(1);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.05);
+		});
+
+		// WC_Discounts::apply_coupon_fixed_product: wc_add_number_precision(1.37) = 137
+		// cents per qty-1 item, neither capped; discounts 1.37 + 1.37 = 2.74.
+		// WC_Abstract_Order::set_item_discount_amounts (exclusive):
+		// 25 - 1.37 = 23.63; non-taxable 5 - 1.37 = 3.63 (no rounding needed).
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(23.63):
+		// id 3 = 23.63*0.04 = 0.9452; id 5 = 23.63*1.04*0.01 = 0.245752;
+		// id 4 = 23.63*1.04*1.01*0.05 = 1.2410476. WC_Tax::round (6dp HALF_UP)
+		// stores 0.9452, 0.245752, 1.241048; WC_Order_Item_Product::set_taxes (on)
+		// sums without cent rounding: total_tax = 2.432.
+		// WC_Abstract_Order::set_coupon_discount_amounts -> calc_tax(1.37, rates, false):
+		// 1.37*0.04 = 0.0548; 1.37*1.04*0.01 = 0.014248;
+		// 1.37*1.04*1.01*0.05 = 0.0719524 -> 0.071952 (WC_Tax::round, 6dp HALF_UP).
+		// Sum = 0.141; on means no cent rounding. Exclusive coupon discount stays 2.74.
+		it('I: exclusive fixed_product 1.37 with round-at-subtotal on', () => {
+			const { lineItems, couponLines } = replay('fixed_product', false, true);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(23.63);
+			expect(Number(line.taxes?.find((tax) => tax.id === 3)?.total)).toBe(0.9452);
+			expect(Number(line.taxes?.find((tax) => tax.id === 5)?.total)).toBe(0.245752);
+			expect(Number(line.taxes?.find((tax) => tax.id === 4)?.total)).toBe(1.241048);
+			expect(Number(line.total_tax)).toBe(2.432);
+			expect(Number(lineItems[1].total)).toBe(3.63);
+			expect(Number(couponLines[0].discount)).toBe(2.74);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.141);
+		});
+
+		// WC_Discounts::apply_coupon_percent: wc_add_number_precision gives 2500/500
+		// cents; floor(2500*0.10) = 250 and floor(500*0.10) = 50, no remainder.
+		// WC_Abstract_Order::set_item_discount_amounts (exclusive):
+		// 25 - 2.5 = 22.5; non-taxable 5 - 0.5 = 4.5 (no rounding needed).
+		// WC_Order_Item::calculate_taxes -> WC_Tax::calc_exclusive_tax(22.5):
+		// id 9 = 22.5*0.20 = 4.5, unchanged by WC_Tax::round (6dp HALF_UP).
+		// WC_Order_Item_Product::set_taxes (off): wc_round_tax_total(4.5) = 4.5
+		// (2dp HALF_UP). WC_Abstract_Order::set_coupon_discount_amounts calls
+		// calc_tax(2.5, rates, false): 2.5*0.20 = 0.5, unchanged at 6dp and by
+		// wc_round_tax_total (2dp HALF_UP). Exclusive coupon discount = 2.5 + 0.5 = 3.
+		it('J: exclusive percent 10 at a single 20% rate with round-at-subtotal off', () => {
+			const { lineItems, couponLines } = replay('percent', false, false, [
+				{ id: 9, rate: '20.0000', priority: 1, compound: false, order: 0, class: 'standard' },
+			]);
+			const line = lineItems[0];
+			expect(Number(line.total)).toBe(22.5);
+			expect(Number(line.taxes?.find((tax) => tax.id === 9)?.total)).toBe(4.5);
+			expect(Number(line.total_tax)).toBe(4.5);
+			expect(Number(lineItems[1].total)).toBe(4.5);
+			expect(Number(couponLines[0].discount)).toBe(3);
+			expect(Number(couponLines[0].discount_tax)).toBe(0.5);
+		});
+	});
+
 	// -----------------------------------------------------------------------
 	// Group 1: Basic coupon types (no tax, no POS discount)
 	// -----------------------------------------------------------------------
