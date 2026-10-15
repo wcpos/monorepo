@@ -7,14 +7,14 @@ import groupBy from 'lodash/groupBy';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import {
-	Modal,
-	ModalBody,
-	ModalClose,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-	ModalTitle,
-} from '@wcpos/components/modal';
+	Dialog,
+	DialogBody as ModalBody,
+	DialogClose as ModalClose,
+	DialogContent as ModalContent,
+	DialogFooter as ModalFooter,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -93,7 +93,7 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 	 *
 	 */
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" size="2xl">
 				<ModalHeader>
 					<ModalTitle>
@@ -128,6 +128,6 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 					<ModalClose>{t('common.close')}</ModalClose>
 				</ModalFooter>
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }

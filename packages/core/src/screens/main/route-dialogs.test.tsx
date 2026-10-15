@@ -12,6 +12,7 @@ import { EditProductModal } from './products/edit/product/modal';
 import { EditVariationModal } from './products/edit/variation/modal';
 import { EditCustomer } from './customers/edit/edit-customer';
 import { EditCoupon } from './coupons/edit/edit-coupon';
+import { TaxRates } from './tax-rates/tax-rates';
 
 let mockPhone = false;
 let mockRecord: { uuid: string; payload: { id: number; name: string; code: string } } | null;
@@ -96,6 +97,7 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 jest.mock('@wcpos/components/tree', () => ({ Tree: () => null }));
 jest.mock('@wcpos/components/tabs', () => ({
+	ScrollableTabsList: mockView,
 	Tabs: mockView,
 	TabsContent: mockView,
 	TabsList: mockView,
@@ -103,6 +105,7 @@ jest.mock('@wcpos/components/tabs', () => ({
 }));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: () => mockRecord }));
 jest.mock('@wcpos/query', () => ({
+	useDocField: () => [],
 	useRecordField: (
 		record: typeof mockRecord,
 		select: (record: NonNullable<typeof mockRecord>) => unknown
@@ -123,6 +126,18 @@ jest.mock('./hooks/use-customer-name-format', () => ({
 }));
 
 jest.mock('./coupons/edit/form', () => ({ EditCouponForm: () => null }));
+
+jest.mock('@wcpos/components/error-boundary', () => ({ ErrorBoundary: mockView }));
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: mockView }));
+jest.mock('../../query', () => ({
+	useQueryState: () => ({}),
+	useCollectionQueryHandle: () => ({}),
+	useDrawnHandle: () => ({}),
+	useQuerySnapshot: () => ({ result: { hits: [] } }),
+}));
+jest.mock('./contexts/extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
+jest.mock('./tax-rates/footer', () => ({ TaxRatesFooter: () => null }));
+jest.mock('./tax-rates/rate-table', () => ({ TaxRateTable: () => null }));
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -154,3 +169,14 @@ describe.each([
 		}
 	});
 });
+
+it.each([false, true])(
+	'tax rates keeps its wide desktop panel or phone page (phone=%s)',
+	(phone) => {
+		mockPhone = phone;
+		render(<TaxRates />);
+		expect(screen.getByRole('dialog')).toHaveClass(phone ? 'w-full' : 'w-200');
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(router.back).toHaveBeenCalledTimes(1);
+	}
+);
