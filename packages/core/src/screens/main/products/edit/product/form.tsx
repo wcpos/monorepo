@@ -18,10 +18,10 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
-	DialogAction as ModalAction,
-	DialogBody as ModalBody,
-	DialogClose as ModalClose,
-	DialogFooter as ModalFooter,
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
 	useDialog,
 } from '@wcpos/components/v2/dialog';
 import { VStack } from '@wcpos/components/vstack';
@@ -172,7 +172,7 @@ export function EditProductForm({ product }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<FormField
 					control={form.control}
@@ -349,13 +349,13 @@ export function EditProductForm({ product }: Props) {
 					/>
 				</HStack>
 				<MetaDataForm />
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose testID="product-edit-cancel-button">{t('common.cancel')}</ModalClose>
-				<ModalAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose testID="product-edit-cancel-button">{t('common.cancel')}</DialogClose>
+				<DialogAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
 					<Button loading={loading}>{t('common.save')}</Button>
-				</ModalAction>
-			</ModalFooter>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

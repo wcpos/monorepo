@@ -19,7 +19,7 @@ const testLogger = getLogger(['test']);
 
 const mockPushDocument = jest.fn();
 const mockLocalPatch = jest.fn();
-const mockModalClose = jest.fn();
+const mockDialogClose = jest.fn();
 const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
 
 type Customer = {
@@ -121,7 +121,7 @@ jest.mock('@wcpos/components/v2/dialog', () => ({
 	},
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useDialog: () => ({ close: mockModalClose }),
+	useDialog: () => ({ close: mockDialogClose }),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -381,7 +381,7 @@ describe('EditOrderForm save', () => {
 			await modalActions.get('order-edit-save-button')!.onPress!();
 		});
 
-		expect(mockModalClose).toHaveBeenCalledTimes(1);
+		expect(mockDialogClose).toHaveBeenCalledTimes(1);
 	});
 
 	it('keeps the modal open when the push fails', async () => {
@@ -394,7 +394,7 @@ describe('EditOrderForm save', () => {
 		});
 
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
-		expect(mockModalClose).not.toHaveBeenCalled();
+		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 
 	it('does not push or close when the local patch fails', async () => {
@@ -408,6 +408,6 @@ describe('EditOrderForm save', () => {
 		});
 
 		expect(mockPushDocument).not.toHaveBeenCalled();
-		expect(mockModalClose).not.toHaveBeenCalled();
+		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 });

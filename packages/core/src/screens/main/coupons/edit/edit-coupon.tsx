@@ -5,10 +5,10 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import {
 	Dialog,
-	DialogBody as ModalBody,
-	DialogContent as ModalContent,
-	DialogHeader as ModalHeader,
-	DialogTitle as ModalTitle,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
 } from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -32,25 +32,25 @@ export function EditCoupon({ resource }: Props) {
 	if (!coupon) {
 		return (
 			<Dialog route>
-				<ModalContent side="right" size="lg">
-					<ModalHeader>
-						<ModalTitle>
+				<DialogContent side="right" size="lg">
+					<DialogHeader>
+						<DialogTitle>
 							<Text>{t('coupons.no_coupon_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
+						</DialogTitle>
+					</DialogHeader>
+				</DialogContent>
 			</Dialog>
 		);
 	}
 
 	return (
 		<Dialog route>
-			<ModalContent side="right" size="lg">
-				<ModalHeader>
-					<ModalTitle>
+			<DialogContent side="right" size="lg">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('common.edit_2', { name: code })}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 						<TabsList className="mx-4 flex-row">
@@ -65,13 +65,13 @@ export function EditCoupon({ resource }: Props) {
 							<EditCouponForm coupon={coupon} />
 						</TabsContent>
 						<TabsContent value="json" className="min-h-0 flex-1">
-							<ModalBody>
+							<DialogBody>
 								<Tree value={payload} />
-							</ModalBody>
+							</DialogBody>
 						</TabsContent>
 					</Tabs>
 				</View>
-			</ModalContent>
+			</DialogContent>
 		</Dialog>
 	);
 }

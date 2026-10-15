@@ -16,10 +16,10 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
-	DialogAction as ModalAction,
-	DialogBody as ModalBody,
-	DialogClose as ModalClose,
-	DialogFooter as ModalFooter,
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
 	useDialog,
 } from '@wcpos/components/v2/dialog';
 import { VStack } from '@wcpos/components/vstack';
@@ -143,7 +143,7 @@ export function EditVariationForm({ variation }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<HStack className="gap-4">
 					<FormField
@@ -261,13 +261,13 @@ export function EditVariationForm({ variation }: Props) {
 					/>
 				</HStack>
 				<MetaDataForm />
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
 					<Button loading={loading}>{t('common.save')}</Button>
-				</ModalAction>
-			</ModalFooter>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

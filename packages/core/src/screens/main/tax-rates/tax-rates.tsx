@@ -8,12 +8,12 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Dialog,
-	DialogBody as ModalBody,
-	DialogClose as ModalClose,
-	DialogContent as ModalContent,
-	DialogFooter as ModalFooter,
-	DialogHeader as ModalHeader,
-	DialogTitle as ModalTitle,
+	DialogBody,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 } from '@wcpos/components/v2/dialog';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -94,12 +94,12 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 	 */
 	return (
 		<Dialog route>
-			<ModalContent side="right" size="2xl">
-				<ModalHeader>
-					<ModalTitle>
+			<DialogContent side="right" size="2xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('tax_rates.tax_rates')}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs
 						className="min-h-0 flex-1"
@@ -116,18 +116,18 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						</ScrollableTabsList>
 						{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 							<TabsContent key={group.slug} value={group.slug} className="min-h-0 flex-1">
-								<ModalBody>
+								<DialogBody>
 									<TaxRateTable rates={group.rates} />
-								</ModalBody>
+								</DialogBody>
 							</TabsContent>
 						))}
 					</Tabs>
 					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 				</View>
-				<ModalFooter>
-					<ModalClose>{t('common.close')}</ModalClose>
-				</ModalFooter>
-			</ModalContent>
+				<DialogFooter>
+					<DialogClose>{t('common.close')}</DialogClose>
+				</DialogFooter>
+			</DialogContent>
 		</Dialog>
 	);
 }

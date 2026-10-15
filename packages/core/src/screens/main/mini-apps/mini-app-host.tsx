@@ -4,12 +4,7 @@ import { Platform as RNPlatform, View } from 'react-native';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Button } from '@wcpos/components/button';
-import {
-	Dialog,
-	DialogContent as ModalContent,
-	DialogHeader as ModalHeader,
-	DialogTitle as ModalTitle,
-} from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
@@ -176,12 +171,12 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 
 	return (
 		<Dialog route onClose={() => close('cancelled')}>
-			<ModalContent side="right" testID="mini-app-host" size="xl">
-				<ModalHeader>
-					<ModalTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</ModalTitle>
-				</ModalHeader>
+			<DialogContent side="right" testID="mini-app-host" size="xl">
+				<DialogHeader>
+					<DialogTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</DialogTitle>
+				</DialogHeader>
 				<View className="flex-1">{content}</View>
-			</ModalContent>
+			</DialogContent>
 		</Dialog>
 	);
 }

@@ -10,7 +10,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { EditProductForm } from './form';
 
 const mockLocalPatch = jest.fn();
-const mockModalClose = jest.fn();
+const mockDialogClose = jest.fn();
 const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
 
 const formValues = {
@@ -83,7 +83,7 @@ jest.mock('@wcpos/components/v2/dialog', () => ({
 	},
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useDialog: () => ({ close: mockModalClose }),
+	useDialog: () => ({ close: mockDialogClose }),
 }));
 
 jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
@@ -156,7 +156,7 @@ describe('EditProductForm save', () => {
 		expect(mockLocalPatch).toHaveBeenCalledWith(
 			expect.objectContaining({ data: expect.objectContaining({ tax_class: '' }) })
 		);
-		expect(mockModalClose).toHaveBeenCalledTimes(1);
+		expect(mockDialogClose).toHaveBeenCalledTimes(1);
 	});
 
 	it('keeps the modal open when the local patch fails', async () => {
@@ -168,6 +168,6 @@ describe('EditProductForm save', () => {
 			await modalActions.get('product-edit-save-button')!.onPress!();
 		});
 
-		expect(mockModalClose).not.toHaveBeenCalled();
+		expect(mockDialogClose).not.toHaveBeenCalled();
 	});
 });

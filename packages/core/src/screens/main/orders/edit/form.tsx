@@ -19,10 +19,10 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
-	DialogAction as ModalAction,
-	DialogBody as ModalBody,
-	DialogClose as ModalClose,
-	DialogFooter as ModalFooter,
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
 	useDialog,
 } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
@@ -294,7 +294,7 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<VStack className="gap-4">
 					<HStack className="gap-4">
@@ -419,18 +419,18 @@ export function EditOrderForm({ order }: Props) {
 					<TaxIdsForm name="tax_ids" />
 					<MetaDataForm name="meta_data" />
 				</VStack>
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction
 					testID="order-edit-save-button"
 					asChild
 					onPress={() => void onSave()}
 					disabled={storageDegraded}
 				>
 					<Button loading={loading}>{t('common.save')}</Button>
-				</ModalAction>
-			</ModalFooter>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }
