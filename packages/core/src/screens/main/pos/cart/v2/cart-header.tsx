@@ -14,11 +14,13 @@ import { UISettingsForm } from '../ui-settings-form';
 import { useT } from '../../../../../contexts/translations';
 import { CustomerSearch } from '../../../components/customer-select';
 import { UISettingsDialog } from '../../../components/ui-settings';
+import { usePanelSide } from '../../contexts/overlay-side/v2';
 import { useAddCustomer } from '../../hooks/use-add-customer';
 
 import type { CustomerData } from '../../../hooks/use-customer-name-format/helpers';
 export function CartHeader() {
 	const { addCustomer } = useAddCustomer();
+	const side = usePanelSide('cart');
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
 	const triggerRef = React.useRef<{ open: () => void } | null>(null);
@@ -89,6 +91,7 @@ export function CartHeader() {
 			</HStack>
 			<AddCartItemsMenu />
 			<UISettingsDialog
+				side={side}
 				portalHost="pos"
 				title={t('pos_cart.cart_settings')}
 				triggerTestID="cart-settings-button"
