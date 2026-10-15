@@ -47,11 +47,10 @@ jest.mock('./use-action-context', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({ useCurrentOrder: () => ({ currentOrderRecord }) }));
-const readEngineCoupons = jest.fn();
+const getCouponContext = jest.fn();
 const whenSettled = jest.fn(async () => true);
 const demandDeclared = jest.fn();
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({}),
 	useRecordField: (record: { payload: unknown }, select: (r: { payload: unknown }) => unknown) =>
 		select(record),
 }));
@@ -61,8 +60,8 @@ jest.mock('../../../../query', () => ({
 		return { whenSettled };
 	},
 }));
-jest.mock('./engine-coupon-data', () => ({
-	readEngineCoupons: (...args: unknown[]) => readEngineCoupons(...args),
+jest.mock('./use-coupon-context', () => ({
+	useCouponContext: () => ({ getCouponContext }),
 }));
 jest.mock('./coupon-rejection-message', () => ({
 	useCouponRejectionMessage:
@@ -75,7 +74,7 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	resetActionRegistry();
 	couponLines = [];
-	readEngineCoupons.mockResolvedValue([]);
+	getCouponContext.mockResolvedValue({ coupons: new Map() });
 	currentOrderRecord.getLatest.mockImplementation(() => ({ payload: currentOrderRecord.payload }));
 	localPatch.mockResolvedValue({ uuid: 'order' });
 	recalculate.mockImplementation(async (_lines, coupons) => ({
@@ -173,31 +172,41 @@ it('reports failures and does not log success for a rejected write', async () =>
 });
 it('refuses to stack onto an applied individual-use catalog coupon, like useAddCoupon', async () => {
 	couponLines = [{ code: 'exclusive' }];
-	readEngineCoupons.mockResolvedValueOnce([
-		{ payload: { code: 'exclusive', individual_use: true } },
-	]);
+	getCouponContext.mockResolvedValueOnce({
+		coupons: new Map([['exclusive', { code: 'exclusive', individual_use: true }]]),
+	});
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
 	).resolves.toEqual({ success: false, error: 'individual_use_conflict:exclusive' });
 	expect(demandDeclared).toHaveBeenLastCalledWith(true);
 	expect(whenSettled).toHaveBeenCalledTimes(1);
+	expect(getCouponContext).toHaveBeenCalledWith(lineItems, couponLines);
+	expect(whenSettled.mock.invocationCallOrder[0]).toBeLessThan(
+		getCouponContext.mock.invocationCallOrder[0]
+	);
 	expect(recalculate).not.toHaveBeenCalled();
 	expect(localPatch).not.toHaveBeenCalled();
 });
 it('refuses when an applied catalog coupon is still not resident after the reference wait', async () => {
 	couponLines = [{ code: 'not-yet-pulled' }];
-	readEngineCoupons.mockResolvedValueOnce([]);
+	getCouponContext.mockResolvedValueOnce({ coupons: new Map() });
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
 	).resolves.toEqual({ success: false, error: 'pos_cart.coupon_not_found' });
 	expect(whenSettled).toHaveBeenCalledTimes(1);
+	expect(getCouponContext).toHaveBeenCalledWith(lineItems, couponLines);
+	expect(whenSettled.mock.invocationCallOrder[0]).toBeLessThan(
+		getCouponContext.mock.invocationCallOrder[0]
+	);
 	expect(recalculate).not.toHaveBeenCalled();
 });
 it('stacks onto a resident, non-exclusive catalog coupon, matching the code case-insensitively', async () => {
 	couponLines = [{ code: 'PLAIN' }];
-	readEngineCoupons.mockResolvedValueOnce([{ payload: { code: 'plain', individual_use: false } }]);
+	getCouponContext.mockResolvedValueOnce({
+		coupons: new Map([['plain', { code: 'plain', individual_use: false }]]),
+	});
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
@@ -216,7 +225,7 @@ it('does not read the catalog when the only applied coupons are quick discounts'
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'fixed_cart', amount: '2' })
 	).resolves.toEqual({ success: true });
-	expect(readEngineCoupons).not.toHaveBeenCalled();
+	expect(getCouponContext).not.toHaveBeenCalled();
 	expect(whenSettled).not.toHaveBeenCalled();
 	expect(demandDeclared).toHaveBeenLastCalledWith(false);
 	expect(recalculate).toHaveBeenCalledWith(
