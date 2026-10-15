@@ -17,6 +17,19 @@ Selector policy: select app UI via stable testIDs with `getByTestId('some-id')`.
 text and named role selectors; structural role locators without a name are allowed (see
 repo `CLAUDE.md`).
 
+## Dev-store setup: PR preview logins
+
+PR runs serve the app from an EAS Hosting preview origin, `https://wcpos--<id>.expo.app`.
+Since woocommerce-pos #2259 (2026-10-14), the POS login page sends tokens only to
+three kinds of origin: the site's own, `https://wcpos.expo.app` and loopback hosts.
+So a fresh login from a preview fails in global-setup with "Missing or invalid
+redirect_uri parameter."
+
+dev-pro and dev-free allow exactly those preview origins through the must-use plugin
+`e2e/scripts/dev-store-preview-redirect.php`, which lives in `wp-content/mu-plugins/`.
+The file's docblock holds the install, verify and undo steps. Never install it on a
+production or customer store. A new dev store that runs PR E2E needs the same file.
+
 ## Current Coverage
 
 ### auth.spec.ts (unauthenticated, free + pro) — 8 tests
