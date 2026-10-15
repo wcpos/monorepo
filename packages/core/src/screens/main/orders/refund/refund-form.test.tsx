@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+import type { DialogAction } from '@wcpos/components/v2/dialog';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -18,6 +19,15 @@ function mockWebProps({ testID, ...props }: any) {
 }
 
 let mockEnableRefundActions = false;
+
+/** The DialogAction props the form passes; `asChild` is taken out so it never reaches the DOM. */
+type MockDialogActionProps = Pick<
+	React.ComponentProps<typeof DialogAction>,
+	'asChild' | 'disabled' | 'testID'
+> & {
+	children?: React.ReactNode;
+	onPress?: () => void;
+};
 
 // The tax provider's own boundary (its fallback loads an icon jest's CommonJS runtime cannot).
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -70,23 +80,34 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
+// Records `loading` so a test can read the process button's pending state.
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	Button: ({ children, loading }: React.PropsWithChildren<{ loading?: boolean }>) => (
+		<span data-loading={loading ? 'true' : 'false'}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/v2/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogAction: ({ children, onPress, loading, disabled, ...props }: any) => (
+	DialogAction: ({
+		children,
+		onPress,
+		disabled,
+		asChild: _asChild,
+		...props
+	}: MockDialogActionProps) => (
 		<button
 			type="button"
 			onClick={onPress}
-			disabled={mockEnableRefundActions ? false : disabled}
+			disabled={mockEnableRefundActions ? false : (disabled ?? undefined)}
 			{...mockWebProps(props)}
 		>
 			{children}
 		</button>
 	),
-	DialogClose: ({ children }: any) => <button>{children}</button>,
-	DialogFooter: ({ children }: any) => <div data-testid="modal-footer">{children}</div>,
+	DialogClose: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="modal-footer">{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,
@@ -319,6 +340,36 @@ describe('RefundOrderForm', () => {
 		await waitFor(() =>
 			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
 		);
+	});
+
+	it('shows the process button loading while the refund save is pending', async () => {
+		mockEnableRefundActions = true;
+		// Never settles: the save stays pending for the rest of the test.
+		const pendingRefund = jest.fn();
+		pendingRefund.mockImplementation(() => new Promise<void>(() => {}));
+		mockUseRefundMutation.mockReturnValue(pendingRefund);
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({
+				data: [{ amount: '10.00' }, { amount: '15.00' }],
+				headers: { 'x-wp-totalpages': '1' },
+			});
+		});
+
+		render(<RefundOrderForm order={order} />);
+		// The fetched history total proves the refund details have loaded, so the submit is live.
+		await waitFor(() =>
+			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
+		);
+		const processLabel = () =>
+			within(screen.getByTestId('process-refund-button')).getByText('orders.process_refund');
+		expect(processLabel()).toHaveAttribute('data-loading', 'false');
+
+		fireEvent.click(screen.getByTestId('process-refund-button'));
+		fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+
+		await waitFor(() => expect(pendingRefund).toHaveBeenCalledTimes(1));
+		expect(processLabel()).toHaveAttribute('data-loading', 'true');
 	});
 
 	it('holds line quantities at zero until detailed refund rows load', async () => {

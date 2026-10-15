@@ -10,7 +10,9 @@ import { EditOrderModal } from './orders/edit/modal';
 import { RefundOrderModal } from './orders/refund/modal';
 import { EditProductModal } from './products/edit/product/modal';
 import { EditVariationModal } from './products/edit/variation/modal';
+import { AddCustomerScreen } from './customers/add';
 import { EditCustomer } from './customers/edit/edit-customer';
+import { AddCouponScreen } from './coupons/add';
 import { EditCoupon } from './coupons/edit/edit-coupon';
 import { TaxRates } from './tax-rates/tax-rates';
 
@@ -51,7 +53,10 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('expo-router', () => {
+	const router = { back: jest.fn() };
+	return { router, useRouter: () => router };
+});
 jest.mock('@wcpos/components/keyboard-controller', () => ({ KeyboardAvoidingView: mockView }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
 // Keep the real v2 root, shell and parts. Replace only platform primitives and unrelated forms.
@@ -127,6 +132,17 @@ jest.mock('./hooks/use-customer-name-format', () => ({
 
 jest.mock('./coupons/edit/form', () => ({ EditCouponForm: () => null }));
 
+jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
+jest.mock('./hooks/mutations/use-mutation', () => ({ useMutation: () => ({ create: jest.fn() }) }));
+jest.mock('./components/customer/customer-form', () => ({
+	CustomerForm: () => null,
+	customerFormSchema: {},
+}));
+jest.mock('./components/coupon/coupon-form', () => ({
+	CouponForm: () => null,
+	couponFormSchema: {},
+}));
+
 jest.mock('@wcpos/components/error-boundary', () => ({ ErrorBoundary: mockView }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: mockView }));
 jest.mock('../../query', () => ({
@@ -141,13 +157,23 @@ jest.mock('./tax-rates/rate-table', () => ({ TaxRateTable: () => null }));
 
 beforeEach(() => jest.clearAllMocks());
 
+// The add screens take no resource; these adapters let them share the rows below.
+function AddCustomerRoute(_props: { resource: unknown }) {
+	return <AddCustomerScreen />;
+}
+function AddCouponRoute(_props: { resource: unknown }) {
+	return <AddCouponScreen />;
+}
+
 // Removing route would close the primitive instead of navigating back; reverting to Modal
 // loses the phone page. Run both loaded and missing records so the early-return shell counts.
 describe.each([
 	['product', EditProductModal, 'w-lg'],
 	['variation', EditVariationModal, 'w-lg'],
 	['customer', EditCustomer, 'w-160'],
+	['customer add', AddCustomerRoute, 'w-160'],
 	['coupon', EditCoupon, 'w-lg'],
+	['coupon add', AddCouponRoute, 'w-lg'],
 	['order edit', EditOrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
 ] as const)('%s route shell', (_name, Screen, width) => {
