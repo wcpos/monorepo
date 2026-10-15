@@ -7,7 +7,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
