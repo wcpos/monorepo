@@ -7,10 +7,10 @@ import { SCRIM_BLUR_RADIUS } from '@wcpos/components/poster-tile';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useImageAttachment } from '../../../hooks/use-image-attachment';
-import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../components/product/product-image-placeholder';
-import { probeEvent, useMountProbe, useRenderProbe } from '../render-probe';
-import { useCopyPicture } from '../v2/deal-stack';
+import { useImageAttachment } from '../../../../hooks/use-image-attachment';
+import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../../components/product/product-image-placeholder';
+import { probeEvent, useMountProbe, useRenderProbe } from '../../render-probe';
+import { useCopyPicture } from '../deal-stack';
 
 // An image that is already on screen and only changing place does not fade in again.
 const STILL = { transition: 0 };

@@ -644,3 +644,11 @@ administrators and shop managers by default, not by cashiers — covering the se
 well. Audited by "rung up by" and an order note. A reassignment **never reopens or amends a
 closure**: the closure reads as at close; live reports read the current cashier on the sale.
 _Avoid_: transfer, change server, edit cashier
+
+## Language — Products browse
+
+**Tile grid**:
+The products stage's fixed-column grid of Poster tiles. Columns come from the grid-columns
+setting, widths are equal, order is kept, and a short last row is padded with empty tile
+frames, never wrapped.
+_Avoid_: wrap, flow layout, masonry, column grid.

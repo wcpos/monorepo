@@ -4,10 +4,10 @@ import { View } from 'react-native';
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 
-import { useT } from '../../../../../contexts/translations';
-import { usePagingVerdict } from '../../../../../query';
+import { useT } from '../../../../../../contexts/translations';
+import { usePagingVerdict } from '../../../../../../query';
 
-import type { EngineOpinion } from '../../../../../query';
+import type { EngineOpinion } from '../../../../../../query';
 
 interface ProductGridFooterProps {
 	/** The handle snapshot's `pending` and `exhausted`, as the grid holds them. */
