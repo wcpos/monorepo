@@ -157,13 +157,13 @@ function serializeLineItemTaxes<T extends LineItem>(items: T[], roundingPrecisio
  * Determine whether a line item represents a POS-discounted (on sale) product
  * by comparing the POS price against the regular price in _woocommerce_pos_data.
  */
-function isLineItemOnSale(item: LineItem | null | undefined): boolean {
+export function isLineItemOnSale(item: LineItem | null | undefined): boolean {
 	if (!item) return false;
 	const posData = parsePosData(item);
 	if (posData?.price == null || posData.regular_price == null) return false;
 	const price = parseFloat(String(posData.price));
 	const regularPrice = parseFloat(String(posData.regular_price));
-	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	if (!Number.isFinite(price) || !Number.isFinite(regularPrice) || regularPrice <= 0) return false;
 	return price < regularPrice;
 }
 

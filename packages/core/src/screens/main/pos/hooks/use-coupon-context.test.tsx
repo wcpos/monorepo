@@ -3,7 +3,9 @@
  */
 import { renderHook } from '@testing-library/react';
 
-import { useCouponContext } from './use-coupon-context';
+import { useQueryRuntime } from '@wcpos/query';
+
+import { readCouponContext, useCouponContext } from './use-coupon-context';
 
 const engine = { active: jest.fn() };
 
@@ -109,3 +111,20 @@ it.each(['missing', 'mixed', 'collision'])('resolves virtual context: %s', async
 	expect(context.coupons.size).toBe(mode === 'mixed' ? 2 : 1);
 	if (mode === 'mixed') expect(context.coupons.get('real')?.amount).toBe('99');
 });
+
+it.each([0, null])(
+	'readCouponContext issues no product query for misc-only or tombstoned lines: %s',
+	async (product_id) => {
+		const productFind = jest.fn(() => {
+			throw new Error('unexpected product query');
+		});
+		engine.active().database.collections.products.find = productFind;
+		const { result } = renderHook(() => useQueryRuntime());
+		const context = await readCouponContext(result.current, {
+			lineItems: [{ product_id }],
+			couponLines: [],
+		});
+		expect(context.productCategories.size).toBe(0);
+		expect(productFind).not.toHaveBeenCalled();
+	}
+);
