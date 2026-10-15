@@ -86,7 +86,7 @@ export function Dialog(allProps: DialogProps): React.JSX.Element {
 export const DialogTrigger = DialogPrimitive.Trigger;
 export function useDialog(): { open: boolean; close: () => void } {
 	const { open, onOpenChange } = DialogPrimitive.useRootContext();
-	return { open, close: () => onOpenChange(false) };
+	return { open, close: React.useCallback(() => onOpenChange(false), [onOpenChange]) };
 }
 export function DialogContent(allProps: DialogContentProps): React.JSX.Element | null {
 	const { side = 'center', portalHost, inline, testID, ...props } = allProps;
