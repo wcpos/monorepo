@@ -1,6 +1,6 @@
 import { useDocField } from '@wcpos/query';
 
-import { useUISettings } from '../../../../contexts/ui-settings';
+import { useUISettings } from '../../../contexts/ui-settings';
 
 export type PanelSubject = 'cart' | 'products' | 'shell';
 

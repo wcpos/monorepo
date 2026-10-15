@@ -644,3 +644,7 @@ administrators and shop managers by default, not by cashiers — covering the se
 well. Audited by "rung up by" and an order note. A reassignment **never reopens or amends a
 closure**: the closure reads as at close; live reports read the current cashier on the sale.
 _Avoid_: transfer, change server, edit cashier
+
+## Language — POS panels
+
+**Panel side**: the edge a POS panel enters from, derived from its subject (cart → over the products, products → over the cart, shell → right). _Avoid_: overlay side, POS overlay side, products side.

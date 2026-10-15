@@ -9,7 +9,7 @@ import {
 } from '@wcpos/components/v2/dialog';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePanelSide } from '../../contexts/overlay-side/v2';
+import { usePanelSide } from '../../contexts/overlay-side';
 import { EditOrderMeta } from '../buttons/edit-order-meta';
 import { SaveButton } from '../buttons/save-order';
 import { VoidButton } from '../buttons/void';

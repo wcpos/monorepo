@@ -14,7 +14,7 @@ import { UISettingsForm } from '../ui-settings-form';
 import { useT } from '../../../../../contexts/translations';
 import { CustomerSearch } from '../../../components/customer-select';
 import { UISettingsDialog } from '../../../components/ui-settings';
-import { usePanelSide } from '../../contexts/overlay-side/v2';
+import { usePanelSide } from '../../contexts/overlay-side';
 import { useAddCustomer } from '../../hooks/use-add-customer';
 
 import type { CustomerData } from '../../../hooks/use-customer-name-format/helpers';

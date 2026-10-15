@@ -27,7 +27,7 @@ import { CameraScannerPanel } from '../camera-scanner-panel';
 import { StorageOutageBanner } from '../storage-outage-banner';
 import { ProductGrid } from '../grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from '../fit-page-size';
-import { usePanelSide } from '../../contexts/overlay-side/v2';
+import { usePanelSide } from '../../contexts/overlay-side';
 import { UISettingsForm } from '../ui-settings-form';
 import { POSFilterBar } from './filter-bar';
 import { getPOSProductSort } from '../pos-product-sort';

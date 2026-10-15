@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { Receipt } from './receipt';
-import { usePanelSide } from '../pos/contexts/overlay-side/v2';
+import { usePanelSide } from '../pos/contexts/overlay-side';
 import { useEngineRecord } from '../hooks/use-engine-document';
 
 export function ReceiptScreen({ side = 'right' }: { side?: 'left' | 'right' }) {

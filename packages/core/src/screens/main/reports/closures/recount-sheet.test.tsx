@@ -56,7 +56,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 // `movement-sheet` reads its side from the v2 subject rule since the register switch (roadmap#388).
-jest.mock('../../pos/contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../../pos/contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

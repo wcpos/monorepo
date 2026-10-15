@@ -66,7 +66,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('../buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
-jest.mock('../../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'left' }));
+jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));

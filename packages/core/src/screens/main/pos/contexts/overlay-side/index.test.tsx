@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { usePanelSide } from './index';
 
 let mockPosition = 'left';
-jest.mock('../../../../contexts/ui-settings', () => ({
+jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { position: mockPosition } }),
 }));
 jest.mock('@wcpos/query', () => ({

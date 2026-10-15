@@ -25,7 +25,7 @@ import type { StoreDocument } from '@wcpos/database';
 import { SwitchStoreSheet } from './switch-store-sheet';
 
 jest.mock('expo-haptics', () => ({}));
-jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: passthrough,
 	DialogContent: passthrough,

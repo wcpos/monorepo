@@ -12,7 +12,7 @@ import {
 } from '@wcpos/components/v2/dialog';
 
 import { useT } from '../../contexts/translations';
-import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side/v2';
+import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side';
 import { getCommands, runCommand } from '../commands';
 import { chordPlatform, DEFAULT_BINDINGS, describeChord } from './bindings';
 

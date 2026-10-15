@@ -8,7 +8,7 @@ import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 
 /**
  *
