@@ -133,7 +133,7 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock('../components/data-table/v2', () => ({
+jest.mock('../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
 		// The real table draws the deferred handle's rows and suspends on an unanswered one.
@@ -154,7 +154,7 @@ jest.mock('../components/data-table/v2', () => ({
 		);
 	},
 }));
-jest.mock('../components/data-table/v2/skeleton', () => ({
+jest.mock('../components/data-table/skeleton', () => ({
 	DataTableSkeleton: ({ id }: { id: string }) => <div data-testid={`skeleton-${id}`} />,
 }));
 jest.mock('../components/ui-settings', () => ({

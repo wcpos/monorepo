@@ -6,9 +6,9 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DataTableFooter } from './footer';
-import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../../query';
+import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
 
-import type { QueryStateOf } from '../../../../../query';
+import type { QueryStateOf } from '../../../../query';
 
 const mockClearAndSync = jest.fn(async () => undefined);
 const mockSync = jest.fn(async () => undefined);
@@ -21,7 +21,7 @@ jest.mock('@wcpos/query', () => ({
 		throw new Error('legacy replication projection reached');
 	},
 }));
-jest.mock('../../../hooks/use-collection-reset', () => ({
+jest.mock('../../hooks/use-collection-reset', () => ({
 	useCollectionReset: (collectionName: string) => mockUseCollectionReset(collectionName),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
@@ -32,7 +32,7 @@ jest.mock('@wcpos/components/text', () => ({
 		<span data-testid={testID}>{children}</span>
 	),
 }));
-jest.mock('../../sync-button', () => ({
+jest.mock('../sync-button', () => ({
 	SyncButton: ({
 		sync,
 		clearAndSync,
@@ -46,7 +46,7 @@ jest.mock('../../sync-button', () => ({
 		</>
 	),
 }));
-jest.mock('../../../../../contexts/translations', () => ({
+jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) =>
 		values ? `${key}:${values.shown}/${values.total}` : key,
 }));

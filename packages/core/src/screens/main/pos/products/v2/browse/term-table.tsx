@@ -8,7 +8,7 @@ import { Suspense } from '@wcpos/components/suspense';
 
 import { useT } from '../../../../../../contexts/translations';
 import { useGuardedExtendLimit, useQueryHandleFields } from '../../../../../../query';
-import { DataTable } from '../../../../components/data-table/v2';
+import { DataTable } from '../../../../components/data-table';
 import { TableSurface } from '../../../../components/data-table/surface';
 import { cellsForRow } from '../cells-for-row';
 import { LevelBack } from '../level-back';

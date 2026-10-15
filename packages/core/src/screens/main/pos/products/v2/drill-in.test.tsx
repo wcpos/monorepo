@@ -57,7 +57,7 @@ jest.mock('@wcpos/components/icon', () => ({
 jest.mock('../../../components/product/variable-product-row', () => ({
 	VariableProductRow: () => <div data-testid="inline-row" />,
 }));
-jest.mock('../../../components/data-table/v2/rows', () => ({
+jest.mock('../../../components/data-table/rows', () => ({
 	DataTableRow: ({ onPress, trailing }: { onPress: () => void; trailing: React.ReactNode }) => (
 		<button data-testid="drill-row" onClick={onPress}>
 			{trailing}

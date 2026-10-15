@@ -28,9 +28,9 @@ import { VariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
-import { DataTable, DataTableFooter } from '../components/data-table/v2';
-import { DataTableRow } from '../components/data-table/v2/rows';
-import { DataTableSkeleton } from '../components/data-table/v2/skeleton';
+import { DataTable, DataTableFooter } from '../components/data-table';
+import { DataTableRow } from '../components/data-table/rows';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { RecordDateCell } from '../components/record-date-cell';
 import { ProductCategories } from '../components/product/categories';
 import { FilterBar } from '../components/product/filter-bar';
@@ -56,7 +56,7 @@ import {
 
 import type { ExpandedState } from '@tanstack/react-table';
 import type { QueryStateActions, SnapshotFields } from '../../../query';
-import type { DataTableFeatures, DataTableFooterProps } from '../components/data-table/v2';
+import type { DataTableFeatures, DataTableFooterProps } from '../components/data-table';
 import type { Row, Table } from '../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };

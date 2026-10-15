@@ -270,7 +270,7 @@ jest.mock('../footer', () => ({ ProductsFooter: () => null }));
 jest.mock('../handle-footer', () => ({ HandleProductsFooter: () => null }));
 // As the real DataTable: rows are `tableConfig.data`, drawn through `renderItem`; a header sort
 // is the `setSort` it was handed.
-jest.mock('../../../../components/data-table/v2', () => ({
+jest.mock('../../../../components/data-table', () => ({
 	DataTable: ({
 		tableConfig,
 		renderItem,

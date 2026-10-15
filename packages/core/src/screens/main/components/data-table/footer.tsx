@@ -3,12 +3,12 @@ import * as React from 'react';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 
-import { useT } from '../../../../../contexts/translations';
-import { useQueryStateActions } from '../../../../../query';
-import { SyncButton } from '../../sync-button';
-import { useCollectionReset } from '../../../hooks/use-collection-reset';
+import { useT } from '../../../../contexts/translations';
+import { useQueryStateActions } from '../../../../query';
+import { SyncButton } from '../sync-button';
+import { useCollectionReset } from '../../hooks/use-collection-reset';
 
-import type { CollectionKey } from '../../../hooks/use-collection';
+import type { CollectionKey } from '../../hooks/use-collection';
 
 /**
  * What a table footer is handed: VALUES, read by its owner from the query handles in the same

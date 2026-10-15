@@ -83,7 +83,7 @@ jest.mock('../../../../components/product/price-with-tax', () => ({
 	),
 	TaxLine: ({ price }: { price: string }) => <span data-testid="tax">{price}</span>,
 }));
-jest.mock('../../../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
+jest.mock('../../../../components/data-table/rows', () => ({ DataTableRow: () => null }));
 // A picture that fails to load says so, as `TileImage` does before it paints.
 let mockImageFails = false;
 jest.mock('./tile-image', () => ({

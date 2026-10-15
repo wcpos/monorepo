@@ -15,7 +15,7 @@ import { RecordTextCell } from '../../../../components/record-text-cell';
 import { getColumnStyle } from '../../../data-table/column-style';
 import { useDrawnHandle, useQuerySnapshot } from '../../../../../../query';
 
-import type { DataTableFeatures } from '../../../data-table/v2';
+import type { DataTableFeatures } from '../../../data-table';
 import type { SnapshotFields } from '../../../../../../query';
 import type { Cell, CellContext, Row } from '../../../../../../table-types';
 

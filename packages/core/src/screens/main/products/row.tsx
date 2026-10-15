@@ -37,7 +37,7 @@ import {
 
 import type { SnapshotFields } from '../../../query';
 import type { Row, Table } from '../../../table-types';
-import type { DataTableFeatures } from '../components/data-table/v2';
+import type { DataTableFeatures } from '../components/data-table';
 
 type Product = {
 	record: EngineRecord<'products'>;

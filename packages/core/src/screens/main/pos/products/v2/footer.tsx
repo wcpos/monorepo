@@ -10,7 +10,7 @@ import { SyncButton } from '../../../components/sync-button';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 import { useCollectionReset } from '../../../hooks/use-collection-reset';
 
-import type { DataTableFooterProps } from '../../../components/data-table/v2/footer';
+import type { DataTableFooterProps } from '../../../components/data-table/footer';
 
 /** The footer contract every table footer takes (`DataTableFooterProps`): values only. */
 export type ProductsFooterProps = DataTableFooterProps;

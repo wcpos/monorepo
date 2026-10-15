@@ -32,8 +32,8 @@ import { FilterBar } from './filter-bar';
 import { useBarcode } from '../use-barcode';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { DataTable } from '../../components/data-table/v2';
-import { DataTableSkeleton } from '../../components/data-table/v2/skeleton';
+import { DataTable } from '../../components/data-table';
+import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { Cashier } from '../../components/order/cashier';
 import { Register } from '../../components/order/register';
 import { CreatedVia } from '../../components/order/created-via';
@@ -51,7 +51,7 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../../query';
-import { DataTableRow } from '../../components/data-table/v2/rows';
+import { DataTableRow } from '../../components/data-table/rows';
 import { useStoreDay } from '../../../../hooks/use-store-day';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { Status } from './cells/status';
@@ -62,7 +62,7 @@ import { DayHeading, groupOrders, isDay, type OrderListItem } from './day-headin
 import { useRowKeyboard } from './use-row-keyboard';
 
 import type { Row } from '../../../../table-types';
-import type { DataTableFeatures } from '../../components/data-table/v2';
+import type { DataTableFeatures } from '../../components/data-table';
 import type { SortFieldsByCollection } from '../../../../query/query-state-types';
 import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../../query';
 const cells = {

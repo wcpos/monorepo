@@ -67,7 +67,7 @@ test('--check ignores translation calls inside source comments', () => {
 
 test('--check sees the footer count key as a literal call', () => {
 	const footerPaths = [
-		'packages/core/src/screens/main/components/data-table/v2/footer.tsx',
+		'packages/core/src/screens/main/components/data-table/footer.tsx',
 		'packages/core/src/screens/main/tax-rates/footer.tsx',
 	];
 

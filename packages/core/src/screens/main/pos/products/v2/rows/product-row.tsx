@@ -5,7 +5,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useCurrentOrder } from '../../../contexts/current-order';
 import { useAddProduct } from '../../../hooks/use-add-product';
-import { DataTableRow } from '../../../../components/data-table/v2/rows';
+import { DataTableRow } from '../../../../components/data-table/rows';
 import { InCartCount } from './in-cart-count';
 
 export { InCartCount };

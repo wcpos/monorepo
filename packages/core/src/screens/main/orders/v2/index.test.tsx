@@ -84,7 +84,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
-jest.mock('../../components/data-table/v2', () => ({
+jest.mock('../../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
 		React.useImperativeHandle(props.listRef as React.Ref<unknown>, () => ({
@@ -110,7 +110,7 @@ jest.mock('../../components/data-table/v2', () => ({
 		);
 	},
 }));
-jest.mock('../../components/data-table/v2/skeleton', () => ({
+jest.mock('../../components/data-table/skeleton', () => ({
 	DataTableSkeleton: ({ id }: { id: string }) => <div data-testid={`skeleton-${id}`} />,
 }));
 jest.mock('../../components/ui-settings', () => ({
@@ -271,7 +271,7 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('../../components/data-table/v2/rows', () => ({ DataTableRow: () => null }));
+jest.mock('../../components/data-table/rows', () => ({ DataTableRow: () => null }));
 beforeEach(() => {
 	mockPointer = 'fine';
 	mockSetParams.mockClear();
