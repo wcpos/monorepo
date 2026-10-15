@@ -5,8 +5,7 @@ import { TextDecoder, TextEncoder } from 'node:util';
 import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ObservableResource } from 'observable-hooks';
-import { defer, type Observable, of, Subject } from 'rxjs';
+import { defer, type Observable, Subject } from 'rxjs';
 
 import {
 	createEngineDatabase,
@@ -17,7 +16,7 @@ import {
 import type { QueryHandle } from '@wcpos/query';
 import type { RequirementHandle } from '@wcpos/sync-engine';
 
-import { ViewOrderModal } from './modal';
+import { RefundsBoundary } from './refunds-boundary';
 import { useOrderRefunds } from './use-order-refunds';
 import { useQuerySnapshot } from '../../../../query/query-handles';
 
@@ -33,7 +32,7 @@ const mockObserve = jest.fn();
 const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 23858, status: 'completed', currency_symbol: '$', refunds: [{ id: 99 }] },
-} as never;
+};
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
@@ -58,26 +57,6 @@ jest.mock('@wcpos/components/button', () => ({
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: any) => <div>{children}</div>,
-	ModalBody: ({ children }: any) => <div>{children}</div>,
-	ModalClose: ({ children }: any) => <button type="button">{children}</button>,
-	ModalContent: ({ children }: any) => <div>{children}</div>,
-	ModalFooter: ({ children }: any) => <div data-testid="order-view-modal-footer">{children}</div>,
-}));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: any) => <span>{children}</span>,
-}));
-jest.mock('./sections/header', () => ({ HeaderSection: () => <div data-testid="header" /> }));
-jest.mock('./sections/customer', () => ({
-	AddressesRail: () => <div />,
-	CustomerNoteSection: () => <div />,
-	CustomerRail: () => <div data-testid="customer-rail" />,
-	TaxIdsRail: () => <div />,
-}));
-jest.mock('./sections/line-items', () => ({ LineItemsSection: () => <div /> }));
-jest.mock('./sections/payment', () => ({ PaymentSection: () => <div /> }));
-jest.mock('./sections/pos-metadata', () => ({ POSMetadataSection: () => <div /> }));
 // Stands in for the real section at the one thing that matters here: it reads the handle
 // `RefundsResourceBoundary` hands it, exactly as the section does (and suspends on it).
 jest.mock('./sections/refunds', () => {
@@ -99,7 +78,6 @@ jest.mock('./sections/refunds', () => {
 		},
 	};
 });
-jest.mock('./sections/totals', () => ({ TotalsSection: () => <div /> }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 let engineDB: RxDatabase;
@@ -143,8 +121,6 @@ function neverSettle() {
 		({ ...require(requirement), ready: new Promise(() => {}) }) as RequirementHandle;
 }
 
-const orderResource = new ObservableResource(of(mockOrder)) as never;
-
 beforeEach(async () => {
 	engineDB = await createEngineDatabase(['refunds', 'orders']);
 	engine = createFakeEngine(engineDB);
@@ -159,7 +135,7 @@ afterEach(async () => {
 const show = () =>
 	render(
 		<React.Suspense fallback={<div data-testid="route-fallback" />}>
-			<ViewOrderModal resource={orderResource} />
+			<RefundsBoundary order={mockOrder.payload} orderUuid={mockOrder.uuid} orderId={23858} />
 		</React.Suspense>
 	);
 
@@ -200,7 +176,7 @@ describe('local-first live order refunds', () => {
 			const view = render(
 				<React.StrictMode>
 					<React.Suspense fallback={<div data-testid="route-fallback" />}>
-						<ViewOrderModal resource={orderResource} />
+						<RefundsBoundary order={mockOrder.payload} orderUuid={mockOrder.uuid} orderId={23858} />
 					</React.Suspense>
 				</React.StrictMode>
 			);
@@ -227,7 +203,6 @@ describe('local-first live order refunds', () => {
 		show();
 		expect(screen.getByTestId('refunds-skeleton')).toBeTruthy();
 		expect(screen.queryByTestId('route-fallback')).toBeNull();
-		expect(screen.getByTestId('customer-rail')).toBeTruthy();
 		// Drop the read's `sort` and the engine answers in uuid order: '1,2'.
 		await waitFor(() => expect(section()).toBe('2,1'));
 		// Drop the `parent_id` selector (or the demand) and these fail.

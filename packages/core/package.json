@@ -45,7 +45,6 @@
 		"./screens/main/orders": "./src/screens/main/orders/index.tsx",
 		"./screens/main/orders/edit": "./src/screens/main/orders/edit/index.tsx",
 		"./screens/main/orders/refund": "./src/screens/main/orders/refund/index.tsx",
-		"./screens/main/orders/view": "./src/screens/main/orders/view/index.tsx",
 		"./screens/main/pos/cart": "./src/screens/main/pos/cart/index.tsx",
 		"./screens/main/pos/cart/add-misc-product": "./src/screens/main/pos/cart/add-misc-product.tsx",
 		"./screens/main/pos/columns": "./src/screens/main/pos/columns/index.ts",
