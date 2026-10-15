@@ -10,13 +10,9 @@ import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
-import {
-	dispatchAction,
-	isActionRefusal,
-	presentActionRefusal,
-} from '../../../../extensions/actions';
+import { dispatchAction } from '../../../../extensions/actions';
 import { cartRestartsOnAdd, restartStamp } from './cart-restart';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueCartAction } from './enqueue-cart-action';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
@@ -32,6 +28,7 @@ import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
 
+import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -248,9 +245,9 @@ export const useAddItemToOrder = () => {
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, async (context) => {
+			const run = async (target: CurrentOrderRecord, context: OrderMutationContext) => {
 				const temporaryOrder = order.getLatest();
-				let latest = context.order?.getLatest() ?? temporaryOrder;
+				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineResident | null = null;
 				if (isNew && !context.order) {
@@ -274,7 +271,7 @@ export const useAddItemToOrder = () => {
 					}
 				}
 
-				const result = await dispatchAction({
+				return dispatchAction({
 					event: 'cart.line.add',
 					token: context.dispatchToken,
 					ctx,
@@ -316,12 +313,8 @@ export const useAddItemToOrder = () => {
 						return result;
 					},
 				});
-				if (isActionRefusal(result)) {
-					presentActionRefusal(ctx, result, { orderId: recordId });
-					return false;
-				}
-				return result;
-			});
+			};
+			return enqueueCartAction(order, run, { ctx, context: { orderId: recordId } });
 		},
 		[
 			buildCartLines,

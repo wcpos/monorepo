@@ -4,18 +4,16 @@ import { getLogger } from '@wcpos/utils/logger';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { reportStaleCartLine } from './cart-failure';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueCartAction } from './enqueue-cart-action';
 // Undo re-enters through cart.line.add; the guard must be registered whoever imported first.
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { useT } from '../../../../contexts/translations';
-import {
-	dispatchAction,
-	isActionRefusal,
-	presentActionRefusal,
-} from '../../../../extensions/actions';
+import { dispatchAction } from '../../../../extensions/actions';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+
+import type { OrderMutationContext } from './order-mutation-queue';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
@@ -42,10 +40,8 @@ export const useRemoveLineItem = () => {
 	const undoRemove = React.useCallback(
 		async (uuid: string, type: Line, itemToRestore: LineItem) => {
 			const orderContext = { orderId: currentOrderRecord.payload.id };
-			const outcome = await enqueueOrderMutation(currentOrderRecord.uuid, (queue) => {
-				// A first add queued ahead replaced the temporary record with the saved order it
-				// left on the slot; that is the order every queued writer lands on.
-				const order = (queue.order ?? currentOrderRecord).getLatest();
+			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
+				const order = target.getLatest();
 				const items = (order.payload[type] ?? []) as LineItem[];
 				// A confirmed deletion retired this Woo id; Undo must append a new line.
 				if (itemToRestore.id && !items.some((item) => item.id === itemToRestore.id)) {
@@ -76,8 +72,8 @@ export const useRemoveLineItem = () => {
 						return localPatch({ document: order, data: { [type]: updatedLines } });
 					},
 				});
-			});
-			if (isActionRefusal(outcome)) presentActionRefusal(ctx, outcome, orderContext);
+			};
+			await enqueueCartAction(currentOrderRecord, run, { ctx, context: orderContext });
 		},
 		[currentOrderRecord, localPatch, ctx, actor]
 	);
@@ -91,9 +87,8 @@ export const useRemoveLineItem = () => {
 	const removeLineItem = React.useCallback(
 		async (uuid: string, type: Line) => {
 			let itemToRestore: LineItem | undefined;
-			const outcome = await enqueueOrderMutation(currentOrderRecord.uuid, (queue) => {
-				// The saved order a first add left on the slot, else the record the cashier acted on.
-				const order = (queue.order ?? currentOrderRecord).getLatest();
+			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
+				const order = target.getLatest();
 				const items = (order.payload[type] ?? []) as LineItem[];
 				itemToRestore = items.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 				return dispatchAction({
@@ -134,11 +129,12 @@ export const useRemoveLineItem = () => {
 						return localPatch({ document: order, data: { [type]: updatedLines } });
 					},
 				});
+			};
+			const outcome = await enqueueCartAction(currentOrderRecord, run, {
+				ctx,
+				context: { orderId: currentOrderRecord.payload.id, uuid, type },
 			});
-			if (isActionRefusal(outcome)) {
-				presentActionRefusal(ctx, outcome, { orderId: currentOrderRecord.payload.id, uuid, type });
-				return;
-			}
+			if (outcome === false) return;
 
 			if (itemToRestore) {
 				const itemName =
