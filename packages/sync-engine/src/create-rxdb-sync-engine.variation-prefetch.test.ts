@@ -661,11 +661,12 @@ describe('variation-prefetch maintenance lane', () => {
 					(query) => (query.mangoQuery.selector ?? {}) as Record<string, unknown>
 				);
 			expect(selectors(products)).not.toContainEqual({ type: 'variable' });
-			// Only the prefetch's own wooIdField lookup: materializing the pulled child adds the
-			// write path's `uuid: { $in }` read, which this job does not cover.
+			// Only the prefetch's own remoteKey lookup (next keys variations by remoteKey, not
+			// remoteId): materializing the pulled child adds the write path's `uuid: { $in }` read,
+			// which this job does not cover.
 			expect(
 				selectors(variations).filter((selector) => {
-					const condition = selector.remoteId;
+					const condition = selector.remoteKey;
 					return typeof condition === 'object' && condition !== null && '$in' in condition;
 				})
 			).toEqual([]);
