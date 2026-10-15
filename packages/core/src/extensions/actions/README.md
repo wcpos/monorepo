@@ -31,6 +31,7 @@ unrelated queued writes.
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
 | `cart.line.update`       | `useUpdateCartLine` (one writer; `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` delegate; `type` says which list) | `changes` | yes |
 | `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
+| `cart.line.split` | `useSplitLineItem` (the cart's Split link; `line_items` only; one write replaces the line with its unit lines) | none | yes |
 | `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
 | `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29) | `billing`, `shipping`, `taxIds` | yes |
@@ -82,7 +83,7 @@ therefore the only register and session rules in the app; there is no second gat
 First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),
 the prevent-overselling check moved onto the two cart events as guards. Ids are unique per event
 and strikes follow the id, so the two stock functions carry distinct ids: a fault in one never
-disables the other.
+disables the other. The stock guard does not register for `cart.line.split`: a split moves no units or net demand.
 
 The audit observer (`audit.sale-completed`) is the first extension-tier hook and the first
 after-work hook: it logs the `checkout.completed` row from the completed result, after reconciliation,
@@ -100,7 +101,8 @@ print, register open/close, refund. Admitted by the spec's
 intent meta, so both hooks hand their line to the same recalculate-and-patch), `cart.customer.set`
 (one writer, `use-set-cart-customer.ts`, for the picker, the new-customer form and the address edit;
 the address edit dispatches with the customer unchanged). A coupon refusal reaches the cashier
-through the coupon field's own error line, not a toast. With it the cart domain is complete: every
+through the coupon field's own error line, not a toast. `cart.line.split` is admitted by the
+2026-10-15 amendment for the same plugin-integration consumers. With it the cart domain is complete: every
 price-affecting cart write goes through the chain, and the fence allowlist holds only the void (its
 own ruling), the payments mirrors, settlement, the order-meta form and the customer note.
 `cart.order.void` (ruled 2026-10-12): the button counts the payments ledger once into

@@ -8,6 +8,7 @@ export const ACTION_BUDGET_MS: Record<ActionEvent, number> = {
 	'cart.line.add': 1500,
 	'cart.line.update': 1500,
 	'cart.line.remove': 1500,
+	'cart.line.split': 1500,
 	'cart.coupon.apply': 1500,
 	'cart.coupon.remove': 1500,
 	'cart.customer.set': 1500,
