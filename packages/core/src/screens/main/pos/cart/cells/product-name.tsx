@@ -9,13 +9,13 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
-import { useT } from '../../../../../../contexts/translations';
-import { EditableField } from '../../../../components/editable-field';
-import { lineRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
-import { getStockRejectionForLine, stockRejection$ } from '../../../hooks/stock-rejection';
-import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
-import { useCurrentOrder } from '../../../contexts/current-order';
+import { formatMetaDataValue } from '../../../components/format-meta-data-value';
+import { useT } from '../../../../../contexts/translations';
+import { EditableField } from '../../../components/editable-field';
+import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
+import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useCurrentOrder } from '../../contexts/current-order';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;

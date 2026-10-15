@@ -9,13 +9,13 @@ import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
-import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
-import { useT } from '../../../../../contexts/translations';
-import { convertUTCStringToLocalDate } from '../../../../../hooks/use-local-date';
-import { useNowMs, useRelativeTime } from '../../../../../hooks/use-relative-time';
-import { CartTabTitle } from '../tab-title';
+import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+import { useT } from '../../../../contexts/translations';
+import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { useNowMs, useRelativeTime } from '../../../../hooks/use-relative-time';
+import { CartTabTitle } from './tab-title';
 import { cartContents } from './cart-contents';
-import { cartRestartsOnAdd } from '../../hooks/cart-restart';
+import { cartRestartsOnAdd } from '../hooks/cart-restart';
 import { TabChip } from './tab-chip';
 
 // The ages tick once a minute: "4 min" need not be exact, and a list of hundreds of rows

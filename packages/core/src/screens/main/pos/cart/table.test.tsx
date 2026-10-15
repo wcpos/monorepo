@@ -116,7 +116,7 @@ jest.mock('./cells/line-strip', () => ({
 		<>{typeof children === 'function' ? null : children}</>
 	),
 }));
-jest.mock('../cells/fee-and-shipping-total', () => ({ FeeAndShippingTotal: () => null }));
+jest.mock('./cells/fee-and-shipping-total', () => ({ FeeAndShippingTotal: () => null }));
 let mockIsPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
 jest.mock('./empty-cart', () => ({
@@ -126,19 +126,19 @@ jest.mock('./empty-cart', () => ({
 	},
 }));
 jest.mock('./cells/fee-name', () => ({ FeeName: () => null }));
-jest.mock('../cells/fee-price', () => ({ FeePrice: () => null }));
-jest.mock('../cells/image', () => ({ LineItemImage: () => null }));
+jest.mock('./cells/fee-price', () => ({ FeePrice: () => null }));
+jest.mock('./cells/image', () => ({ LineItemImage: () => null }));
 jest.mock('./cells/price', () => ({ Price: () => null }));
 jest.mock('./cells/product-name', () => ({ ProductName: () => null }));
 jest.mock('./cells/product-total', () => ({ ProductTotal: () => null }));
 jest.mock('./cells/quantity-keypad', () => ({ Quantity: () => null }));
-jest.mock('../cells/regular_price', () => ({ RegularPrice: () => null }));
-jest.mock('../cells/shipping-price', () => ({ ShippingPrice: () => null }));
+jest.mock('./cells/regular_price', () => ({ RegularPrice: () => null }));
+jest.mock('./cells/shipping-price', () => ({ ShippingPrice: () => null }));
 jest.mock('./cells/shipping-title', () => ({ ShippingTitle: () => null }));
-jest.mock('../cells/sku', () => ({ SKU: () => null }));
-jest.mock('../cells/subtotal', () => ({ Subtotal: () => null }));
+jest.mock('./cells/sku', () => ({ SKU: () => null }));
+jest.mock('./cells/subtotal', () => ({ Subtotal: () => null }));
 
-jest.mock('../../../contexts/ui-settings', () => ({
+jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: {
 			columns: ['quantity', 'name', 'price', 'total'].map((key) => ({ key, show: true })),
@@ -149,11 +149,11 @@ jest.mock('../../../contexts/ui-settings', () => ({
 	}),
 }));
 
-jest.mock('../../contexts/current-order', () => ({
+jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
 }));
 
-jest.mock('../../hooks/use-cart-lines', () => ({
+jest.mock('../hooks/use-cart-lines', () => ({
 	useCartLines: () => mockCartLines,
 }));
 
@@ -188,8 +188,8 @@ describe('CartTable pulse baseline', () => {
 	});
 });
 
-jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 
 it.each([

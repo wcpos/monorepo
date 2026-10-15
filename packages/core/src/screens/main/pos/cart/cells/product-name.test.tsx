@@ -4,7 +4,7 @@ import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 
 import { ProductName } from './product-name';
-import { openLineQuantity } from '../../../conditions/use-cart-conditions';
+import { openLineQuantity } from '../../conditions/use-cart-conditions';
 
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react-native').View }));
@@ -25,29 +25,29 @@ jest.mock('@wcpos/components/text', () => ({
 	},
 }));
 
-jest.mock('../../../contexts/current-order', () => ({
+jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
 }));
-jest.mock('../../../hooks/use-update-line-item', () => ({
+jest.mock('../../hooks/use-update-line-item', () => ({
 	useUpdateLineItem: () => ({ updateLineItem: jest.fn() }),
 }));
-jest.mock('../../../hooks/stock-rejection', () => ({
+jest.mock('../../hooks/stock-rejection', () => ({
 	stockRejection$: new (jest.requireActual('rxjs').BehaviorSubject)(null),
 	getStockRejectionForLine: () => mockRejection,
 }));
-jest.mock('../../../../../../contexts/translations', () => ({
+jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, params?: Record<string, unknown>) =>
 		params ? `${key} ${JSON.stringify(params)}` : key,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: ({ name }: { name: string }) => `[${name}]` }));
 let mockUnmet: { lineUuid: string; available: number | null }[] = [];
 let mockRejection: { available: number | null } | null = null;
-jest.mock('../../../conditions/use-cart-conditions', () => ({
-	...jest.requireActual('../../../conditions/use-cart-conditions'),
+jest.mock('../../conditions/use-cart-conditions', () => ({
+	...jest.requireActual('../../conditions/use-cart-conditions'),
 	useCartUnmet: () => mockUnmet,
 }));
-jest.mock('../../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
-jest.mock('../../../../components/editable-field', () => ({ EditableField: () => null }));
+jest.mock('../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
+jest.mock('../../../components/editable-field', () => ({ EditableField: () => null }));
 
 it('joins public metadata into a decoded subline while keeping value-only selectors', () => {
 	const props = {

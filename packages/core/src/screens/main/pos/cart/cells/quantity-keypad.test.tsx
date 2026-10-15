@@ -4,23 +4,23 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Quantity } from './quantity-keypad';
-import { openLineQuantity, scrollToLine } from '../../../conditions/use-cart-conditions';
+import { openLineQuantity, scrollToLine } from '../../conditions/use-cart-conditions';
 
 const mockUpdateLineItem = jest.fn();
 const mockSplitLineItem = jest.fn();
-jest.mock('../../../hooks/use-split-line-item', () => ({
+jest.mock('../../hooks/use-split-line-item', () => ({
 	useSplitLineItem: () => ({ splitLineItem: mockSplitLineItem }),
 }));
-jest.mock('../../../hooks/use-update-line-item', () => ({
+jest.mock('../../hooks/use-update-line-item', () => ({
 	useUpdateLineItem: () => ({ updateLineItem: mockUpdateLineItem }),
 }));
-jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // The conditions module's own reads (store session) are not under test here.
-jest.mock('../../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
+jest.mock('../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react-native').View }));
 // The cell owns the value/id/commit seam; the unchanged NumberInput owns its keypad.
-jest.mock('../../../../components/number-input', () => ({
+jest.mock('../../../components/number-input', () => ({
 	NumberInput: ({
 		testID,
 		value,

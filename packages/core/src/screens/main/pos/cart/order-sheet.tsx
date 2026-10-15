@@ -8,13 +8,13 @@ import {
 	DialogTitle,
 } from '@wcpos/components/v2/dialog';
 
-import { useT } from '../../../../../contexts/translations';
-import { usePanelSide } from '../../contexts/overlay-side';
-import { EditOrderMeta } from '../buttons/edit-order-meta';
-import { SaveButton } from '../buttons/save-order';
-import { VoidButton } from '../buttons/void';
+import { useT } from '../../../../contexts/translations';
+import { usePanelSide } from '../contexts/overlay-side';
+import { EditOrderMeta } from './buttons/edit-order-meta';
+import { SaveButton } from './buttons/save-order';
+import { VoidButton } from './buttons/void';
 
-import type { CurrentOrderRecord } from '../../contexts/current-order';
+import type { CurrentOrderRecord } from '../contexts/current-order';
 
 export function OrderSheet({
 	open,

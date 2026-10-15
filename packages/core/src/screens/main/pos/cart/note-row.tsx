@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
-import type { CurrentOrderRecord } from '../../contexts/current-order';
+import type { CurrentOrderRecord } from '../contexts/current-order';
 
 export function NoteRow({ order, onPress }: { order: CurrentOrderRecord; onPress: () => void }) {
 	const note = useDocField(order, (value) => value.payload.customer_note);

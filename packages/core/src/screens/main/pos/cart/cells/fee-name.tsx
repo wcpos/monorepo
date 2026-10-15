@@ -6,9 +6,9 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
-import { EditableField } from '../../../../components/editable-field';
-import { useUpdateFeeLine } from '../../../hooks/use-update-fee-line';
+import { formatMetaDataValue } from '../../../components/format-meta-data-value';
+import { EditableField } from '../../../components/editable-field';
+import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {

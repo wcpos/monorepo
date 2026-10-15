@@ -5,12 +5,12 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../../../components/currency-input';
-import { useUISettings } from '../../../../contexts/ui-settings';
-import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
-import { useLineItemData } from '../../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
-import { ensureNumberArray } from '../../cells/ensure-number-array';
+import { CurrencyInput } from '../../../components/currency-input';
+import { useUISettings } from '../../../contexts/ui-settings';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useLineItemData } from '../../hooks/use-line-item-data';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { ensureNumberArray } from './ensure-number-array';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;

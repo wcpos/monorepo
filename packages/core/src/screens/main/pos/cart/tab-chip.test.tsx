@@ -14,24 +14,24 @@ import {
 	markOrderSaveRejected,
 	markOrderSaving,
 	resetCheckoutMode,
-} from '../../checkout/checkout-mode';
+} from '../checkout/checkout-mode';
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
-jest.mock('../../../hooks/use-payment-methods', () => ({
+jest.mock('../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
+jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
-jest.mock('../../../../../contexts/app-state', () => ({
+jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
 }));
-jest.mock('../../../hooks/use-currency-format', () => ({
+jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
-jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (

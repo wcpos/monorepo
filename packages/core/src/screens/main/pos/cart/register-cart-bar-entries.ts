@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { registerSlotEntry, useSlotValue } from '../../../../extensions/slots';
-import { OpenOrderTabs } from './v2/tabs';
+import { OpenOrderTabs } from './tabs';
 
 import type { SlotEntryProps } from '../../../../extensions/slots';
 
