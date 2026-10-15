@@ -5,12 +5,12 @@ import { screen } from '@testing-library/react';
 
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
-import { renderTable, reset } from '../../components/data-table/v2/test-fixture';
-import { DataTableRow } from '../../components/data-table/v2/rows';
+import { renderTable, reset } from '../../components/data-table/test-fixture';
+import { DataTableRow } from '../../components/data-table/rows';
 import { DayHeading, groupOrders, isDay, type OrderHit, type OrderListItem } from './day-heading';
 
 import type { Row } from '../../../../table-types';
-import type { DataTableFeatures } from '../../components/data-table/v2';
+import type { DataTableFeatures } from '../../components/data-table';
 
 beforeEach(reset);
 it('renders actual day headings alongside stable order rows without counting headings as hits', () => {

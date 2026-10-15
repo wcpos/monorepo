@@ -5,7 +5,7 @@ import { render } from '@testing-library/react';
 import type { QueryHandle } from '@wcpos/query';
 
 import { DataTable } from './index';
-import { QueryStateProvider } from '../../../../../query';
+import { QueryStateProvider } from '../../../../query';
 
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
 	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
@@ -43,24 +43,24 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, selector: (value: unknown) => unknown) =>
 		selector({ columns: state.columns }),
 }));
-jest.mock('../../../contexts/ui-settings', () => ({
+jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: {}, getUILabel: (key: string) => key, patchUI }),
 }));
-jest.mock('../../../../../contexts/translations', () => ({
+jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) =>
 		values ? JSON.stringify({ key, ...values }) : key,
 }));
-jest.mock('../../../hooks/use-collection-reset', () => ({
+jest.mock('../../hooks/use-collection-reset', () => ({
 	useCollectionReset: () => ({ clearAndSync: jest.fn() }),
 }));
-jest.mock('../../sync-button', () => ({
+jest.mock('../sync-button', () => ({
 	// The footer's sync control as the cashier sees it: it turns while `active`, a press syncs.
 	SyncButton: ({ active, sync }: { active: boolean; sync: () => Promise<void> }) => (
 		<button data-testid="sync-button" data-active={String(active)} onClick={() => void sync()} />
 	),
 }));
-jest.mock('../list-footer', () => ({ ListFooterComponent: () => null }));
-jest.mock('../../record-text-cell', () => ({
+jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
+jest.mock('../record-text-cell', () => ({
 	RecordTextCell: ({ column }: { column: { id: string } }) => (
 		<span data-testid={`cell-${column.id}`}>{column.id}</span>
 	),

@@ -38,7 +38,7 @@ jest.mock('../level-back', () => ({
 }));
 jest.mock('../grid/product-tile', () => ({ ProductTile: () => null }));
 // The term level's products table (term-table.tsx) is the till's own table; not on stage here.
-jest.mock('../../../../components/data-table/v2', () => ({ DataTable: () => null }));
+jest.mock('../../../../components/data-table', () => ({ DataTable: () => null }));
 jest.mock('../cells-for-row', () => ({ cellsForRow: jest.fn() }));
 jest.mock('../rows/product-row', () => ({ ProductRow: () => null }));
 jest.mock('../rows/variable-product-row', () => ({ VariableProductRow: () => null }));

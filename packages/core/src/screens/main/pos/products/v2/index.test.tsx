@@ -109,7 +109,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../../../components/data-table/v2', () => ({
+jest.mock('../../../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		const { useQueryStateActions } = jest.requireActual('../../../../../query');
 		const actions = useQueryStateActions();
@@ -637,7 +637,7 @@ jest.mock('./deal-stack', () => ({
 jest.mock('./footer', () => ({ ProductsFooter: () => null }));
 jest.mock('@wcpos/components/lib/motion', () => ({ PANE: 280, EASE: (n: number) => n }));
 
-jest.mock('../../../components/data-table/v2/skeleton', () => ({
+jest.mock('../../../components/data-table/skeleton', () => ({
 	DataTableSkeleton: () => <div data-testid="table-skeleton" />,
 }));
 

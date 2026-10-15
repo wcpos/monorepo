@@ -13,7 +13,7 @@ import { PosVariableProductImage } from '../cells/variable-image';
 import { PosVariablePrice } from '../cells/variable-price';
 
 import type { Row } from '../../../../../table-types';
-import type { DataTableFeatures } from '../../../components/data-table/v2';
+import type { DataTableFeatures } from '../../../components/data-table';
 
 type ProductRow = { record: EngineRecord<'products'> };
 

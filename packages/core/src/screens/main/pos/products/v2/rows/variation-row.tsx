@@ -4,7 +4,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 
-import { DataTableRow } from '../../../../components/data-table/v2/rows';
+import { DataTableRow } from '../../../../components/data-table/rows';
 import { resolveVariationName } from '../../../../components/product/resolve-variation-name';
 import { InCartCount, useVariationCount } from './product-row';
 import { useAddVariation } from '../../../hooks/use-add-variation';

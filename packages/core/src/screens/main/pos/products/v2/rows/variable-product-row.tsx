@@ -4,7 +4,7 @@ import { Pressable } from 'react-native';
 import { Icon } from '@wcpos/components/icon';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
-import { DataTableRow } from '../../../../components/data-table/v2/rows';
+import { DataTableRow } from '../../../../components/data-table/rows';
 import { VariableProductRow as InlineRow } from '../../../../components/product/variable-product-row';
 export function VariableProductRow({
 	variationsStyle,

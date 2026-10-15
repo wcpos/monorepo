@@ -15,8 +15,8 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../../../query';
-import { DataTable } from '../../../components/data-table/v2';
-import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
+import { DataTable } from '../../../components/data-table';
+import { DataTableSkeleton } from '../../../components/data-table/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
 import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { OwnFooter, OwnFooterContext, type OwnFooterNumbers } from './own-footer';
