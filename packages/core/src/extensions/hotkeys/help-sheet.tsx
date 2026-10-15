@@ -12,7 +12,7 @@ import {
 } from '@wcpos/components/v2/dialog';
 
 import { useT } from '../../contexts/translations';
-import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side/v2';
+import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side';
 import { getCommands, runCommand } from '../commands';
 import { chordPlatform, DEFAULT_BINDINGS, describeChord } from './bindings';
 
@@ -34,7 +34,7 @@ export function HelpSheet({
 	onOpenChange: (open: boolean) => void;
 	ctx: CommandContext;
 }) {
-	const side = usePanelSide('cart');
+	const side = usePanelSide('shell');
 	const t = useT();
 	const run = (id: CommandId) => {
 		onOpenChange(false);

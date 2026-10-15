@@ -25,7 +25,7 @@ import { useRegisterSurface } from '../../../../extensions/commands/use-register
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 
 type DialogType = 'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'coupon' | null;
 

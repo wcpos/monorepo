@@ -15,7 +15,7 @@ import {
 } from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 
 export function RegisterAmount({
 	currencyOptions,

@@ -15,7 +15,7 @@ const mockClose = jest.fn();
 let mockPercent = false;
 let mockFeeAmount = '10';
 
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	DialogAction: ({
 		children,
 		onPress,
@@ -33,7 +33,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogClose: () => null,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useRootContext: () => ({ onOpenChange: mockClose }),
+	useDialog: () => ({ close: mockClose }),
 }));
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
@@ -187,7 +187,7 @@ it.each([
 	await waitFor(() =>
 		expect(mockAdd).toHaveBeenCalledWith({ discount_type: type, amount: normalized })
 	);
-	await waitFor(() => expect(mockClose).toHaveBeenCalledWith(false));
+	await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 });
 it('keeps the dialog open and shows a failed application', async () => {
 	mockAdd.mockResolvedValue({ success: false, error: 'cart changed' });

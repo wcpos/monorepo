@@ -36,7 +36,7 @@ jest.mock('@wcpos/components/v2/dialog', () => {
 		DialogTitle: Wrapper,
 	};
 });
-jest.mock('../../screens/main/pos/contexts/overlay-side/v2', () => ({
+jest.mock('../../screens/main/pos/contexts/overlay-side', () => ({
 	usePanelSide: () => 'right',
 }));
 jest.mock('../../contexts/translations', () => ({

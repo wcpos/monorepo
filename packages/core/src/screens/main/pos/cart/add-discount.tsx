@@ -10,8 +10,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
@@ -26,7 +26,7 @@ import { useAddQuickDiscount } from '../hooks/use-add-quick-discount';
 export function AddDiscount() {
 	const t = useT();
 	const { addQuickDiscount } = useAddQuickDiscount();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const schema = z.object({ amount: z.string(), percent: z.boolean() }).transform((data, ctx) => {
 		const intent = readQuickDiscountIntent({
 			meta_data: [
@@ -56,7 +56,7 @@ export function AddDiscount() {
 			discount_type: data.percent ? 'percent' : 'fixed_cart',
 			amount: data.amount,
 		});
-		if (result.success) onOpenChange(false);
+		if (result.success) closeDialog();
 		else form.setError('root', { message: result.error });
 	});
 

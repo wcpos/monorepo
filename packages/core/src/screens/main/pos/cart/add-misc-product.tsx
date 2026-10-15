@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -57,7 +57,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddMiscProduct() {
 	const t = useT();
 	const { addProduct } = useAddProduct();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	/**
@@ -95,9 +95,9 @@ export function AddMiscProduct() {
 					name: opt.label,
 				})),
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[addProduct, onOpenChange, t]
+		[addProduct, closeDialog, t]
 	);
 
 	/**

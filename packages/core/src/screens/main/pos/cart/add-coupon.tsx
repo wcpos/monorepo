@@ -16,8 +16,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -46,7 +46,7 @@ type CouponPayload = EngineRecord<'coupons'>['payload'];
 export function AddCoupon() {
 	const t = useT();
 	const { addCoupon } = useAddCoupon();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const [error, setError] = React.useState<string | null>(null);
 	const [selected, setSelected] = React.useState<CouponPayload | null>(null);
 	const [isApplying, setIsApplying] = React.useState(false);
@@ -66,14 +66,14 @@ export function AddCoupon() {
 		try {
 			const result = await addCoupon(selected.code ?? '');
 			if (result.success) {
-				onOpenChange(false);
+				closeDialog();
 			} else {
 				setError(result.error || t('pos_cart.failed_to_apply_coupon'));
 			}
 		} finally {
 			setIsApplying(false);
 		}
-	}, [selected, isApplying, addCoupon, onOpenChange, t]);
+	}, [selected, isApplying, addCoupon, closeDialog, t]);
 
 	return (
 		<>

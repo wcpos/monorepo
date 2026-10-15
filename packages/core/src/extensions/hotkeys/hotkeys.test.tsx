@@ -64,7 +64,7 @@ jest.mock('@wcpos/components/button', () => ({
 		<button data-testid={testID}>{children}</button>
 	),
 }));
-jest.mock('../../screens/main/pos/contexts/overlay-side/v2', () => ({
+jest.mock('../../screens/main/pos/contexts/overlay-side', () => ({
 	usePanelSide: () => 'right',
 }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));

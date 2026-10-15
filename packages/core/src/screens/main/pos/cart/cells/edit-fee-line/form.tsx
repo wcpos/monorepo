@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -57,7 +57,7 @@ interface Props {
 export function EditFeeLineForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateFeeLine } = useUpdateFeeLine();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const { getFeeLineData } = useFeeLineData();
 	const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
 		getFeeLineData(item);
@@ -105,9 +105,9 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 					import('@wcpos/database').OrderDocument['fee_lines']
 				>[number]['meta_data'],
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[updateFeeLine, uuid, onOpenChange]
+		[updateFeeLine, uuid, closeDialog]
 	);
 
 	/**

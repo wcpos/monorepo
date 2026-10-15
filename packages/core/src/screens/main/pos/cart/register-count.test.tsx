@@ -11,7 +11,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({

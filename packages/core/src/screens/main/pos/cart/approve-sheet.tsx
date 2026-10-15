@@ -11,7 +11,7 @@ import { recordRegisterFact, useRegisterActor } from '../../../../services/regis
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 
 export function ApproveSheet({
 	counted,
