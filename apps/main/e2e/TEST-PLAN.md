@@ -17,6 +17,26 @@ Selector policy: select app UI via stable testIDs with `getByTestId('some-id')`.
 text and named role selectors; structural role locators without a name are allowed (see
 repo `CLAUDE.md`).
 
+## Dev-store setup: PR preview logins
+
+PR runs serve the app from an EAS Hosting preview origin, `https://wcpos--<id>.expo.app`.
+Since woocommerce-pos #2259 (2026-10-14), the POS login page sends tokens only to
+three kinds of origin: the site's own, `https://wcpos.expo.app` and loopback hosts.
+So a fresh login from a preview fails in global-setup with "Missing or invalid
+redirect_uri parameter."
+
+The dev stores allow those preview origins through the plugin's
+`woocommerce_pos_auth_redirect_origin_allowed` filter. The filter sits at the end of the
+must-use plugin `wp-content/mu-plugins/wcpos-cors.php` and reuses that file's CORS
+allow-list test, so an origin allowed for CORS is also allowed as a login redirect.
+It was added 2026-10-15, and its backups on the server end `pre-auth-redirect-origin-2026-10-15`.
+It was proven by #2555's Deploy run 38732563222 (attempt 3), whose shards logged a fresh
+dev-pro login from `https://wcpos--8u9p7r2uyf.expo.app`.
+
+- A new dev store that runs PR E2E needs the same filter.
+- Removing the filter brings the global-setup failure back.
+- Never widen it on a production or customer store.
+
 ## Current Coverage
 
 ### auth.spec.ts (unauthenticated, free + pro) — 8 tests
