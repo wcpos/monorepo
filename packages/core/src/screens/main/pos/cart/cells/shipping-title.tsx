@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { EditableField } from '../../../../components/editable-field';
-import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
+import { EditableField } from '../../../components/editable-field';
+import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {

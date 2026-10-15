@@ -6,13 +6,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CartFoot } from './foot';
 let mockSession: { sessionsOn: boolean; session: object | null; overdue: boolean };
 const mockOrder = { payload: { line_items: [] as object[], customer_note: 'Gift' } };
-jest.mock('../../../../../services/register-session/use-register-session', () => ({
+jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => mockSession,
 }));
-jest.mock('../../contexts/current-order', () => ({
+jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(value: T, select: (value: T) => unknown) => select(value),
 }));
@@ -36,7 +36,7 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
-jest.mock('../buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));
+jest.mock('./buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));
 beforeEach(() => {
 	mockSession = { sessionsOn: false, session: null, overdue: false };
 	mockOrder.payload.line_items = [];

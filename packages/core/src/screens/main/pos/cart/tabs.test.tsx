@@ -9,8 +9,8 @@ import {
 	finishReceipt,
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
-} from '../../checkout/checkout-mode';
-import { CartTabTitle } from '../tab-title';
+} from '../checkout/checkout-mode';
+import { CartTabTitle } from './tab-title';
 
 // RN Web drops className without Uniwind's app transform; keep the supplied classes observable.
 type LayoutEvent = {
@@ -143,7 +143,7 @@ let mockCurrent: ReturnType<typeof mockRecord> & { isNew?: boolean } = mockOpen[
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
-jest.mock('../../contexts/current-order', () => ({
+jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
 		currentOrderRecord: mockCurrent,
 		openOrders: mockOpen,
@@ -151,7 +151,7 @@ jest.mock('../../contexts/current-order', () => ({
 		setCurrentOrderID: mockSetOrder,
 	}),
 }));
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('../../hooks/use-engine-document', () => ({
 	useEngineRecord: (_collection: string, uuid: keyof typeof mockReceipts) => {
 		if (uuid === mockSuspended) throw mockPending;
 		return mockReceipts[uuid];
@@ -162,17 +162,17 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../../hooks/use-currency-format', () => ({
+jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
-jest.mock('../../../hooks/use-payment-methods', () => ({
+jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: [] }),
 }));
-jest.mock('../../../../../contexts/app-state', () => ({
+jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
 }));
-jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -181,7 +181,7 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipTrigger: () => null,
 	TooltipContent: () => null,
 }));
-jest.mock('../../checkout/payments/server/use-resume-terminal-legs', () => ({
+jest.mock('../checkout/payments/server/use-resume-terminal-legs', () => ({
 	useResumeTerminalLegsForOrders: jest.fn(),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));

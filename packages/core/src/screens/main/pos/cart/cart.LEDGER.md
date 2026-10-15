@@ -1,5 +1,7 @@
 # Behaviour ledger: `pos/cart/v2`
 
+`v2/` folded into this directory on 2026-10-15; read `v2/x` as `x`
+
 Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md` on `research/composed-ledger` (wcpos/roadmap#341) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
 
 Stage 4 accounting. Paths are relative to `pos/cart`. Source lines and evidence are reproduced verbatim; status refers to the behavior, not an assertion that an entire file has never been restyled. “Untouched” means the named behavior remains with its existing owner. The v2 screen switch (Stage 6) landed with the register screen switch (`c446efb5b`, 2026-09-29); the v1 files were deleted on 2026-10-14, including the old inline-note implementation (`totals/customer-note.tsx`).

@@ -6,16 +6,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 
 import { OpenOrdersList } from './open-orders-list';
-jest.mock('../../../hooks/use-order-status-label', () => ({
+jest.mock('../../hooks/use-order-status-label', () => ({
 	useOrderStatusLabel: () => ({ getLabel: () => 'Pending' }),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../tab-title', () => ({ CartTabTitle: () => null }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('./tab-title', () => ({ CartTabTitle: () => null }));
 // The real converter sits behind the locale hook, whose module graph reaches the app state.
-jest.mock('../../../../../hooks/use-local-date', () => ({
+jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(`${value}Z`),
 }));
 jest.mock('./tab-chip', () => ({ TabChip: () => null }));

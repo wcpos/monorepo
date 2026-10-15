@@ -22,7 +22,7 @@ const mockGuard = jest.fn(() => {
 	return false;
 });
 
-jest.mock('../../hooks/use-action-context', () => ({
+jest.mock('../hooks/use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {
 			log: jest.fn(),
@@ -65,25 +65,25 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('../buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
-jest.mock('../../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
-jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
+jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
-jest.mock('../../../../../services/register/register-document', () => ({
+jest.mock('../../../../services/register/register-document', () => ({
 	getCurrentBoundRegisterId: () => undefined,
 }));
-jest.mock('../../../hooks/mutations/request-server-delete', () => ({
+jest.mock('../../hooks/mutations/request-server-delete', () => ({
 	requestServerDelete: () => mockDelete(),
 }));
-jest.mock('../../../hooks/mutations/use-local-mutation', () => ({}));
-jest.mock('../../../hooks/use-storage-health', () => ({
+jest.mock('../../hooks/mutations/use-local-mutation', () => ({}));
+jest.mock('../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: mockGuard }),
 }));
-jest.mock('../../../contexts/use-push-document', () => ({ usePushDocument: () => mockPush }));
-jest.mock('../../contexts/current-order', () => ({
+jest.mock('../../contexts/use-push-document', () => ({ usePushDocument: () => mockPush }));
+jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 	useCurrentOrderRecord: () => mockOrder,
 	useCurrentOrderActions: () => ({
@@ -123,11 +123,11 @@ it('renders Save order on the existing save-to-server-button', async () => {
 });
 
 // Use the real foot and sheet; only the native primitives and data dependencies are doubled.
-jest.mock('../../../../../services/register-session/use-register-session', () => ({
+jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ sessionsOn: false, session: null, overdue: false }),
 }));
 jest.mock('./note-row', () => ({ NoteRow: () => null }));
-jest.mock('../buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));
+jest.mock('./buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));

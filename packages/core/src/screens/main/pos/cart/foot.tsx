@@ -5,11 +5,11 @@ import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 
-import { useRegisterSession } from '../../../../../services/register-session/use-register-session';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { NoteRow } from './note-row';
-import { useT } from '../../../../../contexts/translations';
-import { useCurrentOrder } from '../../contexts/current-order';
-import { PayButton } from '../buttons/pay';
+import { useT } from '../../../../contexts/translations';
+import { useCurrentOrder } from '../contexts/current-order';
+import { PayButton } from './buttons/pay';
 
 export function CartFoot({
 	onOpenRegister,

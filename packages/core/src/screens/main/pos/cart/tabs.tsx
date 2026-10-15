@@ -12,12 +12,12 @@ import { SlideOver } from '@wcpos/components/slide-over';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useT } from '../../../../../contexts/translations';
-import { useEngineRecord } from '../../../hooks/use-engine-document';
-import { finishReceipt, selectReceipt, useCheckoutMode } from '../../checkout/checkout-mode';
-import { useResumeTerminalLegsForOrders } from '../../checkout/payments/server/use-resume-terminal-legs';
-import { useCurrentOrder } from '../../contexts/current-order';
-import { CartTabTitle } from '../tab-title';
+import { useT } from '../../../../contexts/translations';
+import { useEngineRecord } from '../../hooks/use-engine-document';
+import { finishReceipt, selectReceipt, useCheckoutMode } from '../checkout/checkout-mode';
+import { useResumeTerminalLegsForOrders } from '../checkout/payments/server/use-resume-terminal-legs';
+import { useCurrentOrder } from '../contexts/current-order';
+import { CartTabTitle } from './tab-title';
 import { OpenOrdersList } from './open-orders-list';
 import { TabChip } from './tab-chip';
 import { NEW_TAB_WIDTH, PLUS_WIDTH, TAB_MIN, tabWindow } from './tab-window';
