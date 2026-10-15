@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -18,7 +19,12 @@ import {
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import {
+	DialogAction as ModalAction,
+	DialogBody as ModalBody,
+	DialogClose as ModalClose,
+	DialogFooter as ModalFooter,
+} from '@wcpos/components/v2/dialog';
 import {
 	Table,
 	TableBody,
@@ -558,11 +564,11 @@ export function RefundOrderForm({ order }: Props) {
 				<ModalClose>{t('common.cancel')}</ModalClose>
 				<ModalAction
 					testID="process-refund-button"
-					loading={loading}
+					asChild
 					disabled={!isValid || storageDegraded}
 					onPress={() => setConfirmOpen(true)}
 				>
-					{t('orders.process_refund')}
+					<Button loading={loading}>{t('orders.process_refund')}</Button>
 				</ModalAction>
 			</ModalFooter>
 

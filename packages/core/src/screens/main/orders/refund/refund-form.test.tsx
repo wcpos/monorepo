@@ -70,9 +70,12 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalAction: ({ children, onPress, loading, disabled, ...props }: any) => (
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogAction: ({ children, onPress, loading, disabled, ...props }: any) => (
 		<button
 			type="button"
 			onClick={onPress}
@@ -82,8 +85,8 @@ jest.mock('@wcpos/components/modal', () => ({
 			{children}
 		</button>
 	),
-	ModalClose: ({ children }: any) => <button>{children}</button>,
-	ModalFooter: ({ children }: any) => <div data-testid="modal-footer">{children}</div>,
+	DialogClose: ({ children }: any) => <button>{children}</button>,
+	DialogFooter: ({ children }: any) => <div data-testid="modal-footer">{children}</div>,
 }));
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,

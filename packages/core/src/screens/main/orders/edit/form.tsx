@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormCombobox,
@@ -17,7 +18,13 @@ import {
 	FormTextarea,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import {
+	DialogAction as ModalAction,
+	DialogBody as ModalBody,
+	DialogClose as ModalClose,
+	DialogFooter as ModalFooter,
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -71,7 +78,7 @@ export function EditOrderForm({ order }: Props) {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { close } = useModal();
+	const { close } = useDialog();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
@@ -417,11 +424,11 @@ export function EditOrderForm({ order }: Props) {
 				<ModalClose>{t('common.cancel')}</ModalClose>
 				<ModalAction
 					testID="order-edit-save-button"
-					loading={loading}
+					asChild
 					onPress={() => void onSave()}
 					disabled={storageDegraded}
 				>
-					{t('common.save')}
+					<Button loading={loading}>{t('common.save')}</Button>
 				</ModalAction>
 			</ModalFooter>
 		</Form>

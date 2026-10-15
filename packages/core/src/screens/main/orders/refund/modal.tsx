@@ -2,7 +2,12 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
@@ -20,7 +25,7 @@ export function RefundOrderModal({ resource }: Props) {
 
 	if (!order) {
 		return (
-			<Modal>
+			<Dialog route>
 				<ModalContent side="right" size="xl">
 					<ModalHeader>
 						<ModalTitle>
@@ -28,12 +33,12 @@ export function RefundOrderModal({ resource }: Props) {
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
-			</Modal>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
@@ -42,6 +47,6 @@ export function RefundOrderModal({ resource }: Props) {
 				</ModalHeader>
 				<RefundOrderForm order={order} />
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }
