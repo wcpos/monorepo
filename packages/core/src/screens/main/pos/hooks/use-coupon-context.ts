@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
-import type { CouponContext, CouponInput, LineItemInput } from '@wcpos/order-math';
+import type { CouponContext, CouponInput } from '@wcpos/order-math';
 
 import {
 	readEngineCategories,
@@ -10,67 +10,88 @@ import {
 	readEngineProductRecordsByWooId,
 } from './engine-coupon-data';
 import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
-import { buildCategoryParents } from './coupon-helpers-engine';
+type QueryRuntime = ReturnType<typeof useQueryRuntime>;
+type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
 
 function isDiscountType(value: unknown): value is CouponInput['discount_type'] {
 	return value === 'percent' || value === 'fixed_cart' || value === 'fixed_product';
 }
 
-/** Assemble settle's prefetched coupon inputs without pre-enriching product categories. */
+/** Build settle's raw category_id -> parent_id map from engine-backed adapter proxies. */
+function buildCategoryParents(
+	categoryDocuments: EngineRecord<'categories'>[]
+): Map<number, number> {
+	const categoryParentMap = new Map<number, number>();
+	for (const document of categoryDocuments) {
+		if (document.remoteId !== null && document.payload.parent != null) {
+			categoryParentMap.set(wooIdOf(document.remoteId), document.payload.parent);
+		}
+	}
+	return categoryParentMap;
+}
+
+/** Read raw CouponContext inputs; order-math owns eligibility and ancestry. */
+export async function readCouponContext(
+	runtime: QueryRuntime,
+	{
+		lineItems,
+		couponLines,
+	}: {
+		lineItems: readonly { product_id?: number | null }[];
+		couponLines: readonly CouponLine[];
+	}
+): Promise<CouponContext> {
+	const productIds = lineItems
+		.map((item) => item.product_id)
+		.filter((id): id is number => id != null && id > 0);
+	const [couponRecords, productRecords, categoryRecords] = await Promise.all([
+		readEngineCoupons(runtime),
+		readEngineProductRecordsByWooId(runtime, productIds),
+		readEngineCategories(runtime),
+	]);
+
+	const coupons = new Map<string, CouponInput>();
+	for (const record of couponRecords) {
+		const payload = record.payload;
+		if (typeof payload.code !== 'string' || !isDiscountType(payload.discount_type)) continue;
+		coupons.set(payload.code.toLowerCase(), {
+			...payload,
+			code: payload.code,
+			discount_type: payload.discount_type,
+			amount: payload.amount || '0',
+		});
+	}
+
+	for (const line of couponLines) {
+		const intent = readQuickDiscountIntent(line);
+		if (line.code != null && intent) {
+			coupons.set(line.code.toLowerCase(), quickDiscountCouponInput(line.code, intent));
+		}
+	}
+
+	const productCategories = new Map<number, { id: number }[]>();
+	for (const record of productRecords) {
+		if (record.remoteId === null) continue;
+		const categories = (record.payload.categories || [])
+			.map((category) => category.id)
+			.filter((id): id is number => typeof id === 'number')
+			.map((id) => ({ id }));
+		productCategories.set(wooIdOf(record.remoteId), categories);
+	}
+
+	const categoryParents = buildCategoryParents(categoryRecords);
+
+	return { coupons, productCategories, categoryParents };
+}
+
 export const useCouponContext = () => {
 	const runtime = useQueryRuntime();
-
 	const getCouponContext = React.useCallback(
-		async (
-			lineItems: readonly LineItemInput[],
-			couponLines: readonly NonNullable<
-				import('@wcpos/database').OrderDocument['coupon_lines']
-			>[number][] = []
-		): Promise<CouponContext> => {
-			const productIds = lineItems
-				.map((item) => item.product_id)
-				.filter((id): id is number => id != null);
-			const [couponRecords, productRecords, categoryRecords] = await Promise.all([
-				readEngineCoupons(runtime),
-				readEngineProductRecordsByWooId(runtime, productIds),
-				readEngineCategories(runtime),
-			]);
-
-			const coupons = new Map<string, CouponInput>();
-			for (const record of couponRecords) {
-				const payload = record.payload;
-				if (typeof payload.code !== 'string' || !isDiscountType(payload.discount_type)) continue;
-				coupons.set(payload.code.toLowerCase(), {
-					...payload,
-					code: payload.code,
-					discount_type: payload.discount_type,
-					amount: payload.amount || '0',
-				});
-			}
-
-			for (const line of couponLines) {
-				const intent = readQuickDiscountIntent(line);
-				if (line.code != null && intent) {
-					coupons.set(line.code.toLowerCase(), quickDiscountCouponInput(line.code, intent));
-				}
-			}
-
-			const productCategories = new Map<number, { id: number }[]>();
-			for (const record of productRecords) {
-				if (record.remoteId === null) continue;
-				const categories = (record.payload.categories || [])
-					.map((category) => category.id)
-					.filter((id): id is number => typeof id === 'number')
-					.map((id) => ({ id }));
-				productCategories.set(wooIdOf(record.remoteId), categories);
-			}
-
-			const categoryParents = buildCategoryParents(categoryRecords);
-
-			return { coupons, productCategories, categoryParents };
-		},
+		(
+			lineItems: readonly { product_id?: number | null }[],
+			couponLines: readonly CouponLine[] = []
+		) => readCouponContext(runtime, { lineItems, couponLines }),
 		[runtime]
 	);
-
 	return { getCouponContext };
 };

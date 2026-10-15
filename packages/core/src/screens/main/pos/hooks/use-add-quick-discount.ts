@@ -2,14 +2,14 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { useQueryRuntime, useRecordField } from '@wcpos/query';
+import { useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { reportCartFailure } from './cart-failure';
 import { useCouponRejectionMessage } from './coupon-rejection-message';
-import { readEngineCoupons } from './engine-coupon-data';
+import { useCouponContext } from './use-coupon-context';
 import {
 	mintQuickDiscountCode,
 	QUICK_DISCOUNT_META_KEY,
@@ -35,7 +35,7 @@ export const useAddQuickDiscount = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { recalculate } = useRecalculateCoupons();
 	const { ctx, actor } = useActionContext();
-	const runtime = useQueryRuntime();
+	const { getCouponContext } = useCouponContext();
 	const couponRejectionMessage = useCouponRejectionMessage();
 	const t = useT();
 	// The exclusivity check below scans the RESIDENT coupons, and on a device that never
@@ -73,12 +73,10 @@ export const useAddQuickDiscount = () => {
 					.map((line) => line.code as string);
 				if (catalogCodes.length > 0) {
 					await whenCouponReferencesSettled();
-					const coupons = await readEngineCoupons(runtime);
+					const coupons = await getCouponContext(order.payload.line_items || [], couponLines);
 					// Codes compare case-insensitively everywhere else in the cart; match that.
 					const records = catalogCodes.map((catalogCode) =>
-						coupons.find(
-							(record) => record.payload.code?.toLowerCase() === catalogCode.toLowerCase()
-						)
+						coupons.coupons.get(catalogCode.toLowerCase())
 					);
 					// Still not resident after the wait: we cannot tell whether it is exclusive, and
 					// settlement could not replay it either. Refuse rather than guess.
@@ -86,7 +84,7 @@ export const useAddQuickDiscount = () => {
 						return { success: false, error: t('pos_cart.coupon_not_found') };
 					}
 					const exclusive = catalogCodes.find(
-						(catalogCode, index) => records[index]?.payload.individual_use
+						(catalogCode, index) => records[index]?.individual_use
 					);
 					if (exclusive) {
 						return {
@@ -151,7 +149,7 @@ export const useAddQuickDiscount = () => {
 			currentOrderRecord,
 			localPatch,
 			recalculate,
-			runtime,
+			getCouponContext,
 			couponRejectionMessage,
 			whenCouponReferencesSettled,
 			t,

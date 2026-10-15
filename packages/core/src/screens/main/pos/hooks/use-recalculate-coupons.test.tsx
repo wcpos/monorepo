@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { renderHook } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { of } from 'rxjs';
 
 import { recalculateCoupons } from './coupon-recalculate';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
@@ -17,21 +17,13 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
 }));
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		store: {
-			woocommerce_calc_discounts_sequentially$: new BehaviorSubject('no'),
-			calc_discounts_sequentially$: new BehaviorSubject('no'),
-		},
-	}),
-}));
-
-jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: () => ({
+jest.mock('./use-cart-config', () => ({
+	useCartConfig: () => ({
 		rates: [],
 		pricesIncludeTax: false,
+		calcDiscountsSequentially: false,
 		taxRoundAtSubtotal: false,
-		priceNumDecimals: 2,
+		dp: 2,
 	}),
 }));
 
@@ -273,5 +265,13 @@ it.each(['missing', 'mixed', 'collision'])('resolves virtual coupons: %s', async
 		mode === 'mixed' ? ['15.2', '15.2'] : ['16.2', '16.2']
 	);
 	if (mode === 'mixed') expect(recalculated.couponLines[1].discount).toBe('2');
-	else expect(reads.couponFind).not.toHaveBeenCalled();
+	expect(reads.couponFind).toHaveBeenCalledTimes(1);
+});
+
+it('throws when an active coupon record has an unknown discount_type', async () => {
+	installEngineFixture({ code: 'broken', discount_type: 'unknown', amount: '10' });
+	const { result } = renderHook(() => useRecalculateCoupons());
+	await expect(result.current.recalculate(lineItems, [{ code: 'broken' }])).rejects.toThrow(
+		'Coupon "broken" not found in local collection'
+	);
 });

@@ -29,7 +29,7 @@
  *     — product/tax display.
  *   - `orders/refund/calculate-refund` — refunds.
  *   - `pos/hooks/use-add-coupon`, `pos/hooks/use-recalculate-coupons`,
- *     `pos/hooks/coupon-rejection-message` — coupon application and its typed
+ *     `pos/hooks/coupon-rejection-message` — shared CouponContext consumers and typed
  *     rejections.
  *
  * GONE — the per-line tax hooks. `use-calculate-line-item-tax-and-totals` and its
@@ -58,3 +58,4 @@ export * from './coupons/helpers';
 export * from './coupons/recalculate';
 export * from './coupons/validate';
 export * from './order-totals';
+export * from './coupons/context';
