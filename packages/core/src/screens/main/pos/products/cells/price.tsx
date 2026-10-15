@@ -3,7 +3,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../contexts/translations';
 import { displayStockStatus } from '../../../components/product/resolve-stock';
-import { moneyRow } from '../v2/grid/tile-words';
+import { moneyRow } from '../tiles/tile-words';
 
 /**
  *

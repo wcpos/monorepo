@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { RegisterBar } from '@wcpos/core/screens/main/pos/cart/register-bar';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
+import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 
 /**
  * Phone Products pane shared by the (tabs) Products tab and the (columns)

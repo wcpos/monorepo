@@ -1,0 +1,117 @@
+> `v2/` folded into this directory on 2026-10-15; read `v2/x` as `x`. Exceptions: `v2/grid/x` is `tiles/x`; `v2/filter-bar.tsx` is `filter-bar/filter-bar.tsx`. Historical lines below are unchanged.
+
+# Behaviour ledger: `pos/products/v2`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md` on `research/composed-ledger` (wcpos/roadmap#341) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+## pos/products
+
+1. preserved — v2/index.tsx
+2. preserved — v2/index.tsx
+3. preserved — v2/index.tsx
+4. preserved — v2/index.tsx
+5. preserved — v2/index.tsx
+6. preserved — v2/index.tsx
+7. preserved — v2/index.tsx
+8. preserved — v2/index.tsx
+9. preserved — v2/footer.tsx
+10. preserved — use-fit-page-size.ts, untouched
+11. preserved — use-fit-page-size.ts, untouched
+12. preserved — ui-settings-form.tsx, Variations row added
+13. preserved — v2/index.tsx
+14. preserved — v2/index.tsx
+15. preserved — use-product-meta-keys.ts, untouched
+16. preserved — meta-data-keys-field.tsx, untouched
+17. preserved — meta-data-keys-field.tsx, untouched
+18. preserved — storage-outage-banner.tsx, untouched
+19. preserved — v2/index.tsx
+
+## pos/products/cells
+
+1. preserved — cells/name.tsx and cells/variation-name.tsx, untouched; v2/rows/variation-row.tsx
+2. preserved — v2/rows/variation-row.tsx; cells/variation-name.tsx, untouched
+3. preserved — v2/rows/variation-row.tsx; cells/variation-actions.tsx, untouched
+4. preserved — cells/meta-data.tsx, untouched
+5. preserved — cells/variable-actions.tsx, untouched (inline)
+
+## pos/products/grid
+
+1. preserved — grid/index.tsx, tile props added
+2. preserved — grid/index.tsx, tile props added
+3. preserved — grid/index.tsx, tile props added; grid/grid-footer.tsx, untouched
+4. preserved — grid/index.tsx, tile props added
+5. preserved — grid/grid-footer.tsx, untouched
+6. preserved — grid/index.tsx, tile props added
+7. preserved — v2/grid/tile-words.tsx (every word slot empty: no scrim, see Poster tile 1); grid/variable-product-tile.tsx, untouched (inline)
+8. preserved — v2/grid/tile-words.tsx (`from` + minimum, struck regular minimum); grid/variable-product-tile.tsx, untouched (inline)
+9. preserved — v2/grid/tile-words.tsx (`Cost` fact); grid/variable-product-tile.tsx, untouched (inline)
+10. preserved — grid/tile-image.tsx; on the Poster a missing or failed picture hands the tile its tint (`onFailed`) instead of the placeholder, as the spec rules; the legacy grid and the rows keep the placeholder
+11. preserved — v2/grid/variable-product-tile.tsx; grid/variable-product-tile.tsx, untouched (inline)
+
+## pos/products/filter-bar
+
+1. preserved — v2/filter-bar.tsx; filter-bar/filter-bar-layout.ts, untouched
+2. preserved — filter-bar/filter-bar-layout.ts, untouched
+3. preserved — v2/filter-bar.tsx; filter-bar/apply-quick-filter.ts, untouched
+4. preserved — v2/filter-bar.tsx; filter-bar/apply-quick-filter.ts, untouched
+5. preserved — filter-bar/quick-filter-editor.tsx, untouched
+6. preserved — filter-bar/quick-filter-editor.tsx, untouched
+7. preserved — filter-bar/quick-filter-editor.tsx, untouched
+8. preserved — filter-bar/quick-filter-preview.tsx, untouched
+9. preserved — filter-bar/quick-filter-preview.tsx, untouched
+10. preserved — filter-bar/quick-filter-preview.tsx, untouched
+11. preserved — filter-bar/modal.tsx, untouched
+12. preserved — filter-bar/quick-filter-editor.tsx, untouched
+
+## Unchanged composed surfaces
+
+`components/product` lines 1–50 and `pos/products/cells/variations-popover` lines 1–13 remain unchanged. The existing variable row and tile compose their expansion/picker under `inline`; shared product cells, menus and tax display remain imported, and the Products management page retains the old pills. No line is struck or marked n/a.
+
+## Ruled deviations
+
+- Resize is session-local: persistence needs a hydration rule change in `ui-settings/utils.ts`, deferred.
+- The drill-in shows variations in the form the cashier came from (owner's pick from the live mockup, 2026-10-02, replacing "rows in both view modes"). In the table it is rows, a push on `PaneStack`: the products stay mounted and drift off as the pane travels over them (decision 32's motion), and nothing lands row by row (owner, 2026-10-01; decision 39's row stagger stays struck). In the grid it is tiles on the products' own columns, dealt on `deal-stack.tsx`: the tapped tile walks to the first slot and is the way back, its variations come out from under it on the `newTiles` beat and gather on `oldTiles`, and the products fade underneath and stay mounted. On the way back the products come up on the parent's whole 280 ms walk on the accelerating exit curve, not the furniture's decelerating one: with the furniture's curve they were half visible within 70 ms, in the gaps between gathering tiles, which read as a flash (owner, 2026-10-05, after trying the deal on dev-next: "very, very good" otherwise; filmed before/after in the handoff folder). Device pass 2026-10-05 (owner on iPad, agent-driven Pixel over adb): iPad clean; Android had three first-frame ordering defects — the parent painted at rest before the crumb's height was known, was thrown off-screen by an easing overshoot on the return, and left its slot empty for a frame between the lift and the copy — fixed in #2398 with tests and captures in `captures/2026-10-05-deal-android/`. Variation tiles honour the grid's display fields except category, which a variation does not have. Evidence: `@wcpos/components/pane-stack` ledger; `deal-stack.test.tsx`; `e2e/pos-variations-drill-in.spec.ts`.
+- `TaxBasedOn` remains the existing hover-card display. The grid retains its own footer.
+- The existing shared settings dialog and its footer Close/Restore actions are unchanged.
+- Stock filtering uses the source’s `matchesStockStatusFilter` on resident variation hits; the variations query has no stock-status field. Parent variation IDs remain the footer denominator, floored at the displayed count.
+
+## Browse by (added 2026-10-06; roadmap#392 slices 3–4)
+
+1. The root term set (All products first, then the source's terms) and a term's level are the same tiles and rows in every state the gallery can hold still — image, plain, long name, All products, shortcut, the parent in slot 0, and the four as rows — evidence: `browse/gallery.tsx`, registered as `browse-tiles`; the shortcut tile shows `describeQuickFilter`'s sentence under its name, trimmed to two lines (`term-tile.tsx`), and a filter-only shortcut pressed at the root resets to the baseline and applies its conditions under its own crumb (`browse-stage.test.tsx`, "shortcuts: the stored quick filters are the root"). Live, store-agnostic: `e2e/pos-browse-by.spec.ts` creates a disposable root category and a probe product in it and, in grid and table, walks root → All products and back → the category → the probe under its crumb → back → a search spans the catalogue and the root returns on clear (skips with a reason when the writer credentials are not configured) — evidence: green on dev-next 2026-10-06, `deploy.yml` dispatch run 37537041907 on the branch with `lane=next`, in both projects (free-authenticated #29 and pro-authenticated #94, shard 6/6); a `next`-lane PR runs no web E2E on its own, so a dispatch is how this spec is proven. Neither the web transition nor the Pixel film of the category deal was shot in this slice; the Pixel shoot runs separately.
+2. The crumb is the place, the pills are the conditions (the filters and breadcrumbs page, 2026-09-17; owner on the live category view, 2026-10-07: "the category view should be able to be filtered stock, by featured, by on-sale, even by tag and brand"). A pill pressed inside a level narrows the level in place and the crumb stays; the conditions follow the cashier into a child; the term tiles stand under any condition at the root too (their counts are the storefront's, which never followed the default In-stock pill either). Only the SOURCE's own field is the path's: the Category pill set to another value inside a Categories level, a search, or a broken chain leaves the level, and the drop leaves the query as the cashier set it. While a level is open the source's own pill folds (the crumb already says it; it read `Drinks ②` with the descendant count before), it is not a group for Clear all, and Clear all / the empty state's Clear filters keep the place (`clearConditions`). A shortcut level holds while its OWN conditions hold (`quickFilterHolds`), so a pill beside them narrows it; its chip's lit state stays the stricter equality. Before this the level was dropped whenever any other filter moved (`fb063c249`, `a44086e01`, 2026-10-06, under the spec's "the filter bar is untouched… we'll deal with the filter bar later") — evidence: `use-browse-path.test.tsx` (Brand pill inside a Categories level, under All products, inside a shortcut), `browse-stage.test.tsx` (stock and Brand at the root keep the term set; a pill inside a level narrows it and follows into a child), `filter-bar.test.tsx` (the place's pill folds, Clear all keeps the place); mockup `~/Projects/wcpos-handoffs/pos-browse-filters-and-crumb-2026-10-07.html`, direction A chosen by the owner the same day.
+3. The cashier's place survives the register's layout switching trees (owner, 2026-10-07: "when I resize the screen, past a certain breakpoint, it resets the current breadcrumbs"). The phone's tabs and the rail's columns are two trees, and a window resized across the 768×480 boundary unmounts the products screen in one and mounts it in the other. The screen's query (`QueryStateProvider` `persistKey`) and the browse path with its projection (`useBrowsePath` `persistKey`, keyed per scope) are kept under the POS layout's `PersistedStateProvider` (`contexts/persisted-state.tsx`), so the new mount reads the same search, pills, sort, window and crumb; the dealt tiles' `target`s are stripped on the way back in (the nodes are gone), and the product drill is not kept. A persisted path is never taken out on unmount; leaving a source is the next mount's business: a stage for another source finds a projection that is not its own and drops it (the existing drop effect), and All products mode releases it (`useReleaseBrowsePath`) — evidence: `use-browse-path.test.tsx` 'a persisted path' (survives a remount without the old tiles; dropped by another source; released by All products; without a key, leaving takes the projection out as before); `query-state-store.test.tsx` 'QueryStateProvider persistKey'. Not filmed: the first frame of a restored level on the Deal (a detail present at mount, no target) was not shot on a device in this slice.
+
+## In-cart count (added 2026-10-01)
+
+1. An add lands on the product's in-cart count: the new number rolls in from below over the old one (`BEAT`), the badge swells to 1.3 in 90 ms and a loose spring settles it through a dip. There is no ring or glow: a ring splashing out of the badge was built and struck the same day (owner: "a bit too much"). A count that goes down rolls back the other way with no landing. Only `transform` and `opacity` animate; reduce-motion skips all of it — evidence: owner, 2026-10-01 ("an extra drop going into a bucket… fun, smooth, and joyful"); the badge previously appeared and changed with no motion; filmed frame by frame on web, including three adds 120 ms apart, which carry on from the bounce in flight; `rows/in-cart-count.test.tsx`. A spring asked to go from 1 to 1 with only a starting velocity did not move at all, hence the explicit swell.
+2. The count stays mounted while it is zero (rendering the row's `+`, or nothing on a tile) so that it sees the first add; a count that differs because the list recycled the row for another product, or because another open order came into view, moves nothing — evidence: tests "a different product or a different order is not an add" and "shows what stands in for it while the cart holds none, and moves nothing on mount".
+
+## Poster tile (added 2026-10-12)
+
+Evidence for every line: the spec, wcpos/roadmap `docs/specs/2026-10-12-pos-product-tile-poster-spec.md` (#424 + #425; owner decisions 1–5 of 2026-10-12), its prototype beside it, and the plan `docs/superpowers/plans/2026-10-12-pos-poster-tile.md`. The tile itself is `@wcpos/components/poster-tile` (its own ledger).
+
+### pos/products/grid
+
+1. The product, the drill variable product, the variation and the parent in slot 0 are one `PosterTile`: the picture is the whole square and the words sit on a card-colour scrim at its foot (85 %, eased over 48 px). The three old tiles' caption blocks, the "In stock" badge and the variable tile's chevron hint are gone: a stack of two cards behind the square says "tap to deal". Each of the nine `gridFields` has a fixed slot (`v2/grid/tile-words.tsx`: title, money, sub, facts, mark); a field switched off is not rendered, and with nothing to say there is no scrim — evidence: `grid/product-tile.test.tsx`, `variations-grid.test.tsx`.
+2. Stock is a number: the count when stock is managed and some is left (warning-coloured at the record's own threshold, or a `lowstock` status), a backorder clock when it sells at none, nothing otherwise; "Sold out" replaces the price and greys the picture, with no Sale pill. The drill variable product has no stock mark and is never out as a whole — evidence: owner decision 5; `grid/product-tile.test.tsx`.
+3. A product without a picture, or whose picture fails, is its tint: `tintOf` its first category id, else its name; a variation's is its parent's. The tile falls back before it paints (a layout effect), so the placeholder never shows on a Poster tile — evidence: spec § No picture; `grid/product-tile.test.tsx`.
+4. The stack is the Deal's metaphor at rest. Its cards are drawn inside the tile's measured frame (3 px and 6 px down-right, within the margins), so the frame the Deal measures and the column maths do not move. On the parent's copy they fade out over the first `newTiles` beat and back in as slot 1 gathers, on the Deal's easing, opacity only. The clock lives with the stack (`useDealCards` in `deal-stack.tsx`, driven from the copy's `dealt`), not in `DealCell`, so only a tile that draws cards runs one and every existing deal test stands unedited — evidence: spec § The stack and the Deal; `deal-stack.test.tsx` "the parent’s cards leave as the first tiles land and come home with the last one"; web run on dev-next 2026-10-12 (headless, Metro dev from the branch): the tapped Abominable Hoodie's cards gone by the first variation landing (stack opacity 0 on the copy), back at 1 on the tile after the gather. Not filmed on a device.
+5. The parent in slot 0 shows the same words as the tile that was tapped (it takes `gridFields`), with the back badge where the cart count was. DEVIATION from the plan, which gave the parent only its name and options: the spec's rule 2 asks for the copy's first frame to be the tile it stands on, and with price or facts on, a name-only copy changed under the cashier's finger — evidence: spec § The stack and the Deal, rule 2.
+6. The scrim on native is drawn with `react-native-svg` (`scrim.native.tsx`); the CSS gradient is the default `scrim.tsx`, so a runner with no platform (jest) never loads the native renderer — evidence: the web run's computed `background-image` on `poster-scrim` (13 stops, then flat to 100 %). The native gradient is not verified on a device in this change.
+
+### pos/products/v2/browse
+
+7. A term, All products, a shortcut and the parent term are the same `PosterTile`. A term with a picture carries the folder in a card circle; without one (or when it fails) it is `tintOf(term id)` with the folder bare in the tint; All products (grid) and a shortcut (sliders) keep their glyph on tint 5, the shortcut's conditions in the sub slot. CLARIFICATION of the spec's marks: `mark.kind = 'glyph'` carries those two glyphs. Every term tile is a stack, since it deals more tiles out, and the parent term's cards leave as its contents deal and return as they gather (`useDealCards`), as the product parent's do (owner, 2026-10-13: "Any card that drills down into a new stack should have that consistent UI."; a category keeps its glyph and "N products", a variable product its price, "from" and "N options"; 2026-10-12 to 13 nothing here stacked). The words-body machinery (`WordsBody`, `WORDS_PADDING`, `BADGE`) is gone: every tile is the square picture plus the band (line 9) — evidence: `browse/term-tile.test.tsx`; gallery `browse-tiles` (same story ids).
+8. A child term in a dealt cell `grow`s to its cell and keeps its shape beside product tiles: the picture is a square and the whole tile is that square plus the band (line 9), the same on every tile in the row, so neither the old `own` size nor a wrapper is needed — evidence: the 2026-10-12 web run (then square only: every tile in a Clothing level 172.25 × 172.25) and the 2026-10-13 run with the band (every card in the Clothing level 220.64 px tall, rows stepping by the card plus margins).
+9. Since 2026-10-13 every tile is the square plus the Poster band (components ledger `poster-tile` 12), placeholders included (`VariationPlaceholder`, `ProductPlaceholder`: square and band in `bg-muted`), so a row of products, categories and placeholders is level. The first page's row estimate in `v2/index.tsx` adds the band at base scale (`POSTER_BAND_ESTIMATE_PX`, 48) to the two margins — evidence: owner, 2026-10-13 ("The cards must be the same height, square or rectangle."); `fit-page-size.test.ts`, `variations-grid.test.tsx`, `term-level-grid.test.tsx`.
+10. Every picture this screen hands the Poster carries its blurred twin for the native scrim (components ledger `poster-tile` 14): a product's is `TileImageBlurred` (`grid/tile-image.tsx`: the same `useRecordField` + `useImageAttachment` resolution as `TileImage`, so no second fetch, behind its own `Suspense` with no fallback; null on a missing or failed uri; no probes, no `useCopyPicture`, no callbacks; recycling key `<uuid>:blur`); a term's is the term tile's bare blurred image (no `useCopyPicture`, no `onFailed`). The radius is `SCRIM_BLUR_RADIUS` from `@wcpos/components/poster-tile`. Web never mounts either. Not verified on a device — evidence: `grid/product-tile.test.tsx` (the twin reaches the scrim, none on a tint).
+
+## Table rows (added 2026-10-14)
+
+1. Every row of the table is cells on the store's column grid, a term row included, and the kind is told by three marks that never disagree: the image cell (a stacked thumb opens onto more rows; the folder is a category, grid is All products, sliders a shortcut, a variable product stacks with no glyph), the name cell's sub line (`N products`, `N options`, option chips) and the actions cell (`›` opens, `+` adds, the primary count is in the cart). `TermRow` draws its `PosterThumb` at the image column's width (`TERM_IMAGE_COLUMN_WIDTH`, which must match `initial-settings.json`) and hides it with the image column, so a term's name lines up with the product rows' name cell under the one sortable header; terms stay their own component, never TanStack cell rows. On touch the image cell stays beside the stacked words (`DataTableRow`'s coarse branch) instead of rendering inside them — evidence: owner, 2026-10-14 ("we have columns… it can also sort by columns"), roadmap `docs/specs/2026-10-14-pos-table-rows-spec.md` and its board; `term-tile.test.tsx`, `term-level-table.test.tsx`, `browse-root.test.tsx` (term rows under the settings' columns).
+
+## Products stage path map (added 2026-10-15)
+
+The `pos/products/grid` lines 1–11 now refer to `v2/grid/product-grid.tsx` (formerly `grid/index.tsx`), `v2/grid/grid-footer.tsx`, `v2/grid/tile-image.tsx` and `v2/grid/inline-variable-tile.tsx` (formerly `grid/variable-product-tile.tsx`); their three suites and ledger moved alongside them. Poster lines 1–3 and 10's `grid/product-tile.test.tsx` already means `v2/grid/product-tile.test.tsx` and does not move; line 10's image is now `v2/grid/tile-image.tsx`. No numbered line is reworded.
+
+Status 2026-10-15 (step 2): “tile props added” in `pos/products/grid` lines 1–4 and 6 is historical: `ProductGrid` now owns the stage tiles and takes `onDrill` and `variationsStyle` directly. The unused `grid/product-tile.tsx` default and the injection seam are removed; the inline popover tile remains live.

@@ -44,7 +44,7 @@ it('lets the sheet geometry win over an anchored caller width', () => {
 });
 
 it('drops an anchored caller’s width cap on the phone sheet', () => {
-	// The variations popover's own classes (v2/grid/inline-variable-tile.tsx): on a tablet the
+	// The variations popover's own classes (tiles/inline-variable-tile.tsx): on a tablet the
 	// anchored panel keeps its cap; on a phone the sheet is the phone's width.
 	render(
 		<DeviceScope phone>

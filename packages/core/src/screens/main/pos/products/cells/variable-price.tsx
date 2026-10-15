@@ -3,7 +3,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { getVariablePrices } from '../../../components/product/get-variable-prices';
 import { useT } from '../../../../../contexts/translations';
-import { moneyRow } from '../v2/grid/tile-words';
+import { moneyRow } from '../tiles/tile-words';
 
 import type { VariablePrices } from '../../../components/product/get-variable-prices';
 
