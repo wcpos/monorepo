@@ -8,6 +8,8 @@ import { router } from 'expo-router';
 
 import { EditOrderModal } from './orders/edit/modal';
 import { RefundOrderModal } from './orders/refund/modal';
+import { EditProductModal } from './products/edit/product/modal';
+import { EditVariationModal } from './products/edit/variation/modal';
 
 let mockPhone = false;
 let mockRecord: { uuid: string; payload: { id: number; name: string; code: string } } | null;
@@ -108,11 +110,17 @@ jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => k
 jest.mock('./orders/edit/form', () => ({ EditOrderForm: () => null }));
 jest.mock('./orders/refund/form', () => ({ RefundOrderForm: () => null }));
 
+jest.mock('./products/edit/product/form', () => ({ EditProductForm: () => null }));
+
+jest.mock('./products/edit/variation/form', () => ({ EditVariationForm: () => null }));
+
 beforeEach(() => jest.clearAllMocks());
 
 // Removing route would close the primitive instead of navigating back; reverting to Modal
 // loses the phone page. Run both loaded and missing records so the early-return shell counts.
 describe.each([
+	['product', EditProductModal, 'w-lg'],
+	['variation', EditVariationModal, 'w-lg'],
 	['order edit', EditOrderModal, 'w-160'],
 	['order refund', RefundOrderModal, 'w-160'],
 ] as const)('%s route shell', (_name, Screen, width) => {

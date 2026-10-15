@@ -3,7 +3,13 @@ import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody as ModalBody,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
@@ -26,7 +32,7 @@ export function EditVariationModal({ resource }: Props) {
 
 	if (!variation) {
 		return (
-			<Modal>
+			<Dialog route>
 				<ModalContent side="right" size="lg">
 					<ModalHeader>
 						<ModalTitle>
@@ -34,12 +40,12 @@ export function EditVariationModal({ resource }: Props) {
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
-			</Modal>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" size="lg">
 				<ModalHeader>
 					<ModalTitle>
@@ -67,6 +73,6 @@ export function EditVariationModal({ resource }: Props) {
 					</Tabs>
 				</View>
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }

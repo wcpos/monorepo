@@ -3,7 +3,13 @@ import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody as ModalBody,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
@@ -25,18 +31,18 @@ export function EditProductModal({ resource }: Props) {
 
 	if (!product) {
 		return (
-			<Modal>
+			<Dialog route>
 				<ModalContent side="right" size="lg">
 					<ModalHeader>
 						<ModalTitle>{t('products.no_product_found')}</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
-			</Modal>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" testID="product-edit-modal" size="lg">
 				<ModalHeader>
 					{/* The product name is interpolated straight into the heading, so the
@@ -66,6 +72,6 @@ export function EditProductModal({ resource }: Props) {
 					</Tabs>
 				</View>
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }

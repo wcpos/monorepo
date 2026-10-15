@@ -61,9 +61,12 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalAction: ({
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogAction: ({
 		children,
 		onPress,
 		disabled,
@@ -78,9 +81,9 @@ jest.mock('@wcpos/components/modal', () => ({
 		}
 		return <>{children}</>;
 	},
-	ModalClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useModal: () => ({ close: mockModalClose }),
+	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	useDialog: () => ({ close: mockModalClose }),
 }));
 
 jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
