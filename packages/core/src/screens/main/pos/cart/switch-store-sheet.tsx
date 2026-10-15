@@ -13,7 +13,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useSwitchStore } from './use-switch-store';
 import { storeListResource } from '../../hooks/store-list-resource';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 
 export function SwitchStoreSheet({
 	open,

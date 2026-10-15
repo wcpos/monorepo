@@ -45,6 +45,7 @@ jest.mock('../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }
 jest.mock('./products/edit/product/modal', () => ({ EditProductModal: () => null }));
 jest.mock('./products/edit/variation/modal', () => ({ EditVariationModal: () => null }));
 jest.mock('./receipt/receipt', () => ({ Receipt: () => null }));
+jest.mock('./pos/contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 
 describe('engine modal/detail reads', () => {
 	beforeEach(() => {

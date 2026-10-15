@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -77,7 +77,7 @@ export function EditCartCustomerForm() {
 	const setCartCustomer = useSetCartCustomer();
 	const { patch } = useMutation({ collectionName: 'customers', showSuccessToast: false });
 	const runtime = useQueryRuntime();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 	const { caps } = useUserCapabilities();
@@ -105,7 +105,7 @@ export function EditCartCustomerForm() {
 		});
 		// A refused edit keeps the dialog and the cashier's input; the reason was presented.
 		if (written === false) return false;
-		onOpenChange(false);
+		closeDialog();
 		return true;
 	};
 
@@ -147,7 +147,7 @@ export function EditCartCustomerForm() {
 					},
 				});
 			}
-			onOpenChange(false);
+			closeDialog();
 		} catch (error) {
 			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save customer', {

@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -67,7 +67,7 @@ interface Props {
 export function EditLineItemForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateLineItem } = useUpdateLineItem();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
 	const posData = parsePosData(item);
@@ -120,9 +120,9 @@ export function EditLineItemForm({ uuid, item }: Props) {
 					name: opt.label,
 				})),
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[updateLineItem, uuid, onOpenChange]
+		[updateLineItem, uuid, closeDialog]
 	);
 
 	/**

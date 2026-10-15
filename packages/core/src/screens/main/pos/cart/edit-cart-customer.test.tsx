@@ -16,7 +16,7 @@ const formValues = {
 const localPatch = jest.fn(() => Promise.resolve());
 const patchCustomer = jest.fn(() => Promise.resolve(null));
 const mockUseMutationProps = jest.fn();
-const onOpenChange = jest.fn();
+const mockClose = jest.fn();
 const customerFindOne = jest.fn();
 let canEditCustomers = true;
 const activeScope = () => ({
@@ -79,7 +79,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	DialogAction: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
 		<button type="button" data-testid={String(children)} onClick={onPress}>
 			{children}
@@ -88,7 +88,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useRootContext: () => ({ onOpenChange }),
+	useDialog: () => ({ close: mockClose }),
 }));
 
 jest.mock('@wcpos/components/form', () => ({

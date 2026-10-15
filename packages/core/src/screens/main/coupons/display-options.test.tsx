@@ -49,7 +49,6 @@ jest.mock('@wcpos/components/dnd', () => ({
 		renderItem: (item: { id: string }, index: number) => React.ReactNode;
 	}) => items.map(renderItem),
 }));
-jest.mock('../pos/contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 it('focuses columns, patches immediately and restores defaults', async () => {
 	render(<DisplayOptions />);
 	mockOpenAutoFocus({ preventDefault: jest.fn() });
@@ -63,7 +62,7 @@ it('focuses columns, patches immediately and restores defaults', async () => {
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-jest.mock('@wcpos/components/dialog', () => ({}));
+jest.mock('@wcpos/components/v2/dialog', () => ({}));
 jest.mock('@wcpos/components/tooltip', () => ({}));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: ({ children }: React.PropsWithChildren) => children,

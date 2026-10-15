@@ -77,7 +77,7 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
 }));

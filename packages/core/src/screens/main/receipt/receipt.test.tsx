@@ -57,15 +57,19 @@ function TestButton({ children, disabled, loading, onPress, testID }: TestButton
 
 // The receipt document hook toasts when a cloud profile falls back to the system dialog for a report.
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalAction: (props: TestButtonProps) => <TestButton {...props} />,
-	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: (props: TestButtonProps) => <TestButton {...props} />,
-	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogAction: (props: TestButtonProps) => <TestButton {...props} />,
+	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogClose: (props: TestButtonProps) => <TestButton {...props} />,
+	DialogContent: ({ children, side }: React.PropsWithChildren<{ side: string }>) => (
+		<div data-testid="receipt-panel" data-side={side}>
+			{children}
+		</div>
+	),
+	DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
 }));
 
 jest.mock('@wcpos/components/dialog', () => ({
@@ -442,3 +446,16 @@ it('shows the refund title without email and keeps sale actions unchanged', () =
 		translation.mockRestore();
 	}
 });
+
+// Revert: ignore the explicit cart side or derive it from the removed POS provider.
+it.each([null, mockOrder])(
+	'uses the explicit panel side for a resolved or missing order (%p)',
+	(order) => {
+		mockSuspenseValue = order;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+		const { rerender } = render(<Receipt {...{ resource: {} as never, side: 'left' as const }} />);
+		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('left');
+		rerender(<Receipt resource={{} as never} />);
+		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('right');
+	}
+);

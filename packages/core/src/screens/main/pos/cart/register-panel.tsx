@@ -16,7 +16,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 

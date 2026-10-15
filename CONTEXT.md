@@ -652,3 +652,10 @@ The products stage's fixed-column grid of Poster tiles. Columns come from the gr
 setting, widths are equal, order is kept, and a short last row is padded with empty tile
 frames, never wrapped.
 _Avoid_: wrap, flow layout, masonry, column grid.
+
+## Language — POS panels
+
+**Panel side**:
+the edge a POS panel enters from, derived from its subject (cart → over the products,
+products → over the cart, shell → right).
+_Avoid_: overlay side, POS overlay side, products side.

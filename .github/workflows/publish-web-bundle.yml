@@ -103,6 +103,9 @@ jobs:
         if: ${{ github.event.inputs.bundle_branch == 'main' }}
         run: cp scripts/release/check-worker-rxdb-lane.sh "$RUNNER_TEMP/check-worker-rxdb-lane.sh"
 
+      - name: 📌 Stage CDN verification from the workflow revision
+        run: cp scripts/release/cdn-verify.sh "$RUNNER_TEMP/cdn-verify.sh"
+
       - name: 🔎 Resolve the requested monorepo SHA
         id: monorepo-sha
         env:
@@ -282,33 +285,45 @@ jobs:
           git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_SHA}, ref ${MONOREPO_REF})"
           git push origin "$BRANCH"
 
-      - name: 🧹 Purge jsDelivr
-        if: ${{ steps.published.outputs.already != 'true' }}
+      # Runs even when nothing was pushed or built: a re-run after a verification
+      # failure finds the SHA already published (or builds the same bytes) and has
+      # nothing new to commit, but the lane still has to be made right. With no
+      # build output, the branch tree on GitHub is the expectation instead.
+      - name: 🧹 Purge and verify jsDelivr
         env:
+          GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
         run: |
-          set -e
-          for f in metadata.json index.html; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://purge.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/${f}" || echo "000")
-            echo "purge @${BRANCH}/build/${f} -> HTTP ${code}"
-          done
+          set -euo pipefail
+          source "$RUNNER_TEMP/cdn-verify.sh"
+          BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
+          purge_cdn_root "$BRANCH"
+          if [ -f "$BUILD_DIR/metadata.json" ]; then
+            expected=$(expected_from_dir "$BUILD_DIR")
+          else
+            expected=$(expected_from_tree "$BRANCH")
+          fi
+          hashed=""; unhashed=""; n=0; m=0
+          while read -r sha path; do
+            if is_unhashed_path "$path"; then
+              unhashed+="$sha $path"$'\n'; m=$((m + 1))
+            else
+              hashed+="$sha $path"$'\n'; n=$((n + 1))
+            fi
+          done <<< "$expected"
+          if ! printf '%s' "$hashed" | verify_cdn_paths "$BRANCH" "$CDN_HASHED_DEADLINE_SECONDS"; then
+            echo "::error::jsDelivr does not serve the bytes of the published hashed files on @${BRANCH}; metadata.json was not purged, so stores still load the previous build. Re-run the workflow to retry."
+            exit 1
+          fi
+          while read -r sha path; do
+            [[ -z "$path" ]] || purge_cdn_path "$BRANCH" "$path"
+          done <<< "$unhashed"
+          if ! printf '%s' "$unhashed" | verify_cdn_paths "$BRANCH" "$CDN_UNHASHED_DEADLINE_SECONDS"; then
+            echo "::error::jsDelivr does not serve the published metadata.json/index.html/workers on @${BRANCH} after the purge; re-run the workflow to purge and verify again."
+            exit 1
+          fi
           echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"
-
-          # Warm the entry: jsDelivr's first pull of a 14 MB file from GitHub times out
-          # often enough, and it caches the miss as a 404 for minutes, so the first
-          # cashier to load the new bundle got "Failed to load script" (dev-next,
-          # 2026-10-05, three times in a row). Fetch it from here until it is a 200,
-          # purging the negative cache between tries; a run that cannot warm it says so.
-          entry=$(node -p "require('$GITHUB_WORKSPACE/apps/web/build/metadata.json').fileMetadata.web.bundle")
-          url="https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/${entry}"
-          for attempt in 1 2 3 4 5 6; do
-            code=$(curl -s --max-time 120 -o /dev/null -w "%{http_code}" "$url" || echo "000")
-            echo "warm ${entry} (try ${attempt}) -> HTTP ${code}"
-            [ "$code" = "200" ] && exit 0
-            curl -s -o /dev/null "https://purge.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/${entry}" || true
-            sleep 20
-          done
-          echo "::warning::jsDelivr did not serve ${entry} within six tries; the first loads may fail until its origin fetch succeeds. Retry: curl -sI ${url}"
+          echo "Verified by content: ${n} hashed files and ${m} unhashed files"
 
       # The page is the bundle; the storage worker is NOT. The plugin serves it
       # (Frontend.php hands the app `opfsWorker`), and on dev-next that plugin is

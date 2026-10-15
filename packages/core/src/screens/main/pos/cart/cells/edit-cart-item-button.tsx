@@ -8,7 +8,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePanelSide } from '../../contexts/overlay-side/v2';
+import { usePanelSide } from '../../contexts/overlay-side';
 
 interface Props {
 	title: string;

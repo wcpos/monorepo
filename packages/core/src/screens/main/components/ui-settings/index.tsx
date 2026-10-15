@@ -6,14 +6,14 @@ import * as z from 'zod';
 
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
 	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
+import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -25,7 +25,6 @@ import { useDocField } from '@wcpos/query';
 import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { type POSOverlaySide, usePOSOverlaySide } from '../../pos/contexts/overlay-side';
 
 type ColumnsOnlySettingsID = 'products' | 'coupons' | 'customers' | 'orders' | 'reports-orders';
 
@@ -83,14 +82,13 @@ interface Props {
 	children: React.ReactNode;
 	triggerTestID?: string;
 	portalHost?: string;
-	side?: POSOverlaySide;
+	side?: 'left' | 'right';
 }
 
 /**
  *
  */
-function UISettingsDialog({ title, children, triggerTestID, portalHost, side }: Props) {
-	const defaultSide = usePOSOverlaySide();
+function UISettingsDialog({ title, children, triggerTestID, portalHost, side = 'right' }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -118,7 +116,7 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side }: 
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side ?? defaultSide} size="lg" portalHost={portalHost}>
+				<DialogContent side={side} size="lg" portalHost={portalHost}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>
@@ -127,12 +125,13 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side }: 
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose testID="ui-settings-close">{t('common.close')}</DialogClose>
-						<DialogAction
-							{...({ variant: 'destructive' } as Record<string, unknown>)}
+						<Button
+							testID="ui-settings-restore-defaults"
+							variant="outline-error"
 							onPress={handleButtonPress}
 						>
 							{t('common.restore_default_settings')}
-						</DialogAction>
+						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

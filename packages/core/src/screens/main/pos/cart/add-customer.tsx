@@ -28,7 +28,7 @@ import { useSetCartCustomer } from '../hooks/use-set-cart-customer';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 import { customerLinkIdentity, recordCustomerLink } from './new-customer-link';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);

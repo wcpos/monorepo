@@ -26,7 +26,7 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePanelSide } from '../contexts/overlay-side/v2';
+import { usePanelSide } from '../contexts/overlay-side';
 import { ClearLocalData } from './clear-local-data';
 
 export function useSalesToday() {
