@@ -57,6 +57,7 @@ import {
 
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '../collections/engine-collections';
 import { drainableGenerationCollectionCreators } from '../collections/drainable-generation';
+import { findAllUncached } from '../collections/find-all-uncached';
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
@@ -220,7 +221,7 @@ function queueOf(database: RxDatabase): RxCollection {
  * its record's whole chain; an eligible row is held while its order is open.
  */
 async function classify(database: RxDatabase): Promise<Classified> {
-	const rows = (await queueOf(database).find().exec())
+	const rows = (await findAllUncached(queueOf(database)))
 		.map((doc) => doc.toJSON() as QueueRow)
 		.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
 	const orders = database.collections.orders;
@@ -485,7 +486,7 @@ async function carryPosLocalState(
 		if (typeof count === 'number' && count > 0)
 			counts.set(uuid, Math.max(counts.get(uuid) ?? 0, count));
 	};
-	for (const doc of await legacyOrders.find().exec()) {
+	for (const doc of await findAllUncached(legacyOrders)) {
 		const order = doc.toJSON() as { uuid: string; local?: { receiptPrintCount?: unknown } };
 		keep(order.uuid, order.local?.receiptPrintCount);
 	}

@@ -531,7 +531,9 @@ export class EngineOrderRepository {
 		}
 		// A retry may find the parents already gone. Sweep against current residency,
 		// retaining POS-stamped history even when its parent is not held locally.
-		const held = (await this.db.refunds.find({ selector: {} }).exec()).map((doc) => doc.toJSON());
+		const held = (await findAllUncached(this.db.refunds, { selector: {} })).map((doc) =>
+			doc.toJSON()
+		);
 		if (held.length === 0) return;
 		const parents = await this.db.orders
 			.find({
