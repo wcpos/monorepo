@@ -434,7 +434,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		}
 
 		const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-			exTaxPerItem,
+			// WC calculates coupon-line tax from discounts in the store's price basis.
+			discountResult.perItem,
 			resetItems,
 			taxRates,
 			{ pricesIncludeTax, taxRoundAtSubtotal, dp }

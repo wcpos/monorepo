@@ -201,7 +201,6 @@ describe('recalculateCoupons', () => {
 			);
 		}
 
-		// #2356 divergence: client 2.612158, WooCommerce 2.61 (coupon_lines[0].discount).
 		// WC_Discounts::apply_coupon_fixed_product: wc_add_number_precision(1.37) = 137
 		// cents per qty-1 item, neither capped; discounts 1.37 + 1.37 = 2.74.
 		// WC_Abstract_Order::set_item_discount_amounts -> WC_Tax::calc_tax(..., true)
@@ -219,7 +218,7 @@ describe('recalculateCoupons', () => {
 		// WC_Abstract_Order::set_coupon_discount_amounts sums the inclusive discount
 		// taxes above, then wc_round_tax_total(0.127842) = 0.13 (2dp HALF_DOWN);
 		// coupon discount = 2.74 - 0.13 = 2.61; discount_tax = 0.13.
-		it.failing('E: inclusive fixed_product 1.37 with round-at-subtotal off', () => {
+		it('E: inclusive fixed_product 1.37 with round-at-subtotal off', () => {
 			const { lineItems, couponLines } = replay('fixed_product', true, false);
 			const line = lineItems[0];
 			expect(Number(line.total)).toBe(21.424944);
