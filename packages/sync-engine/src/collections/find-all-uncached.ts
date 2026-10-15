@@ -23,8 +23,15 @@ export async function findAllUncached<TDoc>(
 		const queryCache = queryCacheOf(collection);
 		// A real collection's find() returns an RxQuery, possibly the very instance a screen is
 		// subscribed to (RxDB reuses cached queries by their string form); that one stays cached.
-		if (queryCache && countRxQuerySubscribers(rxQuery as unknown as RxQuery) === 0) {
-			uncacheRxQuery(queryCache, rxQuery as unknown as RxQuery);
+		// uncacheRxQuery deletes by that string form alone, so if the cache already dropped this
+		// instance and an equivalent newer one now holds the key, leave the newer one alone.
+		const ran = rxQuery as unknown as RxQuery;
+		if (
+			queryCache &&
+			queryCache._map.get(ran.toString()) === ran &&
+			countRxQuerySubscribers(ran) === 0
+		) {
+			uncacheRxQuery(queryCache, ran);
 		}
 	}
 }

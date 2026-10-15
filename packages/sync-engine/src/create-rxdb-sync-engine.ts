@@ -1351,7 +1351,7 @@ export function createRxdbSyncEngine(
 			const db = databaseByScopeId.get(scopeId);
 			if (!db) return;
 			const manifest = db.collections[manifestName];
-			const docs = await manifest.find({ selector: { objectType } }).exec();
+			const docs = await findAllUncached(manifest, { selector: { objectType } });
 			if (docs.length > 0)
 				assertBulkSuccess(
 					await manifest.bulkRemove(docs.map((doc) => doc.primary)),
@@ -1373,27 +1373,27 @@ export function createRxdbSyncEngine(
 			const db = databaseByScopeId.get(scopeId);
 			if (!db) return;
 			const schedulerTasks = db.collections.schedulerTaskStates;
-			const taskDocs = await schedulerTasks
-				.find({ selector: { collectionName: collection } })
-				.exec();
+			const taskDocs = await findAllUncached(schedulerTasks, {
+				selector: { collectionName: collection },
+			});
 			if (taskDocs.length > 0)
 				assertBulkSuccess(
 					await schedulerTasks.bulkRemove(taskDocs.map((doc) => doc.primary)),
 					'create-rxdb-sync-engine remove'
 				);
 			const coverageRecords = db.collections.coverageRecords;
-			const recordDocs = await coverageRecords
-				.find({ selector: { collectionName: collection } })
-				.exec();
+			const recordDocs = await findAllUncached(coverageRecords, {
+				selector: { collectionName: collection },
+			});
 			if (recordDocs.length > 0)
 				assertBulkSuccess(
 					await coverageRecords.bulkRemove(recordDocs.map((doc) => doc.primary)),
 					'create-rxdb-sync-engine remove'
 				);
 			const coverageLanes = db.collections.coverageLanes;
-			const laneDocs = await coverageLanes
-				.find({ selector: { collectionName: collection } })
-				.exec();
+			const laneDocs = await findAllUncached(coverageLanes, {
+				selector: { collectionName: collection },
+			});
 			if (laneDocs.length > 0)
 				assertBulkSuccess(
 					await coverageLanes.bulkRemove(laneDocs.map((doc) => doc.primary)),
