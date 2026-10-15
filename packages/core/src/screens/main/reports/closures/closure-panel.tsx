@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 import { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
