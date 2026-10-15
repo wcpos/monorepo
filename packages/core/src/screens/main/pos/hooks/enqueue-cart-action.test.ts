@@ -86,9 +86,9 @@ it('presents a refusal once and returns false', async () => {
 	expect(log).toHaveBeenCalledTimes(1);
 });
 
-// Catches presenting despite caller ownership (e.g. a coupon field's error).
-it('leaves presentation to the caller in caller mode', async () => {
-	expect(await enqueueCartAction(record, async () => refusal, 'caller')).toBe(false);
+// Catches presenting despite caller ownership, or swallowing the refusal the caller's field needs.
+it('returns the refusal unpresented in caller mode', async () => {
+	expect(await enqueueCartAction(record, async () => refusal, 'caller')).toBe(refusal);
 	expect(log).not.toHaveBeenCalled();
 });
 
