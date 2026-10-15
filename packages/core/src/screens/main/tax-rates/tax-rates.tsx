@@ -7,14 +7,14 @@ import groupBy from 'lodash/groupBy';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import {
-	Modal,
-	ModalBody,
-	ModalClose,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-	ModalTitle,
-} from '@wcpos/components/modal';
+	Dialog,
+	DialogBody,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';
@@ -93,13 +93,13 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 	 *
 	 */
 	return (
-		<Modal>
-			<ModalContent side="right" size="2xl">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="2xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('tax_rates.tax_rates')}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs
 						className="min-h-0 flex-1"
@@ -116,18 +116,18 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						</ScrollableTabsList>
 						{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 							<TabsContent key={group.slug} value={group.slug} className="min-h-0 flex-1">
-								<ModalBody>
+								<DialogBody>
 									<TaxRateTable rates={group.rates} />
-								</ModalBody>
+								</DialogBody>
 							</TabsContent>
 						))}
 					</Tabs>
 					<TaxRatesFooter count={rates.length} handle={handle} shown={shown} />
 				</View>
-				<ModalFooter>
-					<ModalClose>{t('common.close')}</ModalClose>
-				</ModalFooter>
-			</ModalContent>
-		</Modal>
+				<DialogFooter>
+					<DialogClose>{t('common.close')}</DialogClose>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

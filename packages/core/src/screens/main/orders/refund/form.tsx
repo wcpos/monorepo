@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -18,7 +19,7 @@ import {
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { DialogAction, DialogBody, DialogClose, DialogFooter } from '@wcpos/components/v2/dialog';
 import {
 	Table,
 	TableBody,
@@ -416,7 +417,7 @@ export function RefundOrderForm({ order }: Props) {
 
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
 						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
@@ -553,18 +554,18 @@ export function RefundOrderForm({ order }: Props) {
 					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
 					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
 				</HStack>
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction
 					testID="process-refund-button"
-					loading={loading}
+					asChild
 					disabled={!isValid || storageDegraded}
 					onPress={() => setConfirmOpen(true)}
 				>
-					{t('orders.process_refund')}
-				</ModalAction>
-			</ModalFooter>
+					<Button loading={loading}>{t('orders.process_refund')}</Button>
+				</DialogAction>
+			</DialogFooter>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>

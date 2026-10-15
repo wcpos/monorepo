@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -78,13 +78,13 @@ export function AddCustomerScreen() {
 	 *
 	 */
 	return (
-		<Modal>
-			<ModalContent side="right" size="xl">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('customers.add_customer')}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<ErrorBoundary>
 					<CustomerForm
 						form={form}
@@ -93,7 +93,7 @@ export function AddCustomerScreen() {
 						loading={loading}
 					/>
 				</ErrorBoundary>
-			</ModalContent>
-		</Modal>
+			</DialogContent>
+		</Dialog>
 	);
 }

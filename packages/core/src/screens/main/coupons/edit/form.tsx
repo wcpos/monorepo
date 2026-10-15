@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { useModal } from '@wcpos/components/modal';
+import { useDialog } from '@wcpos/components/v2/dialog';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -25,7 +25,7 @@ export function EditCouponForm({ coupon }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
-	const { close } = useModal();
+	const { close } = useDialog();
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,

@@ -72,9 +72,6 @@
   "packages/core/src/screens/main/orders/view/sections/customer.tsx": {
     "arbitrary-px": 2
   },
-  "packages/core/src/screens/main/orders/view/sections/header.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/core/src/screens/main/orders/view/sections/line-items.tsx": {
     "arbitrary-px": 3
   },

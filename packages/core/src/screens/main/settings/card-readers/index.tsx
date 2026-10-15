@@ -6,7 +6,13 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { Modal, ModalClose, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -177,11 +183,11 @@ export function CardReadersSettings() {
 
 			{picking ? (
 				<Portal name="card-readers-provider-sheet">
-					<Modal onClose={() => setPicking(false)}>
-						<ModalContent side="bottom" testID="card-readers-provider-sheet">
-							<ModalHeader>
-								<ModalTitle>{t('settings.card_readers.connect_with')}</ModalTitle>
-							</ModalHeader>
+					<Dialog route onClose={() => setPicking(false)}>
+						<DialogContent side="bottom" testID="card-readers-provider-sheet">
+							<DialogHeader>
+								<DialogTitle>{t('settings.card_readers.connect_with')}</DialogTitle>
+							</DialogHeader>
 							<VStack className="gap-1 px-4">
 								{devices.map((method) => (
 									<Button
@@ -203,12 +209,12 @@ export function CardReadersSettings() {
 										<Icon name="chevronRight" variant="muted" />
 									</Button>
 								))}
-								<ModalClose className="mt-2 h-14" testID="card-readers-provider-cancel">
+								<DialogClose className="mt-2 h-14" testID="card-readers-provider-cancel">
 									<ButtonText>{t('common.cancel')}</ButtonText>
-								</ModalClose>
+								</DialogClose>
 							</VStack>
-						</ModalContent>
-					</Modal>
+						</DialogContent>
+					</Dialog>
 				</Portal>
 			) : null}
 

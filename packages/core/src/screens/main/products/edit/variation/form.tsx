@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
@@ -14,7 +15,13 @@ import {
 	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -57,7 +64,7 @@ export function EditVariationForm({ variation }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
-	const { close } = useModal();
+	const { close } = useDialog();
 	const variationData = variation.toMutableJSON().payload;
 
 	if (!variation) {
@@ -136,7 +143,7 @@ export function EditVariationForm({ variation }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<HStack className="gap-4">
 					<FormField
@@ -254,17 +261,13 @@ export function EditVariationForm({ variation }: Props) {
 					/>
 				</HStack>
 				<MetaDataForm />
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction
-					testID="variation-edit-save-button"
-					loading={loading}
-					onPress={() => void onSave()}
-				>
-					{t('common.save')}
-				</ModalAction>
-			</ModalFooter>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction testID="variation-edit-save-button" asChild onPress={() => void onSave()}>
+					<Button loading={loading}>{t('common.save')}</Button>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }
