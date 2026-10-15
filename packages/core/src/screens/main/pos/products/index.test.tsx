@@ -139,7 +139,7 @@ jest.mock('./tiles/product-grid', () => ({
 		return <div />;
 	},
 }));
-jest.mock('./filter-bar', () => ({
+jest.mock('./filter-bar/filter-bar', () => ({
 	POSFilterBar: (props: Record<string, unknown>) => {
 		mockFilterBarProps = props;
 		return null;

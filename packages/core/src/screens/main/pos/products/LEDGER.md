@@ -1,4 +1,4 @@
-> `v2/` folded into this directory on 2026-10-15; read `v2/x` as `x`. Exceptions: `v2/grid/x` is `tiles/x`; `v2/filter-bar.tsx` is `filter-bar/index.tsx`. Historical lines below are unchanged.
+> `v2/` folded into this directory on 2026-10-15; read `v2/x` as `x`. Exceptions: `v2/grid/x` is `tiles/x`; `v2/filter-bar.tsx` is `filter-bar/filter-bar.tsx`. Historical lines below are unchanged.
 
 # Behaviour ledger: `pos/products`
 

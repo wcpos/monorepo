@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { POSFilterBar } from './filter-bar';
+import { POSFilterBar } from './filter-bar/filter-bar';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));

@@ -30,7 +30,7 @@ import { TileRow } from './tiles/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
 import { usePanelSide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
-import { POSFilterBar } from './filter-bar';
+import { POSFilterBar } from './filter-bar/filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
 import { useBarcode } from './use-barcode';
 import { useFitPageSize } from './use-fit-page-size';
