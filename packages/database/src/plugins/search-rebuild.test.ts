@@ -200,6 +200,70 @@ it.each(['read', 'open', 'damaged'])(
 	}
 );
 
+it('recovers a persisted index whose stored schema hash no longer matches (DB6)', async () => {
+	const config = {
+		name: 'searchrecoverydb6',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	};
+	database = await createRxDatabase(config);
+	const { coupons } = await database.addCollections({ coupons: couponsConfig });
+	await coupons.bulkInsert([
+		{ id: 'coupon-1', name: 'Discount' },
+		{ id: 'coupon-2', name: 'Voucher' },
+	]);
+	const before = (await coupons.find().exec()).map((doc) => doc.toJSON(true));
+	const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+	await first.pipeline.awaitIdle();
+	const searchSchema = first.collection.schema.jsonSchema;
+	await first.pipeline.close();
+	await first.close();
+	await database.close();
+
+	database = await createRxDatabase(config);
+	const { coupons: reopened } = await database.addCollections({ coupons: couponsConfig });
+	const searchName = `${getSearchIdentifier('coupons', 'en')}_flexsearch`;
+	const stored = (await getAllCollectionDocuments(database.internalStore)).find(
+		(doc) => doc.data.name === searchName
+	)!;
+	expect(stored).toBeDefined();
+	// RxDB 17.6.0 tolerates hash-only differences, so model an older schema too.
+	const writeResult = await database.internalStore.bulkWrite(
+		[
+			{
+				previous: stored,
+				document: {
+					...stored,
+					data: {
+						...stored.data,
+						schemaHash: `${stored.data.schemaHash}-old`,
+						schema: { ...stored.data.schema, description: 'Older FlexSearch schema' },
+					},
+				},
+			},
+		],
+		'test-flexsearch-schema-mismatch'
+	);
+	expect(writeResult.error).toEqual([]);
+	const mismatched = await database.internalStore.findDocumentsById([stored.id], false);
+	await expect(
+		database.addCollections({ [searchName]: { schema: searchSchema } })
+	).rejects.toMatchObject({ code: 'DB6', parameters: { collection: searchName } });
+	// addCollections closes its pre-created storage on DB6; the persisted mismatch remains.
+	expect(database.collections[searchName]).toBeUndefined();
+	expect(await database.internalStore.findDocumentsById([stored.id], false)).toEqual(mismatched);
+
+	const sourceBefore = (await reopened.find().exec()).map((doc) => doc.toJSON(true));
+	expect(sourceBefore).toEqual(before);
+	const rebuilt = (await reopened.initSearch!('en')) as unknown as SearchIndex;
+	await rebuilt.pipeline.awaitIdle();
+	expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
+	expect((await rebuilt.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
+	expect((await reopened.find().exec()).map((doc) => doc.toJSON(true))).toEqual(sourceBefore);
+	await rebuilt.pipeline.close();
+	await rebuilt.close();
+});
+
 it.each([false, true])(
 	'reopens persisted storage and rebuilds only an oversized index (oversized=%s)',
 	async (oversized) => {
