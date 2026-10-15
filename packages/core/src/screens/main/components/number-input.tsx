@@ -69,6 +69,7 @@ export function NumberInput({
 	// Internal string state for free-form typing
 	const [internalValue, setInternalValue] = React.useState(() => numberToString(value));
 	const [isFocused, setIsFocused] = React.useState(false);
+	const [syncKey, setSyncKey] = React.useState(0);
 
 	// Sync from parent when the value changes externally (and not focused).
 	// Implemented as the React "adjust state during render" pattern (tracking the
@@ -82,6 +83,13 @@ export function NumberInput({
 		setPrevIsFocused(isFocused);
 		if (!isFocused) {
 			setInternalValue(displayValue);
+			if (displayValue !== prevDisplayValue) {
+				// #1957: RN Fabric iOS drops controlled-text updates when event counts disagree
+				// in RCTTextInputComponentView updateState and setTextAndSelection. Remounting
+				// while unfocused gives the native view the current value. Never remount while
+				// focused, so typing is never cut off.
+				setSyncKey((k) => k + 1);
+			}
 		}
 	}
 
@@ -107,6 +115,7 @@ export function NumberInput({
 
 	return (
 		<Input
+			key={syncKey}
 			{...props}
 			value={internalValue}
 			onChangeText={setInternalValue}
