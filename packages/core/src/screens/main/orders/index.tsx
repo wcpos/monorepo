@@ -16,33 +16,33 @@ import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/t
 import { queryHandleAnswers$ } from '@wcpos/query';
 import type { QueryHandle } from '@wcpos/query';
 
-import { ManagementBar } from '../../components/management-bar';
-import { QuerySearchInput } from '../../components/query-search-input';
-import { UpgradeNotice } from '../../components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '../../components/header/upgrade-notice-context';
-import { useAppInfo } from '../../../../hooks/use-app-info';
-import { useTheme } from '../../../../contexts/theme';
+import { ManagementBar } from '../components/management-bar';
+import { QuerySearchInput } from '../components/query-search-input';
+import { UpgradeNotice } from '../components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
+import { useAppInfo } from '../../../hooks/use-app-info';
+import { useTheme } from '../../../contexts/theme';
 import { DisplayOptions } from './display-options';
 import { OrderPane } from './order-pane';
-import { Actions } from '../cells/actions';
-import { Address } from '../cells/address';
-import { Note } from '../cells/note';
-import { Receipt } from '../cells/receipt';
+import { Actions } from './cells/actions';
+import { Address } from './cells/address';
+import { Note } from './cells/note';
+import { Receipt } from './cells/receipt';
 import { FilterBar } from './filter-bar';
-import { useBarcode } from '../use-barcode';
-import { useAppState } from '../../../../contexts/app-state';
-import { useT } from '../../../../contexts/translations';
-import { DataTable } from '../../components/data-table';
-import { DataTableSkeleton } from '../../components/data-table/skeleton';
-import { Cashier } from '../../components/order/cashier';
-import { Register } from '../../components/order/register';
-import { CreatedVia } from '../../components/order/created-via';
-import { Customer } from '../../components/order/customer';
-import { OrderNumber } from '../../components/order/order-number';
-import { PaymentMethod } from '../../components/order/payment-method';
-import { withProAccess } from '../../components/pro-guard';
-import { useUISettings } from '../../contexts/ui-settings';
-import { useReferencedCustomerDemand } from '../../hooks/use-referenced-customer-demand';
+import { useBarcode } from './use-barcode';
+import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
+import { DataTable } from '../components/data-table';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
+import { Cashier } from '../components/order/cashier';
+import { Register } from '../components/order/register';
+import { CreatedVia } from '../components/order/created-via';
+import { Customer } from '../components/order/customer';
+import { OrderNumber } from '../components/order/order-number';
+import { PaymentMethod } from '../components/order/payment-method';
+import { withProAccess } from '../components/pro-guard';
+import { useUISettings } from '../contexts/ui-settings';
+import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
 import {
 	QueryStateProvider,
 	useCollectionQueryHandle,
@@ -50,10 +50,10 @@ import {
 	useQuerySnapshot,
 	useQueryState,
 	useQueryStateActions,
-} from '../../../../query';
-import { DataTableRow } from '../../components/data-table/rows';
-import { useStoreDay } from '../../../../hooks/use-store-day';
-import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
+} from '../../../query';
+import { DataTableRow } from '../components/data-table/rows';
+import { useStoreDay } from '../../../hooks/use-store-day';
+import { useStoreDayLabel } from '../../../hooks/use-store-day-label';
 import { Status } from './cells/status';
 import { DateCell } from './cells/date';
 import { Total } from './cells/total';
@@ -61,10 +61,10 @@ import { OrderRow } from './row';
 import { DayHeading, groupOrders, isDay, type OrderListItem } from './day-heading';
 import { useRowKeyboard } from './use-row-keyboard';
 
-import type { Row } from '../../../../table-types';
-import type { DataTableFeatures } from '../../components/data-table';
-import type { SortFieldsByCollection } from '../../../../query/query-state-types';
-import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../../query';
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
+import type { SortFieldsByCollection } from '../../../query/query-state-types';
+import type { FiltersOf, QueryStateOf, SnapshotFields } from '../../../query';
 const cells = {
 	actions: Actions,
 	billing: Address,

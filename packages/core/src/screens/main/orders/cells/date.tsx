@@ -4,7 +4,7 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useStoreDayLabel } from '../../../../../hooks/use-store-day-label';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 
 export function DateCell({ row, column }: CellContext<{ record: EngineRecord<'orders'> }, string>) {
 	const value = useRecordField(

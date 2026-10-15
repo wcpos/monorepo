@@ -15,16 +15,16 @@ jest.mock('@wcpos/components/icon', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (r: unknown) => unknown) => select(record),
 }));
-jest.mock('../../hooks/use-customer-name-format', () => ({
+jest.mock('../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Jane Cooper' }),
 }));
-jest.mock('../../hooks/use-currency-format', () => ({
+jest.mock('../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (n: number) => `£${n.toFixed(2)}` }),
 }));
-jest.mock('../../hooks/use-order-status-label', () => ({
+jest.mock('../hooks/use-order-status-label', () => ({
 	useOrderStatusLabel: () => ({ getLabel: () => 'Completed' }),
 }));
-jest.mock('../../../../hooks/use-store-day-label', () => ({
+jest.mock('../../../hooks/use-store-day-label', () => ({
 	useStoreDayLabel: () => ({ day: () => 'Sat 12 Sep', dateTime: () => 'Sat 12 Sep · 15:48' }),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => true }));

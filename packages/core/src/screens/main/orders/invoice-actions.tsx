@@ -7,10 +7,10 @@ import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useT } from '../../../../contexts/translations';
-import { setTenderMethod } from '../../pos/checkout/checkout-mode';
-import { GatewayCancelMirrorError } from '../../pos/checkout/payments/submit-gateway-payment';
-import { useGatewayPayment } from '../../pos/checkout/payments/use-gateway-payment';
+import { useT } from '../../../contexts/translations';
+import { setTenderMethod } from '../pos/checkout/checkout-mode';
+import { GatewayCancelMirrorError } from '../pos/checkout/payments/submit-gateway-payment';
+import { useGatewayPayment } from '../pos/checkout/payments/use-gateway-payment';
 import { useReopenOrder } from './use-reopen-order';
 
 const logger = getLogger(['wcpos', 'orders', 'invoice']);

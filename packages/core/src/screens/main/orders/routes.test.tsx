@@ -3,8 +3,8 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import OrdersRoute from '../../../../../../../apps/main/app/(app)/(drawer)/orders';
-import ViewRoute from '../../../../../../../apps/main/app/(app)/(drawer)/orders/(modals)/view/[orderId]';
+import OrdersRoute from '../../../../../../apps/main/app/(app)/(drawer)/orders';
+import ViewRoute from '../../../../../../apps/main/app/(app)/(drawer)/orders/(modals)/view/[orderId]';
 
 jest.mock(
 	'@wcpos/core/screens/main/components/pro-guard',
@@ -18,7 +18,7 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'@wcpos/core/screens/main/orders/v2',
+	'@wcpos/core/screens/main/orders',
 	() => ({ OrdersScreen: () => <div data-testid="new-orders" /> }),
 	{ virtual: true }
 );

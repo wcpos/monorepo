@@ -12,24 +12,24 @@ import { Text } from '@wcpos/components/text';
 import { activeAwaitingCustomer } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useT } from '../../../../contexts/translations';
-import { CreatedVia } from '../../components/order/created-via';
-import { useProAccess } from '../../contexts/pro-access';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useEngineRecord } from '../../hooks/use-engine-document';
-import { useFirstAnswer } from '../../hooks/use-first-answer';
+import { useT } from '../../../contexts/translations';
+import { CreatedVia } from '../components/order/created-via';
+import { useProAccess } from '../contexts/pro-access';
+import { useCurrencyFormat } from '../hooks/use-currency-format';
+import { useEngineRecord } from '../hooks/use-engine-document';
+import { useFirstAnswer } from '../hooks/use-first-answer';
 import {
 	AddressesRail,
 	CustomerNoteSection,
 	CustomerRail,
 	TaxIdsRail,
-} from '../view/sections/customer';
-import { LineItemsSection } from '../view/sections/line-items';
-import { PaymentSection } from '../view/sections/payment';
-import { POSMetadataSection } from '../view/sections/pos-metadata';
-import { RefundsBoundary } from '../view/refunds-boundary';
-import { totalRefunded } from '../view/sections/total-refunded';
-import { TotalsSection } from '../view/sections/totals';
+} from './view/sections/customer';
+import { LineItemsSection } from './view/sections/line-items';
+import { PaymentSection } from './view/sections/payment';
+import { POSMetadataSection } from './view/sections/pos-metadata';
+import { RefundsBoundary } from './view/refunds-boundary';
+import { totalRefunded } from './view/sections/total-refunded';
+import { TotalsSection } from './view/sections/totals';
 import { OrderStatusBadge } from './cells/status';
 import { OrderActionsMenu } from './order-menu';
 import { InvoiceActions } from './invoice-actions';
