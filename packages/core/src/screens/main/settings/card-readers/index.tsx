@@ -6,7 +6,13 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { Modal, ModalClose, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogClose as ModalClose,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -177,7 +183,7 @@ export function CardReadersSettings() {
 
 			{picking ? (
 				<Portal name="card-readers-provider-sheet">
-					<Modal onClose={() => setPicking(false)}>
+					<Dialog route onClose={() => setPicking(false)}>
 						<ModalContent side="bottom" testID="card-readers-provider-sheet">
 							<ModalHeader>
 								<ModalTitle>{t('settings.card_readers.connect_with')}</ModalTitle>
@@ -208,7 +214,7 @@ export function CardReadersSettings() {
 								</ModalClose>
 							</VStack>
 						</ModalContent>
-					</Modal>
+					</Dialog>
 				</Portal>
 			) : null}
 
