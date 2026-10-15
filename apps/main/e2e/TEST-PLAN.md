@@ -25,10 +25,17 @@ three kinds of origin: the site's own, `https://wcpos.expo.app` and loopback hos
 So a fresh login from a preview fails in global-setup with "Missing or invalid
 redirect_uri parameter."
 
-dev-pro and dev-free allow exactly those preview origins through the must-use plugin
-`e2e/scripts/dev-store-preview-redirect.php`, which lives in `wp-content/mu-plugins/`.
-The file's docblock holds the install, verify and undo steps. Never install it on a
-production or customer store. A new dev store that runs PR E2E needs the same file.
+The dev stores allow those preview origins through the plugin's
+`woocommerce_pos_auth_redirect_origin_allowed` filter. The filter sits at the end of the
+must-use plugin `wp-content/mu-plugins/wcpos-cors.php` and reuses that file's CORS
+allow-list test, so an origin allowed for CORS is also allowed as a login redirect.
+It was added 2026-10-15, and its backups on the server end `pre-auth-redirect-origin-2026-10-15`.
+It was proven by #2555's Deploy run 38732563222 (attempt 3), whose shards logged a fresh
+dev-pro login from `https://wcpos--8u9p7r2uyf.expo.app`.
+
+- A new dev store that runs PR E2E needs the same filter.
+- Removing the filter brings the global-setup failure back.
+- Never widen it on a production or customer store.
 
 ## Current Coverage
 
