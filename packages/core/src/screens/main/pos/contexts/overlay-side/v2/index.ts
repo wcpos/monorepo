@@ -8,6 +8,7 @@ export function usePanelSide(subject: PanelSubject): 'left' | 'right' {
 	const { uiSettings } = useUISettings('pos-products');
 	const position = useDocField(uiSettings, (value) => value.position);
 	if (subject === 'shell') return 'right';
-	if (subject === 'cart') return position === 'right' ? 'left' : 'right';
-	return position === 'right' ? 'right' : 'left';
+	// LEDGER.md line 3: cart panels cover products; product panels cover the cart.
+	if (subject === 'cart') return position === 'right' ? 'right' : 'left';
+	return position === 'right' ? 'left' : 'right';
 }

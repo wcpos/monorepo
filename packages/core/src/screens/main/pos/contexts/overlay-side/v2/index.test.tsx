@@ -12,15 +12,18 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 it.each([
-	['left', 'right', 'left'],
-	['right', 'left', 'right'],
-])('places subjects with products on the %s', (position, cart, products) => {
-	mockPosition = position;
-	const { result } = renderHook(() => [
-		usePanelSide('cart'),
-		usePanelSide('products'),
-		usePanelSide('shell'),
-	]);
-	expect(result.current).toEqual([cart, products, 'right']);
-	expect(result.current).not.toContain('bottom');
-});
+	['left', 'left', 'right'],
+	['right', 'right', 'left'],
+])(
+	"cart subjects dock on the products' side; products subjects dock opposite",
+	(position, cart, products) => {
+		mockPosition = position;
+		const { result } = renderHook(() => [
+			usePanelSide('cart'),
+			usePanelSide('products'),
+			usePanelSide('shell'),
+		]);
+		expect(result.current).toEqual([cart, products, 'right']);
+		expect(result.current).not.toContain('bottom');
+	}
+);
