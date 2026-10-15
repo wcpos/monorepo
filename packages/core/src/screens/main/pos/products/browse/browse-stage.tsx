@@ -86,7 +86,7 @@ export type BrowseStageProps = {
 
 /**
  * Whether the query is being rebased onto a baseline that has just moved: a device setting moved
- * it (a header sort writes the settings sort) and the screen's passive effect (v2/index.tsx)
+ * it (a header sort writes the settings sort) and the screen's passive effect (../index.tsx)
  * has not yet moved the query to follow. For that commit the query still reads as the OLD
  * baseline, and must not count as displaced — the tiles would swap for the products view and
  * back, and the root grid would unmount, its scroll and held state lost. React's "previous
