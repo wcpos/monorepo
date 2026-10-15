@@ -996,11 +996,13 @@ export function PaymentWebview({
 								setLoading(false);
 								return;
 							}
+							setLoading(false);
 							orderLogger.error((payload?.message as string) || 'Payment error', {
 								showToast: true,
 								code: ERROR_CODES.PAYMENT_UNEXPECTED,
 								context: {
 									payloadData: payload?.data,
+									action: data?.action,
 								},
 							});
 						} else {

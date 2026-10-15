@@ -150,40 +150,48 @@ const toAxiosError = (result: IpcErrorResponse): AxiosError => {
  * Since the actual HTTP request runs in the main process, we need to
  * send an IPC message to trigger cancellation there.
  *
+ * The hooks are detached again by `cleanup` when the request settles: the sync
+ * engine passes a long-lived store-scope signal, which would otherwise collect
+ * one listener closure per request for the life of the scope (#2502).
+ *
  * @param requestId - Unique ID to identify this request for cancellation
  * @param signal - AbortSignal from AbortController
  * @param cancelToken - Axios CancelToken (legacy, but still supported)
- * @returns CanceledError if already aborted, null otherwise
+ * @returns `{ error }` if already aborted, otherwise `{ cleanup }` to call once on settle
  */
 const setupCancellation = (
 	requestId: string,
 	signal?: AbortSignal | null,
 	cancelToken?: any
-): CanceledError<any> | null => {
-	// Handle pre-aborted signal
-	if (signal?.aborted) {
-		return new CanceledError<any>('canceled');
+): { error: CanceledError<any> } | { cleanup: () => void } => {
+	// Handle pre-aborted signal, or a CancelToken already cancelled: subscribe() would call the
+	// listener synchronously and send the cancel IPC before the request IPC, which then runs.
+	if (signal?.aborted || cancelToken?.reason) {
+		return { error: new CanceledError<any>('canceled') };
 	}
 
 	// Setup abort listener - sends IPC message to main process
-	if (signal) {
-		signal.addEventListener('abort', () => {
-			void window.ipcRenderer
-				.invoke('http-request', { type: 'cancel', requestId })
-				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
-		});
-	}
+	const cancelInMain = () => {
+		void window.ipcRenderer
+			.invoke('http-request', { type: 'cancel', requestId })
+			.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
+	};
+	signal?.addEventListener('abort', cancelInMain, { once: true });
 
 	// Legacy CancelToken support
-	if (cancelToken) {
-		cancelToken.promise.then(() => {
-			void window.ipcRenderer
-				.invoke('http-request', { type: 'cancel', requestId })
-				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
-		});
+	const subscribed = typeof cancelToken?.subscribe === 'function';
+	if (subscribed) {
+		cancelToken.subscribe(cancelInMain);
+	} else if (cancelToken) {
+		cancelToken.promise.then(cancelInMain); // hand-rolled token without subscribe: no cleanup
 	}
 
-	return null;
+	return {
+		cleanup: () => {
+			signal?.removeEventListener('abort', cancelInMain);
+			if (subscribed) cancelToken.unsubscribe(cancelInMain);
+		},
+	};
 };
 
 /**
@@ -202,14 +210,16 @@ const request = (config: AxiosRequestConfig = {}): Promise<any> => {
 	const { signal, cancelToken, ...configToSend } = config;
 
 	// Check for pre-aborted signal before sending IPC
-	const abortError = setupCancellation(requestId, signal as AbortSignal | undefined, cancelToken);
-	if (abortError) {
-		return Promise.reject(abortError);
+	const cancellation = setupCancellation(requestId, signal as AbortSignal | undefined, cancelToken);
+	if ('error' in cancellation) {
+		return Promise.reject(cancellation.error);
 	}
 
 	return new Promise((resolve, reject) => {
 		window.ipcRenderer
 			.invoke('http-request', { type: 'request', requestId, config: configToSend })
+			// Detach the cancellation hooks on every settle path (#2502)
+			.finally(cancellation.cleanup)
 			.then((result: IpcResponse) => {
 				if (result.success === false) {
 					// Reconstruct appropriate error type

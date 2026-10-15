@@ -6,6 +6,7 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { forEachYielding } from '../event-loop-yield';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
@@ -161,7 +162,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 		const dirtyWooIds = async (): Promise<Set<number>> => {
 			const ids = new Set<number>();
 			for (const name of sourceCollections) {
-				const docs = await db.collections[name].find().exec();
+				const docs = await findAllUncached(db.collections[name]);
 				// Chunked so the per-document `toJSON()` cost — the main-thread half of this scan,
 				// measured at ~24 ms per 50k products — cannot hold the loop in one span (#949).
 				await forEachYielding(docs, DIRTY_SCAN_CHUNK_SIZE, (doc) => {

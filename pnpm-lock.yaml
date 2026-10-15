@@ -43,7 +43,7 @@ patchedDependencies:
   expo@58.0.8: 3f8f3320c75431bc80c7fcc65297f6c3f0d79d5459b54b6d0da36577ca35a613
   react-native-drawer-layout@4.2.10: 9d9db4422f8345852d7626ff6d6bffed92bdb2fd600bb1fb466c8fba6bb40f7b
   react-native-esc-pos-printer@4.5.0: f5c6fa6bddf06b2e5934df4919d7e5e39f09f89e9d5b7e30174e799bfda31faf
-  rxdb@17.6.0: d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539
+  rxdb@17.6.0: a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469
 
 importers:
 
@@ -85,10 +85,10 @@ importers:
         version: 0.8.1(prettier@3.9.10)
       rxdb:
         specifier: 17.6.0
-        version: 17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
+        version: 17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
       rxdb-premium:
         specifier: 17.6.0
-        version: 17.6.0(rxdb@17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
+        version: 17.6.0(rxdb@17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
       yaml:
         specifier: 2.9.1
         version: 2.9.1
@@ -799,10 +799,10 @@ importers:
         version: 4.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rxjs@7.8.2)
       rxdb:
         specifier: 17.6.0
-        version: 17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
+        version: 17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
       rxdb-premium:
         specifier: 17.6.0
-        version: 17.6.0(rxdb@17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
+        version: 17.6.0(rxdb@17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1038,7 +1038,7 @@ importers:
         version: 4.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rxjs@7.8.2)
       rxdb:
         specifier: 17.6.0
-        version: 17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
+        version: 17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1163,10 +1163,10 @@ importers:
         version: link:../utils
       rxdb:
         specifier: 17.6.0
-        version: 17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
+        version: 17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
       rxdb-premium:
         specifier: 17.6.0
-        version: 17.6.0(rxdb@17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
+        version: 17.6.0(rxdb@17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@25.9.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.1.2(@noble/hashes@2.2.0))(vite@8.3.4(@types/node@25.9.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.1)(tsx@4.23.15)(yaml@2.9.1))
@@ -19209,7 +19209,7 @@ snapshots:
 
   rtl-detect@1.1.2: {}
 
-  rxdb-premium@17.6.0(rxdb@17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2):
+  rxdb-premium@17.6.0(rxdb@17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -19217,7 +19217,7 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
+      rxdb: 17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -19225,7 +19225,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb@17.6.0(patch_hash=d52de0935117bc0d86e80e1f6f97139efae8aee10bf3baed133a16b31e71e539)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3):
+  rxdb@17.6.0(patch_hash=a3fe3c7c1092739477dd753296197a5b58eac2b3cb58583211fc9a4e7e0ac469)(react@19.3.0)(rxjs@7.8.2)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 8.0.5
       '@types/simple-peer': 9.11.9
