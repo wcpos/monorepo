@@ -6,7 +6,12 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogContent as ModalContent,
+	DialogHeader as ModalHeader,
+	DialogTitle as ModalTitle,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -78,7 +83,7 @@ export function AddCustomerScreen() {
 	 *
 	 */
 	return (
-		<Modal>
+		<Dialog route>
 			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
@@ -94,6 +99,6 @@ export function AddCustomerScreen() {
 					/>
 				</ErrorBoundary>
 			</ModalContent>
-		</Modal>
+		</Dialog>
 	);
 }
