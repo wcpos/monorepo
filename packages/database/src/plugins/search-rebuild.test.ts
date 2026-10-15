@@ -63,6 +63,70 @@ const couponsConfig = {
 	options: { searchFields: ['name'] },
 };
 
+// #2502 H9: the selectors of the queries still held in a collection's query cache.
+const cachedSelectors = (collection: RxCollection) =>
+	[...collection._queryCache._map.values()].map((query) => query.mangoQuery.selector);
+
+const expectImportReadsUncached = (collection: RxCollection) => {
+	expect(cachedSelectors(collection)).not.toContainEqual({});
+	expect(cachedSelectors(collection)).not.toContainEqual({ type: 'append' });
+};
+
+it('drops the one-off index reads from the query cache and still finds after a reopen', async () => {
+	const config = { name: 'searchuncache', storage: getRxStorageMemory(), multiInstance: false };
+	database = await createRxDatabase(config);
+	const { coupons } = await database.addCollections({ coupons: couponsConfig });
+	await coupons.bulkInsert([
+		{ id: 'coupon-1', name: 'Discount' },
+		{ id: 'coupon-2', name: 'Voucher' },
+		{ id: 'coupon-3', name: 'Giftcard' },
+	]);
+	const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+	await first.pipeline.awaitIdle();
+	expectImportReadsUncached(first.collection);
+	expect((await first.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
+	await first.pipeline.close();
+	await first.close();
+	await database.close();
+
+	// Reopening from persisted state runs the premium import read again.
+	database = await createRxDatabase(config);
+	const { coupons: reopened } = await database.addCollections({ coupons: couponsConfig });
+	const second = (await reopened.initSearch!('en')) as unknown as SearchIndex;
+	await second.pipeline.awaitIdle();
+	expectImportReadsUncached(second.collection);
+	expect((await second.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
+	await second.pipeline.close();
+	await second.close();
+});
+
+it('keeps a subscribed import query in the query cache', async () => {
+	database = await createRxDatabase({
+		name: 'searchuncachesubscribed',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	const { coupons } = await database.addCollections({ coupons: couponsConfig });
+	await coupons.insert({ id: 'coupon-1', name: 'Discount' });
+	const searchName = `${getSearchIdentifier('coupons', 'en')}_flexsearch`;
+	const addCollections = database.addCollections.bind(database);
+	let subscription: { unsubscribe(): void } | undefined;
+	// Subscribe as soon as the destination exists, before the premium import runs find().
+	jest.spyOn(database, 'addCollections').mockImplementation(async (creators) => {
+		const added = await addCollections(creators);
+		if (added[searchName]) subscription = added[searchName].find().$.subscribe();
+		return added;
+	});
+	const index = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+	await index.pipeline.awaitIdle();
+	expect(subscription).toBeDefined();
+	expect(cachedSelectors(index.collection)).toContainEqual({});
+	expect(cachedSelectors(index.collection)).not.toContainEqual({ type: 'append' });
+	subscription!.unsubscribe();
+	await index.pipeline.close();
+	await index.close();
+});
+
 it.each(['read', 'open', 'damaged'])(
 	'rebuilds a persisted index after a destination %s failure without changing source documents',
 	async (failure) => {
@@ -173,6 +237,8 @@ it.each([false, true])(
 		const addCollections = jest.spyOn(database, 'addCollections');
 		const rebuilt = (await reopened.initSearch!('en')) as unknown as SearchIndex;
 		await rebuilt.pipeline.awaitIdle();
+		// #2502 H9: the rebuilt destination's import read is dropped from the cache too.
+		expectImportReadsUncached(rebuilt.collection);
 		const appendDocs = await rebuilt.collection.find({ selector: { type: 'append' } }).exec();
 		const entries = appendDocs.reduce((total, doc) => total + doc.dataAr.length, 0);
 		expect(entries).toBe(await reopened.count().exec());

@@ -1,5 +1,6 @@
 import get from 'lodash/get';
 import {
+	countRxQuerySubscribers,
 	createRevision,
 	flatCloneDocWithMeta,
 	getAllCollectionDocuments,
@@ -7,6 +8,7 @@ import {
 	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT,
 	now,
 	removeCollectionStorages,
+	uncacheRxQuery,
 } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
@@ -14,7 +16,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import type { RxCollection, RxPlugin } from 'rxdb';
+import type { RxCollection, RxPlugin, RxQuery } from 'rxdb';
 import type { FlexSearchInstance, SearchInitializationOptions } from '../types.d';
 
 const searchLogger = getLogger(['wcpos', 'db', 'search']);
@@ -33,6 +35,17 @@ const SEARCH_EXPORT_HISTORY_LIMIT = 1;
 // LRU eviction touches other locales, so serialize the whole source collection's
 // init/recreate operations, including creation already in flight before teardown.
 const searchOperations = new WeakMap<RxCollection, Promise<void>>();
+
+/**
+ * Drop a settled one-off read from the collection's query cache (#2502 H9). RxDB keeps an
+ * unsubscribed cached query, and so its result documents (whole index strings here), until
+ * the collection holds 100 queries. A query someone subscribes to stays cached.
+ */
+function uncacheIfUnobserved(rxQuery: RxQuery): void {
+	if (countRxQuerySubscribers(rxQuery) === 0) {
+		uncacheRxQuery(rxQuery.collection._queryCache, rxQuery);
+	}
+}
 
 /**
  * Stop a search instance: pipeline, instance, then the index back-reference.
@@ -381,9 +394,10 @@ async function createSearchInstance(
 		// The index import. Awaited here so an unreadable index fails creation (and so recovery)
 		// instead of every later find(); a find() would wait for it anyway.
 		await searchInstance.queue;
-		const appendDocs = await searchInstance.collection
-			.find({ selector: { type: 'append' } })
-			.exec();
+		// find() returns the cached query the premium import just ran.
+		uncacheIfUnobserved(searchInstance.collection.find());
+		const appendQuery = searchInstance.collection.find({ selector: { type: 'append' } });
+		const appendDocs = await appendQuery.exec().finally(() => uncacheIfUnobserved(appendQuery));
 		const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
 		const sourceCount = await collection.count().exec();
 		if (appendedEntries > sourceCount) {
@@ -397,6 +411,7 @@ async function createSearchInstance(
 			searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
 			searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
 			await searchInstance.queue;
+			uncacheIfUnobserved(searchInstance.collection.find());
 		}
 	} catch (error) {
 		try {

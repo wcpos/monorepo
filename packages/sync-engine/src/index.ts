@@ -44,6 +44,7 @@ export {
 	type HoldCandidate,
 	OPEN_CART_ORDER_STATUS,
 } from './write-path/open-cart-hold';
+export { findAllUncached } from './collections/find-all-uncached';
 export {
 	normalizeVariationAttributes,
 	promotedVariationColumns,

@@ -5,6 +5,8 @@ import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 
+import type { RxQuery } from 'rxdb';
+
 setPremiumFlag();
 
 const SITE = 'https://variation-prefetch.example.test';
@@ -646,5 +648,42 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.sync('variation-prefetch');
 		expect(variationRequests).toHaveLength(1);
 		await engine.dispose();
+	});
+
+	it('leaves no parent or missing-child query in the query caches (#2502)', async () => {
+		const fetcher = vi.fn(async () => json({ documents: [variationEnvelope(102, 10)] }));
+		const engine = engineWith({ fetcher });
+		try {
+			const scope = await engine.whenActive();
+			const { products, variations } = scope.database.collections;
+			await products.bulkInsert([product(10, [101, 102]), product(20, [201])] as never);
+			await variations.bulkInsert([variation(101, 10), variation(201, 20)] as never);
+			const missingRead = vi.spyOn(variations, 'find');
+
+			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
+			expect(missingRead).toHaveBeenCalled();
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
+			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+				status: 'skipped',
+				reason: 'walk-complete',
+			});
+
+			const selectors = (collection: { _queryCache: { _map: Map<string, RxQuery> } }) =>
+				[...collection._queryCache._map.values()].map(
+					(query) => (query.mangoQuery.selector ?? {}) as Record<string, unknown>
+				);
+			expect(selectors(products)).not.toContainEqual({ type: 'variable' });
+			// Only the prefetch's own wooIdField lookup: materializing the pulled child adds the
+			// write path's `uuid: { $in }` read, which this job does not cover.
+			expect(
+				selectors(variations).filter((selector) => {
+					const condition = selector.remoteId;
+					return typeof condition === 'object' && condition !== null && '$in' in condition;
+				})
+			).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
 	});
 });
