@@ -1,4 +1,4 @@
-import { reportCartFailure, reportCartInvariant, reportStaleCartLine } from './cart-failure';
+import { reportCartFailure, reportStaleCartLine } from './cart-failure';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => {
@@ -78,18 +78,5 @@ describe('cart-failure', () => {
 			toast: { title: 'Line no longer exists' },
 			context: { uuid: 'line-1' },
 		});
-	});
-
-	it('reports an invariant without any toast options', () => {
-		reportCartInvariant(logger as never, 'Impossible cart state', {
-			uuid: 'line-1',
-		});
-
-		expect(logger.error).toHaveBeenCalledWith('Impossible cart state', {
-			code: 'UNEXPECTED_ERROR',
-			context: { uuid: 'line-1' },
-		});
-		expect(logger.error.mock.calls[0][1]).not.toHaveProperty('showToast');
-		expect(logger.error.mock.calls[0][1]).not.toHaveProperty('toast');
 	});
 });

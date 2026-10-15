@@ -8,6 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { useT } from '../../../../../../contexts/translations';
 import { NumberInput } from '../../../../components/number-input';
 import { lineRef, useCartUnmet } from '../../../conditions/use-cart-conditions';
+import { useSplitLineItem } from '../../../hooks/use-split-line-item';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -17,7 +18,8 @@ interface Props {
 }
 export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
-	const { updateLineItem, splitLineItem } = useUpdateLineItem();
+	const { updateLineItem } = useUpdateLineItem();
+	const { splitLineItem } = useSplitLineItem();
 	const t = useT();
 	const overStock = useCartUnmet().some((condition) => condition.lineUuid === uuid);
 	const focusRef = React.useMemo(
@@ -50,7 +52,12 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
 			{column.columnDef.meta?.show?.('split') && (item.quantity ?? 0) > 1 && (
-				<Text variant="link" className="text-primary text-sm" onPress={() => splitLineItem(uuid)}>
+				<Text
+					testID="cart-line-split"
+					variant="link"
+					className="text-primary text-sm"
+					onPress={() => splitLineItem(uuid)}
+				>
 					{t('pos_cart.split_qty')}
 				</Text>
 			)}

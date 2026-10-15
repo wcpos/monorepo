@@ -53,8 +53,8 @@ export const BOTTOM_HANDLERS = new Set([
 	'packages/core/src/screens/main/pos/hooks/use-add-item-to-order.ts',
 	// cart.line.update: the shared writer (actions ledger 35).
 	'packages/core/src/screens/main/pos/hooks/use-update-cart-line.ts',
-	// Line-item split remains here.
-	'packages/core/src/screens/main/pos/hooks/use-update-line-item.ts',
+	// cart.line.split: the one split writer (actions ledger 38).
+	'packages/core/src/screens/main/pos/hooks/use-split-line-item.ts',
 	// cart.line.remove, and Undo's cart.line.add restore (actions ledger 27).
 	'packages/core/src/screens/main/pos/hooks/use-remove-line-item.ts',
 	// cart.coupon.apply / cart.coupon.remove: the one coupon-line writer (actions ledger 28).

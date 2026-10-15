@@ -16,6 +16,7 @@ export const ACTION_EVENTS = [
 	'cart.line.add',
 	'cart.line.update',
 	'cart.line.remove',
+	'cart.line.split',
 	'cart.coupon.apply',
 	'cart.coupon.remove',
 	'cart.customer.set',
@@ -117,6 +118,17 @@ export interface ActionContracts {
 		};
 		result: unknown;
 	};
+	'cart.line.split': {
+		payload: {
+			lineUuid: string;
+			/** The line as it is about to be split (line_items only). */
+			line: PlainLine;
+			/** The lines that replace it, in order: the first keeps the line's uuid and Woo id. */
+			lines: PlainLine[];
+			lineItems: PlainLine[];
+		};
+		result: unknown;
+	};
 	'cart.coupon.apply': {
 		payload: {
 			/** The entering line: a catalog coupon, or a quick discount carrying its intent meta. */
@@ -177,6 +189,7 @@ export const REWRITABLE_PAYLOAD_KEYS = {
 	'cart.line.add': ['line'],
 	'cart.line.update': ['changes'],
 	'cart.line.remove': [],
+	'cart.line.split': [],
 	// The discount is recalculated by the writer from the line it is handed; a consumer that wants
 	// to rewrite a coupon line first makes the recalculation read the payload.
 	'cart.coupon.apply': [],

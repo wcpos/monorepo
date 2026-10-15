@@ -37,11 +37,3 @@ export function reportStaleCartLine(
 		context,
 	});
 }
-/** Invariant break unreachable through the UI: error log with UNEXPECTED_ERROR, deliberately NO toast (a toast for an impossible state is noise). */
-export function reportCartInvariant(
-	logger: CartLogger,
-	message: string,
-	context?: Record<string, unknown>
-): void {
-	logger.error(message, { code: ERROR_CODES.UNEXPECTED_ERROR, context });
-}
