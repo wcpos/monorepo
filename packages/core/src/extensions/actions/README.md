@@ -36,7 +36,7 @@ unrelated queued writes.
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29) | `billing`, `shipping`, `taxIds` | yes |
 | `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
+| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`, through `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
 roundingMinor, completing, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`
@@ -68,7 +68,7 @@ consumer: the stock condition, on `prevent_overselling`) with `countConditionsIn
 shows the same count live, through the same evaluator (`screens/main/pos/conditions`).
 The caller presents the two gate refusals with the existing checkout toasts and any other
 refusal through `presentActionRefusal` (unless already presented): `presentTenderRefusal` in
-`screens/main/pos/checkout` is that mapping, shared by every dispatcher of the event.
+`screens/main/pos/checkout` is that mapping, shared by every caller of `commitSale`.
 
 Every sale dispatches this event through `commitSale` (`screens/main/pos/checkout/commit-sale.ts`),
 the one dispatcher and bottom handler. The tender pane's `takeTender` supplies the keypad entry;

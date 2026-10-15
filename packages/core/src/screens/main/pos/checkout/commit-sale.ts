@@ -42,6 +42,12 @@ export interface SaleCommitRequest {
 /** The chain's payload, handed to the writer only after its stamped session is re-verified. */
 export type StampedSale = ActionEventInput<typeof TENDER_COMMIT_EVENT>['payload'];
 
+/**
+ * One dispatch of `checkout.tender.commit`, inside the order's queue slot. Returns the refusal when a
+ * guard or the entry stale-balance check refuses; throws `RegisterSessionRequiredError` when the
+ * pre-action session write lands on a different session. `write` never runs in either case. Any
+ * error `write` throws is rethrown untouched, so the tender hook's mirror-error identity checks hold.
+ */
 export function commitSale<R>(
 	ctx: SaleCommitContext,
 	{ order, methodId, bindingStatus, amounts }: SaleCommitRequest,

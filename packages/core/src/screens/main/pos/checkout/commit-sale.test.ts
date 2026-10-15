@@ -140,6 +140,16 @@ it('an entry at a zero slot balance dispatches mode zero-balance', async () => {
 	});
 });
 
+it('a whole-balance commit of a fully paid order stays mode gateway', async () => {
+	payload.total = '4.00';
+	await commitSale(ctx, { ...request, amounts: { kind: 'whole-balance' } }, write);
+	expect(write.mock.calls[0][0]).toMatchObject({
+		mode: 'gateway',
+		completing: true,
+		balanceMinor: 0,
+	});
+});
+
 it('a partial entry preserves the capture mode and tendered amount', async () => {
 	await commitSale(
 		ctx,
@@ -185,6 +195,25 @@ it('counts conditions on the record a write queued ahead left on the slot', asyn
 	});
 	expect(write).not.toHaveBeenCalled();
 	expect(patchSession).not.toHaveBeenCalled();
+});
+
+it('the write callback receives the queue whose order a write queued ahead left', async () => {
+	const saved = {
+		uuid: order.uuid,
+		getLatest: () => ({
+			payload: {
+				...payload,
+				line_items: [{ product_id: 5, quantity: 1, name: 'Belt', meta_data: [] }],
+			},
+		}),
+	} as unknown as typeof order;
+	const edit = enqueueOrderMutation(order.uuid, async (queue) => {
+		queue.order = saved;
+	});
+	const outcome = commitSale(ctx, request, write);
+	await edit;
+	await outcome;
+	expect(write.mock.calls[0][1].order).toBe(saved);
 });
 
 it('a guard refusal is returned and the write never runs', async () => {
