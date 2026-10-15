@@ -32,10 +32,10 @@ import { remoteIdOrNull, WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useT } from '../../../../contexts/translations';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
-import { useProAccess } from '../../contexts/pro-access';
-import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { useT } from '../../../contexts/translations';
+import { requestServerDelete } from '../hooks/mutations/request-server-delete';
+import { useProAccess } from '../contexts/pro-access';
+import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
 import { useReopenOrder } from './use-reopen-order';
 
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);

@@ -13,7 +13,7 @@ const mockSettings = {
 		{ key: 'total', show: true },
 	],
 };
-jest.mock('../../contexts/ui-settings', () => ({
+jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: mockSettings,
 		getUILabel: (key: string) => key,
@@ -21,7 +21,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 		resetUI: mockReset,
 	}),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
 }));

@@ -120,7 +120,7 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 
-jest.mock('../../../../contexts/app-state', () => {
+jest.mock('../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		store: { id: 1 },
 		wpCredentials: { id: 7 },
@@ -129,15 +129,15 @@ jest.mock('../../../../contexts/app-state', () => {
 	return { useAppState, useStoreSession: useAppState };
 });
 
-jest.mock('../../../../contexts/translations', () => ({
+jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-jest.mock('../../contexts/pro-access', () => ({
+jest.mock('../contexts/pro-access', () => ({
 	useProAccess: () => ({ readOnly: mockReadOnly }),
 }));
 
-jest.mock('../../hooks/mutations/use-local-mutation', () => ({
+jest.mock('../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
@@ -263,7 +263,7 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 	});
 });
 
-jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
+jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
 
 // A View push here would detach the order from the selected row and pane.
 it('View selects the pane instead of pushing a detail route', () => {

@@ -5,9 +5,9 @@ import { StatusBadge, type StatusBadgeProps } from '@wcpos/components/status-bad
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
+import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
-import type { QueryStateActions } from '../../../../../query';
+import type { QueryStateActions } from '../../../../query';
 
 const variants: Record<string, StatusBadgeProps['variant']> = {
 	completed: 'success',

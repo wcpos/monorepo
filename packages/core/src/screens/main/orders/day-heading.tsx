@@ -6,8 +6,8 @@ import { format } from 'date-fns';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
-import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
-import { zoneOptions } from '../../../../hooks/use-store-day';
+import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+import { zoneOptions } from '../../../hooks/use-store-day';
 
 export type OrderHit = { id: string; record: EngineRecord<'orders'> };
 export type DayItem = { id: string; type: 'day'; day: string; label: string };

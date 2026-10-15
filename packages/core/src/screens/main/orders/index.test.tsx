@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { OrdersScreen } from './index';
 
-import type { QueryStateOf } from '../../../../query';
+import type { QueryStateOf } from '../../../query';
 
 // The orders query handle as a reader sees it (one snapshot, driven with `set`).
 type FakeHandle = import('@wcpos/query').QueryHandle & {
@@ -33,8 +33,8 @@ let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
 let mockStoreID: number | undefined = 9;
 
-jest.mock('../../../../query', () => {
-	const actual = jest.requireActual('../../../../query');
+jest.mock('../../../query', () => {
+	const actual = jest.requireActual('../../../query');
 	return {
 		...actual,
 		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
@@ -84,7 +84,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
-jest.mock('../../components/data-table', () => ({
+jest.mock('../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
 		React.useImperativeHandle(props.listRef as React.Ref<unknown>, () => ({
@@ -110,47 +110,47 @@ jest.mock('../../components/data-table', () => ({
 		);
 	},
 }));
-jest.mock('../../components/data-table/skeleton', () => ({
+jest.mock('../components/data-table/skeleton', () => ({
 	DataTableSkeleton: ({ id }: { id: string }) => <div data-testid={`skeleton-${id}`} />,
 }));
-jest.mock('../../components/ui-settings', () => ({
+jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
-jest.mock('../../contexts/ui-settings', () => ({
+jest.mock('./use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
+jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: { sortBy: mockSortBy, sortDirection: mockSortDirection },
 	}),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
+jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		wpCredentials: { id: 7 },
 		store: mockStoreID === undefined ? undefined : { id: mockStoreID },
 	}),
 }));
-jest.mock('../../../../contexts/translations', () => ({
+jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('./filter-bar', () => ({
 	FilterBar: () => {
-		const { useQueryStateActions } = jest.requireActual('../../../../query');
+		const { useQueryStateActions } = jest.requireActual('../../../query');
 		const actions = useQueryStateActions();
 		return <button data-testid="search-probe" onClick={() => actions.setSearch('smith')} />;
 	},
 }));
 
-jest.mock('../cells/actions', () => ({ Actions: () => null }));
-jest.mock('../cells/address', () => ({ Address: () => null }));
-jest.mock('../cells/note', () => ({ Note: () => null }));
-jest.mock('../cells/receipt', () => ({ Receipt: () => null }));
-jest.mock('../../components/record-date-cell', () => ({ RecordDateCell: () => null }));
-jest.mock('../../components/order/cashier', () => ({ Cashier: () => null }));
-jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null }));
-jest.mock('../../components/order/customer', () => ({ Customer: () => null }));
-jest.mock('../../components/order/order-number', () => ({ OrderNumber: () => null }));
-jest.mock('../../components/order/payment-method', () => ({ PaymentMethod: () => null }));
-jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
-jest.mock('../../hooks/use-referenced-customer-demand', () => ({
+jest.mock('./cells/actions', () => ({ Actions: () => null }));
+jest.mock('./cells/address', () => ({ Address: () => null }));
+jest.mock('./cells/note', () => ({ Note: () => null }));
+jest.mock('./cells/receipt', () => ({ Receipt: () => null }));
+jest.mock('../components/record-date-cell', () => ({ RecordDateCell: () => null }));
+jest.mock('../components/order/cashier', () => ({ Cashier: () => null }));
+jest.mock('../components/order/created-via', () => ({ CreatedVia: () => null }));
+jest.mock('../components/order/customer', () => ({ Customer: () => null }));
+jest.mock('../components/order/order-number', () => ({ OrderNumber: () => null }));
+jest.mock('../components/order/payment-method', () => ({ PaymentMethod: () => null }));
+jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null }));
+jest.mock('../hooks/use-referenced-customer-demand', () => ({
 	useReferencedCustomerDemand: jest.fn(),
 }));
 
@@ -239,7 +239,7 @@ describe('OrdersScreen query-state wiring', () => {
 	});
 });
 
-jest.mock('../../components/order/register', () => ({ Register: () => null }));
+jest.mock('../components/order/register', () => ({ Register: () => null }));
 
 jest.mock('expo-haptics', () => ({}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
@@ -258,20 +258,20 @@ jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ order: mockSelected }),
 	useRouter: () => ({ setParams: mockSetParams }),
 }));
-jest.mock('../../../../hooks/use-store-day', () => ({
-	...jest.requireActual('../../../../hooks/use-store-day'),
+jest.mock('../../../hooks/use-store-day', () => ({
+	...jest.requireActual('../../../hooks/use-store-day'),
 	useStoreDay: () => ({ timezone: 'America/New_York' }),
 }));
 jest.mock('./cells/status', () => ({ Status: () => null, OrderStatusBadge: () => null }));
 jest.mock('./cells/date', () => ({ DateCell: () => null }));
 jest.mock('./cells/total', () => ({ Total: () => null, OrderTotal: () => null }));
-jest.mock('../../hooks/use-customer-name-format', () => ({
+jest.mock('../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Jane' }),
 }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Item: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('../../components/data-table/rows', () => ({ DataTableRow: () => null }));
+jest.mock('../components/data-table/rows', () => ({ DataTableRow: () => null }));
 beforeEach(() => {
 	mockPointer = 'fine';
 	mockSetParams.mockClear();
@@ -441,7 +441,7 @@ it('navigates from the actual focused coarse row, skipping headings, then opens 
 	}
 });
 
-jest.mock('../../components/management-bar', () => ({
+jest.mock('../components/management-bar', () => ({
 	ManagementBar: ({ search, children }: React.PropsWithChildren<{ search: React.ReactNode }>) => (
 		<div>
 			{search}
@@ -457,12 +457,12 @@ jest.mock('./order-pane', () => ({
 		</button>
 	),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
-jest.mock('../../../../hooks/use-app-info', () => ({
+jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
+jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
-jest.mock('../../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
-jest.mock('../../components/pro-guard', () => ({
+jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/pro-guard', () => ({
 	withProAccess: (Component: React.ComponentType<object>, page: string) =>
 		function Guarded(props: object) {
 			return (

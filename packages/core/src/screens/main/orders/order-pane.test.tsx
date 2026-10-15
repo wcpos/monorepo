@@ -23,22 +23,22 @@ const mockOrder = {
 };
 let mockResource = new ObservableResource(new BehaviorSubject(mockOrder));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-jest.mock('../../hooks/use-engine-document', () => ({ useEngineRecord: () => mockResource }));
+jest.mock('../hooks/use-engine-document', () => ({ useEngineRecord: () => mockResource }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (r: unknown, select: (r: unknown) => unknown) => (r ? select(r) : null),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../contexts/pro-access', () => ({
+jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../contexts/pro-access', () => ({
 	useProAccess: () => ({ readOnly: mockReadOnly }),
 }));
-jest.mock('../../hooks/use-currency-format', () => ({
+jest.mock('../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (v: number) => `$${v.toFixed(2)}` }),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null }));
+jest.mock('../components/order/created-via', () => ({ CreatedVia: () => null }));
 jest.mock('./cells/status', () => ({
 	OrderStatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
@@ -47,28 +47,28 @@ jest.mock('./invoice-actions', () => ({ InvoiceActions: () => null }));
 jest.mock('./order-menu', () => ({
 	OrderActionsMenu: ({ trigger }: { trigger: React.ReactNode }) => trigger,
 }));
-jest.mock('../view/use-order-refunds', () => ({ useOrderRefunds: () => ({}) }));
-jest.mock('../view/sections/line-items', () => ({
+jest.mock('./view/use-order-refunds', () => ({ useOrderRefunds: () => ({}) }));
+jest.mock('./view/sections/line-items', () => ({
 	LineItemsSection: () => <div data-testid="section-items" />,
 }));
-jest.mock('../view/sections/totals', () => ({
+jest.mock('./view/sections/totals', () => ({
 	TotalsSection: () => <div data-testid="section-totals" />,
 }));
-jest.mock('../view/sections/refunds', () => ({
+jest.mock('./view/sections/refunds', () => ({
 	RefundsSection: () => <div data-testid="section-refunds" />,
 	RefundsSkeleton: () => null,
 	RefundsFallback: () => null,
 }));
-jest.mock('../view/sections/customer', () => ({
+jest.mock('./view/sections/customer', () => ({
 	CustomerNoteSection: () => <div data-testid="section-note" />,
 	CustomerRail: () => <div data-testid="section-customer" />,
 	AddressesRail: () => <div data-testid="section-addresses" />,
 	TaxIdsRail: () => <div data-testid="section-tax-ids" />,
 }));
-jest.mock('../view/sections/payment', () => ({
+jest.mock('./view/sections/payment', () => ({
 	PaymentSection: () => <div data-testid="section-payment" />,
 }));
-jest.mock('../view/sections/pos-metadata', () => ({
+jest.mock('./view/sections/pos-metadata', () => ({
 	POSMetadataSection: () => <div data-testid="section-pos" />,
 }));
 beforeEach(() => {

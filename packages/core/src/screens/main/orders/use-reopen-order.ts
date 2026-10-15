@@ -5,10 +5,10 @@ import { useRouter } from 'expo-router';
 import type { EngineRecord } from '@wcpos/query';
 import { NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
-import { useRegister } from '../../../../services/register/use-register';
-import { useStoreSession } from '../../../../contexts/app-state';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { useRegister } from '../../../services/register/use-register';
+import { useStoreSession } from '../../../contexts/app-state';
+import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
 
 /**
  * Re-open an order at this till: status back to pos-open, cashier and store stamped on it,

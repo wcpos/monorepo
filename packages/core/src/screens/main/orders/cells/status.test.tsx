@@ -7,13 +7,13 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { OrderStatusBadge, Status } from './status';
 
-import type { CellContext } from '../../../../../table-types';
+import type { CellContext } from '../../../../table-types';
 
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
-jest.mock('../../../hooks/use-order-status-label', () => ({
+jest.mock('../../hooks/use-order-status-label', () => ({
 	useOrderStatusLabel: () => ({ getLabel: (value: string) => `Server: ${value}` }),
 }));
 jest.mock('@wcpos/components/status-badge', () => ({

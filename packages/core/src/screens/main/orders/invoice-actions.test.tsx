@@ -5,8 +5,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 
-import { getCheckoutModeSnapshot, resetCheckoutMode } from '../../pos/checkout/checkout-mode';
-import { GatewayCancelMirrorError } from '../../pos/checkout/payments/submit-gateway-payment';
+import { getCheckoutModeSnapshot, resetCheckoutMode } from '../pos/checkout/checkout-mode';
+import { GatewayCancelMirrorError } from '../pos/checkout/payments/submit-gateway-payment';
 import { InvoiceActions } from './invoice-actions';
 
 const mockCancel = jest.fn();
@@ -14,7 +14,7 @@ const mockReopen = jest.fn();
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();
 const mockError = jest.fn();
-jest.mock('../../pos/checkout/payments/use-gateway-payment', () => ({
+jest.mock('../pos/checkout/payments/use-gateway-payment', () => ({
 	useGatewayPayment: () => ({ submit: jest.fn(), cancel: mockCancel }),
 }));
 jest.mock('./use-reopen-order', () => ({ useReopenOrder: () => mockReopen }));
@@ -22,7 +22,7 @@ let mockOnline = 'online-website-available';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline }),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
