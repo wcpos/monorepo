@@ -36,7 +36,7 @@ unrelated queued writes.
 | `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29) | `billing`, `shipping`, `taxIds` | yes |
 | `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
-| `checkout.tender.commit` | `takeTender`, `commitGatewaySale`; extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
+| `checkout.tender.commit` | `commitSale` (`commit-sale.ts`); extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |
 
 The tender payload is `{ methodId, mode, amountMinor, tenderedMinor, balanceMinor,
 roundingMinor, completing, bindingStatus, registerId, sessionId, conditions }`; the handler and `register.gate`
@@ -59,10 +59,10 @@ those ids, records the attempt, then keeps the existing provenance and leg seque
 manual writer takes those same ids as its `session` input rather than resolving again.
 If the handler's pre-action `requireOpenSession` write returns a different session id from
 the gate's stamped id, the commit refuses through the open-register path before recording an attempt or payment.
-Before the dispatch, inside its queue slot, `takeTender` recomputes the balance from the
-latest order and refuses with `pos_checkout.order_changed_retry` if a queued cart edit moved
-it, since the keypad's facts were read at render.
-In the same slot every dispatcher counts the checkout conditions (roadmap#62, the first feature
+Before the dispatch, inside its queue slot, `commitSale` recomputes the balance from the
+latest order and, for a keypad entry, refuses with `pos_checkout.order_changed_retry` if a queued
+cart edit moved it, since the keypad's facts were read at render.
+In the same slot `commitSale` counts the checkout conditions (roadmap#62, the first feature
 consumer: the stock condition, on `prevent_overselling`) with `countConditionsInSlot` into
 `conditions: { unmet }`, and `conditions.gate` refuses with the first unmet line's reason; the cart
 shows the same count live, through the same evaluator (`screens/main/pos/conditions`).
@@ -70,12 +70,13 @@ The caller presents the two gate refusals with the existing checkout toasts and 
 refusal through `presentActionRefusal` (unless already presented): `presentTenderRefusal` in
 `screens/main/pos/checkout` is that mapping, shared by every dispatcher of the event.
 
-Every sale dispatches this event. The tender pane's `takeTender` carries the keypad's amounts; a
-gateway sale takes the whole balance, so the gateway-contract checkout (`use-checkout-session.ts`)
-and the external pay page (`payment-webview.tsx`) dispatch through `commitGatewaySale`
-(`screens/main/pos/checkout/commit-gateway-sale.ts`) with `mode: 'gateway'`, `completing: true`
-and the outstanding balance as every amount. Its bottom handler makes the pre-action session
-write, journals the attempt and stamps the provenance, then the gateway runs. The two gates are
+Every sale dispatches this event through `commitSale` (`screens/main/pos/checkout/commit-sale.ts`),
+the one dispatcher and bottom handler. The tender pane's `takeTender` supplies the keypad entry;
+`commitGatewaySale` supplies the whole-balance mode for the gateway-contract checkout
+(`use-checkout-session.ts`) and external pay page (`payment-webview.tsx`): `mode: 'gateway'`,
+`completing: true` and the outstanding balance as every amount. The bottom handler makes the
+pre-action session write and re-checks the stamped id before calling the supplied writer with
+that verified payload. The gateway writer journals the attempt and stamps provenance, then the gateway runs. The two gates are
 therefore the only register and session rules in the app; there is no second gating path.
 
 First registered hooks: `stock.guard.add` and `stock.guard.update` (`screens/main/pos/hooks/stock-guard-hook.ts`),

@@ -224,6 +224,12 @@ The cash pair. "Tender" is only ever this verb.
 
 Ruled 2026-09-01 on the app-extensibility wayfinder map (wcpos/roadmap#120, ticket #121).
 
+**Sale commit**:
+The one dispatch of `checkout.tender.commit` for an order, made inside the order's queue
+slot: it reads the balance there, counts the conditions, runs the tender guards and hands
+the writer the session the gate stamped, re-verified.
+_Avoid_: tender (as a noun), tender flow, checkout preparation, `prepareSale`
+
 **Extension**:
 A unit of functionality added to the POS app — a mini-app, a display page, or a driver
 (later: add-on forms, layout components). Qualify as "POS extension" when ambiguous with
