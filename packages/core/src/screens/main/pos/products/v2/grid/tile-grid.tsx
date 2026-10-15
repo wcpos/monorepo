@@ -14,9 +14,17 @@ export function useGridColumns(): number {
 	return useDocField(uiSettings, (value) => value.gridColumns);
 }
 
-/** A row of Poster-framed tiles; empty frames keep a short row's widths equal. */
-export function TileRow({ children }: { children: React.ReactNode }): React.ReactElement {
-	const columns = useGridColumns();
+/**
+ * A row of Poster-framed tiles; empty frames keep a short row's widths equal. The caller hands
+ * the columns it chunked by, so a row opens no settings read of its own.
+ */
+export function TileRow({
+	columns,
+	children,
+}: {
+	columns: number;
+	children: React.ReactNode;
+}): React.ReactElement {
 	return (
 		<View className="flex-row">
 			{children}
@@ -62,7 +70,7 @@ export function TileGrid<T>({
 				keyExtractor={rowKey}
 				renderItem={({ item: row }) => (
 					<VirtualizedList.Item>
-						<TileRow>{row.map(renderTile)}</TileRow>
+						<TileRow columns={columns}>{row.map(renderTile)}</TileRow>
 					</VirtualizedList.Item>
 				)}
 				estimatedItemSize={ESTIMATED_ROW_PX}

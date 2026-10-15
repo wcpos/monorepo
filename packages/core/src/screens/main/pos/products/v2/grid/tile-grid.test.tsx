@@ -6,7 +6,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { TileGrid } from './tile-grid';
 
 let mockColumns = 3;
-let mockListProps: { onEndReached?: () => void; onEndReachedThreshold?: number };
+let mockListProps: {
+	onEndReached?: () => void;
+	onEndReachedThreshold?: number;
+	estimatedItemSize?: number;
+};
 jest.mock('../../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { gridColumns: mockColumns } }),
 }));
@@ -33,6 +37,7 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 		ListFooterComponent?: React.ReactNode;
 		onEndReached?: () => void;
 		onEndReachedThreshold?: number;
+		estimatedItemSize?: number;
 	}) => {
 		mockListProps = props;
 		const Empty = props.ListEmptyComponent;
@@ -128,6 +133,7 @@ it('hands end-reached to the list at the stage threshold', () => {
 	const onEndReached = jest.fn();
 	render(<TileGrid tiles={['a']} renderTile={renderTile} onEndReached={onEndReached} />);
 	expect(mockListProps.onEndReachedThreshold).toBe(0.1);
+	expect(mockListProps.estimatedItemSize).toBe(200);
 	fireEvent.click(screen.getByTestId('end-reached'));
 	expect(onEndReached).toHaveBeenCalledTimes(1);
 });

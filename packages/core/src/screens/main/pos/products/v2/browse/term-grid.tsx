@@ -58,12 +58,14 @@ export function BrowseRootGrid({
 	// The stage stages the path entry itself (`{ kind: 'term', term, target }`).
 	const staged = React.useContext(DealStagedContext) as { kind?: string; term?: BrowseTerm } | null;
 	const lifted = staged?.kind === 'term' && staged.term ? termKey(staged.term) : null;
+	// One array per term set, so the grid's rows (and the list's data) hold across stage renders.
+	const tiles = React.useMemo(() => [ALL, ...terms], [terms]);
 
 	return (
 		// Tiles are cards already: they sit straight on the ground, as the products grid's do.
 		<View className="flex h-full flex-col px-1" testID="browse-root">
 			<TileGrid
-				tiles={[ALL, ...terms]}
+				tiles={tiles}
 				rowKey={(row) => termKey(row[0])}
 				renderTile={(term) => (
 					<TermTile

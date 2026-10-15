@@ -26,7 +26,7 @@ import { CameraScanButton } from '../camera-scan-button';
 import { CameraScannerPanel } from '../camera-scanner-panel';
 import { StorageOutageBanner } from '../storage-outage-banner';
 import { ProductGrid } from './grid/product-grid';
-import { TileRow, useGridColumns } from './grid/tile-grid';
+import { TileRow } from './grid/tile-grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from '../fit-page-size';
 import { usePanelSide } from '../../contexts/overlay-side/v2';
 import { UISettingsForm } from '../ui-settings-form';
@@ -304,7 +304,7 @@ function POSProductsContent({
 	// A browse level open: its crumb is the place, so the source's own pill folds, the place's
 	// own conditions are not groups to clear, and Clear filters leaves the place (level-place).
 	const [browsePlace, setBrowsePlace] = React.useState<LevelPlace | null>(null);
-	const gridColumns = useGridColumns();
+	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
@@ -353,7 +353,7 @@ function POSProductsContent({
 				{Array.from(
 					{ length: skeletonCount(body.height, body.width / gridColumns + POSTER_ROW_EXTRA_PX) },
 					(_, row) => (
-						<TileRow key={row}>
+						<TileRow key={row} columns={gridColumns}>
 							{Array.from({ length: gridColumns }, (_, column) => (
 								<PosterPlaceholder key={column} testID="products-grid-skeleton" />
 							))}

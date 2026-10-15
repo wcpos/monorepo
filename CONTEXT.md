@@ -647,5 +647,8 @@ _Avoid_: transfer, change server, edit cashier
 
 ## Language — Products browse
 
-- **Tile grid:** The products stage's fixed-column grid of Poster tiles. Columns come from the grid-columns setting, widths are equal, order is kept, and a short last row is padded with empty tile frames, never wrapped.
-- _Avoid_: wrap, flow layout, masonry, column grid.
+**Tile grid**:
+The products stage's fixed-column grid of Poster tiles. Columns come from the grid-columns
+setting, widths are equal, order is kept, and a short last row is padded with empty tile
+frames, never wrapped.
+_Avoid_: wrap, flow layout, masonry, column grid.
