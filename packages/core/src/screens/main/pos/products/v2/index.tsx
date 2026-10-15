@@ -53,8 +53,6 @@ import {
 import { cellsForRow } from './cells-for-row';
 import { ProductRow as ProductRowView } from './rows/product-row';
 import { VariableProductRow } from './rows/variable-product-row';
-import { ProductTile } from './grid/product-tile';
-import { VariableProductTile } from './grid/variable-product-tile';
 import { ProductsFooter } from './footer';
 import { DealStack, type Measurable } from './deal-stack';
 import { DrillIn } from './drill-in';
@@ -107,12 +105,6 @@ function ProductsView({
 	variationsStyle: string;
 	tableConfig: React.ComponentProps<typeof DataTable<ProductRow>>['tableConfig'];
 }) {
-	const VariableTile = React.useCallback(
-		(props: React.ComponentProps<typeof ProductTile>) => (
-			<VariableProductTile {...props} variationsStyle={variationsStyle} onDrill={onDrill} />
-		),
-		[variationsStyle, onDrill]
-	);
 	useRenderProbe('ProductsView', 'view', {
 		onDrill,
 		viewMode,
@@ -130,8 +122,8 @@ function ProductsView({
 		<Suspense fallback={<SuspendedProbe event="products.suspended">{loading}</SuspendedProbe>}>
 			{viewMode === 'grid' ? (
 				<ProductGrid
-					tile={ProductTile}
-					variableTile={VariableTile}
+					onDrill={onDrill}
+					variationsStyle={variationsStyle}
 					handle={handle}
 					actions={tableActions}
 					noDataMessage={noDataMessage}
@@ -478,8 +470,7 @@ function POSProductsContent({
 	// The products stay mounted under a drill-in: the stage brings the variations over them and
 	// takes them back off, and the list is where the cashier left it. A function of its drill
 	// handler, so a browse stage can wire its own (All products mode drills through `setDrilled`).
-	// Not memoised: `loading` and `noDataMessage` are fresh elements every render anyway. The tile
-	// component identity that matters is memoised inside ProductsView, per drill handler.
+	// Not memoised: `loading` and `noDataMessage` are fresh elements every render anyway.
 	const renderProducts = (onDrill: DrillHandler) => (
 		<ProductsView
 			onDrill={onDrill}

@@ -22,8 +22,8 @@ import {
 	useRenderProbe,
 } from '../../render-probe';
 import { ProductGridFooter } from './grid-footer';
-import { ProductTile } from '../../grid/product-tile';
-import { VariableProductTile } from './inline-variable-tile';
+import { ProductTile } from './product-tile';
+import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../../contexts/translations';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import { ProductsFooter } from '../footer';
@@ -111,8 +111,8 @@ const GRID_FIELDS: SnapshotFields = ['pending', 'exhausted'];
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
-	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
-	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
+	onDrill: React.ComponentProps<typeof VariableProductTile>['onDrill'];
+	variationsStyle: string;
 	/** The products query handle (roadmap#423): one snapshot, read here, nowhere else. */
 	handle: QueryHandle<ProductsResult>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
@@ -134,8 +134,8 @@ export function ProductGrid({
 	handle,
 	actions,
 	noDataMessage,
-	tile: Tile = ProductTile,
-	variableTile: VariableTile = VariableProductTile,
+	onDrill,
+	variationsStyle,
 }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
@@ -175,8 +175,8 @@ export function ProductGrid({
 		actions,
 		uiSettings,
 		t,
-		Tile,
-		VariableTile,
+		onDrill,
+		variationsStyle,
 		noDataMessage,
 	});
 
@@ -239,9 +239,15 @@ export function ProductGrid({
 							<View className="flex-row">
 								{row?.map(({ record }) =>
 									record.payload.type === 'variable' ? (
-										<VariableTile key={record.uuid} record={record} gridFields={gridFields} />
+										<VariableProductTile
+											key={record.uuid}
+											record={record}
+											gridFields={gridFields}
+											onDrill={onDrill}
+											variationsStyle={variationsStyle}
+										/>
 									) : (
-										<Tile key={record.uuid} record={record} gridFields={gridFields} />
+										<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
 									)
 								)}
 								{/* Spacers for incomplete last row */}

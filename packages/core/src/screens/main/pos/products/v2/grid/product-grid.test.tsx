@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -97,11 +97,8 @@ jest.mock('./grid-footer', () => ({
 		</>
 	),
 }));
-jest.mock('../../grid/product-tile', () => ({
-	ProductTile: () => <div data-testid="default-tile" />,
-}));
 jest.mock('./inline-variable-tile', () => ({
-	VariableProductTile: () => <div data-testid="default-variable-tile" />,
+	VariableProductTile: () => <div data-testid="popover-tile" />,
 }));
 // The caption row the table view draws, values in (the tax notice is its own default child).
 jest.mock('../footer', () => ({
@@ -172,30 +169,56 @@ describe('ProductGrid stale-hit reporting', () => {
 	});
 });
 
-it('uses supplied tiles for both kinds and retains the defaults otherwise', () => {
+// Keep the stage's variable-tile selector real; only its leaf tiles and motion context are doubles.
+jest.mock('../deal-stack', () => ({
+	DealStagedContext: jest.requireActual('react').createContext(null),
+}));
+jest.mock('./product-tile', () => ({
+	ProductTile: ({
+		record,
+		onDrill,
+	}: {
+		record: { uuid: string; payload: { type: string } };
+		onDrill?: (record: unknown) => void;
+	}) => (
+		<button
+			data-testid={record.payload.type === 'variable' ? 'drill-tile' : 'default-tile'}
+			onClick={() => onDrill?.(record)}
+		/>
+	),
+}));
+
+it('draws a simple product as the product tile and a variable one as the drill tile', () => {
+	const simple = { uuid: 'simple', payload: { type: 'simple', name: 'Simple' } };
+	const variable = { uuid: 'variable', payload: { type: 'variable', name: 'Variable' } };
+	mockResult = { hits: [{ record: simple }, { record: variable }] };
+	const onDrill = jest.fn();
+	const props = {
+		handle: { key: 'test', sync: jest.fn() },
+		actions: { extendLimit: jest.fn() },
+		onDrill,
+		variationsStyle: 'drill',
+	} as unknown as React.ComponentProps<typeof ProductGrid>;
+	render(<ProductGrid {...props} />);
+	expect(screen.getByTestId('default-tile')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('drill-tile'));
+	expect(onDrill).toHaveBeenCalledWith(variable);
+	expect(screen.queryByTestId('popover-tile')).toBeNull();
+});
+
+it('with the inline variations style a variable product is the popover tile', () => {
 	mockResult = {
-		hits: ['simple', 'variable'].map((type) => ({
-			record: { uuid: type, payload: { type, name: type } },
-		})),
+		hits: [{ record: { uuid: 'variable', payload: { type: 'variable', name: 'Variable' } } }],
 	};
 	const props = {
 		handle: { key: 'test', sync: jest.fn() },
 		actions: { extendLimit: jest.fn() },
+		onDrill: jest.fn(),
+		variationsStyle: 'inline',
 	} as unknown as React.ComponentProps<typeof ProductGrid>;
-	const { rerender } = render(<ProductGrid {...props} />);
-	expect(screen.getByTestId('default-tile')).toBeTruthy();
-	expect(screen.getByTestId('default-variable-tile')).toBeTruthy();
-	rerender(
-		<ProductGrid
-			{...props}
-			tile={() => <div data-testid="custom-tile" />}
-			variableTile={() => <div data-testid="custom-variable-tile" />}
-		/>
-	);
-	expect(screen.getByTestId('custom-tile')).toBeTruthy();
-	expect(screen.getByTestId('custom-variable-tile')).toBeTruthy();
-	expect(screen.queryByTestId('default-tile')).toBeNull();
-	expect(screen.queryByTestId('default-variable-tile')).toBeNull();
+	render(<ProductGrid {...props} />);
+	expect(screen.getByTestId('popover-tile')).toBeTruthy();
+	expect(screen.queryByTestId('drill-tile')).toBeNull();
 });
 
 describe('ProductGrid on the handle snapshot', () => {

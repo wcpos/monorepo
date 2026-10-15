@@ -111,3 +111,5 @@ Evidence for every line: the spec, wcpos/roadmap `docs/specs/2026-10-12-pos-prod
 ## Products stage path map (added 2026-10-15)
 
 The `pos/products/grid` lines 1–11 now refer to `v2/grid/product-grid.tsx` (formerly `grid/index.tsx`), `v2/grid/grid-footer.tsx`, `v2/grid/tile-image.tsx` and `v2/grid/inline-variable-tile.tsx` (formerly `grid/variable-product-tile.tsx`); their three suites and ledger moved alongside them. Poster lines 1–3 and 10's `grid/product-tile.test.tsx` already means `v2/grid/product-tile.test.tsx` and does not move; line 10's image is now `v2/grid/tile-image.tsx`. No numbered line is reworded.
+
+Status 2026-10-15 (step 2): “tile props added” in `pos/products/grid` lines 1–4 and 6 is historical: `ProductGrid` now owns the stage tiles and takes `onDrill` and `variationsStyle` directly. The unused `grid/product-tile.tsx` default and the injection seam are removed; the inline popover tile remains live.
