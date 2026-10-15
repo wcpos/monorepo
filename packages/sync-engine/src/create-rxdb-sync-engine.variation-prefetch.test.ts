@@ -638,7 +638,7 @@ describe('variation-prefetch maintenance lane', () => {
 	});
 
 	it('leaves no parent or missing-child query in the query caches (#2502)', async () => {
-		const fetcher = vi.fn(async () => json({ documents: [variationEnvelope(102, 10)] }));
+		const fetcher = vi.fn(async () => json([variationEnvelope(102, 10)]));
 		const engine = engineWith({ fetcher });
 		try {
 			const scope = await engine.whenActive();
