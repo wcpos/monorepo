@@ -31,6 +31,19 @@ index d2749d11373b9682903f9c3aa0ec775b49943ff4..fe984e50af077e5ab4e53502ff915378
  }
  
  /**
+diff --git a/dist/cjs/rx-change-event.js b/dist/cjs/rx-change-event.js
+index 73a80a4de09a57a58750d8953027117714c0f2d0..69541f793d24f9642eac5d1d387f36e97a28d9ce 100644
+--- a/dist/cjs/rx-change-event.js
++++ b/dist/cjs/rx-change-event.js
+@@ -87,7 +87,7 @@ function flattenEvents(input) {
+   });
+   return nonDuplicate;
+ }
+-var EVENT_BULK_CACHE = new Map();
++var EVENT_BULK_CACHE = new WeakMap();
+ function rxChangeEventBulkToRxChangeEvents(eventBulk) {
+   return (0, _index.getFromMapOrCreate)(EVENT_BULK_CACHE, eventBulk, () => {
+     var events = new Array(eventBulk.events.length);
 diff --git a/dist/esm/plugins/storage-sqlite/sqlite-helpers.js b/dist/esm/plugins/storage-sqlite/sqlite-helpers.js
 index 7cf5dc391a3f3a9fc281371b280fbce588db9068..6723bc42d37a0d536740f35447afbf8f57d88ea0 100644
 --- a/dist/esm/plugins/storage-sqlite/sqlite-helpers.js
@@ -64,3 +77,29 @@ index 7cf5dc391a3f3a9fc281371b280fbce588db9068..6723bc42d37a0d536740f35447afbf8f
  }
  
  /**
+diff --git a/dist/esm/rx-change-event.js b/dist/esm/rx-change-event.js
+index 0063a9ad8d09b871d66a8b2c2df2abd6f8dea739..b7c43f524e4ed48fc5efcb6e8b188fb42ca59938 100644
+--- a/dist/esm/rx-change-event.js
++++ b/dist/esm/rx-change-event.js
+@@ -78,7 +78,7 @@ export function flattenEvents(input) {
+   });
+   return nonDuplicate;
+ }
+-var EVENT_BULK_CACHE = new Map();
++var EVENT_BULK_CACHE = new WeakMap();
+ export function rxChangeEventBulkToRxChangeEvents(eventBulk) {
+   return getFromMapOrCreate(EVENT_BULK_CACHE, eventBulk, () => {
+     var events = new Array(eventBulk.events.length);
+diff --git a/src/rx-change-event.ts b/src/rx-change-event.ts
+index dda2c8325e495cd9f95db90945629727b72942c3..e01c56a2de49b320d40e9953758a64ed47e47ea4 100644
+--- a/src/rx-change-event.ts
++++ b/src/rx-change-event.ts
+@@ -107,7 +107,7 @@ export function flattenEvents<EventType>(
+     return nonDuplicate;
+ }
+ 
+-const EVENT_BULK_CACHE = new Map<RxChangeEventBulk<any>, RxChangeEvent<any>[]>();
++const EVENT_BULK_CACHE = new WeakMap<RxChangeEventBulk<any>, RxChangeEvent<any>[]>();
+ export function rxChangeEventBulkToRxChangeEvents(
+     eventBulk: RxChangeEventBulk<any>
+ ) {

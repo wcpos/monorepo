@@ -142,6 +142,7 @@ import { createWriteDrainNudge } from './write-path/write-drain-nudge';
 import { type CadenceController, createCadenceController } from './cadence-controller';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
+import { findAllUncached } from './collections/find-all-uncached';
 import {
 	DEFAULT_LANE_INTERVALS,
 	type EngineLaneName,
@@ -2365,7 +2366,7 @@ export function createRxdbSyncEngine(
 						// No parents survive a reset. Repeating this after a failed cascade
 						// needs no pre-drop ids; independently POS-stamped refunds stay held.
 						const refunds = activeScopeOf(scopeId).database.collections.refunds;
-						const held = await refunds.find().exec();
+						const held = await findAllUncached(refunds);
 						const orphanIds = held
 							.filter((doc) => !hasPosRefundStamp(doc.toJSON().payload.meta_data))
 							.map((doc) => doc.toJSON().uuid);
