@@ -8,8 +8,13 @@ name: Publish Web Bundle
 #   monorepo `next`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next
 #                       The `next` BRANCH of web-bundle IS the dev lane's tag.
 #                       There is no versioned / prerelease tag for `next`; this
-#                       workflow, run with bundle_branch=next, is the whole deploy.
-#                       dev-next.wcpos.com reads it (WCPOS_WEB_BUNDLE_REF=next).
+#                       workflow, run with bundle_branch=next, is the whole deploy
+#                       of the PAGE. dev-next.wcpos.com reads it
+#                       (WCPOS_WEB_BUNDLE_REF=next). The storage WORKER is not in
+#                       it: the plugin serves that, so a bundle whose rxdb moved
+#                       also needs the free plugin's `next` to re-vendor
+#                       sqlite.worker.js and Pro's dev deploy to pick it up — the
+#                       last step of this workflow checks dev-next for exactly that.
 #
 #   monorepo `main`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<major.minor>
 #                       (e.g. @1.10, then @1.11 once `next` becomes `main`). The
@@ -28,14 +33,16 @@ name: Publish Web Bundle
 # lane is frozen; the allow_frozen_lane input overrides that part only), or when
 # the worker is not the rxdb the bundle was built with. The lane is
 # apps/main/package.json's major.minor at the built SHA; the gate script comes
-# from THIS workflow revision, like the release gate.
-# On 2026-10-14 a 17.6.0 worker tagged v1.10.41 on the 17.4.0 lane broke every
-# web POS on an older plugin. See scripts/release/check-worker-rxdb-lane.sh.
+# from THIS workflow revision, like the release gate. On
+# 2026-10-14 a 17.6.0 worker tagged v1.10.41 on the 17.4.0 lane broke every web
+# POS on an older plugin. See scripts/release/check-worker-rxdb-lane.sh.
 #
 # Manual only — run it when you want to refresh the dev bundle. The release gate
 # (require-green-main) can never pass for a `next` SHA, so pass the override
 # phrase; and pass `monorepo_ref` as a SHA when the branch name contains a `/`
-# (the resolve step puts the ref in a REST path).
+# (the resolve step puts the ref in a REST path). The workflow FILE runs at the
+# dispatch ref; `main` and `next` carry the same steps (the worker gate calls the
+# lane's own check script), so dispatching from either ref publishes the same way.
 
 on:
   workflow_dispatch:
@@ -107,7 +114,29 @@ jobs:
           [ -n "$sha" ] || { echo "::error::could not resolve monorepo_ref '$MONOREPO_REF'"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
+      # The web build is not byte-reproducible: publishing the same SHA twice yields a new
+      # hashed entry and, until the retention below, deleted the old one while edges still
+      # served the old manifest (dev-next, 2026-10-05 16:22: "Failed to load script …
+      # entry-fb8973…"). So a SHA the branch already carries is not built or published
+      # again; the run still ends with the dev-next worker check.
+      - name: 🔎 Is this SHA already published?
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.inputs.bundle_branch }}
+          SHA: ${{ steps.monorepo-sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          head=$(gh api "repos/wcpos/web-bundle/commits/${BRANCH}" --jq .commit.message 2>/dev/null || echo "")
+          if printf '%s' "$head" | grep -q "from monorepo ${SHA}"; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::web-bundle@${BRANCH} was built from ${SHA:0:12} already; not building or publishing again. The dev-next worker check still runs."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 🟢 Require green main verification
+        if: ${{ steps.published.outputs.already != 'true' }}
         uses: ./.github/actions/require-green-main
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,6 +145,7 @@ jobs:
           override: ${{ github.event.inputs.override_release_gate }}
 
       - name: 📥 Check out monorepo
+        if: ${{ steps.published.outputs.already != 'true' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           # The SHA the release gate checked, not the ref: a branch that moves
@@ -128,6 +158,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: 📦 Init submodules
+        if: ${{ steps.published.outputs.already != 'true' }}
         # Populate apps/web BEFORE `pnpm install` scans the `apps/*` workspace glob
         # — otherwise apps/web is an empty dir, `@wcpos/web-bundle` isn't a
         # workspace project, and `pnpm web build` no-ops (leaving no build output).
@@ -138,18 +169,20 @@ jobs:
         run: git submodule update --init apps/web
 
       - name: 🏗 Setup monorepo
+        if: ${{ steps.published.outputs.already != 'true' }}
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       - name: 🔨 Build web bundle
+        if: ${{ steps.published.outputs.already != 'true' }}
         run: pnpm web build
 
       # The build copies apps/main/public/opfs.worker.js (the drift-locked
       # source) into build/; gate the file that is about to be published.
       - name: 🧬 Gate the worker's RXDB_VERSION against its bundle lane
-        if: ${{ github.event.inputs.bundle_branch == 'main' }}
+        if: ${{ steps.published.outputs.already != 'true' && github.event.inputs.bundle_branch == 'main' }}
         env:
           GH_TOKEN: ${{ github.token }}
           ALLOW_FROZEN_LANE: ${{ github.event.inputs.allow_frozen_lane }}
@@ -167,6 +200,7 @@ jobs:
       # the secret in its own env only and exports a boolean; the upload step is
       # the only other step that sees the token.
       - name: 🔎 Is Sentry configured?
+        if: ${{ steps.published.outputs.already != 'true' }}
         id: sentry
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -197,11 +231,11 @@ jobs:
           cp "$MAPS_DIR"/*.js "$JS_DIR/"
 
       - name: 🚀 Publish to web-bundle@${{ github.event.inputs.bundle_branch }}
+        if: ${{ steps.published.outputs.already != 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
-          # The resolved SHA, not the input ref: tag-web-bundle.sh reads the app
-          # version (and so the lane) at the SHA named in this commit message.
+          MONOREPO_REF: ${{ github.event.inputs.monorepo_ref }}
           MONOREPO_SHA: ${{ steps.monorepo-sha.outputs.sha }}
         run: |
           set -euo pipefail
@@ -213,31 +247,51 @@ jobs:
 
           # Publish via a fresh clone of web-bundle on the target branch, decoupled
           # from the apps/web submodule (so a deps re-check during the build can't
-          # reset the submodule out from under us).
+          # reset the submodule out from under us). Full history without blobs, not
+          # --depth 1: the retention below asks `git log -1 -- <path>` when each
+          # file was last published, and a shallow clone answers "the tip" for every
+          # file, so nothing ever aged out while publishes were under a day apart
+          # (web-bundle@next carried chunks from 2026-10-13 on 2026-10-15). Blobless
+          # history for this repo is ~6 MB and ~5 s; checkout fetches HEAD's files.
           WB="$RUNNER_TEMP/web-bundle"
           rm -rf "$WB"
-          git clone --depth 1 --branch "$BRANCH" \
+          git clone --filter=blob:none --branch "$BRANCH" \
             "https://x-access-token:${GH_TOKEN}@github.com/wcpos/web-bundle.git" "$WB"
 
-          # Mirror the freshly built bundle into build/ (replace contents so removed
-          # / renamed hashed chunks are dropped).
-          rm -rf "$WB/build"
+          # Lay the fresh build over build/, then drop only what the new build does not
+          # carry AND has been published for more than a day. A jsDelivr edge keeps the
+          # old metadata.json for up to 12 h; the hashed entry it names must still exist
+          # on the branch, or every tab on that edge fails with "Failed to load script …
+          # entry-….js" (dev-next, 2026-10-05: the previous entry was deleted minutes
+          # after it was published). Unhashed files (metadata.json, index.html, the
+          # workers) are simply overwritten.
           mkdir -p "$WB/build"
           cp -R "$BUILD_DIR/." "$WB/build/"
-
           cd "$WB"
+          keep_until=$(( $(date +%s) - 24 * 3600 ))
+          git ls-files build | while read -r path; do
+            [ -e "$BUILD_DIR/${path#build/}" ] && continue
+            last=$(git log -1 --format=%ct -- "$path" 2>/dev/null || echo 0)
+            if [ "${last:-0}" -lt "$keep_until" ]; then
+              git rm -q "$path"
+            else
+              echo "keeping $path (published $(( ($(date +%s) - last) / 3600 )) h ago; an edge may still name it)"
+            fi
+          done
+
           git add -A
           if git diff --staged --quiet; then
             echo "No bundle changes to publish."
             exit 0
           fi
-          git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_SHA})"
+          # The SHA is what "already published" above matches on; keep it in the message.
+          git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_SHA}, ref ${MONOREPO_REF})"
           git push origin "$BRANCH"
 
-      # Runs even when nothing was pushed: a re-run after a verification failure
-      # builds the same bytes and has nothing new to commit, but the lane still
-      # has to be made right. With no build output (nothing built), the branch
-      # tree on GitHub is the expectation instead.
+      # Runs even when nothing was pushed or built: a re-run after a verification
+      # failure finds the SHA already published (or builds the same bytes) and has
+      # nothing new to commit, but the lane still has to be made right. With no
+      # build output, the branch tree on GitHub is the expectation instead.
       - name: 🧹 Purge and verify jsDelivr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -273,3 +327,46 @@ jobs:
           fi
           echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"
           echo "Verified by content: ${n} hashed files and ${m} unhashed files"
+
+      # The page is the bundle; the storage worker is NOT. The plugin serves it
+      # (Frontend.php hands the app `opfsWorker`), and on dev-next that plugin is
+      # woocommerce-pos-pro's vendored copy of the free plugin. A bundle whose rxdb
+      # moved boots against a worker the plugins have not re-vendored yet and every
+      # tab fails with RxDB RM1 ("Failed to create user database") — this workflow
+      # was green while dev-next was down (2026-10-05). So the publish ends by
+      # reading the worker dev-next actually serves and comparing it with the one
+      # just published. A mismatch fails the run and names the two deploys to make.
+      - name: 🧵 dev-next serves the worker this bundle was built with
+        if: ${{ github.event.inputs.bundle_branch == 'next' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONOREPO_SHA: ${{ steps.monorepo-sha.outputs.sha }}
+          # dev-next's active plugin is Pro; the free plugin dir there is inactive,
+          # so its own deploy changes nothing the page loads.
+          SERVED_WORKER: https://dev-next.wcpos.com/wp-content/plugins/woocommerce-pos-pro/vendor/wcpos/woocommerce-pos/assets/js/sqlite.worker.js
+        run: |
+          set -euo pipefail
+          # The worker the bundle carries: the built copy, or — when this SHA was already
+          # published and nothing was built — the one the branch holds (the build copies
+          # it from apps/main/public unchanged; fetched by the resolved SHA, raw).
+          published="$GITHUB_WORKSPACE/apps/web/build/sqlite.worker.js"
+          if [ ! -f "$published" ]; then
+            published="$RUNNER_TEMP/published.sqlite.worker.js"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/apps/main/public/sqlite.worker.js?ref=${MONOREPO_SHA}" \
+              -H "Accept: application/vnd.github.raw" > "$published" \
+              || { echo "::error::could not read apps/main/public/sqlite.worker.js at ${MONOREPO_SHA}"; exit 1; }
+          fi
+          test -s "$published" || { echo "::error::the bundle has no sqlite.worker.js"; exit 1; }
+          served="$RUNNER_TEMP/served.sqlite.worker.js"
+          curl -fsSL --retry 3 "$SERVED_WORKER" -o "$served" \
+            || { echo "::error::could not fetch the worker dev-next serves ($SERVED_WORKER)"; exit 1; }
+          want=$(sha256sum "$published" | cut -d' ' -f1)
+          have=$(sha256sum "$served" | cut -d' ' -f1)
+          # Informational: the rxdb version strings the worker carries (RM1 names them too).
+          versions() { grep -oE '\b1[0-9]\.[0-9]+\.[0-9]+\b' "$1" | sort -u | tr '\n' ' '; }
+          if [ "$want" = "$have" ]; then
+            echo "✅ dev-next serves the published worker (sha256 ${want:0:12})"
+            exit 0
+          fi
+          echo "::error::dev-next serves a different sqlite.worker.js than this bundle was built with (published ${want:0:12} [$(versions "$published")], served ${have:0:12} [$(versions "$served")]). The page will fail with RxDB RM1 until the plugins catch up: (1) re-vendor assets/js/sqlite.worker.js from web-bundle@next in wcpos/woocommerce-pos and merge to next; (2) gh workflow run deploy-dev.yml --repo wcpos/woocommerce-pos-pro --ref next (Pro vendors free at build time; the free plugin's own deploy does not reach dev-next's page)."
+          exit 1
