@@ -366,6 +366,12 @@ The state machine a display page exposes to templates: `idle`, `cart`, `payment`
 The one-time exchange that lets two WebRTC peers (POS and display) find each other,
 carried by the merchant's WordPress site as a mailbox; not the data path.
 
+**Sale commit**:
+The one dispatch of `checkout.tender.commit` for an order, made inside the order's queue
+slot: it reads the balance there, counts the conditions, runs the tender guards and hands
+the writer the session the gate stamped, re-verified.
+_Avoid_: tender (as a noun), tender flow, checkout preparation, `prepareSale`
+
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202,
