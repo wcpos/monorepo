@@ -188,6 +188,15 @@ patchedDependencies:
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  # rxdb 17.6.0 caches the events of every change-event bulk in a module-level Map keyed by
+  # the bulk (EVENT_BULK_CACHE, rx-change-event.js) and never clears it. Anything that reads
+  # `collection.$` / `db.$` feeds it (e.g. packages/query/src/catalogue-search-blob.ts), so
+  # every products bulk (~150 KB) stays on the heap: +5.6 of +8.6 MB in the last hour of a
+  # 2 h idle sync-on soak (#2502). The patch makes it a WeakMap: subscribers of the same
+  # bulk still share one events array, and a bulk nobody holds is collected. Drop when
+  # upstream rxdb fixes EVENT_BULK_CACHE; scripts/rxdb-event-bulk-cache.test.mjs fails if a
+  # bump drops the patch.
+  "rxdb@17.6.0": "patches/rxdb@17.6.0.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in
