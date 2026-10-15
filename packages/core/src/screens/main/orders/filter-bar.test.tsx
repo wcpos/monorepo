@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { QueryStateProvider, useQueryState } from '../../../../query';
+import { QueryStateProvider, useQueryState } from '../../../query';
 import { FilterBar } from './filter-bar';
 
 jest.mock('expo-haptics', () => ({}));
@@ -11,26 +11,26 @@ jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({}) }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../../contexts/app-state', () => ({
+jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7 } }),
 }));
-jest.mock('../../../../hooks/use-store-day', () => ({
+jest.mock('../../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({
 		presets: () => ({ today: { from: 'store-midnight', to: 'store-end' } }),
 		rangeToFilter: (range: unknown) => range,
 	}),
 }));
-jest.mock('../../hooks/use-engine-document', () => ({ useEngineRecordByWooId: jest.fn() }));
-jest.mock('../../hooks/use-guest-customer', () => ({ useGuestCustomer: jest.fn() }));
-jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: jest.fn() }));
-jest.mock('../force-refresh-filter-customer', () => ({ forceRefreshFilterCustomer: jest.fn() }));
-jest.mock('../../components/order/filter-bar/status-pill', () => ({ StatusPill: () => null }));
-jest.mock('../../components/order/filter-bar/customer-pill', () => ({ CustomerPill: () => null }));
-jest.mock('../../components/order/filter-bar/cashier-pill', () => ({ CashierPill: () => null }));
-jest.mock('../../components/order/filter-bar/store-pill', () => ({ StorePill: () => null }));
-jest.mock('../../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));
-jest.mock('../../components/order/filter-bar/date-range-pill', () => ({
+jest.mock('../hooks/use-engine-document', () => ({ useEngineRecordByWooId: jest.fn() }));
+jest.mock('../hooks/use-guest-customer', () => ({ useGuestCustomer: jest.fn() }));
+jest.mock('../hooks/store-list-resource', () => ({ storeListResource: jest.fn() }));
+jest.mock('./force-refresh-filter-customer', () => ({ forceRefreshFilterCustomer: jest.fn() }));
+jest.mock('../components/order/filter-bar/status-pill', () => ({ StatusPill: () => null }));
+jest.mock('../components/order/filter-bar/customer-pill', () => ({ CustomerPill: () => null }));
+jest.mock('../components/order/filter-bar/cashier-pill', () => ({ CashierPill: () => null }));
+jest.mock('../components/order/filter-bar/store-pill', () => ({ StorePill: () => null }));
+jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));
+jest.mock('../components/order/filter-bar/date-range-pill', () => ({
 	DateRangePill: () => null,
 }));
 function Probe() {

@@ -6,8 +6,8 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useStoreDayLabel } from '../../../hooks/use-store-day-label';
+import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { OrderStatusBadge } from './cells/status';
 import { OrderTotal } from './cells/total';
 

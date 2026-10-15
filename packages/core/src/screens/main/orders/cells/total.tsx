@@ -4,7 +4,7 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 export function Total({ row, column }: CellContext<{ record: EngineRecord<'orders'> }, 'total'>) {
 	const { total, currencySymbol, paymentMethodTitle, refunds } = useRecordField(

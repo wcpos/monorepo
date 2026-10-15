@@ -5,12 +5,12 @@ import { screen } from '@testing-library/react';
 
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
-import { renderTable, reset } from '../../components/data-table/test-fixture';
-import { DataTableRow } from '../../components/data-table/rows';
+import { renderTable, reset } from '../components/data-table/test-fixture';
+import { DataTableRow } from '../components/data-table/rows';
 import { DayHeading, groupOrders, isDay, type OrderHit, type OrderListItem } from './day-heading';
 
-import type { Row } from '../../../../table-types';
-import type { DataTableFeatures } from '../../components/data-table';
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
 
 beforeEach(reset);
 it('renders actual day headings alongside stable order rows without counting headings as hits', () => {
@@ -34,4 +34,4 @@ it('renders actual day headings alongside stable order rows without counting hea
 	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
 });
 
-jest.mock('../../../../contexts/app-state', () => ({}));
+jest.mock('../../../contexts/app-state', () => ({}));

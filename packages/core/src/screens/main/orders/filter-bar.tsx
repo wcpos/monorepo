@@ -9,20 +9,20 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
-import { useT } from '../../../../contexts/translations';
-import { useStoreDay } from '../../../../hooks/use-store-day';
-import { forceRefreshFilterCustomer } from '../force-refresh-filter-customer';
-import { useStoreSession } from '../../../../contexts/app-state';
-import { type FiltersOf, useQueryState, useQueryStateActions } from '../../../../query';
-import { CashierPill } from '../../components/order/filter-bar/cashier-pill';
-import { RegisterPill } from '../../components/order/filter-bar/register-pill';
-import { CustomerPill } from '../../components/order/filter-bar/customer-pill';
-import { DateRangePill } from '../../components/order/filter-bar/date-range-pill';
-import { StatusPill } from '../../components/order/filter-bar/status-pill';
-import { StorePill } from '../../components/order/filter-bar/store-pill';
-import { useEngineRecordByWooId } from '../../hooks/use-engine-document';
-import { useGuestCustomer } from '../../hooks/use-guest-customer';
-import { storeListResource } from '../../hooks/store-list-resource';
+import { useT } from '../../../contexts/translations';
+import { useStoreDay } from '../../../hooks/use-store-day';
+import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
+import { useStoreSession } from '../../../contexts/app-state';
+import { type FiltersOf, useQueryState, useQueryStateActions } from '../../../query';
+import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import { RegisterPill } from '../components/order/filter-bar/register-pill';
+import { CustomerPill } from '../components/order/filter-bar/customer-pill';
+import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
+import { StatusPill } from '../components/order/filter-bar/status-pill';
+import { StorePill } from '../components/order/filter-bar/store-pill';
+import { useEngineRecordByWooId } from '../hooks/use-engine-document';
+import { useGuestCustomer } from '../hooks/use-guest-customer';
+import { storeListResource } from '../hooks/store-list-resource';
 
 export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
 	const { filters } = useQueryState<'orders'>();
