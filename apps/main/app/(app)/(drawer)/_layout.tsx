@@ -10,7 +10,7 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { DrawerContent as DrawerContentV2 } from '@wcpos/core/screens/main/components/drawer-content/rail';
+import { DrawerContent as DrawerRail } from '@wcpos/core/screens/main/components/drawer-content/rail';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import {
 	DrawerPanelVisibilityProvider,
@@ -98,7 +98,7 @@ function ThemedDrawer({
 			// (React Compiler: "Expected a constant size argument for each invocation of
 			// useMemoCache … 39 but 22"). As elements the type changes and React remounts.
 			drawerContent={(props) =>
-				screenSize === 'lg' ? <DrawerContentV2 {...props} /> : <DrawerContent {...props} />
+				screenSize === 'lg' ? <DrawerRail {...props} /> : <DrawerContent {...props} />
 			}
 		>
 			<Drawer.Screen
