@@ -68,7 +68,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 		});
 	});
 
-	describe('ex-tax discounts (prices include tax, already converted)', () => {
+	describe('ex-tax discounts (pricesIncludeTax unset)', () => {
 		it('calculates tax on an ex-tax discount for a single item at 10%', () => {
 			// Original tax-inclusive discount was $1, converted to ex-tax: $1/1.1 = $0.909091
 			// Tax on $0.909091 at 10% = $0.090909, rounded per-item to 2dp = $0.09
@@ -351,6 +351,30 @@ describe('calculateCouponDiscountTaxSplit', () => {
 				Math.round(parseFloat(result.discount) * 100) / 100 +
 					Math.round(parseFloat(result.discount_tax) * 100) / 100
 			).toBeCloseTo(2, 2);
+		});
+
+		it('matches WC output for fixed1limit3 with inclusive discounts', () => {
+			// The recorded WC server response above is discount "1.82", discount_tax "0.18".
+			// calc_inclusive_tax(1, 10%) = 1 − 1/1.1 = 0.090909 per item;
+			// wc_round_tax_total → 0.09, sum 0.18; discount = 2 − 0.18 = 1.82.
+			const perItem: PerItemDiscount[] = [
+				{ product_id: 66, discount: 1 },
+				{ product_id: 69, discount: 1 },
+			];
+			const lineItems = [
+				{ product_id: 66, tax_class: '' },
+				{ product_id: 69, tax_class: '' },
+			];
+			const rates = [{ id: 4, rate: '10', compound: true, order: 1, class: 'standard' }];
+
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, rates, {
+				pricesIncludeTax: true,
+				taxRoundAtSubtotal: false,
+				dp: 2,
+			});
+
+			expect(result.discount_tax).toBe('0.18');
+			expect(result.discount).toBe('1.82');
 		});
 	});
 });

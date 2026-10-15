@@ -181,11 +181,11 @@ describe('coupon integration: real order scenarios', () => {
 		// Lines store total_tax rounded per rate to 2dp (wc_round_tax_total, round-at-subtotal off) and WC's set_total rounds the order total to price decimals, so compare in cents (the #506 test does the same).
 		expect(Math.round((105 - grandTotal) * 100)).toBe(1000);
 
-		// Coupon line: discount + discount_tax ≈ $10 (tax-inclusive).
-		// Per-item tax rounding (matching WC's wc_round_tax_total) produces a
-		// ~0.009 gap here — WC itself has the same rounding artefact.
+		// WC_Abstract_Order::set_coupon_discount_amounts stores discount = amount − taxes
+		// on a prices-include-tax store, so discount + discount_tax is the inclusive $10
+		// exactly (#2356; the old 9.99091 was a client artefact).
 		const couponTotal = parseFloat(discount) + parseFloat(discount_tax);
-		expect(couponTotal).toBe(9.99091);
+		expect(couponTotal).toBe(10);
 
 		// Cart was $105 inc tax, minus $10 coupon = $95
 		expect(Math.round(grandTotal * 100)).toBe(9500);
