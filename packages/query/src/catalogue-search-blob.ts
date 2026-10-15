@@ -2,6 +2,7 @@ import get from 'lodash/get';
 import { asyncScheduler, ReplaySubject, throttleTime } from 'rxjs';
 
 import { foldSearchText } from '@wcpos/sync-core';
+import { findAllUncached } from '@wcpos/sync-engine';
 
 import { SEARCH_SCAN_RETHROTTLE_MS, type SearchableCollection } from './search-shared';
 
@@ -157,7 +158,7 @@ export function catalogueSearchBlobFor(
 		byFields.delete(fieldsKey);
 	};
 	const ready = (async () => {
-		const documents = await collection.find().exec();
+		const documents = await findAllUncached(collection);
 		if (disposed) return;
 		for (const document of documents) rows.set(document.primary, rowText(document));
 		for (const event of buffered) apply(event);
