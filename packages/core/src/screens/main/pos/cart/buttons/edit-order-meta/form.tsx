@@ -27,8 +27,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormCombobox,
@@ -95,7 +95,7 @@ export function EditOrderMetaForm({
 }) {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const pushDocument = usePushDocument();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -133,7 +133,7 @@ export function EditOrderMetaForm({
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
 		const written = !!(await localPatch({ document: order, data: patch }));
-		if (written && close) onOpenChange(false);
+		if (written && close) closeDialog();
 		return written;
 	}
 	async function handleSave(data: FormValues) {
@@ -162,7 +162,7 @@ export function EditOrderMetaForm({
 			patched = true;
 			await pushDocument(order);
 			cartLogger.success(t('pos_cart.order_sent'), { showToast: true });
-			onOpenChange(false);
+			closeDialog();
 			if (
 				!['pos-open', 'pos-partial', 'pending'].includes(patch.status) ||
 				cashier_id !== String(cashierID)

@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -59,7 +59,7 @@ interface Props {
 export function EditShippingLineForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateShippingLine } = useUpdateShippingLine();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
 
@@ -97,9 +97,9 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 					import('@wcpos/database').OrderDocument['shipping_lines']
 				>[number]['meta_data'],
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[updateShippingLine, uuid, onOpenChange]
+		[updateShippingLine, uuid, closeDialog]
 	);
 
 	/**

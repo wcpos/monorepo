@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -54,7 +54,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddShipping() {
 	const t = useT();
 	const { addShipping } = useAddShipping();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 
 	/**
 	 *
@@ -81,9 +81,9 @@ export function AddShipping() {
 				tax_status,
 				prices_include_tax: prices_include_tax ?? true,
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[addShipping, onOpenChange, t]
+		[addShipping, closeDialog, t]
 	);
 
 	/**

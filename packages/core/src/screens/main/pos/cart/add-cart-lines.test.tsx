@@ -13,13 +13,13 @@ import { AddShipping } from './add-shipping';
 const mockAddFee = jest.fn(() => Promise.resolve());
 const mockAddProduct = jest.fn(() => Promise.resolve());
 const mockAddShipping = jest.fn((_data?: Record<string, unknown>) => Promise.resolve());
-const mockOnOpenChange = jest.fn();
+const mockClose = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	DialogAction: ({
 		children,
 		disabled,
@@ -37,7 +37,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	useRootContext: () => ({ onOpenChange: mockOnOpenChange }),
+	useDialog: () => ({ close: mockClose }),
 }));
 
 jest.mock('@wcpos/components/form', () => ({
@@ -119,7 +119,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	it('prevents duplicate miscellaneous-product submissions while addProduct is pending', async () => {
@@ -139,7 +139,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	it('prevents duplicate shipping submissions while addShipping is pending', async () => {
@@ -159,7 +159,7 @@ describe('cart line dialogs', () => {
 			write.resolve();
 			await write.promise;
 		});
-		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(mockClose).toHaveBeenCalledWith());
 	});
 
 	/**

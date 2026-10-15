@@ -50,8 +50,8 @@ jest.mock('@wcpos/components/form', () => ({
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	useRootContext: () => ({ onOpenChange: mockClose }),
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	useDialog: () => ({ close: mockClose }),
 	DialogBody: mockWrap,
 	DialogFooter: mockWrap,
 	DialogClose: mockButton,
@@ -171,7 +171,7 @@ it('saves notes locally without confirmation or push when identity is unchanged'
 	});
 	expect(mockPush).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('order-meta-send-confirm')).toBeNull();
-	expect(mockClose).toHaveBeenCalledWith(false);
+	expect(mockClose).toHaveBeenCalledWith();
 });
 it('confirms before writing, keeps values on cancel, then patches, pushes and leaves', async () => {
 	await save('completed');

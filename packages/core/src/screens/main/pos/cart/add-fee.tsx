@@ -11,8 +11,8 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import {
 	Form,
 	FormField,
@@ -53,7 +53,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddFee() {
 	const t = useT();
 	const { addFee } = useAddFee();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 
 	/**
 	 *
@@ -89,9 +89,9 @@ export function AddFee() {
 				prices_include_tax: prices_include_tax ?? true,
 				meta_data: [],
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[addFee, onOpenChange, t]
+		[addFee, closeDialog, t]
 	);
 
 	/**
