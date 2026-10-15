@@ -11,6 +11,12 @@ const mockHead = jest.fn();
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	useHttpClient: () => ({ head: mockHead }),
+	PREFLIGHT_BLOCK: {
+		ASLEEP: 'preflight-asleep',
+		OFFLINE: 'preflight-offline',
+		AUTH_REQUIRED: 'preflight-auth-required',
+		RECOVERING: 'preflight-recovering',
+	},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ debug: jest.fn(), error: jest.fn() }),
@@ -25,6 +31,13 @@ jest.mock('../../../contexts/translations', () => {
 /** Axios reports a request that exceeded `timeout` with code ECONNABORTED. */
 const timeoutError = () =>
 	Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' });
+
+/**
+ * The shape `useHttpClient` throws when its pre-flight check rejects a request:
+ * a bare Error with no `response`, because nothing was ever sent.
+ */
+const preFlightBlock = (blockCode: string, reason: string) =>
+	Object.assign(new Error(reason), { isPreFlightBlocked: true, blockCode });
 
 describe('useUrlDiscovery', () => {
 	beforeEach(() => {
@@ -42,14 +55,16 @@ describe('useUrlDiscovery', () => {
 			'https://example.com/wp-json/'
 		);
 
-		// EXACT options, quietErrors included: a probe asking "is this a
-		// WordPress site?" must not log "no" as an application error. Dropping
-		// the flag put a typo'd store URL in the error log under a CLIENT999
+		// EXACT options, both flags included. quietErrors: a probe asking "is
+		// this a WordPress site?" must not log "no" as an application error —
+		// dropping it put a typo'd store URL in the error log under a CLIENT999
 		// fallback and raised a dev-client redbox over the connect screen
-		// (E2E flow 01, iOS, 2026-08-29).
+		// (E2E flow 01, iOS, 2026-08-29). unauthenticated: the probe sends no
+		// credentials, so a dead session's authFailed latch must not block it.
 		expect(mockHead).toHaveBeenCalledWith('https://example.com', {
 			timeout: 10_000,
 			quietErrors: true,
+			unauthenticated: true,
 		});
 	});
 
@@ -67,6 +82,7 @@ describe('useUrlDiscovery', () => {
 		expect(mockHead).toHaveBeenNthCalledWith(2, 'https://example.com/wp-json/', {
 			timeout: 10_000,
 			quietErrors: true,
+			unauthenticated: true,
 		});
 	});
 
@@ -141,6 +157,48 @@ describe('useUrlDiscovery', () => {
 		const { result } = renderHook(() => useUrlDiscovery());
 		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
 			'Site does not seem to be a WordPress site'
+		);
+	});
+	/**
+	 * The 2026-08-25 desktop failure (main.log 17:18): a saved store whose refresh
+	 * token had expired latched `authFailed` process-wide during boot. Every store
+	 * the cashier then typed on the Connect screen — demo.wcpos.com, dev-pro,
+	 * dev-free alike — came back "Site does not seem to be a WordPress site", with
+	 * no request in the transport log because none was ever sent.
+	 */
+	it('marks the discovery probes unauthenticated so a dead session cannot block them', async () => {
+		mockHead.mockResolvedValue({
+			status: 200,
+			headers: { link: '<https://example.com/wp-json/>; rel="https://api.w.org/"' },
+		});
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await result.current.discoverWpApiUrl('https://example.com');
+
+		expect(mockHead).toHaveBeenCalledWith('https://example.com', {
+			timeout: 10_000,
+			quietErrors: true,
+			unauthenticated: true,
+		});
+	});
+
+	it('does not blame the site when the request never left the device', async () => {
+		mockHead.mockRejectedValue(
+			preFlightBlock('preflight-auth-required', 'Please log in to continue')
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
+			"The app couldn't send the request — please try again"
+		);
+	});
+
+	it('reports the offline block as a connection problem, not a bad site', async () => {
+		mockHead.mockRejectedValue(preFlightBlock('preflight-offline', 'No internet connection'));
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
+			'No internet connection'
 		);
 	});
 });

@@ -4,6 +4,7 @@
 	"auth.authentication_configuration_not_found": "Authentication configuration not found",
 	"auth.bad_api_response": "Bad API response",
 	"auth.connect": "Connect",
+	"auth.could_not_send_the_request": "The app couldn't send the request — please try again",
 	"auth.discovering_wordpress_api": "Discovering WordPress API...",
 	"auth.enter_demo_store": "Enter Demo Store",
 	"auth.enter_the_url_of_your_woocommerce": "Enter the URL of your WooCommerce store",
