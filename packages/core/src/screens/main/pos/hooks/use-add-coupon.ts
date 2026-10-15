@@ -16,7 +16,7 @@ import {
 	enrichCategoriesWithAncestors,
 } from '@wcpos/order-math/internal';
 
-import { buildCategoryParents } from './coupon-helpers-engine';
+import { buildCategoryParents } from './use-coupon-context';
 import { useCouponRejectionMessage } from './coupon-rejection-message';
 import { validateCoupon } from './coupon-validation';
 import {

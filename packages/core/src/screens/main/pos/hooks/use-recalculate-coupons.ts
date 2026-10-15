@@ -8,7 +8,7 @@ import {
 } from '@wcpos/order-math/internal';
 
 import { quickDiscountCouponConfig, readQuickDiscountIntent } from './quick-discount';
-import { buildCategoryParents } from './coupon-helpers-engine';
+import { buildCategoryParents } from './use-coupon-context';
 import {
 	recalculateCoupons,
 	type RecalculateInput,
