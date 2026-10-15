@@ -103,7 +103,7 @@ jest.mock('@wcpos/components/error-boundary', () => {
 	};
 });
 jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
-jest.mock('../components/data-table/v2', () => ({
+jest.mock('../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
 		// The real handle source's reader: draws the deferred handle's rows, suspends on an
@@ -130,7 +130,7 @@ jest.mock('../components/data-table/v2', () => ({
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
 }));
-jest.mock('../components/data-table/v2/skeleton', () => ({
+jest.mock('../components/data-table/skeleton', () => ({
 	DataTableSkeleton: () => <div data-testid="skeleton-products" />,
 }));
 jest.mock('../components/ui-settings', () => ({
@@ -424,7 +424,7 @@ it('throws a failed read to the boundary, whose reset asks the handle again and 
 
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
-jest.mock('../components/data-table/v2/rows', () => ({
+jest.mock('../components/data-table/rows', () => ({
 	DataTableRow: ({ item }: { item: { original: { record: { uuid: string } } } }) => (
 		<div data-testid={`products-row-${item.original.record.uuid}`} />
 	),

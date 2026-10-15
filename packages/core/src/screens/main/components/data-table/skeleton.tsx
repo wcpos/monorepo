@@ -7,10 +7,10 @@ import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/compo
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
-import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
-import { DataTableHeader } from '../header';
-import { getColumnStyle } from '../column-style';
-import { TableSurface } from '../surface';
+import { UISettingID, useUISettings } from '../../contexts/ui-settings';
+import { DataTableHeader } from './header';
+import { getColumnStyle } from './column-style';
+import { TableSurface } from './surface';
 
 type Column = { key: string; hideLabel?: boolean; show?: boolean };
 

@@ -25,24 +25,24 @@ import {
 	useGuardedExtendLimit,
 	useQueryHandleFields,
 	useQuerySnapshot,
-} from '../../../../../query';
-import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
-import { RecordTextCell } from '../../record-text-cell';
-import { useT } from '../../../../../contexts/translations';
-import { DataTableHeader } from '../header';
+} from '../../../../query';
+import { UISettingID, useUISettings } from '../../contexts/ui-settings';
+import { RecordTextCell } from '../record-text-cell';
+import { useT } from '../../../../contexts/translations';
+import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
-import { ListFooterComponent as DefaultListFooterComponent } from '../list-footer';
+import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 import { getRowTestID, DataTableRow as RowView } from './rows';
 import { ResizeHead } from './resize';
 import { DataTableSkeletonRows } from './skeleton';
-import { getColumnStyle } from '../column-style';
-import { TableSurface } from '../surface';
+import { getColumnStyle } from './column-style';
+import { TableSurface } from './surface';
 
 import type { DataTableFooterProps } from './footer';
-import type { SortingChange } from '../sort-field';
-import type { CollectionKey as QueryCollectionKey } from '../../../../../query';
+import type { SortingChange } from './sort-field';
+import type { CollectionKey as QueryCollectionKey } from '../../../../query';
 import type { RowData, TableOptions } from '@tanstack/react-table';
-import type { ColumnDef, Header, Row, Table as TanStackTable } from '../../../../../table-types';
+import type { ColumnDef, Header, Row, Table as TanStackTable } from '../../../../table-types';
 
 const dataTableFeatures = tableFeatures({
 	columnVisibilityFeature,

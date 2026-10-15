@@ -53,7 +53,7 @@ const mockPatchUI = jest.fn();
 // translated default; the footer gets the table's own props (its `count` the LIVE handle's
 // loaded rows); an end-reached is a scroll and calls the `onEndReached` it was handed, which
 // replaces the extend behind its own guard; a header sort persists as the real one does.
-jest.mock('../../../../components/data-table/v2', () => ({
+jest.mock('../../../../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		// As the real handle source: a table mounted on an unanswered handle suspends.
 		const handle = props.handle as { value: { ready: boolean }; whenAnswered(): Promise<void> };

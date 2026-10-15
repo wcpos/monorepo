@@ -96,7 +96,7 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 }));
 // Every skeleton committed, by the pane or as a Suspense fallback.
 const mockSkeletonMounts = { value: 0 };
-jest.mock('../../../components/data-table/v2/skeleton', () => {
+jest.mock('../../../components/data-table/skeleton', () => {
 	const ReactActual = jest.requireActual('react') as typeof React;
 	return {
 		DataTableSkeleton: ({ rowCount }: { rowCount: number }) => {
@@ -109,7 +109,7 @@ jest.mock('../../../components/data-table/v2/skeleton', () => {
 });
 // The table is handed the handle itself; its footer, values.
 const mockTableProps: { value: Record<string, unknown> } = { value: {} };
-jest.mock('../../../components/data-table/v2', () => ({
+jest.mock('../../../components/data-table', () => ({
 	DataTable: (props: {
 		tableConfig: { data: typeof hits };
 		handle: unknown;
@@ -125,7 +125,7 @@ jest.mock('../../../components/data-table/v2', () => ({
 		);
 	},
 }));
-jest.mock('../../../components/data-table/v2/rows', () => ({
+jest.mock('../../../components/data-table/rows', () => ({
 	DataTableRow: ({ onPress, testID }: { onPress: () => void; testID: string }) => (
 		<button data-testid={testID} onClick={onPress} />
 	),

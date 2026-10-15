@@ -22,7 +22,7 @@ import { getColumnStyle } from '../../data-table/column-style';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
-import type { DataTableFeatures } from '../../data-table/v2';
+import type { DataTableFeatures } from '../../data-table';
 import type { Cell, Row, Table } from '../../../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };
