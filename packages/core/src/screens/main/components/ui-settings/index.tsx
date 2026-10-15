@@ -6,7 +6,6 @@ import * as z from 'zod';
 
 import {
 	Dialog,
-	DialogAction,
 	DialogBody,
 	DialogClose,
 	DialogContent,
@@ -14,6 +13,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/v2/dialog';
+import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -125,12 +125,9 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side = '
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose testID="ui-settings-close">{t('common.close')}</DialogClose>
-						<DialogAction
-							{...({ variant: 'destructive' } as Record<string, unknown>)}
-							onPress={handleButtonPress}
-						>
+						<Button variant="outline-error" onPress={handleButtonPress}>
 							{t('common.restore_default_settings')}
-						</DialogAction>
+						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

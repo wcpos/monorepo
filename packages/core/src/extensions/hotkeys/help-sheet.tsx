@@ -34,7 +34,7 @@ export function HelpSheet({
 	onOpenChange: (open: boolean) => void;
 	ctx: CommandContext;
 }) {
-	const side = usePanelSide('cart');
+	const side = usePanelSide('shell');
 	const t = useT();
 	const run = (id: CommandId) => {
 		onOpenChange(false);
