@@ -11,6 +11,7 @@ interface MockWebViewProps {
 
 let mockWebViewProps: MockWebViewProps = {};
 let mockReady = false;
+let mockDialogClose: (() => void) | undefined;
 const mockReset = jest.fn();
 const mockSend = jest.fn();
 const mockOnMessage = jest.fn();
@@ -24,14 +25,17 @@ jest.mock('@wcpos/components/webview', () => {
 		},
 	};
 });
-jest.mock('@wcpos/components/modal', () => {
+jest.mock('@wcpos/components/v2/dialog', () => {
 	const PassThrough = ({ children }: { children?: React.ReactNode }) => children;
 	return {
-		Modal: PassThrough,
-		ModalBody: PassThrough,
-		ModalContent: PassThrough,
-		ModalHeader: PassThrough,
-		ModalTitle: PassThrough,
+		Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
+			mockDialogClose = onClose;
+			return children;
+		},
+		DialogBody: PassThrough,
+		DialogContent: PassThrough,
+		DialogHeader: PassThrough,
+		DialogTitle: PassThrough,
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
@@ -99,6 +103,17 @@ describe('MiniAppHost readiness deadline', () => {
 		cleanup();
 		jest.clearAllTimers();
 		jest.useRealTimers();
+	});
+
+	it('notifies the mini-app once before dismissing with the cancelled result', () => {
+		const onClose = jest.fn();
+		const view = render(<MiniAppHost id="printer-wizard" onClose={onClose} />);
+		act(() => mockDialogClose?.());
+		expect(mockSend).toHaveBeenCalledWith('app.closing', { reason: 'user' });
+		expect(onClose).toHaveBeenCalledWith('cancelled');
+		expect(mockSend.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
+		view.unmount();
+		expect(mockSend).toHaveBeenCalledTimes(1);
 	});
 
 	it('restarts the 10 second handshake deadline on every document load', () => {
