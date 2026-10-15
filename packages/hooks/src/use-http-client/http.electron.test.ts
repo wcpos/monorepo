@@ -119,6 +119,17 @@ describe('http.electron cancellation hooks', () => {
 		expect(add).not.toHaveBeenCalled();
 	});
 
+	it('rejects a pre-cancelled CancelToken without sending the request IPC', async () => {
+		const source = CancelToken.source();
+		source.cancel();
+		invoke.mockResolvedValue(success);
+
+		const err = await http.request({ url: 'x', cancelToken: source.token }).catch((e) => e);
+
+		expect(isCancel(err)).toBe(true);
+		expect(invoke).not.toHaveBeenCalled();
+	});
+
 	it('unsubscribes from a CancelToken on settle and still cancels through it', async () => {
 		const done = CancelToken.source();
 		const subscribe = jest.spyOn(done.token, 'subscribe');
