@@ -1,3 +1,4 @@
+import { isLineItemOnSale, recalculateCoupons } from './recalculate';
 import { couponValidationContext, resolveCouponReplay } from './context';
 
 import type { CouponContext } from '../../types';
@@ -63,3 +64,66 @@ it.each([0, null, undefined])(
 		).toBeNull();
 	}
 );
+
+it('non-finite POS prices are not on sale in validation or replay', () => {
+	for (const [price, regular_price] of [
+		['18', 'Infinity'],
+		['-Infinity', '20'],
+		['NaN', '20'],
+		['18', 'NaN'],
+	]) {
+		const line = {
+			product_id: 82,
+			quantity: 1,
+			subtotal: '18',
+			total: '18',
+			meta_data: [
+				{ key: '_woocommerce_pos_data', value: JSON.stringify({ price, regular_price }) },
+			],
+		};
+		expect(isLineItemOnSale(line)).toBe(false);
+		expect(
+			couponValidationContext({ lineItems: [line], appliedCouponLines: [], coupons }).lineItems[0]
+				.on_sale
+		).toBe(false);
+	}
+	const result = recalculateCoupons({
+		lineItems: [
+			{
+				product_id: 82,
+				quantity: 1,
+				subtotal: '18',
+				total: '18',
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ price: '18', regular_price: 'Infinity' }),
+					},
+				],
+			},
+		],
+		couponLines: [{ code: 'sale-excluded' }],
+		couponConfigs: new Map([
+			[
+				'sale-excluded',
+				{
+					discount_type: 'percent',
+					amount: '10',
+					exclude_sale_items: true,
+					limit_usage_to_x_items: null,
+					product_ids: [],
+					excluded_product_ids: [],
+					product_categories: [],
+					excluded_product_categories: [],
+				},
+			],
+		]),
+		pricesIncludeTax: false,
+		calcDiscountsSequentially: false,
+		taxRates: [],
+		productCategories: new Map(),
+		taxRoundAtSubtotal: false,
+		dp: 2,
+	});
+	expect(result.couponLines[0].discount).toBe('1.8');
+});

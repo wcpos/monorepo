@@ -163,7 +163,7 @@ export function isLineItemOnSale(item: LineItem | null | undefined): boolean {
 	if (posData?.price == null || posData.regular_price == null) return false;
 	const price = parseFloat(String(posData.price));
 	const regularPrice = parseFloat(String(posData.regular_price));
-	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	if (!Number.isFinite(price) || !Number.isFinite(regularPrice) || regularPrice <= 0) return false;
 	return price < regularPrice;
 }
 
