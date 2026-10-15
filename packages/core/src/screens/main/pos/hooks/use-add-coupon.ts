@@ -2,29 +2,13 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import {
-	isGuestCustomer,
-	type MetaDataEntry,
-	MISC_PRODUCT_ID,
-	wooMetaCarrier,
-} from '@wcpos/sync-core';
-import { useQueryRuntime } from '@wcpos/query';
+import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import {
-	type CouponLineItem,
-	type CouponRejection,
-	enrichCategoriesWithAncestors,
-} from '@wcpos/order-math/internal';
+import { type CouponRejection, couponValidationContext } from '@wcpos/order-math/internal';
 
-import { buildCategoryParents } from './use-coupon-context';
+import { useCouponContext } from './use-coupon-context';
 import { useCouponRejectionMessage } from './coupon-rejection-message';
 import { validateCoupon } from './coupon-validation';
-import {
-	readEngineCategories,
-	readEngineCoupons,
-	readEngineProductsByWooId,
-} from './engine-coupon-data';
-import { readQuickDiscountIntent } from './quick-discount';
 import { reportCartFailure } from './cart-failure';
 import {
 	applyCouponLine,
@@ -34,7 +18,6 @@ import {
 } from './coupon-line-actions';
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
-import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -52,7 +35,7 @@ export const useAddCoupon = () => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
-	const runtime = useQueryRuntime();
+	const { getCouponContext } = useCouponContext();
 	const { recalculate } = useRecalculateCoupons();
 	const { ctx, actor } = useActionContext();
 	const couponRejectionMessage = useCouponRejectionMessage();
@@ -89,115 +72,37 @@ export const useAddCoupon = () => {
 				return { success: false, error: couponRejectionMessage(rejection) };
 			};
 			try {
-				// 1. Preserve the legacy selector semantics: normalize only the input value,
-				// then match payload.code exactly against the resident Tier-0 coupon scan.
-				const coupons = await readEngineCoupons(runtime);
-				const coupon = coupons.find(
-					(record) => record.payload.code === couponCode.toLowerCase().trim()
-				);
-
-				if (!coupon) {
-					return {
-						success: false,
-						error: t('pos_cart.coupon_not_found'),
-					};
-				}
-
 				const order = currentOrderRecord.getLatest();
 				// The cart these rules are checked against; the writer refuses if it moved before the write.
 				const validated = cartSnapshotOf(order.payload);
 				const lineItems = (order.payload.line_items || []).filter(
-					(item: any) => item.product_id !== null
+					(item) => item.product_id !== null
 				);
 				const appliedCouponLines = (order.payload.coupon_lines || []).filter(
-					(cl: any): cl is any & { code: string } => cl.code != null
+					(cl): cl is typeof cl & { code: string } => cl.code != null
 				);
-				const appliedCoupons = appliedCouponLines.map((cl: any) => cl.code);
-
-				// 2. Look up applied coupons that have individual_use for reverse check
-				const appliedCouponsWithIndividualUse: string[] = [];
-				for (const cl of appliedCouponLines) {
-					if (readQuickDiscountIntent(cl)) continue;
-					const appliedCoupon = coupons.find((record) => record.payload.code === cl.code);
-					if (appliedCoupon?.payload.individual_use && cl.code) {
-						appliedCouponsWithIndividualUse.push(cl.code);
-					}
+				const coupons = await getCouponContext(lineItems, appliedCouponLines);
+				const coupon = coupons.coupons.get(couponCode.toLowerCase().trim());
+				if (!coupon) {
+					return { success: false, error: t('pos_cart.coupon_not_found') };
 				}
-
-				// 3. Look up products for category/on_sale info
-				const productIds = lineItems
-					.map((item: any) => item.product_id)
-					.filter(
-						(productId): productId is number => productId != null && productId !== MISC_PRODUCT_ID
-					);
-				const products =
-					productIds.length > 0 ? await readEngineProductsByWooId(runtime, productIds) : [];
-				const productMap = new Map(products.map((p: any) => [p.id, p]));
-
-				// Build ancestor-enriched category map for coupon restriction matching.
-				// WC's wc_get_product_cat_ids() includes parent categories.
-				let productCategoriesMap = new Map<number, { id: number }[]>();
-				for (const p of products) {
-					if (p.id != null) {
-						productCategoriesMap.set(p.id as number, (p.categories || []) as { id: number }[]);
-					}
-				}
-				const categories = await readEngineCategories(runtime);
-				productCategoriesMap = enrichCategoriesWithAncestors(
-					productCategoriesMap,
-					buildCategoryParents(categories)
+				const validation = validateCoupon(
+					coupon,
+					couponValidationContext({
+						lineItems,
+						appliedCouponLines,
+						billing: order.payload.billing,
+						customer_id: order.payload.customer_id,
+						coupons,
+					})
 				);
-
-				// 4. Build validation context
-				// Use POS data to determine on_sale — this matches recalculateCoupons'
-				// isLineItemOnSale() so validation and replay agree on sale state.
-				const couponLineItems: CouponLineItem[] = lineItems.map((item: any) => {
-					const product = productMap.get(item.product_id);
-					const qty = item.quantity || 1;
-					const posData = parsePosData(item);
-					const posPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
-					const posRegular =
-						posData?.regular_price != null ? parseFloat(String(posData.regular_price)) : NaN;
-					const onSale =
-						Number.isFinite(posPrice) && Number.isFinite(posRegular) && posRegular > 0
-							? posPrice < posRegular
-							: false;
-					return {
-						product_id: item.product_id,
-						quantity: qty,
-						price: parseFloat(item.total || '0') / qty,
-						subtotal: item.subtotal || '0',
-						total: item.total || '0',
-						categories: productCategoriesMap.get(item.product_id) || product?.categories || [],
-						on_sale: onSale,
-					};
-				});
-
-				const cartSubtotal = lineItems.reduce(
-					(sum: number, item: any) => sum + parseFloat(item.subtotal || '0'),
-					0
-				);
-
-				const validation = validateCoupon(coupon.payload, {
-					lineItems: couponLineItems,
-					appliedCoupons,
-					appliedCouponsWithIndividualUse,
-					cartSubtotal,
-					customerEmail: order.payload.billing?.email || '',
-					// customer_id 0 = guest: WC records guest coupon usage by email, so guests
-					// must map to null here to trigger the email-based used_by check
-					customerId:
-						order.payload.customer_id == null || isGuestCustomer(order.payload.customer_id)
-							? null
-							: order.payload.customer_id,
-				});
 
 				// No fallback string needed any more: the result is a discriminated union,
 				// so an invalid one always carries its rejection.
 				if (!validation.valid) return rejectCoupon(validation.rejection);
 
 				// 5. Create new coupon line and recalculate all coupons from scratch
-				const couponData = coupon.payload;
+				const couponData = coupon;
 
 				const newCouponLineData = {
 					code: couponData.code,
@@ -233,7 +138,7 @@ export const useAddCoupon = () => {
 				}
 
 				const appliedCouponLine = outcome.couponLines.find(
-					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
+					(cl) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied'), {
 					context: {
@@ -257,7 +162,7 @@ export const useAddCoupon = () => {
 			}
 		},
 		[
-			runtime,
+			getCouponContext,
 			currentOrderRecord,
 			localPatch,
 			t,

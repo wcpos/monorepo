@@ -18,7 +18,7 @@ function isDiscountType(value: unknown): value is CouponInput['discount_type'] {
 }
 
 /** Build settle's raw category_id -> parent_id map from engine-backed adapter proxies. */
-export function buildCategoryParents(
+function buildCategoryParents(
 	categoryDocuments: EngineRecord<'categories'>[]
 ): Map<number, number> {
 	const categoryParentMap = new Map<number, number>();

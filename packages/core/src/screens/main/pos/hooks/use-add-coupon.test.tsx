@@ -180,7 +180,10 @@ function couponPayload(
 	};
 }
 
-function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
+function mockEngineData(
+	coupons: ReturnType<typeof engineDocument>[],
+	categories: ReturnType<typeof engineDocument>[] = []
+) {
 	const products = [
 		engineDocument({
 			uuid: 'product-82',
@@ -194,7 +197,7 @@ function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
 			collections: {
 				coupons: { find: jest.fn(() => ({ exec: async () => coupons })) },
 				products: { find: jest.fn(() => ({ exec: async () => products })) },
-				categories: { find: jest.fn(() => ({ exec: async () => [] })) },
+				categories: { find: jest.fn(() => ({ exec: async () => categories })) },
 			},
 		},
 	});
@@ -219,6 +222,79 @@ describe('useAddCoupon engine reads', () => {
 				payload: couponPayload('solo', true),
 			}),
 		]);
+	});
+
+	it('rejects when an applied mixed-case code is individual_use', async () => {
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [{ ...baseOrderSnapshot.coupon_lines[0], code: 'SoLo' }],
+		};
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: "SoLo is already on the order, and it can't be combined with other coupons.",
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('validates a parent-category coupon against a child-category product', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData(
+			[
+				engineDocument({
+					uuid: 'coupon-parent',
+					remoteId: '3',
+					payload: couponPayload('parent', false, { product_categories: [16] }),
+				}),
+			],
+			[engineDocument({ uuid: 'category-child', remoteId: '17', payload: { id: 17, parent: 16 } })]
+		);
+		recalculate.mockResolvedValue({
+			couponLines: [{ code: 'parent', discount: '1.8' }],
+			lineItems: orderSnapshot.line_items,
+		});
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('parent')).resolves.toEqual({ success: true });
+		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('matches a mixed-case stored candidate code', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData([
+			engineDocument({
+				uuid: 'coupon-bonus',
+				remoteId: '1',
+				payload: couponPayload('BoNuS', false),
+			}),
+		]);
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('  BONUS ')).resolves.toEqual({ success: true });
+	});
+
+	it('returns not found for an unknown discount_type without dispatching', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		mockEngineData([
+			engineDocument({
+				uuid: 'coupon-broken',
+				remoteId: '1',
+				payload: couponPayload('broken', false, { discount_type: 'unknown' }),
+			}),
+		]);
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('broken')).resolves.toEqual({
+			success: false,
+			error: 'Coupon not found',
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('does not inherit individual_use from a catalog collision with a virtual line', async () => {
