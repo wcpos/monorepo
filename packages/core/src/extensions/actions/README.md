@@ -29,11 +29,11 @@ unrelated queued writes.
 | Event                    | Raised by           | Rewritable keys                                                | Can refuse |
 | ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
-| `cart.line.update`       | `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` (`type` says which list) | `changes` | yes |
+| `cart.line.update`       | `useUpdateCartLine` (one writer; `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` delegate; `type` says which list) | `changes` | yes |
 | `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
 | `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |
 | `cart.coupon.remove`     | `useRemoveCoupon`, through `removeCouponLine` | none | yes |
-| `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit) | `billing`, `shipping`, `taxIds` | yes |
+| `cart.customer.set`      | `useSetCartCustomer` (customer picker, new-customer form, address edit); `new-customer-link-bridge.tsx` (`source: 'system'`, writes only `customer_id`; LEDGER 29) | `billing`, `shipping`, `taxIds` | yes |
 | `cart.order.void`        | `VoidButton`, through `voidOrder` (`cart/void-order.ts`); guard `payments.gate`, after-hook `audit.order-voided` | none | yes |
 | `checkout.complete`      | `completeSale`      | none                                                           | **no**     |
 | `checkout.tender.commit` | `takeTender`, `commitGatewaySale`; extension `cash.rounding`; guard `conditions.gate` | `amountMinor`, `balanceMinor`, `roundingMinor`, `registerId`, `sessionId` | yes        |

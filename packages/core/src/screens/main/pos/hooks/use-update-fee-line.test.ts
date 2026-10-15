@@ -70,6 +70,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => mockOrder }),
 }));
 
 const mockActionLog = jest.fn();
