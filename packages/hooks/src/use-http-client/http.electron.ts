@@ -164,8 +164,9 @@ const setupCancellation = (
 	signal?: AbortSignal | null,
 	cancelToken?: any
 ): { error: CanceledError<any> } | { cleanup: () => void } => {
-	// Handle pre-aborted signal
-	if (signal?.aborted) {
+	// Handle pre-aborted signal, or a CancelToken already cancelled: subscribe() would call the
+	// listener synchronously and send the cancel IPC before the request IPC, which then runs.
+	if (signal?.aborted || cancelToken?.reason) {
 		return { error: new CanceledError<any>('canceled') };
 	}
 
