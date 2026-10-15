@@ -5,20 +5,21 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import { enqueueOrderMutation, type OrderMutationContext } from './order-mutation-queue';
+import { enqueueCartAction } from './enqueue-cart-action';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { useCartConfig } from './use-cart-config';
 import { extractLineItemData } from './utils';
 import {
 	type ActionContext,
+	type ActionRefusal,
 	dispatchAction,
-	isActionRefusal,
-	presentActionRefusal,
 } from '../../../../extensions/actions';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
+
+import type { OrderMutationContext } from './order-mutation-queue';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
@@ -160,14 +161,13 @@ export const useUpdateCartLine = () => {
 	);
 	const apply = React.useCallback(
 		async (
-			record: CurrentOrderRecord,
+			target: CurrentOrderRecord,
 			queue: OrderMutationContext,
 			type: EditableLineType,
 			uuid: string,
 			changes: Record<string, unknown> | number,
 			options?: UpdateCartLineOptions
 		) => {
-			const target = queue.order ?? record;
 			const order = target.getLatest();
 			const json = order.toMutableJSON().payload;
 			const line = json[type]?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
@@ -209,11 +209,7 @@ export const useUpdateCartLine = () => {
 				},
 				bottom: (e) => write(target, type, uuid, { ...e.payload.changes }),
 			});
-			if (isActionRefusal(result)) {
-				presentActionRefusal(ctx, result, { orderId: order.uuid, uuid });
-				return false;
-			}
-			return result as Awaited<ReturnType<typeof localPatch>> | undefined;
+			return result as Awaited<ReturnType<typeof localPatch>> | undefined | ActionRefusal;
 		},
 		[actor, ctx, write]
 	);
@@ -226,21 +222,25 @@ export const useUpdateCartLine = () => {
 		) => {
 			const record = getCurrentOrderRecord();
 			if (!record.uuid) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(record.uuid, (queue) =>
-				apply(record, queue, type, uuid, { ...changes }, options)
+			return enqueueCartAction(
+				record,
+				(target, queue) => apply(target, queue, type, uuid, { ...changes }, options),
+				{ ctx, context: { orderId: record.uuid, uuid } }
 			);
 		},
-		[apply, getCurrentOrderRecord]
+		[apply, ctx, getCurrentOrderRecord]
 	);
 	const incrementLineItem = React.useCallback(
 		async (uuid: string, by: number) => {
 			const record = getCurrentOrderRecord();
 			if (!record.uuid) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(record.uuid, (queue) =>
-				apply(record, queue, 'line_items', uuid, by)
+			return enqueueCartAction(
+				record,
+				(target, queue) => apply(target, queue, 'line_items', uuid, by),
+				{ ctx, context: { orderId: record.uuid, uuid } }
 			);
 		},
-		[apply, getCurrentOrderRecord]
+		[apply, ctx, getCurrentOrderRecord]
 	);
 	return { updateCartLine, incrementLineItem };
 };

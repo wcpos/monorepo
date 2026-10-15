@@ -2,15 +2,12 @@ import * as React from 'react';
 
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { enqueueCartAction } from './enqueue-cart-action';
 import { useActionContext } from './use-action-context';
-import {
-	dispatchAction,
-	isActionRefusal,
-	presentActionRefusal,
-} from '../../../../extensions/actions';
+import { dispatchAction } from '../../../../extensions/actions';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
+import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type Plain = Record<string, unknown>;
@@ -41,10 +38,7 @@ export const useSetCartCustomer = () => {
 
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) => {
-				// A first add queued ahead turns the temporary order into a saved one and leaves the
-				// saved record on the slot; that is the order this write lands on.
-				const target = queue.order ?? order;
+			const run = (target: CurrentOrderRecord, queue: OrderMutationContext) => {
 				// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
 				// customer this write keeps, not the one the form last rendered.
 				const current = target.getLatest().payload.customer_id ?? null;
@@ -77,15 +71,11 @@ export const useSetCartCustomer = () => {
 							},
 						}),
 				});
-			});
-			if (isActionRefusal(outcome)) {
-				presentActionRefusal(ctx, outcome, {
-					orderId: order.uuid,
-					customerId: fields.customerId ?? null,
-				});
-				return false;
-			}
-			return outcome as Awaited<ReturnType<typeof localPatch>>;
+			};
+			return (await enqueueCartAction(order, run, {
+				ctx,
+				context: { orderId: order.uuid, customerId: fields.customerId ?? null },
+			})) as Awaited<ReturnType<typeof localPatch>> | false;
 		},
 		[localPatch, ctx, actor]
 	);

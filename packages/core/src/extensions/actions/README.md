@@ -190,6 +190,7 @@ queue's `dispatchToken` and throws without one. The queue serialises an order's 
 rewrite is always applied against an unchanged target. Tender commit also runs inside the order's
 mutation queue: cart edits wait until the manual leg finishes or the terminal leg is handed
 to its service. No new lock is added.
+Cart callers enter through `enqueueCartAction` (`pos/hooks/enqueue-cart-action.ts`): it opens the queue entry, hands the callback the live target and the queue context, and presents a refusal (or returns it unpresented in `'caller'` mode).
 
 ## Do not
 
