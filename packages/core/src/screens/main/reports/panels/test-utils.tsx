@@ -10,7 +10,7 @@ import type * as Context from '../context';
 
 // Native portal/animation primitives are not transformed by this Jest preset; keep shell state real.
 jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
-jest.mock('@wcpos/components/dialog', () => {
+jest.mock('@wcpos/components/v2/dialog', () => {
 	const Close = React.createContext(() => {});
 	return {
 		DialogTitle: ({ children }: React.PropsWithChildren) => <div role="heading">{children}</div>,

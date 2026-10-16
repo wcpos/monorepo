@@ -8,7 +8,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import type { EngineRecord } from '@wcpos/query';
 
 import { EmailForm } from './email';
@@ -44,7 +44,7 @@ export function ReceiptActions({
 					<DialogTrigger asChild>
 						<Action testID="receipt-email-button">{t('receipt.email_receipt')}</Action>
 					</DialogTrigger>
-					<DialogContent>
+					<DialogContent closeLabel={t('common.close')}>
 						<DialogHeader>
 							<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 						</DialogHeader>

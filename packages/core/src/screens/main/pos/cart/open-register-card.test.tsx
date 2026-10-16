@@ -96,7 +96,7 @@ it('prefills default, selects last count, shows only differing variance, and ope
 	);
 });
 
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: () => null,
 	DialogContent: () => null,
 	DialogTitle: () => null,
@@ -124,8 +124,6 @@ it('uses a last count that arrives after the local query, without replacing type
 	view.rerender(<OpenRegisterCard />);
 	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
 });
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));
 
 it('opens the last closure panel from the fold and omits it without a closure', () => {
 	const onLastClosure = jest.fn();

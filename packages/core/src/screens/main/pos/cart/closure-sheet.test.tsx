@@ -86,7 +86,7 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: jest.requireActual('react-native').View,
@@ -190,5 +190,3 @@ it('updates the title to the server number once acknowledged', () => {
 	);
 	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

@@ -60,7 +60,7 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -230,5 +230,3 @@ it.each([
 	render(<RegisterCount onClosed={jest.fn()} />);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

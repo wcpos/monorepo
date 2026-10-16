@@ -12,7 +12,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { Icon, type IconName } from '@wcpos/components/icon';
 import { OptionSelect, type SelectSingleRootProps } from '@wcpos/components/select';
@@ -564,7 +564,7 @@ export function PrinterSetupDialog({
 	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="xl">
+			<DialogContent side="right" size="xl" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>{t('settings.add_printer')}</DialogTitle>
 				</DialogHeader>

@@ -108,7 +108,12 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
 const dialogContent = jest.fn();
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	useDialog: () => ({ open: true, close: () => {} }),
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: (
@@ -119,22 +124,6 @@ jest.mock('@wcpos/components/dialog', () => ({
 	},
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
-// `movement-sheet` renders on the v2 dialog (register switch, roadmap#388): the same doubles,
-// plus the v2-only parts as pass-throughs, so its ESM primitive never loads here.
-jest.mock('@wcpos/components/v2/dialog', () => {
-	const React = jest.requireActual('react');
-	const old = jest.requireMock('@wcpos/components/dialog') as Record<string, unknown>;
-	const passthrough = ({ children }: { children?: React.ReactNode }) =>
-		React.createElement(React.Fragment, null, children);
-	return {
-		...old,
-		DialogHeader: old.DialogHeader ?? passthrough,
-		DialogBody: old.DialogBody ?? passthrough,
-		DialogFooter: old.DialogFooter ?? passthrough,
-		DialogClose: old.DialogClose ?? passthrough,
-		useDialog: old.useDialog ?? (() => ({ open: true, close: () => {} })),
-	};
-});
 const post = jest.fn(),
 	patch = jest.fn(async () => undefined),
 	closeSession = jest.fn(async () => undefined);

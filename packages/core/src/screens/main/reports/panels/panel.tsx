@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import type { WPCredentialsDocument } from '@wcpos/database';
 
@@ -379,9 +379,9 @@ export function DetailPanel() {
 						? { display: 'contents' }
 						: { width: panelWidth, maxWidth: '100%', height: '100%' }
 				}
+				closeLabel={t('common.close')}
 				closeButtonProps={{
 					testID: 'detail-panel-close',
-					accessibilityLabel: t('common.close'),
 					className: 'h-12 w-12 items-center justify-center',
 				}}
 			>

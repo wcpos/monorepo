@@ -38,14 +38,6 @@ jest.mock('react-hook-form', () => ({
 	useForm: () => ({ reset: mockReset }),
 }));
 
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
@@ -273,7 +265,9 @@ it('the controlled dialog opens a panel that is not hidden', () => {
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 // The v2 root has no wrapper: a single-child root is `asChild`, so its own props land on the panel.
 jest.mock('@wcpos/components/v2/dialog', () => ({
-	...jest.requireMock('@wcpos/components/dialog'),
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	Dialog: ({
 		children,
 		open: _open,

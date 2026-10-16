@@ -7,7 +7,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -45,7 +45,7 @@ export function PrinterDialogLayout({
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="2xl">
+			<DialogContent side="right" size="2xl" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>
 						{isEditing ? t('settings.edit_printer') : t('settings.add_printer')}
