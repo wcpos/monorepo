@@ -107,6 +107,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 			presentation={presentation}
 			open={open}
 			pinned={route}
+			fill={props.size === 'full' && presentation === 'center'}
 			testID={testID}
 		>
 			<DialogPanel testID={testID} {...props} />
@@ -139,7 +140,7 @@ function DialogPanel(allProps: DialogContentProps) {
 		testID: closeButtonTestID,
 		...closeProps
 	} = closeButtonProps ?? {};
-	const { presentation, deferAutoFocus, onPanelNode } = useOverlay();
+	const { presentation, deferAutoFocus, onPanelNode, fill } = useOverlay();
 	const composedRef = useComposedRefs(
 		ref,
 		onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>
@@ -172,6 +173,7 @@ function DialogPanel(allProps: DialogContentProps) {
 				'bg-card border-border web:cursor-default z-60 max-h-full max-w-full gap-4 py-4',
 				byPresentation[presentation as DialogPresentation],
 				sizeClass,
+				fill && 'h-full rounded-none border-0 py-2',
 				open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
 				className
 			)}
@@ -182,7 +184,7 @@ function DialogPanel(allProps: DialogContentProps) {
 			{...props}
 		>
 			{children}
-			<View className="absolute top-1 right-1">
+			<View className={cn('absolute right-1', fill ? 'top-0' : 'top-1')}>
 				<DialogClose asChild>
 					<IconButton
 						name="xmark"

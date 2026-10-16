@@ -299,3 +299,51 @@ it('closes a sheet on the hardware back and the accessibility escape when it own
 	expect(add).not.toHaveBeenCalled();
 	add.mockRestore();
 });
+
+it('paints the insets in card colour and fills its wrappers for a fill shell', () => {
+	render(
+		<OverlayShell presentation="center" open fill Scrim={Pressable}>
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.className).toBe('bg-card');
+	expect(mockScrimProps.at(-1)?.className).not.toContain('bg-scrim');
+	expect(mockScrimProps.at(-1)?.style).toBe(StyleSheet.absoluteFill);
+	expect(mockViews[0].className?.split(' ')).toEqual(
+		expect.arrayContaining(['items-stretch', 'justify-start', 'p-0'])
+	);
+	expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
+		paddingTop: 20,
+		paddingBottom: 34,
+		paddingLeft: 12,
+		paddingRight: 12,
+	});
+	const keyboard = mockViews.find((props) => 'behavior' in props);
+	expect(keyboard?.className?.split(' ')).toEqual(expect.arrayContaining(['h-full', 'w-full']));
+	expect(mockAnimatedViews.at(-1)?.className?.split(' ')).toEqual(
+		expect.arrayContaining(['h-full', 'w-full'])
+	);
+});
+
+it('keeps the scrim colour for a non-fill centre shell', () => {
+	render(
+		<OverlayShell presentation="center" open Scrim={Pressable}>
+			<View />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.className).toBe('bg-scrim');
+});
+
+it.each([true, false, undefined])('exposes the native fill decision for fill=%s', (fill) => {
+	const seen: unknown[] = [];
+	function FillProbe() {
+		seen.push(useOverlay());
+		return null;
+	}
+	render(
+		<OverlayShell presentation="center" open fill={fill} Scrim={Pressable}>
+			<FillProbe />
+		</OverlayShell>
+	);
+	expect(seen.at(-1)).toMatchObject({ fill: fill === true });
+});
