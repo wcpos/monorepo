@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 import { useObservableState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 

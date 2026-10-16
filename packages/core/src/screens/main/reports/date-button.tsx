@@ -2,7 +2,9 @@ import * as React from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { format, parseISO, subDays } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
+import { subDays } from 'date-fns/subDays';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';

@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { useCSSVariable } from 'uniwind';
 

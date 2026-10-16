@@ -12,15 +12,37 @@ jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 jest.mock('../storage/sqlite-root', () => ({
 	NATIVE_SQLITE_ROOT: { uri: 'document-dir/wcpos-sqlite' },
 }));
-jest.mock('rxdb/plugins/validate-z-schema', () => ({
-	wrappedValidateZSchemaStorage: ({ storage }: { storage: unknown }) => storage,
-}));
+jest.mock('rxdb/plugins/validate-z-schema', () => {
+	if (!__DEV__) throw new Error('Schema validation loaded in production');
+	return { wrappedValidateZSchemaStorage: ({ storage }: { storage: unknown }) => storage };
+});
 
 const platforms = [
 	['web', './index.web'],
 	['electron', './index.electron'],
 	['native', './index'],
 ] as const;
+
+it.each([...platforms, ['ephemeral', '../ephemeral']] as const)(
+	'%s does not load schema validation in production',
+	async (_platform, modulePath) => {
+		jest.resetModules();
+		const runtime = globalThis as unknown as { __DEV__: boolean; window?: unknown };
+		const windowBefore = runtime.window;
+		jest.replaceProperty(runtime, '__DEV__', false);
+		runtime.window = { ipcRenderer: { invoke: jest.fn() } };
+		try {
+			const adapter = await import(modulePath);
+			expect((adapter.defaultConfig ?? adapter.ephemeralStorageConfig).storage).toBe(
+				adapter.storage
+			);
+		} finally {
+			jest.restoreAllMocks();
+			if (windowBefore === undefined) delete runtime.window;
+			else runtime.window = windowBefore;
+		}
+	}
+);
 
 describe.each(platforms)('%s error-handler wiring', (_platform, modulePath) => {
 	const runtime = globalThis as unknown as { window?: unknown };

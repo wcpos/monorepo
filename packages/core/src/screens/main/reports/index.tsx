@@ -2,7 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

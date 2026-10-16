@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import Chart from './chart';
 
@@ -146,8 +146,10 @@ beforeEach(() => {
 });
 afterEach(() => jest.useRealTimers());
 // Removing the comparison or drawing future primary bars breaks this encoding.
-it('draws period bars, the peak, dashed comparison and faint future comparison bars', () => {
-	render(<Chart comparison />);
+it('draws period bars, the peak, dashed comparison and faint future comparison bars', async () => {
+	await act(async () => {
+		render(<Chart comparison />);
+	});
 	expect(screen.getByTestId('hero-chart-peak').textContent).toBe('£20.00 · 1 order');
 	expect(screen.getByTestId('dash').textContent).toBe('4/4');
 	const bars = screen.getAllByTestId('rect');
@@ -156,9 +158,11 @@ it('draws period bars, the peak, dashed comparison and faint future comparison b
 	).toBe(true);
 	expect(bars.filter((bar) => bar.dataset.color === '--color-primary')).toHaveLength(3);
 });
-it('draws cumulative lines, a faint area and the whole comparison closing figure', () => {
+it('draws cumulative lines, a faint area and the whole comparison closing figure', async () => {
 	mockView = 'run';
-	render(<Chart comparison />);
+	await act(async () => {
+		render(<Chart comparison />);
+	});
 	expect(screen.getByTestId('line-2').textContent).toBe('[0,10,30,30]');
 	expect(screen.getByTestId('line-3.5').textContent).toBe('[10,30]');
 	expect(screen.getByTestId('area').textContent).toBe('0.1');
@@ -166,7 +170,7 @@ it('draws cumulative lines, a faint area and the whole comparison closing figure
 	expect(screen.getByTestId('hero-chart-comparison-total').textContent).toBe('£55.00');
 });
 // The label reads the line's endpoint, not the whole previous period: March 31st has no April counterpart.
-it('labels the comparison line with the plotted total, leaving an unmatched 31st out', () => {
+it('labels the comparison line with the plotted total, leaving an unmatched 31st out', async () => {
 	mockView = 'run';
 	mockPeriod = 'month';
 	mockData = {
@@ -188,24 +192,32 @@ it('labels the comparison line with the plotted total, leaving an unmatched 31st
 		live: false,
 		totals: { total: 10 },
 	} as unknown as ReportsData;
-	render(<Chart comparison />);
+	await act(async () => {
+		render(<Chart comparison />);
+	});
 	expect(screen.getByTestId('hero-chart-comparison-total').textContent).toBe('£20.00');
 });
-it('renders only the primary drawing when comparison is unavailable', () => {
+it('renders only the primary drawing when comparison is unavailable', async () => {
 	mockView = 'run';
-	render(<Chart />);
+	await act(async () => {
+		render(<Chart />);
+	});
 	expect(screen.getByTestId('hero-chart-total').textContent).toBe('£30.00 now');
 	expect(screen.queryByTestId('hero-chart-comparison-total')).toBeNull();
 	expect(screen.queryByTestId('dash')).toBeNull();
 });
-it('caps ticks at actual buckets and omits undefined labels', () => {
-	render(<Chart comparison />);
+it('caps ticks at actual buckets and omits undefined labels', async () => {
+	await act(async () => {
+		render(<Chart comparison />);
+	});
 	expect(mockTicks).toEqual([0, 1, 2, 3, 4, 5, 6]);
 	expect(mockLabel(0)).toBe('09:00');
 	expect(mockLabel(99)).toBe('');
 });
-it('shows the bucket, amount, order count and comparison on hover without tax or refunds', () => {
-	render(<Chart comparison />);
+it('shows the bucket, amount, order count and comparison on hover without tax or refunds', async () => {
+	await act(async () => {
+		render(<Chart comparison />);
+	});
 	fireEvent.mouseMove(screen.getByTestId('canvas'));
 	expect(screen.getByText('09:00')).toBeTruthy();
 	expect(screen.getByText('£10.00')).toBeTruthy();
