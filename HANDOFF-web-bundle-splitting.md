@@ -41,6 +41,23 @@ everything the per-route chunks share. (Keeping the three files separate would l
 `__common` cache across releases when only `entry` changes; the plugin loader already
 accepts a `bundles` array. Worth doing, but it is a caching win, not a budget win.)
 
+**Why `__common` is so big.** Expo's default ("legacy") chunking strategy,
+`@expo/metro-config/build/serializer/chunking/createLegacyChunkingStrategy.js`, takes
+every module that two or more lazy chunks share and moves it into the single eager
+`__common` chunk (`extractCommonChunk`). With one chunk per route, anything used by
+two screens becomes eager: skia and victory are in `__common` because the reports
+chart and the health trend-line chart both import them, even though both are already
+behind `import()`. Adding more lazy boundaries therefore does not shrink the eager set
+unless each heavy library is reachable from exactly one lazy root. Two consequences:
+
+- Prefer **one lazy facade per heavy library** (a single async module that every user
+  imports through) over per-screen lazy wrappers.
+- Expo 58 also ships `createGranularChunkingStrategy`, selected by
+  `experiments.chunking.mode = 'granular'` in `app.config.ts` (web export only; it
+  emits shared chunks per group instead of one `__common`). It is being measured on
+  the `codex/web-bundle-split` branch; if it holds up, it is the first change to land,
+  before any boundary work.
+
 The shape is the problem, not the total: 14.5 MB must download, parse and compile
 before anything renders. On a desktop that is one to
 two seconds of compile; on a cheap Android tablet or an older iPad it is five to ten.
@@ -143,7 +160,9 @@ Behind lazy boundaries, in rough order of payoff:
    `(auth)` connect flow after login. Keep `(pos)` eager. expo-router on web does not
    do this for you in production; the boundary lives in each group's `_layout.tsx` or
    in the screen component it renders.
-2. Charts and skia/canvaskit: only inside the lazy reports/health chunks.
+2. Charts and skia/canvaskit: behind **one** shared lazy chart module that both the
+   reports chart and the health trend line import, so the libraries have a single
+   lazy root (see "Why `__common` is so big").
 3. Receipt **preview** in order history (`orders/(modals)/receipt`, `orders/(modals)/view`)
    can be lazy. Checkout receipt rendering and printing cannot: the checkout
    `ReceiptStageDocument` calls `useReceiptDocument({ autoPrintAllowed: true })` and
