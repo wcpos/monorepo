@@ -34,6 +34,7 @@ function context(
 						exec: async () =>
 							residents.map((row) => ({ primary: row.primary, toJSON: () => row.json })),
 					}),
+					findByIds: () => ({ exec: async () => new Map() }),
 					bulkRemove: async (primaries: string[]) => {
 						removedPrimaries.push(...primaries);
 						return { error: [] };
