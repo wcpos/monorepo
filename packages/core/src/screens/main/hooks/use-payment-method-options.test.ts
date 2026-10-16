@@ -111,6 +111,11 @@ it('observes payloads and all split legs live, rebinds on reset, and unsubscribe
 	act(() => mockDatabases.next({ collections: { orders: { find: () => ({ $: second }) } } }));
 	act(() => first.next([{ payload: { payment_method: 'stale', meta_data: [] } }]));
 	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash']);
+	act(() => second.next([{ payload: { payment_method: 'gone_with_db', meta_data: [] } }]));
+	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash', 'gone_with_db']);
+	// A disposed engine emits null: the previous database's history is forgotten, not kept.
+	act(() => mockDatabases.next(null));
+	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash']);
 	unmount();
 	expect(mockDatabases.observed).toBe(false);
 	expect(second.observed).toBe(false);

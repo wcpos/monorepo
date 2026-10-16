@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { NEVER, Observable, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
@@ -32,7 +32,9 @@ export function usePaymentMethodOptions() {
 				)
 			).pipe(
 				switchMap((database) => {
-					if (!database) return NEVER;
+					// A disposed engine (site or store switch) emits null: forget the previous
+					// database's history rather than keep offering its methods.
+					if (!database) return of([] as ObservedPaymentMethod[]);
 					const collection = database.collections.orders;
 					if (!collection) return of([] as ObservedPaymentMethod[]);
 					return collection.find().$.pipe(
