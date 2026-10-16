@@ -250,7 +250,7 @@ then built only if the owner confirms the exception.
 | Primary: the action the screen exists for | `default` (filled) | one per screen, full width on a phone, 56 pt when it is the sale's button | *Take 18,00 € in Cash*, *Try again* after a refusal, *Set up Tap to Pay*, *Connect a reader* when nothing is connected |
 | Secondary: the reversible alternative beside the primary | `outline` | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Help* |
 | Quiet: navigation, escapes, more | `ghost-quiet` / `link` | after the buttons, on its own line | *Reader guide*, *Details*, *Cancel* on a scan |
-| Destructive: what loses something | `outline-error` (red outline, never filled) or the last red row of a ⋮ sheet | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel on terminal* |
+| Destructive: what loses something | `outline-destructive` (red outline, never filled) or the last red row of a ⋮ sheet | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel on terminal* |
 | Unavailable | the same button, `disabled`, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
 
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one

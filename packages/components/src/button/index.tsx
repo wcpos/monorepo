@@ -41,27 +41,13 @@ const buttonVariants = cva(
 				secondary: 'bg-secondary web:hover:opacity-90 active:opacity-90',
 				muted: 'bg-muted web:hover:opacity-90 active:opacity-90',
 				success: 'bg-success web:hover:opacity-90 active:opacity-90',
-				info: 'bg-info web:hover:opacity-90 active:opacity-90',
-				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
-				warning: 'bg-warning web:hover:opacity-90 active:opacity-90',
-				error: 'bg-destructive web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
 				 */
 				outline: 'border-border bg-card web:hover:bg-muted active:bg-muted border',
 				'outline-primary': 'border-primary bg-card web:hover:bg-primary active:bg-primary border',
-				'outline-secondary':
-					'border-secondary bg-card web:hover:bg-secondary active:bg-secondary border',
-				'outline-muted': 'border-muted bg-card web:hover:bg-muted active:bg-muted border',
-				'outline-success': 'border-success bg-card web:hover:bg-success active:bg-success border',
 				'outline-destructive':
-					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
-				'outline-info': 'border-info bg-card web:hover:bg-info active:bg-info border',
-				'outline-attention':
-					'border-attention bg-card web:hover:bg-attention active:bg-attention border',
-				'outline-warning': 'border-warning bg-card web:hover:bg-warning active:bg-warning border',
-				'outline-error':
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
 				/**
@@ -70,18 +56,11 @@ const buttonVariants = cva(
 				ghost: 'web:hover:bg-muted active:bg-muted',
 				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
 				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
-				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted',
-				'ghost-success': 'bg-success/15 web:hover:bg-success active:bg-success',
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
-				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info',
-				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
-				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
-				'ghost-error': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**
-				 * Transparent, de-emphasised label. Distinct from `ghost-muted`,
-				 * which tints its surface — `ghost-quiet` keeps the surface clear and
-				 * quietens only the text, for secondary actions sitting beside a
+				 * Transparent, de-emphasised label: `ghost-quiet` keeps the surface clear
+				 * and quietens only the text, for secondary actions sitting beside a
 				 * primary one in a row.
 				 */
 				'ghost-quiet': 'web:hover:bg-muted active:bg-muted',
@@ -94,18 +73,6 @@ const buttonVariants = cva(
 					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
 
 				/**
-				 * The pay surface (checkout tender pane) is the sidebar colour too, but its
-				 * buttons are rounded and stand on their own: `sidebar-solid` is the one
-				 * white commit / selected pill, `sidebar-quiet` the translucent chips and
-				 * unselected pills, `sidebar-key` a boxless keypad key.
-				 */
-				'sidebar-solid': 'bg-sidebar-foreground web:hover:opacity-90 active:opacity-90',
-				'sidebar-quiet':
-					'bg-sidebar-foreground/10 web:hover:bg-sidebar-foreground/20 active:bg-sidebar-foreground/20',
-				'sidebar-key':
-					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/15 bg-transparent',
-
-				/**
 				 * Reads as a link, behaves as a button — no surface at all. For
 				 * in-flow navigation (a back affordance, an "open docs" jump), where a
 				 * ghost's hover surface would be too much furniture.
@@ -115,12 +82,9 @@ const buttonVariants = cva(
 			size: {
 				default: 'h-ctl px-4 py-2',
 				xs: 'h-6 px-2',
-				compact: 'h-9 px-3',
 				sm: 'h-9 px-3',
 				lg: 'h-11 px-8',
 				xl: 'h-tile px-10',
-				/** A keypad key: tall, no side padding, the digit carries the size. */
-				key: 'h-tile px-0',
 			},
 		},
 		defaultVariants: {
@@ -144,10 +108,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			secondary: 'text-secondary-foreground',
 			muted: 'text-muted-foreground',
 			success: 'text-success-foreground',
-			info: 'text-info-foreground',
-			attention: 'text-attention-foreground',
-			warning: 'text-warning-foreground',
-			error: 'text-destructive-foreground',
 
 			/**
 			 * Outline buttons
@@ -156,14 +116,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			// Rest: the primary word on a card; hovered/pressed the compound below flips it to the
 			// foreground as the fill arrives (an active filter pill).
 			'outline-primary': 'text-primary font-semibold',
-			'outline-secondary': '',
-			'outline-muted': '',
-			'outline-success': '',
 			'outline-destructive': '',
-			'outline-info': '',
-			'outline-attention': '',
-			'outline-warning': '',
-			'outline-error': '',
 
 			/**
 			 * Ghost buttons
@@ -171,28 +124,17 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			ghost: '',
 			'ghost-primary': 'text-primary',
 			'ghost-secondary': 'text-secondary',
-			'ghost-muted': 'text-muted',
-			'ghost-success': 'text-success',
 			'ghost-destructive': 'text-destructive',
-			'ghost-info': 'text-info',
-			'ghost-attention': 'text-attention',
-			'ghost-warning': 'text-warning',
-			'ghost-error': 'text-destructive',
 			'ghost-quiet': 'text-muted-foreground',
 			sidebar: 'text-sidebar-foreground',
-			'sidebar-solid': 'text-sidebar',
-			'sidebar-quiet': 'text-sidebar-foreground',
-			'sidebar-key': 'text-sidebar-foreground',
 			link: 'text-primary web:hover:underline',
 		},
 		size: {
 			default: '',
 			xs: 'text-xs',
-			compact: 'text-xs',
 			sm: 'text-sm',
 			lg: 'text-lg',
 			xl: 'text-xl',
-			key: 'text-3xl font-medium',
 		},
 	},
 	compoundVariants: [
@@ -208,40 +150,14 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		{ variant: 'muted', hovered: true, class: 'text-muted-foreground' },
 		{ variant: 'outline-primary', pressed: true, class: 'text-primary-foreground' },
 		{ variant: 'outline-primary', hovered: true, class: 'text-primary-foreground' },
-		{ variant: 'outline-secondary', pressed: true, class: 'text-secondary-foreground' },
-		{ variant: 'outline-secondary', hovered: true, class: 'text-secondary-foreground' },
-		{ variant: 'outline-muted', pressed: true, class: 'text-muted-foreground' },
-		{ variant: 'outline-muted', hovered: true, class: 'text-muted-foreground' },
-		{ variant: 'outline-success', pressed: true, class: 'text-success-foreground' },
-		{ variant: 'outline-success', hovered: true, class: 'text-success-foreground' },
 		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
-		{ variant: 'outline-info', pressed: true, class: 'text-info-foreground' },
-		{ variant: 'outline-info', hovered: true, class: 'text-info-foreground' },
-		{ variant: 'outline-attention', pressed: true, class: 'text-attention-foreground' },
-		{ variant: 'outline-attention', hovered: true, class: 'text-attention-foreground' },
-		{ variant: 'outline-warning', pressed: true, class: 'text-warning-foreground' },
-		{ variant: 'outline-warning', hovered: true, class: 'text-warning-foreground' },
-		{ variant: 'outline-error', pressed: true, class: 'text-destructive-foreground' },
-		{ variant: 'outline-error', hovered: true, class: 'text-destructive-foreground' },
 		{ variant: 'ghost-primary', pressed: true, class: 'text-primary-foreground' },
 		{ variant: 'ghost-primary', hovered: true, class: 'text-primary-foreground' },
 		{ variant: 'ghost-secondary', pressed: true, class: 'text-secondary-foreground' },
 		{ variant: 'ghost-secondary', hovered: true, class: 'text-secondary-foreground' },
-		{ variant: 'ghost-muted', pressed: true, class: 'text-muted-foreground' },
-		{ variant: 'ghost-muted', hovered: true, class: 'text-muted-foreground' },
-		{ variant: 'ghost-success', pressed: true, class: 'text-success-foreground' },
-		{ variant: 'ghost-success', hovered: true, class: 'text-success-foreground' },
 		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'ghost-destructive', hovered: true, class: 'text-destructive-foreground' },
-		{ variant: 'ghost-info', pressed: true, class: 'text-info-foreground' },
-		{ variant: 'ghost-info', hovered: true, class: 'text-info-foreground' },
-		{ variant: 'ghost-attention', pressed: true, class: 'text-attention-foreground' },
-		{ variant: 'ghost-attention', hovered: true, class: 'text-attention-foreground' },
-		{ variant: 'ghost-warning', pressed: true, class: 'text-warning-foreground' },
-		{ variant: 'ghost-warning', hovered: true, class: 'text-warning-foreground' },
-		{ variant: 'ghost-error', pressed: true, class: 'text-destructive-foreground' },
-		{ variant: 'ghost-error', hovered: true, class: 'text-destructive-foreground' },
 	],
 	defaultVariants: {
 		variant: 'default',
@@ -387,7 +303,6 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 			muted: 'bg-muted',
 			success: 'bg-success',
 			ghost: 'bg-accent',
-			attention: 'bg-attention',
 		},
 	},
 	defaultVariants: {
