@@ -7,16 +7,20 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+import * as ts from 'typescript';
+
 import {
 	SEAM_ALLOWLIST_FROZEN_2026_10_16,
+	SEAM_CEILINGS,
 	SEAM_REPAIRED_FLOOR,
+	SEAM_REPAIRED_PREFIX_DIGEST,
 	SEAM_REPAIRED_SINCE_FREEZE,
 } from './seam-allowlist';
 
 const frozenCount = new Map(SEAM_ALLOWLIST_FROZEN_2026_10_16);
 
-const FROZEN_LENGTH = 203;
-const FROZEN_DIGEST = '4689c572e44370d0895c5a0d50f07753dad011609d1d7ac553bfdc1a5a6a4e00';
+const FROZEN_LENGTH = 215;
+const FROZEN_DIGEST = '6b21fd395cbb56517dfb68f9bf23c449008dca3dd6ce1d4e7ba3f42703d46aaf';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
 const effectiveAllowlist = new Set(
 	SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file]) => file).filter((file) => !repaired.has(file))
@@ -35,6 +39,7 @@ const forbiddenQueryNames = new Set([
 	'EngineQueryRelation',
 	'CompiledQueryRead',
 	'EngineRxDocument',
+	'EngineDocument',
 	'storageQueryProjectionReader',
 	'openOrdersSelector',
 	'OPEN_ORDERS_SORT',
@@ -55,99 +60,170 @@ function sourceFiles(directory: string): string[] {
 	});
 }
 
-// Preserve quoted strings while stripping comments, then mask strings for the token check.
-const trivia = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
-// A template literal is string content EXCEPT its `${…}` bodies, which are executable code.
-const templateBodies = (literal: string) =>
-	' ' + [...literal.matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1]).join(' ; ') + ' ';
-function violations(source: string): string[] {
-	const commentsRemoved = source.replace(trivia, (match) =>
-		match.startsWith('/') ? ' ' : match.startsWith('`') ? templateBodies(match) : match
-	);
-	const found: string[] = [];
-	const imports =
-		/\b(?:import|export)\s+(?:type\s+)?([^;]*?)\s+from\s*['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*['"]([^'"]+)['"]/g;
-	for (const match of commentsRemoved.matchAll(imports)) {
-		const [, clause = '', from, dynamic, bare] = match;
-		const specifier = from ?? dynamic ?? bare;
-		const braces = clause.match(/^\s*\{([^}]*)\}\s*$/);
-		const names =
-			braces?.[1]
-				.split(',')
-				.map(
-					(name) =>
-						name
-							.trim()
-							.replace(/^type\s+/, '')
-							.split(/\s+as\s+/)[0]
-				)
-				.filter(Boolean) ?? [];
-		if (
-			/^\s*require\s*\(/.test(match[0]) &&
-			/^@wcpos\/(?:query|sync-engine)(?:\/|$)/.test(specifier)
-		)
-			found.push(`require() of a seam package (use static named imports): ${match[0]}`);
+const mutatorNames = new Set([
+	'incrementalPatch',
+	'incrementalModify',
+	'incrementalRemove',
+	'incrementalUpsert',
+	'incrementalUpdate',
+	'modify',
+	'update',
+	'patch',
+	'remove',
+	'insert',
+	'upsert',
+	'insertIfNotExists',
+	'putAttachment',
+	'putAttachments',
+	'putAttachmentBase64',
+	'save',
+	'updateCRDT',
+	'insertCRDT',
+	'cleanup',
+	'addState',
+	'bulkInsert',
+	'bulkUpsert',
+	'bulkRemove',
+	'insertLocal',
+	'upsertLocal',
+	'getLocal',
+	'getLocal$',
+	'atomicUpdate',
+	'atomicPatch',
+]);
+const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
+
+function staticName(node: ts.Node | undefined): string | undefined {
+	if (!node) return undefined;
+	if (ts.isIdentifier(node) || ts.isStringLiteralLike(node)) return node.text;
+	if (ts.isComputedPropertyName(node) && ts.isStringLiteralLike(node.expression))
+		return node.expression.text;
+	return undefined;
+}
+
+function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; text: string }[] {
+	const root = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+	const found: { rule: string; text: string }[] = [];
+	const report = (rule: string, node: ts.Node) =>
+		found.push({ rule, text: node.getText(root).slice(0, 120) });
+	const checkImport = (
+		node: ts.Node,
+		specifier: ts.Node | undefined,
+		names: string[],
+		wholeModule = false,
+		typeWildcard = false
+	) => {
+		if (!specifier || !ts.isStringLiteralLike(specifier)) return;
+		const module = specifier.text;
+		const from = (name: string) => module === name || module.startsWith(`${name}/`);
 		const only = (allowed: Set<string>) =>
-			!!braces && names.length > 0 && names.every((name) => allowed.has(name));
-		if (/^(?:rxdb(?:-premium)?|@wcpos\/database)(?:\/|$)/.test(specifier)) {
-			if (specifier === '@wcpos/database' && only(taxNames)) continue;
-			if (specifier === '@wcpos/database/live-tab' && only(liveTabNames)) continue;
-			found.push(`storage import: ${match[0]}`);
+			!wholeModule && names.length > 0 && names.every((name) => allowed.has(name));
+		if (from('rxdb') || from('rxdb-premium') || from('@wcpos/database')) {
+			if (module === '@wcpos/database' && only(taxNames)) return;
+			if (module === '@wcpos/database/live-tab' && only(liveTabNames)) return;
+			report('storage import', node);
 		}
-		for (const name of names) {
-			if (specifier === '@wcpos/query' && forbiddenQueryNames.has(name))
-				found.push(`query escape hatch: ${name}`);
-			if (specifier === '@wcpos/sync-engine' && name === 'MUTATION_QUEUE_RXDB_COLLECTION')
-				found.push(`mutation queue: ${name}`);
+		if (from('@wcpos/query')) {
+			if (typeWildcard) return;
+			if (wholeModule) report('query escape hatch', node);
+			for (const name of names) {
+				if (
+					forbiddenQueryNames.has(name) ||
+					(module === '@wcpos/query/collection-map' && name !== 'sanitizeVariationAttributesRead')
+				)
+					report('query escape hatch', node);
+			}
 		}
-		// `import * as query from '@wcpos/query'` binds the whole module; member access, optional
-		// chaining, bracket access and destructuring would all need scanning, so the form is rejected.
-		if (
-			/^@wcpos\/(?:query|sync-engine)$/.test(specifier) &&
-			/^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause)
-		)
-			found.push(
-				`namespace import or wildcard re-export of a seam package (use named imports): ${match[0]}`
+		if (from('@wcpos/sync-engine')) {
+			if (wholeModule) report('mutation queue', node);
+			for (const name of names) {
+				if (name === 'MUTATION_QUEUE_RXDB_COLLECTION') report('mutation queue', node);
+			}
+		}
+	};
+	const checkProperty = (node: ts.Node, name: string | undefined) => {
+		if (!name) return;
+		if (storageNames.has(name)) report('storage token', node);
+		if (name === 'collection') report('record collection back-reference', node);
+		if (mutatorNames.has(name)) report('record mutator', node);
+	};
+	const visit = (node: ts.Node) => {
+		if (ts.isImportDeclaration(node)) {
+			const bindings = node.importClause?.namedBindings;
+			const names =
+				bindings && ts.isNamedImports(bindings)
+					? bindings.elements.map((binding) => (binding.propertyName ?? binding.name).text)
+					: [];
+			if (node.importClause?.name) names.push('default');
+			checkImport(node, node.moduleSpecifier, names, !!bindings && ts.isNamespaceImport(bindings));
+		} else if (ts.isExportDeclaration(node)) {
+			const bindings = node.exportClause;
+			checkImport(
+				node,
+				node.moduleSpecifier,
+				bindings && ts.isNamedExports(bindings)
+					? bindings.elements.map((binding) => (binding.propertyName ?? binding.name).text)
+					: [],
+				!bindings || ts.isNamespaceExport(bindings),
+				node.isTypeOnly && !bindings
 			);
-	}
-	// A dynamic `import('@wcpos/query')` is allowed only in the type-access form
-	// `import('@wcpos/query').Name` (binds nothing; the name is checked). Any other form —
-	// `await import(...)`, a destructured result — binds the whole module and is rejected.
-	for (const access of commentsRemoved.matchAll(
-		/import\s*\(\s*['"]@wcpos\/query['"]\s*\)(\s*\.\s*(\w+))?/g
-	)) {
-		if (!access[1]) found.push(`dynamic query import (use static named imports): ${access[0]}`);
-		else if (forbiddenQueryNames.has(access[2])) found.push(`query escape hatch: ${access[0]}`);
-	}
-	// Bracket-notation mutator calls name the method in a string, so scan before strings are masked.
-	for (const match of commentsRemoved.matchAll(
-		/\[\s*['"](?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|updateCRDT|insertCRDT|addState|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)['"]\s*\]\s*\(/g
-	)) {
-		found.push(`record mutator (writes go through commands): ${match[0]}`);
-	}
-	const code = commentsRemoved.replace(trivia, (match) =>
-		match.startsWith('`') ? templateBodies(match) : ''
-	);
-	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\bengine\s*\.\s*write\s*\(|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|updateCRDT|insertCRDT|addState|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
-	)) {
-		found.push(
-			`${
-				/^\s*engine/.test(match[0])
-					? 'write plane outside a command module (engine.write)'
-					: /^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|save|updateCRDT|insertCRDT|addState|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(
-								match[0]
-						  )
-						? 'record mutator (writes go through commands)'
-						: 'storage token'
-			}: ${match[0]}`
-		);
-	}
-	return found.map((violation) => violation.replace(/\s+/g, ' '));
+		} else if (
+			ts.isImportEqualsDeclaration(node) &&
+			ts.isExternalModuleReference(node.moduleReference)
+		) {
+			checkImport(node, node.moduleReference.expression, [], true);
+		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+			let qualifier = node.qualifier;
+			while (qualifier && ts.isQualifiedName(qualifier)) qualifier = qualifier.left;
+			checkImport(node, node.argument.literal, qualifier ? [qualifier.text] : [], !qualifier);
+		} else if (ts.isCallExpression(node)) {
+			const callee = node.expression;
+			if (
+				callee.kind === ts.SyntaxKind.ImportKeyword ||
+				(ts.isIdentifier(callee) && callee.text === 'require')
+			)
+				checkImport(node, node.arguments[0], [], true);
+			if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'write') {
+				const receiver = callee.expression;
+				if (
+					(ts.isIdentifier(receiver) && receiver.text === 'engine') ||
+					(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine')
+				)
+					report('write plane outside a command module', node);
+			}
+		}
+		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text);
+		if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
+			checkProperty(node, node.argumentExpression.text);
+		if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent) && !node.dotDotDotToken)
+			checkProperty(node, staticName(node.propertyName ?? node.name));
+		// Assignment destructuring uses object literals, not ObjectBindingPattern nodes.
+		if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
+			let pattern: ts.Node = node.parent;
+			while (
+				pattern.parent &&
+				(ts.isPropertyAssignment(pattern.parent) ||
+					ts.isObjectLiteralExpression(pattern.parent) ||
+					ts.isArrayLiteralExpression(pattern.parent))
+			)
+				pattern = pattern.parent;
+			const assignment = pattern.parent;
+			if (
+				assignment &&
+				ts.isBinaryExpression(assignment) &&
+				assignment.left === pattern &&
+				assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken
+			)
+				checkProperty(node, staticName(node.name));
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(root);
+	return found;
 }
 
 const violationsByFile = sourceFiles(__dirname).flatMap((path) => {
-	const matches = violations(readFileSync(path, 'utf8'));
+	const matches = violations(readFileSync(path, 'utf8'), path);
 	return matches.length ? [{ file: relative(__dirname, path).split(sep).join('/'), matches }] : [];
 });
 
@@ -167,18 +243,33 @@ it('does not add files that cross the UI/data seam', () => {
 	expect(
 		violationsByFile
 			.filter(({ file }) => !effectiveAllowlist.has(file))
-			.flatMap(({ file, matches }) => matches.map((match) => `${file}: ${match}`))
+			.flatMap(({ file, matches }) => matches.map(({ rule, text }) => `${file}: ${rule}: ${text}`))
 	).toEqual([]);
 });
 
+function ceilingIssue(
+	file: string,
+	current: number,
+	frozen: number,
+	recorded = Infinity
+): string[] {
+	const ceiling = Math.min(frozen, recorded);
+	if (current > ceiling)
+		return [
+			`${file}: ${current} violations, ceiling ${ceiling} — route the new access through a named read or command`,
+		];
+	if (current > 0 && current < ceiling) return [`record the new ceiling for ${file}: ${current}`];
+	return [];
+}
+
 it('never lets a frozen file gain violations (the per-file count only ratchets down)', () => {
+	const ceilings = new Map(SEAM_CEILINGS);
 	expect(
-		violationsByFile
-			.filter(({ file, matches }) => (frozenCount.get(file) ?? Infinity) < matches.length)
-			.map(
-				({ file, matches }) =>
-					`${file}: ${matches.length} violations, frozen at ${frozenCount.get(file)} — route the new access through a named read or command`
-			)
+		violationsByFile.flatMap(({ file, matches }) =>
+			frozenCount.has(file)
+				? ceilingIssue(file, matches.length, frozenCount.get(file)!, ceilings.get(file))
+				: []
+		)
 	).toEqual([]);
 });
 
@@ -202,12 +293,147 @@ it('keeps the frozen allowlist immutable and the repaired list inside it', () =>
 	).toBe(FROZEN_DIGEST);
 	const frozen = new Set(SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file]) => file));
 	expect(SEAM_REPAIRED_SINCE_FREEZE.filter((file) => !frozen.has(file))).toEqual([]);
-	// The repaired list is append-only: a regression that deletes an entry to re-admit a file
-	// must also lower this floor, which a reviewer sees in the diff. Raise it with every repair.
+	// Pin identities, not just length: substitution must not silently re-admit a repaired file.
 	expect(SEAM_REPAIRED_SINCE_FREEZE.length).toBeGreaterThanOrEqual(SEAM_REPAIRED_FLOOR);
+	expect(
+		createHash('sha256')
+			.update(SEAM_REPAIRED_SINCE_FREEZE.slice(0, SEAM_REPAIRED_FLOOR).join('\n'))
+			.digest('hex')
+	).toBe(SEAM_REPAIRED_PREFIX_DIGEST);
 	expect(
 		SEAM_REPAIRED_SINCE_FREEZE.filter(
 			(file) => !violationsByFile.every(({ file: f }) => f !== file)
 		)
 	).toEqual([]);
+});
+
+// These fixtures catch syntax bypasses without executing imported modules or mutators.
+it.each([
+	"export { engineCollection as read } from '@wcpos/query/subpath';",
+	"import { EngineDocument } from '@wcpos/query';",
+	"import { other } from '@wcpos/query/collection-map';",
+	"export { MUTATION_QUEUE_RXDB_COLLECTION as queue } from '@wcpos/sync-engine/subpath';",
+	"type Q = import('@wcpos/query/subpath').EngineCollection;",
+	"type Q = import('@wcpos/sync-engine').MUTATION_QUEUE_RXDB_COLLECTION;",
+	"const q = (await import('@wcpos/query')).SafeName;",
+	'engine?.write?.({});',
+	'object.engine.write({});',
+	'({ collections } = db);',
+	'({ nested: { storageInstance: storage } } = db);',
+	'({ collection: owner, remove: fn } = doc);',
+])('detects the seam access in %s', (source) => {
+	expect(violations(source).length).toBeGreaterThan(0);
+});
+
+it.each([
+	"import { TaxId, type TaxIdType as Id } from '@wcpos/database';",
+	"import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';",
+	"import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';",
+	"export type * from '@wcpos/query';",
+	"type Q = import('@wcpos/query').QueryState;",
+	"// doc.remove();\nconst text = 'doc.collections';",
+	'const text = `doc.remove() and doc.collection`; // engine.write()',
+	'const shape: { collections: string; remove(): void } = value;',
+	'const { safe: collections, ...remove } = value;',
+	'const options = { collections, remove: fn, collection: name };',
+])('allows non-seam syntax in %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+it.each([
+	[5, undefined, []],
+	[4, undefined, ['record the new ceiling for file.ts: 4']],
+	[3, 4, ['record the new ceiling for file.ts: 3']],
+	[4, 4, []],
+	[0, 4, []], // Zero is handled by the repaired-file assertion, not a ceiling entry.
+])('records decreases from the effective ceiling: %s / %s', (current, recorded, expected) => {
+	expect(ceilingIssue('file.ts', current, 5, recorded)).toEqual(expected);
+});
+it.each([
+	[6, undefined],
+	[5, 4],
+	[6, 7],
+])('rejects a count above either ceiling: %s / %s', (current, recorded) => {
+	expect(ceilingIssue('file.ts', current!, 5, recorded)).toHaveLength(1);
+});
+
+// Every mutator spelling is fenced across calls, extraction and binding patterns.
+it.each(
+	(
+		'incrementalPatch incrementalModify incrementalRemove incrementalUpsert incrementalUpdate ' +
+		'modify update patch remove insert upsert insertIfNotExists putAttachment putAttachments ' +
+		'putAttachmentBase64 save updateCRDT insertCRDT addState bulkInsert bulkUpsert bulkRemove ' +
+		'insertLocal upsertLocal getLocal getLocal$ atomicUpdate atomicPatch'
+	).split(' ')
+)('fences all accesses of %s', (name) => {
+	for (const source of [
+		`doc.${name}();`,
+		`doc?.${name}?.();`,
+		`doc['${name}']();`,
+		`doc?.['${name}']?.();`,
+		`const fn = doc.${name};`,
+		`const { ${name} } = doc;`,
+		`const { ['${name}']: fn } = doc;`,
+	])
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+});
+
+it.each(['db$', 'collections', 'storageInstance', 'localDB', 'collection'])(
+	'fences all storage accesses of %s',
+	(name) => {
+		for (const source of [`doc?.${name};`, `doc?.['${name}'];`, `const { ${name}: value } = doc;`])
+			expect(violations(source).map(({ rule }) => rule)).toEqual([
+				name === 'collection' ? 'record collection back-reference' : 'storage token',
+			]);
+	}
+);
+
+it.each([
+	'rxdb',
+	'rxdb/plugins/query',
+	'rxdb-premium',
+	'rxdb-premium/plugins/storage',
+	'@wcpos/database/subpath',
+])('fences every import form from %s', (module) => {
+	for (const source of [
+		`import '${module}';`,
+		`import type { Record } from '${module}';`,
+		`export type { Record } from '${module}';`,
+		`export * from '${module}';`,
+		`import db = require('${module}');`,
+		`require('${module}');`,
+		`import('${module}');`,
+		`type R = import('${module}').Record;`,
+	])
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['storage import']);
+});
+
+it.each([
+	'@wcpos/query',
+	'@wcpos/query/subpath',
+	'@wcpos/sync-engine',
+	'@wcpos/sync-engine/subpath',
+])('fences whole-module access to %s', (module) => {
+	for (const source of [
+		`import * as q from '${module}';`,
+		`import type * as q from '${module}';`,
+		`export * from '${module}';`,
+		`export * as q from '${module}';`,
+		`import q = require('${module}');`,
+		`require('${module}');`,
+		`const q = import('${module}').SafeName;`,
+		`type Q = typeof import('${module}');`,
+	])
+		expect(violations(source)).toHaveLength(1);
+});
+
+it('walks TSX and nested template expressions but ignores string and comment contents', () => {
+	expect(
+		violations('<View title={`literal doc.remove() ${(() => { return `${doc.save}`; })()}`} />')
+	).toEqual([{ rule: 'record mutator', text: 'doc.save' }]);
+});
+
+it('reports the accessed AST text, truncated to 120 characters', () => {
+	const source = `${'receiver'.repeat(20)}.remove`;
+	expect(violations(source)).toEqual([{ rule: 'record mutator', text: source.slice(0, 120) }]);
 });

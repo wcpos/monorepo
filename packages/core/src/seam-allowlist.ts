@@ -1,16 +1,15 @@
 /**
- * ADR 0033 item 7. The seam allowlist, frozen 2026-10-16 with 203 files.
+ * ADR 0033 item 7. Re-frozen 2026-10-16 using the parse-only AST scanner:
+ * 215 files, 550 violations. Tuples are immutable; seam.test.ts pins their length and digest.
  *
- * `SEAM_ALLOWLIST_FROZEN_2026_10_16` pairs each file with its violation COUNT at the freeze and is IMMUTABLE: `seam.test.ts` pins its length and a digest of
- * its contents, so a path can neither be added nor swapped in, and a frozen file may never exceed its frozen count (the per-file ratchet only goes down). When a listed file stops crossing
- * the seam, add its path to `SEAM_REPAIRED_SINCE_FREEZE` below; the effective allowlist is the
- * frozen list minus the repaired list and can therefore only shrink. The repaired list's length is
- * the programme's progress meter.
+ * Counts only ratchet down: record each positive decrease in SEAM_CEILINGS. At zero, append
+ * the path to SEAM_REPAIRED_SINCE_FREEZE and raise its floor and prefix digest together.
+ * The effective allowlist is the frozen list minus repaired files; it can only shrink.
  *
- * Three entries are regex false positives of the `.remove(` fence (an event-subscription remove,
- * a BackHandler subscription remove and a DOM anchor remove): `use-checkout-back.ts`,
- * `use-system-back.android.ts`, `save-or-share-csv.web.ts`. They retire with the read-only record
- * type (ADR 0033 PR 3), when the token fence for ambiguous names gives way to types.
+ * Known conservative false positives: .collection string fields on log events, descriptors
+ * and telemetry rows; remove/update/save/set-like names on non-RxDB receivers (including
+ * subscriptions, DOM elements, form helpers and UI settings). The mutator list is explicit;
+ * it does not infer receiver types. These retire with the read-only record type (ADR 0033 PR 3).
  */
 export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, number])[] = [
 	['contexts/app-state/hydration-steps.ts', 11],
@@ -19,13 +18,14 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['hooks/use-app-info.ts', 1],
 	['hooks/use-site-info.ts', 2],
 	['hooks/use-store-day.ts', 2],
-	['hooks/use-user-validation.ts', 4],
+	['hooks/use-user-validation.ts', 5],
 	['hooks/use-version-check.ts', 1],
-	['query/query-handles.ts', 6],
-	['query/query-state-translator.ts', 1],
+	['query/query-handles.ts', 11],
+	['query/query-state-store.tsx', 1],
+	['query/query-state-translator.ts', 11],
 	['query/scope-key.ts', 1],
 	['query/search-select.ts', 1],
-	['query/terms-handles.ts', 3],
+	['query/terms-handles.ts', 5],
 	['screens/auth/components/add-user-button.tsx', 1],
 	['screens/auth/components/demo-button.tsx', 1],
 	['screens/auth/components/site.tsx', 5],
@@ -36,31 +36,36 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/auth/components/wp-users.tsx', 2],
 	['screens/auth/hooks/use-login-handler.ts', 4],
 	['screens/auth/hooks/use-site-connect.ts', 2],
+	['screens/main/components/customer/tax-ids-form.tsx', 1],
 	['screens/main/components/data-table/index.tsx', 3],
-	['screens/main/components/drawer-content/logs-badge.tsx', 3],
+	['screens/main/components/drawer-content/logs-badge.tsx', 4],
 	['screens/main/components/header/user-menu.tsx', 1],
+	['screens/main/components/meta-data-form.tsx', 1],
 	['screens/main/components/order/customer.tsx', 1],
 	['screens/main/components/order/filter-bar/store-pill.tsx', 1],
 	['screens/main/components/product/variation-select.tsx', 1],
 	['screens/main/components/user-avatar/index.tsx', 1],
 	['screens/main/contexts/extra-data/context.ts', 1],
 	['screens/main/contexts/ui-settings/provider.tsx', 3],
+	['screens/main/contexts/ui-settings/use-ui-settings.ts', 1],
 	['screens/main/contexts/ui-settings/utils.ts', 1],
 	['screens/main/contexts/use-push-document.ts', 4],
 	['screens/main/coupons/edit/form.tsx', 1],
+	['screens/main/coupons/index.tsx', 1],
 	['screens/main/customers/edit/form.tsx', 1],
-	['screens/main/health/attention-panel.tsx', 1],
+	['screens/main/health/attention-panel.tsx', 5],
+	['screens/main/health/database-logic.ts', 1],
 	['screens/main/health/storage-footprint-logic.ts', 2],
 	['screens/main/health/use-collection-sizes.ts', 1],
 	['screens/main/health/use-dead-letter-attention.ts', 3],
 	['screens/main/health/use-rejected-mutations.ts', 5],
 	['screens/main/health/use-storage-footprint.ts', 1],
 	['screens/main/health/use-unresolved-conflicts.ts', 7],
-	['screens/main/hooks/barcodes/use-attributed-wedge.ts', 2],
+	['screens/main/hooks/barcodes/use-attributed-wedge.ts', 3],
 	['screens/main/hooks/barcodes/use-barcode-search.ts', 1],
-	['screens/main/hooks/barcodes/use-scanner-registration.ts', 2],
-	['screens/main/hooks/mutations/request-server-delete.ts', 1],
-	['screens/main/hooks/mutations/use-local-mutation.ts', 13],
+	['screens/main/hooks/barcodes/use-scanner-registration.ts', 3],
+	['screens/main/hooks/mutations/request-server-delete.ts', 2],
+	['screens/main/hooks/mutations/use-local-mutation.ts', 29],
 	['screens/main/hooks/mutations/use-mutation.ts', 3],
 	['screens/main/hooks/store-list-resource.ts', 1],
 	['screens/main/hooks/use-collection.ts', 4],
@@ -68,12 +73,14 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/hooks/use-engine-monitor.ts', 6],
 	['screens/main/hooks/use-image-attachment/types.ts', 1],
 	['screens/main/hooks/use-rest-http-client/index.ts', 1],
-	['screens/main/hooks/use-stock-adjustment.ts', 1],
+	['screens/main/hooks/use-stock-adjustment.ts', 4],
 	['screens/main/hooks/use-storage-health.ts', 1],
 	['screens/main/hooks/use-store-label.ts', 2],
 	['screens/main/hooks/use-unsent-changes.ts', 3],
-	['screens/main/hooks/use-variation-parent-refresh.ts', 1],
+	['screens/main/hooks/use-variation-parent-refresh.ts', 2],
 	['screens/main/logs/index.tsx', 2],
+	['screens/main/logs/ledger.tsx', 2],
+	['screens/main/logs/logs-logic.ts', 3],
 	['screens/main/logs/use-log-stats.ts', 1],
 	['screens/main/mini-apps/capabilities/printers.ts', 4],
 	['screens/main/orders/edit/form.tsx', 1],
@@ -99,9 +106,9 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/cart/cells/subtotal.tsx', 1],
 	['screens/main/pos/cart/clear-local-data.tsx', 1],
 	['screens/main/pos/cart/closure-sheet.tsx', 1],
-	['screens/main/pos/cart/edit-cart-customer.tsx', 1],
-	['screens/main/pos/cart/new-customer-link-bridge.tsx', 5],
-	['screens/main/pos/cart/new-customer-link.ts', 3],
+	['screens/main/pos/cart/edit-cart-customer.tsx', 2],
+	['screens/main/pos/cart/new-customer-link-bridge.tsx', 7],
+	['screens/main/pos/cart/new-customer-link.ts', 9],
 	['screens/main/pos/cart/register-panel.tsx', 1],
 	['screens/main/pos/cart/table.tsx', 3],
 	['screens/main/pos/cart/totals/taxes.tsx', 1],
@@ -109,14 +116,14 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/cart/user-sheet.tsx', 2],
 	['screens/main/pos/cart/void-order.ts', 2],
 	['screens/main/pos/checkout/column/use-checkout-back.ts', 1],
-	['screens/main/pos/checkout/completion-journal.ts', 4],
+	['screens/main/pos/checkout/completion-journal.ts', 10],
 	['screens/main/pos/checkout/hooks/use-checkout-save.ts', 1],
 	['screens/main/pos/checkout/payments/server/use-terminal-payments-service.ts', 2],
 	['screens/main/pos/checkout/provenance/persist-provenance.ts', 1],
 	['screens/main/pos/checkout/provenance/provenance-gap.ts', 1],
 	['screens/main/pos/checkout/provenance/stamp-completion.ts', 1],
 	['screens/main/pos/checkout/sale-completion.ts', 1],
-	['screens/main/pos/checkout/tender/remembered-readers.ts', 2],
+	['screens/main/pos/checkout/tender/remembered-readers.ts', 7],
 	['screens/main/pos/checkout/use-rejected-order-saves.ts', 3],
 	['screens/main/pos/conditions/snapshot.ts', 1],
 	['screens/main/pos/conditions/use-cart-conditions.ts', 2],
@@ -137,7 +144,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/hooks/use-add-product.ts', 1],
 	['screens/main/pos/hooks/use-add-shipping.ts', 1],
 	['screens/main/pos/hooks/use-add-variation.ts', 2],
-	['screens/main/pos/hooks/use-cart-settlement.ts', 1],
+	['screens/main/pos/hooks/use-cart-settlement.ts', 3],
 	['screens/main/pos/hooks/use-coupon-context.ts', 1],
 	['screens/main/pos/hooks/use-fee-line-data.ts', 1],
 	['screens/main/pos/hooks/use-line-item-data.ts', 1],
@@ -153,26 +160,29 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/products/cells/variations-popover/index.tsx', 1],
 	['screens/main/pos/products/cells/variations-popover/utils.ts', 1],
 	['screens/main/pos/products/cells/variations-popover/variations.tsx', 1],
+	['screens/main/pos/products/filter-bar/quick-filter-editor.tsx', 1],
 	['screens/main/pos/products/rows/variation-row.tsx', 1],
 	['screens/main/pos/products/tiles/inline-variable-tile.tsx', 1],
 	['screens/main/pos/products/tiles/product-grid.tsx', 1],
 	['screens/main/pos/products/tiles/variation-tile.tsx', 1],
 	['screens/main/pos/products/use-barcode.ts', 2],
-	['screens/main/pos/products/use-ble-scan.ios.ts', 5],
-	['screens/main/pos/products/use-hid-scan.web.ts', 2],
-	['screens/main/pos/products/use-serial-scan.web.ts', 2],
+	['screens/main/pos/products/use-ble-scan.ios.ts', 6],
+	['screens/main/pos/products/use-hid-scan.web.ts', 3],
+	['screens/main/pos/products/use-serial-scan.web.ts', 3],
 	['screens/main/products/edit/product/form.tsx', 1],
 	['screens/main/products/edit/variation/form.tsx', 1],
-	['screens/main/receipt/email-queue/queue.ts', 9],
-	['screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts', 2],
+	['screens/main/products/products.tsx', 2],
+	['screens/main/receipt/email-queue/queue.ts', 17],
+	['screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts', 3],
 	['screens/main/receipt/hooks/use-active-templates.ts', 1],
 	['screens/main/receipt/hooks/use-resolved-printer.ts', 2],
 	['screens/main/receipt/hooks/use-template-renderer.ts', 1],
-	['screens/main/receipt/hooks/use-templates-sync.ts', 5],
+	['screens/main/receipt/hooks/use-templates-sync.ts', 7],
 	['screens/main/receipt/template-switcher.tsx', 1],
 	['screens/main/receipt/use-receipt-document.ts', 4],
 	['screens/main/reports/bar.tsx', 1],
 	['screens/main/reports/cards/cashiers.tsx', 1],
+	['screens/main/reports/cards/test-utils.tsx', 1],
 	['screens/main/reports/cards/use-local-categories.ts', 1],
 	['screens/main/reports/cards/use-local-products.ts', 1],
 	['screens/main/reports/closures/closure-list.tsx', 1],
@@ -182,7 +192,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/reports/closures/save-or-share-csv.web.ts', 1],
 	['screens/main/reports/closures/session-card.tsx', 1],
 	['screens/main/reports/closures/session-cards.tsx', 1],
-	['screens/main/reports/closures/use-closure-rows.ts', 2],
+	['screens/main/reports/closures/use-closure-rows.ts', 3],
 	['screens/main/reports/closures/use-last-closure.ts', 1],
 	['screens/main/reports/context.tsx', 1],
 	['screens/main/reports/hero/index.tsx', 1],
@@ -190,7 +200,8 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/reports/panels/panel.tsx', 1],
 	['screens/main/reports/report/use-report-cashier.ts', 1],
 	['screens/main/reports/till-strip.tsx', 1],
-	['screens/main/settings/barcode-scanning/input-sources.tsx', 4],
+	['screens/main/settings/barcode-scanning/input-sources.tsx', 5],
+	['screens/main/settings/barcode-scanning/test-panel.tsx', 1],
 	['screens/main/settings/card-readers/use-reader-actions.ts', 1],
 	['screens/main/settings/general.tsx', 1],
 	['screens/main/settings/printer/persist-printer-profile.ts', 5],
@@ -202,18 +213,18 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['services/novu/bootstrap.ts', 1],
 	['services/novu/notification-sync.ts', 4],
 	['services/novu/subscriber.ts', 1],
+	['services/register/register-document.ts', 17],
 	['services/register-session/audit.ts', 1],
 	['services/register-session/bridge.tsx', 1],
 	['services/register-session/closure-document.ts', 1],
 	['services/register-session/expected.ts', 1],
-	['services/register-session/queue.ts', 15],
+	['services/register-session/queue.ts', 16],
 	['services/register-session/refresh.ts', 4],
 	['services/register-session/session-store.ts', 9],
 	['services/register-session/settled-figures.ts', 1],
-	['services/register-session/use-register-session-collections.ts', 2],
+	['services/register-session/use-register-session-collections.ts', 3],
 	['services/register-session/use-register-session.ts', 3],
 	['services/register-session/use-session-report.ts', 1],
-	['services/register/register-document.ts', 9],
 	['utils/merge-stores.ts', 7],
 	['utils/site-writes.ts', 4],
 ];
@@ -223,6 +234,13 @@ export const SEAM_REPAIRED_SINCE_FREEZE: readonly string[] = [];
 
 /**
  * Minimum length of `SEAM_REPAIRED_SINCE_FREEZE`. Raise it in the same commit as every repair;
- * never lower it. A regression that deletes a repaired entry must lower this too, in plain sight.
+ * never lower it. The prefix digest below pins the repaired identities as well as their count.
  */
 export const SEAM_REPAIRED_FLOOR = 0;
+
+/** SHA-256 of the first SEAM_REPAIRED_FLOOR entries joined by a newline; update with the floor. */
+export const SEAM_REPAIRED_PREFIX_DIGEST =
+	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+/** Lowered positive per-file ceilings. Record every decrease; zero belongs in the repaired list. */
+export const SEAM_CEILINGS: readonly (readonly [string, number])[] = [];
