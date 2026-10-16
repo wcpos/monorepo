@@ -54,9 +54,14 @@ unless each heavy library is reachable from exactly one lazy root. Two consequen
   imports through) over per-screen lazy wrappers.
 - Expo 58 also ships `createGranularChunkingStrategy`, selected by
   `experiments.chunking.mode = 'granular'` in `app.config.ts` (web export only; it
-  emits shared chunks per group instead of one `__common`). It is being measured on
-  the `codex/web-bundle-split` branch; if it holds up, it is the first change to land,
-  before any boundary work.
+  emits `__shared-*` chunks per group instead of one `__common`). **Measured
+  2026-10-17 and not adopted:** the script tags shrink to runtime + entry (1.6 MB raw /
+  271 KB brotli), but the chunk closure the POS route needs is 207 chunks and
+  2.68 MB brotli, the same bytes as before spread over 207 requests instead of 3.
+  Granular only pays off once the POS route's own module graph is small; revisit it
+  after the boundary work, not before. The `paths` map it embeds in `entry-*.js` uses
+  absolute `/_expo/static/js/web/` paths, which `apps/web/scripts/build.js` already
+  rewrites, so switching later needs no publish-script change.
 
 The shape is the problem, not the total: 14.5 MB must download, parse and compile
 before anything renders. On a desktop that is one to
@@ -127,6 +132,14 @@ not needed to draw the POS screen:
 ## Plan
 
 ### 0. Measure first (the first deliverable is a table, not a diff)
+
+The number to track is **bytes to the POS screen**: under the legacy strategy that is
+the eager set (runtime + `__common` + entry) plus the `(pos)` route chunks, which is
+what `scripts/web-bundle-composition.mjs` reports. Baseline on `next` at 51f32a2a7:
+14,485,113 raw / 2,700,557 brotli eager. Top owners: `<unmapped>` 1.64 MB,
+`packages/core` 1.48 MB, `date-fns` 1.10 MB (root-barrel imports plus every locale),
+`bwip-js` 0.96 MB, `react-native-reanimated` 0.65 MB, `zod` 0.51 MB, the Sentry
+packages 1.16 MB together, `packages/components` 0.53 MB, `expo-router` 0.44 MB.
 
 Build locally with source maps (`npx expo export --platform web --source-maps external
 --output-dir <dir>`; `metadata.json` is empty in a plain export, so take the eager set
