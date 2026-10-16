@@ -57,19 +57,19 @@ const lineInfo = {
 	line_items: {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'line-item']),
 		label: 'Line item',
-		site: 'useUpdateLineItem',
+		site: 'useUpdateCartLine',
 		stale: (t: ActionContext['t']) => t('pos_cart.update_line_not_found'),
 	},
 	fee_lines: {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'fee-line']),
 		label: 'Fee line',
-		site: 'useUpdateFeeLine',
+		site: 'useUpdateCartLine',
 		stale: (t: ActionContext['t']) => t('pos_cart.update_fee_not_found'),
 	},
 	shipping_lines: {
 		logger: getLogger(['wcpos', 'pos', 'cart', 'shipping-line']),
 		label: 'Shipping line',
-		site: 'useUpdateShippingLine',
+		site: 'useUpdateCartLine',
 		stale: (t: ActionContext['t']) => t('pos_cart.update_shipping_not_found'),
 	},
 } as const;

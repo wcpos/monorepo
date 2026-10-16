@@ -187,7 +187,7 @@ function detectMalformedPosData(
 // ===== changes merges (ports of the use-update-* hooks' merge blocks) =====
 
 /**
- * THE changes-merge for line items — `useUpdateLineItem` calls this rather than carrying
+ * THE changes-merge for line items — `useUpdateCartLine` calls this rather than carrying
  * its own copy (the block it was ported from is deleted):
  * `price`/`regular_price`/`tax_status` go into `_woocommerce_pos_data` with
  * `?? prev` fallbacks; everything else merges top-level.
@@ -224,7 +224,7 @@ function applyLineItemChanges(
 }
 
 /**
- * THE changes-merge for fee lines — `useUpdateFeeLine` calls this rather than carrying its
+ * THE changes-merge for fee lines — `useUpdateCartLine` calls this rather than carrying its
  * own copy (the block it was ported from is deleted):
  * `amount`/`percent`/`prices_include_tax`/`percent_of_cart_total_with_tax` go into
  * `_woocommerce_pos_data` with `?? prev` fallbacks; everything else (name,
@@ -254,7 +254,7 @@ function applyFeeLineChanges(
 }
 
 /**
- * THE changes-merge for shipping lines — `useUpdateShippingLine` calls this rather than
+ * THE changes-merge for shipping lines — `useUpdateCartLine` calls this rather than
  * carrying its own copy (the block it was ported from is deleted):
  * `amount`/`prices_include_tax`/`tax_status` go into `_woocommerce_pos_data` with
  * `?? prev` fallbacks; everything else (method_title, method_id, ...) merges top-level.
@@ -471,7 +471,7 @@ function calculatePercentAmount(
 /**
  * The fee-line tax maths. Began as a port of `calculateFeeLineTaxesAndTotals`
  * (use-calculate-fee-line-tax-and-totals.ts); that hook was deleted once `useAddFee` and
- * `useUpdateFeeLine` came through here, so this is now the only copy — do not reintroduce
+ * `useUpdateCartLine` came through here, so this is now the only copy — do not reintroduce
  * a second one in `packages/core`.
  */
 function computeFeeLine(
@@ -526,7 +526,7 @@ function computeFeeLine(
 /**
  * The shipping-line tax maths. Began as a port of `calculateShippingLineTaxesAndTotals`
  * (use-calculate-shipping-line-tax-and-totals.ts); that hook was deleted once `useAddShipping`
- * and `useUpdateShippingLine` came through here, so this is now the only copy — do not
+ * and `useUpdateCartLine` came through here, so this is now the only copy — do not
  * reintroduce a second one in `packages/core`.
  */
 function computeShippingLine(

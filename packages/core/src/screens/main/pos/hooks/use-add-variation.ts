@@ -10,7 +10,7 @@ import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 import {
 	convertVariationToLineItemWithoutTax,
 	findByProductVariationID,
@@ -37,7 +37,7 @@ export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	// Event-time resolution — every variable product tile mounts this hook.
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { incrementLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateCartLine();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);

@@ -9,7 +9,7 @@ import {
 	registerActionHook,
 	resetActionRegistry,
 } from '../../../../extensions/actions';
-import { useUpdateShippingLine } from './use-update-shipping-line';
+import { useUpdateCartLine } from './use-update-cart-line';
 
 const mockLocalPatch = jest.fn();
 const mockLoggerError = jest.fn();
@@ -17,14 +17,17 @@ const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
-let mockShippingLines: object[] = [];
+let mockFeeLines: object[] = [];
+let mockLineItems: object[] = [];
 const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 17 },
 	getLatest: () => ({
 		uuid: 'order-uuid',
 		payload: { id: 17 },
-		toMutableJSON: () => ({ payload: { shipping_lines: mockShippingLines } }),
+		toMutableJSON: () => ({
+			payload: { fee_lines: mockFeeLines, line_items: mockLineItems },
+		}),
 	}),
 };
 
@@ -85,8 +88,9 @@ jest.mock('./use-action-context', () => ({
 	}),
 }));
 
-// Only the store settings are stubbed; the tax maths and the changes-merge run for
-// real, so this suite fails if the engine port stops behaving like the hook it replaced.
+// Only the store settings are stubbed; the tax maths, the changes-merge and the
+// percent basis all run for real, so this suite fails if the engine port stops
+// behaving like the hook it replaced.
 jest.mock('./use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
 	const config = createCartConfig({
@@ -103,23 +107,21 @@ jest.mock('./use-cart-config', () => {
 	return { useCartConfig: () => config };
 });
 
-describe('useUpdateShippingLine', () => {
+describe('useUpdateCartLine — fee_lines', () => {
 	beforeEach(() => {
 		resetOrderMutationQueues();
 		jest.clearAllMocks();
 		resetActionRegistry();
-		mockShippingLines = [];
+		mockFeeLines = [];
+		mockLineItems = [];
 		mockLocalPatch.mockResolvedValue(true);
 	});
 
-	it('dispatches cart.line.update typed shipping_lines, and a rewritten change reaches the write', async () => {
-		mockShippingLines = [
-			{
-				method_title: 'Flat rate',
-				method_id: 'flat_rate',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'ship-1' }],
-			},
+	it('dispatches cart.line.update typed fee_lines, and a rewritten change reaches the write', async () => {
+		mockFeeLines = [
+			{ name: 'Handling', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },
 		];
+		mockLineItems = [{ product_id: 1, total: '80', total_tax: '8' }];
 		const seen: ActionEventInput<'cart.line.update'>[] = [];
 		registerActionHook(
 			'cart.line.update',
@@ -127,29 +129,29 @@ describe('useUpdateShippingLine', () => {
 				seen.push(e);
 				return next({
 					...e,
-					payload: { ...e.payload, changes: { ...e.payload.changes, amount: 5 } },
+					payload: { ...e.payload, changes: { ...e.payload.changes, amount: '5' } },
 				});
 			},
 			{ id: 'test.rewriter', tier: 'extension' }
 		);
-		const { result } = renderHook(() => useUpdateShippingLine());
-		await act(async () => result.current.updateShippingLine('ship-1', { amount: 3 }));
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => result.current.updateCartLine('fee_lines', 'fee-1', { amount: '3' }));
 		expect(seen).toEqual([
 			expect.objectContaining({
 				event: 'cart.line.update',
 				orderId: 'order-uuid',
 				payload: expect.objectContaining({
-					type: 'shipping_lines',
-					lineUuid: 'ship-1',
-					changes: { amount: 3 },
-					line: expect.objectContaining({ method_title: 'Flat rate' }),
-					lineItems: [],
+					type: 'fee_lines',
+					lineUuid: 'fee-1',
+					changes: { amount: '3' },
+					line: expect.objectContaining({ name: 'Handling' }),
+					lineItems: mockLineItems,
 				}),
 			}),
 		]);
 		expect(mockLocalPatch).toHaveBeenCalledWith(
 			expect.objectContaining({
-				data: { shipping_lines: [expect.objectContaining({ total: '5' })] },
+				data: { fee_lines: [expect.objectContaining({ total: '5' })] },
 			})
 		);
 	});
@@ -163,12 +165,8 @@ describe('useUpdateShippingLine', () => {
 			getLatest: () => saved,
 			toMutableJSON: () => ({
 				payload: {
-					shipping_lines: [
-						{
-							method_title: 'Flat rate',
-							method_id: 'flat_rate',
-							meta_data: [{ key: '_woocommerce_pos_uuid', value: 'ship-1' }],
-						},
+					fee_lines: [
+						{ name: 'Handling', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },
 					],
 					line_items: [],
 				},
@@ -180,27 +178,25 @@ describe('useUpdateShippingLine', () => {
 			await gate;
 			queue.order = saved;
 		});
-		const { result } = renderHook(() => useUpdateShippingLine());
-		const pending = act(async () => result.current.updateShippingLine('ship-1', { amount: 3 }));
+		const { result } = renderHook(() => useUpdateCartLine());
+		const pending = act(async () =>
+			result.current.updateCartLine('fee_lines', 'fee-1', { amount: '3' })
+		);
 		release();
 		await pending;
 		expect(mockLocalPatch).toHaveBeenCalledWith(expect.objectContaining({ document: saved }));
 	});
 
 	it('a guard refusal writes nothing and presents the reason', async () => {
-		mockShippingLines = [
-			{
-				method_title: 'Flat rate',
-				method_id: 'flat_rate',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'ship-1' }],
-			},
+		mockFeeLines = [
+			{ name: 'Handling', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },
 		];
 		registerActionHook('cart.line.update', async () => ({ deny: { reasonKey: 'test.locked' } }), {
 			id: 'test.guard',
 			tier: 'guard',
 		});
-		const { result } = renderHook(() => useUpdateShippingLine());
-		await act(async () => result.current.updateShippingLine('ship-1', { amount: 3 }));
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => result.current.updateCartLine('fee_lines', 'fee-1', { amount: '3' }));
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockActionLog).toHaveBeenCalledWith(
 			'warn',
@@ -209,48 +205,80 @@ describe('useUpdateShippingLine', () => {
 		);
 	});
 
-	it('patches a recalculated matching shipping line', async () => {
-		mockShippingLines = [
+	it('patches a recalculated matching fee line', async () => {
+		mockFeeLines = [
 			{
-				method_title: 'Delivery',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'shipping-1' }],
+				name: 'Handling',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }],
 			},
 		];
-		const { result } = renderHook(() => useUpdateShippingLine());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
-			await result.current.updateShippingLine('shipping-1', { amount: 3 });
+			await result.current.updateCartLine('fee_lines', 'fee-1', { amount: '3' });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
-			data: {
-				shipping_lines: [expect.objectContaining({ total: '3', total_tax: '0' })],
-			},
+			data: { fee_lines: [expect.objectContaining({ total: '3', total_tax: '0' })] },
 		});
 		// The changes-merge is the engine's now: `amount` has to land in pos_data, not
 		// top-level, or the next recalculation reads the pre-edit amount back.
 		const [{ data }] = mockLocalPatch.mock.calls[0];
-		const posData = data.shipping_lines[0].meta_data.find(
+		const posData = data.fee_lines[0].meta_data.find(
 			(meta: { key: string }) => meta.key === '_woocommerce_pos_data'
 		);
-		expect(posData.value).toEqual(expect.objectContaining({ amount: 3, tax_status: 'taxable' }));
+		expect(posData.value).toEqual(expect.objectContaining({ amount: '3', percent: false }));
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
-	it('warns without patching when the shipping line is absent', async () => {
-		const { result } = renderHook(() => useUpdateShippingLine());
+	it('computes a percentage fee from the SAME snapshot it patches', async () => {
+		// The retired hook re-read the order with getLatest() in the middle of its own
+		// arithmetic, so the basis could come from a newer cart than the one being written.
+		// The basis is an explicit input now, taken from this snapshot's line items.
+		mockLineItems = [
+			{ product_id: 1, total: '80', total_tax: '8' },
+			// Tombstoned: excluded from the basis, exactly as `product_id !== null` did.
+			{ product_id: null, total: '999', total_tax: '99' },
+		];
+		mockFeeLines = [
+			{
+				name: '10% service charge',
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: 'fee-1' },
+					{
+						key: '_woocommerce_pos_data',
+						value: { amount: '10', percent: true, percent_of_cart_total_with_tax: false },
+					},
+				],
+			},
+		];
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
-			await result.current.updateShippingLine('missing', { amount: 3 });
+			await result.current.updateCartLine('fee_lines', 'fee-1', {
+				percent_of_cart_total_with_tax: true,
+			});
+		});
+
+		// 10% of (80 + 8), the tombstoned line contributing nothing.
+		const [{ data }] = mockLocalPatch.mock.calls[0];
+		expect(data.fee_lines[0].total).toBe('8.8');
+	});
+
+	it('warns without patching when the fee line is absent', async () => {
+		const { result } = renderHook(() => useUpdateCartLine());
+
+		await act(async () => {
+			await result.current.updateCartLine('fee_lines', 'missing', { amount: '3' });
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockLoggerWarn).toHaveBeenCalledWith(
-			'Shipping line update targeted a line that is no longer in the cart',
+			'Fee line update targeted a line that is no longer in the cart',
 			{
 				showToast: true,
-				toast: { title: 'pos_cart.update_shipping_not_found' },
+				toast: { title: 'pos_cart.update_fee_not_found' },
 				context: { uuid: 'missing', orderId: 17 },
 			}
 		);

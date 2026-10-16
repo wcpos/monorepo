@@ -8,7 +8,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { EditableField } from '../../../components/editable-field';
-import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
 /** The v2 cart's fee name: the old cell without the edit icon (the strip's Edit owns it). */
 export function FeeName({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
-	const { updateFeeLine } = useUpdateFeeLine();
+	const { updateCartLine } = useUpdateCartLine();
 
 	/**
 	 * filter out the private meta data
@@ -48,7 +48,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 					bold={false}
 					numberOfLines={2}
 					value={item.name ?? undefined}
-					onChangeText={(name) => updateFeeLine(uuid, { name })}
+					onChangeText={(name) => updateCartLine('fee_lines', uuid, { name })}
 				/>
 			</View>
 

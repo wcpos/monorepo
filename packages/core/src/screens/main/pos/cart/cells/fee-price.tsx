@@ -7,7 +7,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { CurrencyInput } from '../../../components/currency-input';
 import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
-import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
@@ -21,7 +21,7 @@ interface Props {
  */
 export function FeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
-	const { updateFeeLine } = useUpdateFeeLine();
+	const { updateCartLine } = useUpdateCartLine();
 	const { getFeeLineData } = useFeeLineData();
 	const { percent, amount } = getFeeLineData(item);
 
@@ -33,7 +33,7 @@ export function FeePrice({ row }: CellContext<Props, 'price'>) {
 	 */
 	const onAmount = (next: number) => {
 		if (next < 0) return;
-		void updateFeeLine(uuid, { amount: String(next) });
+		void updateCartLine('fee_lines', uuid, { amount: String(next) });
 	};
 
 	return (

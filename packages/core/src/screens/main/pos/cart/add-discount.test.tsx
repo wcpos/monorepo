@@ -141,8 +141,8 @@ jest.mock('../hooks/use-add-quick-discount', () => ({
 	useAddQuickDiscount: () => ({ addQuickDiscount: mockAdd }),
 }));
 jest.mock('../hooks/use-add-fee', () => ({ useAddFee: () => ({ addFee: mockFee }) }));
-jest.mock('../hooks/use-update-fee-line', () => ({
-	useUpdateFeeLine: () => ({ updateFeeLine: mockUpdate }),
+jest.mock('../hooks/use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ updateCartLine: mockUpdate }),
 }));
 jest.mock('../hooks/use-fee-line-data', () => ({
 	useFeeLineData: () => ({
@@ -228,6 +228,6 @@ it.each([false, true])(
 		fireEvent.change(screen.getByTestId('price'), { target: { value: '-5' } });
 		expect(mockUpdate).not.toHaveBeenCalled();
 		fireEvent.change(screen.getByTestId('price'), { target: { value: '5' } });
-		expect(mockUpdate).toHaveBeenCalledWith('fee', { amount: '5' });
+		expect(mockUpdate).toHaveBeenCalledWith('fee_lines', 'fee', { amount: '5' });
 	}
 );

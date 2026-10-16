@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { EditableField } from '../../../components/editable-field';
-import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {
@@ -16,7 +16,7 @@ interface Props {
 /** The v2 cart's shipping title: the old cell without the edit icon (the strip's Edit owns it). */
 export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
-	const { updateShippingLine } = useUpdateShippingLine();
+	const { updateCartLine } = useUpdateCartLine();
 
 	return (
 		// No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29).
@@ -26,7 +26,7 @@ export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 				bold={false}
 				numberOfLines={2}
 				value={item.method_title}
-				onChangeText={(method_title) => updateShippingLine(uuid, { method_title })}
+				onChangeText={(method_title) => updateCartLine('shipping_lines', uuid, { method_title })}
 			/>
 		</View>
 	);

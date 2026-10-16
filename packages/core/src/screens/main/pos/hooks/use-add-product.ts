@@ -9,7 +9,7 @@ import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 import {
 	convertProductToLineItemWithoutTax,
 	findByProductVariationID,
@@ -38,7 +38,7 @@ export const useAddProduct = () => {
 	 * per add or remove. Nothing this hook does needs the order until the user acts.
 	 */
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { incrementLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateCartLine();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);

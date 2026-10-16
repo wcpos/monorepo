@@ -6,7 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 
 // Mock uuid ESM module
 jest.mock('uuid', () => ({
@@ -188,7 +188,7 @@ jest.mock('./use-line-item-data', () => ({
 	}),
 }));
 
-describe('useUpdateLineItem', () => {
+describe('useUpdateCartLine — line_items', () => {
 	beforeEach(() => {
 		resetOrderMutationQueues();
 		jest.clearAllMocks();
@@ -222,9 +222,9 @@ describe('useUpdateLineItem', () => {
 			await gate;
 			queue.order = saved;
 		});
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const pending = act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 1 });
+			await result.current.updateCartLine('line_items', uuid, { quantity: 1 });
 		});
 		release();
 		await pending;
@@ -232,11 +232,11 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('allows a quantity decrease without evaluating stock', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 0.5 });
+			await result.current.updateCartLine('line_items', uuid, { quantity: 0.5 });
 		});
 
 		expect(mockReadCatalog).not.toHaveBeenCalled();
@@ -245,11 +245,11 @@ describe('useUpdateLineItem', () => {
 
 	it('presents a dispatcher refusal when the stock read throws on a quantity increase', async () => {
 		mockReadCatalog.mockRejectedValueOnce(new Error('database closed'));
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		let outcome: unknown;
 		await act(async () => {
-			outcome = await result.current.updateLineItem(uuid, { quantity: 2 });
+			outcome = await result.current.updateCartLine('line_items', uuid, { quantity: 2 });
 		});
 		expect(outcome).toBe(false);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -266,11 +266,11 @@ describe('useUpdateLineItem', () => {
 			backorders: 'no',
 			name: 'Item 1',
 		});
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 2 });
+			await result.current.updateCartLine('line_items', uuid, { quantity: 2 });
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -283,11 +283,11 @@ describe('useUpdateLineItem', () => {
 			backorders: 'notify',
 			name: 'Item 1',
 		});
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 2 });
+			await result.current.updateCartLine('line_items', uuid, { quantity: 2 });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalled();
@@ -308,7 +308,7 @@ describe('useUpdateLineItem', () => {
 				return { changes: data };
 			}
 		);
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		await act(async () => {
@@ -324,12 +324,12 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates line item name correctly', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newName = 'New Item Name';
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { name: newName });
+			await result.current.updateCartLine('line_items', uuid, { name: newName });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith(
@@ -347,13 +347,13 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates line item quantity correctly', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 3;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: newQuantity });
+			await result.current.updateCartLine('line_items', uuid, { quantity: newQuantity });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith(
@@ -371,13 +371,13 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates line item price correctly', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newPrice = 20;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { price: newPrice });
+			await result.current.updateCartLine('line_items', uuid, { price: newPrice });
 		});
 
 		// Verify localPatch was called with the correct line item
@@ -402,10 +402,10 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('persists searchable before-and-after values for quantity changes', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
-			await result.current.updateLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', {
+			await result.current.updateCartLine('line_items', '23e108ca-63a7-469a-ad12-ed72e0d04be3', {
 				quantity: 3,
 			});
 		});
@@ -424,10 +424,10 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('persists searchable before-and-after values for price changes', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		await act(async () => {
-			await result.current.updateLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', {
+			await result.current.updateCartLine('line_items', '23e108ca-63a7-469a-ad12-ed72e0d04be3', {
 				price: 20,
 			});
 		});
@@ -441,13 +441,13 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates subtotal and total when quantity is changed', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 7;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: newQuantity });
+			await result.current.updateCartLine('line_items', uuid, { quantity: newQuantity });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith(
@@ -468,13 +468,13 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates taxes when quantity is changed', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 7;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: newQuantity });
+			await result.current.updateCartLine('line_items', uuid, { quantity: newQuantity });
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith(
@@ -509,13 +509,13 @@ describe('useUpdateLineItem', () => {
 	});
 
 	it('updates taxes when price is changed', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newPrice = 20;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { price: newPrice });
+			await result.current.updateCartLine('line_items', uuid, { price: newPrice });
 		});
 
 		// Verify localPatch was called and the line item has tax calculations
@@ -553,7 +553,7 @@ describe('useUpdateLineItem', () => {
 	 * The order must be captured at press time and threaded through.
 	 */
 	it('applies the edit to the order captured at press time, not the one selected later', async () => {
-		const { result } = renderHook(() => useUpdateLineItem());
+		const { result } = renderHook(() => useUpdateCartLine());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		// The cashier switches tabs: the NEXT event-time read would hand back a different
@@ -564,7 +564,7 @@ describe('useUpdateLineItem', () => {
 		};
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 5 });
+			await result.current.updateCartLine('line_items', uuid, { quantity: 5 });
 		});
 
 		// The patch still went to the original order and still found the line.

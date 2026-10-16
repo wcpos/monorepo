@@ -121,7 +121,7 @@ type ReplayContinuation = {
  * WooCommerce owns money. Once the server has overruled this order's arithmetic,
  * BOTH passes stand down for good: re-deriving an aggregate the server has already
  * rejected is how the POS argues with its own source of truth. The cashier's
- * structural edits still push — `use-update-line-item` sends `line_items` and no
+ * structural edits still push — `use-update-cart-line` sends `line_items` and no
  * top-level money — so the order keeps moving as intent, and the server's answer is
  * adopted on each ack. Local arithmetic carries on for DISPLAY and for offline
  * operation; it simply stops being an assertion.

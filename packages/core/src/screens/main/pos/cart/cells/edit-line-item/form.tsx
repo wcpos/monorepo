@@ -37,7 +37,7 @@ import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 import { parsePosData } from '../../../hooks/utils';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
@@ -66,7 +66,7 @@ interface Props {
 
 export function EditLineItemForm({ uuid, item }: Props) {
 	const t = useT();
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const { close: closeDialog } = useDialog();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
@@ -104,7 +104,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 	 */
 	const handleSave = React.useCallback(
 		async (data: FormValues) => {
-			await updateLineItem(uuid, {
+			await updateCartLine('line_items', uuid, {
 				name: data.name,
 				sku: data.sku,
 				quantity: data.quantity,
@@ -122,7 +122,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			});
 			closeDialog();
 		},
-		[updateLineItem, uuid, closeDialog]
+		[updateCartLine, uuid, closeDialog]
 	);
 
 	/**

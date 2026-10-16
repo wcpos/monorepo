@@ -14,7 +14,7 @@ import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrder } from '../../contexts/current-order';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
 export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { currentOrderRecord } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
 	const unmet = useCartUnmet().find((condition) => condition.lineUuid === uuid);
@@ -74,7 +74,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 					bold={false}
 					numberOfLines={2}
 					value={item.name}
-					onChangeText={(name) => updateLineItem(uuid, { name })}
+					onChangeText={(name) => updateCartLine('line_items', uuid, { name })}
 				/>
 			</View>
 			{stockMark && (

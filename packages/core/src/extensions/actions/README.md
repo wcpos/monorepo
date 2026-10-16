@@ -29,7 +29,7 @@ unrelated queued writes.
 | Event                    | Raised by           | Rewritable keys                                                | Can refuse |
 | ------------------------ | ------------------- | -------------------------------------------------------------- | ---------- |
 | `cart.line.add`          | `useAddItemToOrder` | `line`                                                         | yes        |
-| `cart.line.update`       | `useUpdateCartLine` (one writer; `useUpdateLineItem`, `useUpdateFeeLine`, `useUpdateShippingLine` delegate; `type` says which list) | `changes` | yes |
+| `cart.line.update`       | `useUpdateCartLine` (one writer; `type` says which list) | `changes` | yes |
 | `cart.line.remove`       | `useRemoveLineItem` (every list; Undo re-enters through `cart.line.add`) | none | yes |
 | `cart.line.split` | `useSplitLineItem` (the cart's Split link; `line_items` only; one write replaces the line with its unit lines) | none | yes |
 | `cart.coupon.apply`      | `useAddCoupon`, `useAddQuickDiscount`, through `applyCouponLine` | none (v1) | yes |

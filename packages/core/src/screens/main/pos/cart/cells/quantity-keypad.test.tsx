@@ -11,8 +11,8 @@ const mockSplitLineItem = jest.fn();
 jest.mock('../../hooks/use-split-line-item', () => ({
 	useSplitLineItem: () => ({ splitLineItem: mockSplitLineItem }),
 }));
-jest.mock('../../hooks/use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ updateLineItem: mockUpdateLineItem }),
+jest.mock('../../hooks/use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ updateCartLine: mockUpdateLineItem }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // The conditions module's own reads (store session) are not under test here.
@@ -58,7 +58,7 @@ it('keeps the quantity id/value and commits the same hook arguments', () => {
 	fireEvent.change(input, { target: { value: '3' } });
 	fireEvent.keyDown(input, { key: 'Enter' });
 	expect(mockUpdateLineItem).toHaveBeenCalledTimes(1);
-	expect(mockUpdateLineItem).toHaveBeenCalledWith('line-1', { quantity: 3 });
+	expect(mockUpdateLineItem).toHaveBeenCalledWith('line_items', 'line-1', { quantity: 3 });
 });
 
 it('a mounted keypad is what the notice opens; it registers no scroll of its own', () => {
