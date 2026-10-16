@@ -18,7 +18,7 @@ type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 export function refreshOrderRecord(
 	runtime: QueryRuntime,
 	orderId: number
-): Promise<'refreshed' | 'timed-out'> {
+): Promise<'refreshed' | 'timed-out' | 'failed'> {
 	// Deliberately not `async`: an engine that cannot even take the request throws
 	// from here, synchronously, to whoever asked for the refresh. Only the WAIT for
 	// readiness is the caller's to absorb.
@@ -31,7 +31,9 @@ export function refreshOrderRecord(
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([
-		handle.ready.then((): 'refreshed' => 'refreshed'),
+		handle.ready.then((result): 'refreshed' | 'failed' =>
+			result.action === 'fetched' ? 'refreshed' : 'failed'
+		),
 		new Promise<'timed-out'>((resolve) => {
 			timer = setTimeout(() => resolve('timed-out'), ORDER_REFRESH_TIMEOUT_MS);
 		}),

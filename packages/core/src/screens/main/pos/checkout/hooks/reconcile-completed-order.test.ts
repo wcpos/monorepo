@@ -25,7 +25,7 @@ function setup(id: number | null = 42) {
 	const requireRefresh = jest
 		.fn()
 		.mockReturnValue({ ready: Promise.resolve(), release: stockRelease });
-	const orderHandle = { ready: Promise.resolve(), release };
+	const orderHandle = { ready: Promise.resolve({ action: 'fetched' }), release };
 	requireRefresh.mockReturnValueOnce(orderHandle);
 	const runtime = { engine: { require: requireRefresh } } as unknown as QueryRuntime;
 	const order = {
@@ -60,8 +60,8 @@ afterEach(() => {
 it('force-refreshes and releases the order before refreshing only reduced products and variations', async () => {
 	const c = setup();
 	let ready!: () => void;
-	c.orderHandle.ready = new Promise<void>((resolve) => {
-		ready = resolve;
+	c.orderHandle.ready = new Promise((resolve) => {
+		ready = () => resolve({ action: 'fetched' });
 	});
 	const completion = reconcileCompletedOrder(c.runtime, c.order);
 	expect(c.requireRefresh.mock.calls).toEqual([
@@ -109,7 +109,7 @@ it('force-refreshes and releases the order before refreshing only reduced produc
 
 it('degrades after ten seconds and still refreshes reduced stock from the local record', async () => {
 	const c = setup();
-	c.orderHandle.ready = new Promise<void>(() => undefined);
+	c.orderHandle.ready = new Promise(() => undefined);
 	const completion = reconcileCompletedOrder(c.runtime, c.order);
 	await jest.advanceTimersByTimeAsync(9_999);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(1);

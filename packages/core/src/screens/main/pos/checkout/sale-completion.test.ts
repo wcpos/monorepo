@@ -993,3 +993,29 @@ it.each(['timed-out', 'failed', 'skipped', 'refreshed'])(
 		resolve.mockRestore();
 	}
 );
+it.each(['released', 'serve-local', 'fetched'])(
+	'replay completes only after a delivering requirement (%s)',
+	async (action) => {
+		const { reconcileCompletedOrder } = jest.requireActual('./hooks/reconcile-completed-order');
+		const release = jest.fn();
+		const ready = Promise.resolve({ action, missingRecordIds: ['42'], reason: 'test readiness' });
+		const runtime = {
+			engine: { require: () => ({ ready, release }) },
+		} as unknown as SaleContext['runtime'];
+		mockReconcile.mockImplementationOnce(reconcileCompletedOrder);
+		const outcome = { source: 'replay' as const };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		const result = await completeSale({ ...ctx, runtime }, order, outcome, { host: 'background' });
+		if (action === 'fetched') {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalled();
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+		expect(release).toHaveBeenCalledTimes(1);
+	}
+);
