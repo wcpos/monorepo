@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';

@@ -9,7 +9,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 
 import { useT } from '../../contexts/translations';
 import { usePanelSide } from '../../screens/main/pos/contexts/overlay-side';

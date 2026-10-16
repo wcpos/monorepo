@@ -21,7 +21,7 @@ import {
 	DialogClose,
 	DialogFooter,
 	useDialog,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';

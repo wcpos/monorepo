@@ -82,7 +82,7 @@ jest.mock('./rate-table', () => ({ TaxRateTable: () => <div data-testid="tax-rat
 function passthrough({ children }: { children?: React.ReactNode }) {
 	return <div>{children}</div>;
 }
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: passthrough,
 	DialogBody: passthrough,
 	DialogClose: passthrough,

@@ -264,7 +264,7 @@ it('the controlled dialog opens a panel that is not hidden', () => {
 
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 // The v2 root has no wrapper: a single-child root is `asChild`, so its own props land on the panel.
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,

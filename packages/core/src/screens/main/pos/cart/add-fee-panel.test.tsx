@@ -5,7 +5,7 @@ import type { ScrollViewProps, ViewProps } from 'react-native';
 
 import { render, screen } from '@testing-library/react';
 
-import { Dialog, DialogContent } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent } from '@wcpos/components/dialog';
 
 import { AddFee } from './add-fee';
 

@@ -108,7 +108,7 @@ jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
 const dialogContent = jest.fn();
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,

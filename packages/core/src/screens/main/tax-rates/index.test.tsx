@@ -81,7 +81,7 @@ jest.mock('@wcpos/components/suspense', () => ({
 		<React.Suspense fallback={<div data-testid="tax-rates-fallback" />}>{children}</React.Suspense>
 	),
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	DialogClose: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,

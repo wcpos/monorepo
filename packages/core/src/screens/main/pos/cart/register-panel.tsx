@@ -6,7 +6,7 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';

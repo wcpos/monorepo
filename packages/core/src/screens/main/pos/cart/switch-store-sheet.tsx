@@ -5,7 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 

@@ -33,7 +33,7 @@ jest.mock('./filter-bar-list', () => ({
 jest.mock('./quick-filter-editor', () => ({
 	QuickFilterEditor: () => <div>Editor open</div>,
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,

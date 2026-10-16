@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import type { DialogAction } from '@wcpos/components/v2/dialog';
+import type { DialogAction } from '@wcpos/components/dialog';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -86,7 +86,7 @@ jest.mock('@wcpos/components/button', () => ({
 		<span data-loading={loading ? 'true' : 'false'}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogAction: ({
 		children,

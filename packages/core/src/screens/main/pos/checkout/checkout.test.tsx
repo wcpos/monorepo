@@ -103,7 +103,7 @@ jest.mock('./tender/tender-checkout', () => ({
 // → expo-haptics into a suite that transforms neither.
 jest.mock('../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

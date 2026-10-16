@@ -6,7 +6,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 
 import { useT } from '../../../../contexts/translations';
 import { usePanelSide } from '../contexts/overlay-side';

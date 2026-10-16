@@ -1,9 +1,9 @@
 import { View } from 'react-native';
 
-import { Button } from '../../button';
-import { Input } from '../../input';
-import { DeviceScope } from '../../lib/device';
-import { Text } from '../../text';
+import { Button } from '../button';
+import { Input } from '../input';
+import { DeviceScope } from '../lib/device';
+import { Text } from '../text';
 import {
 	Dialog,
 	DialogAction,

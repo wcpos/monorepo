@@ -96,7 +96,7 @@ it('prefills default, selects last count, shows only differing variance, and ope
 	);
 });
 
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: () => null,
 	DialogContent: () => null,
 	DialogTitle: () => null,

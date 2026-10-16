@@ -6,9 +6,9 @@ import { useComposedRefs } from '@rn-primitives/hooks';
 import { Slot } from '@rn-primitives/slot';
 import { router } from 'expo-router';
 
-import { Button } from '../../button';
-import { IconButton } from '../../icon-button';
-import { useIsPhone } from '../../lib/device';
+import { Button } from '../button';
+import { IconButton } from '../icon-button';
+import { useIsPhone } from '../lib/device';
 import {
 	EXIT_MARK,
 	isWeb,
@@ -17,14 +17,14 @@ import {
 	OverlayShell,
 	useOverlay,
 	useSheetInset,
-} from '../../lib/overlay';
-import { usePortalContainer } from '../../lib/portal-container';
-import { cn } from '../../lib/utils';
-import { Text, TextClassContext } from '../../text';
-import { isToastTarget } from '../../toast/target';
+} from '../lib/overlay';
+import { usePortalContainer } from '../lib/portal-container';
+import { cn } from '../lib/utils';
+import { Text, TextClassContext } from '../text';
+import { isToastTarget } from '../toast/target';
 import { useDialogLabels } from './labels';
 
-import type { OverlayPresentation } from '../../lib/overlay';
+import type { OverlayPresentation } from '../lib/overlay';
 import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
 export { DialogLabelsProvider, type DialogLabels } from './labels';
 
