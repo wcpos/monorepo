@@ -1,6 +1,6 @@
 # Behaviour ledger: `v2/dialog`
 
-2026-10-16: the one overlay system. `modal` and `dialog` v1 are deleted; their ledgers sit beside this one as `modal.LEDGER.md` and `dialog.LEDGER.md`.
+2026-10-16: the one overlay system. `modal` and `dialog` v1 are deleted (wcpos/monorepo#2603); their ledgers sit beside this one as `modal.LEDGER.md` and `dialog.LEDGER.md`.
 
 Seeded 2026-09-22 by wcpos/roadmap#374 from `dialog/LEDGER.md` and `modal/LEDGER.md` (wcpos/roadmap#345), the component map (wcpos/roadmap#291) and the platform-split page (wcpos/roadmap#290). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
 
@@ -21,6 +21,8 @@ Seeded 2026-09-22 by wcpos/roadmap#374 from `dialog/LEDGER.md` and `modal/LEDGER
 9. Headers reserve space for the close button — evidence: code: "NOTE: extra space on right for the close button" in `packages/components/src/dialog/index.tsx:279`. — **preserved**: `v2/dialog/index.tsx` `DialogHeader` pr-ctl
 10. Titles supply themed foreground text through the text context — evidence: code: "DialogTitle with proper text color for all themes" in `packages/components/src/dialog/index.tsx:314`. — **preserved**: `v2/dialog/index.tsx` `DialogTitle` `TextClassContext`
 11. `DialogContent` accepts `closeButtonProps` and spreads them onto the generated close `IconButton`, so a caller can give the close control a stable testID — the Recount sheet attaches `recount-close` through it and its regression test fails without the seam — evidence: `21b57723e9 2026-09-17 Land the Closures room on Reports: the page bar with Sales | Closures, closures by business day, the drill-in through the closure template with settled figures, Reprint, Recount and Export CSV (#2131)`, code: `"<IconButton name=\"xmark\" {...closeButtonProps} />"` in `packages/components/src/dialog/index.tsx:271`; caller `packages/core/src/screens/main/reports/closures/recount-sheet.tsx:123`. _(added 2026-09-18 after seeding, from the Codex review of monorepo#2160; the behaviour landed after the source ledger's 2026-09-12 read)_ — **preserved**: `v2/dialog/index.tsx` `DialogPanel` `closeButtonProps` spread last
+12. On web the panel takes the shared overlay motion: in solid while the scrim fades, out toward its edge, the Radix wrappers holding for the exit — **preserved**: `v2/dialog` line 10 (origin: `modal` 13)
+13. On web the Radix `role="dialog"` wrapper is a real box sized by `SCRIM_WRAPPER`, never `display: contents` — **preserved**: `v2/dialog` line 11 (origin: `modal` 14)
 
 ## From `modal`
 

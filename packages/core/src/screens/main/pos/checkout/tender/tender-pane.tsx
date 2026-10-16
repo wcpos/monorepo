@@ -587,7 +587,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
 				className="w-full"
 			/>
-			{/* On a phone the full-size modal keeps this 8 above the bottom inset (modal/index.tsx). */}
+			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay.tsx`, `v2/dialog/index.tsx`). */}
 			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
 				<Button
 					variant="default"

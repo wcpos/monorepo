@@ -117,15 +117,11 @@ jest.mock('@wcpos/components/v2/dialog', () => ({
 			processPaymentProps = props;
 		}
 		if (asChild && React.isValidElement<MockDialogActionProps>(children)) {
-			return React.cloneElement(children, props);
+			// The real Slot merges slot props under the child's own, so the child wins on a clash.
+			return React.cloneElement(children, { ...props, ...children.props });
 		}
 		return (
-			<button
-				data-testid={props.testID}
-				disabled={!!props.disabled}
-				data-loading={props.loading ? 'true' : 'false'}
-				onClick={props.onPress}
-			>
+			<button data-testid={props.testID} disabled={!!props.disabled} onClick={props.onPress}>
 				{children}
 			</button>
 		);
