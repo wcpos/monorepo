@@ -45,7 +45,7 @@ export function PrinterDialogLayout({
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side="right" size="2xl">
+			<DialogContent side="right" size="2xl" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>
 						{isEditing ? t('settings.edit_printer') : t('settings.add_printer')}

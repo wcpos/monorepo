@@ -304,9 +304,9 @@ export function ClosurePanel({
 						? { display: 'contents' }
 						: { width: PANEL_WIDTH, maxWidth: '100%', height: '100%' }
 				}
+				closeLabel={t('common.close')}
 				closeButtonProps={{
 					testID: 'closure-close',
-					accessibilityLabel: t('common.close'),
 					className: 'h-12 w-12 items-center justify-center',
 				}}
 			>

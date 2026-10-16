@@ -120,6 +120,7 @@ export function RecountSheet({
 			<DialogContent
 				side={screenSize === 'sm' ? 'bottom' : 'right'}
 				testID="recount-sheet"
+				closeLabel={t('common.close')}
 				closeButtonProps={{ testID: 'recount-close' }}
 			>
 				<DialogTitle>{t('reports.recount')}</DialogTitle>

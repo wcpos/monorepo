@@ -115,6 +115,7 @@ function AboutDialogContent() {
  * Version display with About dialog
  */
 export function Version() {
+	const t = useT();
 	const { screenSize } = useTheme();
 	const { appVersion } = useAppInfo();
 
@@ -132,7 +133,7 @@ export function Version() {
 					</Text>
 				</Pressable>
 			</DialogTrigger>
-			<DialogContent size="sm">
+			<DialogContent size="sm" closeLabel={t('common.close')}>
 				<AboutDialogContent />
 			</DialogContent>
 		</Dialog>

@@ -6,8 +6,12 @@ import { Pressable, type ViewProps } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 
+import type { ClosureRow } from '@wcpos/database';
+
 import { ReceiptActions } from './receipt/receipt-actions';
 import { Version } from './components/drawer-content/version';
+import { ClosurePanel } from './reports/closures/closure-panel';
+import { DetailPanel } from './reports/panels/panel';
 import { PrinterDialogLayout } from './settings/printer/dialog/printer-dialog-layout';
 
 import type { PrinterFormValues } from './settings/printer/schema';
@@ -106,9 +110,15 @@ jest.mock('@rn-primitives/slot', () => ({
 		React.isValidElement(children) ? React.cloneElement(children, props) : null,
 }));
 jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
-		<button aria-label="Close" data-testid={testID} onClick={onPress} />
-	),
+	IconButton: ({
+		onPress,
+		testID,
+		'aria-label': label,
+	}: {
+		onPress?: () => void;
+		testID?: string;
+		'aria-label'?: string;
+	}) => <button aria-label={label} data-testid={testID} onClick={onPress} />,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockView }));
 jest.mock('@wcpos/components/text', () => ({
@@ -122,6 +132,103 @@ jest.mock('./settings/printer/dialog/printer-toggle-group', () => ({
 }));
 jest.mock('./components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/core/hooks/use-app-info', () => ({
+	useAppInfo: () => ({ appVersion: 'test-build', platformVersion: 'test-build', platform: 'web' }),
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('./receipt/email', () => ({ EmailForm: () => <span>Email form</span> }));
+// The reports panels keep their real dialog wiring; their data hooks and bodies are stubs.
+jest.mock('@wcpos/components/breadcrumb', () => ({ Breadcrumb: () => null }));
+jest.mock('@wcpos/database/collections/schemas/closures', () => ({ CLOSURE_DOCUMENT_LIMIT: 1e6 }));
+jest.mock('../../contexts/app-state', () => {
+	// One session object: a new `site` per render resubscribes the directory forever.
+	const session = { site: { populate$: () => jest.requireActual('rxjs').of([]) } };
+	return { useStoreSession: () => session };
+});
+jest.mock('../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => null }),
+}));
+jest.mock('../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ presets: () => [] }),
+	zoneOptions: () => undefined,
+}));
+jest.mock('../../query', () => ({
+	useQueryHandleFields: () => ({ ready: false }),
+	useQueryState: () => ({ filters: {} }),
+}));
+jest.mock('../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({}),
+}));
+jest.mock('../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+	useRegisterNamesReady: () => true,
+}));
+jest.mock('../../services/register-session/closure-document', () => ({
+	buildClosureDocument: () => null,
+}));
+jest.mock('../../services/register-session/settled-figures', () => ({
+	deriveSettled: () => ({ settled: {}, touched: new Set() }),
+}));
+jest.mock('../../services/register-session/use-closure-document-context', () => ({
+	useClosureDocumentContext: () => ({}),
+}));
+jest.mock('../../services/register-session/use-register-session-collections', () => ({
+	useClosureCollection: () => null,
+}));
+jest.mock('./hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
+jest.mock('./receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ templates: [] }),
+}));
+jest.mock('./receipt/receipt-body', () => ({ ReceiptBody: () => null }));
+jest.mock('./receipt/template-switcher', () => ({ TemplateSwitcher: () => null }));
+jest.mock('./receipt/printer-switcher', () => ({ PrinterSwitcher: () => null }));
+jest.mock('./reports/closures/recount-sheet', () => ({ RecountSheet: () => null }));
+jest.mock('./reports/closures/save-or-share-csv', () => ({ saveOrShareCsv: jest.fn() }));
+jest.mock('./reports/cards/aggregate', () =>
+	Object.fromEntries(
+		[
+			'cashiers',
+			'categories',
+			'channels',
+			'registers',
+			'taxesByRate',
+			'tenders',
+			'topProducts',
+		].map((name) => [name, () => null])
+	)
+);
+jest.mock('./reports/cards/use-local-products', () => ({ useLocalProducts: () => [] }));
+jest.mock('./reports/cards/use-local-categories', () => ({ useLocalCategories: () => [] }));
+jest.mock('./reports/margin', () => ({
+	brands: () => null,
+	cogsEnabled: () => false,
+	lineCost: () => null,
+}));
+jest.mock('./reports/date-button', () => ({ periodLabel: () => ({ text: '' }) }));
+jest.mock('./reports/use-report-formats', () => ({
+	useReportFormats: () => ({ quantity: String, money: String }),
+}));
+jest.mock('./reports/panels/export-csv', () => ({ panelCsv: () => null }));
+jest.mock('./reports/panels/report-rows', () => ({ ReportRows: () => null }));
+jest.mock('./reports/panels/orders-panel', () => ({ OrdersPanel: () => null }));
+jest.mock('./reports/panels/document', () => ({ buildReportDocument: () => null }));
+jest.mock('./reports/panels/specs', () => ({
+	panelSpec: () => ({ head: [], keys: [], types: [], align: [] }),
+}));
+jest.mock('./reports/context', () => ({
+	useIncludedStatus: () => () => true,
+	useReportsData: () => ({ allOrders: [], selectedOrders: [], totals: {}, periodRefunds: [] }),
+	useReportsHandles: () => ({}),
+	useReportsPeriod: () => ({
+		dateRange: { start: new Date(0), end: new Date(0) },
+		storeId: 1,
+		timezone: 'UTC',
+	}),
+	useReportsScope: () => ({ detail: 'payments', setDetail: jest.fn() }),
+	useReportsSelection: () => ({ unselectedRowIds: {} }),
+}));
 
 function Printer({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 	const form = useForm<PrinterFormValues>();
@@ -145,16 +252,9 @@ it.each([false, true])('printer keeps its wide desktop panel or phone page (phon
 	render(<Printer onOpenChange={close} />);
 	expect(screen.getByRole('dialog')).toHaveClass(phone ? 'w-full' : 'w-200');
 	expect(screen.getByText('Save printer').parentElement).toHaveClass('border-t');
-	fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+	fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
 	expect(close).toHaveBeenCalledWith(false);
 });
-
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
-jest.mock('@wcpos/core/hooks/use-app-info', () => ({
-	useAppInfo: () => ({ appVersion: 'test-build', platformVersion: 'test-build', platform: 'web' }),
-}));
-jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
 // Reverting About loses the v2 close selector; making it a side panel changes its phone presentation.
 it.each([false, true])('About opens centred and small, then closes (phone=%s)', (phone) => {
@@ -167,8 +267,6 @@ it.each([false, true])('About opens centred and small, then closes (phone=%s)', 
 	fireEvent.click(screen.getByTestId('dialog-close'));
 	expect(screen.queryByRole('dialog')).toBeNull();
 });
-
-jest.mock('./receipt/email', () => ({ EmailForm: () => <span>Email form</span> }));
 
 it.each([false, true])(
 	'receipt email opens centred and closes independently (phone=%s)',
@@ -205,3 +303,16 @@ it.each([false, true])(
 		expect(screen.getByTestId('receipt-print-button')).toBeInTheDocument();
 	}
 );
+
+// Reverting either reports panel to `accessibilityLabel` lets the dialog's English default win.
+it('reports panels name their close buttons in the store language', () => {
+	mockPhone = false;
+	render(
+		<>
+			<ClosurePanel row={{ id: 'c', sync_status: 'synced' } as ClosureRow} onClose={jest.fn()} />
+			<DetailPanel />
+		</>
+	);
+	expect(screen.getByTestId('closure-close')).toHaveAttribute('aria-label', 'common.close');
+	expect(screen.getByTestId('detail-panel-close')).toHaveAttribute('aria-label', 'common.close');
+});

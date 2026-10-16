@@ -379,9 +379,9 @@ export function DetailPanel() {
 						? { display: 'contents' }
 						: { width: panelWidth, maxWidth: '100%', height: '100%' }
 				}
+				closeLabel={t('common.close')}
 				closeButtonProps={{
 					testID: 'detail-panel-close',
-					accessibilityLabel: t('common.close'),
 					className: 'h-12 w-12 items-center justify-center',
 				}}
 			>

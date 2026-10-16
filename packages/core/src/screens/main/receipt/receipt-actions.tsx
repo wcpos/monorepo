@@ -44,7 +44,7 @@ export function ReceiptActions({
 					<DialogTrigger asChild>
 						<Action testID="receipt-email-button">{t('receipt.email_receipt')}</Action>
 					</DialogTrigger>
-					<DialogContent>
+					<DialogContent closeLabel={t('common.close')}>
 						<DialogHeader>
 							<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 						</DialogHeader>

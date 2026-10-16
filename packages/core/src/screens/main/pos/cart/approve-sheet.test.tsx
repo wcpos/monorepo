@@ -62,7 +62,7 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -166,5 +166,3 @@ it('does not label a failed close as a refused approval', async () => {
 	);
 	expect(recordFact).toHaveBeenCalledTimes(1);
 });
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

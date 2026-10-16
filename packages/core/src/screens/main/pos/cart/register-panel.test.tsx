@@ -128,7 +128,7 @@ jest.mock('@wcpos/components/text', () => ({
 		<span data-testid={testID}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -400,5 +400,3 @@ it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
 		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
 	}
 );
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));
