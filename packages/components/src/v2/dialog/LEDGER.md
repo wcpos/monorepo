@@ -1,5 +1,7 @@
 # Behaviour ledger: `v2/dialog`
 
+2026-10-16: the one overlay system. `modal` and `dialog` v1 are deleted; their ledgers sit beside this one as `modal.LEDGER.md` and `dialog.LEDGER.md`.
+
 Seeded 2026-09-22 by wcpos/roadmap#374 from `dialog/LEDGER.md` and `modal/LEDGER.md` (wcpos/roadmap#345), the component map (wcpos/roadmap#291) and the platform-split page (wcpos/roadmap#290). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
 
 **Job:** The one overlay for a task that takes the cashier away from the surface: a centred dialog, a side panel, a phone page, or a sheet; trigger-opened or route-opened on one root.

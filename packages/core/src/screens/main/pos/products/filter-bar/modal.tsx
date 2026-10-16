@@ -2,14 +2,14 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import {
-	Modal,
-	ModalBody,
-	ModalClose,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-	ModalTitle,
-} from '@wcpos/components/modal';
+	Dialog,
+	DialogBody,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
@@ -38,12 +38,12 @@ export function FilterBarModal() {
 	};
 
 	return (
-		<Modal>
-			<ModalContent size="2xl">
-				<ModalHeader>
-					<ModalTitle>{t('common.filter_bar')}</ModalTitle>
-				</ModalHeader>
-				<ModalBody>
+		<Dialog route>
+			<DialogContent size="2xl">
+				<DialogHeader>
+					<DialogTitle>{t('common.filter_bar')}</DialogTitle>
+				</DialogHeader>
+				<DialogBody>
 					<View className="flex-col gap-4 md:flex-row">
 						<View className="md:w-2/5">
 							<FilterBarList
@@ -72,11 +72,11 @@ export function FilterBarModal() {
 							)}
 						</View>
 					</View>
-				</ModalBody>
-				<ModalFooter>
-					<ModalClose testID="filter-bar-modal-close">{t('common.close')}</ModalClose>
-				</ModalFooter>
-			</ModalContent>
-		</Modal>
+				</DialogBody>
+				<DialogFooter>
+					<DialogClose testID="filter-bar-modal-close">{t('common.close')}</DialogClose>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

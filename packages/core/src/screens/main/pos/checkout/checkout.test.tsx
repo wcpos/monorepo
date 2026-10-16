@@ -31,11 +31,12 @@ interface MockPaymentWebviewProps {
 	ref?: React.RefObject<{ postMessage: (message: unknown) => void } | null>;
 }
 
-interface MockModalActionProps {
+interface MockDialogActionProps {
 	children?: React.ReactNode;
 	testID?: string;
 	disabled?: boolean;
 	loading?: boolean;
+	asChild?: boolean;
 	onPress?: () => void | Promise<void>;
 }
 
@@ -47,8 +48,8 @@ const notRendered = (name: string) => () => {
 let paymentWebviewProps: MockPaymentWebviewProps = {
 	setFrameStatus: notRendered('PaymentWebview'),
 };
-/** Props last handed to the Process Payment ModalAction. */
-let processPaymentProps: MockModalActionProps = {
+/** Props last handed to the Process Payment DialogAction. */
+let processPaymentProps: MockDialogActionProps = {
 	onPress: notRendered('process-payment-button'),
 };
 
@@ -102,19 +103,21 @@ jest.mock('./tender/tender-checkout', () => ({
 // → expo-haptics into a suite that transforms neither.
 jest.mock('../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
-	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
-	// Superset of the mock #1019 introduced: it also captures the props so a test
-	// can invoke the handler directly, and exposes the `loading` affordance.
-	ModalAction: ({ children, ...props }: MockModalActionProps) => {
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
+	// Capture the action handler; the slotted Button owns the loading affordance.
+	DialogAction: ({ children, asChild, ...props }: MockDialogActionProps) => {
 		if (props.testID === 'process-payment-button') {
 			processPaymentProps = props;
+		}
+		if (asChild && React.isValidElement<MockDialogActionProps>(children)) {
+			return React.cloneElement(children, props);
 		}
 		return (
 			<button
@@ -130,16 +133,13 @@ jest.mock('@wcpos/components/modal', () => ({
 }));
 
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({
-		children,
-		testID,
-		onPress,
-	}: {
-		children?: React.ReactNode;
-		testID?: string;
-		onPress?: () => void;
-	}) => (
-		<button data-testid={testID} onClick={onPress}>
+	Button: ({ children, testID, onPress, disabled, loading }: MockDialogActionProps) => (
+		<button
+			data-testid={testID}
+			disabled={!!disabled}
+			data-loading={loading ? 'true' : 'false'}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),

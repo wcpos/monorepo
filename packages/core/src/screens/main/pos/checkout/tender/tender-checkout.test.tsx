@@ -82,15 +82,15 @@ jest.mock('@wcpos/query', () => ({
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
 // tab strip paints. Everything that carries a testID stays real.
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children, onClose }: { children?: React.ReactNode; onClose?: () => void }) => {
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children, onClose }: { children?: React.ReactNode; onClose?: () => void }) => {
 		mockOnClose = onClose;
 		return <div>{children}</div>;
 	},
-	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

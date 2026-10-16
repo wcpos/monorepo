@@ -5,7 +5,13 @@ import { useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -136,13 +142,13 @@ export function TenderCheckout({ order }: Props) {
 
 	if (stage === 'receipt') {
 		return (
-			<Modal onClose={handleClose}>
-				<ModalContent testID="checkout-dialog" size="full" className="h-full">
-					<ModalBody className="flex-1 px-0" contentContainerStyle={{ height: '100%' }}>
+			<Dialog route onClose={handleClose}>
+				<DialogContent testID="checkout-dialog" size="full" className="h-full">
+					<DialogBody className="flex-1 px-0" contentContainerStyle={{ height: '100%' }}>
 						<ReceiptStage orderUuid={order.uuid} compact />
-					</ModalBody>
-				</ModalContent>
-			</Modal>
+					</DialogBody>
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
@@ -178,25 +184,25 @@ export function TenderCheckout({ order }: Props) {
 		) : null;
 
 	return (
-		<Modal onClose={handleClose}>
-			<ModalContent testID="checkout-dialog" size={compact ? 'full' : '2xl'} className="h-full">
+		<Dialog route onClose={handleClose}>
+			<DialogContent testID="checkout-dialog" size={compact ? 'full' : '2xl'} className="h-full">
 				<Text testID="checkout-server-order-id" className="hidden">
 					{payload.id}
 				</Text>
-				<ModalHeader>
+				<DialogHeader>
 					<HStack className="items-center gap-3">
-						<ModalTitle asChild>
+						<DialogTitle asChild>
 							<Text className="text-foreground flex-1 text-lg font-semibold">
 								{payload.number
 									? t('pos_checkout.checkout_order', { orderNumber: payload.number })
 									: t('pos_checkout.checkout')}
 							</Text>
-						</ModalTitle>
+						</DialogTitle>
 						{compact ? null : tabs}
 						{compact ? null : cancelPayment}
 					</HStack>
-				</ModalHeader>
-				<ModalBody className="flex-1 px-0" contentContainerStyle={{ flexGrow: 1 }}>
+				</DialogHeader>
+				<DialogBody className="flex-1 px-0" contentContainerStyle={{ flexGrow: 1 }}>
 					<VStack space="sm" className="flex-1">
 						{/* #163 R5 and the totals ruling both land here: this modal is the last
 						    point before goods change hands, and it is the only screen in front
@@ -220,8 +226,8 @@ export function TenderCheckout({ order }: Props) {
 						</View>
 						{body}
 					</VStack>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+				</DialogBody>
+			</DialogContent>
+		</Dialog>
 	);
 }
