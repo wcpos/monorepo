@@ -173,7 +173,7 @@ function DialogPanel(allProps: DialogContentProps) {
 				'bg-card border-border web:cursor-default z-60 max-h-full max-w-full gap-4 py-4',
 				byPresentation[presentation as DialogPresentation],
 				sizeClass,
-				fill && 'h-full w-full max-w-full rounded-none border-0 py-2 shadow-none',
+				fill && 'h-full rounded-none border-0 py-2',
 				open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
 				className
 			)}

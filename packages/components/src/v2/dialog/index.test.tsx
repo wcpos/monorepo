@@ -791,20 +791,17 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 		const panel = screen.getByTestId('d');
 		const close = screen.getByTestId('d-close').parentElement;
 		if (fill) {
-			expect(panel).toHaveClass(
-				'h-full',
-				'w-full',
-				'max-w-full',
-				'rounded-none',
-				'border-0',
-				'py-2',
-				'shadow-none'
-			);
-			expect(panel).not.toHaveClass('py-4', 'rounded-lg', 'border');
+			expect(panel).toHaveClass('h-full', 'rounded-none', 'border-0', 'py-2');
+			// One class per call: jest-dom's negated form passes when ANY listed class is missing.
+			expect(panel).not.toHaveClass('py-4');
+			expect(panel).not.toHaveClass('rounded-lg');
+			expect(panel).not.toHaveClass('border');
 			expect(close).toHaveClass('top-0');
 			expect(close).not.toHaveClass('top-1');
 		} else {
-			expect(panel).not.toHaveClass('py-2', 'shadow-none');
+			expect(panel).not.toHaveClass('py-2');
+			expect(panel).not.toHaveClass('rounded-none');
+			expect(panel).not.toHaveClass('border-0');
 			expect(panel).toHaveClass('py-4', 'rounded-lg', 'border');
 			expect(close).toHaveClass('top-1');
 		}

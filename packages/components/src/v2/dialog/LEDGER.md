@@ -34,6 +34,11 @@ Seeded 2026-09-22 by wcpos/roadmap#374 from `dialog/LEDGER.md` and `modal/LEDGER
 10. Targets native content rather than the newly added scrim when applying child-size constraints — evidence: `89fe07768d 2026-09-11 feat(components): overlay batch 0 — motion constants, phone-sheet shell, panel dismissal, pinned footer (#1974)`, PR #1974, code: "last-child: the content wrapper; the first child is the scrim Pressable." in `packages/components/src/modal/index.tsx:183`. — **preserved**: `lib/overlay.tsx` `OverlayShell` constraints on the panel wrapper
 11. Keeps side-panel footers outside the expanding scroll body with a separating top border — evidence: `89fe07768d 2026-09-11 feat(components): overlay batch 0 — motion constants, phone-sheet shell, panel dismissal, pinned footer (#1974)`, PR #1974, code: "side !== 'center' && 'border-border border-t pt-4'" in `packages/components/src/modal/index.tsx:306`. — **n/a**: twin of `dialog` 4
 12. Reserves header space for the close control — evidence: code: "NOTE: extra space on right for the close button" in `packages/components/src/modal/index.tsx:278`. — **n/a**: twin of `dialog` 9
+13. On web the panel enters on the shared overlay motion while the scrim fades; a route modal closes by navigating away — **preserved**: `v2/dialog` lines 9–10
+14. On web the Radix content wrapper is sized as the panel's box through `SCRIM_WRAPPER`, never `display: contents` — **preserved**: `v2/dialog` line 11
+15. The close is the borderless `default` IconButton (muted, 44 pt); the child's variant overrides the close's `outline` through the Slot — **preserved**: `v2/dialog` line 16
+16. ~~A native full-size modal does not pad the status bar again~~ (struck 2026-10-14 in the source ledger, superseded by its line 17) — **n/a**: struck at source
+17. A native full-size modal pads `insets.top` on its own card-coloured scrim; the panel keeps `py-2` and the close is lifted to the title row; the host never pads — **preserved**: `v2/dialog` line 17
 
 ## `v2/dialog`
 
