@@ -77,8 +77,12 @@ not needed to draw the POS screen:
   `react-native-ble-plx`, `react-native-webrtc`, `react-native-tcp-socket`,
   `@wcpos/scanner`. Check what their web shims cost; some ship real code on web.
 - **Translations:** `packages/core/src/contexts/translations/locales/en/core.json` is
-  bundled; other locales are fetched from the CDN at runtime. English should probably
-  come the same way, or be split.
+  bundled and installed synchronously as the `fallbackLng: 'en'` resource in
+  `packages/core/src/contexts/translations/index.tsx`; the CDN-backed `RxDBBackend`
+  returns `{}` when the CDN and cache are both unavailable. **English stays eager**: it
+  is the guarantee that a cold offline start renders text at all. The only legitimate
+  savings here are stripping keys the app no longer uses and making sure the JSON is
+  not duplicated into other chunks.
 - **Settings, health, support, gallery, coupons, customers, orders, products** route
   groups (see `apps/main/app/`): every route module is statically imported by
   expo-router on web unless made async, so all of them sit in the entry today.
@@ -117,25 +121,35 @@ Behind lazy boundaries, in rough order of payoff:
    do this for you in production; the boundary lives in each group's `_layout.tsx` or
    in the screen component it renders.
 2. Charts and skia/canvaskit: only inside the lazy reports/health chunks.
-3. Receipt rendering and printing: lazy on first print/preview, including the receipt
-   modals under `orders/(modals)/receipt` and `(pos)/(modals)/cart/receipt`.
+3. Receipt **preview** in order history (`orders/(modals)/receipt`, `orders/(modals)/view`)
+   can be lazy. Checkout receipt rendering and printing cannot: the checkout
+   `ReceiptStageDocument` calls `useReceiptDocument({ autoPrintAllowed: true })` and
+   "New Sale" stays disabled while `autoPrintPending` is true, so for a store with
+   auto-print on, a lazy chunk here would block the first sale on a cold or offline
+   start. The renderer and the print path used by `(pos)/(modals)/cart/receipt` and
+   checkout stay in the eager set.
 4. Hardware integrations: lazy on first use from the settings pages that enable them.
-5. English translations: fetch like other locales, or at least move the JSON out of
-   the entry.
+5. Translations: keep English eager (see above); verify no other locale's JSON is
+   bundled, and prune unused English keys.
 6. Fonts: emit Inter once. Two asset paths point at identical bytes.
 
 Rule for every boundary: nothing a cashier touches between "page open" and "sale
-complete" goes behind one. Cart, product search, checkout, payment, and the receipt
-*print* path should be eager; the receipt *renderer* for preview is debatable and the
-measurement table decides it.
+complete" goes behind one. Cart, product search, checkout, payment, the receipt
+renderer and the print path used at checkout are eager. Only receipt *preview* from
+order history is a candidate, and the measurement table decides it.
 
 ### 3. Shape the eager set
 
 After step 2 the entry should be: Metro runtime + React/react-native-web + rxdb +
-database/query/sync packages + the POS screens. If that is still over 1 MB brotli, the
-next moves are a vendor/app split (so vendor caches across releases) and a hard look at
-rxdb-premium plugins and reanimated. Do not go below what the POS needs to be
-interactive offline; the point is first paint, not a smaller number.
+database/query/sync packages + the POS screens + English strings + the checkout
+receipt path. If that is still over 1 MB brotli, the only moves that count are
+removing modules or adding further lazy boundaries: rxdb-premium plugins the POS
+screen does not use, reanimated and gesture-handler if the POS screen can do without
+them, icon sets, and the web shims of the hardware integrations. A vendor/app split
+does **not** reduce the eager set, because the cold-cache test still downloads and
+compiles both files; it is worth doing separately for cache reuse across releases, and
+it must be reported as that, never as a budget win. Do not go below what the POS needs
+to be interactive offline; the point is first paint, not a smaller number.
 
 ### 4. Preload what comes next
 
