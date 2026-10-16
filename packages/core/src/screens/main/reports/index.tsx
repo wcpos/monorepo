@@ -369,6 +369,7 @@ export function ReportsScreen() {
 			<View className="bg-sidebar self-start rounded-md p-2">
 				<HeaderLeft />
 			</View>
+			<SessionHoldBanner />
 			<Text testID="reports-denied">{t('reports.no_access')}</Text>
 		</View>
 	);
