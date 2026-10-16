@@ -38,6 +38,33 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('a marked row cannot be coalesced or claimed by another queue instance', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		const row = { ...mut(), supersededBy: 'void' };
+		await q.enqueue(row);
+		expect(await other.coalesceInto('m1', mut({ mutationId: 'replacement' }))).toBe(false);
+		expect(await other.claim({ ...row, status: 'claimed' })).toBe(false);
+		expect((await q.all()).map((item) => item.mutationId)).toEqual(['m1']);
+	});
+
+	it('marks and unmarks without removing or reviving a row changed by another instance', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		const row = await q.enqueue(mut());
+		expect(await q.markForAnnihilation('m1', 'void')).toBe(true);
+		expect(await other.markForAnnihilation('m1', 'other')).toBe(false);
+		expect(await other.removeMarked('m1', 'other')).toBe(false);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(true);
+		expect(await q.all()).toEqual([row]);
+		await q.markForAnnihilation('m1', 'void');
+		await other.remove(['m1']);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(false);
+		expect(await q.all()).toEqual([]);
+	});
+
 	it('migrates durable v1 rows with a deterministic synthesized seq', () => {
 		const legacy = mut({ mutationId: 'durable-v1' });
 		const migrated = recordMutationQueueMigrationStrategies[2](legacy);
@@ -425,7 +452,7 @@ describe('pendingRecordIds', () => {
 
 describe('RxRecordMutationStorage', () => {
 	// A faithful RxDB-like fake keyed by mutationId, with a monotonic `_rev` per
-	// row and NON-incremental patch/remove that fail closed (409) on a stale rev —
+	// row and NON-incremental modify/remove that fail closed (409) on a stale rev —
 	// the exact optimistic-concurrency contract the conditional writes rely on.
 	function fakeCollection() {
 		const store = new Map<string, { mutation: RecordMutation; rev: string }>();
@@ -439,13 +466,13 @@ describe('RxRecordMutationStorage', () => {
 				get revision() {
 					return store.get(mutationId)?.rev ?? '';
 				},
-				patch: async (changes: Partial<RecordMutation>) => {
+				modify: async (change: (row: RecordMutation) => RecordMutation) => {
 					const current = store.get(mutationId);
 					if (!current || current.rev !== entry.rev) {
 						throw Object.assign(new Error('CONFLICT'), { status: 409, code: 'CONFLICT' });
 					}
 					store.set(mutationId, {
-						mutation: { ...current.mutation, ...changes },
+						mutation: change(current.mutation),
 						rev: nextRev(),
 					});
 				},

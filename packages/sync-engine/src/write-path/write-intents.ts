@@ -234,35 +234,15 @@ export async function enqueueWriteIntent(input: {
 	const collection = collectionOf(input.db, requested.collection);
 	const queue = queueFor(input.db);
 
-	// Only successfully consumed rows are superseded; a refused sweep restores
-	// its rows and removes their ids from this bookkeeping.
-	const supersededIds = new Set<string>();
 	const isRecordRow = (item: QueuedMutation) =>
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
-	const restoreRemoved = async (removed: QueuedMutation[]) => {
-		for (const row of removed) {
-			// Coalescing keeps seq and bumps the generation, even when its failed
-			// swap leaves a claimed replacement behind. Never revive the stale prior.
-			const superseded = (await queue.all()).some(
-				(item) =>
-					isRecordRow(item) &&
-					(item.requeuedFrom === row.mutationId ||
-						(row.seq !== undefined &&
-							item.seq === row.seq &&
-							(item.coalesced ?? 0) > (row.coalesced ?? 0)))
-			);
-			if (superseded) continue;
-			await queue.replace(row);
-			supersededIds.delete(row.mutationId);
-		}
+	const unmark = async (marked: QueuedMutation[], token: string) => {
+		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
 	};
 	// A void owns no resolution claim, so every live holder is foreign to it.
 	// Check both annihilation paths; retrying a recovery create would otherwise
 	// reclassify it as an ordinary never-pushed chain and destroy its resident.
-	const guardAnnihilation = async (
-		successors: readonly QueuedMutation[],
-		removed?: QueuedMutation[]
-	) => {
+	const guardAnnihilation = async (successors: readonly QueuedMutation[], token?: string) => {
 		const fresh = (await queue.all()).filter(isRecordRow);
 		const ownIds = new Set(
 			successors.filter((row) => !row.requeuedFrom).map((row) => row.mutationId)
@@ -278,16 +258,15 @@ export async function enqueueWriteIntent(input: {
 				row.status === 'rejected'
 					? row.resolutionClaimBy !== undefined &&
 						Date.parse(row.resolutionClaimUntil ?? '') > Date.parse(input.now())
-					: !ownIds.has(row.mutationId)
+					: !ownIds.has(row.mutationId) || (token !== undefined && row.supersededBy !== token)
 			)
 		)
 			throw refuse();
-		if (removed) {
+		if (token !== undefined) {
 			for (const row of deadLetters) {
 				if (!(await queue.removeIfStatus(row.mutationId, 'rejected', Date.parse(input.now())))) {
 					throw refuse();
 				}
-				removed.push(row);
 			}
 		}
 		return deadLetters.length;
@@ -397,55 +376,41 @@ export async function enqueueWriteIntent(input: {
 		// pending successors + this delete) cancels, and the resident row is
 		// removed (the caller asked for deletion). Preconditions: every row for the
 		// record is pending with attempts === 0 (nothing claimed, ever-pushed, or
-		// terminal). Removals are CONDITIONAL and run successors-first, the create
-		// LAST: if the drain claims the create mid-annihilation the CAS refuses and
-		// the decision re-runs (the delete then queues behind the in-flight
-		// create); successors already removed are restored before re-deciding.
+		// terminal). Mark successors first, settle dead letters, remove the resident,
+		// then remove successors last. A failed decision only unmarks existing rows.
 		if (placement.kind === 'annihilate' && !storedRevision && remoteIdOrNull(remoteId) === null) {
 			await guardAnnihilation(placement.chain);
-			let refused = false;
-			const removed: QueuedMutation[] = [];
-			for (const row of [...placement.chain].reverse()) {
-				if (await queue.removePending(row.mutationId, { requireNeverPushed: true })) {
-					removed.push(row);
-					supersededIds.add(row.mutationId);
-				} else {
-					refused = true;
-					break;
-				}
-			}
-			if (refused) {
-				await restoreRemoved(removed);
-				continue;
-			}
+			const token = input.mintUuid();
+			const marked: QueuedMutation[] = [];
+			let settledDeadLetters = 0;
 			try {
-				await guardAnnihilation(placement.chain, removed);
+				let refused = false;
+				for (const row of [...placement.chain].reverse()) {
+					if (await queue.markForAnnihilation(row.mutationId, token)) marked.push(row);
+					else {
+						refused = true;
+						break;
+					}
+				}
+				if (refused) {
+					await unmark(marked, token);
+					continue;
+				}
+				settledDeadLetters = await guardAnnihilation(placement.chain, token);
+				const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+				if (resident) await resident.remove();
 			} catch (error) {
-				await restoreRemoved(removed);
+				await unmark(marked, token);
 				throw error;
 			}
-			const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
-			if (resident) {
-				try {
-					await resident.remove();
-				} catch (error) {
-					// Restore through the queue mutex ahead of same-record work that
-					// arrived while its dependency chain was absent.
-					for (const row of removed) {
-						supersededIds.delete(row.mutationId);
-					}
-					await queue.restoreAheadOfRecordNewcomers([...removed].reverse());
-					throw error;
-				}
-			}
+			// After resident removal, keep any failed cleanup marked, never deliverable.
+			for (const row of marked) await queue.removeMarked(row.mutationId, token);
 			input.observe?.({
 				type: 'queue.write.annihilate',
 				level: 'info',
 				collection: intent.collection,
-				fields: { recordId: intent.recordId, removed: removed.length },
+				fields: { recordId: intent.recordId, removed: marked.length + settledDeadLetters },
 			});
-			// Terminal receipt: nothing will ever PUSH under this id — the facade
-			// emits ONE 'write-annihilated' event for it (#516 rule 3).
 			return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
 		}
 
@@ -513,46 +478,42 @@ export async function enqueueWriteIntent(input: {
 						(payloadId === 0 || typeof payloadId !== 'number') &&
 						!deadLetters.some((row) => rejectionSuggestsServerRecord(row.rejectedReason));
 					if (bornLocal) {
-						// Un-pushed successors (edits appended after the create dead-lettered,
-						// or landed since the read at the top of this iteration) go with the
-						// resident, through the same CONDITIONAL removal as annihilation: a row
-						// the drain has claimed refuses, and the decision re-runs against the
-						// fresh queue. Refusals restore the sweep before retrying or throwing;
-						// recovery work refuses outright, never becoming a chain on retry.
+						// As above, retain successors until dead letters and resident are settled.
 						const successors = (await queue.pending()).filter(
 							(row) => isRecordRow(row) && row.operation !== 'create'
 						);
 						await guardAnnihilation(successors);
-						const removed: QueuedMutation[] = [];
+						const token = input.mintUuid();
+						const marked: QueuedMutation[] = [];
 						let settledDeadLetters = 0;
 						try {
 							let refused = false;
 							for (const row of [...successors].reverse()) {
-								if (await queue.removePending(row.mutationId, { requireNeverPushed: true })) {
-									removed.push(row);
-									supersededIds.add(row.mutationId);
+								if (await queue.markForAnnihilation(row.mutationId, token)) {
+									marked.push(row);
 								} else {
 									refused = true;
 									break;
 								}
 							}
 							if (refused) {
-								await restoreRemoved(removed);
+								await unmark(marked, token);
 								continue;
 							}
-							settledDeadLetters = await guardAnnihilation(successors, removed);
+							settledDeadLetters = await guardAnnihilation(successors, token);
 							await doc.remove();
 						} catch (error) {
-							await restoreRemoved(removed);
+							await unmark(marked, token);
 							throw error;
 						}
+						for (const row of marked) await queue.removeMarked(row.mutationId, token);
 						input.observe?.({
 							type: 'queue.write.annihilate',
 							level: 'info',
 							collection: intent.collection,
 							fields: {
 								recordId: intent.recordId,
-								removed: removed.length,
+								removed: marked.length + settledDeadLetters,
 								deadLetters: settledDeadLetters,
 							},
 						});
@@ -680,7 +641,7 @@ export async function enqueueWriteIntent(input: {
 					const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
 					const pending = (
 						Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
-					).filter((id) => id !== prior?.mutationId && !supersededIds.has(id));
+					).filter((id) => id !== prior?.mutationId);
 					return {
 						...data,
 						local: { ...local, dirty: true, pendingMutationIds: [...pending, mutation.mutationId] },

@@ -154,7 +154,10 @@ export function isNeverPushedChain(rows: readonly QueuedMutation[]): boolean {
 		rows.length > 0 &&
 		rows[0]?.operation === 'create' &&
 		rows.every(
-			(row) => (row.status === undefined || row.status === 'pending') && (row.attempts ?? 0) === 0
+			(row) =>
+				row.supersededBy === undefined &&
+				(row.status === undefined || row.status === 'pending') &&
+				(row.attempts ?? 0) === 0
 		)
 	);
 }
@@ -407,7 +410,10 @@ export async function drainMutationQueue(input: {
 	const blockedRecords = new Set<string>(
 		scanned
 			.filter(
-				(mutation) => mutation.status === 'conflicted' || mutation.status === 'needs-revision'
+				(mutation) =>
+					mutation.supersededBy !== undefined ||
+					mutation.status === 'conflicted' ||
+					mutation.status === 'needs-revision'
 			)
 			.map(recordKey)
 	);
@@ -684,10 +690,11 @@ export async function drainMutationQueue(input: {
 				(item) => item.mutationId === mutation.mutationId
 			);
 			if (
-				current?.status === 'claimed' &&
-				current.claimedBy !== undefined &&
-				current.claimedBy !== input.drainInstanceId &&
-				(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now()
+				current?.supersededBy !== undefined ||
+				(current?.status === 'claimed' &&
+					current.claimedBy !== undefined &&
+					current.claimedBy !== input.drainInstanceId &&
+					(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now())
 			) {
 				blockedRecords.add(recordKey(mutation));
 			}

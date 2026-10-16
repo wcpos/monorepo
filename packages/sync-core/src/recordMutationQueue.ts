@@ -47,6 +47,8 @@ import type { RecordMutation } from './recordMutation';
  * bookkeeping ⇒ a fresh mutation: 0 attempts, `pending`, ready to push now.
  */
 export type QueuedMutation = RecordMutation & {
+	/** Void-attempt ownership: held out of drain/coalesce until unmarked or removed. */
+	readonly supersededBy?: string;
 	/** Queue-local override for cashier-triggered pushes; never serialized to the server. */
 	readonly explicit?: boolean;
 	/** Monotonic, per-scope queue position — minted by `enqueue`, the primary drain order key. */
@@ -281,6 +283,7 @@ export class RecordMutationQueue {
 			const row = stored?.mutation;
 			if (
 				!row ||
+				row.supersededBy !== undefined ||
 				(row.status !== undefined && row.status !== 'pending' && row.status !== 'claimed')
 			)
 				return false;
@@ -329,6 +332,7 @@ export class RecordMutationQueue {
 			// never consume an ever-pushed mutation under a fresh id (adversarial P2).
 			if (
 				!row ||
+				row.supersededBy !== undefined ||
 				(row.status !== undefined && row.status !== 'pending') ||
 				(row.attempts ?? 0) !== 0
 			)
@@ -357,7 +361,12 @@ export class RecordMutationQueue {
 			(item) => item.mutation.mutationId === mutationId
 		);
 		const row = stored?.mutation;
-		if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+		if (
+			!row ||
+			row.supersededBy !== undefined ||
+			(row.status !== undefined && row.status !== 'pending')
+		)
+			return false;
 		return this.storage.removeIfUnchanged(mutationId, stored.rev);
 	}
 
@@ -376,7 +385,12 @@ export class RecordMutationQueue {
 				(item) => item.mutation.mutationId === mutationId
 			);
 			const row = stored?.mutation;
-			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+			if (
+				!row ||
+				row.supersededBy !== undefined ||
+				(row.status !== undefined && row.status !== 'pending')
+			)
+				return false;
 			// Reassert annihilation's premise on the same revision the CAS removes.
 			if (
 				options.requireNeverPushed &&
@@ -389,6 +403,53 @@ export class RecordMutationQueue {
 			// annihilated. If the row moved to 'claimed' after our read, the remove is
 			// refused and the delete queues behind the in-flight create instead.
 			return this.storage.removeIfUnchanged(mutationId, stored.rev);
+		});
+	}
+
+	/** Hold a never-pushed successor without removing it; the revision check arbitrates with drain/coalesce. */
+	async markForAnnihilation(mutationId: string, token: string): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			const row = stored?.mutation;
+			if (
+				!row ||
+				row.supersededBy !== undefined ||
+				(row.status !== undefined && row.status !== 'pending') ||
+				(row.attempts ?? 0) !== 0 ||
+				row.claimedBy !== undefined ||
+				row.nextAttemptAt !== undefined
+			)
+				return false;
+			return this.storage.appendIfUnchanged({ ...row, supersededBy: token }, stored.rev);
+		});
+	}
+
+	async unmarkForAnnihilation(mutationId: string, token: string): Promise<boolean> {
+		return this.settleAnnihilationMark(mutationId, token, false);
+	}
+
+	async removeMarked(mutationId: string, token: string): Promise<boolean> {
+		return this.settleAnnihilationMark(mutationId, token, true);
+	}
+
+	private settleAnnihilationMark(
+		mutationId: string,
+		token: string,
+		remove: boolean
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			if (!stored || stored.mutation.supersededBy !== token) return false;
+			return remove
+				? this.storage.removeIfUnchanged(mutationId, stored.rev)
+				: this.storage.appendIfUnchanged(
+						{ ...stored.mutation, supersededBy: undefined },
+						stored.rev
+					);
 		});
 	}
 
@@ -672,7 +733,7 @@ export class InMemoryRecordMutationStorage implements RecordMutationStorage {
  * sync-core stays platform-neutral. The host passes its real RxCollection; only these members are used.
  *
  * The document members carry the revision-checked write (task 43): `revision` is
- * RxDB's `_rev`, and `patch` / `remove` are the NON-incremental variants that
+ * RxDB's `_rev`, and `modify` / `remove` are the NON-incremental variants that
  * fail closed with a native 409 CONFLICT when the stored `_rev` has moved since
  * the document was fetched — the exact cross-process guard the port needs. (The
  * `incremental*` variants retry through conflicts and would DEFEAT a claim, so
@@ -681,7 +742,7 @@ export class InMemoryRecordMutationStorage implements RecordMutationStorage {
 export type RxRecordMutationDocument = {
 	toJSON(): QueuedMutation;
 	readonly revision?: string;
-	patch(changes: Partial<QueuedMutation>): Promise<unknown>;
+	modify(change: (row: QueuedMutation) => QueuedMutation): Promise<unknown>;
 	remove(): Promise<unknown>;
 };
 export type RxRecordMutationCollection = {
@@ -730,14 +791,14 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 		const rows = await this.collection().find().exec();
 		// The real collection returns RxDocuments; a bare-object row (older test
 		// fakes exercising only the unconditional read path) is wrapped so `list()`
-		// still works. Its `patch`/`remove` reject — a conditional write against a
+		// still works. Its `modify`/`remove` reject — a conditional write against a
 		// non-RxDocument is a wiring error, never a runtime path.
 		return rows.map((row) =>
 			'toJSON' in row
 				? (row as RxRecordMutationDocument)
 				: {
 						toJSON: () => row as QueuedMutation,
-						patch: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
+						modify: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
 						remove: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
 					}
 		);
@@ -785,10 +846,15 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 		// Gone, or already moved since the caller read it: the precondition fails.
 		if (!document || (document.revision ?? '') !== expectedRev) return false;
 		try {
-			// Non-incremental patch: atomic against the `_rev` we just verified, so a
-			// concurrent write landing between the read above and here fails the patch
+			// Non-incremental modify: atomic against the `_rev` we just verified, so a
+			// concurrent write landing between the read above and here fails the modify
 			// with 409 rather than silently overwriting.
-			await document.patch(mutation);
+			await document.modify((data) => {
+				const next = { ...data, ...mutation };
+				// RxDB patch retains undefined keys, which schema validation rejects.
+				if (next.supersededBy === undefined) delete next.supersededBy;
+				return next;
+			});
 			return true;
 		} catch (error) {
 			if (isRevisionConflict(error)) return false;
@@ -822,7 +888,7 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 5,
+	version: 6,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
@@ -837,6 +903,7 @@ export const recordMutationQueueSchema = {
 		explicit: { type: 'boolean' },
 		seq: { type: 'number', minimum: 1, multipleOf: 1 },
 		coalesced: { type: 'number', minimum: 0, multipleOf: 1 },
+		supersededBy: { type: 'string', maxLength: 64 },
 		status: {
 			type: 'string',
 			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
@@ -912,4 +979,6 @@ export const recordMutationQueueMigrationStrategies = {
 	3: (doc: QueuedMutation): QueuedMutation => doc,
 	4: (doc: QueuedMutation): QueuedMutation => doc,
 	5: (doc: QueuedMutation): QueuedMutation => doc,
+	// Optional void mark; preserve existing queued work without a schema-hash reset.
+	6: (doc: QueuedMutation): QueuedMutation => doc,
 };

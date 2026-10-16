@@ -540,7 +540,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		existenceManifestCustomers: '107bac24876b267a',
 		existenceManifestOrders: '107bac24876b267a',
 		syncCheckpoints: '13a461c616ee12b9',
-		recordMutations: '94c4fd4e440dbdd7',
+		recordMutations: '301d2ed7a3520328',
 		engineKv: 'a8d94dc8495e36cc',
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
@@ -606,7 +606,8 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	 */
 	const PINNED_GENERATION_DIGESTS: Record<number, string> = {
 		5: '24cd32cfac8830f7',
-		6: '7965df73f69d67e7',
+		// The versioned queue migrates in place; scope-generation schemas stay unchanged.
+		6: 'ac6648b8d1aa6364',
 	};
 
 	const digestOfDigests = (digests: Record<string, string>) =>
@@ -675,18 +676,22 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		);
 	});
 
-	it('every versioned schema ships the migration strategies its version needs', () => {
-		const creators = engineCollectionCreators();
-		for (const [name, creator] of Object.entries(creators)) {
-			const version = (creator.schema as { version: number }).version;
-			if (version > 0) {
-				expect(
-					creator.migrationStrategies,
-					`${name} is at v${version} but declares no migrationStrategies — RxDB cannot open an existing database without them`
-				).toBeDefined();
+	it.each([engineCollectionCreators, drainableGenerationCollectionCreators])(
+		'every versioned schema ships exactly the migration strategies its version needs: %s',
+		(recipe) => {
+			const creators = recipe();
+			for (const [name, creator] of Object.entries(creators)) {
+				const version = (creator.schema as { version: number }).version;
+				if (version > 0) {
+					expect(
+						creator.migrationStrategies,
+						`${name} is at v${version} but declares no migrationStrategies — RxDB cannot open an existing database without them`
+					).toBeDefined();
+					expect(Object.keys(creator.migrationStrategies!)).toHaveLength(version);
+				}
 			}
 		}
-	});
+	);
 });
 
 describe('reference schema identity — a recorded decision, not an accident (ADR 0019)', () => {

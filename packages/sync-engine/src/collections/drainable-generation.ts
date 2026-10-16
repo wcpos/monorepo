@@ -17,6 +17,11 @@
  */
 
 import {
+	recordMutationQueueMigrationStrategies,
+	recordMutationQueueSchema,
+} from '@wcpos/sync-core';
+
+import {
 	type CollectionWriteFacet,
 	productDocument,
 	productsWriteFacetProjectedBy,
@@ -39,6 +44,13 @@ import { productSchema } from './product-schema';
  */
 export const DRAINABLE_SCHEMAS_GENERATION = 5;
 
+// Queue schema v5 predates void marks; the drainable database keeps its shipped hash.
+const { supersededBy: _voidMark, ...drainableQueueProperties } =
+	recordMutationQueueSchema.properties;
+
+const { 6: _voidMarkMigration, ...drainableQueueMigrations } =
+	recordMutationQueueMigrationStrategies;
+
 const { tagIds: _promotedAtV6, ...drainableProductProperties } = productSchema.properties;
 
 /** The product schema v5 shipped: today's minus the `tagIds` column v6 promoted. */
@@ -60,6 +72,8 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 		[MUTATION_QUEUE_RXDB_COLLECTION]: {
 			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
 			localDocuments: true,
+			schema: { ...recordMutationQueueSchema, version: 5, properties: drainableQueueProperties },
+			migrationStrategies: drainableQueueMigrations,
 		},
 	};
 }

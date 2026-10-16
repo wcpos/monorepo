@@ -3,6 +3,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
+import { RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
 import { enqueueWriteIntent, queueFor, requeueBornTwiceSnapshot } from './write-intents';
@@ -32,9 +33,9 @@ function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMuta
 			get revision() {
 				return revs.get(id) ?? '';
 			},
-			patch: async (changes: Partial<QueuedMutation>) => {
+			modify: async (change: (row: QueuedMutation) => QueuedMutation) => {
 				if (!queued.has(id) || revs.get(id) !== captured) throw conflict();
-				queued.set(id, { ...queued.get(id)!, ...changes });
+				queued.set(id, change(queued.get(id)!));
 				bump(id);
 			},
 			remove: async () => {
@@ -254,6 +255,7 @@ describe('enqueueWriteIntent', () => {
 		'settlement refusal',
 		'late dead-letter claim',
 		'coalesced replacement',
+		'chain replacement',
 	])('a refused void preserves resident and queued work: %s', async (scenario) => {
 		const mutationCollection = createFakeMutationCollection();
 		const row: QueuedMutation = {
@@ -270,8 +272,8 @@ describe('enqueueWriteIntent', () => {
 			seq: 1,
 		};
 		const claimedSuccessor = scenario === 'claimed successor';
-		const chain = scenario === 'chain claim';
-		const claimedDeadLetter = scenario === 'claimed dead letter' || chain;
+		const chain = scenario === 'chain claim' || scenario === 'chain replacement';
+		const claimedDeadLetter = scenario === 'claimed dead letter' || scenario === 'chain claim';
 		const older: QueuedMutation = {
 			...row,
 			mutationId: 'older',
@@ -320,14 +322,21 @@ describe('enqueueWriteIntent', () => {
 			status: 'claimed',
 			claimedBy: 'other-window',
 		};
-		if (scenario === 'coalesced replacement') {
-			const remove = queue.removePending.bind(queue);
-			vi.spyOn(queue, 'removePending').mockImplementation(async (id, ...options) => {
-				const removed = await remove(id, ...options);
-				// A concurrent coalesce lost its prior removal, but its replacement
-				// was already claimed, so compensation kept the new generation.
-				if (id === 'newer' && removed) await queue.replace(replacement);
-				return removed;
+		if (scenario === 'coalesced replacement' || scenario === 'chain replacement') {
+			const otherQueue = new RecordMutationQueue(
+				new RxRecordMutationStorage(() => mutationCollection)
+			);
+			const all = queue.all.bind(queue);
+			let inserted = false;
+			vi.spyOn(queue, 'all').mockImplementation(async () => {
+				const snapshot = await all();
+				const prior = snapshot.find((item) => item.mutationId === 'newer');
+				if (!inserted && (!prior || prior.supersededBy)) {
+					inserted = true;
+					// A second instance inserts work after the void's sweep, before its guard.
+					await otherQueue.replace(replacement);
+				}
+				return all();
 			});
 		}
 		if (scenario === 'late replacement') {
@@ -375,8 +384,8 @@ describe('enqueueWriteIntent', () => {
 			});
 		}
 		expect(await orders.findOne().exec()).toBe(resident);
-		if (scenario === 'coalesced replacement') {
-			expect(mutationCollection.store.has('newer')).toBe(false);
+		if (scenario === 'coalesced replacement' || scenario === 'chain replacement') {
+			expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
 			expect(mutationCollection.store.get('replacement')?.mutation).toEqual(replacement);
 		} else {
 			expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
@@ -436,10 +445,11 @@ describe('enqueueWriteIntent', () => {
 			} as unknown as RxDatabase;
 			if (scenario === 'a push attempt') {
 				const queue = queueFor(db);
-				const remove = queue.removePending.bind(queue);
-				vi.spyOn(queue, 'removePending').mockImplementation(async (id, ...options) => {
-					if (id === 'create') await queue.reschedule({ ...create, attempts: 1 });
-					return remove(id, ...options);
+				const all = queue.all.bind(queue);
+				vi.spyOn(queue, 'all').mockImplementationOnce(async () => {
+					const snapshot = await all();
+					await queue.reschedule({ ...create, attempts: 1 });
+					return snapshot;
 				});
 			}
 			const receipt = await enqueueWriteIntent({
