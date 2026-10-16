@@ -19,6 +19,17 @@ import {
 
 const frozenCount = new Map(SEAM_ALLOWLIST_FROZEN_2026_10_16);
 
+/** Receiver names that mean an RxDatabase or RxCollection handle for the `close()` fence. */
+const LIFECYCLE_RECEIVERS = new Set([
+	'db',
+	'database',
+	'localDB',
+	'storeDB',
+	'userDB',
+	'fastStoreDB',
+	'collection',
+]);
+
 const FROZEN_LENGTH = 215;
 const FROZEN_DIGEST = '6b21fd395cbb56517dfb68f9bf23c449008dca3dd6ce1d4e7ba3f42703d46aaf';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
@@ -81,6 +92,7 @@ const mutatorNames = new Set([
 	'insertCRDT',
 	'cleanup',
 	'addCollections',
+	'importJSON',
 	'addState',
 	'bulkInsert',
 	'bulkUpsert',
@@ -191,6 +203,22 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 					(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine')
 				)
 					report('write plane outside a command module', node);
+			}
+			// `close()` is too common a name to fence everywhere (dialogs, sockets); fence it on a
+			// receiver that is named like a database or collection handle, or is a `.collections[…]`.
+			if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'close') {
+				const receiver = callee.expression;
+				const named = ts.isIdentifier(receiver)
+					? receiver.text
+					: ts.isPropertyAccessExpression(receiver)
+						? receiver.name.text
+						: '';
+				const viaCollections =
+					ts.isElementAccessExpression(receiver) &&
+					ts.isPropertyAccessExpression(receiver.expression) &&
+					receiver.expression.name.text === 'collections';
+				if (LIFECYCLE_RECEIVERS.has(named) || viaCollections)
+					report('database or collection lifecycle (close) outside the data layer', node);
 			}
 		}
 		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text);
