@@ -17,7 +17,10 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { I18nContext } from 'react-i18next';
 import { BehaviorSubject } from 'rxjs';
 
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+
 import { TranslationProvider, useT } from './index';
+import { HydrationProviders } from '../hydration-providers';
 
 import type { i18n } from 'i18next';
 
@@ -31,10 +34,41 @@ let mockAppState: {
 };
 jest.mock('../app-state', () => ({
 	useAppState: () => mockAppState,
+	AppStateProvider: ({ children }: React.PropsWithChildren) => children,
 }));
+
+// Jest does not resolve platform extensions; use the browser primitive in jsdom.
+jest.mock('@rn-primitives/dialog', () =>
+	jest.requireActual(require.resolve('@rn-primitives/dialog').replace('index.js', 'dialog.web.js'))
+);
+
+// Hydration services and animation are unrelated; keep translation, labels and dialog rendering real.
+jest.mock('../theme', () => ({
+	ThemeProvider: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('../novu', () => ({ NovuProvider: ({ children }: React.PropsWithChildren) => children }));
+jest.mock('../../screens/splash', () => ({
+	Splash: () => null,
+	SplashProgressProvider: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('@wcpos/components/suspense', () => ({ Suspense: React.Suspense }));
+jest.mock('@wcpos/components/lib/overlay', () => ({
+	OverlayShell: ({ children }: React.PropsWithChildren) => children,
+	useOverlay: () => ({ presentation: 'center' }),
+	useSheetInset: () => undefined,
+	OVERLAY_MOTION: { center: {} },
+}));
+jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 
 const FRENCH: Record<string, string> = {
 	'settings.store_name': 'Nom du magasin',
+	'common.close': 'Fermer',
 };
 
 const mockFetch = jest.fn(
@@ -62,6 +96,23 @@ beforeEach(() => {
 });
 
 describe('locale change', () => {
+	it('updates the app dialog close label when the locale changes', async () => {
+		const locale$ = setupLocale('en_US');
+		render(
+			<HydrationProviders>
+				<Dialog open>
+					<DialogContent inline>
+						<DialogTitle>Task</DialogTitle>
+					</DialogContent>
+				</Dialog>
+			</HydrationProviders>
+		);
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy());
+		await act(async () => locale$.next('fr_FR'));
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Fermer' })).toBeTruthy());
+		expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+	});
+
 	it('re-renders t() consumers inside the provider', async () => {
 		const locale$ = setupLocale('en_US');
 

@@ -2,15 +2,23 @@ import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { DialogLabelsProvider } from '@wcpos/components/v2/dialog';
 
 import { Splash, SplashProgressProvider } from '../screens/splash';
 import { AppStateProvider } from './app-state';
 import { NovuProvider } from './novu';
 import { ThemeProvider } from './theme';
-import { TranslationProvider } from './translations';
+import { TranslationProvider, useT } from './translations';
 
 interface HydrationProvidersProps {
 	children: React.ReactNode;
+}
+
+function TranslatedDialogLabels({ children }: HydrationProvidersProps) {
+	const t = useT();
+	return (
+		<DialogLabelsProvider labels={{ close: t('common.close') }}>{children}</DialogLabelsProvider>
+	);
 }
 
 /**
@@ -34,7 +42,9 @@ export function HydrationProviders({ children }: HydrationProvidersProps) {
 					<ErrorBoundary>
 						<ThemeProvider>
 							<TranslationProvider>
-								<NovuProvider>{children}</NovuProvider>
+								<TranslatedDialogLabels>
+									<NovuProvider>{children}</NovuProvider>
+								</TranslatedDialogLabels>
 							</TranslationProvider>
 						</ThemeProvider>
 					</ErrorBoundary>
