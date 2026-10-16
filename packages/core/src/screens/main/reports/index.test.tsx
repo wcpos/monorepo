@@ -528,6 +528,7 @@ jest.mock('@wcpos/components/popover', () => ({
 	PopoverContent: () => null,
 }));
 jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 // Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
 it('opens the requested closure room and business day for Pro', () => {
 	mockPro = true;
