@@ -6,6 +6,7 @@ import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'reac
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
 
+import { Button } from '../../button';
 import { Input } from '../../input';
 import { DeviceScope } from '../../lib/device';
 import { PANEL_SLIDE } from '../../lib/motion';
@@ -14,6 +15,7 @@ import { registerPortalContainer } from '../../lib/portal-container';
 import {
 	Dialog,
 	DialogBody,
+	DialogClose,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
@@ -707,4 +709,106 @@ it('15. uses provider close labels, falls back to English, and lets closeLabel w
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
 	rerender(dialog('Dismiss'));
 	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+});
+
+it('16. keeps the generated close borderless and muted, and preserves a slotted child variant', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				<DialogClose asChild>
+					<Button variant="outline" testID="outline-close">
+						Close
+					</Button>
+				</DialogClose>
+				<DialogClose asChild>
+					<Button variant="ghost" testID="ghost-close">
+						Close
+					</Button>
+				</DialogClose>
+				<DialogClose testID="plain-close">Close</DialogClose>
+			</DialogContent>
+		</Dialog>
+	);
+	const classes = (testID: string) =>
+		mockPressableProps.find((props) => props.testID === testID)?.className?.split(' ');
+	expect(classes('d-close')).toEqual(
+		expect.arrayContaining(['h-ctl', 'w-ctl', 'web:hover:bg-muted', 'active:bg-muted'])
+	);
+	expect(classes('d-close')).not.toContain('border');
+	expect(screen.getByTestId('d-close').querySelector('svg')).toHaveClass('text-muted-foreground');
+	for (const testID of ['outline-close', 'plain-close']) {
+		expect(classes(testID)).toEqual(expect.arrayContaining(['border', 'border-border', 'bg-card']));
+		expect(classes(testID)).not.toContain('bg-primary');
+	}
+	expect(classes('ghost-close')).not.toContain('border');
+});
+
+it.each([
+	['center', false, 'full', true],
+	['right', false, 'full', false],
+	['right', true, 'full', false],
+	['center', false, '2xl', false],
+] as const)(
+	'17. %s (phone=%s, size=%s) requests fill only for a full-size centre dialog',
+	(side, phone, size, fill) => {
+		const shell = jest.spyOn(overlay, 'OverlayShell');
+		try {
+			render(
+				<DeviceScope phone={phone}>
+					<Dialog open>
+						<DialogContent inline testID="d" side={side} size={size}>
+							Task
+						</DialogContent>
+					</Dialog>
+				</DeviceScope>
+			);
+			expect(shell.mock.calls.at(-1)?.[0]).toMatchObject({
+				fill,
+				presentation: phone && side === 'right' ? 'page' : side,
+			});
+		} finally {
+			shell.mockRestore();
+		}
+	}
+);
+
+it.each([true, false])('17. takes full-size geometry only when the shell says fill=%s', (fill) => {
+	const context = jest.spyOn(overlay, 'useOverlay').mockReturnValue({
+		presentation: 'center',
+		open: true,
+		deferAutoFocus: false,
+		onPanelNode: jest.fn(),
+		fill,
+	});
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d" size="full">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		const panel = screen.getByTestId('d');
+		const close = screen.getByTestId('d-close').parentElement;
+		if (fill) {
+			expect(panel).toHaveClass(
+				'h-full',
+				'w-full',
+				'max-w-full',
+				'rounded-none',
+				'border-0',
+				'py-2',
+				'shadow-none'
+			);
+			expect(panel).not.toHaveClass('py-4', 'rounded-lg', 'border');
+			expect(close).toHaveClass('top-0');
+			expect(close).not.toHaveClass('top-1');
+		} else {
+			expect(panel).not.toHaveClass('py-2', 'shadow-none');
+			expect(panel).toHaveClass('py-4', 'rounded-lg', 'border');
+			expect(close).toHaveClass('top-1');
+		}
+	} finally {
+		context.mockRestore();
+	}
 });

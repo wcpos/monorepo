@@ -91,10 +91,17 @@ export type OverlayShellProps = {
 	 */
 	blocking?: boolean;
 	pinned?: boolean;
+	/**
+	 * Native: a full-size panel IS the screen. The scrim takes the card colour so the inset
+	 * bands read as the card, and the keyboard and motion wrappers fill the shell. Web ignores it.
+	 */
+	fill?: boolean;
 	testID?: string;
 	children: React.ReactNode;
 };
 export type OverlayContextValue = {
+	/** The shell's decision, so a panel can take its full-size geometry without reading the platform itself. */
+	fill: boolean;
 	presentation: OverlayPresentation;
 	open: boolean;
 	deferAutoFocus: boolean;
@@ -301,6 +308,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		onOutsidePress,
 		blocking,
 		pinned,
+		fill = false,
 		testID,
 		children,
 	} = props;
@@ -407,6 +415,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			}
 		};
 	}, [node, open, presentation, fullHeight, ownsDismiss]);
+	const context = { presentation, open, deferAutoFocus, onPanelNode, fill: !isWeb && fill };
 	if (presentation === 'anchored') {
 		/**
 		 * The primitive positions the panel; the shell supplies only the plumbing the
@@ -425,7 +434,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		 * dropdown menu; those ledger lines now point here.
 		 */
 		return (
-			<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
+			<OverlayContext.Provider value={context}>
 				{isWeb ? (
 					<Scrim
 						focusable={false}
@@ -507,11 +516,15 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 					paddingRight: insets.right,
 				},
 			]}
-			className={cn('flex bg-transparent', align[presentation])}
+			className={cn(
+				'flex bg-transparent',
+				align[presentation],
+				fill && 'items-stretch justify-start p-0'
+			)}
 		>
 			<Scrim
 				style={StyleSheet.absoluteFill}
-				className="bg-scrim"
+				className={fill ? 'bg-card' : 'bg-scrim'}
 				accessible={false}
 				importantForAccessibility="no"
 				accessibilityElementsHidden
@@ -538,6 +551,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				className={cn(
 					'max-w-full',
 					fullHeight && 'h-full',
+					fill && 'h-full w-full',
 					presentation === 'bottom' ? 'max-h-[92%] w-full' : 'max-h-full'
 				)}
 			>
@@ -549,6 +563,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 					className={cn(
 						'max-h-full max-w-full',
 						fullHeight && 'h-full',
+						fill && 'h-full w-full',
 						presentation === 'bottom' && 'w-full'
 					)}
 				>
@@ -558,7 +573,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		</View>
 	);
 	return (
-		<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
+		<OverlayContext.Provider value={context}>
 			{isWeb && pinned ? (
 				<View collapsable={false} style={StyleSheet.absoluteFill}>
 					{shell}

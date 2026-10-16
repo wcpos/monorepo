@@ -394,3 +394,28 @@ it('keeps Tab inside a sheet that owns its dismiss, wrapping at either end', () 
 	expect(tab(false)).toBe(true);
 	expect(document.activeElement).toBe(screen.getByTestId('first'));
 });
+
+it('ignores fill on web, keeping the scrim and wrappers and exposing fill: false', () => {
+	const seen: unknown[] = [];
+	function FillProbe() {
+		seen.push(useOverlay());
+		return <View testID="fill-probe" />;
+	}
+	const shell = (fill: boolean) => (
+		<OverlayShell presentation="center" open fill={fill} Scrim={Pressable} testID="f">
+			<FillProbe />
+		</OverlayShell>
+	);
+	const { container, rerender } = render(shell(false));
+	const before = container.innerHTML;
+	const classes = mockScrimProps.at(-1)?.className;
+	rerender(shell(true));
+	expect(mockScrimProps.at(-1)?.className).toBe(classes);
+	expect(classes?.split(' ')).toEqual(
+		expect.arrayContaining(['bg-scrim', 'items-center', 'justify-center', 'p-2'])
+	);
+	expect(classes).toContain(SCRIM_WRAPPER.center);
+	expect(container.innerHTML).toBe(before);
+	expect(screen.getByTestId('fill-probe').parentElement).toBe(screen.getByTestId('f-scrim'));
+	expect(seen.at(-1)).toMatchObject({ fill: false });
+});
