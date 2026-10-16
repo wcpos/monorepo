@@ -86,21 +86,28 @@ function violations(source: string): string[] {
 		}
 		// `import * as query from '@wcpos/query'` binds the whole module; member access, optional
 		// chaining, bracket access and destructuring would all need scanning, so the form is rejected.
-		if (specifier === '@wcpos/query' && /^\s*\*\s+as\s+\w+\s*$/.test(clause))
-			found.push(`query namespace import (use named imports): ${match[0]}`);
+		if (
+			specifier === '@wcpos/query' &&
+			/^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause) &&
+			!/^\s*(?:import|export)\s+type\b/.test(match[0])
+		)
+			found.push(`query namespace import or wildcard re-export (use named imports): ${match[0]}`);
 	}
-	// `import('@wcpos/query').Name` in a type position binds nothing; check the accessed name.
+	// A dynamic `import('@wcpos/query')` is allowed only in the type-access form
+	// `import('@wcpos/query').Name` (binds nothing; the name is checked). Any other form —
+	// `await import(...)`, a destructured result — binds the whole module and is rejected.
 	for (const access of commentsRemoved.matchAll(
-		/import\s*\(\s*['"]@wcpos\/query['"]\s*\)\s*\.\s*(\w+)/g
+		/import\s*\(\s*['"]@wcpos\/query['"]\s*\)(\s*\.\s*(\w+))?/g
 	)) {
-		if (forbiddenQueryNames.has(access[1])) found.push(`query escape hatch: ${access[0]}`);
+		if (!access[1]) found.push(`dynamic query import (use static named imports): ${access[0]}`);
+		else if (forbiddenQueryNames.has(access[2])) found.push(`query escape hatch: ${access[0]}`);
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|upsert|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|upsert|insertIfNotExists|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|modify|update|upsert|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${/^\.(?:incremental|modify|update|upsert|insertIfNotExists|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
