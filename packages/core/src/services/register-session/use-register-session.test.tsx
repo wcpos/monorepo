@@ -32,7 +32,9 @@ let closed: Row[] = [];
 let entries: Row[] = [];
 let closureRows: Row[] = [];
 const mockSessionChanges = new Subject<void>();
-type Hit = { record: { uuid: string; local: { dirty: boolean }; payload: Row } };
+type Hit = {
+	record: { uuid: string; local: { dirty: boolean; pendingMutationIds?: string[] }; payload: Row };
+};
 let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
 let mockParentOrders: BehaviorSubject<Hit[]> | undefined;
@@ -459,7 +461,7 @@ function refundHit(amount = '20', stamp = 'session'): Hit {
 	return {
 		record: {
 			uuid: 'refund:20',
-			local: { dirty: false },
+			local: { dirty: true },
 			payload: {
 				id: 20,
 				parent_id: 1,
@@ -470,7 +472,12 @@ function refundHit(amount = '20', stamp = 'session'): Hit {
 		},
 	};
 }
-function parentHit(saleSession = 'old-session', allocated = true, modified = '2026-09-01'): Hit {
+function parentHit(
+	saleSession = 'old-session',
+	allocated = true,
+	modified = '2026-09-01',
+	payment = {}
+): Hit {
 	return {
 		record: {
 			uuid: 'parent',
@@ -493,6 +500,7 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 									amount: '100',
 									refunded_amount: allocated ? '20' : '0',
 									refunds: allocated ? [{ id: 20, amount: '20', status: 'succeeded' }] : [],
+									...payment,
 								},
 							],
 						},
@@ -503,7 +511,7 @@ function parentHit(saleSession = 'old-session', allocated = true, modified = '20
 	};
 }
 
-// Remove the refund subscription or snapshot nulling: live edits stay hidden behind server_expected.
+// Remove the refund subscription or pending delta: live edits stay hidden behind server_expected.
 it('keeps the initial empty snapshot, then recomputes inserts, updates and deletion and permits server re-anchoring', async () => {
 	entries = [];
 	const result = await settled();
@@ -512,7 +520,7 @@ it('keeps the initial empty snapshot, then recomputes inserts, updates and delet
 		mockRefunds.next([refundHit()]);
 	});
 	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80.0000' }));
-	expect(active[0].server_expected).toBeNull();
+	expect(active[0].server_expected).toEqual({ cash: '100' });
 	await act(async () => {
 		mockRefunds.next([refundHit('30')]);
 	});
@@ -520,7 +528,7 @@ it('keeps the initial empty snapshot, then recomputes inserts, updates and delet
 	await act(async () => {
 		mockRefunds.next([]);
 	});
-	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100.0000' }));
+	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100' }));
 	await act(async () => {
 		active = [{ ...active[0], server_expected: { cash: '99' } }];
 		mockSessionChanges.next();
@@ -535,16 +543,9 @@ it('observes old held parents and later allocations without importing their sale
 	const result = await settled();
 	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80.0000' }));
 	await act(async () => {
-		active = [{ ...active[0], server_expected: { cash: '80' } }];
-		mockSessionChanges.next();
-	});
-	await waitFor(() => expect(result.current.expected).toEqual({ cash: '80' }));
-	await act(async () => {
 		mockOrders.next([parentHit()]);
 	});
-	await waitFor(() =>
-		expect(result.current.expected).toEqual({ cash: '100.0000', stripe: '-20.0000' })
-	);
+	await waitFor(() => expect(result.current.expected).toEqual({ cash: '100', stripe: '-20.0000' }));
 	expect(result.current.salesCount).toBe(0);
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest
@@ -576,7 +577,7 @@ it('loads another session stamp referenced by this session payment allocations',
 // Drop uuid deduplication: a parent returned by both reads doubles the captured sale and allocation.
 it('deduplicates parents also returned by the recent sales query', async () => {
 	entries = [];
-	active = [{ ...active[0], server_sales_count: null }];
+	active = [{ ...active[0], server_expected: null, server_sales_count: null }];
 	mockOrders.next([parentHit('session', true, '2026-09-15')]);
 	mockRefunds.next([refundHit()]);
 	const result = await settled();
@@ -603,7 +604,7 @@ it('requests missing stamped refund parents, releases on arrival, and keeps resi
 	);
 	await act(async () => mockOrders.next([parentHit()]));
 	await waitFor(() =>
-		expect(view.result.current.expected).toEqual({ cash: '100.0000', stripe: '-20.0000' })
+		expect(view.result.current.expected).toEqual({ cash: '100', stripe: '-20.0000' })
 	);
 	expect(mockReleaseParents).toHaveBeenCalledTimes(1);
 	mockDeclareRequirements.mockClear();
@@ -723,9 +724,9 @@ it.each([false, true])(
 	}
 );
 
-// Revert the refund-record or pending-invalidation guard: close freezes the stale server anchor.
+// The closure must use baseline plus pending deltas, without waiting for an anchor write.
 it.each([false, true])(
-	'derives the closure before anchor clearing settles, allocation-only %s',
+	'derives the closure with the retained baseline, allocation-only %s',
 	async (allocationOnly) => {
 		addRxPlugin(RxDBLocalDocumentsPlugin);
 		const db: StoreDatabase = await createRxDatabase({
@@ -777,7 +778,9 @@ it.each([false, true])(
 				if (allocationOnly) {
 					// The close already wrote the session, but its closure still needs recovery.
 					Object.assign(active[0], { status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' });
-					mockOrders.next([parentHit('session', true, '2026-09-15')]);
+					const pending = parentHit('session', true, '2026-09-15');
+					pending.record.local.dirty = true;
+					mockOrders.next([pending]);
 				} else {
 					mockRefunds.next([refundHit()]);
 				}
@@ -787,7 +790,7 @@ it.each([false, true])(
 			expect(active[0].server_expected).toEqual({ cash: '100' });
 			expect((await closing).toJSON()).toMatchObject({
 				period_refunds_total: '20.0000',
-				till_expected: { cash: '100.0000', stripe: allocationOnly ? '80.0000' : '-20.0000' },
+				till_expected: { cash: '100', stripe: allocationOnly ? '80.0000' : '-20.0000' },
 				breakdowns: {
 					refund_count: 1,
 					payment_methods: {
@@ -1039,18 +1042,17 @@ it('shares one close deadline across replacement refund parent handles', async (
 	}
 });
 
-// Revert catch to finally: a failed patch ends accounting and close reuses the stale anchor.
-it('keeps processing after anchor patch failures and derives the closure', async () => {
+// Refund observation must not write or discard the shared server baseline.
+it('keeps the baseline without attempting anchor patches', async () => {
 	entries = [];
 	const patch = jest.fn().mockRejectedValue(new Error('anchor patch failed'));
 	active = [{ ...active[0], incrementalPatch: patch }];
 	mockOrders.next([parentHit('session', false, '2026-09-15')]);
 	const result = await settled();
 	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-15')]));
-	expect(patch).toHaveBeenCalledTimes(1);
-	expect(logger.warn).toHaveBeenCalled();
+	expect(patch).not.toHaveBeenCalled();
 	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-16')]));
-	expect(patch).toHaveBeenCalledTimes(2);
+	expect(patch).not.toHaveBeenCalled();
 	jest
 		.mocked(actions.closeSession)
 		.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
@@ -1060,7 +1062,7 @@ it('keeps processing after anchor patch failures and derives the closure', async
 	});
 	expect(actions.writeClosure).toHaveBeenLastCalledWith(
 		expect.objectContaining({
-			tillExpected: undefined,
+			tillExpected: { cash: '100' },
 			orders: [parentHit('session', true, '2026-09-16').record],
 			refundRecords: [],
 		})
@@ -1316,4 +1318,66 @@ describe('overdue', () => {
 		// Catches the replacement stream re-rendering per minute rather than once at its flip.
 		expect(counter.renders).toBe(settledRenders + 1);
 	});
+});
+
+it.each([true, false])('adds only pending sales with server baseline %s', async (baseline) => {
+	entries = [];
+	active = [
+		{
+			...active[0],
+			counted_float: '0',
+			server_expected: baseline ? { cash: '100' } : null,
+			server_sales_count: baseline ? 5 : null,
+		},
+	];
+	mockOrders.next(
+		[
+			['local', '10', true],
+			['synced', '50', false],
+		].map(([id, amount, pending]) => {
+			const hit = parentHit('session', false, '2026-09-15', {
+				id,
+				amount,
+				kind: 'cash',
+				method_id: 'cash',
+			});
+			hit.record.uuid = String(id);
+			hit.record.local.pendingMutationIds = pending ? ['write'] : [];
+			return hit;
+		})
+	);
+	const result = await settled();
+	expect(result.current.expected.cash).toBe(baseline ? '110.0000' : '60.0000');
+	expect(result.current.salesCount).toBe(baseline ? 6 : 2);
+});
+
+it('keeps acknowledged sales, refunds and movements until baseline refresh', async () => {
+	active = [{ ...active[0], server_expected_at: '2026-09-15T10:00:00.000Z' }];
+	mockOrders.next([parentHit('session', false, '2026-09-15T10:00:01')]);
+	const refund = refundHit();
+	refund.record.local.dirty = false;
+	refund.record.payload.date_created_gmt = '2026-09-15T10:00:01';
+	mockRefunds.next([refund]);
+	entries = [
+		{
+			...movement,
+			amount: '30',
+			sync_status: 'synced',
+			acknowledged_at: '2026-09-15T10:00:01.000Z',
+		},
+	];
+	const result = await settled();
+	const expected = { cash: '110.0000', stripe: '100.0000' };
+	expect(result.current.expected).toEqual(expected);
+	expect(result.current.salesCount).toBe(1);
+	await act(async () => {
+		Object.assign(active[0], {
+			server_expected: expected,
+			server_sales_count: 1,
+			server_expected_at: '2026-09-15T10:00:02.000Z',
+		});
+		mockSessionChanges.next();
+	});
+	expect(result.current.expected).toEqual(expected);
+	expect(result.current.salesCount).toBe(1);
 });

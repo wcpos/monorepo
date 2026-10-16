@@ -27,6 +27,8 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePanelSide } from '../contexts/overlay-side';
+import { useCurrentOrderOptional } from '../contexts/current-order/context';
+import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 import { ClearLocalData } from './clear-local-data';
 
 export function useSalesToday() {
@@ -142,6 +144,9 @@ export function UserSheet({
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const side = usePanelSide('shell');
 	const { registers } = useRegisterBinding();
+	const currentOrder = useCurrentOrderOptional();
+	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
+	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
 	const router = useRouter();
 	return (
@@ -171,6 +176,8 @@ export function UserSheet({
 									<View className="border-border border-b">
 										<Button
 											testID="user-sheet-switch-register"
+											disabled={attributed}
+											aria-disabled={attributed}
 											variant="ghost"
 											className="min-h-row flex-row justify-start gap-2"
 											onPress={() => {
@@ -180,6 +187,11 @@ export function UserSheet({
 										>
 											{t('register.switch_register')}
 										</Button>
+										{attributed && (
+											<Text className="text-muted-foreground">
+												{t('register.switch_register_blocked_cart')}
+											</Text>
+										)}
 									</View>
 								)}
 								<View className="border-border mt-auto border-t pt-4">

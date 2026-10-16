@@ -39,6 +39,7 @@ export async function refreshSessions({
 			...detail,
 			// A cashier counting blind is not served the expected figure at all.
 			server_expected: detail.expected ?? null,
+			server_expected_at: new Date().toISOString(),
 			server_sales_count: detail.sales_count ?? null,
 		});
 		for (const movement of detail.movements ?? []) {

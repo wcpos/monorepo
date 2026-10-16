@@ -26,7 +26,7 @@ beforeEach(async () => {
 	});
 	await db.addCollections({
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
-		cash_movements: { schema: cashMovementsLiteral },
+		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
 });
 afterEach(async () => {
@@ -75,7 +75,7 @@ it('void inserts a write-once reversal and marks its target', async () => {
 	expect(row.getLatest().voided_by).toBe(reversal.id);
 });
 
-it('gates counting and missing sessions, and expires the expected snapshot before money actions', async () => {
+it('gates counting and missing sessions, and retains the server baseline before money actions', async () => {
 	expect(await requireOpenSession(undefined, null, false)).toBeNull();
 	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
@@ -83,7 +83,10 @@ it('gates counting and missing sessions, and expires the expected snapshot befor
 	const row = await openSession(db.register_sessions, input);
 	await row.incrementalPatch({ server_expected: { cash: '100' }, server_sales_count: 2 });
 	expect(await requireOpenSession(db.register_sessions, 'register', true)).toBe(row.id);
-	expect(row.getLatest().server_expected).toBeNull();
+	expect(row.getLatest().toJSON()).toMatchObject({
+		server_expected: { cash: '100' },
+		server_sales_count: 2,
+	});
 	await startCounting(db.register_sessions, row.id);
 	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',

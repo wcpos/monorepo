@@ -345,11 +345,11 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					...(row.voids ? { voids: row.voids } : {}),
 				});
 				try {
-					await session.incrementalPatch({ server_expected: null, server_sales_count: null });
 					await row.incrementalModify((local) => ({
 						...local,
 						...(response.data as CashMovementRow),
 						...synced,
+						acknowledged_at: new Date().toISOString(),
 						voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
 					}));
 				} catch (error) {

@@ -38,7 +38,7 @@ export class RegisterSessionRequiredError extends Error {
 export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed' } } as const;
 /**
  * The open session for a register, or throws. A read: it changes nothing, so an action guard
- * may call it before `next`. `requireOpenSession` is the same lookup plus the pre-action write.
+ * may call it before `next`. `requireOpenSession` returns only its id.
  */
 export async function findOpenSession(
 	sessions: RegisterSessionCollection | undefined,
@@ -61,8 +61,7 @@ export async function requireOpenSession(
 ) {
 	const session = await findOpenSession(sessions, registerId, enabled);
 	if (!session) return null;
-	// This gate precedes money actions: a pre-action snapshot must not return after sync.
-	await session.incrementalPatch({ server_expected: null, server_sales_count: null });
+	// Retain the baseline; pending rows supply the delta until the next detail refresh.
 	return session.id;
 }
 export function openSession(

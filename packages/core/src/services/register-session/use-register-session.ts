@@ -16,15 +16,16 @@ import {
 
 import {
 	declareRequirements,
+	type EngineRecord,
 	observeEngineQuery,
 	useDocField,
 	useQueryRuntime,
 } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { readLedger, toMinor } from '@wcpos/order-math';
+import { getLogger } from '@wcpos/utils/logger';
+import { readLedger } from '@wcpos/order-math';
 import { mintRemoteId } from '@wcpos/sync-core';
 import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
-import type { RequirementHandle } from '@wcpos/sync-engine';
+import { hasPendingLocalWork, type RequirementHandle } from '@wcpos/sync-engine';
 
 import { useStoreDay } from '../../hooks/use-store-day';
 import { recordRegisterFact, useRegisterActor } from './audit';
@@ -43,6 +44,48 @@ const logger = getLogger(['wcpos', 'registerSession']);
 // still close; the closure then carries the fallback and the parent arrives later.
 const REFUND_PARENT_WAIT_MS = 15_000;
 
+function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
+	return hasPendingLocalWork(record) || record.remoteId === null;
+}
+
+function afterBaseline(at?: string | null, baselineAt?: string | null) {
+	return (
+		!!at && !!baselineAt && Date.parse(at.endsWith('Z') ? at : `${at}Z`) > Date.parse(baselineAt)
+	);
+}
+function outsideBaseline(
+	record: {
+		local?: unknown;
+		remoteId?: unknown;
+		payload: { date_modified_gmt?: string; date_created_gmt?: string };
+	},
+	baselineAt?: string | null
+) {
+	return (
+		pendingMoney(record) ||
+		afterBaseline(record.payload.date_modified_gmt || record.payload.date_created_gmt, baselineAt)
+	);
+}
+function baselineContains(
+	orders: readonly EngineRecord<'orders'>[],
+	refunds: readonly EngineRecord<'refunds'>[],
+	movements: readonly { id: string; sync_status: string; acknowledged_at?: string | null }[],
+	baselineAt?: string | null
+) {
+	const pending = new Set<string | number | null | undefined>([
+		...refunds.filter((row) => outsideBaseline(row, baselineAt)).map((row) => row.payload.id),
+		...movements
+			.filter(
+				(row) => row.sync_status !== 'synced' || afterBaseline(row.acknowledged_at, baselineAt)
+			)
+			.map((row) => row.id),
+		...orders
+			.filter((row) => outsideBaseline(row, baselineAt))
+			.flatMap((row) => readLedger(row.payload.meta_data).map(({ id }) => id)),
+	]);
+	return (id: string | number | null | undefined) => !pending.has(id);
+}
+
 /** Whether now is past today's `HH:MM` close time; no or unreadable close time is never past. */
 function isPastClose(closeTime: string | null | undefined) {
 	const [hour, minute] = String(closeTime ?? '')
@@ -58,13 +101,13 @@ function isPastClose(closeTime: string | null | undefined) {
 
 export function useRegisterSession() {
 	const missingParentKey = React.useRef('');
-	const anchorInvalidationPending = React.useRef(false);
 	const [accountingChanges] = React.useState(() => new Subject<void>());
 	const pendingParents = React.useRef<RequirementHandle[]>([]);
-	const latestAccounting = React.useRef<Pick<
-		Parameters<typeof actions.writeClosure>[0],
-		'orders' | 'refundRecords'
-	> | null>(null);
+	const latestAccounting = React.useRef<{
+		orders: EngineRecord<'orders'>[];
+		refundRecords: RefundDocumentType[];
+		refundSources: EngineRecord<'refunds'>[];
+	} | null>(null);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
 	const actor = useRegisterActor();
 	const { today, timezone } = useStoreDay();
@@ -97,8 +140,11 @@ export function useRegisterSession() {
 			// eslint-disable-next-line react-hooks/refs -- RxJS invokes this on subscription emissions, not while constructing the observable during render.
 			switchMap((current) => {
 				if (!current)
-					return of({ orders: { hits: [] as never[] }, refundRecords: [] as RefundDocumentType[] });
-				let previousRefunds: string | undefined;
+					return of({
+						orders: { hits: [] as never[] },
+						refundRecords: [] as RefundDocumentType[],
+						refundSources: [] as EngineRecord<'refunds'>[],
+					});
 				return observeEngineQuery(engine, {
 					collection: 'orders',
 					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
@@ -173,54 +219,22 @@ export function useRegisterSession() {
 											],
 										},
 										refundRecords,
+										refundSources: refunds.hits.map(({ record }) => record),
 									}))
 								);
 							})
 						);
 					}),
 					tap((accounting) => {
-						const allocations = accounting.orders.hits
-							.flatMap(({ record }) => readLedger(record.payload.meta_data))
-							.filter((row) => row.refunds?.length || toMinor(row.refunded_amount, 4) > 0)
-							.map(({ id, session_id, kind, method_id, status, refunded_amount, refunds }) => ({
-								id,
-								session_id,
-								kind,
-								method_id,
-								status,
-								refunded_amount,
-								refunds,
-							}));
-						const signature = JSON.stringify([accounting.refundRecords, allocations]);
-						const changed =
-							previousRefunds === undefined
-								? accounting.refundRecords.length > 0
-								: signature !== previousRefunds;
-						previousRefunds = signature;
-						if (changed) anchorInvalidationPending.current = true;
 						latestAccounting.current = {
 							orders: accounting.orders.hits.map(({ record }) => record),
 							refundRecords: accounting.refundRecords,
+							refundSources: accounting.refundSources,
 						};
 						accountingChanges.next();
 					}),
-					concatMap(async (accounting) => {
-						// Close must derive while the persisted anchor is still being cleared.
-						try {
-							if (anchorInvalidationPending.current && current.getLatest().server_expected) {
-								await current.getLatest().incrementalPatch({ server_expected: null });
-							}
-							anchorInvalidationPending.current = false;
-						} catch (error) {
-							logger.warn(
-								'Register session anchor invalidation failed; close will derive accounting',
-								{
-									context: { sessionId: current.id, error: getErrorMessage(error) },
-								}
-							);
-						}
-						return accounting;
-					})
+					// Preserve the existing asynchronous accounting emission boundary.
+					concatMap(async (accounting) => accounting)
 				);
 			})
 		);
@@ -307,12 +321,6 @@ export function useRegisterSession() {
 						key === '_wcpos_session' && value === session?.id
 				) || readLedger(record.payload.meta_data).some((row) => row.session_id === session?.id)
 		) ?? [];
-	// 'failed' counts as outstanding, not settled: the server never took the row, so falling
-	// back to its expected total drops the movement and hands the cashier the variance.
-	const localPending =
-		session?.sync_status !== 'synced' ||
-		entries.some((row) => row.sync_status !== 'synced') ||
-		orders.some(({ record }) => record.local.dirty);
 	const accountingOrders = data?.orders.hits ?? [];
 	const drawerInput = session
 		? {
@@ -326,11 +334,13 @@ export function useRegisterSession() {
 			}
 		: undefined;
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput) : undefined;
-	const expected = session
-		? !localPending && session.server_expected
-			? session.server_expected
-			: deriveExpected(drawerInput!)
-		: {};
+	const baselineHas = baselineContains(
+		accountingOrders.map(({ record }) => record),
+		data?.refundSources ?? [],
+		entries,
+		session?.server_expected_at
+	);
+	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -345,7 +355,7 @@ export function useRegisterSession() {
 		terms,
 		varianceThreshold,
 		unsyncedCount:
-			orders.filter(({ record }) => record.local.dirty).length +
+			orders.filter(({ record }) => pendingMoney(record)).length +
 			entries.filter((row) => row.sync_status !== 'synced').length +
 			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
@@ -353,8 +363,9 @@ export function useRegisterSession() {
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
 		salesCount:
-			!localPending && session?.server_sales_count != null
-				? session.server_sales_count
+			session?.server_sales_count != null
+				? session.server_sales_count +
+					orders.filter(({ record }) => outsideBaseline(record, session.server_expected_at)).length
 				: orders.length,
 		lastClosure:
 			data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null,
@@ -470,13 +481,22 @@ export function useRegisterSession() {
 						opened_by_name: actorName(closed.opened_by),
 						approved_by_name: actorName(closed.approved_by),
 					},
-					tillExpected:
-						!localPending &&
-						!anchorInvalidationPending.current &&
-						latestSession.server_expected &&
-						!refundRecords?.length
-							? latestSession.server_expected
-							: undefined,
+					tillExpected: deriveExpected(
+						{
+							session: latestSession,
+							movements: entries,
+							refundRecords,
+							ledgerRowsBySession: (
+								accounting?.orders ?? accountingOrders.map(({ record }) => record)
+							).flatMap((record) => readLedger(record.payload.meta_data)),
+						},
+						baselineContains(
+							accounting?.orders ?? [],
+							accounting?.refundSources ?? [],
+							entries,
+							latestSession.server_expected_at
+						)
+					),
 					userDB,
 					siteUuid: site.uuid!,
 					session: closed,

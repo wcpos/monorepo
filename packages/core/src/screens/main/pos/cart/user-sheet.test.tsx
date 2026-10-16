@@ -88,7 +88,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registers: [] }),
+	useRegisterBinding: () => ({ registers: [{ id: 'A' }, { id: 'B' }] }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/dialog', () => {
@@ -102,12 +102,16 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		onPress,
+		disabled,
+		'aria-disabled': ariaDisabled,
 	}: {
 		children: React.ReactNode;
 		testID: string;
 		onPress: () => void;
+		disabled?: boolean;
+		'aria-disabled'?: boolean;
 	}) => (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} onClick={onPress} disabled={disabled} aria-disabled={ariaDisabled}>
 			{children}
 		</button>
 	),
@@ -219,3 +223,26 @@ it.each(['settings', 'support', 'clear-local-data'])(
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	}
 );
+
+let mockCart: { payload: { meta_data: { key: string; value: string }[] } } | undefined = {
+	payload: { meta_data: [] as { key: string; value: string }[] },
+};
+jest.mock('../contexts/current-order/context', () => ({ useCurrentOrderOptional: () => mockCart }));
+// Undefined is the rail variant: outside CurrentOrderProvider, switching fails closed.
+it.each([true, false, undefined])('guards cart and rail switching: %s', (attributed) => {
+	mockCart =
+		attributed === undefined
+			? undefined
+			: { payload: { meta_data: attributed ? [{ key: '_wcpos_register', value: 'A' }] : [] } };
+	const blocked = attributed !== false;
+	const switchRegister = jest.fn();
+	render(
+		<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} portalHost={null} />
+	);
+	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+	expect(button.disabled).toBe(blocked);
+	expect(button.getAttribute('aria-disabled')).toBe(String(blocked));
+	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(blocked);
+	fireEvent.click(button);
+	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
+});

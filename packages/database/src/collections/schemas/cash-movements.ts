@@ -11,6 +11,7 @@ export const cashMovementsLiteral = {
 		type: { type: 'string', enum: ['paid_in', 'paid_out', 'no_sale', 'void'] },
 		amount: { type: 'string' },
 		reason: { type: 'string' },
+		acknowledged_at: { type: ['string', 'null'], default: null },
 		created_at_gmt: { type: 'string' },
 		created_by: { type: ['number', 'null'] },
 		voids: { type: ['string', 'null'] },

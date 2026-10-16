@@ -46,7 +46,7 @@ beforeEach(async () => {
 	await db.addCollections({
 		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
-		cash_movements: { schema: cashMovementsLiteral },
+		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
 });
 afterEach(async () => {
@@ -150,6 +150,7 @@ it('backs off a 5xx without posting dependent movements', async () => {
 });
 it('sends movements after create but before a deferred counting transition', async () => {
 	const row = await open();
+	await row.incrementalPatch({ server_expected: { cash: '100' } });
 	const movement = await recordMovement(db.cash_movements, {
 		sessionId: row.id,
 		type: 'paid_out',
@@ -162,7 +163,7 @@ it('sends movements after create but before a deferred counting transition', asy
 		data:
 			url === 'movements'
 				? { ...movement.toJSON() }
-				: { ...row.toJSON(), status: url === 'sessions' ? 'open' : body.status },
+				: { ...row.getLatest().toJSON(), status: url === 'sessions' ? 'open' : body.status },
 	}));
 	await drain();
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['sessions', 'movements']);
@@ -187,6 +188,23 @@ it('sends movements after create but before a deferred counting transition', asy
 	await drain();
 	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
 	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
+	expect(row.getLatest().server_expected).toEqual({ cash: '100' });
+	expect(movement.getLatest().toJSON()).toMatchObject({ acknowledged_at: expect.any(String) });
+	http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+		data: { ...row.getLatest().toJSON(), expected: { cash: '95' }, sales_count: 0, movements: [] },
+	});
+	await refreshSessions({
+		registerId: 'register',
+		http,
+		sessions: db.register_sessions,
+		movements: db.cash_movements,
+		closures: db.closures,
+	});
+	const refreshed = row.getLatest().toJSON();
+	expect(refreshed).toMatchObject({
+		server_expected: { cash: '95' },
+		server_expected_at: expect.any(String),
+	});
 });
 it('closes a predecessor before creating its successor on the same register', async () => {
 	const predecessor = await open();
