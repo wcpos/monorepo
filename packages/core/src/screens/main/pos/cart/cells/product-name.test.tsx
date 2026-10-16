@@ -28,8 +28,8 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
 }));
-jest.mock('../../hooks/use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ updateLineItem: jest.fn() }),
+jest.mock('../../hooks/use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ updateCartLine: jest.fn() }),
 }));
 jest.mock('../../hooks/stock-rejection', () => ({
 	stockRejection$: new (jest.requireActual('rxjs').BehaviorSubject)(null),

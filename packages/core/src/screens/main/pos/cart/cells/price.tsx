@@ -9,7 +9,7 @@ import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
 }
 export function Price({ row, column }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price } = getLineItemData(item);
 	const { format } = useCurrencyFormat();
@@ -41,7 +41,7 @@ export function Price({ row, column }: CellContext<Props, 'price'>) {
 				textClassName="text-muted-foreground text-right tabular-nums"
 				inputClassName="border-0 tabular-nums"
 				value={price}
-				onChangeText={(price) => updateLineItem(uuid, { price })}
+				onChangeText={(price) => updateCartLine('line_items', uuid, { price })}
 				discounts={ensureNumberArray(quickDiscounts)}
 			/>
 		</VStack>

@@ -9,7 +9,7 @@ import { useT } from '../../../../../contexts/translations';
 import { NumberInput } from '../../../components/number-input';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useSplitLineItem } from '../../hooks/use-split-line-item';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
@@ -18,7 +18,7 @@ interface Props {
 }
 export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const { splitLineItem } = useSplitLineItem();
 	const t = useT();
 	const overStock = useCartUnmet().some((condition) => condition.lineUuid === uuid);
@@ -49,7 +49,7 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// does; selecting on focus makes the next keystroke do exactly that.
 				selectTextOnFocus
 				value={item.quantity}
-				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
+				onChangeText={(quantity) => updateCartLine('line_items', uuid, { quantity })}
 			/>
 			{column.columnDef.meta?.show?.('split') && (item.quantity ?? 0) > 1 && (
 				<Text

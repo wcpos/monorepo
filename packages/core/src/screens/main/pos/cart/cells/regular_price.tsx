@@ -6,7 +6,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -22,7 +22,7 @@ interface Props {
 export function RegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	const item = row.original.item;
 	const uuid = row.original.uuid;
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
 	const { regular_price: value } = getLineItemData(item);
 
@@ -38,7 +38,7 @@ export function RegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	return (
 		<CurrencyInput
 			value={value}
-			onChangeText={(regular_price) => updateLineItem(uuid, { regular_price })}
+			onChangeText={(regular_price) => updateCartLine('line_items', uuid, { regular_price })}
 			discounts={ensureNumberArray(quickDiscounts)}
 		/>
 	);

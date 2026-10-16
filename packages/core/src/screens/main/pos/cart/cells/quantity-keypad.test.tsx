@@ -6,13 +6,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { Quantity } from './quantity-keypad';
 import { openLineQuantity, scrollToLine } from '../../conditions/use-cart-conditions';
 
-const mockUpdateLineItem = jest.fn();
+const mockUpdateCartLine = jest.fn();
 const mockSplitLineItem = jest.fn();
 jest.mock('../../hooks/use-split-line-item', () => ({
 	useSplitLineItem: () => ({ splitLineItem: mockSplitLineItem }),
 }));
-jest.mock('../../hooks/use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ updateLineItem: mockUpdateLineItem }),
+jest.mock('../../hooks/use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ updateCartLine: mockUpdateCartLine }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // The conditions module's own reads (store session) are not under test here.
@@ -47,7 +47,7 @@ jest.mock('../../../components/number-input', () => ({
 }));
 
 it('keeps the quantity id/value and commits the same hook arguments', () => {
-	mockUpdateLineItem.mockClear();
+	mockUpdateCartLine.mockClear();
 	const props = {
 		row: { original: { uuid: 'line-1', type: 'line_items', item: { quantity: 20 } } },
 		column: { columnDef: { meta: { show: () => false } } },
@@ -57,8 +57,8 @@ it('keeps the quantity id/value and commits the same hook arguments', () => {
 	expect(input.value).toBe('20');
 	fireEvent.change(input, { target: { value: '3' } });
 	fireEvent.keyDown(input, { key: 'Enter' });
-	expect(mockUpdateLineItem).toHaveBeenCalledTimes(1);
-	expect(mockUpdateLineItem).toHaveBeenCalledWith('line-1', { quantity: 3 });
+	expect(mockUpdateCartLine).toHaveBeenCalledTimes(1);
+	expect(mockUpdateCartLine).toHaveBeenCalledWith('line_items', 'line-1', { quantity: 3 });
 });
 
 it('a mounted keypad is what the notice opens; it registers no scroll of its own', () => {

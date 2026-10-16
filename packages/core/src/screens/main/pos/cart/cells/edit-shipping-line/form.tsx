@@ -30,7 +30,7 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
-import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
+import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
@@ -58,7 +58,7 @@ interface Props {
  */
 export function EditShippingLineForm({ uuid, item }: Props) {
 	const t = useT();
-	const { updateShippingLine } = useUpdateShippingLine();
+	const { updateCartLine } = useUpdateCartLine();
 	const { close: closeDialog } = useDialog();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
@@ -86,7 +86,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 	 */
 	const handleSave = React.useCallback(
 		async (data: FormValues) => {
-			await updateShippingLine(uuid, {
+			await updateCartLine('shipping_lines', uuid, {
 				method_title: data.method_title,
 				method_id: data.method_id,
 				instance_id: data.instance_id,
@@ -99,7 +99,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 			});
 			closeDialog();
 		},
-		[updateShippingLine, uuid, closeDialog]
+		[updateCartLine, uuid, closeDialog]
 	);
 
 	/**

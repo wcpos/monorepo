@@ -112,8 +112,8 @@ jest.mock('./use-cart-config', () => {
 	return { useCartConfig: () => config };
 });
 
-jest.mock('./use-update-line-item', () => ({
-	useUpdateLineItem: () => ({ incrementLineItem: mockIncrementLineItem }),
+jest.mock('./use-update-cart-line', () => ({
+	useUpdateCartLine: () => ({ incrementLineItem: mockIncrementLineItem }),
 }));
 
 jest.mock('./utils', () => ({

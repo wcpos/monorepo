@@ -33,7 +33,7 @@ import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
-import { useUpdateFeeLine } from '../../../hooks/use-update-fee-line';
+import { useUpdateCartLine } from '../../../hooks/use-update-cart-line';
 
 /**
  *
@@ -56,7 +56,7 @@ interface Props {
 
 export function EditFeeLineForm({ uuid, item }: Props) {
 	const t = useT();
-	const { updateFeeLine } = useUpdateFeeLine();
+	const { updateCartLine } = useUpdateCartLine();
 	const { close: closeDialog } = useDialog();
 	const { getFeeLineData } = useFeeLineData();
 	const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
@@ -90,7 +90,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 	 */
 	const handleSave = React.useCallback(
 		async (data: FormValues) => {
-			await updateFeeLine(uuid, {
+			await updateCartLine('fee_lines', uuid, {
 				name: data.name,
 				amount: String(data.amount),
 				tax_status: data.tax_status,
@@ -107,7 +107,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 			});
 			closeDialog();
 		},
-		[updateFeeLine, uuid, closeDialog]
+		[updateCartLine, uuid, closeDialog]
 	);
 
 	/**

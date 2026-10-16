@@ -6,7 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 import { useSplitLineItem } from './use-split-line-item';
 import {
 	getActionHooks,
@@ -225,11 +225,12 @@ describe('useSplitLineItem', () => {
 					};
 				})
 		);
-		const { result } = renderHook(() => ({ ...useUpdateLineItem(), ...useSplitLineItem() }));
+		const { result } = renderHook(() => ({ ...useUpdateCartLine(), ...useSplitLineItem() }));
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 
 		await act(async () => {
-			const firstMutation = result.current.updateLineItem(
+			const firstMutation = result.current.updateCartLine(
+				'line_items',
 				uuid,
 				{ quantity: 3 },
 				{ skipStockGuard: true }
