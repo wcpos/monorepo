@@ -1,12 +1,16 @@
-/** ADR 0033 item 7: UI code acquires data only through named reads; this allowlist may only shrink. */
+/**
+ * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
+ * commands. Storage imports, storage tokens and RxDB record-mutator calls are reported; the frozen
+ * allowlist is immutable and the effective list (frozen minus repaired) may only shrink.
+ */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { SEAM_ALLOWLIST_FROZEN_2026_10_16, SEAM_REPAIRED_SINCE_FREEZE } from './seam-allowlist';
 
-const FROZEN_LENGTH = 191;
-const FROZEN_DIGEST = 'b4ba55758f2f0809d4c635b219a5e021f825b87287736deed868b5c6e0a05870';
+const FROZEN_LENGTH = 193;
+const FROZEN_DIGEST = '573230ce3998dcfeb1868611dc43533023983edde7c4231e62742329030d7e3c';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
 const effectiveAllowlist = new Set(
 	SEAM_ALLOWLIST_FROZEN_2026_10_16.filter((file) => !repaired.has(file))
@@ -98,9 +102,11 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
-		found.push(`storage token: ${match[0]}`);
+		found.push(
+			`${/^\.(?:incremental|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
 }

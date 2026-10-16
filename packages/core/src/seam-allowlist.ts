@@ -1,5 +1,5 @@
 /**
- * ADR 0033 item 7. The seam allowlist, frozen 2026-10-16 with 191 files.
+ * ADR 0033 item 7. The seam allowlist, frozen 2026-10-16 with 193 files.
  *
  * `SEAM_ALLOWLIST_FROZEN_2026_10_16` is IMMUTABLE: `seam.test.ts` pins its length and a digest of
  * its contents, so a path can neither be added nor swapped in. When a listed file stops crossing
@@ -58,6 +58,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly string[] = [
 	'screens/main/hooks/use-engine-document.ts',
 	'screens/main/hooks/use-engine-monitor.ts',
 	'screens/main/hooks/use-image-attachment/types.ts',
+	'screens/main/hooks/use-rest-http-client/index.ts',
 	'screens/main/hooks/use-stock-adjustment.ts',
 	'screens/main/hooks/use-storage-health.ts',
 	'screens/main/hooks/use-store-label.ts',
@@ -149,6 +150,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly string[] = [
 	'screens/main/pos/products/use-serial-scan.web.ts',
 	'screens/main/products/edit/product/form.tsx',
 	'screens/main/products/edit/variation/form.tsx',
+	'screens/main/receipt/email-queue/queue.ts',
 	'screens/main/receipt/email-queue/use-receipt-email-queue-collection.ts',
 	'screens/main/receipt/hooks/use-active-templates.ts',
 	'screens/main/receipt/hooks/use-resolved-printer.ts',
