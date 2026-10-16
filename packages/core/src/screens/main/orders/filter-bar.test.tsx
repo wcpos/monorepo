@@ -30,6 +30,9 @@ jest.mock('../components/order/filter-bar/customer-pill', () => ({ CustomerPill:
 jest.mock('../components/order/filter-bar/cashier-pill', () => ({ CashierPill: () => null }));
 jest.mock('../components/order/filter-bar/store-pill', () => ({ StorePill: () => null }));
 jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));
+jest.mock('../components/order/filter-bar/payment-method-pill', () => ({
+	PaymentMethodPill: () => null,
+}));
 jest.mock('../components/order/filter-bar/date-range-pill', () => ({
 	DateRangePill: () => null,
 }));

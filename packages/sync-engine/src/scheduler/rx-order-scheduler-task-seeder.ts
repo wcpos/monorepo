@@ -73,6 +73,7 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	customerId?: number;
 	cashierId?: number;
 	registerId?: string;
+	paymentMethod?: string;
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
@@ -144,6 +145,7 @@ function orderFilterWindow(input: SeedOrderFilterSchedulerTaskInput): {
 		customerId: input.customerId,
 		cashierId: input.cashierId,
 		registerId: input.registerId,
+		paymentMethod: input.paymentMethod,
 		store: input.store,
 		afterSeconds: input.afterSeconds,
 		beforeSeconds: input.beforeSeconds,

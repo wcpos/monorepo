@@ -310,6 +310,26 @@ describe('seedOrderSchedulerTasks', () => {
 		);
 	});
 
+	it('seeds a payment-method-specific lane and requirement', async () => {
+		await seedOrderFilterSchedulerTask({
+			database: MOCK_DATABASE,
+			status: 'all',
+			search: '',
+			limit: 25,
+			paymentMethod: 'pos_cash',
+		});
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				tasks: [
+					expect.objectContaining({
+						queryKey: 'orders:browser:status=all:payment_method=pos_cash:search=:limit=25',
+						requirementId: 'orders.browser.status=all.payment_method=pos_cash.search=.limit=25',
+					}),
+				],
+			})
+		);
+	});
+
 	it('round-trips all order dimensions through a browser order search descriptor', async () => {
 		const { schedulerRepository, result } = arrangeBrowserOrderSeed();
 

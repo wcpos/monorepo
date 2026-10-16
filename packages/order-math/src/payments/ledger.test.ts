@@ -73,10 +73,47 @@ describe('ledger meta', () => {
 			{ key: 'after', value: 2 },
 		];
 		const output = withLedger(input, [row()]);
-		expect(output.map(({ key }) => key)).toEqual(['before', '_wcpos_payments', 'after']);
+		expect(output.map(({ key }) => key)).toEqual([
+			'before',
+			'_wcpos_payments',
+			'after',
+			'_wcpos_payment_method',
+		]);
 		expect(output[1]).toMatchObject({ id: 77, value: { schema: 1, payments: [row()] } });
 		expect(typeof output[1].value).toBe('object');
 		expect(input[1].value).toEqual({ schema: 1, payments: [] });
+	});
+
+	it('replaces stale method indexes with distinct live methods, preserving other metadata', () => {
+		const input: MetaDataEntry[] = [
+			{ key: 'before', value: { untouched: true } },
+			{ id: 77, key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+			{ id: 78, key: '_wcpos_payment_method', value: 'old' },
+			{ key: 'after', value: 2 },
+			{ id: 79, key: '_wcpos_payment_method', value: 'gift' },
+		];
+		const original = structuredClone(input);
+		const rows = [
+			row({ id: 'cash-1', status: 'pending' }),
+			row({ id: 'cash-2', status: 'authorized' }),
+			row({ id: 'card', method_id: 'stripe', status: 'captured' }),
+			row({ id: 'gift', method_id: 'gift', status: 'voided' }),
+		];
+		const ledgerBytes = JSON.stringify({ schema: 1, payments: rows });
+		const output = withLedger(input, rows);
+
+		expect(output.filter(({ key }) => key === '_wcpos_payment_method')).toEqual([
+			{ key: '_wcpos_payment_method', value: 'pos_cash' },
+			{ key: '_wcpos_payment_method', value: 'stripe' },
+		]);
+		expect(output.slice(0, 3)).toEqual([
+			input[0],
+			{ ...input[1], value: { schema: 1, payments: rows } },
+			input[3],
+		]);
+		expect(output).toHaveLength(5);
+		expect(JSON.stringify(output[1].value)).toBe(ledgerBytes);
+		expect(input).toEqual(original);
 	});
 
 	it('appends to absent or undefined metadata', () => {

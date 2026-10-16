@@ -1341,3 +1341,62 @@ describe('refund query state', () => {
 		}
 	});
 });
+
+it('translates the payment method into the local selector and browse demand', () => {
+	const compiled = compileQuery(
+		'orders',
+		{
+			filters: { payment_method: 'pos_cash' },
+			search: '',
+			limit: 10,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		},
+		{ id: 'orders' }
+	);
+	expect(compiled.represented).toBe(true);
+	expect(compiled.demand[0]).toMatchObject({ paymentMethod: 'pos_cash' });
+	expect(compiled.read.prefilter).toEqual({
+		$or: [
+			{ 'payload.payment_method': 'pos_cash' },
+			{ 'payload.meta_data': { $elemMatch: { key: '_wcpos_payment_method', value: 'pos_cash' } } },
+		],
+	});
+	const documents = [
+		{ uuid: 'direct', payload: { payment_method: 'pos_cash' } },
+		{
+			uuid: 'split',
+			payload: {
+				payment_method: 'stripe',
+				meta_data: [
+					{ key: '_wcpos_payment_method', value: 'stripe' },
+					{ key: '_wcpos_payment_method', value: 'pos_cash' },
+				],
+			},
+		},
+		{ uuid: 'other', payload: { payment_method: 'stripe' } },
+	];
+	expect(documents.map(compiled.read.residual)).toEqual([true, true, false]);
+	expect(documents.map((document) => new Query(compiled.read.prefilter).test(document))).toEqual([
+		true,
+		true,
+		false,
+	]);
+});
+
+it('an invalid gateway id stays local-only', () => {
+	const compiled = compileQuery(
+		'orders',
+		{
+			filters: { payment_method: 'pos:cash' },
+			search: '',
+			limit: 10,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		},
+		{ id: 'orders' }
+	);
+	expect(compiled.represented).toBe(false);
+	expect(compiled.demand.every((requirement) => !('paymentMethod' in requirement))).toBe(true);
+	expect(compiled.read.residual({ uuid: 'local', payload: { payment_method: 'pos:cash' } })).toBe(
+		true
+	);
+});

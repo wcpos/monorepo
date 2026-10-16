@@ -121,6 +121,10 @@ describe('recordManualPayment', () => {
 		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
 		expect(deps.patchAndEnqueue.mock.calls[0][0].status).toBe('pos-partial');
 		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data[0]).toEqual(order.meta_data[0]);
+		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data).toContainEqual({
+			key: '_wcpos_payment_method',
+			value: 'pos_cash',
+		});
 		expect(ledgerFrom(deps.patchAndEnqueue)).toEqual({
 			schema: 1,
 			payments: [
