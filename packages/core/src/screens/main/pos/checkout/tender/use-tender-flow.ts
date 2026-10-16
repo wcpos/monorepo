@@ -12,6 +12,7 @@ import {
 	type DeclaredValues,
 	derive,
 	fromMinor,
+	isLivePaymentStatus,
 	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
@@ -270,7 +271,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			online: online && !queuedOffline,
 			readersInUse: service?.readersInUse(),
 			currentOrderUuid: order.uuid,
-			hasLiveLeg: rows.some(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
+			hasLiveLeg: rows.some(({ status }) => isLivePaymentStatus(status)),
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
@@ -310,7 +311,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(
-		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
+		() => rows.filter(({ status }) => isLivePaymentStatus(status)),
 		[rows]
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
@@ -953,7 +954,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// gateway runs the whole order and cannot become one leg beside money already held.
 				if (
 					readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
-						['pending', 'authorized', 'captured'].includes(status)
+						isLivePaymentStatus(status)
 					)
 				) {
 					logger.info(t(disabledReasonKey('not_with_split'), { title: method.title }), {
@@ -1464,7 +1465,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					(row) =>
 						row.capture_mode === 'device' &&
 						((row.recorded_offline && row.status === 'authorized') ||
-							(!online && ['pending', 'authorized', 'captured'].includes(row.status)))
+							(!online && isLivePaymentStatus(row.status)))
 				)
 			) {
 				logger.info(t('pos_checkout.device_void_needs_settlement'), {

@@ -1,10 +1,6 @@
 export { QueryProvider, useQueryRuntime } from './provider';
 export type { EngineRecord, EngineRecordCollectionName } from './records/engine-record';
-export {
-	engineCollection,
-	observeEngineCollection,
-	type EngineCollection,
-} from './records/engine-collection';
+export { engineCollection, type EngineCollection } from './records/engine-collection';
 export { useDocField, useRecordField } from './records/use-record-field';
 export {
 	useFollowedCollection,
@@ -104,3 +100,9 @@ export type {
 	QueryLaneProgress,
 	QuerySnapshot,
 } from './query-handle';
+
+export {
+	observePaymentMethodHistory,
+	type ObservedPaymentMethod,
+} from './reads/payment-method-history';
+export { observeProductMetaKeys } from './reads/product-meta-keys';
