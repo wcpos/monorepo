@@ -8,7 +8,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import type { EngineRecord } from '@wcpos/query';
 
 import { EmailForm } from './email';

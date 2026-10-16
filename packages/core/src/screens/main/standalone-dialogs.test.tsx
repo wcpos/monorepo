@@ -1,11 +1,12 @@
 /** @jest-environment jsdom */
 import '@testing-library/jest-dom';
 import * as React from 'react';
-import type { ViewProps } from 'react-native';
+import { Pressable, type ViewProps } from 'react-native';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 
+import { ReceiptActions } from './receipt/receipt-actions';
 import { Version } from './components/drawer-content/version';
 import { PrinterDialogLayout } from './settings/printer/dialog/printer-dialog-layout';
 
@@ -166,3 +167,41 @@ it.each([false, true])('About opens centred and small, then closes (phone=%s)', 
 	fireEvent.click(screen.getByTestId('dialog-close'));
 	expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+jest.mock('./receipt/email', () => ({ EmailForm: () => <span>Email form</span> }));
+
+it.each([false, true])(
+	'receipt email opens centred and closes independently (phone=%s)',
+	(phone) => {
+		mockPhone = phone;
+		type Props = React.ComponentProps<typeof ReceiptActions>;
+		const doc = {
+			document: null,
+			canDownloadPdf: false,
+			isDownloadingPdf: false,
+			isPrinting: false,
+			isSyncing: false,
+			downloadReceiptPdf: jest.fn(),
+			print: jest.fn(async () => true),
+			printedTo: null,
+		} as unknown as Props['doc'];
+		render(
+			<ReceiptActions
+				doc={doc}
+				order={{} as Props['order']}
+				buttonComponent={({ children, ...props }) => (
+					<Pressable {...props}>
+						{(state) => <span>{typeof children === 'function' ? children(state) : children}</span>}
+					</Pressable>
+				)}
+			/>
+		);
+		expect(screen.queryByRole('dialog')).toBeNull();
+		fireEvent.click(screen.getByTestId('receipt-email-button'));
+		expect(screen.getByRole('dialog')).toHaveClass('w-96', 'rounded-lg');
+		expect(screen.getByText('Email form')).toBeInTheDocument();
+		fireEvent.click(screen.getByTestId('dialog-close'));
+		expect(screen.queryByRole('dialog')).toBeNull();
+		expect(screen.getByTestId('receipt-print-button')).toBeInTheDocument();
+	}
+);

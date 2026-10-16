@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/v2/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
