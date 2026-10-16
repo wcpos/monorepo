@@ -17,12 +17,16 @@ function main() {
 		throw new Error('Usage: node scripts/web-bundle-composition.mjs <export-dir>');
 	}
 	const directory = path.resolve(process.argv[2]);
-	const html = readFileSync(path.join(directory, 'index.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
-	const eager = [...html.matchAll(/<script\b[^>]*>[^]*?<\/script\s*>/gi)]
-		.map(([tag]) => tag.split('>')[0].match(/\ssrc\s*=\s*(["'])(.*?)\1/i)?.[2])
+	// The eager set is Metro's fixed trio, in load order: the module-system runtime, the
+	// shared chunk hoisted from every lazy chunk (absent when nothing is shared), and the
+	// entry. Taking them by name avoids parsing index.html.
+	const chunkDirectory = '_expo/static/js/web';
+	const jsFiles = readdirSync(path.join(directory, chunkDirectory)).filter((name) => name.endsWith('.js'));
+	const eager = ['__expo-metro-runtime-', '__common-', 'entry-']
+		.map((prefix) => jsFiles.find((name) => name.startsWith(prefix)))
 		.filter(Boolean)
-		.map((src) => decodeURIComponent(new URL(src, 'https://export.local/').pathname).replace(/^\//, ''));
-	if (!eager.length) throw new Error('No eager scripts found in index.html');
+		.map((name) => `${chunkDirectory}/${name}`);
+	if (!eager.some((name) => name.includes('/entry-'))) throw new Error('No entry-*.js chunk found');
 	const owners = new Map();
 	const subtotals = [];
 	for (const name of eager) {
@@ -58,9 +62,7 @@ function main() {
 	lines.push('', '## All web JS chunks', '',
 		'Brotli quality 11; each file compressed separately. Sizes are bytes.', '',
 		'| Chunk | Eager | Raw bytes | Brotli bytes |', '| --- | :---: | ---: | ---: |');
-	const chunkDirectory = '_expo/static/js/web';
-	const chunks = readdirSync(path.join(directory, chunkDirectory))
-		.filter((name) => name.endsWith('.js')).sort();
+	const chunks = [...jsFiles].sort();
 	let eagerRaw = 0;
 	let eagerBrotli = 0;
 	for (const name of chunks) {

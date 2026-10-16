@@ -24,11 +24,15 @@ Object.defineProperty(globalThis, 'window', {
 const {
 	buildCaptureOptions,
 	captureLoggedError,
+	capturePrinterOutcome,
 	messageTemplate,
 	scrubEvent,
 	setTelemetryConsent,
 } = jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
 const sentryInitCallsOnImport = jest.mocked(Sentry.init).mock.calls.length;
+
+// Let the dynamic import and its consent callback settle without changing the sink API.
+const settleSentryLoad = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe('sentry-sink.web', () => {
 	beforeEach(() => {
@@ -41,15 +45,27 @@ describe('sentry-sink.web', () => {
 		expect(sentryInitCallsOnImport).toBe(0);
 	});
 
-	it('initializes Sentry once when tracking is allowed', () => {
+	it('initializes Sentry once when tracking is allowed', async () => {
 		setTelemetryConsent('allowed');
+		expect(Sentry.init).not.toHaveBeenCalled();
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 
 		expect(Sentry.init).toHaveBeenCalledTimes(1);
 		const initCall = jest.mocked(Sentry.init).mock.calls[0];
 		if (!initCall) throw new Error('Missing Sentry init call');
 		const [initOptions] = initCall;
 		if (!initOptions) throw new Error('Missing Sentry init options');
+		expect(initOptions).toEqual({
+			dsn: 'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733',
+			release: 'wcpos-app@1.0.0',
+			environment: 'web',
+			sendDefaultPii: false,
+			integrations: expect.any(Function),
+			sampleRate: 1,
+			beforeSend: expect.any(Function),
+			ignoreErrors: [/ResizeObserver loop/],
+		});
 		const configureIntegrations = initOptions.integrations;
 		expect(configureIntegrations).toEqual(expect.any(Function));
 		if (typeof configureIntegrations !== 'function') throw new Error('Missing integrations filter');
@@ -59,7 +75,7 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'new-install-id' });
 	});
 
-	it('does not capture errors before tracking is allowed, and discards them when it is denied', () => {
+	it('does not capture errors before tracking is allowed, and discards them when it is denied', async () => {
 		captureLoggedError({ message: 'Checkout failed' });
 
 		expect(Sentry.captureException).not.toHaveBeenCalled();
@@ -67,10 +83,11 @@ describe('sentry-sink.web', () => {
 
 		setTelemetryConsent('denied');
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
 	});
 
-	it('holds errors logged before consent is known and sends them once it is allowed', () => {
+	it('holds errors logged before consent is known and sends them once it is allowed', async () => {
 		// The #2112 timing: a render error in the first commit, before the root
 		// layout's effect has read the store's consent and initialised the sink.
 		const thrown = new Error('useStoreSession must be called within an active store session');
@@ -83,6 +100,7 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.captureException).not.toHaveBeenCalled();
 
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 
 		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
 		expect(Sentry.captureException).toHaveBeenCalledWith(
@@ -93,28 +111,96 @@ describe('sentry-sink.web', () => {
 		// Sent once: a later re-consent must not replay them.
 		setTelemetryConsent('undecided');
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps only the newest held captures', () => {
+	it('keeps only the newest held captures', async () => {
 		for (let index = 0; index < 25; index += 1) {
 			captureLoggedError({ message: `held ${index}` });
 		}
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 
 		expect(Sentry.captureMessage).toHaveBeenCalledTimes(20);
 		expect(jest.mocked(Sentry.captureMessage).mock.calls[0][0]).toBe('held 5');
 		expect(jest.mocked(Sentry.captureMessage).mock.calls[19][0]).toBe('held 24');
 	});
 
-	it('closes Sentry and forgets the install id when tracking is denied', () => {
+	it('closes Sentry and forgets the install id when tracking is denied', async () => {
 		localStorageData.set('wcpos_install_id', 'existing-install-id');
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 		setTelemetryConsent('denied');
 
 		expect(Sentry.close).toHaveBeenCalledTimes(1);
 		expect(localStorage.removeItem).toHaveBeenCalledWith('wcpos_install_id');
 		expect(localStorageData.has('wcpos_install_id')).toBe(false);
+	});
+
+	it('holds captures while the SDK is loading', async () => {
+		setTelemetryConsent('allowed');
+		captureLoggedError({ message: 'During load' });
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+		await settleSentryLoad();
+		expect(Sentry.captureMessage).toHaveBeenCalledWith('During load', expect.anything());
+	});
+
+	it('never initializes when consent is denied before it is allowed', async () => {
+		setTelemetryConsent('denied');
+		await settleSentryLoad();
+		expect(Sentry.init).not.toHaveBeenCalled();
+	});
+
+	it('closes after an in-flight load when consent is withdrawn', async () => {
+		captureLoggedError({ message: 'Before consent' });
+		setTelemetryConsent('allowed');
+		setTelemetryConsent('denied');
+		await settleSentryLoad();
+		expect(Sentry.close).toHaveBeenCalledTimes(1);
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+		expect(Sentry.setUser).not.toHaveBeenCalled();
+		expect(localStorageData.has('wcpos_install_id')).toBe(false);
+	});
+
+	it('loads no SDK before consent and swallows a failed load without retrying', async () => {
+		const load = jest.fn(() => {
+			throw new Error('SDK unavailable');
+		});
+		// Isolation inherits cached mocks; clear the already-imported SDK before replacing it.
+		jest.resetModules();
+		jest.doMock('@sentry/browser', load);
+		try {
+			await jest.isolateModulesAsync(async () => {
+				const sink = jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
+				sink.captureLoggedError({ message: 'Held before load failure' });
+				expect(load).not.toHaveBeenCalled();
+				sink.setTelemetryConsent('allowed');
+				await settleSentryLoad();
+				sink.captureLoggedError({ message: 'Held after load failure' });
+				sink.setTelemetryConsent('undecided');
+				sink.setTelemetryConsent('allowed');
+				await settleSentryLoad();
+				expect(load).toHaveBeenCalledTimes(1);
+				expect(Sentry.init).not.toHaveBeenCalled();
+				expect(Sentry.captureMessage).not.toHaveBeenCalled();
+			});
+		} finally {
+			jest.doMock('@sentry/browser', () => Sentry);
+		}
+	});
+
+	it('sends printer outcomes only after the consented SDK load', async () => {
+		setTelemetryConsent('allowed');
+		capturePrinterOutcome({ result: 'success' });
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+		await settleSentryLoad();
+		capturePrinterOutcome({ result: 'success', address: 'private' });
+		expect(Sentry.captureMessage).toHaveBeenCalledWith('Printer setup outcome', {
+			level: 'info',
+			tags: { result: 'success' },
+			extra: { context: { result: 'success' } },
+		});
 	});
 
 	it('removes store origins from request and breadcrumb urls', () => {
@@ -324,8 +410,9 @@ describe('sentry-sink.web', () => {
 		});
 	});
 
-	it('captures Error context as an exception', () => {
+	it('captures Error context as an exception', async () => {
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 		const error = new Error('Checkout failed');
 		captureLoggedError({ message: 'Checkout failed', code: 'E_CHECKOUT', context: { error } });
 		expect(Sentry.captureException).toHaveBeenCalledWith(error, {
@@ -337,8 +424,9 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
 	});
 
-	it('captures a log without Error context as a message', () => {
+	it('captures a log without Error context as a message', async () => {
 		setTelemetryConsent('allowed');
+		await settleSentryLoad();
 		captureLoggedError({ message: 'Checkout failed', context: { reason: 'offline' } });
 		expect(Sentry.captureMessage).toHaveBeenCalledWith('Checkout failed', {
 			level: 'error',
