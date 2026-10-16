@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -58,7 +58,13 @@ jest.mock('./use-register-session-collections', () => ({
 	useCashMovementCollection: () => movements,
 }));
 jest.mock('./queue', () => ({ drainRegisterSessionQueue: jest.fn() }));
-jest.mock('./refresh', () => ({ refreshSessions: jest.fn() }));
+const mockRefreshRequests = new Subject<unknown>();
+jest.mock('./refresh', () => ({
+	refreshSessions: jest.fn(),
+	get sessionRefreshRequests() {
+		return mockRefreshRequests;
+	},
+}));
 
 const log = jest.mocked(getLogger(['wcpos', 'registerSession']));
 const drain = jest.mocked(drainRegisterSessionQueue);
@@ -250,4 +256,15 @@ it('recovers only an interrupted local close; imported history and written closu
 	data.active = [{ id: 'counting', status: 'counting' }];
 	view.rerender();
 	expect(view.result.current.session?.id).toBe('counting');
+});
+
+it('debounces snapshot refresh requests through the existing bridge cycle', async () => {
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+	await act(async () => {
+		mockRefreshRequests.next({ sessions, registerId: 'register' });
+		mockRefreshRequests.next({ sessions, registerId: 'register' });
+		await jest.advanceTimersByTimeAsync(500);
+	});
+	expect(refresh).toHaveBeenCalledTimes(2);
 });

@@ -1,3 +1,5 @@
+import { Subject } from 'rxjs';
+
 import type {
 	CashMovementCollection,
 	CashMovementRow,
@@ -8,6 +10,11 @@ import type {
 
 import { recordRegisterFact } from './audit';
 import { adoptSession, type SessionHttp, synced } from './queue';
+
+export const sessionRefreshRequests = new Subject<{
+	sessions: RegisterSessionCollection;
+	registerId: string;
+}>();
 
 export async function refreshSessions({
 	registerId,
@@ -29,17 +36,25 @@ export async function refreshSessions({
 	for (const row of rows) {
 		await adoptSession(sessions, row);
 		if (row.status === 'closed') continue;
-		const detail = (await http.get(`sessions/${row.id}`)).data as RegisterSessionRow & {
+		const detailResponse = await http.get(`sessions/${row.id}`);
+		const detail = detailResponse.data as RegisterSessionRow & {
+			as_of_gmt?: string;
 			movements: CashMovementRow[];
 			// Omitted for a cashier without the reports capability: the count is blind.
 			expected?: Record<string, string>;
 			sales_count?: number;
 		};
+		// Capture the server snapshot boundary before any local persistence awaits.
+		const boundary = detail.as_of_gmt
+			? detail.as_of_gmt.replace(/Z?$/, 'Z')
+			: detailResponse.headers?.date;
+		const serverExpectedAt = typeof boundary === 'string' ? new Date(boundary).toISOString() : null;
 		await adoptSession(sessions, {
 			...detail,
 			// A cashier counting blind is not served the expected figure at all.
 			server_expected: detail.expected ?? null,
-			server_expected_at: new Date().toISOString(),
+			server_expected_at: serverExpectedAt,
+			server_movement_ids: (detail.movements ?? []).map(({ id }) => id),
 			server_sales_count: detail.sales_count ?? null,
 		});
 		for (const movement of detail.movements ?? []) {

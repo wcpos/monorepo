@@ -189,7 +189,9 @@ export function UserSheet({
 										</Button>
 										{attributed && (
 											<Text className="text-muted-foreground">
-												{t('register.switch_register_blocked_cart')}
+												{currentOrder
+													? t('register.switch_register_blocked_cart')
+													: t('register.switch_register_unavailable_here')}
 											</Text>
 										)}
 									</View>

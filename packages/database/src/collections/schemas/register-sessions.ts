@@ -38,6 +38,7 @@ export const registerSessionsLiteral = {
 			additionalProperties: { type: 'string' },
 			default: null,
 		},
+		server_movement_ids: { type: 'array', items: { type: 'string' }, default: [] },
 		server_expected_at: { type: ['string', 'null'], default: null },
 		server_sales_count: { type: ['number', 'null'], default: null },
 		...sessionOutboxProperties,

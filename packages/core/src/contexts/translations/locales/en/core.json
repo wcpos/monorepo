@@ -208,6 +208,7 @@
 	"register.your_sales_today": "Your sales today",
 	"register.switch_user": "Switch user",
 	"register.another_account": "Another account…",
+	"register.switch_register_unavailable_here": "Switch registers from the cart.",
 	"register.switch_register_blocked_cart": "Finish or park the current sale before switching registers.",
 	"register.switch_register": "Switch register",
 	"register.switch_store": "Switch store",

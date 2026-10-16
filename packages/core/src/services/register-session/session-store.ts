@@ -23,6 +23,8 @@ import {
 } from '../register/register-document';
 import { attributeRefunds, deriveExpected } from './expected';
 
+import type { DeepReadonly } from 'rxdb';
+
 export const pending = {
 	sync_status: 'pending',
 	sync_attempts: 0,
@@ -219,7 +221,7 @@ export async function writeClosure({
 	closures: ClosureCollection;
 	userDB: UserDatabase;
 	siteUuid: string;
-	session: RegisterSessionRow;
+	session: DeepReadonly<RegisterSessionRow>;
 	counted: string;
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];

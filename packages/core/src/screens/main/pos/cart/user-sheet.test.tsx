@@ -242,7 +242,10 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
 	expect(button.disabled).toBe(blocked);
 	expect(button.getAttribute('aria-disabled')).toBe(String(blocked));
-	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(blocked);
+	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(attributed === true);
+	expect(!!screen.queryByText('register.switch_register_unavailable_here')).toBe(
+		attributed === undefined
+	);
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
 });

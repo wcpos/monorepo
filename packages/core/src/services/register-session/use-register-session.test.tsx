@@ -23,6 +23,10 @@ Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
 
 jest.mock('./session-store');
+const mockRequestRefresh = jest.fn();
+jest.mock('./refresh', () => ({
+	sessionRefreshRequests: { next: (...args: unknown[]) => mockRequestRefresh(...args) },
+}));
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 
 type Row = Record<string, unknown>;
@@ -33,7 +37,12 @@ let entries: Row[] = [];
 let closureRows: Row[] = [];
 const mockSessionChanges = new Subject<void>();
 type Hit = {
-	record: { uuid: string; local: { dirty: boolean; pendingMutationIds?: string[] }; payload: Row };
+	record: {
+		remoteId?: number | null;
+		uuid: string;
+		local: { dirty: boolean; pendingMutationIds?: string[] };
+		payload: Row;
+	};
 };
 let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
@@ -129,6 +138,8 @@ const session = {
 	// The server's figure cannot include a movement it never accepted.
 	server_expected: { cash: '100' },
 	server_sales_count: 0,
+	server_expected_at: '2026-09-15T09:00:00.000Z',
+	server_movement_ids: [],
 };
 const movement = {
 	id: 'movement',
@@ -202,12 +213,16 @@ it('counts a refused movement as outstanding and keeps it in the list for retry'
 	expect(typeof result.current.actions.retryMovement).toBe('function');
 });
 
-it('trusts the server total once every local row is delivered', async () => {
-	entries = [{ ...movement, sync_status: 'synced' }];
-	const result = await settled();
-	expect(result.current.expected.cash).toBe('100');
-	expect(result.current.unsyncedCount).toBe(0);
-});
+it.each(['synced', 'pending'])(
+	'trusts snapshot movement membership while locally %s',
+	async (sync_status) => {
+		active = [{ ...active[0], server_movement_ids: [movement.id] }];
+		entries = [{ ...movement, sync_status }];
+		const result = await settled();
+		expect(result.current.expected.cash).toBe('100');
+		expect(result.current.unsyncedCount).toBe(sync_status === 'pending' ? 1 : 0);
+	}
+);
 
 describe('refusedMovements', () => {
 	const refused = { ...movement, sync_status: 'failed', sync_error: 'rest_invalid_param' };
@@ -485,6 +500,7 @@ function parentHit(
 			payload: {
 				id: 1,
 				date_modified_gmt: modified,
+				date_created_gmt: modified,
 				meta_data: [
 					{
 						key: '_wcpos_payments',
@@ -493,6 +509,8 @@ function parentHit(
 							payments: [
 								{
 									id: 'card',
+									created_at_gmt: modified,
+									updated_at_gmt: modified,
 									session_id: saleSession,
 									kind: 'card',
 									method_id: 'stripe',
@@ -778,7 +796,9 @@ it.each([false, true])(
 				if (allocationOnly) {
 					// The close already wrote the session, but its closure still needs recovery.
 					Object.assign(active[0], { status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' });
-					const pending = parentHit('session', true, '2026-09-15');
+					const pending = parentHit('session', true, '2026-09-15', {
+						updated_at_gmt: '2026-09-15T10:00:00',
+					});
 					pending.record.local.dirty = true;
 					mockOrders.next([pending]);
 				} else {
@@ -790,7 +810,8 @@ it.each([false, true])(
 			expect(active[0].server_expected).toEqual({ cash: '100' });
 			expect((await closing).toJSON()).toMatchObject({
 				period_refunds_total: '20.0000',
-				till_expected: { cash: '100', stripe: allocationOnly ? '80.0000' : '-20.0000' },
+				// An edited baseline leg cannot supply its prior refund state.
+				till_expected: allocationOnly ? { cash: '100' } : { cash: '100', stripe: '-20.0000' },
 				breakdowns: {
 					refund_count: 1,
 					payment_methods: {
@@ -1046,7 +1067,9 @@ it('shares one close deadline across replacement refund parent handles', async (
 it('keeps the baseline without attempting anchor patches', async () => {
 	entries = [];
 	const patch = jest.fn().mockRejectedValue(new Error('anchor patch failed'));
-	active = [{ ...active[0], incrementalPatch: patch }];
+	active = [
+		{ ...active[0], incrementalPatch: patch, server_expected_at: '2026-09-17T00:00:00.000Z' },
+	];
 	mockOrders.next([parentHit('session', false, '2026-09-15')]);
 	const result = await settled();
 	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-15')]));
@@ -1335,7 +1358,7 @@ it.each([true, false])('adds only pending sales with server baseline %s', async 
 			['local', '10', true],
 			['synced', '50', false],
 		].map(([id, amount, pending]) => {
-			const hit = parentHit('session', false, '2026-09-15', {
+			const hit = parentHit('session', false, pending ? '2026-09-15T10:00:00' : '2026-09-15', {
 				id,
 				amount,
 				kind: 'cash',
@@ -1363,7 +1386,6 @@ it('keeps acknowledged sales, refunds and movements until baseline refresh', asy
 			...movement,
 			amount: '30',
 			sync_status: 'synced',
-			acknowledged_at: '2026-09-15T10:00:01.000Z',
 		},
 	];
 	const result = await settled();
@@ -1375,9 +1397,79 @@ it('keeps acknowledged sales, refunds and movements until baseline refresh', asy
 			server_expected: expected,
 			server_sales_count: 1,
 			server_expected_at: '2026-09-15T10:00:02.000Z',
+			server_movement_ids: [movement.id],
 		});
 		mockSessionChanges.next();
 	});
 	expect(result.current.expected).toEqual(expected);
 	expect(result.current.salesCount).toBe(1);
 });
+
+it('derives locally when figures have no snapshot boundary', async () => {
+	active = [
+		{
+			...active[0],
+			server_expected: { cash: '999' },
+			server_sales_count: 99,
+			server_expected_at: null,
+		},
+	];
+	const result = await settled();
+	expect(result.current.expected.cash).toBe('120.0000');
+	expect(result.current.salesCount).toBe(0);
+});
+
+it.each(['captured', 'voided'])(
+	'preserves baseline ledger rows on a dirty order (%s)',
+	async (status) => {
+		entries = [];
+		const hit = parentHit('session', false, '2026-09-15T10:00:00', {
+			kind: 'cash',
+			method_id: 'cash',
+			amount: '60',
+			status,
+			created_at_gmt: '2026-09-15T08:00:00',
+			updated_at_gmt: '2026-09-15T10:00:00',
+		});
+		hit.record.local.dirty = true;
+		hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+		const meta = hit.record.payload.meta_data as { value: { payments: Row[] } }[];
+		meta[0].value.payments.push({
+			...meta[0].value.payments[0],
+			id: 'new',
+			amount: '10',
+			status: 'captured',
+			created_at_gmt: '2026-09-15T10:00:00',
+		});
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(mockRequestRefresh).toHaveBeenCalledWith({
+			sessions: mockSessions,
+			registerId: 'register',
+		});
+		expect(result.current.expected.cash).toBe('110.0000');
+		expect(result.current.salesCount).toBe(0);
+		await act(async () => {
+			Object.assign(active[0], {
+				server_expected: { cash: '70' },
+				server_expected_at: '2026-09-15T11:00:00.000Z',
+			});
+			mockSessionChanges.next();
+		});
+		expect(result.current.expected.cash).toBe('70');
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+	}
+);
+
+it.each([null, 1])(
+	'counts only orders absent from the snapshot (remoteId %s)',
+	async (remoteId) => {
+		const hit = parentHit('session', false, '2026-09-15T10:00:00');
+		hit.record.remoteId = remoteId;
+		hit.record.local.dirty = true;
+		hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.salesCount).toBe(remoteId === null ? 1 : 0);
+	}
+);

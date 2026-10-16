@@ -32,6 +32,7 @@ import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 import { deriveDrawerTerms, deriveExpected } from './expected';
+import { sessionRefreshRequests } from './refresh';
 import * as actions from './session-store';
 import {
 	useCashMovementCollection,
@@ -55,33 +56,29 @@ function afterBaseline(at?: string | null, baselineAt?: string | null) {
 }
 function outsideBaseline(
 	record: {
-		local?: unknown;
 		remoteId?: unknown;
-		payload: { date_modified_gmt?: string; date_created_gmt?: string };
+		payload: { date_created_gmt?: string };
 	},
 	baselineAt?: string | null
 ) {
-	return (
-		pendingMoney(record) ||
-		afterBaseline(record.payload.date_modified_gmt || record.payload.date_created_gmt, baselineAt)
-	);
+	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
 }
 function baselineContains(
 	orders: readonly EngineRecord<'orders'>[],
 	refunds: readonly EngineRecord<'refunds'>[],
-	movements: readonly { id: string; sync_status: string; acknowledged_at?: string | null }[],
-	baselineAt?: string | null
+	movements: readonly { id: string }[],
+	baselineAt?: string | null,
+	movementIds: readonly string[] = []
 ) {
+	if (!baselineAt) return undefined;
 	const pending = new Set<string | number | null | undefined>([
 		...refunds.filter((row) => outsideBaseline(row, baselineAt)).map((row) => row.payload.id),
-		...movements
-			.filter(
-				(row) => row.sync_status !== 'synced' || afterBaseline(row.acknowledged_at, baselineAt)
-			)
-			.map((row) => row.id),
-		...orders
-			.filter((row) => outsideBaseline(row, baselineAt))
-			.flatMap((row) => readLedger(row.payload.meta_data).map(({ id }) => id)),
+		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
+		...orders.flatMap((order) =>
+			readLedger(order.payload.meta_data)
+				.filter((row) => afterBaseline(row.created_at_gmt, baselineAt))
+				.map(({ id }) => id)
+		),
 	]);
 	return (id: string | number | null | undefined) => !pending.has(id);
 }
@@ -338,8 +335,20 @@ export function useRegisterSession() {
 		accountingOrders.map(({ record }) => record),
 		data?.refundSources ?? [],
 		entries,
-		session?.server_expected_at
+		session?.server_expected_at,
+		session?.server_movement_ids
 	);
+	// Offline edits of synced captured legs are rare (a void needs the server). Keep
+	// the baseline plus other deltas until refreshed rather than inventing prior state:
+	// baseline-known rows cancel in deriveUnsyncedDelta even after amount/status edits.
+	const baselineStale = !!drawerInput?.ledgerRowsBySession.some(
+		(row) => baselineHas?.(row.id) && afterBaseline(row.updated_at_gmt, session?.server_expected_at)
+	);
+	// Ask the existing bridge to refresh external state; it debounces requests across consumers.
+	React.useEffect(() => {
+		if (baselineStale && sessions && binding.registerId)
+			sessionRefreshRequests.next({ sessions, registerId: binding.registerId });
+	}, [baselineStale, sessions, binding.registerId]);
 	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
@@ -363,7 +372,7 @@ export function useRegisterSession() {
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
 		salesCount:
-			session?.server_sales_count != null
+			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
 					orders.filter(({ record }) => outsideBaseline(record, session.server_expected_at)).length
 				: orders.length,
@@ -494,7 +503,8 @@ export function useRegisterSession() {
 							accounting?.orders ?? [],
 							accounting?.refundSources ?? [],
 							entries,
-							latestSession.server_expected_at
+							latestSession.server_expected_at,
+							latestSession.server_movement_ids
 						)
 					),
 					userDB,

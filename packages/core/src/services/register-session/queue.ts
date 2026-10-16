@@ -28,7 +28,7 @@ export type SessionHttp = {
 	get: (
 		url: string,
 		options?: { params: Record<string, string | number> }
-	) => Promise<{ data: unknown }>;
+	) => Promise<{ data: unknown; headers?: Record<string, unknown> }>;
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 };
 type Deps = {
@@ -349,7 +349,6 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 						...local,
 						...(response.data as CashMovementRow),
 						...synced,
-						acknowledged_at: new Date().toISOString(),
 						voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
 					}));
 				} catch (error) {

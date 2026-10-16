@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { debounceTime, filter } from 'rxjs';
+
 import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
@@ -11,7 +13,7 @@ import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client
 import { useRegisterBinding } from '../register/use-register-binding';
 import { failureFacts } from './failure-facts';
 import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions } from './refresh';
+import { refreshSessions, sessionRefreshRequests } from './refresh';
 import {
 	useCashMovementCollection,
 	useClosureCollection,
@@ -112,11 +114,20 @@ export function RegisterSessionBridge() {
 			sync().then(() => {
 				consecutiveFailures.current = 0;
 			}, report);
+		const refreshRequests = sessionRefreshRequests
+			.pipe(
+				filter((request) => request.sessions === sessions && request.registerId === registerId),
+				debounceTime(250)
+			)
+			.subscribe(() => void cycle());
 		void cycle();
 		const tick = setInterval(() => {
 			void cycle();
 		}, 60_000);
-		return () => clearInterval(tick);
+		return () => {
+			clearInterval(tick);
+			refreshRequests.unsubscribe();
+		};
 	}, [
 		sessions,
 		movements,

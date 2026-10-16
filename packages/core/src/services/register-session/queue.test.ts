@@ -189,9 +189,9 @@ it('sends movements after create but before a deferred counting transition', asy
 	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
 	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
 	expect(row.getLatest().server_expected).toEqual({ cash: '100' });
-	expect(movement.getLatest().toJSON()).toMatchObject({ acknowledged_at: expect.any(String) });
 	http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
 		data: { ...row.getLatest().toJSON(), expected: { cash: '95' }, sales_count: 0, movements: [] },
+		headers: { date: 'Tue, 15 Sep 2026 10:00:05 GMT' },
 	});
 	await refreshSessions({
 		registerId: 'register',
@@ -918,5 +918,45 @@ it.each([403, 503])(
 		} else {
 			expect(calls[0][1]?.context).not.toHaveProperty('type');
 		}
+	}
+);
+
+it.each([
+	['2026-09-15T10:00:00', 'Tue, 15 Sep 2026 10:00:05 GMT', '2026-09-15T10:00:00.000Z'],
+	[undefined, 'Tue, 15 Sep 2026 10:00:05 GMT', '2026-09-15T10:00:05.000Z'],
+	[undefined, undefined, null],
+])(
+	'anchors detail to server time %s / %s, never device time',
+	async (as_of_gmt, date, expectedAt) => {
+		const row = await open();
+		await row.incrementalPatch({ sync_status: 'synced' });
+		const movement = await recordMovement(db.cash_movements, {
+			sessionId: row.id,
+			type: 'paid_in',
+			amount: '20',
+			reason: 'Float',
+			actor: 7,
+		});
+		http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+			data: {
+				...row.getLatest().toJSON(),
+				expected: { cash: '120' },
+				as_of_gmt,
+				movements: [movement.toJSON()],
+			},
+			headers: { date },
+		});
+		await refreshSessions({
+			registerId: 'register',
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+			closures: db.closures,
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({
+			server_expected_at: expectedAt,
+			server_movement_ids: [movement.id],
+		});
+		expect(movement.getLatest().sync_status).toBe('pending');
 	}
 );
