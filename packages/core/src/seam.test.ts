@@ -88,7 +88,8 @@ function violations(source: string): string[] {
 		const namespace = clause.match(/^\s*\*\s+as\s+(\w+)\s*$/);
 		if (specifier === '@wcpos/query' && namespace) {
 			for (const access of commentsRemoved.matchAll(
-				new RegExp(`\\b${namespace[1]}\\.(\\w+)`, 'g')
+				// `ns.name`, `ns?.name`, `ns['name']`; namespace[1] is \w+ so the built pattern is linear.
+				new RegExp(`\\b${namespace[1]}\\s*(?:\\?\\.|\\.|\\[\\s*['"])\\s*(\\w+)`, 'g')
 			)) {
 				if (forbiddenQueryNames.has(access[1])) found.push(`query escape hatch: ${access[0]}`);
 			}
