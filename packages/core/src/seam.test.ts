@@ -9,8 +9,8 @@ import { join, relative, sep } from 'node:path';
 
 import { SEAM_ALLOWLIST_FROZEN_2026_10_16, SEAM_REPAIRED_SINCE_FREEZE } from './seam-allowlist';
 
-const FROZEN_LENGTH = 195;
-const FROZEN_DIGEST = '8254c65e39b2be1a51938324829711874b0508d5281ef2b9581e5015772faaae';
+const FROZEN_LENGTH = 200;
+const FROZEN_DIGEST = '66965d6d18eef9019e826aa60d2e7624870964e093f0171ef6ad4a6fbfd425f0';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
 const effectiveAllowlist = new Set(
 	SEAM_ALLOWLIST_FROZEN_2026_10_16.filter((file) => !repaired.has(file))
@@ -71,6 +71,11 @@ function violations(source: string): string[] {
 							.split(/\s+as\s+/)[0]
 				)
 				.filter(Boolean) ?? [];
+		if (
+			/^\s*require\s*\(/.test(match[0]) &&
+			/^@wcpos\/(?:query|sync-engine)(?:\/|$)/.test(specifier)
+		)
+			found.push(`require() of a seam package (use static named imports): ${match[0]}`);
 		const only = (allowed: Set<string>) =>
 			!!braces && names.length > 0 && names.every((name) => allowed.has(name));
 		if (/^(?:rxdb(?:-premium)?|@wcpos\/database)(?:\/|$)/.test(specifier)) {
@@ -86,11 +91,7 @@ function violations(source: string): string[] {
 		}
 		// `import * as query from '@wcpos/query'` binds the whole module; member access, optional
 		// chaining, bracket access and destructuring would all need scanning, so the form is rejected.
-		if (
-			specifier === '@wcpos/query' &&
-			/^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause) &&
-			!/^\s*(?:import|export)\s+type\b/.test(match[0])
-		)
+		if (specifier === '@wcpos/query' && /^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause))
 			found.push(`query namespace import or wildcard re-export (use named imports): ${match[0]}`);
 	}
 	// A dynamic `import('@wcpos/query')` is allowed only in the type-access form
@@ -104,10 +105,10 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|upsert|insertIfNotExists|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachmentBase64|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|modify|update|upsert|insertIfNotExists|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${/^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
