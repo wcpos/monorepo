@@ -14,6 +14,7 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { CashierSheetProvider, useCashierSheet } from '../../pos/cart/cashier-sheet-state';
+import { SessionHoldBanner } from '../header/session-hold-banner';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
@@ -82,6 +83,8 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 			{phone && search != null && (
 				<View className="h-ctl border-border justify-center border-b px-2">{search}</View>
 			)}
+			{/* Under the bar, where the drawer header showed it: a held session is a state. */}
+			<SessionHoldBanner />
 			<UserSheet open={userOpen} onOpenChange={setUserOpen} />
 		</>
 	);

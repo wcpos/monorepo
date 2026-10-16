@@ -25,9 +25,10 @@ export type NavigationAreaItem = {
 
 /**
  * The surface the area sits on. An area that opted into the page bar (`barTestID`) is on
- * `bg-background`, so a selected row lifts onto `bg-card`; an area that did not (Health, until
- * its own switch) is still on `bg-card`, where that lift is invisible, so it keeps the tinted
- * row it had. The index route reads it too, so both surfaces stay consistent per area.
+ * `bg-background`, so a selected row lifts onto `bg-card`; an area without one sits on
+ * `bg-card`, where that lift is invisible, so it keeps the tinted row. Every area (Settings,
+ * Store health) is on the page bar since 2026-10-16, so no screen renders on `card` today.
+ * The index route reads it too, so both surfaces stay consistent per area.
  */
 const NavigationSurfaceContext = React.createContext<'background' | 'card'>('card');
 

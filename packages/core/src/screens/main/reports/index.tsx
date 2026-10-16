@@ -17,6 +17,7 @@ import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { UpgradeNotice } from '../components/header/upgrade-notice';
+import { SessionHoldBanner } from '../components/header/session-hold-banner';
 import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import {
@@ -307,6 +308,7 @@ function ReportsShell() {
 	return (
 		// The safe-area inset sits above everything, so the Free strip never slides under the status bar.
 		<View className="flex-1" style={{ paddingTop: top }}>
+			<SessionHoldBanner />
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			<ErrorBoundary>
 				<Suspense>
@@ -367,6 +369,7 @@ export function ReportsScreen() {
 			<View className="bg-sidebar self-start rounded-md p-2">
 				<HeaderLeft />
 			</View>
+			<SessionHoldBanner />
 			<Text testID="reports-denied">{t('reports.no_access')}</Text>
 		</View>
 	);

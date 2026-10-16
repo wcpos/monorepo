@@ -528,6 +528,9 @@ jest.mock('@wcpos/components/popover', () => ({
 	PopoverContent: () => null,
 }));
 jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/header/session-hold-banner', () => ({
+	SessionHoldBanner: () => <div data-testid="session-hold-banner" />,
+}));
 // Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
 it('opens the requested closure room and business day for Pro', () => {
 	mockPro = true;
@@ -585,6 +588,14 @@ it('places denied navigation below the phone safe area', () => {
 			.getByTestId('reports-denied')
 			.parentElement?.contains(screen.getByTestId('drawer-open-button'))
 	).toBe(true);
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+});
+
+// A held session must stay visible to a cashier who cannot read reports (Codex review, #2611).
+it('shows the held-session banner on the denied screen too', () => {
+	mockCapabilities = [];
+	render(<ReportsScreen />);
+	expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 

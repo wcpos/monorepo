@@ -74,7 +74,20 @@ jest.mock('../../../../contexts/translations', () => {
 });
 
 // eslint-disable-next-line import/first -- Initialize the shared logger mock before the banner.
-import { resetSessionHoldBannerState, SessionHoldBanner } from './session-hold-banner';
+import {
+	resetSessionHoldBannerState,
+	SessionHoldBanner,
+	SessionHoldProvider,
+} from './session-hold-banner';
+
+// One owner, as the app mounts it; a test that needs two bars renders two banners inside it.
+function Held() {
+	return (
+		<SessionHoldProvider>
+			<SessionHoldBanner />
+		</SessionHoldProvider>
+	);
+}
 
 describe('SessionHoldBanner', () => {
 	beforeEach(() => {
@@ -92,7 +105,7 @@ describe('SessionHoldBanner', () => {
 	});
 
 	it('renders nothing when neither session flag is set', () => {
-		const { container } = render(<SessionHoldBanner />);
+		const { container } = render(<Held />);
 
 		expect(container.firstChild).toBeNull();
 	});
@@ -101,7 +114,7 @@ describe('SessionHoldBanner', () => {
 		mockWriteSessionHeld = reason === 'writeSessionHeld';
 		mockAuthRequired = reason === 'authRequired';
 		mockSyncBacklogSales = 0;
-		render(<SessionHoldBanner />);
+		render(<Held />);
 
 		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
 			'Session expired — sign in to reconnect to the store.'
@@ -113,7 +126,7 @@ describe('SessionHoldBanner', () => {
 	it('shows the waiting sales while the write session is held', () => {
 		mockWriteSessionHeld = true;
 		mockSyncBacklogSales = 2;
-		render(<SessionHoldBanner />);
+		render(<Held />);
 
 		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
 			'2 sales waiting to sync. Log in to continue.'
@@ -123,7 +136,7 @@ describe('SessionHoldBanner', () => {
 	it('shows a singular sale when only authRequired is set', () => {
 		mockAuthRequired = true;
 		mockSyncBacklogSales = 1;
-		render(<SessionHoldBanner />);
+		render(<Held />);
 
 		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
 			'1 sale waiting to sync. Log in to continue.'
@@ -132,18 +145,18 @@ describe('SessionHoldBanner', () => {
 
 	it('starts the login flow when the login action is pressed', () => {
 		mockWriteSessionHeld = true;
-		render(<SessionHoldBanner />);
+		render(<Held />);
 
 		fireEvent.click(screen.getByTestId('session-hold-login'));
 		expect(mockTrigger).toHaveBeenCalledTimes(1);
 	});
 
 	it('toasts once at hold start and again only after the hold clears', () => {
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		expect(mockWarn).not.toHaveBeenCalled();
 
 		mockWriteSessionHeld = true;
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockWarn).toHaveBeenCalledWith(
 			'Please log in to continue',
@@ -155,14 +168,14 @@ describe('SessionHoldBanner', () => {
 			})
 		);
 
-		rerender(<SessionHoldBanner />);
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
+		rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 
 		mockWriteSessionHeld = false;
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		mockWriteSessionHeld = true;
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(2);
 
 		mockWarn.mock.calls[0][1].toast.action.onClick();
@@ -170,18 +183,18 @@ describe('SessionHoldBanner', () => {
 	});
 
 	it('toasts once when authRequired starts and not again when the write hold joins it', () => {
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		mockAuthRequired = true;
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockWarn).toHaveBeenCalledWith(
 			'Please log in to continue',
 			expect.objectContaining({ code: ERROR_CODES.SESSION_EXPIRED })
 		);
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 
 		mockWriteSessionHeld = true;
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 	});
 
@@ -191,15 +204,15 @@ describe('SessionHoldBanner', () => {
 			mockAuthRequired = true;
 			requestStateManager.setAuthFailed(true);
 			requestStateManager.setRefreshedToken('old');
-			const { rerender } = render(<SessionHoldBanner />);
+			const { rerender } = render(<Held />);
 			expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			expect(requestStateManager.isAuthFailed()).toBe(true);
 			expect(requestStateManager.getRefreshedToken()).toBe('old');
 			expect(mockInfo).not.toHaveBeenCalled();
 
 			mockWpCredentials = { ...mockWpCredentials, [field]: 'new' };
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			expect(screen.queryByTestId('session-hold-banner')).toBeNull();
 			expect(requestStateManager.isAuthFailed()).toBe(false);
 			expect(requestStateManager.getRefreshedToken()).toBeNull();
@@ -212,38 +225,61 @@ describe('SessionHoldBanner', () => {
 
 			act(() => requestStateManager.setAuthFailed(true));
 			requestStateManager.setRefreshedToken('old');
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			expect(requestStateManager.isAuthFailed()).toBe(true);
 			expect(requestStateManager.getRefreshedToken()).toBe('old');
 			expect(mockInfo).toHaveBeenCalledTimes(1);
 
 			mockAuthRequired = false;
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			mockAuthRequired = true;
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
 		}
 	);
 
 	it('does not recover for a refresh-token-only change', () => {
 		requestStateManager.setAuthFailed(true);
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		mockWpCredentials = { ...mockWpCredentials, refresh_token: 'new' };
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(requestStateManager.isAuthFailed()).toBe(true);
 		expect(mockInfo).not.toHaveBeenCalled();
 		expect(mockWarn).not.toHaveBeenCalled();
 	});
 
-	it('toasts once across mounted headers, including one mounted during a hold', () => {
-		const first = render(<SessionHoldBanner />);
-		const second = render(<SessionHoldBanner />);
+	it('toasts once across providers, including one mounted during a hold', () => {
+		const first = render(<Held />);
+		const second = render(<Held />);
 		mockAuthRequired = true;
-		first.rerender(<SessionHoldBanner />);
-		second.rerender(<SessionHoldBanner />);
+		first.rerender(<Held />);
+		second.rerender(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
-		render(<SessionHoldBanner />);
+		render(<Held />);
 		expect(mockWarn).toHaveBeenCalledTimes(1);
+	});
+
+	it('hides every mounted bar banner on a renewal, not only the first', () => {
+		mockAuthRequired = true;
+		requestStateManager.setAuthFailed(true);
+		const bars = () => (
+			<SessionHoldProvider>
+				<SessionHoldBanner />
+				<SessionHoldBanner />
+			</SessionHoldProvider>
+		);
+		const { rerender } = render(bars());
+		expect(screen.getAllByTestId('session-hold-banner')).toHaveLength(2);
+		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
+		rerender(bars());
+		expect(screen.queryAllByTestId('session-hold-banner')).toHaveLength(0);
+		expect(mockInfo).toHaveBeenCalledTimes(1);
+	});
+
+	it('renders nothing outside a provider', () => {
+		mockAuthRequired = true;
+		const { container } = render(<SessionHoldBanner />);
+		expect(container.firstChild).toBeNull();
 	});
 
 	it('keeps the sales warning after a recovery while the write session is still held', () => {
@@ -251,9 +287,9 @@ describe('SessionHoldBanner', () => {
 		mockWriteSessionHeld = true;
 		mockSyncBacklogSales = 2;
 		requestStateManager.setAuthFailed(true);
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(requestStateManager.isAuthFailed()).toBe(false);
 		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
 			'2 sales waiting to sync'
@@ -263,9 +299,9 @@ describe('SessionHoldBanner', () => {
 	it('shows the banner again when the latch sets after a recovery', () => {
 		mockAuthRequired = true;
 		requestStateManager.setAuthFailed(true);
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(screen.queryByTestId('session-hold-banner')).toBeNull();
 
 		act(() => requestStateManager.setAuthFailed(true));
@@ -277,15 +313,15 @@ describe('SessionHoldBanner', () => {
 		(required) => {
 			mockAuthRequired = true;
 			requestStateManager.setAuthFailed(true);
-			const { rerender } = render(<SessionHoldBanner />);
+			const { rerender } = render(<Held />);
 			mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			expect(screen.queryByTestId('session-hold-banner')).toBeNull();
 			expect(requestStateManager.isAuthFailed()).toBe(false);
 
 			mockAuthRequired = required;
 			mockRepublishStatus();
-			rerender(<SessionHoldBanner />);
+			rerender(<Held />);
 			if (required) {
 				expect(screen.getByTestId('session-hold-banner')).toBeTruthy();
 			} else {
@@ -296,9 +332,9 @@ describe('SessionHoldBanner', () => {
 
 	it('does not clear the cached token or log recovery when auth has not failed', () => {
 		requestStateManager.setRefreshedToken('current');
-		const { rerender } = render(<SessionHoldBanner />);
+		const { rerender } = render(<Held />);
 		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
-		rerender(<SessionHoldBanner />);
+		rerender(<Held />);
 		expect(requestStateManager.getRefreshedToken()).toBe('current');
 		expect(mockInfo).not.toHaveBeenCalled();
 	});

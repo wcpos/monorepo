@@ -54,6 +54,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../notification-bell/notification-bell', () => ({ NotificationBell: () => null }));
 jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
+jest.mock('../header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('../../pos/cart/user-sheet', () => ({ UserSheet: () => null }));
 
 const items: NavigationAreaItem[] = [
@@ -194,7 +195,7 @@ describe('NavigationAreaLayout', () => {
 		expect(lifted.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('background');
 		lifted.unmount();
 
-		// Health has not opted in: its rail is still bg-card, where a bg-card row is invisible.
+		// A layout without a bar sits on bg-card, where a bg-card row is invisible.
 		const legacy = render(layout());
 		expect(legacy.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('card');
 	});
