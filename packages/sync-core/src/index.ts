@@ -10,6 +10,7 @@ export {
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';
 export { mapCouponExpiryToPayload } from './couponWirePayload';
+export { GATEWAY_ID_PATTERN, isGatewayId } from './gatewayId';
 // prettier-ignore
 export { syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository, type WirePullDocument } from './customPullAdapter';
 export { drainMutationQueue, isNeverPushedChain } from './drainMutationQueue';

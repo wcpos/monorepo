@@ -17,9 +17,9 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
-import { isOrderBrowsePaymentMethodId } from '@wcpos/sync-engine';
 import {
 	identityColumnFilter,
+	isGatewayId,
 	POS_META_KEYS,
 	remoteIdOrNull,
 	wooMetaCarrier,
@@ -573,7 +573,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 				dimensions.registerId = String(value);
 				scoped = true;
 			} else if (field === 'payment_method') {
-				if (isOrderBrowsePaymentMethodId(value)) {
+				if (isGatewayId(value)) {
 					dimensions.paymentMethod = value;
 					scoped = true;
 				} else represented = false;

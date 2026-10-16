@@ -1,3 +1,5 @@
+import { isGatewayId } from '@wcpos/sync-core';
+
 import {
 	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
 	clampToBrowseWindowBackstop,
@@ -6,11 +8,6 @@ import {
 import { type BrowseWindowGrammar, browseWindowKeyPart } from './browse-window-grammar';
 
 import type { OrderBrowseDimensions } from '../require-plane';
-
-export const ORDER_BROWSE_PAYMENT_METHOD_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
-export function isOrderBrowsePaymentMethodId(value: unknown): value is string {
-	return typeof value === 'string' && ORDER_BROWSE_PAYMENT_METHOD_PATTERN.test(value);
-}
 
 export const WOO_REST_MAX_PER_PAGE = 100;
 export const ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON = 'descriptor is not supported';
@@ -199,7 +196,7 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
 	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
-	if (dims.paymentMethod !== undefined && !isOrderBrowsePaymentMethodId(dims.paymentMethod)) {
+	if (dims.paymentMethod !== undefined && !isGatewayId(dims.paymentMethod)) {
 		throw new TypeError(
 			'orders browse payment method must be a gateway id of 1–64 letters, digits, _, . or -'
 		);
@@ -295,7 +292,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (
-		(paymentMethod !== undefined && !isOrderBrowsePaymentMethodId(paymentMethod)) ||
+		(paymentMethod !== undefined && !isGatewayId(paymentMethod)) ||
 		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
 		(cashierId !== undefined && !Number.isSafeInteger(cashierId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
