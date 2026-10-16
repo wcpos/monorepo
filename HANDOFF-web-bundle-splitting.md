@@ -22,7 +22,7 @@ separate chunks that load on first use.
 | Entry chunk, gzip | 3.6 MB |
 | Next-largest JS chunk | 0.2 MB (`index-*.js`, a handful of these exist) |
 | Whole `build/` directory, raw, 110 files | 18.1 MB |
-| `React.lazy` / `lazy(` in `apps/main` and `packages/` | **none** |
+| Lazy boundaries in `apps/main` and `packages/` | **two**: `components/health/trend-line.web.tsx` imports `./trend-line-chart` on demand, and `components/root-error.tsx` imports `@wcpos/database/clear-all-db`. No `React.lazy` anywhere. |
 | `zxing_reader.wasm` (barcode) | 0.94 MB, already a separate asset |
 | `sqlite3.wasm` + `sqlite.worker.js` | 0.85 MB + 0.3 MB, separate, served by the plugin |
 | `Inter-Medium.ttf` | 387 KB, **bundled twice** under two asset paths |
@@ -31,8 +31,9 @@ separate chunks that load on first use.
 The shape is the problem, not the total: one chunk carries the whole app, so nothing
 renders until 14.5 MB has downloaded, parsed and compiled. On a desktop that is one to
 two seconds of compile; on a cheap Android tablet or an older iPad it is five to ten.
-The small `index-*.js` chunks prove Metro's chunk emitter is already active in this
-build, which is the mechanism to build on.
+The small `index-*.js` chunks are those two dynamic imports: Metro already splits
+`import()` in this config and the chunks already load through the plugin loader from
+the CDN base, which is the mechanism to build on.
 
 ## How the bundle reaches the browser (so you know what you may change)
 
@@ -97,14 +98,14 @@ Decisions below should be re-ordered by what that table says.
 Memory note for this machine: one build at a time, cap test workers at 2, and set
 `NODE_OPTIONS=--max-old-space-size=6144` for the export if it OOMs.
 
-### 1. Prove Metro splits in this config
+### 1. Confirm the split path end to end
 
-Add one `React.lazy(() => import(...))` boundary around something obviously
-non-critical (the gallery route is a good candidate), export for web, and confirm a
-new chunk appears in `_expo/static/js/web/`, is listed by Metro's runtime, and loads
-in a browser from the CDN base URL and in the Electron build. If `expo export` does not
-split with this metro config, find out why before doing anything else; the serializer
-wrapper and the resolver are the first places to look.
+`import()` already splits here (see the two existing boundaries), so this step is a
+check, not an experiment: add one `React.lazy(() => import(...))` around the gallery
+route, export for web, and confirm the new chunk appears in `_expo/static/js/web/`,
+loads in a browser from the CDN base URL, **and loads in the Electron build from its
+own origin**. The Electron half is the one nobody has exercised with a route-level
+chunk; the health chart is the only lazy chunk that ships today.
 
 ### 2. Cut the boundaries
 
@@ -177,8 +178,6 @@ dev-next. Those two numbers are the result; the byte counts are the means.
 
 ## Open questions for the implementer to answer in the PR, not here
 
-- Does `expo export` honour `import()` splits with the custom serializer wrapper in
-  place? (Step 1 answers it.)
 - What does the Electron CSP allow for chunk loading from the app origin? (Step 1,
   Electron half.)
 - Is `canvaskit-wasm` better vendored as a local asset like `zxing-wasm` so Electron and
