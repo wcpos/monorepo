@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 import { CLOSURE_DOCUMENT_LIMIT } from '@wcpos/database/collections/schemas/closures';
@@ -304,9 +304,9 @@ export function ClosurePanel({
 						? { display: 'contents' }
 						: { width: PANEL_WIDTH, maxWidth: '100%', height: '100%' }
 				}
+				closeLabel={t('common.close')}
 				closeButtonProps={{
 					testID: 'closure-close',
-					accessibilityLabel: t('common.close'),
 					className: 'h-12 w-12 items-center justify-center',
 				}}
 			>

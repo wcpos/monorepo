@@ -91,7 +91,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [] }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
-jest.mock('@wcpos/components/dialog', () => {
+jest.mock('@wcpos/components/v2/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
 	}
@@ -162,8 +162,6 @@ it.each([
 		});
 	}
 );
-
-jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));
 
 it('keeps settings, support and external links reachable below sign out', () => {
 	const { openExternalURL } = jest.requireMock('@wcpos/utils/open-external-url');

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
@@ -120,6 +120,7 @@ export function RecountSheet({
 			<DialogContent
 				side={screenSize === 'sm' ? 'bottom' : 'right'}
 				testID="recount-sheet"
+				closeLabel={t('common.close')}
 				closeButtonProps={{ testID: 'recount-close' }}
 			>
 				<DialogTitle>{t('reports.recount')}</DialogTitle>

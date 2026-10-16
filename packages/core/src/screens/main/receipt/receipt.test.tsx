@@ -58,27 +58,19 @@ function TestButton({ children, disabled, loading, onPress, testID }: TestButton
 // The receipt document hook toasts when a cloud profile falls back to the system dialog for a report.
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/v2/dialog', () => ({
+	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogAction: (props: TestButtonProps) => <TestButton {...props} />,
 	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogClose: (props: TestButtonProps) => <TestButton {...props} />,
 	DialogContent: ({ children, side }: React.PropsWithChildren<{ side: string }>) => (
-		<div data-testid="receipt-panel" data-side={side}>
+		<div data-testid={side ? 'receipt-panel' : undefined} data-side={side}>
 			{children}
 		</div>
 	),
 	DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
-}));
-
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h2>{children}</h2>,
-	DialogTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -440,7 +432,7 @@ it('shows the refund title without email and keeps sale actions unchanged', () =
 			document: 'refund:12',
 		});
 		rerender(<Receipt resource={{} as never} />);
-		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Receipt');
+		expect(screen.getByRole('heading', { level: 1, name: 'Receipt' }).textContent).toBe('Receipt');
 		expect(screen.getByTestId('receipt-email-button')).toBeTruthy();
 	} finally {
 		translation.mockRestore();

@@ -44,3 +44,5 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 ## Evidence footnotes
 
 [^closures]: `21b57723e9 2026-09-17 Land the Closures room on Reports: the page bar with Sales | Closures, closures by business day, the drill-in through the closure template with settled figures, Reprint, Recount and Export CSV (#2131)`. Commit body and diffstat inspected; its body records the specific follow-up behaviours cited above.
+
+Status (2026-10-16, C7 B3): `closure-panel` and `recount-sheet` now compose `@wcpos/components/v2/dialog`; existing side, portal host and close testIDs are retained.

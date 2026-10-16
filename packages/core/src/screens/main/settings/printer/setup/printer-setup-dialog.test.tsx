@@ -20,7 +20,7 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: 'Stack' }));
-jest.mock('@wcpos/components/dialog', () => ({
+jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: 'Dialog',
 	DialogBody: 'Body',
 	DialogContent: 'Content',
