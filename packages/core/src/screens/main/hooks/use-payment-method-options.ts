@@ -15,7 +15,7 @@ type OrderDocument = {
 	payload?: {
 		payment_method?: string;
 		payment_method_title?: string;
-		meta_data?: ({ key?: string; value?: unknown } | null)[] | unknown;
+		meta_data?: unknown;
 	};
 };
 type EngineDatabase = { collections: { orders?: { find(): { $: Observable<OrderDocument[]> } } } };
