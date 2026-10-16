@@ -80,6 +80,7 @@ const mutatorNames = new Set([
 	'updateCRDT',
 	'insertCRDT',
 	'cleanup',
+	'addCollections',
 	'addState',
 	'bulkInsert',
 	'bulkUpsert',
