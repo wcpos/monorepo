@@ -376,7 +376,13 @@ async function finishSale(
 					: outcome.source === 'gateway-contract' || outcome.source === 'gateway-settled';
 	if (outcome.source === 'replay' && refresh) {
 		// The cached status is suspect on replay; re-judge the store's copy before any receipt.
-		await reconcileCompletedOrder(ctx.runtime, order, refresh, ctx.stockAdjustment);
+		const refreshed = await reconcileCompletedOrder(
+			ctx.runtime,
+			order,
+			refresh,
+			ctx.stockAdjustment
+		);
+		if (refreshed !== 'refreshed') return { outcome: 'not-completed', summary: null };
 		latest = payload();
 		if (latest.status === 'cancelled' || !isSaleComplete(outcome, ctx.dp, latest))
 			return { outcome: 'not-completed', summary: null };

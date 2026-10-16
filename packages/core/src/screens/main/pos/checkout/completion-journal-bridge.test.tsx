@@ -80,6 +80,7 @@ const drain = () =>
 addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
+	mockRefresh.mockResolvedValue('refreshed');
 	mockStartVersion = 0;
 	mockManager = {};
 	mockContext = {
@@ -577,8 +578,8 @@ it('stays sequential across context changes and StrictMode effect restarts, with
 	let release!: () => void;
 	mockRefresh.mockImplementationOnce(
 		() =>
-			new Promise<void>((resolve) => {
-				release = resolve;
+			new Promise<string>((resolve) => {
+				release = () => resolve('refreshed');
 			})
 	);
 	const view = render(

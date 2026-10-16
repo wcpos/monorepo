@@ -134,6 +134,7 @@ beforeEach(async () => {
 		mockInfo(message, rest);
 	});
 	mockRefresh.mockReset();
+	mockReconcile.mockResolvedValue('refreshed');
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
 	mockStamp.mockResolvedValue([{ key: 'stamp', value: 1 }]);
@@ -952,6 +953,7 @@ it.each(['pos-open', 'cancelled', 'pending'])(
 		mockReconcile.mockImplementationOnce(async () => {
 			expect(mockReceipt).not.toHaveBeenCalled();
 			latest = { ...latest, status };
+			return 'refreshed';
 		});
 		const result = await completeSale(ctx, resident, outcome, { host: 'background' });
 		expect(mockReconcile).toHaveBeenCalledTimes(1);
@@ -967,5 +969,27 @@ it.each(['pos-open', 'cancelled', 'pending'])(
 			expect(mockActionLog).not.toHaveBeenCalled();
 			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
 		}
+	}
+);
+it.each(['timed-out', 'failed', 'skipped', 'refreshed'])(
+	'replay requires a confirmed refresh before completing (%s)',
+	async (refreshResult) => {
+		const outcome = { source: 'replay' as const };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		const resolve = jest.spyOn(journal, 'resolveCompletionAttempt');
+		mockReconcile.mockResolvedValueOnce(refreshResult);
+		const result = await completeSale(ctx, order, outcome, { host: 'background' });
+		if (refreshResult === 'refreshed') {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalled();
+			expect(resolve).toHaveBeenCalled();
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect(resolve).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+		resolve.mockRestore();
 	}
 );

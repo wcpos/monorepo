@@ -77,7 +77,7 @@ it('force-refreshes and releases the order before refreshing only reduced produc
 	]);
 	expect(c.order.getLatest).toHaveBeenCalledTimes(1);
 	ready();
-	await completion;
+	await expect(completion).resolves.toBe('refreshed');
 	expect(c.order.getLatest).toHaveBeenCalledTimes(2);
 	expect(c.release).toHaveBeenCalledTimes(1);
 	expect(c.release.mock.invocationCallOrder[0]).toBeLessThan(
@@ -114,7 +114,7 @@ it('degrades after ten seconds and still refreshes reduced stock from the local 
 	await jest.advanceTimersByTimeAsync(9_999);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(1);
 	await jest.advanceTimersByTimeAsync(1);
-	await completion;
+	await expect(completion).resolves.toBe('timed-out');
 	expect(c.release).toHaveBeenCalledTimes(1);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(3);
 	expect(c.stockRelease).toHaveBeenCalledTimes(2);
@@ -142,7 +142,7 @@ it('records a recovered arc when the refresh never answers within its bound', as
 it('records a recovered arc on rejected readiness and still refreshes reduced stock', async () => {
 	const c = setup();
 	c.orderHandle.ready = Promise.reject(new Error('network unavailable'));
-	await reconcileCompletedOrder(c.runtime, c.order);
+	await expect(reconcileCompletedOrder(c.runtime, c.order)).resolves.toBe('failed');
 	// The sale completed from the local record, so per LEVELS.md this arc recovered —
 	// warning here told the merchant something was broken when nothing was.
 	expect(getLogger(['wcpos', 'pos', 'checkout']).warn).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ it('propagates synchronous refresh admission failure without adjusting stock', a
 
 it('skips the order refresh but still adjusts local stock when refresh is false', async () => {
 	const c = setup(null);
-	await reconcileCompletedOrder(c.runtime, c.order, false);
+	await expect(reconcileCompletedOrder(c.runtime, c.order, false)).resolves.toBe('skipped');
 	expect(c.requireRefresh.mock.calls.map(([requirement]) => requirement.collection)).toEqual([
 		'products',
 		'variations',
