@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { SessionHoldBanner } from '@wcpos/core/screens/main/components/header/session-hold-banner';
 import { RegisterBar } from '@wcpos/core/screens/main/pos/cart/register-bar';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 
@@ -14,6 +15,7 @@ export function POSProductsPane({ children }: { children?: React.ReactNode }) {
 		<View className="h-full" testID="pos-products-tab">
 			{/* Phone: the bar (hamburger, place, avatar) lives on both tabs; Switch register is the cart tab's. */}
 			<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
+			<SessionHoldBanner />
 			{children}
 			{/* POSProducts sizes itself h-full; give it a flex child to measure against so the bar keeps its row. */}
 			<View className="min-h-0 flex-1">

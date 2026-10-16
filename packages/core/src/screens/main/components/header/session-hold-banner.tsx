@@ -20,11 +20,20 @@ export function resetSessionHoldBannerState() {
 	holdToastShown = false;
 }
 
+type SessionHold = { syncBacklogSales: number; login: () => void };
+
+const SessionHoldContext = React.createContext<SessionHold | null>(null);
+
 /**
  * A refused session is a STATE that lasts until the cashier logs in, so it is
  * a banner; the toast only marks the moment it starts.
+ *
+ * The state has ONE owner, mounted once for the store session: every page bar
+ * renders a `SessionHoldBanner`, and visited drawer screens stay mounted, so a
+ * per-banner owner would let the first instance clear the shared latch on a
+ * renewal while the banner on screen kept showing the hold (Codex review, #2611).
  */
-export function SessionHoldBanner() {
+export function SessionHoldProvider({ children }: { children: React.ReactNode }) {
 	const status = useEngineStatus();
 	const { syncBacklogSales } = useMutationCounts();
 	const { site, wpCredentials, logout } = useStoreSession();
@@ -82,7 +91,21 @@ export function SessionHoldBanner() {
 	}, [held, site.name, t, triggerAuthFlow]);
 
 	// A recovery answers the auth hold only; a held write session keeps its sales warning.
-	if (!held || (recovered && !status.writeSessionHeld)) return null;
+	const visible = held && !(recovered && !status.writeSessionHeld);
+	const value = React.useMemo(
+		() => (visible ? { syncBacklogSales, login: () => triggerAuthFlow() } : null),
+		[visible, syncBacklogSales, triggerAuthFlow]
+	);
+
+	return <SessionHoldContext.Provider value={value}>{children}</SessionHoldContext.Provider>;
+}
+
+/** The held-session row a bar shows under itself; the state lives in `SessionHoldProvider`. */
+export function SessionHoldBanner() {
+	const hold = React.useContext(SessionHoldContext);
+	const t = useT();
+	if (!hold) return null;
+	const { syncBacklogSales, login } = hold;
 
 	return (
 		<View
@@ -94,7 +117,7 @@ export function SessionHoldBanner() {
 					? t('auth.sales_waiting_to_sync', { count: syncBacklogSales })
 					: t('auth.session_expired')}
 			</Text>
-			<Pressable testID="session-hold-login" onPress={() => triggerAuthFlow()}>
+			<Pressable testID="session-hold-login" onPress={login}>
 				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
 					{t('auth.log_in')}
 				</Text>

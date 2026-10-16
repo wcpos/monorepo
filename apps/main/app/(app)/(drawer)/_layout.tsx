@@ -17,6 +17,7 @@ import {
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { Header } from '@wcpos/core/screens/main/components/header';
+import { SessionHoldProvider } from '@wcpos/core/screens/main/components/header/session-hold-banner';
 import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
 import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 
@@ -269,17 +270,20 @@ function DrawerLayoutContent() {
 
 	return (
 		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
-			<View className="bg-background flex-1">
-				<ThemedSystemBars />
-				<RestartLockOverlay />
-				<ThemedDrawer
-					screenSize={screenSize}
-					t={t}
-					showUpgrade={showUpgrade}
-					setShowUpgrade={() => setShowUpgrade(false)}
-					unreadErrorCount={unreadErrorCount}
-				/>
-			</View>
+			{/* One owner for the held-session state; each bar renders its own banner. */}
+			<SessionHoldProvider>
+				<View className="bg-background flex-1">
+					<ThemedSystemBars />
+					<RestartLockOverlay />
+					<ThemedDrawer
+						screenSize={screenSize}
+						t={t}
+						showUpgrade={showUpgrade}
+						setShowUpgrade={() => setShowUpgrade(false)}
+						unreadErrorCount={unreadErrorCount}
+					/>
+				</View>
+			</SessionHoldProvider>
 		</UpgradeNoticeContext.Provider>
 	);
 }
