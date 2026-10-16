@@ -84,16 +84,10 @@ function violations(source: string): string[] {
 			if (specifier === '@wcpos/sync-engine' && name === 'MUTATION_QUEUE_RXDB_COLLECTION')
 				found.push(`mutation queue: ${name}`);
 		}
-		// `import * as query from '@wcpos/query'` binds the whole module: check its member accesses.
-		const namespace = clause.match(/^\s*\*\s+as\s+(\w+)\s*$/);
-		if (specifier === '@wcpos/query' && namespace) {
-			for (const access of commentsRemoved.matchAll(
-				// `ns.name`, `ns?.name`, `ns['name']`; namespace[1] is \w+ so the built pattern is linear.
-				new RegExp(`\\b${namespace[1]}\\s*(?:\\?\\.|\\.|\\[\\s*['"])\\s*(\\w+)`, 'g')
-			)) {
-				if (forbiddenQueryNames.has(access[1])) found.push(`query escape hatch: ${access[0]}`);
-			}
-		}
+		// `import * as query from '@wcpos/query'` binds the whole module; member access, optional
+		// chaining, bracket access and destructuring would all need scanning, so the form is rejected.
+		if (specifier === '@wcpos/query' && /^\s*\*\s+as\s+\w+\s*$/.test(clause))
+			found.push(`query namespace import (use named imports): ${match[0]}`);
 	}
 	// `import('@wcpos/query').Name` in a type position binds nothing; check the accessed name.
 	for (const access of commentsRemoved.matchAll(
