@@ -550,6 +550,39 @@ describe('sync("change-signal") through the public handle', () => {
 			await engine.dispose();
 		});
 
+		it('targeted pull (no persist): an identical re-pull still records the existence-manifest row', async () => {
+			const server = scriptedServer();
+			// The server's digest is what materialization turns into a manifest row (keyed String(wooId)).
+			server.state.products.set(9, { ...server.state.products.get(9)!, _rxdb_digest: '42' });
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				fetch: server.fetch,
+				identity: freshIdentity(),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			const first = await revsById(engine, 'products');
+			expect(first.size).toBe(1);
+			const manifest = engine.active()!.database.collections.existenceManifest!;
+			const row = await manifest.findOne('9').exec();
+			expect(row?.toJSON()).toMatchObject({ wooId: 9, objectType: 'product', digest: '42' });
+			await row!.remove();
+			expect(await manifest.findOne('9').exec()).toBeNull();
+
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			expect(server.state.productPulls).toBe(2);
+			expect(await revsById(engine, 'products')).toEqual(first);
+			expect((await manifest.findOne('9').exec())?.toJSON()).toMatchObject({
+				wooId: 9,
+				objectType: 'product',
+				digest: '42',
+			});
+			await engine.dispose();
+		});
+
 		it('refreshUpsert (tax rates): identical refresh keeps _rev, one changed rate is written', async () => {
 			const server = scriptedServer();
 			const rates = [1, 2, 3].map((id) => ({ id, rate: '10.0000', name: `Rate ${id}` }));
