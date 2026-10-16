@@ -129,6 +129,25 @@ not needed to draw the POS screen:
 - **`lodash`**, date libraries, icon sets, `react-native-reanimated`,
   `react-native-gesture-handler`: measure before judging.
 
+## Progress so far (branch `codex/web-bundle-split`, draft PR #2613, 2026-10-17)
+
+| Step | Eager set raw | Eager set brotli |
+|---|---:|---:|
+| baseline `next` 51f32a2a7 | 14,485,113 | 2,700,557 |
+| slice 1: date-fns subpaths + on-demand locales, charts single root, z-schema dev-only, calendar + json view lazy | 12,281,696 | 2,407,786 |
+| slice 2: Sentry SDK on demand after consent, calendar single root | 10,857,392 | 2,152,875 |
+| slice 3: one lazy root for every non-POS screen (`@wcpos/core/screens/main/rest`) | 10,598,344 | 2,099,882 |
+
+**Lesson from slice 3:** the "rest of app" root only removed 260 KB raw, because most
+of what the legacy strategy hoists is shared with the POS graph and is therefore
+correctly eager. `packages/core`'s remaining 1.26 MB is mostly `screens/main/pos`
+itself (0.72 MB) plus shared components. From here the number moves only by changing
+what the POS screen's own graph reaches: `bwip-js` 0.96 MB (receipt renderer; needs
+the async-renderer decision), `react-native-reanimated` 0.65 MB, `zod` 0.51 MB
+(reached from POS forms, not only settings), `@tanstack/table-core` 0.21 MB, `mingo`
+0.18 MB, and `<unmapped>` 1.39 MB, which is largely Metro's per-module wrapper
+boilerplate across ~3,800 eager modules and shrinks only with module count.
+
 ## Plan
 
 ### 0. Measure first (the first deliverable is a table, not a diff)
