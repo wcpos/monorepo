@@ -1,6 +1,6 @@
 # Behaviour ledger: `dialog`
 
-`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#2604); read `v2/dialog` as `dialog`.
 
 2026-10-16: the one overlay system. `modal` and `dialog` v1 are deleted (wcpos/monorepo#2603); their ledgers sit beside this one as `modal.LEDGER.md` and `dialog.LEDGER.md`.
 

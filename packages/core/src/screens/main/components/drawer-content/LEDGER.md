@@ -6,7 +6,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{badge,button,dialog,hstack,icon,lib/utils,text,tooltip,vstack}`.
 
-`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#2604); read `v2/dialog` as `dialog`.
 
 ## Lines
 
