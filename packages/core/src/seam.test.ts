@@ -1,7 +1,7 @@
 /**
  * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
  * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
- * violation must be frozen; vanished fingerprints are progress and need no bookkeeping.
+ * violation must be frozen and not retired; vanished fingerprints require pinned retirement.
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,7 +9,12 @@ import { join, relative, sep } from 'node:path';
 
 import * as ts from 'typescript';
 
-import { SEAM_FROZEN_VIOLATIONS_2026_10_16 } from './seam-allowlist';
+import {
+	SEAM_FROZEN_VIOLATIONS_2026_10_16,
+	SEAM_RETIRED_FINGERPRINTS,
+	SEAM_RETIRED_FLOOR,
+	SEAM_RETIRED_PREFIX_DIGEST,
+} from './seam-allowlist';
 
 /** Receiver names that mean an RxDatabase or RxCollection handle for the `close()` fence. */
 const LIFECYCLE_RECEIVERS = new Set([
@@ -159,7 +164,10 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 			(name === 'write' || name === 'resolveConflict') &&
 			receiver &&
 			((ts.isIdentifier(receiver) && receiver.text === 'engine') ||
-				(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine'))
+				(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine') ||
+				(ts.isElementAccessExpression(receiver) &&
+					ts.isStringLiteralLike(receiver.argumentExpression) &&
+					receiver.argumentExpression.text === 'engine'))
 		)
 			report('write plane outside a command module', node);
 	};
@@ -271,10 +279,8 @@ function fingerprints(file: string, matches: { rule: string; text: string }[]): 
 
 const current = violationsByFile.flatMap(({ file, matches }) => fingerprints(file, matches)).sort();
 const frozen = new Set(SEAM_FROZEN_VIOLATIONS_2026_10_16);
-const currentSet = new Set(current);
-const progress = [...frozen].filter((fingerprint) => !currentSet.has(fingerprint));
 console.log(
-	`Seam progress: ${progress.length}/${frozen.size} frozen violations removed; ${current.length} remain`
+	`Seam progress: ${SEAM_RETIRED_FINGERPRINTS.length}/${frozen.size} frozen violations retired; ${current.length} remain`
 );
 if (process.env.SEAM_PROGRESS === '1') console.log(current.join('\n'));
 
@@ -282,14 +288,37 @@ if (process.env.SEAM_PROGRESS === '1') console.log(current.join('\n'));
 if (process.env.SEAM_DUMP)
 	writeFileSync(process.env.SEAM_DUMP, JSON.stringify(current, null, '\t'));
 
-function unfrozenViolations(current: string[], frozen: ReadonlySet<string>): string[] {
-	return current
-		.filter((fingerprint) => !frozen.has(fingerprint))
-		.map((fingerprint) => `${fingerprint} — route this access through a named read or command`);
+function fingerprintIssues(
+	current: string[],
+	frozen: ReadonlySet<string>,
+	retired: readonly string[] = []
+): string[] {
+	const retiredSet = new Set(retired);
+	const effective = new Set([...frozen].filter((fingerprint) => !retiredSet.has(fingerprint)));
+	const currentSet = new Set(current);
+	return [
+		...current
+			.filter((fingerprint) => !effective.has(fingerprint))
+			.map((fingerprint) => `${fingerprint} — route this access through a named read or command`),
+		...[...effective]
+			.filter((fingerprint) => !currentSet.has(fingerprint))
+			.map((fingerprint) => `retire fingerprint: ${fingerprint}`),
+	];
 }
 
-it('requires every current violation to belong to the frozen set', () => {
-	expect(unfrozenViolations(current, frozen)).toEqual([]);
+it('requires current violations to match the frozen set minus explicit retirements', () => {
+	expect(fingerprintIssues(current, frozen, SEAM_RETIRED_FINGERPRINTS)).toEqual([]);
+});
+
+it('keeps retirements within the frozen set and pins every append-only entry', () => {
+	expect(SEAM_RETIRED_FINGERPRINTS.filter((fingerprint) => !frozen.has(fingerprint))).toEqual([]);
+	expect(SEAM_RETIRED_FINGERPRINTS.length).toBeGreaterThanOrEqual(SEAM_RETIRED_FLOOR);
+	expect(
+		createHash('sha256')
+			.update(SEAM_RETIRED_FINGERPRINTS.slice(0, SEAM_RETIRED_FLOOR).join('\n'))
+			.digest('hex')
+	).toBe(SEAM_RETIRED_PREFIX_DIGEST);
+	expect(SEAM_RETIRED_FLOOR).toBe(SEAM_RETIRED_FINGERPRINTS.length);
 });
 
 it('keeps the frozen fingerprints immutable', () => {
@@ -315,17 +344,32 @@ it('normalises whitespace and numbers repeated rule/text pairs independently per
 	]);
 });
 
-it('rejects same-count substitutions and extra occurrences but accepts removals', () => {
+it('rejects same-count substitutions and extra occurrences', () => {
 	const frozen = new Set(['file.ts :: record mutator :: doc.remove :: 1']);
 	for (const source of ['doc.save;', 'doc.remove; doc.remove;']) {
-		const issues = unfrozenViolations(fingerprints('file.ts', violations(source)), frozen);
-		expect(issues).toHaveLength(1);
+		const issues = fingerprintIssues(fingerprints('file.ts', violations(source)), frozen);
+		expect(issues.filter((issue) => issue.includes('route this access'))).toHaveLength(1);
 		expect(issues[0]).toContain('route this access through a named read or command');
 	}
-	expect(unfrozenViolations([], frozen)).toEqual([]);
-	expect(unfrozenViolations(fingerprints('file.ts', violations('\n doc.remove;')), frozen)).toEqual(
+	expect(fingerprintIssues(fingerprints('file.ts', violations('\n doc.remove;')), frozen)).toEqual(
 		[]
 	);
+});
+
+it('requires explicit retirement of vanished fingerprints', () => {
+	const fingerprint = 'file.ts :: record mutator :: doc.remove :: 1';
+	expect(fingerprintIssues([], new Set([fingerprint]))).toEqual([
+		`retire fingerprint: ${fingerprint}`,
+	]);
+	expect(fingerprintIssues([], new Set([fingerprint]), [fingerprint])).toEqual([]);
+});
+
+it('rejects reintroducing the exact text of a retired violation', () => {
+	const fingerprint = 'file.ts :: record mutator :: doc.remove :: 1';
+	const current = fingerprints('file.ts', violations('doc.remove;'));
+	expect(fingerprintIssues(current, new Set([fingerprint]), [fingerprint])).toEqual([
+		`${fingerprint} — route this access through a named read or command`,
+	]);
 });
 
 // These fixtures catch syntax bypasses without executing imported modules or mutators.
@@ -445,9 +489,10 @@ it('reports the full accessed AST text so fingerprints distinguish long accesses
 
 // Engine methods are fenced by receiver, not on unrelated objects with the same names.
 it.each(['write', 'resolveConflict'])('fences engine %s calls and extraction', (name) => {
-	for (const receiver of ['engine', 'object.engine']) {
+	for (const receiver of ['engine', 'object.engine', "runtime['engine']", "runtime?.['engine']"]) {
 		for (const source of [
 			`${receiver}.${name}({});`,
+			`${receiver}['${name}']({});`,
 			`${receiver}?.['${name}']?.({});`,
 			`const fn = ${receiver}.${name};`,
 			`const fn = ${receiver}['${name}'];`,
@@ -475,6 +520,9 @@ it.each([
 	"dialog['close']();",
 	"socket?.['close']?.();",
 	'writer.write();',
+	"runtime['writer'].write();",
+	"const { resolveConflict } = runtime['other'];",
+	'runtime[engine].write();',
 	'const { write, resolveConflict } = other;',
 	"const fn = other['resolveConflict'];",
 ])('allows unrelated receivers in %s', (source) => {

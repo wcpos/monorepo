@@ -3,7 +3,8 @@
  * 217 files, 553 violation fingerprints. seam.test.ts pins the sorted set's length and digest.
  *
  * Fingerprints are path :: rule :: whitespace-normalised full node text :: occurrence (1-based).
- * Every current fingerprint must be frozen; removing one is progress, with no bookkeeping.
+ * Every current fingerprint must be frozen and not retired. Append vanished fingerprints to
+ * SEAM_RETIRED_FINGERPRINTS and pin the full list below; retired entries cannot reappear.
  * SEAM_PROGRESS=1 prints remaining fingerprints; SEAM_DUMP=<path> dumps them as JSON.
  *
  * Known conservative false positives: .collection string fields on log events, descriptors
@@ -566,3 +567,10 @@ export const SEAM_FROZEN_VIOLATIONS_2026_10_16: readonly string[] = [
 	'utils/site-writes.ts :: record mutator :: latest.incrementalModify :: 1',
 	"utils/site-writes.ts :: storage import :: import type { SiteCollection, SiteDocument } from '@wcpos/database'; :: 1",
 ];
+
+// Append-only: never remove or reorder a retirement. Pin every append in the same commit.
+// Digest: sha256 of the first FLOOR entries joined with '\n' (no trailing newline).
+export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [];
+export const SEAM_RETIRED_FLOOR = 0;
+export const SEAM_RETIRED_PREFIX_DIGEST =
+	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
