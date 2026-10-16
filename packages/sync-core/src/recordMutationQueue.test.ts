@@ -356,6 +356,19 @@ describe('RecordMutationQueue — conditional (CAS) transitions (#507 P1-2)', ()
 		expect((await q.all()).map((m) => m.mutationId)).toEqual(['m-replacement']);
 	});
 
+	it.each([{ attempts: 1 }, { claimedBy: 'other-window' }, { nextAttemptAt: iso(1000) }])(
+		'never-pushed removal refuses push evidence %j',
+		async (evidence) => {
+			const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+			await q.enqueue({ ...mut(), ...evidence });
+			const before = await q.all();
+			expect(await q.removePending('m1', { requireNeverPushed: true })).toBe(false);
+			expect(await q.all()).toEqual(before);
+			// Callers that settle rather than annihilate retain the existing contract.
+			expect(await q.removePending('m1')).toBe(true);
+		}
+	);
+
 	it('removePending refuses a claimed row — an in-flight create cannot be annihilated', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		const row = await q.enqueue(mut({ mutationId: 'm-create', operation: 'create' }));

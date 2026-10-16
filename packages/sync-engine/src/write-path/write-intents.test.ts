@@ -253,6 +253,7 @@ describe('enqueueWriteIntent', () => {
 		'chain claim',
 		'settlement refusal',
 		'late dead-letter claim',
+		'coalesced replacement',
 	])('a refused void preserves resident and queued work: %s', async (scenario) => {
 		const mutationCollection = createFakeMutationCollection();
 		const row: QueuedMutation = {
@@ -312,6 +313,23 @@ describe('enqueueWriteIntent', () => {
 			collections: { orders, recordMutations: mutationCollection },
 		} as unknown as RxDatabase;
 		const queue = queueFor(db);
+		const replacement: QueuedMutation = {
+			...newer,
+			mutationId: 'replacement',
+			coalesced: 1,
+			status: 'claimed',
+			claimedBy: 'other-window',
+		};
+		if (scenario === 'coalesced replacement') {
+			const remove = queue.removePending.bind(queue);
+			vi.spyOn(queue, 'removePending').mockImplementation(async (id, ...options) => {
+				const removed = await remove(id, ...options);
+				// A concurrent coalesce lost its prior removal, but its replacement
+				// was already claimed, so compensation kept the new generation.
+				if (id === 'newer' && removed) await queue.replace(replacement);
+				return removed;
+			});
+		}
 		if (scenario === 'late replacement') {
 			const pending = queue.pending.bind(queue);
 			vi.spyOn(queue, 'pending').mockImplementationOnce(async () => {
@@ -357,7 +375,12 @@ describe('enqueueWriteIntent', () => {
 			});
 		}
 		expect(await orders.findOne().exec()).toBe(resident);
-		expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
+		if (scenario === 'coalesced replacement') {
+			expect(mutationCollection.store.has('newer')).toBe(false);
+			expect(mutationCollection.store.get('replacement')?.mutation).toEqual(replacement);
+		} else {
+			expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
+		}
 		expect(mutationCollection.store.get('older')?.mutation).toEqual(older);
 		expect(resident.toJSON().local.pendingMutationIds).toEqual(['older', 'newer']);
 		expect(mutationCollection.store.has('dead')).toBe(true);
@@ -365,6 +388,77 @@ describe('enqueueWriteIntent', () => {
 			expect(mutationCollection.store.get('replacement')?.mutation.operation).toBe('create');
 		}
 	});
+
+	it.each(['remoteId', 'revision', 'a push attempt'])(
+		'a void preserves queued work when %s prevents annihilation',
+		async (scenario) => {
+			const mutationCollection = createFakeMutationCollection();
+			const create: QueuedMutation = {
+				mutationId: 'create',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				operation: 'create',
+				origin: 'minted',
+				payload: { id: 0 },
+				baseRevision: null,
+				queuedAt: '2026-09-18T00:00:00.000Z',
+				status: 'pending',
+				attempts: 0,
+				seq: 1,
+			};
+			const edit: QueuedMutation = {
+				...create,
+				mutationId: 'edit',
+				operation: 'update',
+				explicit: true,
+				seq: 2,
+			};
+			await mutationCollection.bulkUpsert([create, edit]);
+			let data: Record<string, unknown> = {
+				remoteId: scenario === 'remoteId' ? '42' : undefined,
+				payload: { id: 0 },
+				sync: { revision: scenario === 'revision' ? 'rev-1' : undefined },
+				local: { pendingMutationIds: ['create', 'edit'] },
+			};
+			let removed = false;
+			const resident = {
+				toJSON: () => data,
+				remove: async () => {
+					removed = true;
+				},
+				incrementalModify: async (modify: (value: typeof data) => typeof data) => {
+					data = modify(data);
+				},
+			};
+			const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+			const db = {
+				collections: { orders, recordMutations: mutationCollection },
+			} as unknown as RxDatabase;
+			if (scenario === 'a push attempt') {
+				const queue = queueFor(db);
+				const remove = queue.removePending.bind(queue);
+				vi.spyOn(queue, 'removePending').mockImplementation(async (id, ...options) => {
+					if (id === 'create') await queue.reschedule({ ...create, attempts: 1 });
+					return remove(id, ...options);
+				});
+			}
+			const receipt = await enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+				mintUuid: () => 'delete',
+				now: () => '2026-09-18T00:00:01.000Z',
+			});
+			expect(receipt.annihilated).not.toBe(true);
+			expect(await orders.findOne().exec()).toBe(resident);
+			expect(mutationCollection.store.get('create')?.mutation).toEqual({
+				...create,
+				attempts: scenario === 'a push attempt' ? 1 : 0,
+			});
+			expect(mutationCollection.store.get('edit')?.mutation).toEqual(edit);
+			expect(mutationCollection.store.get('delete')?.mutation.operation).toBe('delete');
+			expect(data.local).toEqual({ dirty: true, pendingMutationIds: ['create', 'edit', 'delete'] });
+		}
+	);
 
 	it('carries an own `__proto__` payload key through as ordinary data', async () => {
 		// `sanitize_key` keeps `_`, so a Woo payload key literally spelled `__proto__`

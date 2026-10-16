@@ -241,6 +241,17 @@ export async function enqueueWriteIntent(input: {
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
 	const restoreRemoved = async (removed: QueuedMutation[]) => {
 		for (const row of removed) {
+			// Coalescing keeps seq and bumps the generation, even when its failed
+			// swap leaves a claimed replacement behind. Never revive the stale prior.
+			const superseded = (await queue.all()).some(
+				(item) =>
+					isRecordRow(item) &&
+					(item.requeuedFrom === row.mutationId ||
+						(row.seq !== undefined &&
+							item.seq === row.seq &&
+							(item.coalesced ?? 0) > (row.coalesced ?? 0)))
+			);
+			if (superseded) continue;
 			await queue.replace(row);
 			supersededIds.delete(row.mutationId);
 		}
@@ -326,6 +337,8 @@ export async function enqueueWriteIntent(input: {
 					}
 				: requested;
 		const storedRevision = stored?.sync?.revision ?? '';
+		const facet = writeFacetFor(intent.collection);
+		const remoteId = facet ? stored?.[facet.remoteIdField] : undefined;
 		const placement = decideWritePlacement({
 			rows: recordRows,
 			operation: intent.operation,
@@ -388,12 +401,12 @@ export async function enqueueWriteIntent(input: {
 		// LAST: if the drain claims the create mid-annihilation the CAS refuses and
 		// the decision re-runs (the delete then queues behind the in-flight
 		// create); successors already removed are restored before re-deciding.
-		if (placement.kind === 'annihilate') {
+		if (placement.kind === 'annihilate' && !storedRevision && remoteIdOrNull(remoteId) === null) {
 			await guardAnnihilation(placement.chain);
 			let refused = false;
 			const removed: QueuedMutation[] = [];
 			for (const row of [...placement.chain].reverse()) {
-				if (await queue.removePending(row.mutationId)) {
+				if (await queue.removePending(row.mutationId, { requireNeverPushed: true })) {
 					removed.push(row);
 					supersededIds.add(row.mutationId);
 				} else {
@@ -494,8 +507,6 @@ export async function enqueueWriteIntent(input: {
 							row.recordId === intent.recordId &&
 							row.status === 'rejected'
 					);
-					const facet = writeFacetFor(intent.collection);
-					const remoteId = facet ? stored?.[facet.remoteIdField] : undefined;
 					const bornLocal =
 						!storedRevision &&
 						remoteIdOrNull(remoteId) === null &&
@@ -517,7 +528,7 @@ export async function enqueueWriteIntent(input: {
 						try {
 							let refused = false;
 							for (const row of [...successors].reverse()) {
-								if (await queue.removePending(row.mutationId)) {
+								if (await queue.removePending(row.mutationId, { requireNeverPushed: true })) {
 									removed.push(row);
 									supersededIds.add(row.mutationId);
 								} else {

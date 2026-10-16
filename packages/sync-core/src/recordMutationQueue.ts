@@ -367,13 +367,24 @@ export class RecordMutationQueue {
 	 * drain-in-flight create must NOT be annihilated (the server may already be
 	 * applying it); the delete queues behind it instead.
 	 */
-	async removePending(mutationId: string): Promise<boolean> {
+	async removePending(
+		mutationId: string,
+		options: { requireNeverPushed?: boolean } = {}
+	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === mutationId
 			);
 			const row = stored?.mutation;
 			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+			// Reassert annihilation's premise on the same revision the CAS removes.
+			if (
+				options.requireNeverPushed &&
+				((row.attempts ?? 0) !== 0 ||
+					row.claimedBy !== undefined ||
+					row.nextAttemptAt !== undefined)
+			)
+				return false;
 			// Revision-checked: a drain-in-flight claim in another process must not be
 			// annihilated. If the row moved to 'claimed' after our read, the remove is
 			// refused and the delete queues behind the in-flight create instead.
