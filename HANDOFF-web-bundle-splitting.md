@@ -28,12 +28,26 @@ separate chunks that load on first use.
 | `Inter-Medium.ttf` | 387 KB, **bundled twice** under two asset paths |
 | `global-*.css` (Tailwind via uniwind) | 105 KB |
 
-The shape is the problem, not the total: one chunk carries the whole app, so nothing
-renders until 14.5 MB has downloaded, parsed and compiled. On a desktop that is one to
+**Why the published build is one file.** A plain `expo export --platform web` on `next`
+already emits `__expo-metro-runtime-*.js` (~1 KB), `__common-*.js` (**13.2 MB raw**),
+`entry-*.js` (1.27 MB raw) and one chunk per route (`index-*`, `_layout-*`,
+`database-*`, `connect-*`, each tens to hundreds of KB), and its `metadata.json` has an
+empty `fileMetadata`. The publish script `apps/web/scripts/build.js` then **prepends
+the runtime and `__common` into `entry-*.js`** and writes a single `bundle` into
+`metadata.json`. Concatenation moves no bytes: the eager set is runtime + common +
+entry whether it is one file or three. The target of this work is therefore
+`__common`: every module reachable from the eager graph is hoisted there, including
+everything the per-route chunks share. (Keeping the three files separate would let
+`__common` cache across releases when only `entry` changes; the plugin loader already
+accepts a `bundles` array. Worth doing, but it is a caching win, not a budget win.)
+
+The shape is the problem, not the total: 14.5 MB must download, parse and compile
+before anything renders. On a desktop that is one to
 two seconds of compile; on a cheap Android tablet or an older iPad it is five to ten.
-The small `index-*.js` chunks are those two dynamic imports: Metro already splits
-`import()` in this config and the chunks already load through the plugin loader from
-the CDN base, which is the mechanism to build on.
+The small `index-*.js` chunks in the published build are route chunks plus those two
+dynamic imports: Metro already splits routes and `import()` in this config, and the
+chunks already load through the plugin loader from the CDN base. The mechanism is
+proven; what is missing is keeping heavy modules *out* of `__common`.
 
 ## How the bundle reaches the browser (so you know what you may change)
 
@@ -98,9 +112,12 @@ not needed to draw the POS screen:
 ### 0. Measure first (the first deliverable is a table, not a diff)
 
 Build locally with source maps (`npx expo export --platform web --source-maps external
---output-dir <dir>`) and produce a composition table of the entry chunk by package and
-by workspace package. `source-map-explorer` on the exported bundle plus its map is
-enough. Commit the script
+--output-dir <dir>`; `metadata.json` is empty in a plain export, so take the eager set
+from the `<script src>` tags in `index.html`) and produce a composition table of the
+eager set (runtime + `__common` + entry) by package and by workspace package.
+`source-map-explorer` on each bundle plus its map is enough. A script that does this
+is being added at `scripts/web-bundle-composition.mjs` on the `codex/web-bundle-split`
+branch. Commit the script
 under `scripts/` so the table can be regenerated, and attach the first table to the PR.
 Decisions below should be re-ordered by what that table says.
 
