@@ -536,6 +536,7 @@
 	"common.no_notifications": "No notifications",
 	"common.no_order_found": "No order found",
 	"common.no_orders_found": "No orders found",
+	"common.no_payment_methods_found": "No payment methods found",
 	"common.no_products_found": "No products found",
 	"common.no_rates_matched": "No rates matched",
 	"common.no_results_found": "No results found",

@@ -18,6 +18,7 @@ import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
+import { PaymentMethodPill } from '../components/order/filter-bar/payment-method-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useEngineRecordByWooId } from '../hooks/use-engine-document';
@@ -100,6 +101,7 @@ export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersO
 					}
 				/>
 				<StatusPill />
+				<PaymentMethodPill />
 				<Suspense>
 					<CustomerPill
 						resource={customerResource}

@@ -27,6 +27,10 @@ export {
 	type SyncEngineLogger,
 	type SyncEngineLogMeta,
 } from './engine-logger';
+export {
+	ORDER_BROWSE_PAYMENT_METHOD_PATTERN,
+	isOrderBrowsePaymentMethodId,
+} from './scheduler/order-browser-scheduler-descriptor';
 export type { UpdateRequiredDetails } from './update-required';
 export {
 	hydrateResponse,

@@ -436,3 +436,19 @@ it('reads the register dimension from order metadata', () => {
 	).toBe(register);
 	expect(readLegacyField('orders', { uuid: 'order-2', payload: {} }, 'register')).toBeUndefined();
 });
+
+it('keeps payment method payload reads and sorting while exposing a browse dimension', () => {
+	expect(collectionMap.orders.fields.payment_method).toMatchObject({
+		kind: 'payload',
+		wireFace: 'dimension',
+		enginePath: 'payload.payment_method',
+		sort: { wooOrderby: 'payment_method' },
+	});
+	expect(
+		readLegacyField(
+			'orders',
+			{ uuid: 'order', payload: { payment_method: 'MyGateway' } },
+			'payment_method'
+		)
+	).toBe('MyGateway');
+});

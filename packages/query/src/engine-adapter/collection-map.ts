@@ -573,6 +573,7 @@ export const collectionMap = {
 				legacy: 'payment_method',
 				kind: 'payload',
 				enginePath: 'payload.payment_method',
+				wireFace: 'dimension',
 				sort: { wooOrderby: 'payment_method' },
 			},
 			cashier: {

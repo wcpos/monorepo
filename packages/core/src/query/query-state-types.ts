@@ -29,6 +29,7 @@ export interface FiltersByCollection {
 		customer_id?: number;
 		cashier?: string | number;
 		register?: string;
+		payment_method?: string;
 		store?: string | number;
 		dateRange?: DateRangeFilter;
 	};

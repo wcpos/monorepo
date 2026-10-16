@@ -17,14 +17,27 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
-import { identityColumnFilter, remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
+import { isOrderBrowsePaymentMethodId } from '@wcpos/sync-engine';
+import {
+	identityColumnFilter,
+	POS_META_KEYS,
+	remoteIdOrNull,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
 import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 
 type Operator =
-	'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'numeric-range' | 'all-match';
+	| 'taxonomy-many'
+	| 'value'
+	| 'metadata'
+	| 'store'
+	| 'date-range'
+	| 'numeric-range'
+	| 'all-match'
+	| 'payment-method';
 
 type WireField = FieldMapEntry & {
 	wireFace: NonNullable<FieldMapEntry['wireFace']>;
@@ -56,6 +69,7 @@ export const FILTER_TRANSLATORS = {
 		customer_id: mappedEntry(collectionMap.orders.fields.customer_id),
 		cashier: mappedEntry(collectionMap.orders.fields.cashier, 'metadata'),
 		register: mappedEntry(collectionMap.orders.fields.register, 'metadata'),
+		payment_method: mappedEntry(collectionMap.orders.fields.payment_method, 'payment-method'),
 		store: mappedEntry(collectionMap.orders.fields.store, 'store'),
 		dateRange: mappedEntry(collectionMap.orders.fields.date_created_gmt, 'date-range'),
 	},
@@ -227,6 +241,27 @@ function compileReadFilter(
 					const id = item && typeof item === 'object' ? (item as { id?: unknown }).id : item;
 					return ids.includes(Number(id));
 				}),
+		};
+	}
+	if (operator === 'payment-method') {
+		return {
+			prefilter: {
+				$or: [
+					{ 'payload.payment_method': value },
+					{ 'payload.meta_data': { $elemMatch: { key: POS_META_KEYS.paymentMethod, value } } },
+				],
+			},
+			matches: (document) => {
+				const payload = document.payload as
+					{ payment_method?: unknown; meta_data?: { key: string; value: unknown }[] } | undefined;
+				return (
+					payload?.payment_method === value ||
+					(Array.isArray(payload?.meta_data) &&
+						payload.meta_data.some(
+							(entry) => entry?.key === POS_META_KEYS.paymentMethod && String(entry.value) === value
+						))
+				);
+			},
 		};
 	}
 	if (operator === 'metadata' && mapping.legacy === 'register') {
@@ -537,6 +572,11 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			} else if (field === 'register') {
 				dimensions.registerId = String(value);
 				scoped = true;
+			} else if (field === 'payment_method') {
+				if (isOrderBrowsePaymentMethodId(value)) {
+					dimensions.paymentMethod = value;
+					scoped = true;
+				} else represented = false;
 			} else if (field === 'store') {
 				if (salesStoreScope) {
 					coverage = 'superset';

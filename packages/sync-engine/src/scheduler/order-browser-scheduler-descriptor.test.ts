@@ -576,3 +576,32 @@ describe('register browse dimension', () => {
 		).toMatchObject({ descriptor: { cashierId: 7 } });
 	});
 });
+
+describe('payment method browse dimension', () => {
+	it('keeps gateways distinct and round-trips beside free text', () => {
+		const keys = ['pos_cash', 'stripe', 'MyGateway'].map((paymentMethod) =>
+			orderBrowserQueryKey({
+				paymentMethod,
+				store: '12',
+				afterSeconds: 1,
+				search: 'note:payment_method=other',
+			})
+		);
+		expect(new Set(keys).size).toBe(3);
+		keys.forEach((key, index) => {
+			const paymentMethod = ['pos_cash', 'stripe', 'MyGateway'][index];
+			expect(key).toContain(`:store=12:payment_method=${paymentMethod}:after=1:`);
+			expect(parseOrderBrowserSchedulerDescriptor(key)).toMatchObject({
+				descriptor: { paymentMethod, search: 'note:payment_method=other' },
+			});
+		});
+	});
+	it('still parses keys without a payment method', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:search=:limit=10')
+		).toMatchObject({ descriptor: { status: 'all' } });
+	});
+	it.each(['pos:cash', '', 'x'.repeat(65)])('rejects an unrepresentable id %s', (paymentMethod) => {
+		expect(() => orderBrowserQueryKey({ paymentMethod })).toThrow(TypeError);
+	});
+});

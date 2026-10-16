@@ -3034,3 +3034,67 @@ it.each([
 		);
 	}
 );
+
+it('sends the payment method dimension as payment_method', async () => {
+	const fetcher = vi.fn(async (_url: string) => response([]));
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository: { upsertMany: vi.fn(async () => undefined) },
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher,
+	});
+	await schedulerFetcher(
+		orderTask({ queryKey: 'orders:browser:status=all:payment_method=MyGateway:search=:limit=25' })
+	);
+	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('payment_method')).toBe('MyGateway');
+});
+
+it.each([
+	['pos_cash', [], true],
+	[
+		'stripe',
+		[
+			{ key: '_wcpos_payment_method', value: 'stripe' },
+			{ key: '_wcpos_payment_method', value: 'pos_cash' },
+		],
+		true,
+	],
+	['stripe', [{ key: '_wcpos_payment_method', value: 'stripe' }], false],
+])(
+	'checks returned payment method %s and index rows %j before completing coverage',
+	async (payment_method, indexRows, complete) => {
+		const recordQueryResult = vi.fn(async () => undefined);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: { upsertMany: vi.fn(async () => undefined) },
+			coverageRepository: { recordQueryResult },
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response([
+					{
+						id: 901,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						payment_method,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(901) }, ...indexRows],
+					},
+				])
+			),
+		});
+		await schedulerFetcher(
+			orderTask({ queryKey: 'orders:browser:status=all:payment_method=pos_cash:search=:limit=25' })
+		);
+		expect(recordQueryResult).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				complete,
+				records: complete ? [{ id: 'woo-order:901' }] : [],
+			})
+		);
+	}
+);

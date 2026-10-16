@@ -40,6 +40,7 @@ export interface PosCarrier {
 export const NO_STORE = 0;
 
 export const POS_META_KEYS = {
+	paymentMethod: '_wcpos_payment_method',
 	user: '_pos_user',
 	store: '_pos_store',
 	register: '_wcpos_register',

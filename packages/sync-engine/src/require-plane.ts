@@ -185,6 +185,8 @@ export type OrderBrowseDimensions = {
 	customerId?: number;
 	cashierId?: number;
 	registerId?: string;
+	/** Gateway id: 1–64 case-preserving letters, digits, underscores, dots or hyphens. */
+	paymentMethod?: string;
 	/** Numeric store id or created_via slug (/^[a-z0-9_-]+$/). */
 	store?: string;
 	/** date_created_gmt range bounds, epoch seconds. */

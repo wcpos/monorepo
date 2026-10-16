@@ -176,6 +176,7 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		customerId: decision.descriptor.customerId,
 		cashierId: decision.descriptor.cashierId,
 		registerId: decision.descriptor.registerId,
+		paymentMethod: decision.descriptor.paymentMethod,
 		store: decision.descriptor.store,
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
@@ -203,10 +204,20 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
 	return undefined;
 }
 
+function payloadMetaValues(payload: WooOrderPayload, key: string): string[] {
+	const metaData = (payload as { meta_data?: unknown }).meta_data;
+	if (!Array.isArray(metaData)) return [];
+	return metaData.flatMap((entry) =>
+		entry?.key === key && entry.value !== undefined && entry.value !== null
+			? [String(entry.value)]
+			: []
+	);
+}
+
 /**
  * Whether a returned order actually carries the POS dimensions the descriptor asked for.
  *
- * `pos_cashier`, `pos_register`, `pos_store` and `created_via` are WCPOS proxy params
+ * `pos_cashier`, `pos_register`, `pos_store`, `payment_method` and `created_via` are WCPOS proxy params
  * (wcpos/woocommerce-pos#1432), NOT wc/v3 core params: a store still running an older
  * plugin ignores them silently and answers with the unfiltered superset. Recording that
  * superset as a COMPLETE lane would make the grid's projected total — which is the lane's
@@ -219,7 +230,7 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
  */
 function honorsRequestedDimensions(
 	payload: WooOrderPayload,
-	descriptor: { cashierId?: number; registerId?: string; store?: string }
+	descriptor: { cashierId?: number; registerId?: string; store?: string; paymentMethod?: string }
 ): boolean {
 	if (
 		descriptor.cashierId !== undefined &&
@@ -234,6 +245,12 @@ function honorsRequestedDimensions(
 	) {
 		return false;
 	}
+	if (
+		descriptor.paymentMethod !== undefined &&
+		payload.payment_method !== descriptor.paymentMethod &&
+		!payloadMetaValues(payload, POS_META_KEYS.paymentMethod).includes(descriptor.paymentMethod)
+	)
+		return false;
 	if (descriptor.store !== undefined) {
 		const matched = /^\d+$/.test(descriptor.store)
 			? payloadMetaValue(payload, POS_META_KEYS.store) === descriptor.store
@@ -811,6 +828,8 @@ async function fetchBrowserOrderQuery(
 		if (descriptor.customerId !== undefined) query.set('customer', String(descriptor.customerId));
 		if (descriptor.cashierId !== undefined) query.set('pos_cashier', String(descriptor.cashierId));
 		if (descriptor.registerId !== undefined) query.set('pos_register', descriptor.registerId);
+		if (descriptor.paymentMethod !== undefined)
+			query.set('payment_method', descriptor.paymentMethod);
 		if (descriptor.store !== undefined) {
 			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
 		}
