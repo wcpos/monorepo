@@ -11,6 +11,7 @@ import { IconButton } from '../../icon-button';
 import { useIsPhone } from '../../lib/device';
 import {
 	EXIT_MARK,
+	isWeb,
 	OVERLAY_EXIT_MOUNTED,
 	OVERLAY_MOTION,
 	OverlayShell,
@@ -210,11 +211,12 @@ export function DialogHeader({ className, ...props }: ViewProps): React.JSX.Elem
 export function DialogTitle(allProps: SlottableTextProps): React.JSX.Element {
 	const { className, asChild, ...props } = allProps;
 	const Component = asChild ? Slot : Text;
+	const title = <Component role={isWeb ? undefined : 'heading'} className={className} {...props} />;
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
-			<DialogPrimitive.Title asChild>
-				<Component className={className} {...props} />
-			</DialogPrimitive.Title>
+			{/* On web the panel is a Radix dialog; slotting the title gives it aria-labelledby.
+			    The native primitive ignores asChild and would nest the child in its own Text. */}
+			{isWeb ? <DialogPrimitive.Title asChild>{title}</DialogPrimitive.Title> : title}
 		</TextClassContext.Provider>
 	);
 }
