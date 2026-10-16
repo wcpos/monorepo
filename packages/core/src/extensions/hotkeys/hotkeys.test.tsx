@@ -46,7 +46,7 @@ jest.mock('../../screens/main/pos/checkout/checkout-mode', () => ({
 	selectReceipt: (id: string | null) => mockSelectReceipt(id),
 }));
 // The help sheet's host components (see help-sheet.test.tsx).
-jest.mock('@wcpos/components/v2/dialog', () => {
+jest.mock('@wcpos/components/dialog', () => {
 	function Wrapper({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
 		return <div data-testid={testID}>{children}</div>;
 	}

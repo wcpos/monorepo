@@ -99,7 +99,7 @@ it.each([
 
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 // The v2 root has no wrapper: a single-child root is `asChild`, so its own props land on the panel.
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({
 		children,
 		open: _open,

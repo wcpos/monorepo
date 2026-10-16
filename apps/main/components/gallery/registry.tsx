@@ -41,7 +41,7 @@ import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
 import { stories as text } from '@wcpos/components/text/gallery';
-import { stories as dialogV2 } from '@wcpos/components/v2/dialog/gallery';
+import { stories as dialogV2 } from '@wcpos/components/dialog/gallery';
 import { stories as badge } from '@wcpos/components/badge/gallery';
 import { stories as avatar } from '@wcpos/components/avatar/gallery';
 import { stories as loader } from '@wcpos/components/loader/gallery';

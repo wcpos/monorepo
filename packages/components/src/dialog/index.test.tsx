@@ -6,12 +6,12 @@ import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'reac
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
 
-import { Button } from '../../button';
-import { Input } from '../../input';
-import { DeviceScope } from '../../lib/device';
-import { PANEL_SLIDE } from '../../lib/motion';
-import * as overlay from '../../lib/overlay';
-import { registerPortalContainer } from '../../lib/portal-container';
+import { Button } from '../button';
+import { Input } from '../input';
+import { DeviceScope } from '../lib/device';
+import { PANEL_SLIDE } from '../lib/motion';
+import * as overlay from '../lib/overlay';
+import { registerPortalContainer } from '../lib/portal-container';
 import {
 	Dialog,
 	DialogBody,
@@ -63,21 +63,21 @@ jest.mock('react-native', () => {
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-jest.mock('../../keyboard-controller', () => ({
+jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
 }));
-jest.mock('../../lib/overlay', () => ({
+jest.mock('../lib/overlay', () => ({
 	__esModule: true,
-	...jest.requireActual('../../lib/overlay'),
+	...jest.requireActual('../lib/overlay'),
 	isWeb: true,
 }));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
-jest.mock('../../loader', () => ({ Loader: () => null }));
-jest.mock('../../icon', () => ({
+jest.mock('../loader', () => ({ Loader: () => null }));
+jest.mock('../icon', () => ({
 	Icon: ({ className }: { className?: string }) => <svg className={className} />,
 }));
-jest.mock('../../input', () => ({
+jest.mock('../input', () => ({
 	Input: ({ value, onChangeText, placeholder, ...props }: any) => (
 		<input
 			aria-label={placeholder}
@@ -644,7 +644,7 @@ it('11. center does not defer or focus through the settle path', () => {
 
 it('12. keeps the platform boundary in the shell and exports only the new dialog API', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	const shell = readFileSync(`${__dirname}/../../lib/overlay.tsx`, 'utf8');
+	const shell = readFileSync(`${__dirname}/../lib/overlay.tsx`, 'utf8');
 	expect(source).toContain("'children' | 'asChild'");
 	expect(source).not.toContain('Platform');
 	expect(shell.match(/Platform\.OS/g)).toHaveLength(1);
@@ -837,7 +837,7 @@ describe('18. title platform contract', () => {
 			jest
 				.spyOn(primitive, 'Title')
 				.mockImplementation(jest.requireActual('@rn-primitives/dialog/dist/dialog').Title);
-			const { Text } = jest.requireActual<typeof import('../../text')>('../../text');
+			const { Text } = jest.requireActual<typeof import('../text')>('../text');
 			render(
 				<DialogHeader testID="header">
 					{asChild ? (
@@ -865,7 +865,7 @@ describe('18. title platform contract', () => {
 			require.resolve('@rn-primitives/dialog').replace(/index\.js$/, 'dialog.web.js')
 		);
 		jest.spyOn(primitive, 'Title').mockImplementation(web.Title);
-		const { Text } = jest.requireActual<typeof import('../../text')>('../../text');
+		const { Text } = jest.requireActual<typeof import('../text')>('../text');
 		render(
 			<web.Root open>
 				<web.Content testID="d">

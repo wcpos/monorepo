@@ -91,7 +91,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [] }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
-jest.mock('@wcpos/components/v2/dialog', () => {
+jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
 	}

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Chip } from '@wcpos/components/chip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { useRecordField } from '@wcpos/query';
 
 import { EditCartCustomerForm } from './edit-cart-customer';

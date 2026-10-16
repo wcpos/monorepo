@@ -40,7 +40,7 @@ jest.mock('@wcpos/printer', () => ({
 }));
 jest.mock('@wcpos/components/input', () => ({ Input: () => null }));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null }));
-jest.mock('@wcpos/components/v2/dialog', () => ({ Dialog: () => null }));
+jest.mock('@wcpos/components/dialog', () => ({ Dialog: () => null }));
 jest.mock('@wcpos/components/text', () => ({ Text: () => null }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,

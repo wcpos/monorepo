@@ -14,7 +14,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord, QueryHandle } from '@wcpos/query';

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 

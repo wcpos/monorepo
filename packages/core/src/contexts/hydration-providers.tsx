@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { DialogLabelsProvider } from '@wcpos/components/v2/dialog';
+import { DialogLabelsProvider } from '@wcpos/components/dialog';
 
 import { Splash, SplashProgressProvider } from '../screens/splash';
 import { AppStateProvider } from './app-state';

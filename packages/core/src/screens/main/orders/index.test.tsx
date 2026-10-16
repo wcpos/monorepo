@@ -472,7 +472,7 @@ jest.mock('../components/pro-guard', () => ({
 			);
 		},
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: React.PropsWithChildren) => children,
 	DialogContent: ({ children }: React.PropsWithChildren) => (
 		<div data-testid="phone-page">{children}</div>

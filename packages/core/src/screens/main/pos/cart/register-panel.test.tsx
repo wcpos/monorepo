@@ -128,7 +128,7 @@ jest.mock('@wcpos/components/text', () => ({
 		<span data-testid={testID}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
 	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (

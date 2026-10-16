@@ -50,7 +50,7 @@ jest.mock('@wcpos/components/form', () => ({
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	useDialog: () => ({ close: mockClose }),
 	DialogBody: mockWrap,
 	DialogFooter: mockWrap,

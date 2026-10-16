@@ -36,7 +36,7 @@ jest.mock('../hooks/use-action-context', () => ({
 	}),
 }));
 
-jest.mock('@wcpos/components/v2/dialog', () => {
+jest.mock('@wcpos/components/dialog', () => {
 	function Wrapper({ children }: React.PropsWithChildren) {
 		return <>{children}</>;
 	}

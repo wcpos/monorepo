@@ -15,7 +15,7 @@ const mockClose = jest.fn();
 let mockPercent = false;
 let mockFeeAmount = '10';
 
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogAction: ({
 		children,
 		onPress,

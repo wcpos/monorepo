@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{badge,button,dialog,hstack,icon,lib/utils,text,tooltip,vstack}`.
 
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
+
 ## Lines
 
 1. Permanent items are icon-only, with tooltip wrapping only on web; ordinary drawers retain labels — native navigation buttons must remain directly operable — evidence: `eee1eef4dd 2025-09-30 fix drawer buttons on native`; “Only wrap with tooltip on web” (`components/drawer-content/drawer-item.tsx:100`) — platform: all.

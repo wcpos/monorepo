@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';

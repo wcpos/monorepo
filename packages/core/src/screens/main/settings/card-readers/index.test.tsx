@@ -135,7 +135,7 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 jest.mock('@wcpos/components/portal', () => ({
 	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
 		mockProviderClose = onClose;
 		return <>{children}</>;

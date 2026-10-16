@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import isEqual from 'lodash/isEqual';
 
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';

@@ -12,7 +12,7 @@ import {
 	DialogClose,
 	DialogFooter,
 	useDialog,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';

@@ -36,7 +36,7 @@ function createQueue() {
 	};
 }
 
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogAction: ({ children, testID, onPress }: PressProps) => (
 		<button data-testid={testID} onClick={onPress} type="button">
 			{children}

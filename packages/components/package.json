@@ -15,6 +15,7 @@
     "./combobox": "./src/combobox/index.ts",
     "./combobox/types": "./src/combobox/types.ts",
     "./data-table/types": "./src/data-table/types.ts",
+    "./dialog": "./src/dialog/index.tsx",
     "./docs-link": "./src/docs-link/index.tsx",
     "./dnd": "./src/dnd/index.ts",
     "./dropdown-menu": "./src/dropdown-menu/index.tsx",
@@ -78,8 +79,7 @@
     "./tree-combobox": "./src/tree-combobox/index.ts",
     "./virtualized-list": "./src/virtualized-list/index.ts",
     "./vstack": "./src/vstack/index.tsx",
-    "./webview": "./src/webview/index.tsx",
-    "./v2/dialog": "./src/v2/dialog/index.tsx"
+    "./webview": "./src/webview/index.tsx"
   },
   "scripts": {
     "build:css": "tailwindcss -i ./src/index.css -o ./dist/styles.css --minify",

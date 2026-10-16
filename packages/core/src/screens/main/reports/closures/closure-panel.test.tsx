@@ -100,7 +100,7 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children: React.ReactNode }) => children,
 	DialogContent: ({
 		children,

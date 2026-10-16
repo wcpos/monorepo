@@ -10,7 +10,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Platform } from '@wcpos/utils/platform';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';

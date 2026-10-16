@@ -17,7 +17,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { I18nContext } from 'react-i18next';
 import { BehaviorSubject } from 'rxjs';
 
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 
 import { TranslationProvider, useT } from './index';
 import { HydrationProviders } from '../hydration-providers';

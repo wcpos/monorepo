@@ -12,7 +12,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { Portal } from '@wcpos/components/portal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';

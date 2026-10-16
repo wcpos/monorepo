@@ -12,7 +12,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Form, useFormChangeHandler } from '@wcpos/components/form';

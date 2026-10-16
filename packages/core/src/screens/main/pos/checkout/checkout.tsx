@@ -16,7 +16,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';

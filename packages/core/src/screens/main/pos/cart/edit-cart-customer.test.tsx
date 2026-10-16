@@ -79,7 +79,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogAction: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
 		<button type="button" data-testid={String(children)} onClick={onPress}>
 			{children}

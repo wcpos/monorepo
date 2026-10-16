@@ -11,7 +11,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';

@@ -1,4 +1,6 @@
-# Behaviour ledger: `v2/dialog`
+# Behaviour ledger: `dialog`
+
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
 
 2026-10-16: the one overlay system. `modal` and `dialog` v1 are deleted (wcpos/monorepo#2603); their ledgers sit beside this one as `modal.LEDGER.md` and `dialog.LEDGER.md`.
 
@@ -44,7 +46,7 @@ Seeded 2026-09-22 by wcpos/roadmap#374 from `dialog/LEDGER.md` and `modal/LEDGER
 16. ~~A native full-size modal does not pad the status bar again~~ (struck 2026-10-14 in the source ledger, superseded by its line 17) — **n/a**: struck at source
 17. A native full-size modal pads `insets.top` on its own card-coloured scrim; the panel keeps `py-2` and the close is lifted to the title row; the host never pads — **preserved**: `v2/dialog` line 17
 
-## `v2/dialog`
+## `dialog`
 
 1. Under the phone width a side panel renders as a page; a centred dialog and a sheet never split — evidence: platform split (wcpos/roadmap#290) §2; the component map §4.
 2. One root serves a trigger-opened and a route-opened dialog; a route dialog closes by navigating back unless the caller supplies `onClose` — evidence: the component map §7a; `modal` line 3 as origin.

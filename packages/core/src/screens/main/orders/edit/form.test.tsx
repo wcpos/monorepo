@@ -102,7 +102,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/v2/dialog', () => ({
+jest.mock('@wcpos/components/dialog', () => ({
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogAction: ({
 		children,

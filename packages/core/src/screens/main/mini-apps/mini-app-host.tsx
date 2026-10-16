@@ -4,7 +4,7 @@ import { Platform as RNPlatform, View } from 'react-native';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';

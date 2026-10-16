@@ -12,7 +12,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/v2/dialog';
+} from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { Icon, type IconName } from '@wcpos/components/icon';
 import { OptionSelect, type SelectSingleRootProps } from '@wcpos/components/select';

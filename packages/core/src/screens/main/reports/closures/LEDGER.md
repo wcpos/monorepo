@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{badge,button,dialog,dropdown-menu,icon,input,portal,text}` and `@wcpos/components/lib/portal-container`.
 
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
+
 ## Lines
 
 1. Group by stamped opening business day, falling back to opening time in store timezone for legacy rows; filter by closer and sort newest day/closure first — overnight sessions must not move to their closing day or change with later timezone edits — evidence: [^closures]; `closure-list.test.tsx` names overnight/DST/timezone-edit cases — platform: all.

@@ -19,7 +19,7 @@ import {
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { DialogAction, DialogBody, DialogClose, DialogFooter } from '@wcpos/components/v2/dialog';
+import { DialogAction, DialogBody, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Table,
 	TableBody,

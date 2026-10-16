@@ -6,6 +6,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Composes:** `@wcpos/components/{button,collapsible,form,hstack,icon-button,modal,select,text,tooltip,vstack}`.
 
+`v2/` folded into this directory on 2026-10-16 (wcpos/monorepo#<this PR>); read `v2/dialog` as `dialog`.
+
 ## Lines
 
 1. Default password to an empty string rather than omit it — WooCommerce customer creation rejects a missing password property — evidence: “WC REST API will error if password is not provided on create” (`components/customer/customer-form.tsx:30`) — platform: all.

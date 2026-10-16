@@ -54,7 +54,7 @@ it('patches a column immediately and restores defaults without a dialog footer',
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-jest.mock('@wcpos/components/v2/dialog', () => ({}));
+jest.mock('@wcpos/components/dialog', () => ({}));
 jest.mock('@wcpos/components/tooltip', () => ({}));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: ({ children }: React.PropsWithChildren) => children,
