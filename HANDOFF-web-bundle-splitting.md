@@ -37,8 +37,9 @@ the CDN base, which is the mechanism to build on.
 
 ## How the bundle reaches the browser (so you know what you may change)
 
-- Built by `expo export --platform web` from `apps/main` (Expo SDK 57, React Native
-  0.86, react-native-web, Metro with a custom config at `apps/main/metro.config.js`).
+- Built by `expo export --platform web` from `apps/main` (on `next`: Expo `~58.0.8`,
+  React `19.3.0`, React Native `0.88.0-rc.4`, react-native-web, Metro with a custom
+  config at `apps/main/metro.config.js`; read the SDK 58 docs, not older ones).
   The `apps/web` submodule is the `wcpos/web-bundle` repo; `pnpm web build` wraps the
   export. CI: `.github/workflows/publish-web-bundle.yml`.
 - The free plugin's page (`woocommerce-pos/includes/Templates/Frontend.php`) fetches
@@ -74,8 +75,11 @@ not needed to draw the POS screen:
   `@wcpos/virtual-printer`, `expo-print`, `react-native-esc-pos-printer`,
   `react-native-star-io10`. Only needed when a receipt is rendered or printed.
 - **Hardware integrations:** `@stripe/stripe-terminal-react-native`,
-  `react-native-ble-plx`, `react-native-webrtc`, `react-native-tcp-socket`,
-  `@wcpos/scanner`. Check what their web shims cost; some ship real code on web.
+  `react-native-ble-plx`, `react-native-webrtc`, `react-native-tcp-socket`. Check what
+  their web shims cost; some ship real code on web. **Not `@wcpos/scanner`**: `AppStack`
+  mounts `ScanHubProvider` around the POS and the product screen uses it for wedge, HID,
+  serial, camera and BLE scanning, so barcode entry is on the ring-a-sale path and stays
+  eager.
 - **Translations:** `packages/core/src/contexts/translations/locales/en/core.json` is
   bundled and installed synchronously as the `fallbackLng: 'en'` resource in
   `packages/core/src/contexts/translations/index.tsx`; the CDN-backed `RxDBBackend`
@@ -93,9 +97,10 @@ not needed to draw the POS screen:
 
 ### 0. Measure first (the first deliverable is a table, not a diff)
 
-Build locally with source maps and produce a composition table of the entry chunk by
-package and by workspace package. `source-map-explorer` on the exported bundle plus its
-map is enough; `@expo/metro-config` also exposes `--dump-sourcemap`. Commit the script
+Build locally with source maps (`npx expo export --platform web --source-maps external
+--output-dir <dir>`) and produce a composition table of the entry chunk by package and
+by workspace package. `source-map-explorer` on the exported bundle plus its map is
+enough. Commit the script
 under `scripts/` so the table can be regenerated, and attach the first table to the PR.
 Decisions below should be re-ordered by what that table says.
 
@@ -105,10 +110,11 @@ Memory note for this machine: one build at a time, cap test workers at 2, and se
 ### 1. Confirm the split path end to end
 
 `import()` already splits here (see the two existing boundaries), so this step is a
-check, not an experiment: add one `React.lazy(() => import(...))` around the gallery
-route, export for web, and confirm the new chunk appears in `_expo/static/js/web/`,
-loads in a browser from the CDN base URL, **and loads in the Electron build from its
-own origin**. The Electron half is the one nobody has exercised with a route-level
+check, not an experiment: add one `React.lazy(() => import(...))` around a **merchant**
+route that the deployed app can navigate to (the `support` or `health` group; not the
+gallery, which merchant builds resolve to `registry.stub.tsx` and never mount), export
+for web, and confirm the new chunk appears in `_expo/static/js/web/`, loads in a
+browser from the CDN base URL, **and loads in the Electron build from its own origin**. The Electron half is the one nobody has exercised with a route-level
 chunk; the health chart is the only lazy chunk that ships today.
 
 ### 2. Cut the boundaries
