@@ -1,5 +1,5 @@
 /**
- * ADR 0033 item 7. The seam allowlist, frozen 2026-10-16 with 201 files.
+ * ADR 0033 item 7. The seam allowlist, frozen 2026-10-16 with 203 files.
  *
  * `SEAM_ALLOWLIST_FROZEN_2026_10_16` pairs each file with its violation COUNT at the freeze and is IMMUTABLE: `seam.test.ts` pins its length and a digest of
  * its contents, so a path can neither be added nor swapped in, and a frozen file may never exceed its frozen count (the per-file ratchet only goes down). When a listed file stops crossing
@@ -46,7 +46,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/contexts/extra-data/context.ts', 1],
 	['screens/main/contexts/ui-settings/provider.tsx', 3],
 	['screens/main/contexts/ui-settings/utils.ts', 1],
-	['screens/main/contexts/use-push-document.ts', 3],
+	['screens/main/contexts/use-push-document.ts', 4],
 	['screens/main/coupons/edit/form.tsx', 1],
 	['screens/main/customers/edit/form.tsx', 1],
 	['screens/main/health/attention-panel.tsx', 1],
@@ -59,8 +59,9 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/hooks/barcodes/use-attributed-wedge.ts', 2],
 	['screens/main/hooks/barcodes/use-barcode-search.ts', 1],
 	['screens/main/hooks/barcodes/use-scanner-registration.ts', 2],
-	['screens/main/hooks/mutations/use-local-mutation.ts', 12],
-	['screens/main/hooks/mutations/use-mutation.ts', 2],
+	['screens/main/hooks/mutations/request-server-delete.ts', 1],
+	['screens/main/hooks/mutations/use-local-mutation.ts', 13],
+	['screens/main/hooks/mutations/use-mutation.ts', 3],
 	['screens/main/hooks/store-list-resource.ts', 1],
 	['screens/main/hooks/use-collection.ts', 4],
 	['screens/main/hooks/use-engine-document.ts', 2],
@@ -106,6 +107,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/cart/totals/taxes.tsx', 1],
 	['screens/main/pos/cart/use-switch-store.ts', 1],
 	['screens/main/pos/cart/user-sheet.tsx', 2],
+	['screens/main/pos/cart/void-order.ts', 2],
 	['screens/main/pos/checkout/column/use-checkout-back.ts', 1],
 	['screens/main/pos/checkout/completion-journal.ts', 4],
 	['screens/main/pos/checkout/hooks/use-checkout-save.ts', 1],
@@ -131,7 +133,7 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly (readonly [string, numbe
 	['screens/main/pos/hooks/stock-guard-hook.ts', 1],
 	['screens/main/pos/hooks/use-add-customer.ts', 1],
 	['screens/main/pos/hooks/use-add-fee.ts', 1],
-	['screens/main/pos/hooks/use-add-item-to-order.ts', 5],
+	['screens/main/pos/hooks/use-add-item-to-order.ts', 6],
 	['screens/main/pos/hooks/use-add-product.ts', 1],
 	['screens/main/pos/hooks/use-add-shipping.ts', 1],
 	['screens/main/pos/hooks/use-add-variation.ts', 2],

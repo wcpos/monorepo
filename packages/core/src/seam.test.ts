@@ -15,8 +15,8 @@ import {
 
 const frozenCount = new Map(SEAM_ALLOWLIST_FROZEN_2026_10_16);
 
-const FROZEN_LENGTH = 201;
-const FROZEN_DIGEST = 'ed8998904dfd9df16f618882b0e4612d2066894f04590dd0160fd20c7830177e';
+const FROZEN_LENGTH = 203;
+const FROZEN_DIGEST = '4689c572e44370d0895c5a0d50f07753dad011609d1d7ac553bfdc1a5a6a4e00';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
 const effectiveAllowlist = new Set(
 	SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file]) => file).filter((file) => !repaired.has(file))
@@ -129,10 +129,18 @@ function violations(source: string): string[] {
 		match.startsWith('`') ? templateBodies(match) : ''
 	);
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|updateCRDT|insertCRDT|addState|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\bengine\s*\.\s*write\s*\(|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|updateCRDT|insertCRDT|addState|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|save|updateCRDT|insertCRDT|addState|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${
+				/^\s*engine/.test(match[0])
+					? 'write plane outside a command module (engine.write)'
+					: /^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|save|updateCRDT|insertCRDT|addState|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(
+								match[0]
+						  )
+						? 'record mutator (writes go through commands)'
+						: 'storage token'
+			}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
