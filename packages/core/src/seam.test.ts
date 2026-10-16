@@ -7,7 +7,11 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-import { SEAM_ALLOWLIST_FROZEN_2026_10_16, SEAM_REPAIRED_SINCE_FREEZE } from './seam-allowlist';
+import {
+	SEAM_ALLOWLIST_FROZEN_2026_10_16,
+	SEAM_REPAIRED_FLOOR,
+	SEAM_REPAIRED_SINCE_FREEZE,
+} from './seam-allowlist';
 
 const FROZEN_LENGTH = 200;
 const FROZEN_DIGEST = '66965d6d18eef9019e826aa60d2e7624870964e093f0171ef6ad4a6fbfd425f0';
@@ -105,7 +109,7 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachmentBase64|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
 			`${/^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
@@ -143,6 +147,9 @@ it('keeps the frozen allowlist immutable and the repaired list inside it', () =>
 	).toBe(FROZEN_DIGEST);
 	const frozen = new Set(SEAM_ALLOWLIST_FROZEN_2026_10_16);
 	expect(SEAM_REPAIRED_SINCE_FREEZE.filter((file) => !frozen.has(file))).toEqual([]);
+	// The repaired list is append-only: a regression that deletes an entry to re-admit a file
+	// must also lower this floor, which a reviewer sees in the diff. Raise it with every repair.
+	expect(SEAM_REPAIRED_SINCE_FREEZE.length).toBeGreaterThanOrEqual(SEAM_REPAIRED_FLOOR);
 	expect(
 		SEAM_REPAIRED_SINCE_FREEZE.filter(
 			(file) => !violationsByFile.every(({ file: f }) => f !== file)

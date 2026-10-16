@@ -217,3 +217,9 @@ export const SEAM_ALLOWLIST_FROZEN_2026_10_16: readonly string[] = [
 
 /** Files from the frozen list that no longer cross the seam. Append-only; see above. */
 export const SEAM_REPAIRED_SINCE_FREEZE: readonly string[] = [];
+
+/**
+ * Minimum length of `SEAM_REPAIRED_SINCE_FREEZE`. Raise it in the same commit as every repair;
+ * never lower it. A regression that deletes a repaired entry must lower this too, in plain sight.
+ */
+export const SEAM_REPAIRED_FLOOR = 0;
