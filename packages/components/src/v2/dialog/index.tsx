@@ -21,9 +21,12 @@ import { usePortalContainer } from '../../lib/portal-container';
 import { cn } from '../../lib/utils';
 import { Text, TextClassContext } from '../../text';
 import { isToastTarget } from '../../toast/target';
+import { useDialogLabels } from './labels';
 
 import type { OverlayPresentation } from '../../lib/overlay';
 import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
+export { DialogLabelsProvider, type DialogLabels } from './labels';
+
 export type DialogSide = 'center' | 'left' | 'right' | 'bottom';
 export type DialogSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 export type DialogProps = DialogPrimitive.RootProps & { route?: boolean; onClose?: () => void };
@@ -118,6 +121,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	);
 }
 function DialogPanel(allProps: DialogContentProps) {
+	const labels = useDialogLabels();
 	const { size = 'md', className, children, ...rest } = allProps;
 	const {
 		closeLabel,
@@ -184,7 +188,7 @@ function DialogPanel(allProps: DialogContentProps) {
 						name="xmark"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
 						iconClassName={cn('size-4.5', closeIconClassName)}
-						aria-label={closeLabel ?? 'Close'}
+						aria-label={closeLabel ?? labels.close}
 						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}
 						{...closeProps}
 					/>

@@ -17,6 +17,7 @@ import {
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
+	DialogLabelsProvider,
 	DialogTitle,
 	DialogTrigger,
 	useDialog,
@@ -686,4 +687,24 @@ it('14. a bottom sheet pads the bottom inset the shell leaves (native answer: li
 	} finally {
 		inset.mockRestore();
 	}
+});
+
+it('15. uses provider close labels, falls back to English, and lets closeLabel win', () => {
+	const dialog = (closeLabel?: string) => (
+		<Dialog open>
+			<DialogContent inline closeLabel={closeLabel}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	const { rerender } = render(dialog());
+	expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+	rerender(<DialogLabelsProvider labels={{ close: 'Fermer' }}>{dialog()}</DialogLabelsProvider>);
+	expect(screen.getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
+	rerender(
+		<DialogLabelsProvider labels={{ close: 'Fermer' }}>{dialog('Dismiss')}</DialogLabelsProvider>
+	);
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+	rerender(dialog('Dismiss'));
+	expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
 });
