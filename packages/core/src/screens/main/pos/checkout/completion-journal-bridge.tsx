@@ -194,6 +194,9 @@ export function SaleCompletionBridge(): null {
 					// The stored status the attempt journaled settles the replay as the pay window would.
 					const replay = {
 						source: 'replay' as const,
+						...(attempt.settledOrderGateway !== undefined
+							? { settledOrderGateway: attempt.settledOrderGateway }
+							: {}),
 						...(attempt.settledOrderStatus != null
 							? { settledOrderStatus: attempt.settledOrderStatus }
 							: {}),

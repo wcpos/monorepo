@@ -29,7 +29,8 @@ interface Props {
 export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
-	const { handleStockRejection, settledOrderStatuses, gatewayResolved } = useCheckoutSession(order);
+	const { handleStockRejection, settledOrderStatuses, gatewayResolved, gatewayError, refetch } =
+		useCheckoutSession(order);
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [loading, setLoading] = React.useState(false);
 	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
@@ -86,6 +87,16 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	// status (BACS at pending) would never replay to completion.
 	if (flow.saveState || !gatewayResolved) {
 		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
+	}
+	if (gatewayError) {
+		return (
+			<VStack className="border-destructive bg-destructive/10 m-4 rounded-md border p-3">
+				<Text className="text-destructive">{t('pos_checkout.gateway_catalog_unavailable')}</Text>
+				<Button testID="checkout-gateway-catalog-retry" size="lg" onPress={() => void refetch()}>
+					<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
+				</Button>
+			</VStack>
+		);
 	}
 	if (!paymentURL) {
 		return (

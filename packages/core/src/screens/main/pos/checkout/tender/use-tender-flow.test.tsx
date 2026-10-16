@@ -2652,6 +2652,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				source: 'gateway',
 				actor: { id: '7', name: 'Pat' },
 				settledOrderStatus: 'pending',
+				settledOrderGateway: 'wcpos_email_invoice',
 			});
 			// The stale stamp goes with the mirror; no row is minted.
 			expect(mockManualMirror).toHaveBeenCalledWith(

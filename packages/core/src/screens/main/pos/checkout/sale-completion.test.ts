@@ -910,3 +910,62 @@ it('audits the summary read after reconciliation, including counted payment legs
 		],
 	]);
 });
+
+it.each([
+	['a', 'a', true],
+	['a', 'b', false],
+	[undefined, 'b', true],
+] as const)(
+	'replay scalar gateway %s judges resident gateway %s as complete: %s',
+	(settledOrderGateway, payment_method, expected) => {
+		const outcome = {
+			source: 'replay' as const,
+			settledOrderStatus: 'pending',
+			settledOrderGateway,
+		};
+		expect(isSaleComplete(outcome, 2, { ...payload, status: 'pending', payment_method })).toBe(
+			expected
+		);
+	}
+);
+it('journals the gateway beside its scalar settled status', async () => {
+	const attempt = {
+		order,
+		completing: true,
+		source: 'gateway-contract' as const,
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'a',
+	};
+	await recordSaleAttempt(ctx, attempt);
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'a',
+	});
+});
+it.each(['pos-open', 'cancelled', 'pending'])(
+	'replay revalidates refreshed %s before receipt, audit, and journal resolution',
+	async (status) => {
+		let latest = { ...payload, status: 'pending', payment_method: 'a' };
+		const resident = { uuid: 'order', getLatest: () => ({ payload: latest }) } as never;
+		const outcome = { source: 'replay' as const, settledOrderStatus: 'pending' };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		mockReconcile.mockImplementationOnce(async () => {
+			expect(mockReceipt).not.toHaveBeenCalled();
+			latest = { ...latest, status };
+		});
+		const result = await completeSale(ctx, resident, outcome, { host: 'background' });
+		expect(mockReconcile).toHaveBeenCalledTimes(1);
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, resident, true, ctx.stockAdjustment);
+		if (status === 'pending') {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+			expect(mockActionLog).toHaveBeenCalledTimes(1);
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+	}
+);

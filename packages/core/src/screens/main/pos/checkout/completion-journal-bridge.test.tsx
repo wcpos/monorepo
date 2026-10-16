@@ -752,6 +752,7 @@ it.each([
 			completing: true,
 			source: 'gateway',
 			settledOrderStatus,
+			settledOrderGateway: 'a',
 		});
 		mockFind.mockResolvedValue({
 			uuid: 'order',
@@ -759,6 +760,7 @@ it.each([
 				payload: {
 					id: 42,
 					status: 'pending',
+					payment_method: 'a',
 					meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
 					line_items: [],
 				},
@@ -770,7 +772,7 @@ it.each([
 			expect(owner.completeSale).toHaveBeenCalledWith(
 				mockContext,
 				expect.objectContaining({ uuid: 'order' }),
-				{ source: 'replay', settledOrderStatus: 'pending' },
+				{ source: 'replay', settledOrderStatus: 'pending', settledOrderGateway: 'a' },
 				{ host: 'background' }
 			);
 			// Judged settled before any catch-up: the finish refreshes once, from the store.
