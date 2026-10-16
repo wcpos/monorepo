@@ -103,10 +103,10 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${/^\.(?:incremental|modify|update|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
