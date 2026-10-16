@@ -129,7 +129,10 @@ describe('submitGatewayPayment', () => {
 		expect(outcome).toMatchObject({ kind: 'recorded', row: { id: 'attempt-1' } });
 		expect(mirror).toHaveBeenCalledWith({
 			status: 'completed',
-			meta_data: [{ key: LEDGER_META_KEY, value: { schema: 1, payments: [row()] } }],
+			meta_data: [
+				{ key: LEDGER_META_KEY, value: { schema: 1, payments: [row()] } },
+				{ key: '_wcpos_payment_method', value: 'custom_gateway' },
+			],
 		});
 	});
 	it('settled: no row, the stale stamp is cleared and the summary status is mirrored', async () => {

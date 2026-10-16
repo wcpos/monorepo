@@ -21,6 +21,8 @@ export {
 	mintDevicePayment,
 	LEDGER_META_KEY,
 	LEDGER_SCHEMA,
+	PAYMENT_METHOD_INDEX_META_KEY,
+	LIVE_PAYMENT_STATUSES,
 } from './ledger';
 export type {
 	MetaDataEntry,

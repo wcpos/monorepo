@@ -8,6 +8,13 @@ import type { PaymentMethodDescriptor, PaymentRow, PaymentTransport } from './ty
 
 export const LEDGER_META_KEY = '_wcpos_payments';
 export const LEDGER_SCHEMA = 1;
+// Keep aligned with POS_META_KEYS.paymentMethod in sync-core/src/pos-carrier/carrier.ts.
+export const PAYMENT_METHOD_INDEX_META_KEY = '_wcpos_payment_method';
+export const LIVE_PAYMENT_STATUSES: readonly PaymentRow['status'][] = [
+	'pending',
+	'authorized',
+	'captured',
+];
 
 /** One `meta_data` entry as the order document carries it (`key` is optional there). */
 export type MetaDataEntry = {
@@ -47,11 +54,20 @@ export function withLedger(
 	metaData: readonly MetaDataEntry[] | null | undefined,
 	rows: readonly PaymentRow[]
 ): MetaDataEntry[] {
-	const result = [...(metaData ?? [])];
+	const result = (metaData ?? []).filter(({ key }) => key !== PAYMENT_METHOD_INDEX_META_KEY);
 	const index = result.findIndex(({ key }) => key === LEDGER_META_KEY);
 	const value = { schema: LEDGER_SCHEMA, payments: [...rows] };
 	if (index === -1) result.push({ key: LEDGER_META_KEY, value });
 	else result[index] = { ...result[index], key: LEDGER_META_KEY, value };
+	// The server owns this derivation; mirror it to keep the local read model and
+	// orders filter coherent until the server echo arrives.
+	const indexed = new Set<string>();
+	for (const row of rows) {
+		if (LIVE_PAYMENT_STATUSES.includes(row.status) && !indexed.has(row.method_id)) {
+			indexed.add(row.method_id);
+			result.push({ key: PAYMENT_METHOD_INDEX_META_KEY, value: row.method_id });
+		}
+	}
 	return result;
 }
 
