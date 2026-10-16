@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { CardReadersSettings, SettingsPage } from '@wcpos/core/screens/main/settings';
+import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+
+const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.CardReadersSettingsPage })));
 
 export default function CardReadersSettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage title={t('settings.card_readers')} testID="screen-settings-card-readers">
-			<CardReadersSettings />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

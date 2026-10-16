@@ -1,1 +1,13 @@
-export { ProductsScreen as default } from '@wcpos/core/screens/main/products';
+import * as React from 'react';
+
+import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+
+const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.ProductsScreen })));
+
+export default function ProductsRoute() {
+	return (
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
+	);
+}
