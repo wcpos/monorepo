@@ -504,6 +504,160 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	// #2502 H8: an identical re-pull must not rewrite rows (new `_rev`, change events).
+	describe('identical re-pulls keep _rev; real changes still land', () => {
+		/** `_rev` per Woo id, read from the real RxDB collection. */
+		async function revsById(engine: RxdbSyncEngine, name: string): Promise<Map<number, string>> {
+			const docs = await engine.active()!.database.collections[name]!.find().exec();
+			return new Map(
+				docs.map((doc) => {
+					const json = doc.toJSON(true) as { _rev: string; payload: { id: number } };
+					return [json.payload.id, json._rev];
+				})
+			);
+		}
+
+		function signal(server: ReturnType<typeof scriptedServer>, collection: string, id: number) {
+			server.state.head += 1;
+			server.state.rows.push({
+				sequence: server.state.head,
+				id,
+				deleted: 0,
+				collection,
+				modified_gmt: `2026-07-10T00:00:${String(server.state.head).padStart(2, '0')}`,
+			});
+		}
+
+		it('targeted pull (no persist): an identical product re-pull keeps its _rev', async () => {
+			const server = scriptedServer();
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				fetch: server.fetch,
+				identity: freshIdentity(),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			const first = await revsById(engine, 'products');
+			expect(first.size).toBe(1);
+
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			expect(server.state.productPulls).toBe(2);
+			expect(await revsById(engine, 'products')).toEqual(first);
+			await engine.dispose();
+		});
+
+		it('targeted pull (no persist): an identical re-pull still records the existence-manifest row', async () => {
+			const server = scriptedServer();
+			// The server's digest is what materialization turns into a manifest row (keyed String(wooId)).
+			server.state.products.set(9, { ...server.state.products.get(9)!, _rxdb_digest: '42' });
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				fetch: server.fetch,
+				identity: freshIdentity(),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			const first = await revsById(engine, 'products');
+			expect(first.size).toBe(1);
+			const manifest = engine.active()!.database.collections.existenceManifest!;
+			const row = await manifest.findOne('9').exec();
+			expect(row?.toJSON()).toMatchObject({ wooId: 9, objectType: 'product', digest: '42' });
+			await row!.remove();
+			expect(await manifest.findOne('9').exec()).toBeNull();
+
+			signal(server, 'products', 9);
+			await engine.sync('change-signal');
+			expect(server.state.productPulls).toBe(2);
+			expect(await revsById(engine, 'products')).toEqual(first);
+			expect((await manifest.findOne('9').exec())?.toJSON()).toMatchObject({
+				wooId: 9,
+				objectType: 'product',
+				digest: '42',
+			});
+			await engine.dispose();
+		});
+
+		it('refreshUpsert (tax rates): identical refresh keeps _rev, one changed rate is written', async () => {
+			const server = scriptedServer();
+			const rates = [1, 2, 3].map((id) => ({ id, rate: '10.0000', name: `Rate ${id}` }));
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				identity: freshIdentity(),
+				fetch: async (url) =>
+					new URL(url).pathname.endsWith('/taxes') ? Response.json(rates) : server.fetch(url),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+			signal(server, 'tax_rates', 1);
+			await engine.sync('change-signal');
+			const first = await revsById(engine, 'taxRates');
+			expect(first.size).toBe(3);
+
+			signal(server, 'tax_rates', 1);
+			await engine.sync('change-signal');
+			expect(await revsById(engine, 'taxRates')).toEqual(first);
+
+			rates[1] = { ...rates[1]!, rate: '12.5000' };
+			signal(server, 'tax_rates', 2);
+			await engine.sync('change-signal');
+			const after = await revsById(engine, 'taxRates');
+			expect(after.get(1)).toBe(first.get(1));
+			expect(after.get(3)).toBe(first.get(3));
+			expect(after.get(2)).not.toBe(first.get(2));
+			const changed = (await engine.active()!.database.collections.taxRates!.find().exec())
+				.map((doc) => doc.toJSON() as { payload: { id: number; rate: string } })
+				.find((json) => json.payload.id === 2);
+			expect(changed?.payload.rate).toBe('12.5000');
+			await engine.dispose();
+		});
+
+		it('refreshPrunable (categories): identical refresh keeps _rev; a change lands; the prune still runs', async () => {
+			const server = scriptedServer();
+			const category = (id: number, name = `Category ${id}`) => ({
+				id,
+				name,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: variationUuid(100 + id) }],
+			});
+			let categories = [1, 2, 3].map((id) => category(id));
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				identity: freshIdentity(),
+				fetch: async (url) =>
+					new URL(url).pathname.endsWith('/products/categories')
+						? Response.json(categories)
+						: server.fetch(url),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+			await engine.require({ id: 'category-picker', collection: 'categories', kind: 'refresh' })
+				.ready;
+			const first = await revsById(engine, 'categories');
+			expect(first.size).toBe(3);
+
+			signal(server, 'categories', 1);
+			await engine.sync('change-signal');
+			expect(await revsById(engine, 'categories')).toEqual(first);
+
+			categories = [category(1), category(2, 'Renamed')];
+			signal(server, 'categories', 2);
+			await engine.sync('change-signal');
+			const after = await revsById(engine, 'categories');
+			expect([...after.keys()].sort()).toEqual([1, 2]);
+			expect(after.get(1)).toBe(first.get(1));
+			expect(after.get(2)).not.toBe(first.get(2));
+			const renamed = (await engine.active()!.database.collections.categories!.find().exec())
+				.map((doc) => doc.toJSON() as { payload: { id: number; name: string } })
+				.find((json) => json.payload.id === 2);
+			expect(renamed?.payload.name).toBe('Renamed');
+			await engine.dispose();
+		});
+	});
+
 	it('skips a journal row for customer 0 (the Guest sentinel) and still applies the real ids', async () => {
 		const server = scriptedServer();
 		const customerIncludes: string[] = [];

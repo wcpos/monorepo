@@ -168,6 +168,52 @@ describe('product-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	// #2502 H8: a re-walked page that did not change must not rewrite rows (new `_rev`, change
+	// events), yet every row still counts as applied for the existence manifest.
+	it('re-walking an unchanged page keeps each _rev, writes the one real change, re-records the manifest', async () => {
+		let walk = 0;
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (new URL(url).searchParams.get('page') === '2') {
+					// The page-rewind path: the next tick re-walks page 1.
+					return new Response(JSON.stringify({ code: 'rest_post_invalid_page_number' }), {
+						status: 400,
+						headers: { 'content-type': 'application/json' },
+					});
+				}
+				walk += 1;
+				const page = products(1, 10);
+				if (walk > 1) page[2] = { ...page[2], price: '99.00' };
+				return json(page);
+			},
+		});
+		const scope = await engine.whenActive();
+		const { products: rows, existenceManifest } = scope.database.collections;
+		const revs = async () =>
+			new Map(
+				(await rows.find().exec()).map((doc) => [doc.primary, doc.toJSON(true)._rev as string])
+			);
+
+		await engine.sync('product-trickle');
+		const first = await revs();
+		expect(first.size).toBe(10);
+		await engine.sync('product-trickle');
+		await existenceManifest.find().remove();
+		expect(await existenceManifest.count().exec()).toBe(0);
+		await engine.sync('product-trickle');
+
+		expect(walk).toBe(2);
+		const second = await revs();
+		for (let id = 1; id <= 10; id += 1) {
+			if (id === 3) continue;
+			expect(second.get(productUuid(id))).toBe(first.get(productUuid(id)));
+		}
+		expect(second.get(productUuid(3))).not.toBe(first.get(productUuid(3)));
+		expect((await rows.findOne(productUuid(3)).exec())?.toJSON().price).toBe(99);
+		expect(await existenceManifest.count().exec()).toBe(10);
+		await engine.dispose();
+	});
+
 	// Paul's ruling, 2026-08-19: the catalogue comes down in the order the merchant/cashier
 	// chose, not by id — and re-pointing the grid re-points the backfill.
 	it('trickles in the sort the grid last declared, and restarts when that sort changes', async () => {
