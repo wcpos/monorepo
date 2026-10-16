@@ -55,8 +55,13 @@ function sourceFiles(directory: string): string[] {
 
 // Preserve quoted strings while stripping comments, then mask strings for the token check.
 const trivia = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
+// A template literal is string content EXCEPT its `${…}` bodies, which are executable code.
+const templateBodies = (literal: string) =>
+	' ' + [...literal.matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1]).join(' ; ') + ' ';
 function violations(source: string): string[] {
-	const commentsRemoved = source.replace(trivia, (match) => (match.startsWith('/') ? ' ' : match));
+	const commentsRemoved = source.replace(trivia, (match) =>
+		match.startsWith('/') ? ' ' : match.startsWith('`') ? templateBodies(match) : match
+	);
 	const found: string[] = [];
 	const imports =
 		/\b(?:import|export)\s+(?:type\s+)?([^;]*?)\s+from\s*['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*['"]([^'"]+)['"]/g;
@@ -95,8 +100,13 @@ function violations(source: string): string[] {
 		}
 		// `import * as query from '@wcpos/query'` binds the whole module; member access, optional
 		// chaining, bracket access and destructuring would all need scanning, so the form is rejected.
-		if (specifier === '@wcpos/query' && /^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause))
-			found.push(`query namespace import or wildcard re-export (use named imports): ${match[0]}`);
+		if (
+			/^@wcpos\/(?:query|sync-engine)$/.test(specifier) &&
+			/^\s*\*(?:\s+as\s+\w+)?\s*$/.test(clause)
+		)
+			found.push(
+				`namespace import or wildcard re-export of a seam package (use named imports): ${match[0]}`
+			);
 	}
 	// A dynamic `import('@wcpos/query')` is allowed only in the type-access form
 	// `import('@wcpos/query').Name` (binds nothing; the name is checked). Any other form —
@@ -107,7 +117,15 @@ function violations(source: string): string[] {
 		if (!access[1]) found.push(`dynamic query import (use static named imports): ${access[0]}`);
 		else if (forbiddenQueryNames.has(access[2])) found.push(`query escape hatch: ${access[0]}`);
 	}
-	const code = commentsRemoved.replace(trivia, '');
+	// Bracket-notation mutator calls name the method in a string, so scan before strings are masked.
+	for (const match of commentsRemoved.matchAll(
+		/\[\s*['"](?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)['"]\s*\]\s*\(/g
+	)) {
+		found.push(`record mutator (writes go through commands): ${match[0]}`);
+	}
+	const code = commentsRemoved.replace(trivia, (match) =>
+		match.startsWith('`') ? templateBodies(match) : ''
+	);
 	for (const match of code.matchAll(
 		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
