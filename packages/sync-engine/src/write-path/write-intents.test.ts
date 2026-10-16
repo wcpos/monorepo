@@ -193,6 +193,186 @@ describe('enqueueWriteIntent', () => {
 		expect(mutationCollection.store.size).toBe(rejected && !annihilated ? 1 : 0);
 	});
 
+	it('refuses a late writer admission after the void final guard', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		let releaseAppend!: () => void;
+		let appendStarted!: () => void;
+		const heldAppend = new Promise<void>((resolve) => {
+			releaseAppend = resolve;
+		});
+		const started = new Promise<void>((resolve) => {
+			appendStarted = resolve;
+		});
+		const insert = mutationCollection.bulkInsert.bind(mutationCollection);
+		mutationCollection.bulkInsert = async (rows) => {
+			if (rows.some((row) => row.admittedBy === 'late-writer')) {
+				appendStarted();
+				await heldAppend;
+			}
+			return insert(rows);
+		};
+		const append = mutationCollection.bulkUpsert.bind(mutationCollection);
+		mutationCollection.bulkUpsert = async (rows) => {
+			if (rows.some((row) => row.mutationId === 'late-writer')) {
+				appendStarted();
+				await heldAppend;
+			}
+			return append(rows);
+		};
+		let removed = false;
+		let writerOutcome: Promise<unknown>;
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (
+				change: (row: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				data = change(data);
+			},
+			remove: async () => {
+				// The void has fenced and passed its last guard. Resume the OTHER
+				// queue instance at its admission CAS (the append on the old implementation).
+				releaseAppend();
+				await writerOutcome;
+				removed = true;
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+			recordMutations: mutationCollection,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const now = () => '2026-09-18T00:00:01.000Z';
+		writerOutcome = enqueueWriteIntent({
+			db: otherDb,
+			now,
+			mintUuid: () => 'late-writer',
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				payload: { id: 0 },
+			},
+		}).then(
+			(receipt) => ({ receipt }),
+			(error: unknown) => ({ error })
+		);
+		await started;
+		await enqueueWriteIntent({
+			db,
+			now,
+			mintUuid: () => 'void',
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+		});
+		expect(await writerOutcome).toMatchObject({
+			error: { status: 428, reason: 'void-in-progress' },
+		});
+		expect(await queueFor(db).all()).toEqual([]);
+		// The create producer reinserts its born-local resident after the void.
+		removed = false;
+		await enqueueWriteIntent({
+			db: otherDb,
+			now,
+			mintUuid: () => 'after-void',
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				payload: { id: 0 },
+			},
+		});
+		expect(await queueFor(db).pending()).toMatchObject([{ mutationId: 'after-void' }]);
+	});
+
+	it('an admitted writer blocks a void and a second writer then succeeds in order', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		let release!: () => void;
+		let started!: () => void;
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const writing = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const append = mutationCollection.bulkUpsert.bind(mutationCollection);
+		mutationCollection.bulkUpsert = async (rows) => {
+			if (rows.some((row) => row.mutationId === 'first')) {
+				started();
+				await held;
+			}
+			return append(rows);
+		};
+		let removed = false;
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (
+				change: (row: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				data = change(data);
+			},
+			remove: async () => {
+				removed = true;
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+			recordMutations: mutationCollection,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const now = () => '2026-09-18T00:00:01.000Z';
+		const write = (database: RxDatabase, id: string) =>
+			enqueueWriteIntent({
+				db: database,
+				now,
+				mintUuid: () => id,
+				canCoalesce: false,
+				intent: {
+					collection: 'orders',
+					operation: 'create',
+					recordId: 'order-1',
+					payload: { id: 0 },
+				},
+			});
+		const first = write(db, 'first');
+		await writing;
+		try {
+			await expect(
+				enqueueWriteIntent({
+					db: otherDb,
+					now,
+					mintUuid: () => 'void',
+					intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+				})
+			).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
+			expect(removed).toBe(false);
+			const otherQueue = queueFor(otherDb);
+			const admit = otherQueue.admitWriter.bind(otherQueue);
+			let contended = false;
+			// Release the paused first append only AFTER the second writer's real
+			// admission CAS has observed it. The retry must then enqueue second.
+			vi.spyOn(otherQueue, 'admitWriter').mockImplementationOnce(async (...args) => {
+				const accepted = await admit(...args);
+				contended = !accepted;
+				release();
+				return accepted;
+			});
+			const second = write(otherDb, 'second');
+			await expect(first).resolves.toMatchObject({ mutationId: 'first' });
+			await expect(second).resolves.toMatchObject({ mutationId: 'second' });
+			expect(contended).toBe(true);
+		} finally {
+			release();
+		}
+		expect((await queueFor(db).pending()).map((row) => row.mutationId)).toEqual([
+			'first',
+			'second',
+		]);
+		expect(mutationCollection.store.size).toBe(2);
+	});
+
 	it('a born-local void takes a same-record edit that lands after the queue read with it', async () => {
 		// An update enqueued between the decision's `pending()` read and the resident's
 		// removal must not be left targeting a missing record: it is consumed through
@@ -256,6 +436,7 @@ describe('enqueueWriteIntent', () => {
 		'late dead-letter claim',
 		'coalesced replacement',
 		'chain replacement',
+		'failed resident removal',
 	])('a refused void preserves resident and queued work: %s', async (scenario) => {
 		const mutationCollection = createFakeMutationCollection();
 		const row: QueuedMutation = {
@@ -307,6 +488,7 @@ describe('enqueueWriteIntent', () => {
 		const resident = {
 			toJSON: () => ({ payload: { id: 0 }, sync: {}, local }),
 			remove: async () => {
+				if (scenario === 'failed resident removal') throw new Error('resident removal failed');
 				removed = true;
 			},
 		};
@@ -362,11 +544,11 @@ describe('enqueueWriteIntent', () => {
 			});
 		}
 		if (scenario === 'settlement refusal') {
-			// The dead letter changes status after the guard, before its conditional removal.
-			const remove = queue.removeIfStatus.bind(queue);
-			vi.spyOn(queue, 'removeIfStatus').mockImplementationOnce(async (id, status) => {
-				await queue.replace({ ...row, status: 'pending' });
-				return remove(id, status);
+			// The dead letter changes status after the guard, before its conditional mark.
+			const mark = queue.markForAnnihilation.bind(queue);
+			vi.spyOn(queue, 'markForAnnihilation').mockImplementation(async (id, token, now, status) => {
+				if (id === 'dead') await queue.replace({ ...row, status: 'pending' });
+				return mark(id, token, now, status);
 			});
 		}
 		const result = enqueueWriteIntent({
@@ -375,7 +557,10 @@ describe('enqueueWriteIntent', () => {
 			mintUuid: () => 'delete-1',
 			now: () => '2026-09-18T00:00:01.000Z',
 		});
-		if (claimedSuccessor) {
+		if (scenario === 'failed resident removal') {
+			await expect(result).rejects.toThrow('resident removal failed');
+			expect(mutationCollection.store.get('dead')?.mutation).toEqual(row);
+		} else if (claimedSuccessor) {
 			await expect(result).rejects.toThrow('mutation queue kept changing');
 		} else {
 			await expect(result).rejects.toMatchObject({

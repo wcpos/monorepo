@@ -45,11 +45,21 @@ import { productSchema } from './product-schema';
 export const DRAINABLE_SCHEMAS_GENERATION = 5;
 
 // Queue schema v5 predates void marks; the drainable database keeps its shipped hash.
-const { supersededBy: _voidMark, ...drainableQueueProperties } =
-	recordMutationQueueSchema.properties;
+const {
+	supersededBy: _voidMark,
+	markedAt: _markedAt,
+	expiresAt: _expiresAt,
+	admittedBy: _admittedBy,
+	admittedAt: _admittedAt,
+	mutationId: _mutationId,
+	...drainableQueueProperties
+} = recordMutationQueueSchema.properties;
 
-const { 6: _voidMarkMigration, ...drainableQueueMigrations } =
-	recordMutationQueueMigrationStrategies;
+const {
+	6: _voidMarkMigration,
+	7: _voidFenceMigration,
+	...drainableQueueMigrations
+} = recordMutationQueueMigrationStrategies;
 
 const { tagIds: _promotedAtV6, ...drainableProductProperties } = productSchema.properties;
 
@@ -72,7 +82,11 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 		[MUTATION_QUEUE_RXDB_COLLECTION]: {
 			...creators[MUTATION_QUEUE_RXDB_COLLECTION]!,
 			localDocuments: true,
-			schema: { ...recordMutationQueueSchema, version: 5, properties: drainableQueueProperties },
+			schema: {
+				...recordMutationQueueSchema,
+				version: 5,
+				properties: { ...drainableQueueProperties, mutationId: { type: 'string', maxLength: 64 } },
+			},
 			migrationStrategies: drainableQueueMigrations,
 		},
 	};

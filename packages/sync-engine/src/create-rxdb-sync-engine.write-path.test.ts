@@ -2014,12 +2014,13 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it('clears an abandoned annihilation mark on scope open and delivers the stored write', async () => {
+	it.each([false, true])('scope open respects void expiry: %s', async (expired) => {
 		const server = createFakeWriteServer({ firstId: 900_000_200 });
 		const options = {
 			fetch: (url: string, init?: RequestInit) => server.fetch(url, init as never),
 			identity: freshIdentity(),
 			storage: memoryEngineStorage(),
+			now: () => Date.parse('2026-09-18T00:00:00.000Z'),
 		};
 		const before = engineWith(options);
 		try {
@@ -2034,17 +2035,34 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(
 				await queueFor(before.active()!.database).markForAnnihilation(
 					receipt.mutationId,
-					'abandoned-void'
+					'abandoned-void',
+					options.now()
+				)
+			).toBe(true);
+			expect(
+				await queueFor(before.active()!.database).fenceForVoid(
+					'orders',
+					UUID_A,
+					'abandoned-void',
+					options.now()
 				)
 			).toBe(true);
 		} finally {
 			await before.dispose();
 		}
-		const reopened = engineWith(options);
+		const reopened = engineWith({ ...options, now: () => options.now() + (expired ? 120_001 : 1) });
 		try {
 			await reopened.ready;
-			const rows = await queueRows(reopened);
+			expect(
+				await queueFor(reopened.active()!.database).hasVoidFence('orders', UUID_A, options.now())
+			).toBe(!expired);
+			const rows = await queueFor(reopened.active()!.database).all();
 			expect(rows).toHaveLength(1);
+			if (!expired) {
+				expect(rows[0]).toHaveProperty('supersededBy', 'abandoned-void');
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
 			expect(rows[0]).not.toHaveProperty('supersededBy');
 			expect(await reopened.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			expect(await queueRows(reopened)).toEqual([]);
@@ -4813,7 +4831,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		}
 	});
 
-	it('#526: failed resident removal restores ahead of a concurrent same-record newcomer', async () => {
+	it('#526: failed resident removal preserves work and refuses a concurrent newcomer', async () => {
 		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
 		try {
 			await engine.ready;
@@ -4837,23 +4855,34 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				queuedAt: '2026-07-11T00:00:00.000Z',
 			});
 			const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
-			vi.spyOn(resident!, 'remove').mockImplementationOnce(async () => {
-				await engine.write({
-					collection: 'orders',
-					operation: 'update',
-					recordId: UUID_A,
-					payload: { status: 'newcomer' },
-				});
+			const remove = vi.spyOn(resident!, 'remove', 'get').mockReturnValueOnce(async () => {
+				await expect(
+					engine.write({
+						collection: 'orders',
+						operation: 'update',
+						recordId: UUID_A,
+						payload: { status: 'newcomer' },
+					})
+				).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
 				throw new Error('scripted resident remove failure');
 			});
 			await expect(
 				engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A })
 			).rejects.toThrow('scripted resident remove failure');
 			const rows = (await queueRows(engine)).sort((a, b) => Number(a.seq) - Number(b.seq));
-			expect(rows.map((row) => row.seq)).toEqual([1, 2, 3]);
-			expect(rows.map((row) => row.operation)).toEqual(['create', 'update', 'update']);
+			expect(rows.map((row) => row.seq)).toEqual([1, 2]);
+			expect(rows.map((row) => row.operation)).toEqual(['create', 'update']);
 			expect((rows[1]?.payload as { status?: string }).status).toBe('chain');
-			expect((rows[2]?.payload as { status?: string }).status).toBe('newcomer');
+			remove.mockRestore();
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+			await insertBornLocalOrder(engine, UUID_A);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { id: 0 },
+			});
+			expect(await queue.pending()).toMatchObject([{ operation: 'create' }]);
 		} finally {
 			await engine.dispose();
 		}

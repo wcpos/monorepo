@@ -233,16 +233,26 @@ export async function enqueueWriteIntent(input: {
 	const canCoalesce = input.canCoalesce ?? true;
 	const collection = collectionOf(input.db, requested.collection);
 	const queue = queueFor(input.db);
+	const { collection: name, recordId } = requested;
+	const nowMs = () => Date.parse(input.now());
+	// The drainable generation keeps its frozen v5 queue: no admission fields
+	// and no fence probes there. Current queues migrate to the admission schema.
+	const legacyQueue = collectionOf(input.db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version === 5;
 
 	const isRecordRow = (item: QueuedMutation) =>
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
 	const unmark = async (marked: QueuedMutation[], token: string) => {
 		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
+		await queue.releaseVoidFence(name, recordId, token);
 	};
 	// A void owns no resolution claim, so every live holder is foreign to it.
 	// Check both annihilation paths; retrying a recovery create would otherwise
 	// reclassify it as an ordinary never-pushed chain and destroy its resident.
-	const guardAnnihilation = async (successors: readonly QueuedMutation[], token?: string) => {
+	const guardAnnihilation = async (
+		successors: readonly QueuedMutation[],
+		token?: string,
+		marked?: QueuedMutation[]
+	) => {
 		const fresh = (await queue.all()).filter(isRecordRow);
 		const ownIds = new Set(
 			successors.filter((row) => !row.requeuedFrom).map((row) => row.mutationId)
@@ -257,19 +267,29 @@ export async function enqueueWriteIntent(input: {
 			fresh.some((row) =>
 				row.status === 'rejected'
 					? row.resolutionClaimBy !== undefined &&
-						Date.parse(row.resolutionClaimUntil ?? '') > Date.parse(input.now())
+						Date.parse(row.resolutionClaimUntil ?? '') > nowMs()
 					: !ownIds.has(row.mutationId) || (token !== undefined && row.supersededBy !== token)
 			)
 		)
 			throw refuse();
 		if (token !== undefined) {
 			for (const row of deadLetters) {
-				if (!(await queue.removeIfStatus(row.mutationId, 'rejected', Date.parse(input.now())))) {
+				if (!(await queue.markForAnnihilation(row.mutationId, token, nowMs(), 'rejected'))) {
 					throw refuse();
 				}
+				marked!.push(row);
 			}
 		}
 		return deadLetters.length;
+	};
+
+	const voidInProgress = () =>
+		Object.assign(new Error('write: void-in-progress'), {
+			status: 428 as const,
+			reason: 'void-in-progress' as const,
+		});
+	const fence = async (token: string) => {
+		if (!(await queue.fenceForVoid(name, recordId, token, nowMs()))) throw voidInProgress();
 	};
 
 	// The bounded CAS retry loop: each iteration re-reads the queue, decides
@@ -280,6 +300,7 @@ export async function enqueueWriteIntent(input: {
 	// fresh queue, never forced through. Contention is microtask-scale, so the
 	// bound is generous; hitting it means something is livelocking the queue.
 	for (let attempt = 0; attempt < 10; attempt += 1) {
+		if (!legacyQueue && (await queue.hasVoidFence(name, recordId, nowMs()))) throw voidInProgress();
 		const rows = await queue.pending();
 		const recordRows = rows.filter(isRecordRow);
 		// Read the resident before placement so delete deferral sees the same
@@ -382,11 +403,10 @@ export async function enqueueWriteIntent(input: {
 			await guardAnnihilation(placement.chain);
 			const token = input.mintUuid();
 			const marked: QueuedMutation[] = [];
-			let settledDeadLetters = 0;
 			try {
 				let refused = false;
 				for (const row of [...placement.chain].reverse()) {
-					if (await queue.markForAnnihilation(row.mutationId, token)) marked.push(row);
+					if (await queue.markForAnnihilation(row.mutationId, token, nowMs())) marked.push(row);
 					else {
 						refused = true;
 						break;
@@ -396,7 +416,8 @@ export async function enqueueWriteIntent(input: {
 					await unmark(marked, token);
 					continue;
 				}
-				settledDeadLetters = await guardAnnihilation(placement.chain, token);
+				await fence(token);
+				await guardAnnihilation(placement.chain, token, marked);
 				const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
 				if (resident) await resident.remove();
 			} catch (error) {
@@ -405,11 +426,12 @@ export async function enqueueWriteIntent(input: {
 			}
 			// After resident removal, keep any failed cleanup marked, never deliverable.
 			for (const row of marked) await queue.removeMarked(row.mutationId, token);
+			await queue.releaseVoidFence(name, recordId, token);
 			input.observe?.({
 				type: 'queue.write.annihilate',
 				level: 'info',
 				collection: intent.collection,
-				fields: { recordId: intent.recordId, removed: marked.length + settledDeadLetters },
+				fields: { recordId: intent.recordId, removed: marked.length },
 			});
 			return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
 		}
@@ -489,7 +511,7 @@ export async function enqueueWriteIntent(input: {
 						try {
 							let refused = false;
 							for (const row of [...successors].reverse()) {
-								if (await queue.markForAnnihilation(row.mutationId, token)) {
+								if (await queue.markForAnnihilation(row.mutationId, token, nowMs())) {
 									marked.push(row);
 								} else {
 									refused = true;
@@ -500,20 +522,22 @@ export async function enqueueWriteIntent(input: {
 								await unmark(marked, token);
 								continue;
 							}
-							settledDeadLetters = await guardAnnihilation(successors, token);
+							await fence(token);
+							settledDeadLetters = await guardAnnihilation(successors, token, marked);
 							await doc.remove();
 						} catch (error) {
 							await unmark(marked, token);
 							throw error;
 						}
 						for (const row of marked) await queue.removeMarked(row.mutationId, token);
+						await queue.releaseVoidFence(name, recordId, token);
 						input.observe?.({
 							type: 'queue.write.annihilate',
 							level: 'info',
 							collection: intent.collection,
 							fields: {
 								recordId: intent.recordId,
-								removed: marked.length + settledDeadLetters,
+								removed: marked.length,
 								deadLetters: settledDeadLetters,
 							},
 						});
@@ -556,116 +580,128 @@ export async function enqueueWriteIntent(input: {
 			};
 		}
 
-		if (prior) {
-			const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
-			// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
-			// resident stored payload (local truth) ⊕ the prior entry's payload
-			// (covers an enqueue that never wrote locally; a delete tombstone is
-			// not a snapshot, so it never layers) ⊕ the incoming intent's payload.
-			// A delete replacement stays the bare `{id}` tombstone. The order
-			// display-field strip re-applies AFTER the merge: the resident layer
-			// may predate the strip and still carry object display fields.
-			const mergedPayload = coalescedPayload({
-				operation,
-				residentPayload: stored?.payload,
-				prior,
-				incomingPayload: mutation.payload,
-			});
-			const payload =
-				operation === 'delete'
-					? mutation.payload
-					: sanitizeOutboundPayload(mutation.collectionName, mergedPayload);
-			const replacement = {
-				...mutation,
-				operation,
-				payload,
-				baseRevision: prior.baseRevision,
-				// A cashier action is stamped with its own time: the drain releases a record's
-				// backoff once for an explicit row queued after the chain's last attempt.
-				queuedAt:
-					intent.operation !== 'delete' && intent.explicit ? mutation.queuedAt : prior.queuedAt,
-				seq: prior.seq,
-				coalesced: (prior.coalesced ?? 0) + 1,
-				...(prior.explicit || (intent.operation !== 'delete' && intent.explicit)
-					? { explicit: true }
-					: {}),
-				status: 'pending' as const,
-			};
-			// Conditional swap: refuses when the prior row is no longer pending
-			// (drain-claimed or consumed by a concurrent write) — re-decide then.
-			if (!(await queue.coalesceInto(prior.mutationId, replacement))) continue;
-			input.observe?.({
-				type: 'queue.write.coalesce',
-				level: 'debug',
-				collection: mutation.collectionName,
-				fields: { recordId: mutation.recordId, removed: 1, added: 1 },
-			});
-		} else if (placement.kind === 'append-if-unchanged') {
-			// CONDITIONAL append for a recovery (#832), the same idiom
-			// requeueBornTwiceSnapshot uses: prove the record's row-set is unchanged
-			// INSIDE the queue's serialized turn. Without it, a delete enqueued
-			// between the read above and this append would sit AHEAD of the rebuilt
-			// intent — and a rebuilt CREATE ordered after a delete recreates a record
-			// the cashier just deleted. On mismatch, re-read and re-decide; the
-			// delete guard at the top of the loop then refuses.
-			const observedIds = placement.observedIds.join('|');
-			const queued = await queue.enqueueWhen(
-				mutation,
-				(fresh) =>
-					fresh
-						.filter(
-							(item) =>
-								item.collectionName === intent.collection &&
-								item.recordId === intent.recordId &&
-								item.status !== 'rejected'
-						)
-						.map((item) => item.mutationId)
-						.sort()
-						.join('|') === observedIds
-			);
-			if (queued === null) continue;
-		} else {
-			await queue.enqueue(mutation);
-		}
-
-		// Dirty-mark the resident record (create may target a record inserted by the
-		// caller beforehand; absent is fine for a payload-only create). Enqueue is
-		// ATOMIC-BY-COMPENSATION: if this second write fails, the queue insert is
-		// rolled back (and a coalesced-away prior restored) so `write()` rejecting
-		// means "nothing changed". A future schema may derive the dirty state FROM
-		// the durable queue and delete this second write (and the compensation)
-		// entirely.
-		if (doc) {
-			try {
-				await doc.incrementalModify((data) => {
-					const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
-					const pending = (
-						Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
-					).filter((id) => id !== prior?.mutationId);
-					return {
-						...data,
-						local: { ...local, dirty: true, pendingMutationIds: [...pending, mutation.mutationId] },
-					};
+		// Hold admission through bookkeeping/compensation as well as the append: a
+		// void cannot remove the resident while this writer still owns its changes.
+		if (!legacyQueue && !(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs())))
+			continue;
+		try {
+			if (prior) {
+				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
+				// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
+				// resident stored payload (local truth) ⊕ the prior entry's payload
+				// (covers an enqueue that never wrote locally; a delete tombstone is
+				// not a snapshot, so it never layers) ⊕ the incoming intent's payload.
+				// A delete replacement stays the bare `{id}` tombstone. The order
+				// display-field strip re-applies AFTER the merge: the resident layer
+				// may predate the strip and still carry object display fields.
+				const mergedPayload = coalescedPayload({
+					operation,
+					residentPayload: stored?.payload,
+					prior,
+					incomingPayload: mutation.payload,
 				});
-			} catch (error) {
-				// CAS-CONDITIONAL compensation (#516 item 5): unwind ONLY a row the
-				// drain has not touched. If the drain claimed the just-enqueued row in
-				// the microtask window, it is in-flight work — deleting it would cancel
-				// a push the server may be applying, and restoring `prior` would
-				// resurrect a superseded intent alongside it. In that case adapt: leave
-				// the queue as-is (the enqueue stands; only the dirty-mark is missing,
-				// and the drain's ack/reject bookkeeping self-heals it) and rethrow.
-				const unwound = await queue.removePending(mutation.mutationId);
-				if (unwound && prior) await queue.replace(prior);
-				throw error;
+				const payload =
+					operation === 'delete'
+						? mutation.payload
+						: sanitizeOutboundPayload(mutation.collectionName, mergedPayload);
+				const replacement = {
+					...mutation,
+					operation,
+					payload,
+					baseRevision: prior.baseRevision,
+					// A cashier action is stamped with its own time: the drain releases a record's
+					// backoff once for an explicit row queued after the chain's last attempt.
+					queuedAt:
+						intent.operation !== 'delete' && intent.explicit ? mutation.queuedAt : prior.queuedAt,
+					seq: prior.seq,
+					coalesced: (prior.coalesced ?? 0) + 1,
+					...(prior.explicit || (intent.operation !== 'delete' && intent.explicit)
+						? { explicit: true }
+						: {}),
+					status: 'pending' as const,
+				};
+				// Conditional swap: refuses when the prior row is no longer pending
+				// (drain-claimed or consumed by a concurrent write) — re-decide then.
+				if (!(await queue.coalesceInto(prior.mutationId, replacement))) continue;
+				input.observe?.({
+					type: 'queue.write.coalesce',
+					level: 'debug',
+					collection: mutation.collectionName,
+					fields: { recordId: mutation.recordId, removed: 1, added: 1 },
+				});
+			} else if (placement.kind === 'append-if-unchanged') {
+				// CONDITIONAL append for a recovery (#832), the same idiom
+				// requeueBornTwiceSnapshot uses: prove the record's row-set is unchanged
+				// INSIDE the queue's serialized turn. Without it, a delete enqueued
+				// between the read above and this append would sit AHEAD of the rebuilt
+				// intent — and a rebuilt CREATE ordered after a delete recreates a record
+				// the cashier just deleted. On mismatch, re-read and re-decide; the
+				// delete guard at the top of the loop then refuses.
+				const observedIds = placement.observedIds.join('|');
+				const queued = await queue.enqueueWhen(
+					mutation,
+					(fresh) =>
+						fresh
+							.filter(
+								(item) =>
+									item.collectionName === intent.collection &&
+									item.recordId === intent.recordId &&
+									item.status !== 'rejected'
+							)
+							.map((item) => item.mutationId)
+							.sort()
+							.join('|') === observedIds
+				);
+				if (queued === null) continue;
+			} else {
+				await queue.enqueue(mutation);
 			}
-		}
 
-		return {
-			mutationId: mutation.mutationId,
-			recordId: mutation.recordId,
-			...(prior ? { supersededMutationId: prior.mutationId } : {}),
-		};
+			// Dirty-mark the resident record (create may target a record inserted by the
+			// caller beforehand; absent is fine for a payload-only create). Enqueue is
+			// ATOMIC-BY-COMPENSATION: if this second write fails, the queue insert is
+			// rolled back (and a coalesced-away prior restored) so `write()` rejecting
+			// means "nothing changed". A future schema may derive the dirty state FROM
+			// the durable queue and delete this second write (and the compensation)
+			// entirely.
+			if (doc) {
+				try {
+					await doc.incrementalModify((data) => {
+						const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
+						const pending = (
+							Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
+						).filter((id) => id !== prior?.mutationId);
+						return {
+							...data,
+							local: {
+								...local,
+								dirty: true,
+								pendingMutationIds: [...pending, mutation.mutationId],
+							},
+						};
+					});
+				} catch (error) {
+					// CAS-CONDITIONAL compensation (#516 item 5): unwind ONLY a row the
+					// drain has not touched. If the drain claimed the just-enqueued row in
+					// the microtask window, it is in-flight work — deleting it would cancel
+					// a push the server may be applying, and restoring `prior` would
+					// resurrect a superseded intent alongside it. In that case adapt: leave
+					// the queue as-is (the enqueue stands; only the dirty-mark is missing,
+					// and the drain's ack/reject bookkeeping self-heals it) and rethrow.
+					const unwound = await queue.removePending(mutation.mutationId);
+					if (unwound && prior) await queue.replace(prior);
+					throw error;
+				}
+			}
+
+			return {
+				mutationId: mutation.mutationId,
+				recordId: mutation.recordId,
+				...(prior ? { supersededMutationId: prior.mutationId } : {}),
+			};
+		} finally {
+			if (!legacyQueue) await queue.releaseWriter(name, recordId, mutation.mutationId);
+		}
 	}
 	throw new Error(
 		`write(${requested.operation}): the mutation queue kept changing under "${requested.recordId}" — retry the intent`

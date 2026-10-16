@@ -1190,11 +1190,15 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(collectionCreators() as never);
-			// Void attempts are in-process: recover abandoned marks before exposing the scope.
-			const queue = queueFor(db);
-			for (const row of await queue.all()) {
-				if (row.supersededBy !== undefined) {
-					await queue.unmarkForAnnihilation(row.mutationId, row.supersededBy);
+			if (scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION) {
+				try {
+					await queueFor(db).clearExpiredAnnihilation(nowMs());
+				} catch (error) {
+					diagnostics({
+						type: 'engine.guard',
+						level: 'warn',
+						message: `Expired void cleanup failed: ${String(error)}`,
+					});
 				}
 			}
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;

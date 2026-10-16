@@ -540,7 +540,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		existenceManifestCustomers: '107bac24876b267a',
 		existenceManifestOrders: '107bac24876b267a',
 		syncCheckpoints: '13a461c616ee12b9',
-		recordMutations: '301d2ed7a3520328',
+		recordMutations: 'c9b776b876fde13a',
 		engineKv: 'a8d94dc8495e36cc',
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
@@ -607,7 +607,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	const PINNED_GENERATION_DIGESTS: Record<number, string> = {
 		5: '24cd32cfac8830f7',
 		// The versioned queue migrates in place; scope-generation schemas stay unchanged.
-		6: 'ac6648b8d1aa6364',
+		6: 'e4f6f52ebe674eed',
 	};
 
 	const digestOfDigests = (digests: Record<string, string>) =>

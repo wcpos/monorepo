@@ -38,6 +38,23 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('a live writer admission blocks a void, but a crashed writer expires after 30 seconds', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await storage.append({
+			...mut({ mutationId: 'products/rec-A' }),
+			status: 'rejected',
+			expiresAt: 0,
+			admittedBy: 'crashed-writer',
+			admittedAt: 1000,
+		});
+		expect(await q.fenceForVoid('products', 'rec-A', 'void', 30_999)).toBe(false);
+		expect(await q.fenceForVoid('products', 'rec-A', 'void', 31_001)).toBe(true);
+		expect(await q.hasVoidFence('products', 'rec-A', 31_001)).toBe(true);
+		await q.releaseVoidFence('products', 'rec-A', 'void');
+		expect(await storage.list()).toEqual([]);
+	});
+
 	it('a marked row cannot be coalesced or claimed by another queue instance', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);

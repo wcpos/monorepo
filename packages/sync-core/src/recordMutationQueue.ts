@@ -2,6 +2,12 @@ import { assertBulkSuccess } from './assertBulkSuccess';
 
 import type { RecordMutation } from './recordMutation';
 
+// Two minutes lets a live void finish while making crash-abandoned holds recoverable.
+const ANNIHILATION_TTL_MS = 120_000;
+// Admission covers only a local enqueue; 30 seconds recovers a crashed writer.
+const WRITER_ADMISSION_TTL_MS = 30_000;
+const fenceId = (collection: string, record: string) => `${collection}/${record}`;
+
 /**
  * The generic durable write queue shared by every collection (#507).
  *
@@ -49,6 +55,11 @@ import type { RecordMutation } from './recordMutation';
 export type QueuedMutation = RecordMutation & {
 	/** Void-attempt ownership: held out of drain/coalesce until unmarked or removed. */
 	readonly supersededBy?: string;
+	readonly markedAt?: number;
+	/** Internal record fence, never exposed as a deliverable mutation. */
+	readonly expiresAt?: number;
+	readonly admittedBy?: string;
+	readonly admittedAt?: number;
 	/** Queue-local override for cashier-triggered pushes; never serialized to the server. */
 	readonly explicit?: boolean;
 	/** Monotonic, per-scope queue position — minted by `enqueue`, the primary drain order key. */
@@ -406,8 +417,113 @@ export class RecordMutationQueue {
 		});
 	}
 
+	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {
+		return (await this.storage.list()).some(
+			(row) => row.mutationId === fenceId(collection, record) && (row.expiresAt ?? 0) > nowMs
+		);
+	}
+
+	async admitWriter(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		return this.holdRecord(collection, record, token, nowMs, true);
+	}
+
+	async releaseWriter(collection: string, record: string, token: string): Promise<void> {
+		await this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === fenceId(collection, record)
+			);
+			if (stored?.mutation.admittedBy === token) {
+				await this.storage.removeIfUnchanged(stored.mutation.mutationId, stored.rev);
+			}
+		});
+	}
+
+	async fenceForVoid(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		return this.holdRecord(collection, record, token, nowMs, false);
+	}
+
+	/** Writers and voids contend on ONE revision-checked row, never separate snapshots. */
+	private holdRecord(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number,
+		writer: boolean
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const id = fenceId(collection, record);
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === id
+			);
+			const row = stored?.mutation;
+			if (
+				(row?.expiresAt ?? 0) > nowMs ||
+				(row?.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			)
+				return false;
+			return this.storage.appendIfUnchanged(
+				{
+					mutationId: id,
+					collectionName: collection,
+					recordId: record,
+					operation: 'delete',
+					origin: 'existing',
+					payload: {},
+					baseRevision: null,
+					queuedAt: new Date(nowMs).toISOString(),
+					status: 'rejected',
+					// Clear an expired owner's fields on modify; omit them on insert (RxDB validation).
+					...(stored
+						? {
+								supersededBy: undefined,
+								markedAt: undefined,
+								admittedBy: undefined,
+								admittedAt: undefined,
+							}
+						: {}),
+					...(writer
+						? { admittedBy: token, admittedAt: nowMs, expiresAt: 0 }
+						: { supersededBy: token, markedAt: nowMs, expiresAt: nowMs + ANNIHILATION_TTL_MS }),
+				},
+				stored?.rev ?? null
+			);
+		});
+	}
+
+	async releaseVoidFence(collection: string, record: string, token: string): Promise<void> {
+		await this.removeMarked(fenceId(collection, record), token);
+	}
+
+	async clearExpiredAnnihilation(nowMs: number): Promise<void> {
+		for (const { mutation: row, rev } of await this.storage.listStored()) {
+			if (row.supersededBy === undefined) continue;
+			if ((row.expiresAt ?? (row.markedAt ?? 0) + ANNIHILATION_TTL_MS) > nowMs) continue;
+			if (row.expiresAt !== undefined) await this.storage.removeIfUnchanged(row.mutationId, rev);
+			else
+				await this.storage.appendIfUnchanged(
+					{ ...row, supersededBy: undefined, markedAt: undefined },
+					rev
+				);
+		}
+	}
+
 	/** Hold a never-pushed successor without removing it; the revision check arbitrates with drain/coalesce. */
-	async markForAnnihilation(mutationId: string, token: string): Promise<boolean> {
+	async markForAnnihilation(
+		mutationId: string,
+		token: string,
+		nowMs = Date.now(),
+		status: 'pending' | 'rejected' = 'pending'
+	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === mutationId
@@ -416,13 +532,19 @@ export class RecordMutationQueue {
 			if (
 				!row ||
 				row.supersededBy !== undefined ||
-				(row.status !== undefined && row.status !== 'pending') ||
-				(row.attempts ?? 0) !== 0 ||
-				row.claimedBy !== undefined ||
-				row.nextAttemptAt !== undefined
+				(row.status ?? 'pending') !== status ||
+				(status === 'rejected'
+					? row.resolutionClaimBy !== undefined &&
+						Date.parse(row.resolutionClaimUntil ?? '') > nowMs
+					: (row.attempts ?? 0) !== 0 ||
+						row.claimedBy !== undefined ||
+						row.nextAttemptAt !== undefined)
 			)
 				return false;
-			return this.storage.appendIfUnchanged({ ...row, supersededBy: token }, stored.rev);
+			return this.storage.appendIfUnchanged(
+				{ ...row, supersededBy: token, markedAt: nowMs },
+				stored.rev
+			);
 		});
 	}
 
@@ -447,7 +569,7 @@ export class RecordMutationQueue {
 			return remove
 				? this.storage.removeIfUnchanged(mutationId, stored.rev)
 				: this.storage.appendIfUnchanged(
-						{ ...stored.mutation, supersededBy: undefined },
+						{ ...stored.mutation, supersededBy: undefined, markedAt: undefined },
 						stored.rev
 					);
 		});
@@ -539,7 +661,12 @@ export class RecordMutationQueue {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === mutationId
 			);
-			if (!stored || stored.mutation.status !== status) return false;
+			if (
+				!stored ||
+				stored.mutation.status !== status ||
+				stored.mutation.supersededBy !== undefined
+			)
+				return false;
 			if (
 				unclaimedAtMs !== undefined &&
 				stored.mutation.resolutionClaimBy !== undefined &&
@@ -579,6 +706,7 @@ export class RecordMutationQueue {
 				(item) => item.mutation.mutationId === input.mutationId
 			);
 			if (!stored || stored.mutation.status !== input.expectedStatus) return 'gone';
+			if (stored.mutation.supersededBy !== undefined) return 'held';
 			const heldBy = stored.mutation.resolutionClaimBy;
 			const until = stored.mutation.resolutionClaimUntil
 				? Date.parse(stored.mutation.resolutionClaimUntil)
@@ -623,7 +751,7 @@ export class RecordMutationQueue {
 
 	/** EVERY stored entry, terminal rows included — the engine's `conflicts()` reads this. */
 	async all(): Promise<QueuedMutation[]> {
-		return this.storage.list();
+		return (await this.storage.list()).filter((row) => row.expiresAt === undefined);
 	}
 
 	/**
@@ -853,6 +981,9 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 				const next = { ...data, ...mutation };
 				// RxDB patch retains undefined keys, which schema validation rejects.
 				if (next.supersededBy === undefined) delete next.supersededBy;
+				if (next.markedAt === undefined) delete next.markedAt;
+				if (next.admittedBy === undefined) delete next.admittedBy;
+				if (next.admittedAt === undefined) delete next.admittedAt;
 				return next;
 			});
 			return true;
@@ -888,11 +1019,11 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 6,
+	version: 7,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
-		mutationId: { type: 'string', maxLength: 64 },
+		mutationId: { type: 'string', maxLength: 129 },
 		recordId: { type: 'string', maxLength: 64 },
 		collectionName: { type: 'string', maxLength: 64 },
 		operation: { type: 'string', enum: ['create', 'update', 'delete'] },
@@ -904,6 +1035,10 @@ export const recordMutationQueueSchema = {
 		seq: { type: 'number', minimum: 1, multipleOf: 1 },
 		coalesced: { type: 'number', minimum: 0, multipleOf: 1 },
 		supersededBy: { type: 'string', maxLength: 64 },
+		markedAt: { type: 'number' },
+		expiresAt: { type: 'number' },
+		admittedBy: { type: 'string', maxLength: 64 },
+		admittedAt: { type: 'number' },
 		status: {
 			type: 'string',
 			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
@@ -981,4 +1116,5 @@ export const recordMutationQueueMigrationStrategies = {
 	5: (doc: QueuedMutation): QueuedMutation => doc,
 	// Optional void mark; preserve existing queued work without a schema-hash reset.
 	6: (doc: QueuedMutation): QueuedMutation => doc,
+	7: (doc: QueuedMutation): QueuedMutation => doc,
 };
