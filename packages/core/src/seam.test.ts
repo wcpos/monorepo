@@ -9,8 +9,8 @@ import { join, relative, sep } from 'node:path';
 
 import { SEAM_ALLOWLIST_FROZEN_2026_10_16, SEAM_REPAIRED_SINCE_FREEZE } from './seam-allowlist';
 
-const FROZEN_LENGTH = 193;
-const FROZEN_DIGEST = '573230ce3998dcfeb1868611dc43533023983edde7c4231e62742329030d7e3c';
+const FROZEN_LENGTH = 195;
+const FROZEN_DIGEST = '8254c65e39b2be1a51938324829711874b0508d5281ef2b9581e5015772faaae';
 const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
 const effectiveAllowlist = new Set(
 	SEAM_ALLOWLIST_FROZEN_2026_10_16.filter((file) => !repaired.has(file))
@@ -103,10 +103,10 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|upsert|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|modify|update|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${/^\.(?:incremental|modify|update|upsert|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
