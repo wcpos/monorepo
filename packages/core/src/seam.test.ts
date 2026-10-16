@@ -1,7 +1,7 @@
 /**
  * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
- * commands. Storage imports, storage tokens and RxDB record-mutator calls are reported; the frozen
- * allowlist is immutable and the effective list (frozen minus repaired) may only shrink.
+ * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
+ * violation must be frozen; vanished fingerprints are progress and need no bookkeeping.
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,15 +9,7 @@ import { join, relative, sep } from 'node:path';
 
 import * as ts from 'typescript';
 
-import {
-	SEAM_ALLOWLIST_FROZEN_2026_10_16,
-	SEAM_CEILINGS,
-	SEAM_REPAIRED_FLOOR,
-	SEAM_REPAIRED_PREFIX_DIGEST,
-	SEAM_REPAIRED_SINCE_FREEZE,
-} from './seam-allowlist';
-
-const frozenCount = new Map(SEAM_ALLOWLIST_FROZEN_2026_10_16);
+import { SEAM_FROZEN_VIOLATIONS_2026_10_16 } from './seam-allowlist';
 
 /** Receiver names that mean an RxDatabase or RxCollection handle for the `close()` fence. */
 const LIFECYCLE_RECEIVERS = new Set([
@@ -30,12 +22,8 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 215;
-const FROZEN_DIGEST = '6b21fd395cbb56517dfb68f9bf23c449008dca3dd6ce1d4e7ba3f42703d46aaf';
-const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
-const effectiveAllowlist = new Set(
-	SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file]) => file).filter((file) => !repaired.has(file))
-);
+const FROZEN_LENGTH = 553;
+const FROZEN_DIGEST = '396395d78e7068b66b96ce6920d32ae8c7750a5dad181862104bc19c9fce166a';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -115,16 +103,25 @@ function staticName(node: ts.Node | undefined): string | undefined {
 }
 
 function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; text: string }[] {
-	const root = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+	const root = ts.createSourceFile(
+		path,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+	);
+	const diagnostics: ts.Diagnostic[] = (root as any).parseDiagnostics;
+	if (diagnostics.length)
+		throw new Error(
+			`${path}: ${diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ')}`
+		);
 	const found: { rule: string; text: string }[] = [];
-	const report = (rule: string, node: ts.Node) =>
-		found.push({ rule, text: node.getText(root).slice(0, 120) });
+	const report = (rule: string, node: ts.Node) => found.push({ rule, text: node.getText(root) });
 	const checkImport = (
 		node: ts.Node,
 		specifier: ts.Node | undefined,
 		names: string[],
-		wholeModule = false,
-		typeWildcard = false
+		wholeModule = false
 	) => {
 		if (!specifier || !ts.isStringLiteralLike(specifier)) return;
 		const module = specifier.text;
@@ -137,7 +134,6 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 			report('storage import', node);
 		}
 		if (from('@wcpos/query')) {
-			if (typeWildcard) return;
 			if (wholeModule) report('query escape hatch', node);
 			for (const name of names) {
 				if (
@@ -154,11 +150,18 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 			}
 		}
 	};
-	const checkProperty = (node: ts.Node, name: string | undefined) => {
+	const checkProperty = (node: ts.Node, name: string | undefined, receiver?: ts.Node) => {
 		if (!name) return;
 		if (storageNames.has(name)) report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
+		if (
+			(name === 'write' || name === 'resolveConflict') &&
+			receiver &&
+			((ts.isIdentifier(receiver) && receiver.text === 'engine') ||
+				(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine'))
+		)
+			report('write plane outside a command module', node);
 	};
 	const visit = (node: ts.Node) => {
 		if (ts.isImportDeclaration(node)) {
@@ -177,8 +180,7 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 				bindings && ts.isNamedExports(bindings)
 					? bindings.elements.map((binding) => (binding.propertyName ?? binding.name).text)
 					: [],
-				!bindings || ts.isNamespaceExport(bindings),
-				node.isTypeOnly && !bindings
+				!bindings || ts.isNamespaceExport(bindings)
 			);
 		} else if (
 			ts.isImportEqualsDeclaration(node) &&
@@ -196,17 +198,14 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 				(ts.isIdentifier(callee) && callee.text === 'require')
 			)
 				checkImport(node, node.arguments[0], [], true);
-			if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'write') {
-				const receiver = callee.expression;
-				if (
-					(ts.isIdentifier(receiver) && receiver.text === 'engine') ||
-					(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine')
-				)
-					report('write plane outside a command module', node);
-			}
 			// `close()` is too common a name to fence everywhere (dialogs, sockets); fence it on a
 			// receiver that is named like a database or collection handle, or is a `.collections[…]`.
-			if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'close') {
+			if (
+				(ts.isPropertyAccessExpression(callee) && callee.name.text === 'close') ||
+				(ts.isElementAccessExpression(callee) &&
+					ts.isStringLiteralLike(callee.argumentExpression) &&
+					callee.argumentExpression.text === 'close')
+			) {
 				const receiver = callee.expression;
 				const named = ts.isIdentifier(receiver)
 					? receiver.text
@@ -221,11 +220,15 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 					report('database or collection lifecycle (close) outside the data layer', node);
 			}
 		}
-		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text);
+		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text, node.expression);
 		if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
-			checkProperty(node, node.argumentExpression.text);
+			checkProperty(node, node.argumentExpression.text, node.expression);
 		if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent) && !node.dotDotDotToken)
-			checkProperty(node, staticName(node.propertyName ?? node.name));
+			checkProperty(
+				node,
+				staticName(node.propertyName ?? node.name),
+				ts.isVariableDeclaration(node.parent.parent) ? node.parent.parent.initializer : undefined
+			);
 		// Assignment destructuring uses object literals, not ObjectBindingPattern nodes.
 		if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
 			let pattern: ts.Node = node.parent;
@@ -256,84 +259,73 @@ const violationsByFile = sourceFiles(__dirname).flatMap((path) => {
 	return matches.length ? [{ file: relative(__dirname, path).split(sep).join('/'), matches }] : [];
 });
 
-// `SEAM_DUMP=<path>` writes the current violations as JSON (used to freeze or re-freeze the allowlist).
-if (process.env.SEAM_DUMP) {
-	writeFileSync(
-		process.env.SEAM_DUMP,
-		JSON.stringify(
-			violationsByFile.map(({ file, matches }) => [file, matches.length]),
-			null,
-			'\t'
-		)
-	);
+function fingerprints(file: string, matches: { rule: string; text: string }[]): string[] {
+	const occurrences = new Map<string, number>();
+	return matches.map(({ rule, text }) => {
+		const key = `${rule} :: ${text.replace(/\s+/g, ' ').trim()}`;
+		const occurrence = (occurrences.get(key) ?? 0) + 1;
+		occurrences.set(key, occurrence);
+		return `${file} :: ${key} :: ${occurrence}`;
+	});
 }
 
-it('does not add files that cross the UI/data seam', () => {
-	expect(
-		violationsByFile
-			.filter(({ file }) => !effectiveAllowlist.has(file))
-			.flatMap(({ file, matches }) => matches.map(({ rule, text }) => `${file}: ${rule}: ${text}`))
-	).toEqual([]);
-});
+const current = violationsByFile.flatMap(({ file, matches }) => fingerprints(file, matches)).sort();
+const frozen = new Set(SEAM_FROZEN_VIOLATIONS_2026_10_16);
+const currentSet = new Set(current);
+const progress = [...frozen].filter((fingerprint) => !currentSet.has(fingerprint));
+console.log(
+	`Seam progress: ${progress.length}/${frozen.size} frozen violations removed; ${current.length} remain`
+);
+if (process.env.SEAM_PROGRESS === '1') console.log(current.join('\n'));
 
-function ceilingIssue(
-	file: string,
-	current: number,
-	frozen: number,
-	recorded = Infinity
-): string[] {
-	const ceiling = Math.min(frozen, recorded);
-	if (current > ceiling)
-		return [
-			`${file}: ${current} violations, ceiling ${ceiling} — route the new access through a named read or command`,
-		];
-	if (current > 0 && current < ceiling) return [`record the new ceiling for ${file}: ${current}`];
-	return [];
+// `SEAM_DUMP=<path>` writes sorted current fingerprints as JSON for an explicit re-freeze.
+if (process.env.SEAM_DUMP)
+	writeFileSync(process.env.SEAM_DUMP, JSON.stringify(current, null, '\t'));
+
+function unfrozenViolations(current: string[], frozen: ReadonlySet<string>): string[] {
+	return current
+		.filter((fingerprint) => !frozen.has(fingerprint))
+		.map((fingerprint) => `${fingerprint} — route this access through a named read or command`);
 }
 
-it('never lets a frozen file gain violations (the per-file count only ratchets down)', () => {
-	const ceilings = new Map(SEAM_CEILINGS);
-	expect(
-		violationsByFile.flatMap(({ file, matches }) =>
-			frozenCount.has(file)
-				? ceilingIssue(file, matches.length, frozenCount.get(file)!, ceilings.get(file))
-				: []
-		)
-	).toEqual([]);
+it('requires every current violation to belong to the frozen set', () => {
+	expect(unfrozenViolations(current, frozen)).toEqual([]);
 });
 
-it('records repaired files in SEAM_REPAIRED_SINCE_FREEZE (the effective list may only shrink)', () => {
-	const violatingFiles = new Set(violationsByFile.map(({ file }) => file));
+it('keeps the frozen fingerprints immutable', () => {
+	expect(SEAM_FROZEN_VIOLATIONS_2026_10_16.length).toBe(FROZEN_LENGTH);
 	expect(
-		[...effectiveAllowlist]
-			.filter((file) => !violatingFiles.has(file))
-			.map((file) => `No longer crosses the seam; add to SEAM_REPAIRED_SINCE_FREEZE: ${file}`)
-	).toEqual([]);
-});
-
-it('keeps the frozen allowlist immutable and the repaired list inside it', () => {
-	expect(SEAM_ALLOWLIST_FROZEN_2026_10_16.length).toBe(FROZEN_LENGTH);
-	expect(
-		createHash('sha256')
-			.update(
-				SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file, count]) => `${file}:${count}`).join('\n')
-			)
-			.digest('hex')
+		createHash('sha256').update(SEAM_FROZEN_VIOLATIONS_2026_10_16.join('\n')).digest('hex')
 	).toBe(FROZEN_DIGEST);
-	const frozen = new Set(SEAM_ALLOWLIST_FROZEN_2026_10_16.map(([file]) => file));
-	expect(SEAM_REPAIRED_SINCE_FREEZE.filter((file) => !frozen.has(file))).toEqual([]);
-	// Pin identities, not just length: substitution must not silently re-admit a repaired file.
-	expect(SEAM_REPAIRED_SINCE_FREEZE.length).toBeGreaterThanOrEqual(SEAM_REPAIRED_FLOOR);
-	expect(
-		createHash('sha256')
-			.update(SEAM_REPAIRED_SINCE_FREEZE.slice(0, SEAM_REPAIRED_FLOOR).join('\n'))
-			.digest('hex')
-	).toBe(SEAM_REPAIRED_PREFIX_DIGEST);
-	expect(
-		SEAM_REPAIRED_SINCE_FREEZE.filter(
-			(file) => !violationsByFile.every(({ file: f }) => f !== file)
-		)
-	).toEqual([]);
+});
+
+it('normalises whitespace and numbers repeated rule/text pairs independently per file', () => {
+	const matches = [
+		{ rule: 'storage import', text: "import {\n Thing\t} from 'storage';" },
+		{ rule: 'other rule', text: "import { Thing } from 'storage';" },
+		{ rule: 'storage import', text: "import { Thing } from 'storage';" },
+	];
+	expect(fingerprints('file.ts', matches)).toEqual([
+		"file.ts :: storage import :: import { Thing } from 'storage'; :: 1",
+		"file.ts :: other rule :: import { Thing } from 'storage'; :: 1",
+		"file.ts :: storage import :: import { Thing } from 'storage'; :: 2",
+	]);
+	expect(fingerprints('other.ts', matches.slice(2))).toEqual([
+		"other.ts :: storage import :: import { Thing } from 'storage'; :: 1",
+	]);
+});
+
+it('rejects same-count substitutions and extra occurrences but accepts removals', () => {
+	const frozen = new Set(['file.ts :: record mutator :: doc.remove :: 1']);
+	for (const source of ['doc.save;', 'doc.remove; doc.remove;']) {
+		const issues = unfrozenViolations(fingerprints('file.ts', violations(source)), frozen);
+		expect(issues).toHaveLength(1);
+		expect(issues[0]).toContain('route this access through a named read or command');
+	}
+	expect(unfrozenViolations([], frozen)).toEqual([]);
+	expect(unfrozenViolations(fingerprints('file.ts', violations('\n doc.remove;')), frozen)).toEqual(
+		[]
+	);
 });
 
 // These fixtures catch syntax bypasses without executing imported modules or mutators.
@@ -358,7 +350,6 @@ it.each([
 	"import { TaxId, type TaxIdType as Id } from '@wcpos/database';",
 	"import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';",
 	"import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';",
-	"export type * from '@wcpos/query';",
 	"type Q = import('@wcpos/query').QueryState;",
 	"// doc.remove();\nconst text = 'doc.collections';",
 	'const text = `doc.remove() and doc.collection`; // engine.write()',
@@ -367,23 +358,6 @@ it.each([
 	'const options = { collections, remove: fn, collection: name };',
 ])('allows non-seam syntax in %s', (source) => {
 	expect(violations(source)).toEqual([]);
-});
-
-it.each([
-	[5, undefined, []],
-	[4, undefined, ['record the new ceiling for file.ts: 4']],
-	[3, 4, ['record the new ceiling for file.ts: 3']],
-	[4, 4, []],
-	[0, 4, []], // Zero is handled by the repaired-file assertion, not a ceiling entry.
-])('records decreases from the effective ceiling: %s / %s', (current, recorded, expected) => {
-	expect(ceilingIssue('file.ts', current, 5, recorded)).toEqual(expected);
-});
-it.each([
-	[6, undefined],
-	[5, 4],
-	[6, 7],
-])('rejects a count above either ceiling: %s / %s', (current, recorded) => {
-	expect(ceilingIssue('file.ts', current!, 5, recorded)).toHaveLength(1);
 });
 
 // Every mutator spelling is fenced across calls, extraction and binding patterns.
@@ -429,6 +403,7 @@ it.each([
 		`import type { Record } from '${module}';`,
 		`export type { Record } from '${module}';`,
 		`export * from '${module}';`,
+		`export type * from '${module}';`,
 		`import db = require('${module}');`,
 		`require('${module}');`,
 		`import('${module}');`,
@@ -447,6 +422,7 @@ it.each([
 		`import * as q from '${module}';`,
 		`import type * as q from '${module}';`,
 		`export * from '${module}';`,
+		`export type * from '${module}';`,
 		`export * as q from '${module}';`,
 		`import q = require('${module}');`,
 		`require('${module}');`,
@@ -462,7 +438,55 @@ it('walks TSX and nested template expressions but ignores string and comment con
 	).toEqual([{ rule: 'record mutator', text: 'doc.save' }]);
 });
 
-it('reports the accessed AST text, truncated to 120 characters', () => {
+it('reports the full accessed AST text so fingerprints distinguish long accesses', () => {
 	const source = `${'receiver'.repeat(20)}.remove`;
-	expect(violations(source)).toEqual([{ rule: 'record mutator', text: source.slice(0, 120) }]);
+	expect(violations(source)).toEqual([{ rule: 'record mutator', text: source }]);
+});
+
+// Engine methods are fenced by receiver, not on unrelated objects with the same names.
+it.each(['write', 'resolveConflict'])('fences engine %s calls and extraction', (name) => {
+	for (const receiver of ['engine', 'object.engine']) {
+		for (const source of [
+			`${receiver}.${name}({});`,
+			`${receiver}?.['${name}']?.({});`,
+			`const fn = ${receiver}.${name};`,
+			`const fn = ${receiver}['${name}'];`,
+			`const { ${name} } = ${receiver};`,
+			`const { ['${name}']: fn } = ${receiver};`,
+		])
+			expect(violations(source).map(({ rule }) => rule)).toEqual([
+				'write plane outside a command module',
+			]);
+	}
+});
+
+it.each([
+	"database['close']();",
+	"db?.['close']?.();",
+	"object.database['close']();",
+	"object.collections['orders']['close']();",
+])('fences database lifecycle calls in %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toContain(
+		'database or collection lifecycle (close) outside the data layer'
+	);
+});
+
+it.each([
+	"dialog['close']();",
+	"socket?.['close']?.();",
+	'writer.write();',
+	'const { write, resolveConflict } = other;',
+	"const fn = other['resolveConflict'];",
+])('allows unrelated receivers in %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+it('parses TypeScript assertions and generic arrows as TS, not TSX', () => {
+	expect(violations('const fn = <T>(doc: T) => (<T>doc).remove;', 'fixture.ts')).toEqual([
+		{ rule: 'record mutator', text: '(<T>doc).remove' },
+	]);
+});
+
+it.each(['fixture.ts', 'fixture.tsx'])('fails the scan on parse errors in %s', (path) => {
+	expect(() => violations('const broken = ; doc.remove();', path)).toThrow(path);
 });
