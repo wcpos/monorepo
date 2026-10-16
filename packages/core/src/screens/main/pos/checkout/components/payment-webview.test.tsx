@@ -6,6 +6,7 @@ import * as React from 'react';
 import { act, render } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	isSettledOrderStatus,
@@ -652,6 +653,43 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(onStockRejection).toHaveBeenCalledWith(payload);
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(setLoading).toHaveBeenCalledWith(false);
+	});
+
+	it('stops loading and logs the action when the payment frame reports a blocked submit', async () => {
+		const setLoading = jest.fn();
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const payload = {
+			message: 'Payment failed. Please try again.',
+			data: {
+				notices: ['Payment failed. Please try again.'],
+				payment_method: 'pos_cash',
+				scripts: ['wc-stripe-upe-classic-js'],
+			},
+		};
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-blocked', payload } },
+			});
+		});
+
+		expect(setLoading).toHaveBeenCalledWith(false);
+		expect(logger.error).toHaveBeenCalledWith('Payment failed. Please try again.', {
+			showToast: true,
+			code: ERROR_CODES.PAYMENT_UNEXPECTED,
+			context: {
+				action: 'wcpos-payment-blocked',
+				payloadData: payload.data,
+			},
+		});
 	});
 
 	it('does not log a payment-gateway error when the fallback server probe fails', async () => {

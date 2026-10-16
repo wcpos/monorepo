@@ -85,6 +85,28 @@ describe('findAllUncached', () => {
 		}
 	});
 
+	it('leaves a newer equivalent query under the same key alone', async () => {
+		const collection = await itemCollection(2);
+		const original = collection.find();
+		const key = original.toString();
+		let newer: unknown;
+		const exec = original.exec.bind(original);
+		// While the read is in flight, the cache drops this instance and a newer equivalent
+		// query takes its key (cache replacement, or an earlier equivalent read's cleanup).
+		original.exec = (async () => {
+			const docs = await exec();
+			collection._queryCache._map.delete(key);
+			newer = collection.find();
+			return docs;
+		}) as typeof original.exec;
+		const fakeCollection = { find: () => original, _queryCache: collection._queryCache };
+
+		await findAllUncached(fakeCollection);
+
+		expect(newer).not.toBe(original);
+		expect(collection._queryCache._map.get(key)).toBe(newer);
+	});
+
 	it('runs exec() on a plain fake that has no query cache', async () => {
 		const a = { id: 'a' };
 		const b = { id: 'b' };

@@ -10,19 +10,20 @@
 #    (RXDB_VERSION must match the rxdb pinned at that SHA and the lane's highest
 #    tag; frozen lanes refused).
 # 4. Creates v<major.minor>.<N+1> (or .0 on a new lane) at the bundle commit.
-# 5. Waits up to 5 minutes for jsDelivr @<major.minor> to resolve the new tag,
-#    purges, and re-verifies.
+# 5. Refreshes the lane ref and verifies every hashed file by content before
+#    purging metadata. Then purges and verifies metadata, index and workers
+#    by content and version header; any failure stops the release.
 # --dry-run stops after step 3 and prints the tag it would create.
 # Re-running on a commit that already holds its lane's newest tag (a previous run
 # tagged it, then timed out on the CDN) skips step 4 and resumes at step 5.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=check-worker-rxdb-lane.sh
+# shellcheck source=scripts/release/check-worker-rxdb-lane.sh
 source "$SCRIPT_DIR/check-worker-rxdb-lane.sh"
+# shellcheck source=scripts/release/cdn-verify.sh
+source "$SCRIPT_DIR/cdn-verify.sh"
 
 MONOREPO_REPO="wcpos/monorepo"
-CDN_POLL_SECONDS=300 # jsDelivr re-resolved @1.10 about 4 minutes after v1.10.41 (2026-10-14)
-CDN_POLL_INTERVAL=20
 CDN_VERIFY_SECONDS=120
 
 # stdin: bundle commit message. stdout: the monorepo SHA. Only @main builds are released.
@@ -74,9 +75,12 @@ tag_action() {
 # A 404/5xx (jsDelivr can carry x-jsd-version on one), a timeout or a dropped
 # connection reads as no version, so the caller's poll retries until its deadline.
 cdn_version() { # $1 lane, $2 path under build/
-	local headers
-	headers=$(curl -sI --fail --connect-timeout 10 --max-time 30 "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$2") || return 0
-	jsd_version <<<"$headers"
+	local headers code status=0
+	headers=$(mktemp) || return 0
+	code=$(curl -g -sS -I --connect-timeout 10 --max-time 120 -o "$headers" -w '%{http_code}' \
+		"https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$2") || status=$?
+	if [[ "$status" == 0 && "$code" == 200 ]]; then jsd_version < "$headers"; fi
+	rm -f "$headers"
 }
 
 # Polls until every path in $4.. serves version $2 on lane $1, or $3 seconds pass.
@@ -96,32 +100,30 @@ wait_for_cdn() {
 	done
 }
 
-# The ~14 MB hashed entry metadata.json names: jsDelivr's first origin fetch of it
-# often times out and caches a 404, so GET it until it is a 200, purging between
-# tries. Small files serving the new tag do not mean the POS can load.
-warm_entry() { # $1 lane
-	local entry url attempt
-	entry=$(curl -s --fail --connect-timeout 10 --max-time 30 "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/metadata.json" \
-		| jq -er '.fileMetadata.web.bundle') || { echo "could not read the entry from @$1/build/metadata.json" >&2; return 1; }
-	url="https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/${entry}"
-	for attempt in 1 2 3 4 5 6; do
-		if curl -s --fail --connect-timeout 10 --max-time 120 -o /dev/null "$url"; then
-			echo "@$1/build/${entry} -> 200"
-			return 0
+verify_lane_live() {
+	local lane="$1" tag="$2" expected sha path hashed="" unhashed="" n=0 m=0 paths=()
+	purge_cdn_root "$lane"
+	expected=$(expected_from_tree "$tag") || return 1
+	while read -r sha path; do
+		if is_unhashed_path "$path"; then
+			unhashed+="$sha $path"$'\n'; paths+=("$path"); m=$((m + 1))
+		else
+			hashed+="$sha $path"$'\n'; n=$((n + 1))
 		fi
-		echo "@$1/build/${entry} not served (try ${attempt}); purging it"
-		curl -s --connect-timeout 10 --max-time 60 -o /dev/null "https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/${entry}" || true
-		sleep "$CDN_POLL_INTERVAL"
-	done
-	return 1
-}
-
-purge_cdn() { # $1 lane
-	local path code
-	for path in "" /build/metadata.json /build/opfs.worker.js /build/index.html; do
-		code=$(curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w '%{http_code}' "https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1${path}" || echo 000)
-		echo "purge @$1${path} -> HTTP ${code}"
-	done
+	done <<< "$expected"
+	if ! printf '%s' "$hashed" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS"; then
+		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. Re-run this command to retry." >&2
+		return 1
+	fi
+	while read -r sha path; do
+		[[ -z "$path" ]] || purge_cdn_path "$lane" "$path"
+	done <<< "$unhashed"
+	if ! printf '%s' "$unhashed" | verify_cdn_paths "$lane" "$CDN_UNHASHED_DEADLINE_SECONDS" ||
+		! wait_for_cdn "$lane" "${tag#v}" "$CDN_VERIFY_SECONDS" "${paths[@]}"; then
+		echo "FAIL: @${lane} does not serve ${tag}'s metadata.json/index.html/workers after the purge; re-run this command to purge and verify again" >&2
+		return 1
+	fi
+	echo "LIVE: @${lane} serves ${tag}: ${n} hashed files and ${m} unhashed files verified by content"
 }
 
 main() {
@@ -169,17 +171,7 @@ main() {
 		echo "${sha} is already ${tag}; resuming CDN verification"
 	fi
 
-	wait_for_cdn "$lane" "${tag#v}" "$CDN_POLL_SECONDS" metadata.json || echo "@${lane} has not resolved ${tag} yet; purging"
-	purge_cdn "$lane"
-	if ! wait_for_cdn "$lane" "${tag#v}" "$CDN_VERIFY_SECONDS" metadata.json opfs.worker.js index.html; then
-		echo "FAIL: @${lane} does not serve ${tag} on every path after the purge; re-run this command to purge and verify again" >&2
-		return 1
-	fi
-	if ! warm_entry "$lane"; then
-		echo "FAIL: @${lane} serves ${tag} but not its JS entry; re-run this command to purge and verify again" >&2
-		return 1
-	fi
-	echo "LIVE: @${lane} serves ${tag} (metadata.json, opfs.worker.js, index.html, the JS entry)"
+	verify_lane_live "$lane" "$tag"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
