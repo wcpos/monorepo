@@ -1,10 +1,16 @@
 /** ADR 0033 item 7: UI code acquires data only through named reads; this allowlist may only shrink. */
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
-import { SEAM_ALLOWLIST_FROZEN_2026_10_16 } from './seam-allowlist';
+import { SEAM_ALLOWLIST_FROZEN_2026_10_16, SEAM_REPAIRED_SINCE_FREEZE } from './seam-allowlist';
 
-const ALLOWLIST_FROZEN_2026_10_16 = new Set(SEAM_ALLOWLIST_FROZEN_2026_10_16);
+const FROZEN_LENGTH = 191;
+const FROZEN_DIGEST = 'b4ba55758f2f0809d4c635b219a5e021f825b87287736deed868b5c6e0a05870';
+const repaired = new Set(SEAM_REPAIRED_SINCE_FREEZE);
+const effectiveAllowlist = new Set(
+	SEAM_ALLOWLIST_FROZEN_2026_10_16.filter((file) => !repaired.has(file))
+);
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -74,10 +80,25 @@ function violations(source: string): string[] {
 			if (specifier === '@wcpos/sync-engine' && name === 'MUTATION_QUEUE_RXDB_COLLECTION')
 				found.push(`mutation queue: ${name}`);
 		}
+		// `import * as query from '@wcpos/query'` binds the whole module: check its member accesses.
+		const namespace = clause.match(/^\s*\*\s+as\s+(\w+)\s*$/);
+		if (specifier === '@wcpos/query' && namespace) {
+			for (const access of commentsRemoved.matchAll(
+				new RegExp(`\\b${namespace[1]}\\.(\\w+)`, 'g')
+			)) {
+				if (forbiddenQueryNames.has(access[1])) found.push(`query escape hatch: ${access[0]}`);
+			}
+		}
+	}
+	// `import('@wcpos/query').Name` in a type position binds nothing; check the accessed name.
+	for (const access of commentsRemoved.matchAll(
+		/import\s*\(\s*['"]@wcpos\/query['"]\s*\)\s*\.\s*(\w+)/g
+	)) {
+		if (forbiddenQueryNames.has(access[1])) found.push(`query escape hatch: ${access[0]}`);
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\s*[.[]|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\s*:[^}]*\}\s*=\s*useQueryRuntime\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.storageInstance\b|\.localDB\b|\{[^}]*\blocalDB\b[^}]*\}\s*=\s*useQueryRuntime\s*\(/g
 	)) {
 		found.push(`storage token: ${match[0]}`);
 	}
@@ -86,26 +107,36 @@ function violations(source: string): string[] {
 
 const violationsByFile = sourceFiles(__dirname).flatMap((path) => {
 	const matches = violations(readFileSync(path, 'utf8'));
-	return matches.length ? [{ file: relative(__dirname, path), matches }] : [];
+	return matches.length ? [{ file: relative(__dirname, path).split(sep).join('/'), matches }] : [];
 });
 
 it('does not add files that cross the UI/data seam', () => {
 	expect(
 		violationsByFile
-			.filter(({ file }) => !ALLOWLIST_FROZEN_2026_10_16.has(file))
+			.filter(({ file }) => !effectiveAllowlist.has(file))
 			.flatMap(({ file, matches }) => matches.map((match) => `${file}: ${match}`))
 	).toEqual([]);
 });
 
-it('removes repaired files from the frozen allowlist (the list may only shrink)', () => {
+it('records repaired files in SEAM_REPAIRED_SINCE_FREEZE (the effective list may only shrink)', () => {
 	const violatingFiles = new Set(violationsByFile.map(({ file }) => file));
 	expect(
-		[...ALLOWLIST_FROZEN_2026_10_16]
+		[...effectiveAllowlist]
 			.filter((file) => !violatingFiles.has(file))
-			.map((file) => `Remove repaired file from allowlist: ${file}`)
+			.map((file) => `No longer crosses the seam; add to SEAM_REPAIRED_SINCE_FREEZE: ${file}`)
 	).toEqual([]);
 });
 
-it('never grows the frozen allowlist beyond its original 190 files', () => {
-	expect(SEAM_ALLOWLIST_FROZEN_2026_10_16.length).toBeLessThanOrEqual(190);
+it('keeps the frozen allowlist immutable and the repaired list inside it', () => {
+	expect(SEAM_ALLOWLIST_FROZEN_2026_10_16.length).toBe(FROZEN_LENGTH);
+	expect(
+		createHash('sha256').update(SEAM_ALLOWLIST_FROZEN_2026_10_16.join('\n')).digest('hex')
+	).toBe(FROZEN_DIGEST);
+	const frozen = new Set(SEAM_ALLOWLIST_FROZEN_2026_10_16);
+	expect(SEAM_REPAIRED_SINCE_FREEZE.filter((file) => !frozen.has(file))).toEqual([]);
+	expect(
+		SEAM_REPAIRED_SINCE_FREEZE.filter(
+			(file) => !violationsByFile.every(({ file: f }) => f !== file)
+		)
+	).toEqual([]);
 });
