@@ -77,6 +77,15 @@ describe('withoutUnchanged', () => {
 		);
 	});
 
+	it('writes a row whose only difference is the server revision (sync.revision)', () => {
+		const resident = { uuid: 'a', payload: { a: 1 }, sync: { revision: 'r1' } };
+		const stored = new Map([['a', { toJSON: () => resident }]]);
+		const incoming = { uuid: 'a', payload: { a: 1 }, sync: { revision: 'r2' } };
+		expect(withoutUnchanged(collectionWith({}), stored, [incoming])).toEqual([incoming]);
+		const same = { uuid: 'a', payload: { a: 1 }, sync: { revision: 'r1' } };
+		expect(withoutUnchanged(collectionWith({}), stored, [same])).toEqual([]);
+	});
+
 	it('applies schema fill methods and writes on uncertain comparisons', () => {
 		const incoming = { uuid: 'a' };
 		const stored = new Map([['a', { toJSON: () => ({ uuid: 'a', enabled: false }) }]]);

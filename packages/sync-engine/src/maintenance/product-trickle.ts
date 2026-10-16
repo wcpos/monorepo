@@ -56,7 +56,7 @@ import {
 	productBrowseWindowQueryParams,
 	productBrowseWindowViewKey,
 } from '../scheduler';
-import { withoutLocallyProtected } from '../write-path/local-work-guard';
+import { withoutLocallyProtected, withoutUnchanged } from '../write-path/local-work-guard';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -259,13 +259,17 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 		materializeTargeted('products', payload, selectors)
 	);
 	const documents = materialized.map(({ storedDocument }) => storedDocument);
+	const products = deps.database.collections.products;
+	const stored = await products.findByIds(documents.map(({ uuid }) => uuid as string)).exec();
 	const applicable = await withoutLocallyProtected(
 		deps.database.collections.products as never,
-		documents as { uuid: string }[]
+		documents as { uuid: string }[],
+		stored
 	);
-	if (applicable.length > 0) {
+	const changed = withoutUnchanged(products as never, stored, applicable); // unchanged = applied
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await deps.database.collections.products.bulkUpsert(applicable as never[]),
+			await deps.database.collections.products.bulkUpsert(changed as never[]),
 			'product-trickle upsert'
 		);
 	}

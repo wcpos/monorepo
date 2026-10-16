@@ -46,7 +46,7 @@ import {
 	customerBrowseWindowViewKey,
 	parseCustomerBrowseWindowDescriptor,
 } from '../scheduler';
-import { withoutLocallyProtected } from '../write-path/local-work-guard';
+import { withoutLocallyProtected, withoutUnchanged } from '../write-path/local-work-guard';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -268,13 +268,17 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	const payloads = descriptor.parse((await response.json()) as unknown);
 	const materialized = payloads.map((payload) => materializeTargeted('customers', payload));
 	const documents = materialized.map(({ storedDocument }) => storedDocument);
+	const customers = deps.database.collections.customers;
+	const stored = await customers.findByIds(documents.map(({ uuid }) => uuid as string)).exec();
 	const applicable = await withoutLocallyProtected(
 		deps.database.collections.customers as never,
-		documents as { uuid: string }[]
+		documents as { uuid: string }[],
+		stored
 	);
-	if (applicable.length > 0) {
+	const changed = withoutUnchanged(customers as never, stored, applicable); // unchanged = applied
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await deps.database.collections.customers.bulkUpsert(applicable as never[]),
+			await deps.database.collections.customers.bulkUpsert(changed as never[]),
 			'customer-trickle upsert'
 		);
 	}
