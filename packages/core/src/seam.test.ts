@@ -109,10 +109,10 @@ function violations(source: string): string[] {
 	}
 	const code = commentsRemoved.replace(trivia, '');
 	for (const match of code.matchAll(
-		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
+		/\.db\$(?:\s*\()?|\.collections\b|\.collection\s*(?:\?\.|\.|\[)|\.storageInstance\b|\.localDB\b|\{[^}]*\b(?:collections|storageInstance|localDB|db\$)\b[^}]*\}\s*=|\[\s*['"](?:collections|storageInstance|localDB|db\$)['"]\s*\]|\.(?:incrementalPatch|incrementalModify|incrementalRemove|incrementalUpsert|incrementalUpdate|modify|update|patch|remove|insert|upsert|insertIfNotExists|putAttachment|putAttachments|putAttachmentBase64|save|bulkInsert|bulkUpsert|bulkRemove|insertLocal|upsertLocal|getLocal\$?|atomicUpdate|atomicPatch)\s*\(/g
 	)) {
 		found.push(
-			`${/^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
+			`${/^\.(?:incremental|modify|update|patch|remove|insert|upsert|putAttachment|save|bulk|insertLocal|upsertLocal|getLocal|atomic)/.test(match[0]) ? 'record mutator (writes go through commands)' : 'storage token'}: ${match[0]}`
 		);
 	}
 	return found.map((violation) => violation.replace(/\s+/g, ' '));
