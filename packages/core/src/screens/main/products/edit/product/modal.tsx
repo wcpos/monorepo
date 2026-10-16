@@ -3,7 +3,13 @@ import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
@@ -25,26 +31,26 @@ export function EditProductModal({ resource }: Props) {
 
 	if (!product) {
 		return (
-			<Modal>
-				<ModalContent side="right" size="lg">
-					<ModalHeader>
-						<ModalTitle>{t('products.no_product_found')}</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
+			<Dialog route>
+				<DialogContent side="right" size="lg">
+					<DialogHeader>
+						<DialogTitle>{t('products.no_product_found')}</DialogTitle>
+					</DialogHeader>
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
-			<ModalContent side="right" testID="product-edit-modal" size="lg">
-				<ModalHeader>
+		<Dialog route>
+			<DialogContent side="right" testID="product-edit-modal" size="lg">
+				<DialogHeader>
 					{/* The product name is interpolated straight into the heading, so the
 				    heading needs the same decode the grid row behind it already does. */}
-					<ModalTitle>
+					<DialogTitle>
 						<Text decodeHtml>{t('common.edit_2', { name })}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 						<TabsList className="mx-4 flex-row">
@@ -59,13 +65,13 @@ export function EditProductModal({ resource }: Props) {
 							<EditProductForm product={product} />
 						</TabsContent>
 						<TabsContent value="json" className="min-h-0 flex-1">
-							<ModalBody>
+							<DialogBody>
 								<Tree value={payload} />
-							</ModalBody>
+							</DialogBody>
 						</TabsContent>
 					</Tabs>
 				</View>
-			</ModalContent>
-		</Modal>
+			</DialogContent>
+		</Dialog>
 	);
 }

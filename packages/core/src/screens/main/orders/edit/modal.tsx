@@ -3,7 +3,13 @@ import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
@@ -24,30 +30,30 @@ export function EditOrderModal({ resource }: Props) {
 
 	if (!order) {
 		return (
-			<Modal>
-				<ModalContent side="right" size="xl">
-					<ModalHeader>
-						<ModalTitle>
+			<Dialog route>
+				<DialogContent side="right" size="xl">
+					<DialogHeader>
+						<DialogTitle>
 							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
+						</DialogTitle>
+					</DialogHeader>
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
-			<ModalContent side="right" size="xl">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>
 							{payload?.id
 								? t('orders.edit_order_2', { number: payload.id })
 								: t('orders.edit_order')}
 						</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 						<TabsList className="mx-4 flex-row">
@@ -62,13 +68,13 @@ export function EditOrderModal({ resource }: Props) {
 							<EditOrderForm order={order} />
 						</TabsContent>
 						<TabsContent value="json" className="min-h-0 flex-1">
-							<ModalBody>
+							<DialogBody>
 								<Tree value={payload} />
-							</ModalBody>
+							</DialogBody>
 						</TabsContent>
 					</Tabs>
 				</View>
-			</ModalContent>
-		</Modal>
+			</DialogContent>
+		</Dialog>
 	);
 }

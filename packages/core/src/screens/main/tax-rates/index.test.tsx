@@ -81,14 +81,14 @@ jest.mock('@wcpos/components/suspense', () => ({
 		<React.Suspense fallback={<div data-testid="tax-rates-fallback" />}>{children}</React.Suspense>
 	),
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalClose: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-	ModalContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ModalTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogClose: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+	DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

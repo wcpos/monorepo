@@ -344,6 +344,24 @@ it('3. useDialog closes an uncontrolled, default-open dialog', () => {
 	fireEvent.click(screen.getByTestId('context-close'));
 	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
 });
+it('3. close stays referentially stable when its consumer rerenders', () => {
+	const closes: (() => void)[] = [];
+	function Consumer() {
+		const [, rerender] = React.useReducer((value: number) => value + 1, 0);
+		const { close } = useDialog();
+		closes.push(close);
+		return <button onClick={rerender}>Rerender consumer</button>;
+	}
+	render(
+		<Dialog open>
+			<Consumer />
+		</Dialog>
+	);
+	fireEvent.click(screen.getByRole('button', { name: 'Rerender consumer' }));
+	expect(closes).toHaveLength(2);
+	expect(closes[1]).toBe(closes[0]);
+});
+
 it('3. useDialog throws outside Dialog', () => {
 	expect(() => render(<CloseFromContext />)).toThrow('Dialog context is missing');
 });

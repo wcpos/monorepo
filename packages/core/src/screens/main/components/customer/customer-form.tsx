@@ -7,7 +7,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalBody, ModalFooter } from '@wcpos/components/modal';
+import { DialogBody, DialogFooter } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -216,8 +216,8 @@ export function CustomerForm(props: CustomerFormProps) {
 	if (renderLayout) return renderLayout(body, footer);
 	return (
 		<>
-			<ModalBody>{body}</ModalBody>
-			<ModalFooter>{footer}</ModalFooter>
+			<DialogBody>{body}</DialogBody>
+			<DialogFooter>{footer}</DialogFooter>
 		</>
 	);
 }

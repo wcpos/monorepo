@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormCombobox,
@@ -17,7 +18,13 @@ import {
 	FormTextarea,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -71,7 +78,7 @@ export function EditOrderForm({ order }: Props) {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const { close } = useModal();
+	const { close } = useDialog();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
@@ -287,7 +294,7 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<VStack className="gap-4">
 					<HStack className="gap-4">
@@ -412,18 +419,18 @@ export function EditOrderForm({ order }: Props) {
 					<TaxIdsForm name="tax_ids" />
 					<MetaDataForm name="meta_data" />
 				</VStack>
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction
 					testID="order-edit-save-button"
-					loading={loading}
+					asChild
 					onPress={() => void onSave()}
 					disabled={storageDegraded}
 				>
-					{t('common.save')}
-				</ModalAction>
-			</ModalFooter>
+					<Button loading={loading}>{t('common.save')}</Button>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

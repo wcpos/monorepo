@@ -3,7 +3,13 @@ import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
@@ -25,26 +31,26 @@ export function EditCoupon({ resource }: Props) {
 
 	if (!coupon) {
 		return (
-			<Modal>
-				<ModalContent side="right" size="lg">
-					<ModalHeader>
-						<ModalTitle>
+			<Dialog route>
+				<DialogContent side="right" size="lg">
+					<DialogHeader>
+						<DialogTitle>
 							<Text>{t('coupons.no_coupon_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
+						</DialogTitle>
+					</DialogHeader>
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
 	return (
-		<Modal>
-			<ModalContent side="right" size="lg">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="lg">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('common.edit_2', { name: code })}</Text>
-					</ModalTitle>
-				</ModalHeader>
+					</DialogTitle>
+				</DialogHeader>
 				<View className="min-h-0 flex-1">
 					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
 						<TabsList className="mx-4 flex-row">
@@ -59,13 +65,13 @@ export function EditCoupon({ resource }: Props) {
 							<EditCouponForm coupon={coupon} />
 						</TabsContent>
 						<TabsContent value="json" className="min-h-0 flex-1">
-							<ModalBody>
+							<DialogBody>
 								<Tree value={payload} />
-							</ModalBody>
+							</DialogBody>
 						</TabsContent>
 					</Tabs>
 				</View>
-			</ModalContent>
-		</Modal>
+			</DialogContent>
+		</Dialog>
 	);
 }

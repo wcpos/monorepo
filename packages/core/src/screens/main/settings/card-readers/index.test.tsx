@@ -25,6 +25,7 @@ const mockReaderState = {
 };
 const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
 const mockBootstrap = jest.fn(async () => ({ token: 'connection' }));
+let mockProviderClose: (() => void) | undefined;
 let mockMethods: PaymentMethodDescriptor[] = [];
 let mockCaps = { canAcceptReaderTerms: true };
 let mockOS = 'web';
@@ -134,15 +135,20 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 jest.mock('@wcpos/components/portal', () => ({
 	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalContent: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
+		mockProviderClose = onClose;
+		return <>{children}</>;
+	},
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
 	),
-	ModalHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	ModalTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	ModalClose: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<button data-testid={testID}>{children}</button>
+	DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	DialogClose: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<button data-testid={testID} onClick={() => mockProviderClose?.()}>
+			{children}
+		</button>
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
@@ -401,6 +407,19 @@ it.each([
 	mockMethods = [deviceMethod, sumupMethod];
 	render(<CardReadersSettings />);
 	expect(screen.getByTestId('card-readers-connect').getAttribute('data-variant')).toBe(variant);
+});
+
+it('cancels provider selection without opening a reader connection', async () => {
+	const driver = sdkUiDriver(null);
+	registerDriver(driver);
+	mockMethods = [deviceMethod, sumupMethod];
+	render(<CardReadersSettings />);
+	await flush();
+	fireEvent.click(screen.getByTestId('card-readers-connect'));
+	fireEvent.click(screen.getByTestId('card-readers-provider-cancel'));
+	expect(screen.queryByTestId('card-readers-provider-sheet')).toBeNull();
+	expect(screen.getByTestId('card-readers-connect')).toBeTruthy();
+	expect(driver.opened).not.toHaveBeenCalled();
 });
 
 it("a provider whose SDK owns pairing gets one button that opens the provider's screen", async () => {

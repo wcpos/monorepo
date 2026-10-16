@@ -6,6 +6,7 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
@@ -16,7 +17,13 @@ import {
 	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useDialog,
+} from '@wcpos/components/v2/dialog';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -68,7 +75,7 @@ export function EditProductForm({ product }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
-	const { close } = useModal();
+	const { close } = useDialog();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 	const productData = product.toMutableJSON().payload;
 
@@ -165,7 +172,7 @@ export function EditProductForm({ product }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<ModalBody contentContainerClassName="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<FormField
 					control={form.control}
@@ -342,17 +349,13 @@ export function EditProductForm({ product }: Props) {
 					/>
 				</HStack>
 				<MetaDataForm />
-			</ModalBody>
-			<ModalFooter>
-				<ModalClose testID="product-edit-cancel-button">{t('common.cancel')}</ModalClose>
-				<ModalAction
-					testID="product-edit-save-button"
-					loading={loading}
-					onPress={() => void onSave()}
-				>
-					{t('common.save')}
-				</ModalAction>
-			</ModalFooter>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose testID="product-edit-cancel-button">{t('common.cancel')}</DialogClose>
+				<DialogAction testID="product-edit-save-button" asChild onPress={() => void onSave()}>
+					<Button loading={loading}>{t('common.save')}</Button>
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

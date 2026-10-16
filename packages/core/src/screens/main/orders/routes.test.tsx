@@ -22,11 +22,6 @@ jest.mock(
 	() => ({ OrdersScreen: () => <div data-testid="new-orders" /> }),
 	{ virtual: true }
 );
-jest.mock(
-	'@wcpos/core/screens/main/orders/view',
-	() => ({ ViewOrderScreen: () => <div data-testid="old-view" /> }),
-	{ virtual: true }
-);
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ orderId: 'order-uuid' }),
 	Redirect: ({ href }: { href: { pathname: string; params: { order: string } } }) => (
