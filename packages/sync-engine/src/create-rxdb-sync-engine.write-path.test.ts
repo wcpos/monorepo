@@ -2014,6 +2014,46 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('clears an abandoned annihilation mark on scope open and delivers the stored write', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_200 });
+		const options = {
+			fetch: (url: string, init?: RequestInit) => server.fetch(url, init as never),
+			identity: freshIdentity(),
+			storage: memoryEngineStorage(),
+		};
+		const before = engineWith(options);
+		try {
+			await before.ready;
+			await insertBornLocalOrder(before, UUID_A);
+			const receipt = await before.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pending' },
+			});
+			expect(
+				await queueFor(before.active()!.database).markForAnnihilation(
+					receipt.mutationId,
+					'abandoned-void'
+				)
+			).toBe(true);
+		} finally {
+			await before.dispose();
+		}
+		const reopened = engineWith(options);
+		try {
+			await reopened.ready;
+			const rows = await queueRows(reopened);
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).not.toHaveProperty('supersededBy');
+			expect(await reopened.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			expect(await queueRows(reopened)).toEqual([]);
+			expect((await orderJson(reopened, UUID_A))?.remoteId).toBe(remoteId(900_000_200));
+		} finally {
+			await reopened.dispose();
+		}
+	});
+
 	it('the queue survives A→B→A: an offline write drains after the return', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_200 });
 		const connectivity = scriptedConnectivity('offline');

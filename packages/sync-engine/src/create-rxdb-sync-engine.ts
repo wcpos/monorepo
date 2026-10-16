@@ -134,6 +134,7 @@ import {
 	createWritePlane,
 	type WriteIntent,
 } from './write-path/write-plane';
+import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
@@ -1189,6 +1190,13 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(collectionCreators() as never);
+			// Void attempts are in-process: recover abandoned marks before exposing the scope.
+			const queue = queueFor(db);
+			for (const row of await queue.all()) {
+				if (row.supersededBy !== undefined) {
+					await queue.unmarkForAnnihilation(row.mutationId, row.supersededBy);
+				}
+			}
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
