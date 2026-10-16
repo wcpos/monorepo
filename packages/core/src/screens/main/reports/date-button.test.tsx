@@ -173,6 +173,7 @@ jest.mock('react-native-calendars', () => ({
 	},
 }));
 jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
