@@ -15,7 +15,7 @@ type OrderDocument = {
 	payload?: {
 		payment_method?: string;
 		payment_method_title?: string;
-		meta_data?: { key: string; value: unknown }[];
+		meta_data?: ({ key?: string; value?: unknown } | null)[] | unknown;
 	};
 };
 type EngineDatabase = { collections: { orders?: { find(): { $: Observable<OrderDocument[]> } } } };
@@ -40,8 +40,12 @@ export function usePaymentMethodOptions() {
 							documents.map(({ payload }) => ({
 								payment_method: payload?.payment_method,
 								payment_method_title: payload?.payment_method_title,
-								indexMethods: (payload?.meta_data ?? [])
-									.filter((entry) => entry.key === POS_META_KEYS.paymentMethod)
+								// A resident order's meta_data is wire data: guard every level so one odd
+								// row cannot kill the stream (and with it the filter bar).
+								indexMethods: (Array.isArray(payload?.meta_data) ? payload.meta_data : [])
+									.filter(
+										(entry) => entry?.key === POS_META_KEYS.paymentMethod && entry.value != null
+									)
 									.map((entry) => String(entry.value)),
 							}))
 						)
