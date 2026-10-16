@@ -960,3 +960,34 @@ it.each([
 		expect(movement.getLatest().sync_status).toBe('pending');
 	}
 );
+
+it('persists snapshot membership arrays and clears them when an older detail omits them', async () => {
+	const row = await open();
+	await row.incrementalPatch({ sync_status: 'synced' });
+	for (const ids of [
+		{ order_ids: [1, 2], ledger_row_ids: ['cash', 'card'] },
+		{ order_ids: [], ledger_row_ids: [] },
+		{},
+	]) {
+		http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+			data: {
+				...row.getLatest().toJSON(),
+				expected: { cash: '100' },
+				as_of_gmt: '2026-09-15T09:00:00',
+				movements: [],
+				...ids,
+			},
+		});
+		await refreshSessions({
+			registerId: 'register',
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+			closures: db.closures,
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({
+			server_order_ids: ids.order_ids ?? null,
+			server_ledger_row_ids: ids.ledger_row_ids ?? null,
+		});
+	}
+});

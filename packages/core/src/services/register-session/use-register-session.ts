@@ -57,10 +57,12 @@ function afterBaseline(at?: string | null, baselineAt?: string | null) {
 function outsideBaseline(
 	record: {
 		remoteId?: unknown;
-		payload: { date_created_gmt?: string };
+		payload: { id?: number; date_created_gmt?: string };
 	},
-	baselineAt?: string | null
+	baselineAt?: string | null,
+	orderIds?: readonly number[] | null
 ) {
+	if (orderIds != null) return !orderIds.some((id) => id === record.payload.id);
 	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
 }
 function baselineContains(
@@ -68,7 +70,8 @@ function baselineContains(
 	refunds: readonly EngineRecord<'refunds'>[],
 	movements: readonly { id: string }[],
 	baselineAt?: string | null,
-	movementIds: readonly string[] = []
+	movementIds: readonly string[] = [],
+	ledgerRowIds?: readonly string[] | null
 ) {
 	if (!baselineAt) return undefined;
 	const pending = new Set<string | number | null | undefined>([
@@ -76,7 +79,11 @@ function baselineContains(
 		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
 		...orders.flatMap((order) =>
 			readLedger(order.payload.meta_data)
-				.filter((row) => afterBaseline(row.created_at_gmt, baselineAt))
+				.filter((row) =>
+					ledgerRowIds != null
+						? !ledgerRowIds.includes(row.id)
+						: afterBaseline(row.created_at_gmt, baselineAt)
+				)
 				.map(({ id }) => id)
 		),
 	]);
@@ -336,7 +343,8 @@ export function useRegisterSession() {
 		data?.refundSources ?? [],
 		entries,
 		session?.server_expected_at,
-		session?.server_movement_ids
+		session?.server_movement_ids,
+		session?.server_ledger_row_ids
 	);
 	// Offline edits of synced captured legs are rare (a void needs the server). Keep
 	// the baseline plus other deltas until refreshed rather than inventing prior state:
@@ -374,7 +382,9 @@ export function useRegisterSession() {
 		salesCount:
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
-					orders.filter(({ record }) => outsideBaseline(record, session.server_expected_at)).length
+					orders.filter(({ record }) =>
+						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
+					).length
 				: orders.length,
 		lastClosure:
 			data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null,
@@ -504,7 +514,8 @@ export function useRegisterSession() {
 							accounting?.refundSources ?? [],
 							entries,
 							latestSession.server_expected_at,
-							latestSession.server_movement_ids
+							latestSession.server_movement_ids,
+							latestSession.server_ledger_row_ids
 						)
 					),
 					userDB,

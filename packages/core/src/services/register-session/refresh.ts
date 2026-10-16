@@ -39,6 +39,8 @@ export async function refreshSessions({
 		const detailResponse = await http.get(`sessions/${row.id}`);
 		const detail = detailResponse.data as RegisterSessionRow & {
 			as_of_gmt?: string;
+			order_ids?: number[];
+			ledger_row_ids?: string[];
 			movements: CashMovementRow[];
 			// Omitted for a cashier without the reports capability: the count is blind.
 			expected?: Record<string, string>;
@@ -55,6 +57,8 @@ export async function refreshSessions({
 			server_expected: detail.expected ?? null,
 			server_expected_at: serverExpectedAt,
 			server_movement_ids: (detail.movements ?? []).map(({ id }) => id),
+			server_order_ids: detail.order_ids ?? null,
+			server_ledger_row_ids: detail.ledger_row_ids ?? null,
 			server_sales_count: detail.sales_count ?? null,
 		});
 		for (const movement of detail.movements ?? []) {

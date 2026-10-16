@@ -1419,47 +1419,51 @@ it('derives locally when figures have no snapshot boundary', async () => {
 	expect(result.current.salesCount).toBe(0);
 });
 
-it.each(['captured', 'voided'])(
-	'preserves baseline ledger rows on a dirty order (%s)',
-	async (status) => {
-		entries = [];
-		const hit = parentHit('session', false, '2026-09-15T10:00:00', {
-			kind: 'cash',
-			method_id: 'cash',
-			amount: '60',
-			status,
-			created_at_gmt: '2026-09-15T08:00:00',
-			updated_at_gmt: '2026-09-15T10:00:00',
+it.each([
+	['captured', false],
+	['voided', false],
+	['captured', true],
+	['voided', true],
+])('preserves baseline ledger rows on a dirty order (%s, ids %s)', async (status, withIds) => {
+	if (withIds) active = [{ ...active[0], server_ledger_row_ids: ['card'] }];
+	entries = [];
+	const hit = parentHit('session', false, '2026-09-15T10:00:00', {
+		kind: 'cash',
+		method_id: 'cash',
+		amount: '60',
+		status,
+		created_at_gmt: '2026-09-15T08:00:00',
+		updated_at_gmt: '2026-09-15T10:00:00',
+	});
+	hit.record.local.dirty = true;
+	hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+	const meta = hit.record.payload.meta_data as { value: { payments: Row[] } }[];
+	meta[0].value.payments.push({
+		...meta[0].value.payments[0],
+		id: 'new',
+		amount: '10',
+		status: 'captured',
+		created_at_gmt: '2026-09-15T10:00:00',
+	});
+	mockOrders.next([hit]);
+	const result = await settled();
+	expect(mockRequestRefresh).toHaveBeenCalledWith({
+		sessions: mockSessions,
+		registerId: 'register',
+	});
+	expect(result.current.expected.cash).toBe('110.0000');
+	expect(result.current.salesCount).toBe(0);
+	await act(async () => {
+		Object.assign(active[0], {
+			server_expected: { cash: '70' },
+			server_expected_at: '2026-09-15T11:00:00.000Z',
+			server_ledger_row_ids: withIds ? ['card', 'new'] : null,
 		});
-		hit.record.local.dirty = true;
-		hit.record.payload.date_created_gmt = '2026-09-15T08:00:00';
-		const meta = hit.record.payload.meta_data as { value: { payments: Row[] } }[];
-		meta[0].value.payments.push({
-			...meta[0].value.payments[0],
-			id: 'new',
-			amount: '10',
-			status: 'captured',
-			created_at_gmt: '2026-09-15T10:00:00',
-		});
-		mockOrders.next([hit]);
-		const result = await settled();
-		expect(mockRequestRefresh).toHaveBeenCalledWith({
-			sessions: mockSessions,
-			registerId: 'register',
-		});
-		expect(result.current.expected.cash).toBe('110.0000');
-		expect(result.current.salesCount).toBe(0);
-		await act(async () => {
-			Object.assign(active[0], {
-				server_expected: { cash: '70' },
-				server_expected_at: '2026-09-15T11:00:00.000Z',
-			});
-			mockSessionChanges.next();
-		});
-		expect(result.current.expected.cash).toBe('70');
-		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
-	}
-);
+		mockSessionChanges.next();
+	});
+	expect(result.current.expected.cash).toBe('70');
+	expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+});
 
 it.each([null, 1])(
 	'counts only orders absent from the snapshot (remoteId %s)',
@@ -1471,5 +1475,59 @@ it.each([null, 1])(
 		mockOrders.next([hit]);
 		const result = await settled();
 		expect(result.current.salesCount).toBe(remoteId === null ? 1 : 0);
+	}
+);
+
+it.each([
+	[[1], '2026-09-15T10:00:00', 5],
+	[[], '2026-09-15T09:00:00', 6],
+	[[], '2026-09-15T08:00:00', 6],
+	[undefined, '2026-09-15T10:00:00', 6],
+	[null, '2026-09-15T08:00:00', 5],
+] as const)(
+	'counts sales by snapshot order ids %j at %s',
+	async (ids, createdAt, expectedCount) => {
+		entries = [];
+		active = [{ ...active[0], server_order_ids: ids, server_sales_count: 5 }];
+		const hit = parentHit('session', false, createdAt);
+		hit.record.remoteId = 1;
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.salesCount).toBe(expectedCount);
+	}
+);
+
+it.each([
+	[['card'], '2026-09-15T10:00:00', '100'],
+	[[], '2026-09-15T09:00:00', '110.0000'],
+	[[], '2026-09-15T08:00:00', '110.0000'],
+	[undefined, '2026-09-15T10:00:00', '110.0000'],
+	[null, '2026-09-15T08:00:00', '100'],
+] as const)(
+	'uses snapshot ledger ids %j at %s for display and closure',
+	async (ids, createdAt, cash) => {
+		entries = [];
+		active = [{ ...active[0], server_ledger_row_ids: ids }];
+		mockOrders.next([
+			parentHit('session', false, createdAt, {
+				kind: 'cash',
+				method_id: 'cash',
+				amount: '10',
+			}),
+		]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe(cash);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tillExpected: { cash },
+			})
+		);
 	}
 );
