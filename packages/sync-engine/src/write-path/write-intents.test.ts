@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
-import { enqueueWriteIntent, requeueBornTwiceSnapshot } from './write-intents';
+import { enqueueWriteIntent, queueFor, requeueBornTwiceSnapshot } from './write-intents';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -119,6 +119,7 @@ describe('enqueueWriteIntent', () => {
 	it.each([
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
 		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
+		{ name: 'bare-ack server record', id: 0, remoteId: '42', rejected: false, annihilated: false },
 		{ name: 'server record with no revision', id: 42, rejected: false, annihilated: false },
 		{
 			// `identity-ambiguous`: the push adapter matched MORE than one server record,
@@ -129,7 +130,8 @@ describe('enqueueWriteIntent', () => {
 			reason: 'identity-ambiguous',
 			annihilated: false,
 		},
-	])('deletes $name only when it is born-local', async ({ id, rejected, reason, annihilated }) => {
+	])('deletes $name only when it is born-local', async (testCase) => {
+		const { id, remoteId, rejected, reason, annihilated } = testCase;
 		const mutationCollection = createFakeMutationCollection();
 		if (rejected) {
 			await mutationCollection.bulkUpsert([
@@ -150,7 +152,7 @@ describe('enqueueWriteIntent', () => {
 		}
 		let removed = false;
 		const resident = {
-			toJSON: () => ({ payload: { id, status: 'pos-open' }, sync: {} }),
+			toJSON: () => ({ remoteId, payload: { id, status: 'pos-open' }, sync: {} }),
 			remove: async () => {
 				removed = true;
 			},
@@ -242,6 +244,126 @@ describe('enqueueWriteIntent', () => {
 		expect(observe).toHaveBeenCalledWith(
 			expect.objectContaining({ fields: { recordId: 'order-1', removed: 1, deadLetters: 0 } })
 		);
+	});
+
+	it.each([
+		'claimed successor',
+		'claimed dead letter',
+		'late replacement',
+		'chain claim',
+		'settlement refusal',
+		'late dead-letter claim',
+	])('a refused void preserves resident and queued work: %s', async (scenario) => {
+		const mutationCollection = createFakeMutationCollection();
+		const row: QueuedMutation = {
+			mutationId: 'dead',
+			collectionName: 'orders',
+			recordId: 'order-1',
+			operation: 'create',
+			origin: 'minted',
+			payload: { id: 0 },
+			baseRevision: null,
+			queuedAt: '2026-09-18T00:00:00.000Z',
+			status: 'rejected',
+			attempts: 1,
+			seq: 1,
+		};
+		const claimedSuccessor = scenario === 'claimed successor';
+		const chain = scenario === 'chain claim';
+		const claimedDeadLetter = scenario === 'claimed dead letter' || chain;
+		const older: QueuedMutation = {
+			...row,
+			mutationId: 'older',
+			operation: chain ? 'create' : 'update',
+			status: claimedSuccessor ? 'claimed' : 'pending',
+			attempts: 0,
+			seq: 2,
+		};
+		const newer: QueuedMutation = {
+			...older,
+			mutationId: 'newer',
+			operation: 'update',
+			status: 'pending',
+			seq: 3,
+		};
+		await mutationCollection.bulkUpsert([
+			{
+				...row,
+				...(claimedDeadLetter
+					? {
+							resolutionClaimBy: 'other-window',
+							resolutionClaimUntil: '2026-09-18T00:01:00.000Z',
+						}
+					: {}),
+			},
+			older,
+			newer,
+		]);
+		const local = { dirty: true, pendingMutationIds: ['older', 'newer'] };
+		let removed = false;
+		const resident = {
+			toJSON: () => ({ payload: { id: 0 }, sync: {}, local }),
+			remove: async () => {
+				removed = true;
+			},
+		};
+		const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+		const db = {
+			collections: { orders, recordMutations: mutationCollection },
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		if (scenario === 'late replacement') {
+			const pending = queue.pending.bind(queue);
+			vi.spyOn(queue, 'pending').mockImplementationOnce(async () => {
+				const snapshot = await pending();
+				await queue.replace({ ...older, mutationId: 'replacement', operation: 'create', seq: 4 });
+				return snapshot;
+			});
+		}
+		if (scenario === 'late dead-letter claim') {
+			const all = queue.all.bind(queue);
+			let reads = 0;
+			vi.spyOn(queue, 'all').mockImplementation(async () => {
+				const snapshot = await all();
+				if (++reads === 3)
+					await queue.replace({
+						...row,
+						resolutionClaimBy: 'other-window',
+						resolutionClaimUntil: '2026-09-18T00:01:00.000Z',
+					});
+				return snapshot;
+			});
+		}
+		if (scenario === 'settlement refusal') {
+			// The dead letter changes status after the guard, before its conditional removal.
+			const remove = queue.removeIfStatus.bind(queue);
+			vi.spyOn(queue, 'removeIfStatus').mockImplementationOnce(async (id, status) => {
+				await queue.replace({ ...row, status: 'pending' });
+				return remove(id, status);
+			});
+		}
+		const result = enqueueWriteIntent({
+			db,
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+			mintUuid: () => 'delete-1',
+			now: () => '2026-09-18T00:00:01.000Z',
+		});
+		if (claimedSuccessor) {
+			await expect(result).rejects.toThrow('mutation queue kept changing');
+		} else {
+			await expect(result).rejects.toMatchObject({
+				status: 428,
+				reason: 'dead-letter-resolution-in-progress',
+			});
+		}
+		expect(await orders.findOne().exec()).toBe(resident);
+		expect(mutationCollection.store.get('newer')?.mutation).toEqual(newer);
+		expect(mutationCollection.store.get('older')?.mutation).toEqual(older);
+		expect(resident.toJSON().local.pendingMutationIds).toEqual(['older', 'newer']);
+		expect(mutationCollection.store.has('dead')).toBe(true);
+		if (scenario === 'late replacement') {
+			expect(mutationCollection.store.get('replacement')?.mutation.operation).toBe('create');
+		}
 	});
 
 	it('carries an own `__proto__` payload key through as ordinary data', async () => {

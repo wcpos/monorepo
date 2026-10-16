@@ -74,6 +74,7 @@ import {
 	MUTATION_QUEUE_RXDB_COLLECTION,
 	type SyncCollectionName,
 } from '../collections/engine-collections';
+import { writeFacetFor } from '../collections/collection-descriptors';
 import { sanitizeOutboundOrderPayload } from '../materialization/sanitize-outbound-order-payload';
 import { sanitizeOutboundProductPayload } from '../materialization/sanitize-outbound-product-payload';
 import { rejectionSuggestsServerRecord } from './conflict-resolution';
@@ -233,10 +234,53 @@ export async function enqueueWriteIntent(input: {
 	const collection = collectionOf(input.db, requested.collection);
 	const queue = queueFor(input.db);
 
-	// Chain links a partial annihilation consumed before a CAS refusal forced a
-	// re-decision: their queue rows are gone (superseded by this delete either
-	// way), so the eventual dirty-mark must drop their ids from pendingMutationIds.
+	// Only successfully consumed rows are superseded; a refused sweep restores
+	// its rows and removes their ids from this bookkeeping.
 	const supersededIds = new Set<string>();
+	const isRecordRow = (item: QueuedMutation) =>
+		item.collectionName === requested.collection && item.recordId === requested.recordId;
+	const restoreRemoved = async (removed: QueuedMutation[]) => {
+		for (const row of removed) {
+			await queue.replace(row);
+			supersededIds.delete(row.mutationId);
+		}
+	};
+	// A void owns no resolution claim, so every live holder is foreign to it.
+	// Check both annihilation paths; retrying a recovery create would otherwise
+	// reclassify it as an ordinary never-pushed chain and destroy its resident.
+	const guardAnnihilation = async (
+		successors: readonly QueuedMutation[],
+		removed?: QueuedMutation[]
+	) => {
+		const fresh = (await queue.all()).filter(isRecordRow);
+		const ownIds = new Set(
+			successors.filter((row) => !row.requeuedFrom).map((row) => row.mutationId)
+		);
+		const deadLetters = fresh.filter((row) => row.status === 'rejected');
+		const refuse = () =>
+			Object.assign(new Error('write(delete): dead-letter-resolution-in-progress'), {
+				status: 428 as const,
+				reason: 'dead-letter-resolution-in-progress' as const,
+			});
+		if (
+			fresh.some((row) =>
+				row.status === 'rejected'
+					? row.resolutionClaimBy !== undefined &&
+						Date.parse(row.resolutionClaimUntil ?? '') > Date.parse(input.now())
+					: !ownIds.has(row.mutationId)
+			)
+		)
+			throw refuse();
+		if (removed) {
+			for (const row of deadLetters) {
+				if (!(await queue.removeIfStatus(row.mutationId, 'rejected', Date.parse(input.now())))) {
+					throw refuse();
+				}
+				removed.push(row);
+			}
+		}
+		return deadLetters.length;
+	};
 
 	// The bounded CAS retry loop: each iteration re-reads the queue, decides
 	// (annihilate / coalesce / plain enqueue), and applies the decision through
@@ -247,8 +291,6 @@ export async function enqueueWriteIntent(input: {
 	// bound is generous; hitting it means something is livelocking the queue.
 	for (let attempt = 0; attempt < 10; attempt += 1) {
 		const rows = await queue.pending();
-		const isRecordRow = (item: QueuedMutation) =>
-			item.collectionName === requested.collection && item.recordId === requested.recordId;
 		const recordRows = rows.filter(isRecordRow);
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
@@ -345,8 +387,9 @@ export async function enqueueWriteIntent(input: {
 		// terminal). Removals are CONDITIONAL and run successors-first, the create
 		// LAST: if the drain claims the create mid-annihilation the CAS refuses and
 		// the decision re-runs (the delete then queues behind the in-flight
-		// create); successors already removed are superseded by this delete either way.
+		// create); successors already removed are restored before re-deciding.
 		if (placement.kind === 'annihilate') {
+			await guardAnnihilation(placement.chain);
 			let refused = false;
 			const removed: QueuedMutation[] = [];
 			for (const row of [...placement.chain].reverse()) {
@@ -358,7 +401,16 @@ export async function enqueueWriteIntent(input: {
 					break;
 				}
 			}
-			if (refused) continue;
+			if (refused) {
+				await restoreRemoved(removed);
+				continue;
+			}
+			try {
+				await guardAnnihilation(placement.chain, removed);
+			} catch (error) {
+				await restoreRemoved(removed);
+				throw error;
+			}
 			const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
 			if (resident) {
 				try {
@@ -425,7 +477,7 @@ export async function enqueueWriteIntent(input: {
 			} else {
 				const baseRevision = intent.baseRevision ?? storedRevision;
 				if (!baseRevision && !createAhead) {
-					// A record with no stored revision and no numeric server id is born-local
+					// A record with no stored revision or canonical/payload server id is born-local
 					// and never acknowledged (materialization stamps a revision on every
 					// pulled record; zero is the born-local payload's placeholder id): its
 					// create was pushed, refused and dead-lettered, so the server has nothing
@@ -442,8 +494,11 @@ export async function enqueueWriteIntent(input: {
 							row.recordId === intent.recordId &&
 							row.status === 'rejected'
 					);
+					const facet = writeFacetFor(intent.collection);
+					const remoteId = facet ? stored?.[facet.remoteIdField] : undefined;
 					const bornLocal =
 						!storedRevision &&
+						remoteIdOrNull(remoteId) === null &&
 						(payloadId === 0 || typeof payloadId !== 'number') &&
 						!deadLetters.some((row) => rejectionSuggestsServerRecord(row.rejectedReason));
 					if (bornLocal) {
@@ -451,31 +506,44 @@ export async function enqueueWriteIntent(input: {
 						// or landed since the read at the top of this iteration) go with the
 						// resident, through the same CONDITIONAL removal as annihilation: a row
 						// the drain has claimed refuses, and the decision re-runs against the
-						// fresh queue. Successors go first, so a failing resident removal
-						// loses only writes the server could never have applied.
-						let removed = 0;
-						let refused = false;
-						for (const row of (await queue.pending()).filter(isRecordRow).reverse()) {
-							if (await queue.removePending(row.mutationId)) {
-								removed += 1;
-								supersededIds.add(row.mutationId);
-							} else {
-								refused = true;
-								break;
+						// fresh queue. Refusals restore the sweep before retrying or throwing;
+						// recovery work refuses outright, never becoming a chain on retry.
+						const successors = (await queue.pending()).filter(
+							(row) => isRecordRow(row) && row.operation !== 'create'
+						);
+						await guardAnnihilation(successors);
+						const removed: QueuedMutation[] = [];
+						let settledDeadLetters = 0;
+						try {
+							let refused = false;
+							for (const row of [...successors].reverse()) {
+								if (await queue.removePending(row.mutationId)) {
+									removed.push(row);
+									supersededIds.add(row.mutationId);
+								} else {
+									refused = true;
+									break;
+								}
 							}
-						}
-						if (refused) continue;
-						await doc.remove();
-						// Each dead letter is dropped only while it still reads `rejected`, so a
-						// row another window has claimed for resolution stays with that resolution.
-						for (const row of deadLetters) {
-							if (await queue.removeIfStatus(row.mutationId, 'rejected')) removed += 1;
+							if (refused) {
+								await restoreRemoved(removed);
+								continue;
+							}
+							settledDeadLetters = await guardAnnihilation(successors, removed);
+							await doc.remove();
+						} catch (error) {
+							await restoreRemoved(removed);
+							throw error;
 						}
 						input.observe?.({
 							type: 'queue.write.annihilate',
 							level: 'info',
 							collection: intent.collection,
-							fields: { recordId: intent.recordId, removed, deadLetters: deadLetters.length },
+							fields: {
+								recordId: intent.recordId,
+								removed: removed.length,
+								deadLetters: settledDeadLetters,
+							},
 						});
 						return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
 					}

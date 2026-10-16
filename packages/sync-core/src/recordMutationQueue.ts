@@ -457,12 +457,23 @@ export class RecordMutationQueue {
 	 * would enqueue a rebuild and both would remove, leaving two live writes for
 	 * one recovery.
 	 */
-	async removeIfStatus(mutationId: string, status: QueuedMutation['status']): Promise<boolean> {
+	/** `unclaimedAtMs` makes a void also refuse a live resolution claim in this CAS turn. */
+	async removeIfStatus(
+		mutationId: string,
+		status: QueuedMutation['status'],
+		unclaimedAtMs?: number
+	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === mutationId
 			);
 			if (!stored || stored.mutation.status !== status) return false;
+			if (
+				unclaimedAtMs !== undefined &&
+				stored.mutation.resolutionClaimBy !== undefined &&
+				Date.parse(stored.mutation.resolutionClaimUntil ?? '') > unclaimedAtMs
+			)
+				return false;
 			// Revision-checked: two concurrent resolutions of one dead letter (two
 			// windows) both reach here, but only one remove lands — the loser sees the
 			// row already gone and compensates. Cross-process, the resolution claim
