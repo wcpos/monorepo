@@ -194,7 +194,7 @@ describe('NavigationAreaLayout', () => {
 		expect(lifted.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('background');
 		lifted.unmount();
 
-		// Health has not opted in: its rail is still bg-card, where a bg-card row is invisible.
+		// A layout without a bar sits on bg-card, where a bg-card row is invisible.
 		const legacy = render(layout());
 		expect(legacy.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('card');
 	});

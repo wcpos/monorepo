@@ -194,6 +194,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="health"
 				options={{
+					headerShown: false,
 					title: t('common.store_health'),
 					drawerLabel: t('common.store_health'),
 					drawerIcon: ({ focused }) => (
@@ -227,6 +228,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="support"
 				options={{
+					headerShown: false,
 					title: t('common.support'),
 					drawerLabel: t('common.support'),
 					drawerIcon: ({ focused }) => (
