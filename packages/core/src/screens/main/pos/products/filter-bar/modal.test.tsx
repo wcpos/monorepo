@@ -33,14 +33,14 @@ jest.mock('./filter-bar-list', () => ({
 jest.mock('./quick-filter-editor', () => ({
 	QuickFilterEditor: () => <div>Editor open</div>,
 }));
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,

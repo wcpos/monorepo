@@ -66,6 +66,11 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
 }));
+jest.mock('../../lib/overlay', () => ({
+	__esModule: true,
+	...jest.requireActual('../../lib/overlay'),
+	isWeb: true,
+}));
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
 jest.mock('../../loader', () => ({ Loader: () => null }));
@@ -808,4 +813,76 @@ it.each([true, false])('17. takes full-size geometry only when the shell says fi
 	} finally {
 		context.mockRestore();
 	}
+});
+
+// Keep the existing cases' stand-ins unchanged; test 18 uses the installed title/slot contracts.
+describe('18. title platform contract', () => {
+	beforeEach(() => {
+		const native = jest.requireMock<typeof import('react-native')>('react-native');
+		jest.spyOn(native, 'Text').mockImplementation(({ children, className, testID, role, id }) => (
+			<span className={className} data-testid={testID} role={role} id={id}>
+				{children}
+			</span>
+		));
+		const slot = jest.requireMock<typeof import('@rn-primitives/slot')>('@rn-primitives/slot');
+		jest.spyOn(slot, 'Slot').mockImplementation(jest.requireActual('@rn-primitives/slot').Slot);
+	});
+	afterEach(() => jest.restoreAllMocks());
+
+	it.each([true, false])(
+		'native keeps the heading directly in the header (asChild=%s)',
+		(asChild) => {
+			jest.replaceProperty(overlay, 'isWeb', false);
+			const primitive = jest.requireMock<typeof Primitive>('@rn-primitives/dialog');
+			jest
+				.spyOn(primitive, 'Title')
+				.mockImplementation(jest.requireActual('@rn-primitives/dialog/dist/dialog').Title);
+			const { Text } = jest.requireActual<typeof import('../../text')>('../../text');
+			render(
+				<DialogHeader testID="header">
+					{asChild ? (
+						<DialogTitle asChild>
+							<Text testID="title" className="flex-1">
+								Order 12345678901234567890
+							</Text>
+						</DialogTitle>
+					) : (
+						<DialogTitle testID="title">Order 12345678901234567890</DialogTitle>
+					)}
+				</DialogHeader>
+			);
+			const title = screen.getByTestId('title');
+			expect(title.parentElement).toBe(screen.getByTestId('header'));
+			expect(title).toHaveAttribute('role', 'heading');
+			expect(title.tagName).toBe('SPAN');
+			if (asChild) expect(title).toHaveClass('flex-1');
+		}
+	);
+
+	it.each([true, false])('web keeps the primitive accessible name (asChild=%s)', (asChild) => {
+		const primitive = jest.requireMock<typeof Primitive>('@rn-primitives/dialog');
+		const web = jest.requireActual<typeof Primitive>(
+			require.resolve('@rn-primitives/dialog').replace(/index\.js$/, 'dialog.web.js')
+		);
+		jest.spyOn(primitive, 'Title').mockImplementation(web.Title);
+		const { Text } = jest.requireActual<typeof import('../../text')>('../../text');
+		render(
+			<web.Root open>
+				<web.Content testID="d">
+					{asChild ? (
+						<DialogTitle asChild>
+							<Text testID="title">Email receipt</Text>
+						</DialogTitle>
+					) : (
+						<DialogTitle testID="title">Email receipt</DialogTitle>
+					)}
+					<web.Description>Receipt options</web.Description>
+				</web.Content>
+			</web.Root>
+		);
+		const title = screen.getByTestId('title');
+		expect(title.id).not.toBe('');
+		expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', title.id);
+		expect(screen.getByRole('dialog')).toHaveAccessibleName('Email receipt');
+	});
 });

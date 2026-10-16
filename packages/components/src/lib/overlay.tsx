@@ -35,7 +35,8 @@ import {
 	SHEET_RISE,
 } from './motion';
 import { cn } from './utils';
-const isWeb = Platform.OS === 'web';
+/** The shell's platform verdict; consumers branch on this, never on `Platform` themselves. */
+export const isWeb = Platform.OS === 'web';
 /**
  * Web: a closing overlay stays mounted until its exit has played. Radix keeps the portal,
  * the scrim and the panel until the scrim's animation ends, but only while the caller goes

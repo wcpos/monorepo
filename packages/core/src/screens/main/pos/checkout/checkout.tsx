@@ -8,15 +8,15 @@ import {
 } from 'observable-hooks';
 
 import {
-	Modal,
-	ModalAction,
-	ModalBody,
-	ModalClose,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-	ModalTitle,
-} from '@wcpos/components/modal';
+	Dialog,
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -48,15 +48,15 @@ export function Checkout({ resource }: Props) {
 
 	if (!order) {
 		return (
-			<Modal>
-				<ModalContent testID="checkout-dialog" size="lg">
-					<ModalHeader>
-						<ModalTitle>
+			<Dialog route>
+				<DialogContent testID="checkout-dialog" size="lg">
+					<DialogHeader>
+						<DialogTitle>
 							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
+						</DialogTitle>
+					</DialogHeader>
+				</DialogContent>
+			</Dialog>
 		);
 	}
 
@@ -176,18 +176,18 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	 *
 	 */
 	return (
-		<Modal>
-			<ModalContent testID="checkout-dialog" size="xl" className="h-full">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent testID="checkout-dialog" size="xl" className="h-full">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>
 							{orderNumber
 								? t('pos_checkout.checkout_order', { orderNumber })
 								: t('pos_checkout.checkout')}
 						</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody contentContainerStyle={{ height: '100%' }}>
+					</DialogTitle>
+				</DialogHeader>
+				<DialogBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
 						{/* R1. The cart's copy of this banner is behind this full-height
@@ -279,23 +279,23 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 							</VStack>
 						)}
 					</VStack>
-				</ModalBody>
-				<ModalFooter>
+				</DialogBody>
+				<DialogFooter>
 					{!showStockRejection && (
-						<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
+						<DialogClose testID="cancel-checkout-button">{t('common.cancel')}</DialogClose>
 					)}
 					{showStockRejection ? (
-						<ModalAction
+						<DialogAction
 							testID="return-to-cart-button"
 							onPress={() => returnToTill(router, screenSize === 'sm', 'cart')}
 						>
 							{t('pos_checkout.return_to_cart')}
-						</ModalAction>
+						</DialogAction>
 					) : (
-						<ModalAction
+						<DialogAction
 							testID="process-payment-button"
 							onPress={handleProcessPayment}
-							loading={mode === 'contract' ? loading : legacyLoading || paymentFrameLoading}
+							asChild
 							disabled={
 								mode === 'pending' ||
 								storageDegraded ||
@@ -307,11 +307,15 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								paymentFrameFailed
 							}
 						>
-							{t('pos_checkout.process_payment')}
-						</ModalAction>
+							<Button
+								loading={mode === 'contract' ? loading : legacyLoading || paymentFrameLoading}
+							>
+								{t('pos_checkout.process_payment')}
+							</Button>
+						</DialogAction>
 					)}
-				</ModalFooter>
-			</ModalContent>
-		</Modal>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

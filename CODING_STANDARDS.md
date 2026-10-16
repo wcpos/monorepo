@@ -266,10 +266,10 @@ nothing wraps. The same shape is the Printers row and the Card readers row.
 
 #### Sheets, modals and menus on a phone
 - A full-size modal IS the screen: no scrim gutter, no radius, card colour to the safe-area
-  edges, top-aligned (`Modal` with `size="full"` does this on native; nothing else is needed).
+  edges, top-aligned (`DialogContent` from `v2/dialog` with `size="full"` does this on native).
 - A bottom sheet (a ⋮ menu, a picker, a short choice) sits on the screen edge and paints the
   bottom inset itself in card colour; the shell leaves that strip unpadded. Both live in
-  `lib/overlay.tsx` and `modal/index.tsx`; a sheet that shows a bar under it is a bug there,
+  `lib/overlay.tsx` and `v2/dialog/index.tsx`; a sheet that shows a bar under it is a bug there,
   not a reason for local padding.
 - A sheet's rows are 48 pt, one icon + one verb each; a destructive row is last and red.
 - The sheet header is title + close; a segmented switch (Payments / Legacy) is its own row
