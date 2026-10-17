@@ -25,6 +25,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 		warn: jest.fn(),
 		error: jest.fn(),
 	}),
+	markErrorReported: jest.fn(),
 }));
 
 const makeWpUser = (stores: any[] = []) => {

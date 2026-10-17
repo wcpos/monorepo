@@ -343,7 +343,7 @@ describe('AttentionPanel', () => {
 			expect(Toast.show).toHaveBeenCalledWith({
 				type: 'error',
 				text1: 'Couldn’t sync with the server.',
-				text2: 'HTTP 502',
+				text2: 'Check your connection and try again. Logs has the details.',
 			})
 		);
 		expect(mockSync).toHaveBeenCalledTimes(1);

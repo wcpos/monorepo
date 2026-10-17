@@ -117,6 +117,8 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 		{
 			recordId: record.uuid,
 			remoteId: record.remoteId,
+			scope: (record as { collection?: { database?: { name?: string } } }).collection?.database
+				?.name,
 			name: fields.name,
 			sku: fields.sku,
 			price: fields.price,

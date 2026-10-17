@@ -43,6 +43,32 @@ export const SEARCH_SCAN_RETHROTTLE_MS = 500;
 export const rebuiltSearchIndexes = new Set<string>();
 
 /**
+ * The rebuilds that actually COMPLETED. `rebuiltSearchIndexes` is set the moment a
+ * rebuild starts (it is the in-flight guard), so a second subscription spotting the
+ * same divergence while that rebuild is pending has checked no rebuilt index yet: only
+ * a divergence found after completion is the error "a rebuild did not cure it".
+ */
+const completedSearchRebuilds = new WeakMap<object, Set<string>>();
+
+/**
+ * Keyed by the COLLECTION INSTANCE (one per store database), not by name: a store
+ * switch opens a new database whose index was never rebuilt, and must not inherit the
+ * previous store's "already rebuilt" verdict. A dropped database drops its record.
+ */
+export function markSearchRebuildCompleted(collection: object, locale: string): void {
+	let locales = completedSearchRebuilds.get(collection);
+	if (!locales) {
+		locales = new Set<string>();
+		completedSearchRebuilds.set(collection, locales);
+	}
+	locales.add(locale);
+}
+
+export function searchRebuildCompleted(collection: object, locale: string): boolean {
+	return completedSearchRebuilds.get(collection)?.has(locale) ?? false;
+}
+
+/**
  * One subject per collection:locale, shared by every active subscription, so a
  * rebuild rebinds ALL of them — `recreateSearch` destroys the instance the
  * others still hold. Entries are never deleted: the population is bounded by

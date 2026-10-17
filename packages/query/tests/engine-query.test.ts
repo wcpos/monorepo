@@ -767,7 +767,10 @@ describe('observeEngineQuery', () => {
 	});
 
 	describe('search index divergence self-check', () => {
-		beforeEach(() => searchError.mockClear());
+		beforeEach(() => {
+			searchError.mockClear();
+			searchWarn.mockClear();
+		});
 
 		it('rebuilds a divergent index and emits the corrected result set', async () => {
 			const database = await createEngineDatabase(['categories']);
@@ -803,7 +806,9 @@ describe('observeEngineQuery', () => {
 
 				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
 				expect(recreateSearch).toHaveBeenCalledTimes(1);
-				expect(searchError).toHaveBeenCalledWith('Search index divergence detected', {
+				// The first divergence rebuilds itself ("nothing to do"): warn, not error.
+				expect(searchError).not.toHaveBeenCalled();
+				expect(searchWarn).toHaveBeenCalledWith('Search index divergence detected', {
 					code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
 					showToast: false,
 					context: {
@@ -817,6 +822,90 @@ describe('observeEngineQuery', () => {
 				});
 			} finally {
 				await database.close();
+			}
+		});
+
+		it('warns, not errors, for a divergence seen while the first rebuild is still running', async () => {
+			const database = await createEngineDatabase(['categories']);
+			const engine = createFakeEngine(database);
+			await database.collections.categories.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.categories.findOne('false-hit').exec();
+			if (!falseHit) throw new Error('missing pending-rebuild fixture');
+			jest.spyOn(database.collections.categories, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => [falseHit],
+			} as never);
+			// The rebuild never completes during this test.
+			const recreateSearch = jest.fn(() => new Promise(() => undefined));
+			Object.assign(database.collections.categories, { recreateSearch });
+			const query = {
+				collection: 'products/categories',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+
+			const first = observeEngineQuery(engine, 'divergence-pending', query).subscribe();
+			const second = observeEngineQuery(engine, 'divergence-pending', query).subscribe();
+			try {
+				await waitFor(() => expect(searchWarn).toHaveBeenCalledTimes(2));
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+				// Neither subscription has checked a rebuilt index yet.
+				expect(searchError).not.toHaveBeenCalled();
+			} finally {
+				first.unsubscribe();
+				second.unsubscribe();
+				await database.close();
+			}
+		});
+
+		it('does not carry a completed rebuild across a store switch (new database, new verdict)', async () => {
+			const query = {
+				collection: 'products/categories',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+			const divergeOn = async () => {
+				const database = await createEngineDatabase(['categories']);
+				const engine = createFakeEngine(database);
+				await database.collections.categories.bulkInsert([
+					engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+					engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+				]);
+				const falseHit = await database.collections.categories.findOne('false-hit').exec();
+				const correctHit = await database.collections.categories.findOne('correct-hit').exec();
+				if (!falseHit || !correctHit) throw new Error('missing store-switch fixtures');
+				jest
+					.spyOn(database.collections.categories, 'initSearch')
+					.mockResolvedValueOnce({
+						collection: { $: of(null) },
+						find: async () => [falseHit],
+					} as never)
+					.mockResolvedValue({
+						collection: { $: of(null) },
+						find: async () => [correctHit],
+					} as never);
+				Object.assign(database.collections.categories, {
+					recreateSearch: jest.fn().mockResolvedValue(null),
+				});
+				return { database, engine };
+			};
+
+			const storeA = await divergeOn();
+			try {
+				await firstValueFrom(observeEngineQuery(storeA.engine, 'divergence-swap', query));
+			} finally {
+				await storeA.database.close();
+			}
+			const storeB = await divergeOn();
+			try {
+				await firstValueFrom(observeEngineQuery(storeB.engine, 'divergence-swap', query));
+				// Store B's index was never rebuilt: its first divergence is a warning.
+				expect(searchError).not.toHaveBeenCalled();
+			} finally {
+				await storeB.database.close();
 			}
 		});
 
@@ -858,8 +947,13 @@ describe('observeEngineQuery', () => {
 
 				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
 				expect(recreateSearch).toHaveBeenCalledTimes(1);
-				expect(searchError).toHaveBeenCalledTimes(2);
-				expect(searchError.mock.calls[1][1]?.context).toMatchObject({
+				// Warn for the self-healing first; error only once it survives the rebuild.
+				expect(searchWarn).toHaveBeenCalledWith(
+					'Search index divergence detected',
+					expect.anything()
+				);
+				expect(searchError).toHaveBeenCalledTimes(1);
+				expect(searchError.mock.calls[0][1]?.context).toMatchObject({
 					alreadyRebuilt: true,
 					falseHitCount: 1,
 				});

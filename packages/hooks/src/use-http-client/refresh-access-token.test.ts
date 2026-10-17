@@ -458,15 +458,155 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.info).not.toHaveBeenCalled();
 		});
 
-		it('keeps a transient refresh failure at warn (attention only if it persists)', async () => {
+		it('keeps one transient refresh failure forensic: the session is still valid and it retries', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
 			const { config } = makeConfig(post);
 
 			await refreshAccessToken({ ...config, operationId: 'transient-arc' });
 
-			expect(loggerCalls.warn).toHaveBeenCalledWith('Unable to refresh session', expect.anything());
-			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
+			// Never AUTH101 "session ended", never AUTH999 "contact support" for a blip.
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
 			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC131' })
+			);
+		});
+
+		it('counts the streak per session: another cashier’s failures do not make a first blip "persist"', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 2; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...first, operationId: `first-${attempt}` });
+				}
+				now += 120_000;
+				await refreshAccessToken({ ...other, operationId: 'other-0' });
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+		});
+
+		it('does not let another session’s backoff skip this session’s refresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			await refreshAccessToken({ ...first, operationId: 'first' });
+			await refreshAccessToken({ ...other, operationId: 'other' });
+
+			// Both sessions reached the store: the first's cooldown did not apply to the second.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
+		it('keys the session by store as well as user: the same user id on another store starts fresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			// No `url`: the engine's session fetcher passes only the API bases.
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			await refreshAccessToken({ ...storeA, operationId: 'a' });
+			await refreshAccessToken({ ...storeB, operationId: 'b' });
+
+			// Store A's backoff did not skip store B's refresh.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
+		it('gives the same store the same key whether or not the caller passes its url', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const engineSite = { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' };
+			const httpClientSite = { ...engineSite, url: 'https://a.test' };
+			const viaEngine = makeConfig(post, engineSite);
+			const viaHttpClient = makeConfig(post, httpClientSite as never);
+			(viaHttpClient.config as { wpUser: unknown }).wpUser = viaEngine.wpUser;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [viaEngine.config, viaHttpClient.config, viaEngine.config]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'alternating' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// Three failures for ONE store, alternating callers: the streak persisted.
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+		});
+
+		it('keeps each session’s streak its own: interleaved stores neither reset nor inflate each other', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [storeA, storeA, storeB, storeA]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'interleaved' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// A's third failure persists (B's in between neither reset A nor counted toward it).
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ context: expect.objectContaining({ failureStreak: 3 }) })
+			);
+		});
+
+		it('codes a 2xx refresh with an unreadable body SYNC151 (malformed), not "cannot be reached"', async () => {
+			const post = jest.fn().mockResolvedValue({ status: 200, data: { unexpected: true } });
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken({ ...config, operationId: 'malformed' });
+
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC151' })
+			);
+		});
+
+		it('warns with the store’s own code once transient refresh failures persist', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const { config } = makeConfig(post);
+
+			// Step past each backoff window so every attempt really reaches the store.
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 3; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: `transient-${attempt}` });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({
+					code: 'SYNC121',
+					context: expect.objectContaining({ failureStreak: 3 }),
+				})
+			);
+			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
 		});
 	});
 });

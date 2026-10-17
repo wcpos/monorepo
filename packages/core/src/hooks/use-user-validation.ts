@@ -11,16 +11,28 @@ import {
 } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	getErrorMessage,
+	getLogger,
+	isErrorReported,
+	markErrorReported,
+} from '@wcpos/utils/logger';
+import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
+import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
+
+/** Mark an error as already logged, so the outer catch does not write a second row. */
+function reported<T>(error: T): T {
+	markErrorReported(error);
+	return error;
+}
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -211,7 +223,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								siteUrl,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					const data = get(response, 'data', {});
@@ -227,7 +239,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								hasData: !!data,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					// Sanity check: verify that the response ID matches the expected user ID
@@ -241,7 +253,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								siteUrl,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					return data;
@@ -254,9 +266,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						error?.response?.data,
 						'Failed to fetch user data from server'
 					);
-					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-					appLogger[logLevel](serverMessage, {
-						code: ERROR_CODES.AUTH_UNEXPECTED,
+					// Forensic: the rethrow below reaches the one terminal row ("[stores]
+					// validation FAILED"); logging here too made two rows per failure.
+					appLogger.debug(serverMessage, {
 						context: {
 							error: getErrorMessage(error),
 							userId,
@@ -374,6 +386,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						});
 					}
 				} catch (error) {
+					// mergeStoresWithResponse already wrote its own row for its failure.
+					if (isErrorReported(error)) throw error;
 					const errorMsg = getErrorMessage(error);
 					appLogger.error('Failed to update user in local database', {
 						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
@@ -382,7 +396,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 							userId,
 						},
 					});
-					throw error;
+					throw reported(error);
 				}
 			};
 
@@ -408,11 +422,24 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					appLogger.debug('[stores] validation deferred — app is in background', {
 						context: { userId, siteUrl },
 					});
+				} else if (isErrorReported(error)) {
+					// The failing step already wrote its own coded row.
+					setError(getErrorMessage(error));
+					setIsValid(false);
 				} else {
 					const errorMsg = getErrorMessage(error);
-					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-					appLogger[logLevel]('[stores] validation FAILED', {
-						code: ERROR_CODES.AUTH_UNEXPECTED,
+					// Runs on every app mount and only leaves the cashier data stale, so
+					// offline is forensic; otherwise the code of what the store answered,
+					// not AUTH999's "contact support".
+					const code = storeRequestFailureCode(error);
+					appLogger[
+						isExpectedPreflightBlock(error)
+							? 'debug'
+							: ERROR_CATALOGUE[code].severity === 'error'
+								? 'error'
+								: 'warn'
+					]('[stores] validation FAILED', {
+						code,
 						context: {
 							error: errorMsg,
 							userId,

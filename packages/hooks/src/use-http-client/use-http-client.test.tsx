@@ -338,6 +338,39 @@ describe('useHttpClient network audit logs', () => {
 		}
 	);
 
+	it('keeps a handler retry that failed in transport forensic, not a CLIENT999 row', async () => {
+		const failure = Object.assign(new Error('expired'), {
+			response: { status: 401 },
+			isRefreshTokenInvalid: true,
+		});
+		// The handler's own retry hit the network: that request's failure path owns it.
+		const retryFailure = Object.assign(new Error('Network Error'), { isAxiosError: true });
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() =>
+			useHttpClient([
+				{
+					name: 'token-refresh',
+					priority: 100,
+					intercepts: true,
+					canHandle: () => true,
+					handle: async () => {
+						throw retryFailure;
+					},
+				},
+			])
+		);
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toBe(retryFailure);
+		expect(loggerMock.__error).not.toHaveBeenCalledWith(
+			'Error handler token-refresh threw an error',
+			expect.anything()
+		);
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'Error handler token-refresh threw a request error',
+			expect.anything()
+		);
+	});
+
 	it('rejects with an intercepting handler cancellation without error-level logging', async () => {
 		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });
 		const cancellation = new CanceledError();

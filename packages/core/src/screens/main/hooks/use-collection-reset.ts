@@ -1,8 +1,11 @@
 import * as React from 'react';
 
+import { Toast } from '@wcpos/components/toast';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
+
+import { useT } from '../../../contexts/translations';
 
 import type { CollectionKey } from './use-collection';
 
@@ -21,6 +24,7 @@ export interface CollectionResetResult {
  * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
 export const useCollectionReset = (key: CollectionKey) => {
 	const runtime = useQueryRuntime();
+	const t = useT();
 	const collectionNames = React.useMemo<CollectionKey[]>(
 		() => (key === 'products' ? ['variations', 'products'] : [key]),
 		[key]
@@ -51,14 +55,22 @@ export const useCollectionReset = (key: CollectionKey) => {
 		const results = await clear();
 		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
 		if (pendingConfirmation) {
-			logger.warn('clearAndSync: reset needs confirmation', {
+			// Never cleared: the engine refuses to drop unsent changes, and its own row
+			// (engine.reset-needs-confirmation) records it. The cashier pressed the
+			// button, so say why nothing happened instead of looking broken.
+			logger.debug('clearAndSync: reset needs confirmation', {
 				context: { collectionName: pendingConfirmation.collectionName },
+			});
+			Toast.show({
+				type: 'warning',
+				title: t('common.clear_blocked_unsent'),
+				description: t('common.clear_blocked_unsent_hint'),
 			});
 			return;
 		}
 		await runResetRefill(runtime.engine, collectionNames);
 		logger.debug('clearAndSync: complete', { context: { key } });
-	}, [clear, collectionNames, key, runtime.engine]);
+	}, [clear, collectionNames, key, runtime.engine, t]);
 
 	return { clear, clearAndSync };
 };

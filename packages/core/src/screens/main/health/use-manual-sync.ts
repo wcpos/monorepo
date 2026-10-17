@@ -6,9 +6,12 @@ import { BehaviorSubject } from 'rxjs';
 import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
-import { getErrorMessage } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+
+const manualSyncLogger = getLogger(['wcpos', 'health', 'manual-sync']);
 
 /**
  * One in-flight flag shared by every full manual-sync control. Row checks use the
@@ -28,11 +31,11 @@ function showReportToast(
 	t: ReturnType<typeof useT>
 ) {
 	if (report.status === 'error') {
-		const detail = report.error ?? report.reason;
+		// The engine's raw reason is in its own sync row; the cashier gets what to do.
 		Toast.show({
 			type: 'error',
 			text1: t('health.database.sync_failed'),
-			...(detail ? { text2: detail } : {}),
+			text2: t('health.database.sync_failed_hint'),
 		});
 	} else if (report.status === 'skipped') {
 		const reason =
@@ -40,7 +43,9 @@ function showReportToast(
 				? t('health.database.sync_skipped_offline')
 				: report.reason === 'lifecycle operation pending'
 					? t('health.database.sync_skipped_busy')
-					: report.reason;
+					: report.reason === 'no active scope'
+						? t('health.database.sync_skipped_no_scope')
+						: undefined;
 		Toast.show({
 			type: 'warning',
 			text1: t('health.database.sync_skipped'),
@@ -78,10 +83,16 @@ export function useManualSync() {
 			const report = await engine.sync();
 			showReportToast(report, t);
 		} catch (error) {
+			// Thrown before the engine wrote any row (e.g. disposed mid-switch): this is
+			// the one record the toast's "Logs has the details" points at.
+			manualSyncLogger.error('Manual sync threw', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error: getErrorMessage(error) },
+			});
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.sync_failed'),
-				text2: getErrorMessage(error),
+				text2: t('health.database.sync_failed_hint'),
 			});
 		} finally {
 			manualSyncInFlight$.next(false);
@@ -103,10 +114,14 @@ export function useCollectionCheck() {
 			try {
 				showReportToast(await engine.checkCollection(name), t);
 			} catch (error) {
+				manualSyncLogger.error('Collection check threw', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { collection: name, error: getErrorMessage(error) },
+				});
 				Toast.show({
 					type: 'error',
 					text1: t('health.database.sync_failed'),
-					text2: getErrorMessage(error),
+					text2: t('health.database.sync_failed_hint'),
 				});
 			} finally {
 				collectionCheckInFlight$.next(null);

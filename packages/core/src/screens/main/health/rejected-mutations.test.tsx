@@ -293,8 +293,26 @@ describe('RejectedMutationsPanel', () => {
 		await press(getByTestId('db-rejected-requeue-m-1'));
 
 		expect(mockToast).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'error', text2: 'record is no longer on this device' })
+			expect.objectContaining({
+				type: 'error',
+				text2: 'Try again. If it keeps failing, reload WCPOS.',
+			})
 		);
+	});
+
+	it('says "already resolved" (info, no raw uuid) for a change auto-recovery already settled', async () => {
+		mockResolveConflict.mockRejectedValueOnce(
+			new Error('resolveConflict: terminal mutation "m-1" not found')
+		);
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-requeue-m-1'));
+
+		expect(mockToast).toHaveBeenCalledWith({
+			type: 'info',
+			text1: 'Already resolved — nothing more to do.',
+		});
+		expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 	});
 
 	it('shows follower deferral as information instead of a failure', async () => {

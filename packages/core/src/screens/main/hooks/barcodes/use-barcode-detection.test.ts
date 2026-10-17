@@ -82,7 +82,7 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => {
-	const barcodeLogger = { warn: jest.fn() };
+	const barcodeLogger = { warn: jest.fn(), debug: jest.fn() };
 
 	return {
 		getLogger: () => barcodeLogger,
@@ -100,6 +100,7 @@ jest.mock('@wcpos/utils/user-activity', () => ({
 
 const barcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
 	warn: jest.Mock;
+	debug: jest.Mock;
 };
 
 const dispatchBarcode = (barcode: string) => {
@@ -367,7 +368,9 @@ describe('useBarcodeDetection', () => {
 		// toast; the rejection is only logged (and visible in the test panel).
 		expect(detected).toEqual([]);
 		expect(mockToastShow).not.toHaveBeenCalled();
-		expect(barcodeLogger.warn).toHaveBeenCalledWith(
+		// …and only forensically: no toast means almost certainly a typist, so no amber row.
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+		expect(barcodeLogger.debug).toHaveBeenCalledWith(
 			'Fast keystroke burst was shorter than the minimum length',
 			expect.objectContaining({
 				context: expect.objectContaining({ terminated: false, toastShown: false }),

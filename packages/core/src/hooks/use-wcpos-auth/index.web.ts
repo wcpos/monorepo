@@ -147,7 +147,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!request || !config.site) {
-			oauthLogger.warn('Auth not ready', {
+			oauthLogger.debug('Auth not ready', {
 				context: { hasRequest: !!request, hasSite: !!config.site },
 			});
 			return;
@@ -229,6 +229,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			const errorResult: WcposAuthResult = {
 				type: 'error',
 				error: errorMessage,
+				reported: true,
 			};
 			setImperativeResult(errorResult);
 			return errorResult;

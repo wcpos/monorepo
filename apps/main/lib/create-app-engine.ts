@@ -157,6 +157,12 @@ type CachedEngine = {
 };
 
 let cachedEngine: CachedEngine | null = null;
+/**
+ * Bumped each time the cashier's render intent moves to a new scope on an entry, so a
+ * failing switch can tell whether it is still the switch the cashier asked for (a
+ * rejected latest request rewinds `renderKey`, so the key alone cannot say).
+ */
+const renderIntentSeq = new WeakMap<CachedEngine, number>();
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
@@ -303,8 +309,10 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			for (const databaseName of entry.databaseNames) {
 				forceFreeDatabaseRegistration(databaseName);
 			}
-			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+			// The app force-releases and carries on, so this is SYNC181 (slow storage,
+			// outcome not yet known) at warn — not a red "syncing hit a problem".
+			engineLogger.warn('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
+				code: ERROR_CODES.LOCAL_DB_STALLED,
 				context: {
 					scopeKey: disposalKey,
 					databaseNames: [...entry.databaseNames],
@@ -395,10 +403,19 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			return entry.engine;
 		}
 		entry.renderKey = cacheKey;
+		const intent = (renderIntentSeq.get(entry) ?? 0) + 1;
+		renderIntentSeq.set(entry, intent);
 		void requestScope(entry, options.scope, projected).catch((error) => {
+			// The cashier is left on a stuck or previous store: say so, and what to do —
+			// but only while this request is still what they asked for. A switch the
+			// cashier has since superseded (another store picked, a new engine cached)
+			// keeps its row and gets no "reload" toast against the store they are on.
+			const current = cachedEngine === entry && renderIntentSeq.get(entry) === intent;
 			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
+				showToast: current,
 				context: {
+					superseded: !current,
 					scopeKey: cacheKey,
 					error: error instanceof Error ? error.message : String(error),
 				},

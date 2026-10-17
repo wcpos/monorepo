@@ -1463,13 +1463,56 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, scope: target });
 
 		expect(first.scope.switch).toHaveBeenCalledTimes(2);
+		// CLIENT181 with a toast: the cashier is told to reload and choose the store again.
 		expect(networkError).toHaveBeenCalledWith(
-			expect.any(String),
+			'ENGINE SCOPE SWITCH FAILED',
 			expect.objectContaining({
-				code: 'SYNC999',
+				code: 'CLIENT181',
+				showToast: true,
 				context: expect.objectContaining({
 					scopeKey: expect.any(String),
 				}),
+			})
+		);
+	});
+
+	it('gives no reload toast for a switch the cashier has already superseded', async () => {
+		const rejecters: ((error: Error) => void)[] = [];
+		const first = createEngineDouble(
+			undefined,
+			() =>
+				new Promise<never>((_resolve, reject) => {
+					rejecters.push(reject);
+				})
+		);
+		const engines = [first, createEngineDouble()];
+		const { createAppSyncEngine, networkError } = loadCreateAppEngine(() => {
+			const engine = engines.shift();
+			if (!engine) return first;
+			return engine;
+		});
+		createAppSyncEngine(BASE_OPTIONS);
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' } });
+		await Promise.resolve();
+		// The cashier picks store-3 before store-2's switch settles.
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' } });
+
+		// store-2's switch (the superseded one) is the one that fails.
+		rejecters[0](new Error('refused'));
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const rows = networkError.mock.calls.filter(
+			([message]) => message === 'ENGINE SCOPE SWITCH FAILED'
+		);
+		expect(rows.length).toBeGreaterThan(0);
+		// Still a row (support needs it), but no "reload" toast against the store now open.
+		expect(rows[0][1]).toEqual(
+			expect.objectContaining({
+				code: 'CLIENT181',
+				showToast: false,
+				context: expect.objectContaining({ superseded: true }),
 			})
 		);
 	});
@@ -1789,6 +1832,7 @@ describe('createAppSyncEngine scope cache', () => {
 				markStorageTerminallyFailed,
 				forceFreeDatabaseRegistration,
 				networkError,
+				networkWarn,
 			} = loadCreateAppEngine(() => {
 				const engine = engines.shift();
 				if (!engine) throw new Error('missing engine double');
@@ -1833,7 +1877,12 @@ describe('createAppSyncEngine scope cache', () => {
 			// The successor may only be released AFTER the registration is freed —
 			// a barrier that settles first would race the successor's open into DB8.
 			expect(barrierSettledWhenFreed).toBe(false);
-			expect(networkError).toHaveBeenCalled();
+			// The app force-releases and carries on: SYNC181 at warn, not a red SYNC999.
+			expect(networkError).not.toHaveBeenCalled();
+			expect(networkWarn).toHaveBeenCalledWith(
+				'ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier',
+				expect.objectContaining({ code: 'SYNC181' })
+			);
 		} finally {
 			jest.useRealTimers();
 		}

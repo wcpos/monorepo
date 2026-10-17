@@ -37,7 +37,7 @@ import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-changes';
@@ -179,9 +179,9 @@ export function UserMenu() {
 			return;
 		}
 
-		uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
-		});
+		// A fallback that works on web, and a refusal with its own toast on native:
+		// worth a warn for support, not a red "unexpected error, report it".
+		uiLogger.warn('Failed to schedule the pre-hydration reset; falling back to direct clear');
 
 		if (Platform.OS !== 'web') {
 			// Without the flag, a direct clear would leave the running app pointing
@@ -229,10 +229,13 @@ export function UserMenu() {
 			Toast.show({
 				type: 'error',
 				title: t('common.store_switch_failed'),
-				description: getErrorMessage(error),
+				// The raw message rides the row below; the cashier gets what to do.
+				description: t('common.store_switch_failed_hint'),
 			});
+			// The same incident as the engine's failed scope switch: CLIENT181, so the
+			// row says what the toast says.
 			uiLogger.error('Store switch failed', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
 				context: { error },
 			});
 		} finally {

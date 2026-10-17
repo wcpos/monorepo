@@ -97,7 +97,8 @@ export function DemoButton() {
 		if (response.type === 'success') {
 			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
-			void handleLoginSuccess({ params: response.params } as any);
+			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
+			void handleLoginSuccess({ params: response.params } as any).catch(() => undefined);
 		} else if (response.type === 'error') {
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,

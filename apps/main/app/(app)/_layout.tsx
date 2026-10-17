@@ -328,7 +328,7 @@ function MetricsPersistenceBridge() {
 				hydrateMetricsBuckets(state.get());
 			})
 			.catch((error: unknown) => {
-				metricsLogger.warn('Failed to hydrate host sync metrics', {
+				metricsLogger.debug('Failed to hydrate host sync metrics', {
 					context: { error: String(error) },
 				});
 			});
@@ -338,7 +338,7 @@ function MetricsPersistenceBridge() {
 				const state = await statePromise;
 				await state.set('', () => buckets);
 			} catch (error) {
-				metricsLogger.warn('Failed to persist host sync metrics', {
+				metricsLogger.debug('Failed to persist host sync metrics', {
 					context: { error: String(error) },
 				});
 			}

@@ -165,7 +165,7 @@ async function removeStaleSearchCollections(
 				database.hashFunction
 			);
 		} catch (error: any) {
-			searchLogger.warn('Could not remove a stale search index', {
+			searchLogger.debug('Could not remove a stale search index', {
 				context: {
 					collection: collection.name,
 					locale,
@@ -207,7 +207,7 @@ export async function removePersistedSearchIndexes(collection: RxCollection): Pr
 		// A transient storage failure (worker not up yet) must not spend the
 		// once-per-session ticket: log it and let the next opener retry (Codex review).
 		persistedIndexSweeps.delete(sweepKey);
-		searchLogger.warn('Could not enumerate persisted search indexes', {
+		searchLogger.debug('Could not enumerate persisted search indexes', {
 			context: { collection: collection.name, error: error.message },
 		});
 		return [];
@@ -232,7 +232,7 @@ export async function removePersistedSearchIndexes(collection: RxCollection): Pr
 			removed.push(name);
 		} catch (error: any) {
 			removalFailed = true;
-			searchLogger.warn('Could not remove a persisted search index', {
+			searchLogger.debug('Could not remove a persisted search index', {
 				context: { collection: collection.name, searchCollection: name, error: error.message },
 			});
 		}
@@ -293,7 +293,7 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 				try {
 					await closeSearchInstance(instance, { closeDestination: true });
 				} catch (error: any) {
-					searchLogger.warn('Failed to destroy evicted search instance', {
+					searchLogger.debug('Failed to destroy evicted search instance', {
 						context: {
 							collection: collection.name,
 							locale: oldestLocale,
@@ -426,7 +426,7 @@ async function createSearchInstance(
 				await resetPipelineCheckpoint();
 			}
 		} catch (cleanupError) {
-			searchLogger.warn('Could not dispose failed search instance', {
+			searchLogger.debug('Could not dispose failed search instance', {
 				context: { collection: collection.name, locale, error: String(cleanupError) },
 			});
 		}
@@ -475,7 +475,7 @@ async function destroySearchCollection(collection: RxCollection, locale: string)
 		);
 		return true;
 	} catch (error: any) {
-		searchLogger.warn('Could not destroy search collection via database', {
+		searchLogger.debug('Could not destroy search collection via database', {
 			context: { searchCollection: searchCollectionName, error: error.message },
 		});
 	}
@@ -578,9 +578,8 @@ export const searchPlugin: RxPlugin = {
 					} catch (error: any) {
 						this._searchPromises.delete(locale);
 
-						searchLogger.error('Failed to initialize search', {
-							showToast: false,
-							code: ERROR_CODES.UNEXPECTED_ERROR,
+						// Forensic: recovery usually succeeds, and its verdict is the row.
+						searchLogger.debug('Failed to initialize search', {
 							context: {
 								collection: this.name,
 								locale,
@@ -612,9 +611,9 @@ export const searchPlugin: RxPlugin = {
 								return searchInstance;
 							} catch (retryError: any) {
 								await destroySearchCollection(this, locale);
-								searchLogger.error('Search recovery failed', {
+								searchLogger.warn('Search recovery failed', {
 									showToast: true,
-									code: ERROR_CODES.UNEXPECTED_ERROR,
+									code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
 									context: {
 										collection: this.name,
 										locale,
@@ -622,6 +621,11 @@ export const searchPlugin: RxPlugin = {
 									},
 								});
 							}
+						} else {
+							searchLogger.warn('Search recovery could not remove the damaged index', {
+								code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
+								context: { collection: this.name, locale, error: error.message },
+							});
 						}
 
 						throw error;
@@ -712,7 +716,7 @@ export const searchPlugin: RxPlugin = {
 
 									// Only destroy if it's a FlexSearch collection and not already destroyed
 									if (!isFlexSearchCollection) {
-										searchLogger.warn('Skipping non-FlexSearch collection destruction', {
+										searchLogger.debug('Skipping non-FlexSearch collection destruction', {
 											context: {
 												mainCollection: this.name,
 												locale: loc,
@@ -736,7 +740,7 @@ export const searchPlugin: RxPlugin = {
 											context: { mainCollection: this.name, locale: loc },
 										});
 									} catch (error: any) {
-										searchLogger.warn('Error destroying search instance on cleanup', {
+										searchLogger.debug('Error destroying search instance on cleanup', {
 											context: {
 												collection: this.name,
 												locale: loc,
@@ -839,7 +843,7 @@ export const searchPlugin: RxPlugin = {
 						try {
 							await closeSearchInstance(oldInstance);
 						} catch (error: any) {
-							searchLogger.warn('Error destroying old search instance', {
+							searchLogger.debug('Error destroying old search instance', {
 								context: {
 									collection: this.name,
 									locale,
@@ -888,9 +892,9 @@ export const searchPlugin: RxPlugin = {
 
 					return searchInstance;
 				} catch (error: any) {
-					searchLogger.error('Failed to recreate search index', {
+					searchLogger.warn('Failed to recreate search index', {
 						showToast: true,
-						code: ERROR_CODES.UNEXPECTED_ERROR,
+						code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
 						context: {
 							collection: this.name,
 							locale,

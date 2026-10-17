@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
@@ -114,9 +113,10 @@ export function useReceiptData({
 				if (cancelled) return;
 
 				const error = err instanceof Error ? err : new Error(String(err));
-				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
-				logger[logLevel]('Failed to fetch receipt data', {
-					code: ERROR_CODES.PRINT_UNEXPECTED,
+				// The receipt falls back to locally built data and still prints, so this is
+				// lifecycle (offline: forensic), not a printing problem.
+				const logLevel = isExpectedPreflightBlock(err) ? 'debug' : 'info';
+				logger[logLevel]('Receipt built from local data: server receipt data unavailable', {
 					context: { orderId, mode, error: error.message },
 				});
 

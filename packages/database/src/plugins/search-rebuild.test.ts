@@ -195,6 +195,8 @@ it.each(['read', 'open', 'damaged'])(
 		expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
 		expect((await rebuilt.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
 		expect((await reopened.find().exec()).map((doc) => doc.toJSON(true))).toEqual(sourceBefore);
+		// A failure the rebuild recovered from is no error row: the verdict is the row.
+		expect(logger.error).not.toHaveBeenCalledWith('Failed to initialize search', expect.anything());
 		await rebuilt.pipeline.close();
 		await rebuilt.close();
 	}

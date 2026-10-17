@@ -2000,6 +2000,27 @@
 		"introducedIn": "1.10.21"
 	},
 	{
+		"code": "CLIENT181",
+		"symbol": "STORE_SWITCH_FAILED",
+		"domain": "CLIENT",
+		"severity": "error",
+		"actionHint": "Reload WCPOS and choose the store again. Nothing on this device is lost.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "WCPOS couldn't switch to that store.",
+		"docsBody": "Switching stores closes the current store's local data and opens the next one's. Here the switch did not complete — the next store's local database or sync engine could not be opened — so the screen may still show the previous store or be stuck loading. Unsent changes stay in each store's own local data on this device; nothing is deleted by a failed switch.",
+		"troubleshooting": [
+			"Reload WCPOS (on the web, reload the tab), then choose the store again from the store list.",
+			"If the same store fails to open every time, check Store health for storage warnings, then export debug info and contact support."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "2026-10-17 owner ruling on monorepo#2678: a failed engine scope switch logged SYNC999 'syncing hit an unexpected problem' with no toast, leaving the cashier on a stuck or wrong store with no instruction.",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"code": "CLIENT171",
 		"symbol": "CLOCK_OUT_OF_SYNC",
 		"domain": "CLIENT",

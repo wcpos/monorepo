@@ -21,6 +21,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+import { classifyResolutionError } from './resolution-error';
 import { Callout, Pill } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type RejectedMutation, useRejectedMutations } from './use-rejected-mutations';
@@ -109,6 +110,18 @@ export function RejectedMutationsPanel() {
 				});
 				return;
 			}
+			// Clicking a change that is already resolved is not an error: say so, no row.
+			const kind = classifyResolutionError(error);
+			if (kind !== 'failed') {
+				Toast.show({
+					type: 'info',
+					text1:
+						kind === 'already-resolved'
+							? t('health.database.already_resolved')
+							: t('health.database.resolving_elsewhere'),
+				});
+				return;
+			}
 			const message = getErrorMessage(error);
 			logger.error('dead letter resolution failed', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -126,7 +139,8 @@ export function RejectedMutationsPanel() {
 					resolution === 'discard'
 						? t('health.database.rejected.discard_failed')
 						: t('health.database.rejected.requeue_failed'),
-				text2: message,
+				// The raw engine message (with its uuid) stays in the row, not the toast.
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);

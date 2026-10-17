@@ -190,6 +190,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT421');
 		case 'CLIENT151':
 			return t('health.logs.error_action.CLIENT151');
+		case 'CLIENT181':
+			return t('health.logs.error_action.CLIENT181');
 		case 'CLIENT171':
 			return t('health.logs.error_action.CLIENT171');
 		case 'AUTH131':

@@ -13,7 +13,8 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
 import { isCanonicalUuid, normalizeUuid, scannerDeviceKey } from '@wcpos/scanner';
-import { getErrorMessage } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/scan-hub-context';
@@ -23,6 +24,20 @@ import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
+const scannerSettingsLogger = getLogger(['wcpos', 'settings', 'scanners']);
+
+/**
+ * A scanner profile is a local database write: one SYNC101 row, whose own summary
+ * and hint are the toast. The raw RxDB message stays in the row, never as the
+ * toast's only sentence under a bare "Error" title.
+ */
+function reportScannerSettingFailure(action: string, error: unknown): void {
+	scannerSettingsLogger.error('Scanner setting could not be saved', {
+		code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+		showToast: true,
+		context: { action, error: getErrorMessage(error) },
+	});
+}
 const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 
 /**
@@ -183,11 +198,7 @@ export function InputSources() {
 			setName('');
 			Toast.show({ type: 'success', title: t('settings.scanner_registered'), duration: 2500 });
 		} catch (error) {
-			Toast.show({
-				type: 'error',
-				title: t('common.error'),
-				description: getErrorMessage(error),
-			});
+			reportScannerSettingFailure('register', error);
 		}
 	};
 
@@ -195,11 +206,7 @@ export function InputSources() {
 		try {
 			await profile.getLatest().remove();
 		} catch (error) {
-			Toast.show({
-				type: 'error',
-				title: t('common.error'),
-				description: getErrorMessage(error),
-			});
+			reportScannerSettingFailure('remove', error);
 		}
 	};
 
@@ -244,11 +251,7 @@ export function InputSources() {
 				duration: 2500,
 			});
 		} catch (error) {
-			Toast.show({
-				type: 'error',
-				title: t('common.error'),
-				description: getErrorMessage(error),
-			});
+			reportScannerSettingFailure('add-bluetooth-uuid', error);
 		}
 	};
 

@@ -127,7 +127,7 @@ async function describe(
 				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
 			} catch (error) {
 				readFailed = true;
-				healthLogger.warn('Rejected-mutations panel could not read the local record', {
+				healthLogger.debug('Rejected-mutations panel could not read the local record', {
 					context: {
 						collection: entry.collectionName,
 						recordId: entry.recordId,

@@ -20,6 +20,7 @@ import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import '@wcpos/database/plugins';
 import { storeCollections, type TemplateCollection } from '@wcpos/database/collections';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { syncTemplates } from './use-templates-sync';
 
@@ -174,6 +175,22 @@ describe('syncTemplates', () => {
 
 		const docs = await db.collections.templates.find().exec();
 		expect(docs).toHaveLength(serverPayload.length);
+	});
+
+	it('codes a rejected local save SYNC101 — the only copy failing — not the refresh info line', async () => {
+		const collection = db.collections.templates;
+		jest.spyOn(collection, 'bulkUpsert').mockRejectedValueOnce(new Error('storage worker gone'));
+
+		await syncTemplates(collection, fakeHttpClient(serverPayload));
+
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			'Receipt templates could not be saved on this device',
+			{ code: 'SYNC101', context: { error: 'storage worker gone' } }
+		);
+		expect(getLogger([]).info).not.toHaveBeenCalledWith(
+			'Receipt templates not refreshed; using the saved templates',
+			expect.anything()
+		);
 	});
 
 	it('ignores a non-array response body', async () => {

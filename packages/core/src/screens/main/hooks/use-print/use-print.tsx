@@ -3,7 +3,9 @@ import * as React from 'react';
 import * as Print from 'expo-print';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+import { reportPrintFailure } from './print-failure';
+import { useT } from '../../../../contexts/translations';
 
 import type { UsePrintOptions } from './use-print.types';
 
@@ -16,10 +18,11 @@ const printLogger = getLogger(['wcpos', 'print', 'native']);
 export const usePrint = (options: UsePrintOptions) => {
 	const { html, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
+	const t = useT();
 
 	const print = React.useCallback(async () => {
 		if (!html) {
-			printLogger.warn('No HTML content provided to print');
+			printLogger.debug('No HTML content provided to print');
 			return;
 		}
 
@@ -38,12 +41,13 @@ export const usePrint = (options: UsePrintOptions) => {
 			// Call onAfterPrint if provided
 			onAfterPrint?.();
 		} catch (error) {
-			printLogger.error('Print error', { code: ERROR_CODES.PRINT_UNEXPECTED, context: { error } });
+			// Closing the iOS print dialog rejects too: that is a cancel, not a failure.
+			reportPrintFailure(printLogger, 'Print error', error, t);
 			onPrintError?.('print', error as Error);
 		} finally {
 			setIsPrinting(false);
 		}
-	}, [html, onBeforePrint, onAfterPrint, onPrintError]);
+	}, [html, onBeforePrint, onAfterPrint, onPrintError, t]);
 
 	return { print, isPrinting };
 };

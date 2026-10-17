@@ -14,6 +14,7 @@ import { createEngineDatabase, createFakeEngine, engineProduct } from '../src/te
 
 const searchLogger = getLogger(['wcpos', 'query', 'search']);
 const searchError = jest.mocked(searchLogger.error);
+const searchWarn = jest.mocked(searchLogger.warn);
 
 /** Fast cadence so a test observes several audit ticks inside its own timeout. */
 const TEST_TIMINGS = {
@@ -213,7 +214,8 @@ describe('startSearchReadiness', () => {
 			});
 			try {
 				await waitFor(() => expect(recreateSearch).toHaveBeenCalledTimes(1), { timeout: 2000 });
-				expect(searchError).toHaveBeenCalledWith(
+				// The first miss rebuilds itself: warn, not error.
+				expect(searchWarn).toHaveBeenCalledWith(
 					'Search index cannot find an indexed document by its own tokens',
 					expect.objectContaining({
 						code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,

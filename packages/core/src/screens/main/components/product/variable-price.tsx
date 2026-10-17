@@ -32,7 +32,9 @@ export function VariableProductPrice({
 		regularPrice: product.payload.regular_price,
 		salePrice: product.payload.sale_price,
 	}));
-	const variablePrices = getVariablePrices(metaData, owner);
+	const scope = (row.original.record as { collection?: { database?: { name?: string } } })
+		.collection?.database?.name;
+	const variablePrices = getVariablePrices(metaData, { ...owner, scope });
 	const key = column.id as PriceKey;
 	const safeTaxStatus = taxStatus || 'none';
 

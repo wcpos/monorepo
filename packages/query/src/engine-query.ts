@@ -48,10 +48,12 @@ import {
 	searchTokens,
 } from './search-match';
 import {
+	markSearchRebuildCompleted,
 	rebuiltSearchIndexes,
 	SEARCH_SCAN_RETHROTTLE_MS,
 	type SearchableCollection,
 	searchLogger,
+	searchRebuildCompleted,
 	sharedSearchInstances,
 } from './search-shared';
 
@@ -305,7 +307,10 @@ function matchingSelectors$(
 						const falseHits = findFalseHits(documents);
 						if (falseHits.length === 0) return documents;
 						const alreadyRebuilt = rebuiltSearchIndexes.has(sharedKey);
-						searchLogger.error('Search index divergence detected', {
+						// A rebuild is triggered automatically ("nothing to do"): warn. Only a
+						// divergence that survives a rebuild is an error.
+						const survivedRebuild = searchRebuildCompleted(collection, locale);
+						searchLogger[survivedRebuild ? 'error' : 'warn']('Search index divergence detected', {
 							code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
 							showToast: false,
 							context: {
@@ -329,6 +334,7 @@ function matchingSelectors$(
 								searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
 								documentSnapshot,
 							});
+							markSearchRebuildCompleted(collection, locale);
 							if (rebuilt) searchInstances.next(rebuilt);
 							return filtered;
 						} catch (error) {

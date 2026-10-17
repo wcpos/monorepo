@@ -9,10 +9,12 @@ import { engineCollectionNameFor, LEGACY_SEARCH_FIELDS } from './engine-adapter/
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { observeEngineDatabases } from './engine-query';
 import {
+	markSearchRebuildCompleted,
 	rebuiltSearchIndexes,
 	type SearchableCollection,
 	type SearchInstance,
 	searchLogger,
+	searchRebuildCompleted,
 	sharedSearchInstances,
 } from './search-shared';
 
@@ -300,23 +302,30 @@ export function startSearchReadiness(options: {
 		auditFailureStreaks.delete(key);
 
 		const alreadyRebuilt = rebuiltSearchIndexes.has(key);
-		searchLogger.error('Search index cannot find an indexed document by its own tokens', {
-			code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
-			showToast: false,
-			context: {
-				collection: name,
-				locale,
-				uuid: sample.primary,
-				tokens,
-				...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
-			},
-		});
+		// A rebuild is triggered automatically ("nothing to do"): warn. Only a miss
+		// that survives a rebuild is an error.
+		// Error only once a COMPLETED rebuild still misses; a pending one is just the guard.
+		searchLogger[searchRebuildCompleted(collection, locale) ? 'error' : 'warn'](
+			'Search index cannot find an indexed document by its own tokens',
+			{
+				code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
+				showToast: false,
+				context: {
+					collection: name,
+					locale,
+					uuid: sample.primary,
+					tokens,
+					...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
+				},
+			}
+		);
 		if (alreadyRebuilt) return;
 		rebuiltSearchIndexes.add(key);
 		try {
 			await collection.recreateSearch?.(locale);
 			if (stale()) return;
 			const rebuilt = await collection.initSearch(locale, initializationOptions);
+			markSearchRebuildCompleted(collection, locale);
 			// Rebind every live search subscription to the rebuilt instance — but
 			// never after a store switch: pushing the OLD scope's instance under the
 			// scope-less shared key would rebind the NEW scope's subscriptions.

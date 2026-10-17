@@ -139,7 +139,7 @@ export class SppNativeAdapter implements PrinterTransport {
 						if (offset + SPP_CHUNK_SIZE < data.byteLength) await pause(SPP_CHUNK_PAUSE_MS);
 					}
 				} catch (cause) {
-					printerLogger.warn('Bluetooth SPP print failed', {
+					printerLogger.debug('Bluetooth SPP print failed', {
 						context: { cause: cause instanceof Error ? cause.message : String(cause), chunks },
 					});
 					// open() cleared the idle timer, so a failed socket would otherwise

@@ -14,6 +14,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useCollection } from '../../hooks/use-collection';
+import { isChooserCancel } from './chooser-cancel';
 
 import type { UseHidScanResult } from './use-hid-scan';
 
@@ -199,7 +200,12 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 				await attachDevice(devices[0], true);
 			}
 		} catch (error) {
-			hidLogger.warn('hid connect cancelled or failed', { context: { error: String(error) } });
+			// Closing the browser's device chooser is a cancel, not a fault.
+			const cancelled = isChooserCancel(error);
+			hidLogger[cancelled ? 'debug' : 'warn'](
+				cancelled ? 'hid connect cancelled' : 'hid connect failed',
+				{ context: { error: String(error) } }
+			);
 		}
 	}, [attachDevice]);
 
@@ -235,7 +241,8 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 				await attachDevice(match, false);
 			}
 		})().catch((error) => {
-			hidLogger.warn('Failed to reopen saved HID scanner', { context: { error: String(error) } });
+			// A silent best-effort reopen on mount (another tab may hold the device).
+			hidLogger.debug('Failed to reopen saved HID scanner', { context: { error: String(error) } });
 		});
 		return () => {
 			cancelled = true;

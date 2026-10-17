@@ -219,7 +219,9 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				await novuMarkAsRead(notificationId);
 			} catch (error) {
 				novuLogger.error('Novu: Failed to mark notification as read', {
-					code: ERROR_CODES.UNEXPECTED_ERROR,
+					// The Novu client turns its own failures into false; what throws here is the
+					// local read/write of the notification's state.
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: { error },
 				});
 			}
@@ -250,7 +252,9 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			await novuMarkAllAsRead();
 		} catch (error) {
 			novuLogger.error('Novu: Failed to mark all notifications as read', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+				// The Novu client turns its own failures into false; what throws here is the
+				// local read/write of the notification's state.
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 				context: { error },
 			});
 		}
@@ -277,7 +281,9 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			await novuMarkAllAsSeen();
 		} catch (error) {
 			novuLogger.error('Novu: Failed to mark all notifications as seen', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+				// The Novu client turns its own failures into false; what throws here is the
+				// local read/write of the notification's state.
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 				context: { error },
 			});
 		}

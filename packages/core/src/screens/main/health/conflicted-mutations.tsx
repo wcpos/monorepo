@@ -24,6 +24,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../contexts/translations';
 import { useRecordEditRoute } from './record-edit-route';
+import { classifyResolutionError } from './resolution-error';
 import { Callout, Pill } from './components';
 import { useManualSync } from './use-manual-sync';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -122,6 +123,18 @@ export function ConflictedMutationsPanel() {
 				});
 				return;
 			}
+			// Clicking a change that is already resolved is not an error: say so, no row.
+			const kind = classifyResolutionError(error);
+			if (kind !== 'failed') {
+				Toast.show({
+					type: 'info',
+					text1:
+						kind === 'already-resolved'
+							? t('health.database.already_resolved')
+							: t('health.database.resolving_elsewhere'),
+				});
+				return;
+			}
 			const message = getErrorMessage(error);
 			logger.error('conflict resolution failed', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -139,7 +152,8 @@ export function ConflictedMutationsPanel() {
 					resolution === 'discard'
 						? t('health.database.conflicted.discard_failed')
 						: t('health.database.conflicted.resend_failed'),
-				text2: message,
+				// The raw engine message (with its uuid) stays in the row, not the toast.
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);
