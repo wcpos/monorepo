@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import * as SwitchPrimitives from '@rn-primitives/switch';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -159,30 +159,34 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 		<Animated.View
 			style={[animatedRootStyle, wrapperStyle]}
 			// The caller's classes land on the wrapper that owns the layout and paints the
-			// track, as they do on the web root; the primitive underneath is only the hit area.
+			// track, as they do on the web root: the row lays out the drawn 20 × 34 track only.
 			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45', className)}
 			onLayout={({ nativeEvent: { layout } }) => {
 				trackWidth.value = layout.width;
 			}}
 		>
-			<SwitchPrimitives.Root
-				// No size of its own: it fills whatever the wrapper measures, so a caller's
-				// width lands on the same track the thumb's travel is read from.
-				className="absolute inset-0 flex-row items-center bg-transparent p-0.5"
-				style={pressableStyle}
-				{...props}
-				ref={ref}
+			<Animated.View
+				style={animatedThumbStyle}
+				onLayout={({ nativeEvent: { layout } }) => {
+					thumbWidth.value = layout.width;
+					padding.value = layout.x;
+				}}
 			>
-				<Animated.View
-					style={animatedThumbStyle}
-					onLayout={({ nativeEvent: { layout } }) => {
-						thumbWidth.value = layout.width;
-						padding.value = layout.x;
-					}}
-				>
-					<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
-				</Animated.View>
-			</SwitchPrimitives.Root>
+				<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
+			</Animated.View>
+			{/* The finger gets 44 × 44 (§ Design 2, both HIGs) while the row still lays out the
+			    drawn track: the press area is a control-token square centred over the track and
+			    overflowing it, out of layout. Not hitSlop: iOS drops a touch outside a parent
+			    that nothing overflows, so slop past a 20 pt row never reaches the switch; a real
+			    overflowing child is hit-tested on iOS and Android alike. */}
+			<View pointerEvents="box-none" className="absolute inset-0 items-center justify-center">
+				<SwitchPrimitives.Root
+					className="h-ctl w-ctl bg-transparent"
+					style={pressableStyle}
+					{...props}
+					ref={ref}
+				/>
+			</View>
 		</Animated.View>
 	);
 }
