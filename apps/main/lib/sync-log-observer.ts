@@ -428,9 +428,16 @@ export const CONFORMANCE_TABLE = {
 		message: recordMessage('push aborted'),
 	},
 	'push.conflict': {
+		// One push's 409, not the record's verdict. The drain settles it next: an
+		// order re-anchors and re-pushes once (#1204) and lands as
+		// conflict-recovered / conflict-overwrote-server; anything it cannot settle
+		// parks as queue.write.conflict-transition, which carries SYNC221. Stamping
+		// SYNC221 here told the cashier to "re-apply the values" for an order the
+		// till had already saved (demo.wcpos.com, 2026-10-17).
 		operationType: 'sync.record',
-		outcome: 'failed',
-		code: ERROR_CODES.RECORD_CONFLICT,
+		outcome: 'unknown',
+		code: null,
+		level: 'info',
 		message: recordMessage('push conflict'),
 	},
 	'push.in_progress': {

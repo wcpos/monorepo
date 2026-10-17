@@ -330,6 +330,30 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it('keeps SYNC221 for the parked clash, not the first 409 an order re-pushes past', () => {
+		observer.observe(
+			event({
+				type: 'push.conflict',
+				level: 'warn',
+				collection: 'orders',
+				fields: { recordId: 'order-9', mutationId: 'mutation-9' },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'queue.write.conflict-transition',
+				level: 'warn',
+				collection: 'orders',
+				fields: { recordId: 'order-9', mutationId: 'mutation-9' },
+			})
+		);
+
+		expect(rows.map((row) => [row.context.type, row.level, row.code])).toEqual([
+			['push.conflict', 'info', undefined],
+			['queue.write.conflict-transition', 'warn', 'SYNC221'],
+		]);
+	});
+
 	it('names the server fields overwritten by a recovered conflict', () => {
 		observer.observe(
 			event({

@@ -375,6 +375,10 @@ export function createEngineFetcher(input: {
 		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
 		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
 		 *    it needs attention, not a refresh loop.
+		 *  - 409 → info, still a failed request in the metrics: the server answered
+		 *    a push with a clash the record-level events narrate and settle (an
+		 *    order re-pushes once; a parked clash is the SYNC221 row). A warn here
+		 *    put a second SYNC221 action on a push that went on to save.
 		 *  - anything else !ok → warn (will need attention if it persists).
 		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
@@ -382,6 +386,7 @@ export function createEngineFetcher(input: {
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
+			else if (status === 409) attempt.settle('info', extraFields, { failed: true });
 			else if (status === 403) {
 				if (forbiddenPathsOwner !== input.auth.credentials) {
 					forbiddenPaths.clear();

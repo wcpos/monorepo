@@ -1313,6 +1313,25 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	it('settles a push 409 at info: the record-level events narrate the clash', async () => {
+		const fetch = jest.fn().mockResolvedValueOnce(new Response(null, { status: 409 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/push/orders', {
+			method: 'POST',
+		});
+
+		expect(response?.status).toBe(409);
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'info',
+				fields: expect.objectContaining({ status: 409 }),
+			})
+		);
+		fetch.mockReset();
+	});
+
 	it('reports a 403 at error once per path and at info after that (#1876)', async () => {
 		// Sentry AUTH201: a cashier without customer read permission produced one
 		// error row per 10 s tick, 242 events on 11 installs. The permission is a
