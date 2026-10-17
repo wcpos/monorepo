@@ -31,4 +31,18 @@ describe('reportRestoreFailure', () => {
 			context: { error: '500' },
 		});
 	});
+
+	it('reports at the mapped code’s own severity — an ended session is a warning, not red', () => {
+		reportRestoreFailure(
+			logger,
+			Object.assign(new Error('401'), { isAxiosError: true, response: { status: 401 } }),
+			t
+		);
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).toHaveBeenCalledWith(
+			'Failed to restore server settings',
+			expect.objectContaining({ code: 'AUTH101', showToast: true })
+		);
+	});
 });

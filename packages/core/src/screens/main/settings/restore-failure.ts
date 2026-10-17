@@ -1,6 +1,6 @@
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getErrorMessage } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ExtendedLogger } from '@wcpos/utils/logger';
 
 import { storeRequestFailureCode } from '../../../utils/store-request-failure-code';
@@ -30,9 +30,9 @@ export function reportRestoreFailure(
 		});
 		return;
 	}
-	logger.error('Failed to restore server settings', {
-		showToast: true,
-		code: storeRequestFailureCode(error),
-		context,
-	});
+	const code = storeRequestFailureCode(error);
+	logger[ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn'](
+		'Failed to restore server settings',
+		{ showToast: true, code, context }
+	);
 }

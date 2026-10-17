@@ -473,6 +473,29 @@ describe('refreshAccessToken', () => {
 			);
 		});
 
+		it('counts the streak per session: another cashier’s failures do not make a first blip "persist"', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 2; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...first, operationId: `first-${attempt}` });
+				}
+				now += 120_000;
+				await refreshAccessToken({ ...other, operationId: 'other-0' });
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+		});
+
 		it('warns with the store’s own code once transient refresh failures persist', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
 			const { config } = makeConfig(post);

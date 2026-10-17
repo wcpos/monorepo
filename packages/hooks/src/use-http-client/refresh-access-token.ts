@@ -17,6 +17,8 @@ let refreshFailureStreak = 0;
  * roughly 7 s of a store that will not answer, which is worth saying.
  */
 const TRANSIENT_REFRESH_FAILURES_BEFORE_REPORT = 3;
+/** The session the streak was counted for: a new site or user starts from zero. */
+let refreshStreakSession: string | null = null;
 let refreshRetryAtMs = 0;
 
 export function resetRefreshCooldown(): void {
@@ -98,6 +100,13 @@ export async function refreshAccessToken({
 	// /auth/refresh again indefinitely once the refresh token is known-bad.
 	if (requestStateManager.isAuthFailed()) {
 		return null;
+	}
+	// Persistence is measured per session: another store's or cashier's failures must
+	// not make this session's first blip read as "keeps happening".
+	const session = `${site.url ?? ''}|${String(wpUser.id ?? '')}`;
+	if (session !== refreshStreakSession) {
+		refreshStreakSession = session;
+		refreshFailureStreak = 0;
 	}
 	const nowMs = Date.now();
 	if (nowMs < refreshRetryAtMs) {

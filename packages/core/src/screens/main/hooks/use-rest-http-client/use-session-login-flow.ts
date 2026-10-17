@@ -169,8 +169,12 @@ export const useSessionLoginFlow = (
 				});
 			} catch (error) {
 				// handleLoginSuccess already wrote the one row and toast for its failure;
-				// skipping here also skips the false "Session renewed" above.
-				if (isErrorReported(error)) return;
+				// skipping here also skips the false "Session renewed" above. Forget the
+				// response so a retry that returns the same token is processed again.
+				if (isErrorReported(error)) {
+					processedResponseRef.current = null;
+					return;
+				}
 				authLogger.error('Failed to save login credentials', {
 					showToast: true,
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
@@ -187,22 +191,31 @@ export const useSessionLoginFlow = (
 		} else if (response.type === 'error') {
 			// OAuth returned an error (e.g., invalid credentials)
 			// authFailed stays true - user needs to try again
-			// The auth hook that produced this result (state mismatch, IPC failure, a
-			// provider error) already wrote its own coded row, and none of those is a
-			// credential rejection — the login page handles a wrong password itself. So
-			// no second row and no "re-enter the username and password": tell the cashier
-			// the login didn't complete and to try again.
-			authLogger.debug('Login did not complete', {
-				context: {
-					siteName: site.name,
-					errorDetails: response.error,
-				},
-			});
-			Toast.show({
-				type: 'error',
-				title: t('auth.login_did_not_complete'),
-				description: t('auth.login_did_not_complete_hint'),
-			});
+			// One row per failure. When the auth hook already wrote its coded row (state
+			// mismatch, IPC failure, a thrown prompt) the cashier only needs the toast;
+			// a provider error it merely passed through is this branch's row to write.
+			// Neither is a credential rejection — the login page handles a wrong
+			// password itself — so never AUTH111 "re-enter the username and password".
+			if (response.reported) {
+				authLogger.debug('Login did not complete', {
+					context: { siteName: site.name, errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+			} else {
+				authLogger.error('Login did not complete', {
+					showToast: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					toast: {
+						title: t('auth.login_did_not_complete'),
+						text2: t('auth.login_did_not_complete_hint'),
+					},
+					context: { siteName: site.name, errorDetails: response.error },
+				});
+			}
 			processedResponseRef.current = responseKey;
 		} else if (
 			response.type === 'dismiss' ||

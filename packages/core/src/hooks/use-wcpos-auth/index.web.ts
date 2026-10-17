@@ -229,6 +229,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			const errorResult: WcposAuthResult = {
 				type: 'error',
 				error: errorMessage,
+				reported: true,
 			};
 			setImperativeResult(errorResult);
 			return errorResult;

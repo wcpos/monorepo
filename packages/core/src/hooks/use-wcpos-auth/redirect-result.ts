@@ -136,6 +136,7 @@ export function captureRedirectResult(): void {
 			result = {
 				type: 'error',
 				error: 'Authentication did not originate from this app session - rejected for security',
+				reported: true,
 			};
 		} else if (returnedState !== savedCsrf) {
 			oauthLogger.error('State parameter mismatch - possible CSRF attack', {
@@ -148,6 +149,7 @@ export function captureRedirectResult(): void {
 			result = {
 				type: 'error',
 				error: 'State parameter mismatch - authentication rejected for security',
+				reported: true,
 			};
 		}
 	}

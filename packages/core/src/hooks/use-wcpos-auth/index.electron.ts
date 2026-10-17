@@ -95,6 +95,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 					const errorResult: WcposAuthResult = {
 						type: 'error',
 						error: 'State parameter mismatch - authentication rejected for security',
+						reported: true,
 					};
 					setResponse(errorResult);
 					return errorResult;
@@ -119,6 +120,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			const errorResult: WcposAuthResult = {
 				type: 'error',
 				error: err instanceof Error ? err.message : 'Authentication failed',
+				reported: true,
 			};
 
 			setResponse(errorResult);
