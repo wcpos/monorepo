@@ -6,6 +6,14 @@ import type { RecordMutation } from './recordMutation';
 const ANNIHILATION_TTL_MS = 120_000;
 // Admission covers only a local enqueue; 30 seconds recovers a crashed writer.
 const WRITER_ADMISSION_TTL_MS = 30_000;
+export const NON_INTERNAL_MUTATION_STATUSES = Object.keys({
+	pending: true,
+	claimed: true,
+	conflicted: true,
+	'needs-revision': true,
+	rejected: true,
+} satisfies Record<Exclude<QueuedMutation['status'], 'internal' | undefined>, true>);
+
 export const isInternalRow = (row: QueuedMutation) => row.status === 'internal';
 const fenceId = (collection: string, record: string) => `${collection}/${record}`;
 
@@ -427,11 +435,12 @@ export class RecordMutationQueue {
 		});
 	}
 
-	/** Reset must also protect a writer that has admission but has not appended yet. */
+	/** Reset protects admitted writers and durable instructions to finish a committed void. */
 	async pendingResetCount(nowMs: number): Promise<number> {
 		return (await this.storage.list()).filter(
 			(row) =>
 				!isInternalRow(row) ||
+				row.payload.phase === 'committed' ||
 				(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
 		).length;
 	}
@@ -539,8 +548,8 @@ export class RecordMutationQueue {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === fenceId(collection, record)
 			);
-			if (!stored) return phase === 'preparing';
-			if (stored.mutation.supersededBy !== token) return false;
+			// No owned fence to roll back: release this void's marks, not the foreign holder.
+			if (!stored || stored.mutation.supersededBy !== token) return phase === 'preparing';
 			return this.storage.appendIfUnchanged({ ...stored.mutation, payload: { phase } }, stored.rev);
 		});
 	}

@@ -38,6 +38,15 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('a committed fence alone remains pending reset work even after expiry', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.fenceForVoid('products', 'rec-A', 'void', 0);
+		expect(await q.pendingResetCount(1)).toBe(0);
+		await q.setVoidPhase('products', 'rec-A', 'void', 'committed');
+		expect(await q.pendingResetCount(1)).toBe(1);
+		expect(await q.pendingResetCount(120_001)).toBe(1);
+	});
+
 	it('live recovery preserves marks while their later-acquired fence is still live', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		await q.enqueue(mut());

@@ -49,6 +49,7 @@ function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
 				};
 
 	return {
+		ready: new Promise(() => {}),
 		active: () => (database ? { database } : null),
 		db$: (cb: (db: unknown) => void) => {
 			cb(database);

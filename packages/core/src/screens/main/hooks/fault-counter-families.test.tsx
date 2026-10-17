@@ -26,6 +26,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION, OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
 import type { HoldCandidate, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { observeUnsentWorkCount } from '@wcpos/query';
 import { forgetUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { useMutationCounts } from './use-engine-monitor';
@@ -88,6 +89,7 @@ const QUEUE: QueueRow[] = [
 
 const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
 const mockEngine = {
+	ready: new Promise(() => {}),
 	active: () => {
 		const database = mockDatabase$.value;
 		return database ? { database } : null;
@@ -99,6 +101,7 @@ const mockEngine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	observeUnsentWorkCount: jest.fn(jest.requireActual('@wcpos/query').observeUnsentWorkCount),
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 
@@ -181,7 +184,7 @@ describe('Unsent work — "is it safe to reset?"', () => {
 		});
 	});
 
-	it('applies NO selector — this family’s exclusion rule is "none at all"', async () => {
+	it('the named read counts all rows minus internal coordination rows', async () => {
 		// The pin: `count()` is called bare. `status` is optional in the queue
 		// schema (absent means pending), so ANY status selector both hides those
 		// rows and quietly adopts another family's exclusions.
@@ -189,7 +192,7 @@ describe('Unsent work — "is it safe to reset?"', () => {
 
 		await countUnsentChanges(engine);
 
-		expect(queue.count).toHaveBeenCalled();
+		expect(observeUnsentWorkCount).toHaveBeenCalledWith(engine, { snapshot: true });
 		// The whole queue is counted bare; the only other count is the EQUALITY count of the
 		// internal coordination rows (admission/fence rows, #2607) that is subtracted from it.
 		// Never a `$ne`: under the SQLite translator that is null-unsafe and would hide every

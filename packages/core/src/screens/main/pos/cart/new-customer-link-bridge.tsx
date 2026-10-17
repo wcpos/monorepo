@@ -4,7 +4,7 @@ import { BehaviorSubject, combineLatest, EMPTY, Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { engineCollection, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { NON_INTERNAL_MUTATION_STATUSES, remoteIdOrNull } from '@wcpos/sync-core';
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -122,7 +122,9 @@ export function NewCustomerLinkBridge(): null {
 				// Thrown, not guessed: the pass keeps the link and the next pass retries.
 				if (!database) throw new Error('No active scope to read the write queue from');
 				const queue = database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as {
-					findOne(query: { selector: Record<string, unknown> }): { exec(): Promise<unknown> };
+					findOne(query: { selector: Record<string, unknown> }): {
+						exec(): Promise<unknown>;
+					};
 				};
 				const row = await queue
 					.findOne({
@@ -130,11 +132,15 @@ export function NewCustomerLinkBridge(): null {
 							collectionName: { $eq: 'orders' },
 							recordId: { $eq: uuid },
 							operation: { $eq: 'delete' },
-							status: { $ne: 'internal' },
+							$or: [
+								{ status: { $exists: false } },
+								{ status: { $in: NON_INTERNAL_MUTATION_STATUSES } },
+							],
 						},
 					})
 					.exec();
-				return row !== null;
+				// SQLite's $ne excludes missing statuses; legacy deletes must still count.
+				return Boolean(row);
 			},
 			serializeOrder: (uuid, run) => enqueueOrderMutation(uuid, (slot) => run(slot)),
 			drop: (uuid, at) => dropCustomerLink(storeDB, uuid, at),

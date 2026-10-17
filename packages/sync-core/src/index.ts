@@ -24,7 +24,7 @@ export {
 export { buildCreateMutation, buildDeleteMutation, buildUpdateMutation } from './recordMutation';
 // prettier-ignore
 export {
-	isInternalRow, pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
+	NON_INTERNAL_MUTATION_STATUSES, isInternalRow, pendingRecordIds, recordMutationQueueMigrationStrategies, recordMutationQueueSchema,
 	RecordMutationQueue, RxRecordMutationStorage, type QueuedMutation,
 	type RxRecordMutationCollection,
 } from './recordMutationQueue';

@@ -117,6 +117,74 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each(['foreign admission', 'owned committed fence'])(
+		'a refused fence releases only uncommitted marks: %s',
+		async (owner) => {
+			const mutationCollection = createFakeMutationCollection();
+			const resident = { toJSON: () => ({ payload: { id: 0 }, sync: {} }) };
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => resident }) },
+					recordMutations: mutationCollection,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			const other = new RecordMutationQueue(new RxRecordMutationStorage(() => mutationCollection));
+			await queue.enqueue({
+				mutationId: 'create',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				operation: 'create',
+				origin: 'minted',
+				payload: { id: 0 },
+				baseRevision: null,
+				queuedAt: '2026-09-18T00:00:00.000Z',
+			});
+			const fence = queue.fenceForVoid.bind(queue);
+			vi.spyOn(queue, 'fenceForVoid').mockImplementationOnce(async (name, id, token, now) => {
+				if (owner === 'foreign admission') {
+					await other.admitWriter(name, id, 'other-writer', now);
+					return fence(name, id, token, now);
+				}
+				await fence(name, id, token, now);
+				await queue.setVoidPhase(name, id, token, 'committed');
+				// A failed rollback CAS must leave the durable committed instruction intact.
+				const find = mutationCollection.find.bind(mutationCollection);
+				vi.spyOn(mutationCollection, 'find').mockImplementation(() => ({
+					exec: async () =>
+						(await find().exec()).map((doc) => {
+							if (!('toJSON' in doc)) return doc;
+							return {
+								...doc,
+								modify: async (change) => {
+									if (doc.toJSON().payload.phase === 'committed')
+										throw Object.assign(new Error('CONFLICT'), { status: 409 });
+									await doc.modify!(change);
+								},
+							};
+						}),
+				}));
+				return false;
+			});
+			await expect(
+				enqueueWriteIntent({
+					db,
+					intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+					mintUuid: () => 'void',
+					now: () => '2026-09-18T00:00:01.000Z',
+				})
+			).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
+			expect((await queue.all())[0].supersededBy).toBe(
+				owner === 'foreign admission' ? undefined : 'void'
+			);
+			expect(mutationCollection.store.get('orders/order-1')?.mutation).toMatchObject(
+				owner === 'foreign admission'
+					? { admittedBy: 'other-writer' }
+					: { payload: { phase: 'committed' } }
+			);
+		}
+	);
+
 	it.each([
 		{ name: 'legacy rejected create', legacy: true, id: 0, rejected: true, annihilated: true },
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
