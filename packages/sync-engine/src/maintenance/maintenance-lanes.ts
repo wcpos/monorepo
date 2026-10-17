@@ -64,6 +64,7 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
+import { RequestTimeoutError } from '../write-path/request-timeout';
 
 import type {
 	BarcodeSelectors,
@@ -478,7 +479,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						type: 'maintenance.lane.error',
 						level: 'error',
 						message,
-						fields: { lane: name },
+						fields: { lane: name, ...(error instanceof RequestTimeoutError ? { status: 0 } : {}) },
 					});
 					return { lane: name, status: 'error', error: message };
 				}
