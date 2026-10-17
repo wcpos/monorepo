@@ -18,6 +18,7 @@ jest.mock('@wcpos/hooks/use-http-client/http', () => ({
 	http: { request: jest.fn(), isCancel: () => false },
 }));
 jest.mock('@wcpos/hooks/use-http-client/request-queue', () => ({
+	isDroppedRequestError: () => false,
 	scheduleRequest: (request: () => Promise<unknown>) => request(),
 }));
 jest.mock('@wcpos/hooks/use-http-client/request-state-manager', () => ({
