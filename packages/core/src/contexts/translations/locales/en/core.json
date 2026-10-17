@@ -326,6 +326,7 @@
 	"auth.re_authenticate": "Re-authenticate",
 	"auth.remove": "Remove",
 	"auth.remove_2": "Remove {name}",
+	"auth.unknown_user": "Unknown user",
 	"auth.remove_site": "Remove site",
 	"auth.remove_store_and_associated_users": "Remove store and associated users?",
 	"auth.rest_api_restricted": "The WordPress REST API on this site requires authentication. A security plugin may be blocking public access to the REST API.",

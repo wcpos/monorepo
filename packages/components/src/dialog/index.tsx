@@ -192,9 +192,10 @@ function DialogPanel(allProps: DialogContentProps) {
 						name="xmark"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
 						iconClassName={cn('size-4.5', closeIconClassName)}
-						accessibilityLabel={closeLabel ?? labels.close}
 						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}
 						{...closeProps}
+						// After the spread: the type omits it, but a runtime object could still carry one.
+						accessibilityLabel={closeLabel ?? labels.close}
 					/>
 				</DialogClose>
 			</View>
