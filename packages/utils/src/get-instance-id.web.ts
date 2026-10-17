@@ -26,10 +26,13 @@ async function readWithConsensus(): Promise<string | undefined> {
 		const nonce = Math.random().toString(36);
 		const peers = new Map<string, boolean>();
 		let windowClosed = false;
+		let quorumExpired = false;
 		return await new Promise<string | undefined>((resolve, reject) => {
 			const announce = () => channel!.postMessage({ candidate, nonce });
 			const finish = () => {
-				if (!windowClosed || [...peers.values()].some((acked) => !acked)) return;
+				if (!windowClosed || (!quorumExpired && [...peers.values()].some((acked) => !acked)))
+					return;
+				clearTimeout(deadline);
 				try {
 					const stored = window.localStorage.getItem('wcpos_instance_id');
 					if (stored && stored < candidate!) candidate = stored;
@@ -59,6 +62,11 @@ async function readWithConsensus(): Promise<string | undefined> {
 				}
 				finish();
 			};
+			// A closed or suspended peer must not block REST: allow 250 ms after discovery.
+			const deadline = setTimeout(() => {
+				quorumExpired = true;
+				finish();
+			}, 50 + 250);
 			announce();
 			setTimeout(() => {
 				windowClosed = true;

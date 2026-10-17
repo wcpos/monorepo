@@ -103,6 +103,34 @@ describe('getInstanceId (web)', () => {
 		}
 	});
 
+	it('settles with the smallest candidate when an announced peer never acknowledges', async () => {
+		jest.useFakeTimers();
+		const channel = { onmessage: (_event: { data: unknown }) => {}, postMessage() {}, close() {} };
+		Object.defineProperty(globalThis, 'BroadcastChannel', {
+			configurable: true,
+			value: jest.fn(() => channel),
+		});
+		window.localStorage.setItem('wcpos_instance_id', 'c');
+		try {
+			let result: string | undefined;
+			const pending = getInstanceId().then((id) => (result = id));
+			channel.onmessage({ data: { candidate: 'b', nonce: 'departed-peer' } });
+			await jest.advanceTimersByTimeAsync(299);
+			expect(result).toBeUndefined();
+			await jest.advanceTimersByTimeAsync(1);
+			expect(result).toBe('b');
+			await pending;
+			expect(await getInstanceId()).toBe('b');
+			expect(window.localStorage.getItem('wcpos_instance_id')).toBe('b');
+			channel.onmessage({ data: { candidate: 'a', nonce: 'late-peer' } });
+			expect(await getInstanceId()).toBe('a');
+			expect(window.localStorage.getItem('wcpos_instance_id')).toBe('a');
+		} finally {
+			jest.useRealTimers();
+			Reflect.deleteProperty(globalThis, 'BroadcastChannel');
+		}
+	});
+
 	it('returns undefined when storage throws', async () => {
 		const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
 			throw new Error('blocked');
