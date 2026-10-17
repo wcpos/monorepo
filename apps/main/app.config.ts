@@ -52,8 +52,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		// One store binary receives every JS-only patch until a native change lands.
 		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
 		// applies on the next cold start.
-		// maxUpdatesToKeep: the running update plus one older update stay on disk
-		// (expo-updates 58.0.11+; set explicitly so the cache bound is ours, not a default).
+		// maxUpdatesToKeep: reaper target for downloaded updates kept on disk, not a strict bound (newer and embedded updates stay).
+		// 2 is expo-updates' default and minimum (58.0.11+); set explicitly so the value is ours.
 		// CI resolves once before Metro: Expo otherwise fingerprints every manifest,
 		// exceeding the iOS launcher's 10 s timeout (expo/expo#46415).
 		runtimeVersion: (process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
