@@ -43,6 +43,7 @@
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./list-item": "./src/list-item/index.tsx",
+    "./list-row": "./src/list-row/index.tsx",
     "./loader": "./src/loader/index.tsx",
     "./logo": "./src/logo/index.tsx",
     "./nav-item": "./src/nav-item/index.tsx",
