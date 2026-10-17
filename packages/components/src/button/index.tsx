@@ -38,9 +38,7 @@ const buttonVariants = cva(
 				 */
 				default: 'bg-primary web:hover:opacity-90 active:opacity-90',
 				destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-				secondary: 'bg-secondary web:hover:opacity-90 active:opacity-90',
 				muted: 'bg-muted web:hover:opacity-90 active:opacity-90',
-				success: 'bg-success web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
@@ -51,19 +49,14 @@ const buttonVariants = cva(
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
 				/**
-				 * Ghost buttons
+				 * Ghost buttons. Plain `ghost` is the quiet button: no surface at rest,
+				 * a muted label that turns to the foreground with the hover/press
+				 * surface — navigation, escapes and "more" sitting after the primary.
 				 */
 				ghost: 'web:hover:bg-muted active:bg-muted',
 				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
 				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
-
-				/**
-				 * Transparent, de-emphasised label: `ghost-quiet` keeps the surface clear
-				 * and quietens only the text, for secondary actions sitting beside a
-				 * primary one in a row.
-				 */
-				'ghost-quiet': 'web:hover:bg-muted active:bg-muted',
 
 				/**
 				 * For buttons living on the sidebar / header surface, which is dark in
@@ -79,12 +72,18 @@ const buttonVariants = cva(
 				 */
 				link: 'bg-transparent',
 			},
+			/**
+			 * Three sizes, by role (ruled 2026-10-16): `sm` (36) in rows and toolbars,
+			 * `default` (44, the control token) everywhere else, `lg` (56) for the
+			 * pane's one sale/commit button — Pay, Take payment, Open/Close register,
+			 * New sale. A Button never carries its own height class. `xs` stays only
+			 * for ButtonPill until ButtonPill is folded into Chip.
+			 */
 			size: {
 				default: 'h-ctl px-4 py-2',
 				xs: 'h-6 px-2',
 				sm: 'h-9 px-3',
-				lg: 'h-11 px-8',
-				xl: 'h-tile px-10',
+				lg: 'h-14 px-6',
 			},
 		},
 		defaultVariants: {
@@ -105,9 +104,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			 */
 			default: 'text-primary-foreground font-semibold',
 			destructive: 'text-destructive-foreground',
-			secondary: 'text-secondary-foreground',
 			muted: 'text-muted-foreground',
-			success: 'text-success-foreground',
 
 			/**
 			 * Outline buttons
@@ -121,11 +118,10 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			/**
 			 * Ghost buttons
 			 */
-			ghost: '',
+			ghost: 'text-muted-foreground',
 			'ghost-primary': 'text-primary',
 			'ghost-secondary': 'text-secondary',
 			'ghost-destructive': 'text-destructive',
-			'ghost-quiet': 'text-muted-foreground',
 			sidebar: 'text-sidebar-foreground',
 			link: 'text-primary web:hover:underline',
 		},
@@ -133,8 +129,7 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			default: '',
 			xs: 'text-xs',
 			sm: 'text-sm',
-			lg: 'text-lg',
-			xl: 'text-xl',
+			lg: 'text-lg font-semibold',
 		},
 	},
 	compoundVariants: [
@@ -142,10 +137,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		{ variant: 'outline', hovered: true, class: 'text-foreground' },
 		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
 		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
-		{ variant: 'ghost-quiet', pressed: true, class: 'text-foreground' },
-		{ variant: 'ghost-quiet', hovered: true, class: 'text-foreground' },
-		{ variant: 'secondary', pressed: true, class: 'text-secondary-foreground' },
-		{ variant: 'secondary', hovered: true, class: 'text-secondary-foreground' },
 		{ variant: 'muted', pressed: true, class: 'text-muted-foreground' },
 		{ variant: 'muted', hovered: true, class: 'text-muted-foreground' },
 		{ variant: 'outline-primary', pressed: true, class: 'text-primary-foreground' },
@@ -299,9 +290,7 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 			default: 'bg-primary',
 			destructive: 'bg-destructive',
 			outline: 'bg-background',
-			secondary: 'bg-secondary',
 			muted: 'bg-muted',
-			success: 'bg-success',
 			ghost: 'bg-accent',
 		},
 	},

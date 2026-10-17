@@ -61,8 +61,9 @@ export function DisplayOptions({
 					<Text className="min-w-0 shrink font-semibold" numberOfLines={1}>
 						{title}
 					</Text>
+					{/* Restore loses the saved layout: a red outline, as in every other Restore defaults. */}
 					<Button
-						variant="ghost"
+						variant="outline-destructive"
 						size="sm"
 						className="shrink-0"
 						testID={`${testID}-display-restore`}

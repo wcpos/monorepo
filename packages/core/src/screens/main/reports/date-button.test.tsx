@@ -32,6 +32,12 @@ jest.mock('./hero', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+// The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
+		<button data-testid={testID} onClick={onPress} />
+	),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
 	Button: ({

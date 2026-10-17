@@ -63,7 +63,7 @@ function DisplayRow({
 						? t('settings.customer_display.connected')
 						: t('settings.customer_display.disconnected')}
 				</Text>
-				<Button variant="ghost-quiet" size="sm" onPress={() => onForget(display)}>
+				<Button variant="ghost" size="sm" onPress={() => onForget(display)}>
 					<ButtonText>{t('settings.customer_display.forget')}</ButtonText>
 				</Button>
 			</HStack>

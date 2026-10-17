@@ -391,7 +391,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			>
 				<Animated.View
 					testID="cart-line-edit-slot"
-					className="flex-row items-stretch"
+					// The slot paints the Edit block's grey; the button on it is a plain ghost.
+					className="bg-muted flex-row items-stretch"
 					style={editStyle}
 					onLayout={(e) => setEditWidth(e.nativeEvent.layout.width)}
 					pointerEvents={armed ? 'none' : 'auto'}
@@ -425,6 +426,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					<Button
 						variant="destructive"
 						testID="cart-line-remove"
+						// The swipe block fills the row it sits under, square (the 2026-10-08 swipe ruling).
+						// eslint-disable-next-line no-restricted-syntax
 						className="min-w-tile h-auto rounded-none px-5"
 						onPress={() => leave(true)}
 					>

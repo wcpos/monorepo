@@ -46,7 +46,7 @@ test('rejects colour utilities on components that own colour as a variant', asyn
 						<Text className="text-destructive">Clear</Text>
 					</AlertDialogAction>
 					<ModalAction><Text className="text-destructive">Remove</Text></ModalAction>
-					<Button className="bg-transparent rounded-none">Menu</Button>
+					<Button className="bg-transparent">Menu</Button>
 					<Badge className="border-destructive">3</Badge>
 				</>
 			);
@@ -54,6 +54,45 @@ test('rejects colour utilities on components that own colour as a variant', asyn
 	`);
 
 	assert.equal(messages.length, 4);
+});
+
+test('rejects height and radius utilities on Button and IconButton: the size prop owns them', async () => {
+	// Ruled 2026-10-16: three sizes (sm 36, default 44, lg 56) and no height class on a
+	// Button — `min-h-14` beside size="lg" was how one Pay button grew three heights.
+	const messages = await variantOwnership(`
+		export function Bad() {
+			return (
+				<>
+					<Button size="lg" className="min-h-14 w-full">Pay</Button>
+					<Button className="h-11 w-11 p-0">Menu</Button>
+					<Button className="flex-1 rounded-t-none">Void</Button>
+					<IconButton name="plus" className="size-12" />
+					<Button className="max-h-9">Retry</Button>
+					<Button className="self-end web:h-20">Prefixed</Button>
+					<Button className="web:!rounded-none">Important</Button>
+				</>
+			);
+		}
+	`);
+
+	assert.equal(messages.filter((m) => m.message.includes('owned by its size prop')).length, 7);
+});
+
+test('allows width and layout utilities on a Button, which no size models', async () => {
+	const messages = await variantOwnership(`
+		export function Fine() {
+			return (
+				<>
+					<Button size="lg" className="w-full">Pay</Button>
+					<Button variant="ghost" className="aspect-square px-0">Avatar</Button>
+					<Button className="min-w-11 shrink self-end">Store</Button>
+					<Text className="min-h-row">Not a button</Text>
+				</>
+			);
+		}
+	`);
+
+	assert.deepEqual(messages, []);
 });
 
 test('rejects font-size utilities that duplicate or fight the size prop', async () => {
@@ -210,6 +249,18 @@ test('enforces variant ownership outside core screens under per-package lint', a
 	);
 
 	assert.equal(messages.length, 1);
+});
+
+test('enforces size ownership on packages/core screens under per-package lint', async () => {
+	const messages = await lint(
+		`export function Bad() { return <Button className="min-h-12">Retry</Button>; }`,
+		IN_APP,
+		'no-restricted-syntax',
+		coreConfig,
+		CORE_ROOT
+	);
+
+	assert.equal(restrictedSyntax(messages, 'owned by its size prop').length, 1);
 });
 
 test('enforces variant ownership in apps/main under per-package lint', async () => {

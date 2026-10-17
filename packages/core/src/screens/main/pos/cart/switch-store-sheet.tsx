@@ -50,7 +50,7 @@ function StoreRows({ onSwitched }: { onSwitched: () => void }) {
 					<Button
 						testID={`switch-store-row-${next.localID}`}
 						variant="ghost"
-						className="min-h-row flex-row justify-between"
+						className="flex-row justify-between"
 						disabled={isSwitching || next.localID === store.localID}
 						onPress={async () => {
 							await handleSwitchStore(next);

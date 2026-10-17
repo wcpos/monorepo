@@ -218,7 +218,7 @@ function CartColumn({
 							{overdue && (
 								<Button
 									testID="checkout-close-register"
-									className="min-h-14"
+									size="lg"
 									onPress={() => setPanelOpen(true)}
 								>
 									{t('register.close_register')}

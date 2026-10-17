@@ -25,7 +25,7 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 							<Button
 								testID={`register-picker-row-${register.id}`}
 								variant="ghost"
-								className="min-h-row items-start"
+								className="items-start"
 								onPress={async () => {
 									await bind(register.id);
 									onBound?.();

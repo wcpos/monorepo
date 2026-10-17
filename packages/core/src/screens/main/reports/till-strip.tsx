@@ -339,7 +339,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				<Button
 					testID={open ? 'till-xreport' : 'till-reprint'}
 					variant="outline"
-					className="min-h-12 flex-row items-center gap-1"
+					className="flex-row items-center gap-1"
 					disabled={busy || !!unavailable}
 					onPress={dispatch}
 				>
@@ -351,7 +351,6 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				name="chevronRight"
 				testID="till-closures"
 				aria-label={t('reports.closures')}
-				className="h-12 w-12 items-center justify-center"
 				onPress={onOpenClosures}
 			/>
 		</View>

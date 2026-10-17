@@ -162,7 +162,6 @@ export function CardReadersSettings() {
 					<VStack className="gap-1">
 						<Button
 							variant={readerHeld ? 'outline' : 'default'}
-							className="h-14"
 							leftIcon="plus"
 							disabled={actions.working !== null}
 							onPress={() =>
@@ -193,7 +192,7 @@ export function CardReadersSettings() {
 									<Button
 										key={method.id}
 										variant="ghost"
-										className="h-14 flex-row justify-start gap-3 px-1"
+										className="flex-row justify-start gap-3 px-1"
 										onPress={() => {
 											setPicking(false);
 											void actions.start(method);

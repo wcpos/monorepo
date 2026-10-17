@@ -119,10 +119,10 @@ function ScannerProfileRow({
 				{statusLabel[status]}
 			</Text>
 			{/* Quiet by design: a destructive-red button on every row is alarm for a
-			    list, not emphasis. ghost-quiet keeps the surface clear and
+			    list, not emphasis. ghost keeps the surface clear and
 			    de-emphasises only the label. */}
 			<Button
-				variant="ghost-quiet"
+				variant="ghost"
 				size="sm"
 				testID="scanner-profile-delete"
 				onPress={() => onRemove(profile)}

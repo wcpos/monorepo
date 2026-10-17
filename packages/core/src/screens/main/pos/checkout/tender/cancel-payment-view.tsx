@@ -55,8 +55,8 @@ export function CancelPaymentView({ flow, format }: Props) {
 				</VStack>
 			)}
 			<HStack className="justify-end gap-2">
+				{/* Keeping the payment is the safe answer this pane exists for; voiding loses it. */}
 				<Button
-					variant="outline"
 					testID="checkout-cancel-keep-going"
 					disabled={flow.busy}
 					onPress={() => flow.dispatch({ type: 'back' })}
@@ -64,7 +64,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 					<ButtonText>{t('pos_checkout.keep_taking_payment')}</ButtonText>
 				</Button>
 				<Button
-					variant="destructive"
+					variant="outline-destructive"
 					testID="checkout-cancel-confirm"
 					loading={flow.busy}
 					disabled={flow.busy}
