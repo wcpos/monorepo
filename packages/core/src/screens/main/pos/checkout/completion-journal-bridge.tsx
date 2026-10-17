@@ -212,8 +212,11 @@ export function SaleCompletionBridge(): null {
 					) {
 						// One bounded targeted GET per pending unpaid order at start; no second GET in the owner.
 						try {
-							if ((await refreshOrderRecord(manager, payload.id)) === 'timed-out')
-								throw new Error('completion_refresh_timed_out');
+							// Only a confirmed refresh may count towards "unpaid": a timed-out, failed
+							// or undelivered pull leaves the cached row suspect, so the attempt is kept
+							// for the next replay rather than consuming one of the three unpaid starts.
+							const outcome = await refreshOrderRecord(manager, payload.id);
+							if (outcome !== 'refreshed') throw new Error(`completion_refresh_${outcome}`);
 							refreshed = true;
 						} catch (error) {
 							await failCompletionAttempt(storeDB, uuid, error, { expectAt: attempt.at });
