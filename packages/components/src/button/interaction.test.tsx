@@ -99,7 +99,7 @@ it('grows a sm button to a 44 pt target on native, measured, and keeps a caller 
 		const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 80, height: 36 } } };
 		act(() => (pressable.onLayout as (event: object) => void)(layout));
 		expect(onLayout).toHaveBeenCalledWith(layout);
-		expect(pressable.hitSlop).toEqual({ top: 4, bottom: 4 });
+		expect(pressable.hitSlop).toEqual({ top: 4, bottom: 4, left: 0, right: 0 });
 		rerender(
 			<Button size="sm" hitSlop={0}>
 				Retry

@@ -11,10 +11,12 @@ jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const presses = new Map();
 	const slops = new Map();
+	const layouts = new Map();
 	return {
 		...actual,
 		presses,
 		slops,
+		layouts,
 		View: ({ testID, ...props }: { testID?: string }) =>
 			React.createElement('div', { ...props, 'data-testid': testID }),
 		Pressable: ({
@@ -25,6 +27,7 @@ jest.mock('react-native', () => {
 		}) => {
 			presses.set(props.testID, props.onPress);
 			slops.set(props.testID, props.hitSlop);
+			layouts.set(props.testID, props.onLayout);
 			return React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } });
 		},
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
@@ -55,9 +58,10 @@ it.each([
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
 });
 it('gives a sm chip the 44 pt target on its root, which presses as the label when clearable', () => {
-	const { slops, presses } = jest.requireMock<{
+	const { slops, presses, layouts } = jest.requireMock<{
 		slops: Map<string, unknown>;
 		presses: Map<string, unknown>;
+		layouts: Map<string, unknown>;
 	}>('react-native');
 	const onPress = jest.fn();
 	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} />);
@@ -67,7 +71,17 @@ it('gives a sm chip the 44 pt target on its root, which presses as the label whe
 	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={() => {}} />);
 	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
 	expect(slops.get('chip-label')).toBeUndefined();
-	expect(presses.get('chip')).toBe(onPress);
+	// The band above and below routes by where it landed: past the clear half's x it clears.
+	const onClear = jest.fn();
+	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={onClear} />);
+	const route = presses.get('chip') as (event: object) => void;
+	(layouts.get('chip-clear') as (event: object) => void)({ nativeEvent: { layout: { x: 50 } } });
+	route({ nativeEvent: { locationX: 10 } });
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(onClear).not.toHaveBeenCalled();
+	route({ nativeEvent: { locationX: 60 } });
+	expect(onClear).toHaveBeenCalledTimes(1);
+	expect(onPress).toHaveBeenCalledTimes(1);
 	// Without the grown target a clearable root still takes no press.
 	rerender(<Chip label="Menu" testID="chip" onPress={onPress} onClear={() => {}} />);
 	expect(slops.get('chip')).toBeUndefined();

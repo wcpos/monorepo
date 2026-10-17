@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
@@ -62,10 +63,20 @@ export function Chip({
 	// slop sits on the root, because `hitSlop` never reaches past a parent's bounds.
 	const target = useMinTargetSlop(sm, props.onLayout);
 	// A clearable chip's root takes no press (the label half does), except on native when it
-	// carries the grown target: the slop band is the root's, so the root presses as the label.
-	// Native gives a touch to the deepest responder, so inside the chip the label and the clear
-	// halves still win and nothing fires twice; the web never measures, and its click bubbles.
-	const rootPress = !onClear || target.hitSlop ? onPress : undefined;
+	// carries the grown target: the band above and below is the root's, so the root routes a
+	// press there by where it landed, the clear half's x onward clearing and the rest pressing
+	// as the label. Native gives a touch to the deepest responder, so inside the chip the label
+	// and the clear halves still win and nothing fires twice; the web never measures.
+	const clearStart = React.useRef(Number.POSITIVE_INFINITY);
+	const rootPress: PressableProps['onPress'] =
+		!onClear || !target.hitSlop
+			? onClear
+				? undefined
+				: onPress
+			: (event) => {
+					if (event.nativeEvent.locationX >= clearStart.current) onClear();
+					else onPress?.(event);
+				};
 	const content = (
 		<>
 			{icon && <Icon name={icon} className="text-foreground" />}
@@ -142,6 +153,9 @@ export function Chip({
 						testID={clearTestID ?? id('clear')}
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
+						onLayout={(event) => {
+							clearStart.current = event.nativeEvent.layout.x;
+						}}
 						className={cn(
 							'items-center justify-center self-stretch active:opacity-70',
 							// The clear control spans the chip's height and as much width, so it is never
