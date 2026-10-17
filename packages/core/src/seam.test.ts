@@ -7,8 +7,9 @@
  * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
  * evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
  * bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
- * remains allowed (ADR 0028), including element access and destructuring. Both stream fences
- * ($ and collections$) share lifecycle/collection receiver names; helper re-exports are fenced,
+ * remains allowed (ADR 0028), including element access and destructuring. Stream fences
+ * ($, eventBulks$ and collections$) share lifecycle/collection receiver names, including member
+ * database handles. Engine aliases include destructuring assignments; helper re-exports are fenced,
  * and collection-named find calls accept only inline callbacks without a query fingerprint.
  */
 import { createHash } from 'node:crypto';
@@ -35,8 +36,8 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 890;
-const FROZEN_DIGEST = '0000c04ab1d0d534336bf3e2a6b7f21e3bcca1f4b3bc588da6730081ddbe7470';
+const FROZEN_LENGTH = 891;
+const FROZEN_DIGEST = '230f50e5724b475404e468021eaff5989e075093a55861deb3e889182a7454ca';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -97,6 +98,7 @@ const mutatorNames = new Set([
 	'insertCRDT',
 	'cleanup',
 	'addCollections',
+	'removeCollectionDoc',
 	'importJSON',
 	'addState',
 	'bulkWrite',
@@ -183,10 +185,15 @@ function isCollectionReceiver(node: ts.Node | undefined): boolean {
 
 function isChangeStreamReceiver(node: ts.Node): boolean {
 	const receiver = unwrap(node)!;
-	return (
-		isCollectionReceiver(receiver) ||
-		(ts.isIdentifier(receiver) && LIFECYCLE_RECEIVERS.has(receiver.text))
-	);
+	const name = ts.isIdentifier(receiver)
+		? receiver.text
+		: ts.isPropertyAccessExpression(receiver)
+			? receiver.name.text
+			: ts.isElementAccessExpression(receiver) &&
+				  ts.isStringLiteralLike(receiver.argumentExpression)
+				? receiver.argumentExpression.text
+				: '';
+	return isCollectionReceiver(receiver) || LIFECYCLE_RECEIVERS.has(name);
 }
 
 function isEngineReceiver(node: ts.Node | undefined): boolean {
@@ -316,7 +323,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
 		if (rawQueryNames.has(name)) report('raw query construction', node);
-		if (name === '$' && receiver && isChangeStreamReceiver(receiver))
+		if ((name === '$' || name === 'eventBulks$') && receiver && isChangeStreamReceiver(receiver))
 			report('raw change stream', node);
 		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
 			report('write plane outside a command module', node);
@@ -469,12 +476,14 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 				ts.isBinaryExpression(assignment) &&
 				assignment.left === pattern &&
 				assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken
-			)
+			) {
+				if (staticName(node.name) === 'engine') report('engine handle aliased', node);
 				checkProperty(
 					node,
 					staticName(node.name),
 					pattern === node.parent ? assignment.right : undefined
 				);
+			}
 		}
 		ts.forEachChild(node, visit);
 	};
@@ -1284,3 +1293,73 @@ it.each(['order', 'doc', 'record', 'this'])('allows unrelated collections$ on %s
 		expect(violations(source)).toEqual([]);
 	}
 });
+
+// Round 9: assignment bindings, member database handles and existing storage APIs.
+it.each([
+	'({ engine: writer } = runtime);',
+	'({ engine } = runtime);',
+	"({ ['engine']: writer } = runtime);",
+	'({ engine: writer = fallback } = runtime);',
+	'({ nested: { engine: writer } } = runtime);',
+])('fences engine aliases in destructuring assignments: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['engine handle aliased']);
+});
+
+it.each(['({ db: writer } = runtime);', '({ engine: writer });', '({ [key]: writer } = runtime);'])(
+	'allows unrelated assignment patterns and object literals: %s',
+	(source) => {
+		expect(violations(source)).toEqual([]);
+	}
+);
+
+it.each(['db', 'database', 'localDB', 'storeDB', 'userDB', 'fastStoreDB'])(
+	'fences streams on member database handle %s',
+	(name) => {
+		for (const receiver of [`manager.${name}`, `manager['${name}']`, `manager.active()?.${name}`]) {
+			for (const [member, rule] of [
+				['$', 'raw change stream'],
+				['collections$', 'storage token'],
+			]) {
+				for (const source of [
+					`${receiver}.${member};`,
+					`${receiver}['${member}'];`,
+					`const { ${member}: changes } = ${receiver};`,
+				])
+					expect(
+						violations(source).filter((match) => match.rule === rule && match.text.includes(member))
+					).toHaveLength(1);
+			}
+		}
+	}
+);
+
+it.each([
+	'database.removeCollectionDoc("orders");',
+	"database['removeCollectionDoc']('orders');",
+	'const remove = database.removeCollectionDoc;',
+	'const { removeCollectionDoc: remove } = database;',
+	'({ removeCollectionDoc: remove } = database);',
+])('fences database collection removal: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+});
+
+it.each(['collection', 'db', 'ordersCollection', 'collections.orders', "collections['orders']"])(
+	'fences eventBulks$ on database/collection receiver %s',
+	(receiver) => {
+		for (const source of [
+			`${receiver}.eventBulks$.pipe(operator);`,
+			`${receiver}['eventBulks$'];`,
+			`const { eventBulks$: changes } = ${receiver};`,
+			`({ eventBulks$: changes } = ${receiver});`,
+		])
+			expect(violations(source).filter(({ rule }) => rule === 'raw change stream')).toHaveLength(1);
+	}
+);
+
+it.each(['order', 'record', 'this', 'manager.record', "manager['record']", 'manager[database]'])(
+	'allows streams on unrelated or dynamic receivers: %s',
+	(receiver) => {
+		for (const member of ['$', 'eventBulks$', 'collections$'])
+			expect(violations(`${receiver}['${member}'];`)).toEqual([]);
+	}
+);

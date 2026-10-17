@@ -1,7 +1,7 @@
 /**
  * ADR 0033 item 7. Re-frozen 2026-10-17 using the parse-only AST scanner:
- * 279 files, 890 violation fingerprints. seam.test.ts pins the sorted set's length and digest.
- * Round 6–8 scanner refinements leave this set unchanged (all per-rule deltas are zero).
+ * 279 files, 891 violation fingerprints. seam.test.ts pins the sorted set's length and digest.
+ * Round 9 adds one raw change stream (eventBulks$); all other per-rule deltas are zero.
  *
  * Fingerprints are path :: rule :: declaration chain :: normalised node text :: occurrence (1-based).
  * Declaration names run outermost first, joined by >; module-level accesses have an empty chain.
@@ -18,8 +18,8 @@
  * Engine alias checks match names, not types. Resident helper imports/calls/re-exports are exempt only in their
  * two defining modules and commands/ modules. No alias propagation or deliberate-evasion
  * modelling is performed. Raw change streams and collections$ share lifecycle/collection receiver names, not
- * types; record streams (order.$, doc.$) remain allowed. Conservative matches remain pinned
- * until explicitly retired.
+ * types; member database handles and eventBulks$ are included. Record streams (order.$, doc.$)
+ * remain allowed. Conservative matches remain pinned until explicitly retired.
  */
 export const SEAM_FROZEN_VIOLATIONS_2026_10_16: readonly string[] = [
 	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.sites.findOne :: 1',
@@ -70,6 +70,7 @@ export const SEAM_FROZEN_VIOLATIONS_2026_10_16: readonly string[] = [
 	"query/query-handles.ts :: query escape hatch ::  :: import { acquireQueryHandle, createDemand, createQueryHandle, type Demand, type DemandPlan, engineCollectionNameFor, type EngineQueryDescriptor, observeCollectionActive, observeEngineDatabases, observeEngineQuery, type QueryHandle, type QueryHandleSpec, type QueryResult, type QuerySnapshot, useLocalQuery$, useQueryRuntime, useSearchFields, } from '@wcpos/query'; :: 2",
 	"query/query-handles.ts :: query escape hatch ::  :: import { acquireQueryHandle, createDemand, createQueryHandle, type Demand, type DemandPlan, engineCollectionNameFor, type EngineQueryDescriptor, observeCollectionActive, observeEngineDatabases, observeEngineQuery, type QueryHandle, type QueryHandleSpec, type QueryResult, type QuerySnapshot, useLocalQuery$, useQueryRuntime, useSearchFields, } from '@wcpos/query'; :: 3",
 	"query/query-handles.ts :: query escape hatch ::  :: import { acquireQueryHandle, createDemand, createQueryHandle, type Demand, type DemandPlan, engineCollectionNameFor, type EngineQueryDescriptor, observeCollectionActive, observeEngineDatabases, observeEngineQuery, type QueryHandle, type QueryHandleSpec, type QueryResult, type QuerySnapshot, useLocalQuery$, useQueryRuntime, useSearchFields, } from '@wcpos/query'; :: 4",
+	'query/query-handles.ts :: raw change stream :: recheckedRead$ :: collection.eventBulks$ :: 1',
 	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: collection :: 1',
 	'query/query-handles.ts :: record collection back-reference :: acquireCollectionQueryHandle :: compiled.collection :: 1',
 	'query/query-handles.ts :: record collection back-reference :: acquireDemandQueryHandle :: compiled.collection :: 1',
