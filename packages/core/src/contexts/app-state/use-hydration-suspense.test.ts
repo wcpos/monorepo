@@ -1,7 +1,7 @@
 import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 
 import { hydrationSteps } from './hydration-steps';
-import { useHydrationSuspense } from './use-hydration-suspense';
+import { resetHydration, useHydrationSuspense } from './use-hydration-suspense';
 
 const mockSetProgress = jest.fn();
 
@@ -13,8 +13,7 @@ jest.mock('react', () => ({
 }));
 
 // Mutable array: each test installs its own steps. The hydration promise cache
-// is module-level, so tests that reject must run before tests that resolve —
-// a rejection clears the cache, a resolution would be served to the next test.
+// persists after both rejection and resolution, so each test explicitly resets it.
 jest.mock('./hydration-steps', () => ({
 	hydrationSteps: [],
 }));
@@ -30,6 +29,7 @@ const hydrationLogger = getLogger(['wcpos', 'app-state', 'hydration']);
 // (A shared helper trips rules-of-hooks/react-compiler whatever it is named.)
 
 beforeEach(() => {
+	resetHydration();
 	jest.clearAllMocks();
 	steps.length = 0;
 });
@@ -60,11 +60,62 @@ it('serializes a failed hydration error in both logger contexts', async () => {
 		code: 'CLIENT101',
 		context: { step: 'load-store', failSoft: false, error: serializedError },
 	});
-	expect(hydrationLogger.debug).toHaveBeenCalledWith('Hydration promise cleared after failure', {
-		context: { error: serializedError },
-	});
+	expect(hydrationLogger.debug).toHaveBeenCalledWith(
+		'Hydration rejection cached so the next render throws it to the boundary',
+		{ context: { error: serializedError } }
+	);
 	// The root ErrorBoundary catches this rethrow next; it must not report it again.
 	expect(markErrorReported).toHaveBeenCalledWith(rejection);
+});
+
+it('a hard step failure keeps the rejected promise cached so the next render reaches the boundary instead of re-running hydration', async () => {
+	const failure = new Error('Store database failed');
+	const execute = jest.fn().mockRejectedValue(failure);
+	steps.push({ name: 'hydrate-session', progressIncrement: 100, execute });
+
+	let firstPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		firstPromise = error as Promise<unknown>;
+	}
+	await expect(firstPromise).rejects.toBe(failure);
+
+	let secondPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		secondPromise = error as Promise<unknown>;
+	}
+	await expect(secondPromise).rejects.toBe(failure);
+	expect(secondPromise).toBe(firstPromise);
+	expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it('resetHydration lets the next render re-run hydration', async () => {
+	const failure = new Error('Store database failed');
+	const execute = jest.fn().mockRejectedValue(failure);
+	steps.push({ name: 'hydrate-session', progressIncrement: 100, execute });
+
+	let firstPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		firstPromise = error as Promise<unknown>;
+	}
+	await expect(firstPromise).rejects.toBe(failure);
+
+	resetHydration();
+
+	let secondPromise: Promise<unknown> | undefined;
+	try {
+		useHydrationSuspense();
+	} catch (error) {
+		secondPromise = error as Promise<unknown>;
+	}
+	await expect(secondPromise).rejects.toBe(failure);
+	expect(secondPromise).not.toBe(firstPromise);
+	expect(execute).toHaveBeenCalledTimes(2);
 });
 
 it('continues past a failed fail-soft step instead of rejecting the boot', async () => {
@@ -115,7 +166,7 @@ it('continues past a failed fail-soft step instead of rejecting the boot', async
 		}
 	);
 	expect(hydrationLogger.debug).not.toHaveBeenCalledWith(
-		'Hydration promise cleared after failure',
+		'Hydration rejection cached so the next render throws it to the boundary',
 		expect.anything()
 	);
 });

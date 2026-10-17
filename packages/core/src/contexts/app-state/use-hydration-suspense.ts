@@ -23,6 +23,14 @@ interface UseHydrationSuspenseReturn {
  */
 let globalHydrationPromise: Promise<HydrationContext> | null = null;
 
+/**
+ * The only way to re-run hydration. The crash screen's "Try again" calls this
+ * before resetting the error boundary; tests use it to reset the cache too.
+ */
+export function resetHydration(): void {
+	globalHydrationPromise = null;
+}
+
 function getOrCreateHydrationPromise(
 	setProgress: (value: number) => void
 ): Promise<HydrationContext> {
@@ -70,13 +78,12 @@ function getOrCreateHydrationPromise(
 					},
 				});
 				if (!step.failSoft) {
-					// The root ErrorBoundary catches this next; it is already reported.
+					// Keep the rejection cached for the root ErrorBoundary; it is already reported.
 					markErrorReported(error);
 					throw error;
 				}
 				// Fail-soft step: keep booting from the context accumulated so far.
-				// Rejecting here clears the promise cache and the next render retries
-				// the identical failing work — an infinite splash loop.
+				// Rejecting here would send a recoverable failure to the error boundary.
 				totalProgress += step.progressIncrement;
 				setProgress(totalProgress);
 			}
@@ -87,13 +94,15 @@ function getOrCreateHydrationPromise(
 		return currentContext;
 	})().catch((err) => {
 		const error = err instanceof Error ? err : new Error(String(err));
-		// Step failures are reported above; this clears the cache so a remount retries.
-		hydrationLogger.debug('Hydration promise cleared after failure', {
-			context: {
-				error: { name: error.name, message: error.message, stack: error.stack },
-			},
-		});
-		globalHydrationPromise = null;
+		// Step failures are reported above; keep the rejection cached for the boundary.
+		hydrationLogger.debug(
+			'Hydration rejection cached so the next render throws it to the boundary',
+			{
+				context: {
+					error: { name: error.name, message: error.message, stack: error.stack },
+				},
+			}
+		);
 		throw err;
 	});
 

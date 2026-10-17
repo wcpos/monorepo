@@ -3,6 +3,7 @@ import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from '
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { resetHydration } from '@wcpos/core/contexts/app-state/use-hydration-suspense';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
@@ -148,6 +149,8 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 	const handleTryAgain = () => {
 		if (isResetting) return;
 		setConfirming(null);
+		// Without this, "Try again" would immediately re-throw the cached rejection.
+		resetHydration();
 		resetErrorBoundary();
 	};
 
