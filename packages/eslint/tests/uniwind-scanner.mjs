@@ -27,6 +27,27 @@ const rules = {
 	'arbitrary-px': /\[[^\]]*(?:\d+(?:\.\d+)?|\.\d+)px(?![a-zA-Z0-9])[^\]]*\]/,
 };
 
+// Decision 11 (2026-10-16): a pressable outside the design system is a component from
+// packages/components (ListRow, Tile, NavItem, Button…), never a raw React Native one.
+const RAW_PRESSABLES = new Set([
+	'Pressable',
+	'TouchableOpacity',
+	'TouchableHighlight',
+	'TouchableWithoutFeedback',
+	'TouchableNativeFeedback',
+]);
+// CODING_STANDARDS § Design 7: never a hex colour in a component; the semantic tokens carry it.
+const HEX_COLOUR = /(?<![\w&#-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g;
+// Files that legitimately carry hex: the native app config, the static HTML shell, and the
+// one pre-theme palette that the screens rendered above every provider read.
+const HEX_EXEMPT = new Set([
+	'apps/main/app.config.ts',
+	'apps/main/app/+html.tsx',
+	'apps/main/components/pre-theme-colours.ts',
+]);
+// The app trees whose screens the two rules above guard (the design system itself is exempt).
+const APP_TREES = ['packages/core/src', 'apps/main/app', 'apps/main/components', 'apps/main/lib'];
+
 export function animationTokens() {
 	// These are the two imported animation-owning sheets, not a hand-maintained name list.
 	const sheets = [
@@ -52,6 +73,10 @@ export function scanSource(text, path, tokens = new Set()) {
 	const checker = ts.createProgram([path], { noLib: true, noResolve: true }, host).getTypeChecker();
 	const followed = new Set();
 	const sites = new Set();
+	const namespaces = new Set();
+	// The class rules are the packages' contract; the app rules cover every app tree.
+	const classRules = !path.startsWith('apps/');
+	const appRules = !path.startsWith('packages/components/');
 	const report = (position, construct) => {
 		const { line, character } = source.getLineAndCharacterOfPosition(position);
 		sites.add(`${path}:${line + 1}:${character + 1}:${construct}`);
@@ -94,9 +119,45 @@ export function scanSource(text, path, tokens = new Set()) {
 				visit(declaration.initializer, true);
 			}
 		}
-		if (classContext && (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)))
+		if (classRules && classContext && (ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node)))
 			classes(node);
-		if (!path.endsWith('/lib/motion.ts')) {
+		if (
+			appRules &&
+			!HEX_EXEMPT.has(path) &&
+			(ts.isStringLiteral(node) || ts.isTemplateLiteralToken(node))
+		) {
+			const start = node.getStart(source) + 1;
+			for (const match of node.text.matchAll(HEX_COLOUR)) report(start + match.index, 'hex-colour');
+		}
+		if (
+			appRules &&
+			ts.isImportDeclaration(node) &&
+			node.moduleSpecifier.text === 'react-native' &&
+			node.importClause?.namedBindings &&
+			!node.importClause.isTypeOnly
+		) {
+			const bindings = node.importClause.namedBindings;
+			if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+			else
+				for (const element of bindings.elements)
+					if (
+						!element.isTypeOnly &&
+						RAW_PRESSABLES.has((element.propertyName ?? element.name).text)
+					)
+						report(element.getStart(source), 'raw-pressable');
+		}
+		// `import * as RN from 'react-native'` then `RN.Pressable`: each use is a site, its
+		// closing JSX tag aside.
+		if (
+			appRules &&
+			ts.isPropertyAccessExpression(node) &&
+			ts.isIdentifier(node.expression) &&
+			namespaces.has(node.expression.text) &&
+			RAW_PRESSABLES.has(node.name.text) &&
+			!ts.isJsxClosingElement(node.parent)
+		)
+			report(node.getStart(source), 'raw-pressable');
+		if (classRules && !path.endsWith('/lib/motion.ts')) {
 			if (
 				ts.isPropertyAssignment(node) &&
 				node.name.getText(source).replace(/['"]/g, '') === 'duration' &&
@@ -112,6 +173,7 @@ export function scanSource(text, path, tokens = new Set()) {
 				report(node.getStart(source), 'duration-literal');
 		}
 		if (
+			classRules &&
 			/^packages\/core\/src\/screens\/.*\/index\.tsx$/.test(path) &&
 			(ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
 			/^(React\.)?Suspense$/.test(node.tagName.getText(source))
@@ -140,7 +202,11 @@ export function scanRepository() {
 			return scanSource(readFileSync(path, 'utf8'), relative(ROOT, path), tokens);
 		});
 	}
-	return ['components', 'core'].flatMap((pkg) => walk(join(ROOT, `packages/${pkg}/src`))).sort();
+	const trees = ['packages/components/src', ...APP_TREES];
+	return trees
+		.filter((tree) => existsSync(join(ROOT, tree)))
+		.flatMap((tree) => walk(join(ROOT, tree)))
+		.sort();
 }
 
 function groupSites(sites) {
