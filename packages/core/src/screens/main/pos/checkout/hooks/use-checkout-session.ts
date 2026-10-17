@@ -47,8 +47,9 @@ interface CheckoutState {
 type CheckoutPhase = 'bootstrap' | 'start' | 'poll' | 'settled' | 'completed';
 
 interface CheckoutFailureReport {
-	level: 'warn' | 'error';
-	code: ErrorCode;
+	level: 'info' | 'warn' | 'error';
+	/** Absent for a benign outcome (backgrounded before anything was sent). */
+	code?: ErrorCode;
 	/** Already-translated toast title, when the code's summary is not the sentence. */
 	title?: string;
 	/** Already-translated second line, when the code's hint would mislead. */
@@ -82,7 +83,17 @@ export function classifyCheckoutFailure(
 	}
 	// A preflight block means the request never left — but only the bootstrap and
 	// the start can be the request that charges. Offline mid-poll is outcome-unknown.
-	if (isExpectedPreflightBlock(error) && (phase === 'bootstrap' || phase === 'start')) {
+	const notSent = isExpectedPreflightBlock(error) && (phase === 'bootstrap' || phase === 'start');
+	// Backgrounded (the tab was hidden), not offline: nothing is wrong with the
+	// connection, so no "you're offline" and no code — just try again.
+	if (notSent && (error as { isSleeping?: unknown } | null)?.isSleeping === true) {
+		return {
+			level: 'info',
+			title: t('pos_checkout.background_nothing_charged'),
+			text2: t('common.try_again_now'),
+		};
+	}
+	if (notSent) {
 		return {
 			level: 'warn',
 			code: ERROR_CODES.SYNC_UNREACHABLE,
@@ -384,9 +395,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
 			const report = classifyCheckoutFailure(err, phase, t, providerMessage);
-			checkoutLogger[report.level](`Contract checkout failed: ${message}`, {
+			const options = {
 				showToast: true,
-				code: report.code,
 				...(report.title !== undefined || report.text2 !== undefined
 					? {
 							toast: {
@@ -401,7 +411,16 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					phase,
 					status: (err as { response?: { status?: number } } | null)?.response?.status,
 				},
-			});
+			};
+			const logMessage = `Contract checkout failed: ${message}`;
+			if (report.code === undefined) {
+				checkoutLogger.info(logMessage, options);
+			} else {
+				checkoutLogger[report.level === 'error' ? 'error' : 'warn'](logMessage, {
+					...options,
+					code: report.code,
+				});
+			}
 		} finally {
 			setLoading(false);
 		}

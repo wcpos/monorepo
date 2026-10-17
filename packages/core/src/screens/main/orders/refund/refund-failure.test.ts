@@ -3,8 +3,18 @@ import { classifyRefundFailure } from './refund-failure';
 const t = (key: string) => key;
 
 describe('classifyRefundFailure', () => {
+	it('says no refund was made — and not "offline" — when the app was only backgrounded', () => {
+		const asleep = Object.assign(new Error('asleep'), { isSleeping: true });
+
+		expect(classifyRefundFailure(asleep, t)).toEqual({
+			level: 'info',
+			title: 'orders.refund_background',
+			text2: 'common.try_again_now',
+		});
+	});
+
 	it('says no refund was made when the request never left (offline)', () => {
-		const offline = Object.assign(new Error('offline'), { isSleeping: true });
+		const offline = Object.assign(new Error('offline'), { blockCode: 'preflight-offline' });
 
 		expect(classifyRefundFailure(offline, t)).toEqual({
 			level: 'warn',

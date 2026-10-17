@@ -48,6 +48,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		debug: jest.fn(),
+		info: jest.fn(),
 		success: jest.fn(),
 		error: (...args: unknown[]) => mockCheckoutError(...args),
 		warn: (...args: unknown[]) => mockCheckoutWarn(...args),
@@ -487,7 +488,16 @@ describe('useCheckoutSession', () => {
 
 describe('classifyCheckoutFailure', () => {
 	const t = (key: string) => key;
-	const offline = Object.assign(new Error('offline'), { isSleeping: true });
+	const offline = Object.assign(new Error('offline'), { blockCode: 'preflight-offline' });
+	const asleep = Object.assign(new Error('asleep'), { isSleeping: true });
+
+	it('says nothing was charged — and not "offline" — when the app was only backgrounded', () => {
+		expect(classifyCheckoutFailure(asleep, 'start', t)).toEqual({
+			level: 'info',
+			title: 'pos_checkout.background_nothing_charged',
+			text2: 'common.try_again_now',
+		});
+	});
 
 	it('says nothing was charged when offline before the start was sent', () => {
 		for (const phase of ['bootstrap', 'start'] as const) {

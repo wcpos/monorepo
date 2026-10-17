@@ -10,7 +10,7 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
@@ -393,6 +393,21 @@ describe('EditOrderForm save', () => {
 		});
 
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(mockModalClose).not.toHaveBeenCalled();
+	});
+
+	it('does not report a localPatch rethrow a second time', async () => {
+		const reported = new Error('Active engine scope changed twice');
+		markErrorReported(reported);
+		mockLocalPatch.mockRejectedValue(reported);
+		render(<EditOrderForm order={order} />);
+
+		await act(async () => {
+			await modalActions.get('order-edit-save-button')!.onPress!();
+		});
+
+		expect(testLogger.error).not.toHaveBeenCalled();
+		expect(testLogger.debug).not.toHaveBeenCalledWith('Failed to save order', expect.anything());
 		expect(mockModalClose).not.toHaveBeenCalled();
 	});
 

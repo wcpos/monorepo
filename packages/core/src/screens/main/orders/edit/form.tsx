@@ -22,7 +22,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -161,6 +161,8 @@ export function EditOrderForm({ order }: Props) {
 					}
 				});
 			} catch (error) {
+				// A localPatch rethrow (the scope moved twice) is already reported.
+				if (isErrorReported(error)) return;
 				reportPushFailure(mutationLogger, 'Failed to save order', error, {
 					title: t('common.failed_to_save_order'),
 					stillSendingTitle: t('common.order_still_sending'),

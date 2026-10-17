@@ -9,8 +9,9 @@ import {
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export interface RefundFailureReport {
-	level: 'warn' | 'error';
-	code: ErrorCode;
+	level: 'info' | 'warn' | 'error';
+	/** Absent for a benign outcome (backgrounded before anything was sent). */
+	code?: ErrorCode;
 	/** Already-translated toast title. */
 	title: string;
 	/** Already-translated second line, when the code's own hint would mislead. */
@@ -42,6 +43,14 @@ function isRefusal(status: number | undefined): status is number {
  * everything else must send the cashier to the order's refunds first.
  */
 export function classifyRefundFailure(error: unknown, t: Translate): RefundFailureReport {
+	// Backgrounded (the tab was hidden), not offline: no code, no "you're offline".
+	if ((error as { isSleeping?: unknown } | null)?.isSleeping === true) {
+		return {
+			level: 'info',
+			title: t('orders.refund_background'),
+			text2: t('common.try_again_now'),
+		};
+	}
 	if (isExpectedPreflightBlock(error)) {
 		return {
 			level: 'warn',

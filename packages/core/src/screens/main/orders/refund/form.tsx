@@ -392,9 +392,8 @@ export function RefundOrderForm({ order }: Props) {
 			if (isStorageBlockedError(err)) return;
 
 			const report = classifyRefundFailure(err, t);
-			refundLogger[report.level]('Refund failed', {
+			const options = {
 				showToast: true,
-				code: report.code,
 				toast: {
 					title: report.title,
 					...(report.text2 !== undefined && { text2: report.text2 }),
@@ -404,7 +403,15 @@ export function RefundOrderForm({ order }: Props) {
 					status: err?.response?.status,
 					error: getErrorMessage(err),
 				},
-			});
+			};
+			if (report.code === undefined) {
+				refundLogger.info('Refund not sent: WCPOS was in the background', options);
+			} else {
+				refundLogger[report.level === 'error' ? 'error' : 'warn']('Refund failed', {
+					...options,
+					code: report.code,
+				});
+			}
 		} finally {
 			setLoading(false);
 		}
