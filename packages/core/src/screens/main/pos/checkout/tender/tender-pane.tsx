@@ -142,14 +142,19 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 	);
 }
 
-const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
+const keypadRows = (accessibilityLabel: string): readonly (readonly KeypadKeyDescriptor[])[] => [
 	...['123', '456', '789'].map((row) =>
 		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
 	),
 	[
 		{ value: 'clear', label: 'C', testID: 'checkout-key-clear' },
 		{ value: '0', label: '0', testID: 'checkout-key-0' },
-		{ value: 'backspace', icon: 'deleteLeft', testID: 'checkout-key-backspace' },
+		{
+			value: 'backspace',
+			icon: 'deleteLeft',
+			accessibilityLabel,
+			testID: 'checkout-key-backspace',
+		},
 	],
 ];
 
@@ -160,6 +165,7 @@ const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
  */
 function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const t = useT();
+	const KEYPAD_ROWS = keypadRows(t('common.backspace'));
 	const busy = flow.busy || saving;
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
