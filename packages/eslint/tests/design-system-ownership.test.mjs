@@ -68,12 +68,13 @@ test('rejects height and radius utilities on Button and IconButton: the size pro
 					<Button className="flex-1 rounded-t-none">Void</Button>
 					<IconButton name="plus" className="size-12" />
 					<Button className="max-h-9">Retry</Button>
+					<Button className="self-end web:h-20">Prefixed</Button>
 				</>
 			);
 		}
 	`);
 
-	assert.equal(messages.filter((m) => m.message.includes('owned by its size prop')).length, 5);
+	assert.equal(messages.filter((m) => m.message.includes('owned by its size prop')).length, 6);
 });
 
 test('allows width and layout utilities on a Button, which no size models', async () => {
