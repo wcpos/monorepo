@@ -98,7 +98,12 @@ export function deriveExpected(
 		ledgerRowsBySession,
 		refundRecords = [],
 	}: {
-		session: { id: string; counted_float: string; server_expected?: Record<string, string> | null };
+		session: {
+			id: string;
+			counted_float: string;
+			server_expected?: Record<string, string> | null;
+			server_ledger_rows?: readonly { id?: string; status?: string }[] | null;
+		};
 		movements: readonly Movement[];
 		ledgerRowsBySession: readonly LedgerRow[];
 		refundRecords?: readonly RefundDocumentType[];
@@ -196,6 +201,18 @@ export function deriveUnsyncedDelta(
 	// Compare the full local view with only the part already represented in the baseline.
 	// Restoring a synced target's pending void marker makes its reversal a signed debit.
 	const full = deriveExpected(input);
+	for (const row of input.ledgerRowsBySession) {
+		if (row.session_id !== input.session.id || !baselineHas(row.id)) continue;
+		const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
+		if (
+			['voided', 'failed'].includes(row.status) &&
+			snapshot &&
+			['captured', 'authorized'].includes(snapshot.status ?? '')
+		) {
+			const method = row.kind === 'cash' ? 'cash' : row.method_id;
+			full[method] = fromMinor(toMinor(full[method] ?? '0', 4) - toMinor(row.amount, 4), 4);
+		}
+	}
 	const known = deriveExpected({
 		...input,
 		movements: input.movements

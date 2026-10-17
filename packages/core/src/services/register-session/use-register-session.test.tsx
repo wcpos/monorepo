@@ -1593,6 +1593,59 @@ it.each([
 	}
 );
 
+it.each([
+	['cash', 'captured', 'voided'],
+	['cash', 'authorized', 'failed'],
+	['cheque', 'authorized', 'voided'],
+	['cheque', 'captured', 'failed'],
+])(
+	'debits a snapshotted %s %s leg changed offline to %s exactly once',
+	async (method, before, status) => {
+		entries = [];
+		const snapshot = { id: 'card', updated_at_gmt: '2026-09-15T08:00:00', status: before };
+		active = [
+			{
+				...active[0],
+				server_expected: { [method]: '100' },
+				server_ledger_row_ids: ['card'],
+				server_ledger_rows: [snapshot],
+			},
+		];
+		const hit = parentHit('session', false, '2026-09-15T10:00:00', {
+			kind: method === 'cash' ? 'cash' : 'manual',
+			method_id: method,
+			amount: '50',
+			status,
+			created_at_gmt: snapshot.updated_at_gmt,
+		});
+		hit.record.local.dirty = true;
+		mockOrders.next([hit]);
+		const result = await settled();
+		expect(result.current.expected).toEqual({ [method]: '50.0000' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { [method]: '50' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({ tillExpected: { [method]: '50.0000' } })
+		);
+		await act(async () => {
+			Object.assign(active[0], {
+				server_expected: { [method]: '50' },
+				server_expected_at: '2026-09-15T11:00:00',
+				server_ledger_rows: [{ ...snapshot, status, updated_at_gmt: '2026-09-15T10:00:00' }],
+			});
+			mockSessionChanges.next();
+		});
+		expect(result.current.expected).toEqual({ [method]: '50' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+	}
+);
+
 it.each(['startCounting', 'backToSelling', 'closeSession'] as const)(
 	'%s rejects with the domain error when the session is missing',
 	async (action) => {

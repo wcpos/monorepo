@@ -351,9 +351,8 @@ export function useRegisterSession() {
 		session?.server_ledger_row_ids,
 		session?.server_refund_ids
 	);
-	// Offline edits of synced captured legs are rare (a void needs the server). Keep
-	// the baseline plus other deltas until refreshed rather than inventing prior state:
-	// baseline-known rows cancel in deriveUnsyncedDelta even after amount/status edits.
+	// Snapshot-counted voids debit the baseline even offline. Other in-place edits keep
+	// the baseline plus deltas until refreshed rather than inventing their prior state.
 	// Compare each row's snapshot version; older plugins fall back to the snapshot time.
 	const versions = [...(session?.server_ledger_rows ?? []), ...(session?.server_refunds ?? [])];
 	const baselineVersion = (id: string | number | undefined) =>
