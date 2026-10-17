@@ -139,3 +139,67 @@ it.each(['headers', 'body'])('counts black-holed %s once in server pressure', as
 	await vi.advanceTimersByTimeAsync(0);
 	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
 });
+
+it('counts a black-holed query-total probe exactly once in server pressure', async () => {
+	await harness.dispose();
+	let rejectProbe!: (error: Error) => void;
+	harness = await createEngineHarness({
+		fetch,
+		queryTotal: {
+			fetchWooQueryTotal: vi
+				.fn(async () => 42)
+				.mockImplementationOnce(
+					() =>
+						new Promise((_, reject) => {
+							rejectProbe = reject;
+						})
+				),
+		},
+		now: () => Date.now(),
+	});
+	vi.useFakeTimers();
+	const run = harness.engine.sync('query-total-retry');
+	await vi.advanceTimersByTimeAsync(24_999);
+	fetch.mockRejectedValue(new Error('network down'));
+	const networkFailure = () =>
+		harness.engine
+			.hostTransport()
+			.fetcher('https://example.test/probe')
+			.catch(() => {});
+	await networkFailure();
+	await networkFailure();
+	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
+	await vi.advanceTimersByTimeAsync(1);
+	await run;
+	expect(harness.engine.status().serverPressure).toMatchObject({
+		multiplier: 2,
+		signal: 'timeout',
+	});
+	rejectProbe(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+	await vi.advanceTimersByTimeAsync(0);
+	await networkFailure();
+	await networkFailure();
+	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
+});
+
+it('settles caller cancellation immediately without deadline or pressure for ignored aborts', async () => {
+	fetch.mockImplementation(() => new Promise(() => {}));
+	vi.useFakeTimers();
+	const caller = new AbortController();
+	const settled = vi.fn();
+	const requests = Array.from({ length: 3 }, () =>
+		harness.engine
+			.hostTransport()
+			.fetcher('https://example.test/probe', { signal: caller.signal })
+			.catch(settled)
+	);
+	await vi.advanceTimersByTimeAsync(1_000);
+	caller.abort();
+	await vi.advanceTimersByTimeAsync(0);
+	expect(settled).toHaveBeenCalledTimes(3);
+	expect(settled).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+	await Promise.all(requests);
+	await vi.advanceTimersByTimeAsync(60_000);
+	expect(harness.diagnostics.some((event) => event.type === 'engine.request.deadline')).toBe(false);
+	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
+});

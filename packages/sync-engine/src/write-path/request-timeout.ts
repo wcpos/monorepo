@@ -19,17 +19,20 @@ export function withRequestTimeout<T>(
 ): (...args: Parameters<Fetcher>) => Promise<T> {
 	return async (url, init) => {
 		const controller = new AbortController();
-		const abort = () => controller.abort();
+		let rejectDeadline!: (error: Error) => void;
+		const deadline = new Promise<never>((_, reject) => {
+			rejectDeadline = reject;
+		});
+		const abort = () => {
+			controller.abort();
+			rejectDeadline(Object.assign(new Error('request aborted'), { name: 'AbortError' }));
+		};
 		if (init?.signal?.aborted) {
 			abort();
 		} else {
 			init?.signal?.addEventListener('abort', abort, { once: true });
 		}
 		let timedOut = false;
-		let rejectDeadline!: (error: Error) => void;
-		const deadline = new Promise<never>((_, reject) => {
-			rejectDeadline = reject;
-		});
 		const handle = timers.setTimeout(() => {
 			timedOut = true;
 			rejectDeadline(new RequestTimeoutError(timeoutMs));

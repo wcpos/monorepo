@@ -67,14 +67,15 @@ function claimState(
 	state: QueryTotalRequestState,
 	input: QueryTotalRetryRunnerInput
 ): QueryTotalRequestState {
+	const claimedAtMs = input.getNowMs?.() ?? input.nowMs;
 	return {
 		...state,
 		status: 'in-flight',
 		ownerId: input.ownerId,
-		claimedUntilMs: input.nowMs + input.leaseForMs,
+		claimedUntilMs: claimedAtMs + input.leaseForMs,
 		attempt: state.attempt + 1,
 		retryAfterMs: null,
-		updatedAtMs: input.nowMs,
+		updatedAtMs: claimedAtMs,
 	};
 }
 

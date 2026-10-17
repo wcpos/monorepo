@@ -1017,6 +1017,18 @@ describe('maintenance lanes through the public handle', () => {
 	});
 
 	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+		let releaseWrite!: () => void;
+		const writeBarrier = new Promise<void>((resolve) => {
+			releaseWrite = resolve;
+		});
+		const markFailed = RxQueryTotalRequestStateRepository.prototype.markFailed;
+		// Cancellation settles the host call immediately; keep its final database write pending.
+		vi.spyOn(RxQueryTotalRequestStateRepository.prototype, 'markFailed').mockImplementation(
+			async function (this: RxQueryTotalRequestStateRepository, ...args) {
+				await writeBarrier;
+				return markFailed.apply(this, args);
+			}
+		);
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'orders:total:guarded-dispose'
@@ -1063,6 +1075,7 @@ describe('maintenance lanes through the public handle', () => {
 		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
 
 		releaseFetch(42);
+		releaseWrite();
 		const report = await tick;
 		await disposing;
 		expect(closeStartedBeforeTickFinished).toBe(false);

@@ -160,6 +160,10 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
  * other side too.
  */
 export type SyncEventFieldsByType = {
+	'maintenance.lane.error': {
+		readonly lane: string;
+		readonly status?: number;
+	};
 	'engine.request.deadline': {
 		readonly lane: string;
 		readonly elapsedMs: number;

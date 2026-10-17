@@ -880,10 +880,22 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const createRequestObservation = () => {
+	const createRequestObservation = (callerSignal?: AbortSignal | null) => {
 		const startedAtMs = nowMs();
 		let observed = false;
-		return (
+		// The age that decides whether an abort was a timeout is measured at the ABORT, not at
+		// the moment a transport that ignored the signal finally rejects (which can be at the
+		// deadline, long after a young cancellation).
+		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
+		callerSignal?.addEventListener(
+			'abort',
+			() => {
+				abortedAtMs ??= nowMs();
+			},
+			{ once: true }
+		);
+		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
+		const observe = (
 			status: number,
 			retryAfter?: string | null,
 			pressure?: ServerPressure,
@@ -915,11 +927,12 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
+		return { observe, abortAgeMs };
 	};
 	const transportFetcher = async (
 		url: string,
 		init: RequestInit | undefined,
-		observe: ReturnType<typeof createRequestObservation>
+		{ observe, abortAgeMs }: ReturnType<typeof createRequestObservation>
 	) => {
 		if (updateRequiredRefusal !== null) {
 			return new Response(updateRequiredRefusal.body, {
@@ -927,7 +940,6 @@ export function createRxdbSyncEngine(
 				headers: { 'Content-Type': 'application/json' },
 			});
 		}
-		const startedAtMs = nowMs();
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -954,7 +966,7 @@ export function createRxdbSyncEngine(
 			const aborted =
 				(error as { name?: unknown } | null)?.name === 'AbortError' ||
 				init?.signal?.aborted === true;
-			const abortedYoung = aborted && nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
@@ -1036,16 +1048,17 @@ export function createRxdbSyncEngine(
 		return response;
 	};
 	const observeDeadline = async <T>(
-		request: (observe: ReturnType<typeof createRequestObservation>) => Promise<T>,
-		lane: string
+		request: (observation: ReturnType<typeof createRequestObservation>) => Promise<T>,
+		lane: string,
+		callerSignal?: AbortSignal | null
 	) => {
-		const observe = createRequestObservation();
+		const observation = createRequestObservation(callerSignal);
 		const startedAtMs = nowMs();
 		try {
-			return await request(observe);
+			return await request(observation);
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
-				observe(0);
+				observation.observe(0);
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
@@ -1057,13 +1070,14 @@ export function createRxdbSyncEngine(
 	};
 	const fetcher = (url: string, init?: RequestInit, lane = 'host-transport') =>
 		observeDeadline(
-			(observe) =>
+			(observation) =>
 				withRequestTimeout(
-					(url, init) => transportFetcher(url, init, observe),
+					(url, init) => transportFetcher(url, init, observation),
 					ENGINE_REQUEST_DEADLINE_MS,
 					timers
 				)(url, { ...init, signal: init?.signal ?? undefined }),
-			lane
+			lane,
+			init?.signal
 		);
 	const rawQueryTotal = ports.queryTotal;
 	const queryTotal =
@@ -1082,7 +1096,8 @@ export function createRxdbSyncEngine(
 											QUERY_TOTAL_REQUEST_DEADLINE_MS,
 											timers
 										)(input.request.endpoint, { signal: input.signal }),
-									'query-total-retry'
+									'query-total-retry',
+									input.signal
 								)
 							: null,
 				};
