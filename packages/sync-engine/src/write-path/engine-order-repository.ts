@@ -24,7 +24,7 @@ import {
 } from '../local-coverage/rx-existence-manifest-repository';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -260,17 +260,22 @@ export function stashPrintCounts(
 	});
 }
 
+export type OrderIngestionContext = { source: 'ack'; mutationId: string; recordId: string };
+
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
 	/** Returns the subset the storage guard actually applied, so the ingest site can
 	 * record manifest rows for exactly those documents (the guard-skipped-manifest class,
 	 * Greptile P1 on this PR — same contract as `collectionSchedulerRepository`). */
-	async upsertMany(documents: OrderDocument[]): Promise<readonly OrderDocument[]> {
+	async upsertMany(
+		documents: OrderDocument[],
+		context?: OrderIngestionContext
+	): Promise<readonly OrderDocument[]> {
 		if (documents.length === 0) return [];
 		// Offline-first guard: a pulled server row must never clobber a local edit that hasn't drained
-		// yet. `upsertMany` is only ever the pull-apply path (every incoming order is server truth with
-		// `local.dirty === false`), so dropping any incoming id whose ALREADY-STORED counterpart carries
+		// yet. Pull ingestion carries server truth with
+		// `local.dirty === false`, so dropping any incoming id whose ALREADY-STORED counterpart carries
 		// un-drained local work protects the edit at the storage boundary in its own right — independent
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
@@ -278,7 +283,11 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
-		let applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		const protectsLocal = (id: string, resident: unknown) =>
+			id !== context?.recordId && hasPendingLocalWork(resident);
+		let applicable = documents.filter(
+			(document) => !protectsLocal(document.uuid, residents.get(document.uuid)?.toJSON())
+		);
 		if (applicable.length === 0) return [];
 		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
 		const counts = { ...stash?.get('counts') };
@@ -344,8 +353,24 @@ export class EngineOrderRepository {
 		// with a modifier that ignores the current data.)
 		const skipped = new Set<string>();
 		const heldIds = this.db.recordMutations
-			? createOrderPendingMutationIds(this.db.recordMutations)
+			? createOrderPendingMutationIds(this.db.recordMutations, context?.mutationId)
 			: async () => new Set<string>();
+		const currentResidents =
+			changed.length > 0
+				? await this.db.orders.findByIds(changed.map((document) => document.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		for (const [uuid, resident] of currentResidents) residents.set(uuid, resident);
+		const held = await heldIds();
+		changed = changed.filter((document) => {
+			if (
+				held.has(document.uuid) ||
+				protectsLocal(document.uuid, currentResidents.get(document.uuid)?.toJSON())
+			) {
+				skipped.add(document.uuid);
+				return false;
+			}
+			return true;
+		});
 		const inserts = changed.filter((document) => !residents.has(document.uuid));
 		const updates = changed.filter((document) => residents.has(document.uuid));
 		if (inserts.length > 0)
@@ -355,7 +380,7 @@ export class EngineOrderRepository {
 			if (resident.incrementalModify) {
 				await resident.incrementalModify(async (current) => {
 					// Re-run inside RxDB's per-record write queue, including on conflict retry.
-					if (hasPendingLocalWork(current) || (await heldIds()).has(document.uuid)) {
+					if (protectsLocal(document.uuid, current) || (await heldIds()).has(document.uuid)) {
 						skipped.add(document.uuid);
 						return current;
 					}

@@ -642,7 +642,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										}
 										await facet.upsertServerDocument(
 											database,
-											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors())
+											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors()),
+											{ source: 'ack', mutationId: mutation.mutationId, recordId }
 										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',

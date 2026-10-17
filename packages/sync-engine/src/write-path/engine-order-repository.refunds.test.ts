@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { mintRemoteId, normalizeCheckpoint } from '@wcpos/sync-core';
+import { mintRemoteId, normalizeCheckpoint, withOrderColumns } from '@wcpos/sync-core';
 
 import { createEngineHarness } from '../testing';
 import { materializeLocalOnly, materializeRefund } from '../materialization/record-materialization';
@@ -60,6 +60,67 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	it.each(['local create', 'void', 'none'])('rechecks insert protection: %s', async (hold) => {
+		const h = await harness();
+		const incoming = parent(42, []);
+		const orders = h.collection<ReturnType<typeof parent>>('orders');
+		const queue = queueFor(h.scope.database as never);
+		const local = { ...incoming.local, dirty: true, pendingMutationIds: ['local-create'] };
+		const getLocal = orders.getLocal.bind(orders);
+		vi.spyOn(orders, 'getLocal').mockImplementationOnce(async (id) => {
+			if (hold === 'local create') {
+				await orders.insert(
+					withOrderColumns({
+						...incoming,
+						local,
+						payload: { ...incoming.payload, status: 'pos-open' },
+					})
+				);
+			} else if (hold === 'void') {
+				await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			}
+			return getLocal(id);
+		});
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(hold === 'none' ? 1 : 0);
+		const stored = await orders.findOne(incoming.uuid).exec();
+		if (hold === 'local create') {
+			expect(stored?.toJSON()).toMatchObject({ local, payload: { status: 'pos-open' } });
+			await stored!.incrementalPatch({ local: { ...local, dirty: false, pendingMutationIds: [] } });
+		} else if (hold === 'void') {
+			expect(stored).toBeNull();
+			await queue.releaseVoidFence('orders', incoming.uuid, 'hold');
+		}
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(1);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe('completed');
+	});
+
+	it.each(['none', 'writer', 'void'])(
+		'ack recovery exempts only its mutation: %s',
+		async (hold) => {
+			const h = await harness();
+			const incoming = parent(42, []);
+			const orders = h.collection<ReturnType<typeof parent>>('orders');
+			const queue = queueFor(h.scope.database as never);
+			await orders.insert(
+				withOrderColumns({
+					...incoming,
+					local: { ...incoming.local, dirty: true, pendingMutationIds: ['ack'] },
+				})
+			);
+			if (hold === 'writer') await queue.admitWriter('orders', incoming.uuid, 'hold', Date.now());
+			if (hold === 'void') await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			const applied = await h.repo.upsertMany([incoming], {
+				source: 'ack',
+				mutationId: 'ack',
+				recordId: incoming.uuid,
+			});
+			expect(applied.map((doc) => doc.uuid)).toEqual(hold === 'none' ? [incoming.uuid] : []);
+			expect((await orders.findOne(incoming.uuid).exec())?.toJSON().local.dirty).toBe(
+				hold !== 'none'
+			);
+		}
+	);
+
 	it.each(['writer', 'void'])('rechecks a late %s hold', async (hold) => {
 		const h = await harness();
 		await h.repo.upsertMany([parent(42, [])]);

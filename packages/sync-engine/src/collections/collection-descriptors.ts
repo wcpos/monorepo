@@ -61,6 +61,7 @@ import {
 import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 import {
 	EngineOrderRepository,
+	type OrderIngestionContext,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
@@ -250,7 +251,11 @@ export type CollectionWriteFacet = {
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
 	/** Missing-row ack/discard write-back through the collection's repository seam. */
-	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
+	upsertServerDocument: (
+		db: RxDatabase,
+		document: Record<string, unknown>,
+		context?: OrderIngestionContext
+	) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
@@ -664,8 +669,11 @@ const ordersWriteFacet = createWriteFacet({
 	// because a payload may predate it (#885/#890) and this rewrites line arrays.
 	graftAckIdentity: (payload, source, options) =>
 		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
-	upsert: async (db, document) => {
-		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
+	upsert: async (db, document, context) => {
+		await new EngineOrderRepository(db.collections as never).upsertMany(
+			[document as never],
+			context
+		);
 	},
 });
 
