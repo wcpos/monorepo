@@ -135,6 +135,41 @@ describe('useCheckoutSession', () => {
 		expect(result.current.error).toBe('payment_gateways_fetch_failed');
 	});
 
+	it('keeps the gateway unresolved through an auth-cancelled catalog load, then resolves it after auth', async () => {
+		const { requestStateManager } = jest.requireActual('@wcpos/hooks/use-http-client') as {
+			requestStateManager: { setAuthFailed(failed: boolean): void };
+		};
+		requestStateManager.setAuthFailed(true);
+		mockGet
+			.mockRejectedValueOnce(
+				Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' })
+			)
+			.mockResolvedValueOnce({
+				data: [
+					{
+						id: 'stripe_terminal_for_woocommerce',
+						provider: 'stripe',
+						pos_type: 'terminal',
+						capabilities: { supports_checkout: true },
+					},
+				],
+			});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await act(async () => {
+			await Promise.resolve();
+		});
+		// Not resolved, so no fall-back to the legacy webview for a contract gateway.
+		expect(result.current.gatewayResolved).toBe(false);
+		expect(result.current.mode).toBe('pending');
+
+		act(() => requestStateManager.setAuthFailed(false));
+
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		expect(result.current.mode).toBe('contract');
+	});
+
 	it('maps every catalog entry to its stored settled status, keyed by gateway id', async () => {
 		// The pay page can settle the order through any POS gateway, so the webview
 		// needs the whole catalog: id -> stored status, null where nothing is stored

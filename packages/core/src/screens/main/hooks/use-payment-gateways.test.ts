@@ -86,17 +86,37 @@ describe('usePaymentGateways', () => {
 		});
 	});
 
-	it('writes no failure row when an auth flow cancelled the request on purpose', async () => {
-		mockGet.mockRejectedValue(
-			Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' })
-		);
+	it('stays unresolved through an auth-cancelled load, then loads once auth completes', async () => {
+		const { requestStateManager } = jest.requireActual('@wcpos/hooks/use-http-client') as {
+			requestStateManager: { setAuthFailed(failed: boolean): void };
+		};
+		requestStateManager.setAuthFailed(true);
+		mockGet
+			.mockRejectedValueOnce(
+				Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' })
+			)
+			.mockResolvedValueOnce({
+				data: [{ id: 'stripe', capabilities: { supports_checkout: true } }],
+			});
 
-		const { result } = renderHook(() => usePaymentGateways('pos_cash'));
+		const { result } = renderHook(() => usePaymentGateways('stripe'));
 
-		await waitFor(() => expect(result.current.loading).toBe(false));
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await act(async () => {
+			await Promise.resolve();
+		});
+		// Not resolved: checkout must not fall back to the legacy webview meanwhile.
+		expect(result.current.loading).toBe(true);
+		expect(result.current.error).toBeNull();
 		expect(getLogger([]).warn).not.toHaveBeenCalledWith(
 			'Payment gateways could not be loaded',
 			expect.anything()
 		);
+
+		act(() => requestStateManager.setAuthFailed(false));
+
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(result.current.gateway?.id).toBe('stripe');
 	});
 });
