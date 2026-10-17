@@ -545,6 +545,30 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
 		});
 
+		it('keeps each session’s streak its own: interleaved stores neither reset nor inflate each other', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [storeA, storeA, storeB, storeA]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'interleaved' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// A's third failure persists (B's in between neither reset A nor counted toward it).
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ context: expect.objectContaining({ failureStreak: 3 }) })
+			);
+		});
+
 		it('codes a 2xx refresh with an unreadable body SYNC151 (malformed), not "cannot be reached"', async () => {
 			const post = jest.fn().mockResolvedValue({ status: 200, data: { unexpected: true } });
 			const { config } = makeConfig(post);

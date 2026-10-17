@@ -33,6 +33,8 @@ export type VariablePriceOwner = {
 	remoteId?: unknown;
 	name?: unknown;
 	sku?: unknown;
+	/** The store database the record lives in, so the once-per-record report is per store. */
+	scope?: string;
 	/**
 	 * The parent's OWN price fields exactly as served — the evidence for
 	 * {@link augmentationRan}. Pass them straight from the payload; `undefined`
@@ -98,7 +100,9 @@ function warnPriceProblem(
 	context: Record<string, unknown>
 ): void {
 	const ownerId = owner?.recordId ?? owner?.remoteId;
-	const key = `${message}:${String(ownerId)}`;
+	// The store's database is part of the key: deterministic uuids repeat across stores,
+	// and one store's report must not silence another's.
+	const key = `${message}:${owner?.scope ?? ''}:${String(ownerId)}`;
 	// Only a known record can be de-duplicated; an anonymous read always reports.
 	if (ownerId != null && reportedPriceProblems.has(key)) return;
 	// Evict only the oldest record (a Set keeps insertion order): clearing everything

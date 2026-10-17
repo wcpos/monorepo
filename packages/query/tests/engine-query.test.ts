@@ -861,6 +861,54 @@ describe('observeEngineQuery', () => {
 			}
 		});
 
+		it('does not carry a completed rebuild across a store switch (new database, new verdict)', async () => {
+			const query = {
+				collection: 'products/categories',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+			const divergeOn = async () => {
+				const database = await createEngineDatabase(['categories']);
+				const engine = createFakeEngine(database);
+				await database.collections.categories.bulkInsert([
+					engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+					engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+				]);
+				const falseHit = await database.collections.categories.findOne('false-hit').exec();
+				const correctHit = await database.collections.categories.findOne('correct-hit').exec();
+				if (!falseHit || !correctHit) throw new Error('missing store-switch fixtures');
+				jest
+					.spyOn(database.collections.categories, 'initSearch')
+					.mockResolvedValueOnce({
+						collection: { $: of(null) },
+						find: async () => [falseHit],
+					} as never)
+					.mockResolvedValue({
+						collection: { $: of(null) },
+						find: async () => [correctHit],
+					} as never);
+				Object.assign(database.collections.categories, {
+					recreateSearch: jest.fn().mockResolvedValue(null),
+				});
+				return { database, engine };
+			};
+
+			const storeA = await divergeOn();
+			try {
+				await firstValueFrom(observeEngineQuery(storeA.engine, 'divergence-swap', query));
+			} finally {
+				await storeA.database.close();
+			}
+			const storeB = await divergeOn();
+			try {
+				await firstValueFrom(observeEngineQuery(storeB.engine, 'divergence-swap', query));
+				// Store B's index was never rebuilt: its first divergence is a warning.
+				expect(searchError).not.toHaveBeenCalled();
+			} finally {
+				await storeB.database.close();
+			}
+		});
+
 		it('filters a second divergence without rebuilding the same index again', async () => {
 			const database = await createEngineDatabase(['categories']);
 			const engine = createFakeEngine(database);

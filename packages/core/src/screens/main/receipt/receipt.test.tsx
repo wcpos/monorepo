@@ -308,6 +308,39 @@ describe('Receipt auto-print', () => {
 		expect(mockPrint).toHaveBeenCalledTimes(1);
 	});
 
+	it('reports a failed autoprint as PRINT101, and a manual print during it on its own terms', async () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		let failAutoprint!: (error: Error) => void;
+		mockPrint
+			.mockImplementationOnce(
+				() =>
+					new Promise<void>((_resolve, reject) => {
+						failAutoprint = reject;
+					})
+			)
+			.mockRejectedValueOnce(new Error('Star printer reported status: busy'));
+		render(<Receipt resource={{} as never} />);
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		// A manual Print fails while the autoprint is still in flight: PRINT201, not PRINT101.
+		fireEvent.click(screen.getByTestId('receipt-print-button'));
+		await act(async () => Promise.resolve());
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			'Receipt print failed',
+			expect.objectContaining({ code: 'PRINT201', showToast: true })
+		);
+
+		await act(async () => {
+			failAutoprint(new Error('ECONNREFUSED'));
+			await Promise.resolve();
+		});
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
+			'Receipt print failed',
+			expect.objectContaining({ code: 'PRINT101', showToast: true })
+		);
+	});
+
 	it('waits for the receipt frame to load when final data is already available', () => {
 		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
 

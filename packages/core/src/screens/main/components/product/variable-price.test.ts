@@ -305,4 +305,13 @@ describe('getVariablePrices reporting', () => {
 
 		expect(getLogger([]).warn).not.toHaveBeenCalled();
 	});
+
+	it('reports the same record id again in another store (uuids repeat across stores)', () => {
+		const meta = [{ key: '_woocommerce_pos_variable_prices', value: 'not json {' }];
+
+		getVariablePrices(meta, { recordId: 'uuid-shared', scope: 'store-a' });
+		getVariablePrices(meta, { recordId: 'uuid-shared', scope: 'store-b' });
+
+		expect(getLogger([]).warn).toHaveBeenCalledTimes(2);
+	});
 });

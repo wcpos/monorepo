@@ -188,8 +188,6 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		useSystemDialog,
 	} = useResolvedPrinter({ template: templateInfo });
 
-	// Set while an automatic print is in flight, so its failure is reported as PRINT101.
-	const autoPrintingRef = React.useRef(false);
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
@@ -211,14 +209,28 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
 			}),
-		// A closed print dialog is a cancel (debug); a real failure is one coded row and
-		// a toast, so neither a manual Print nor an autoprint can fail silently.
-		onPrintError: (error) =>
-			reportPrintFailure(getLogger(['wcpos', 'pos', 'receipt']), 'Receipt print failed', error, t, {
-				autoPrint: autoPrintingRef.current,
-				context: { event: 'receipt.print_failed', orderId: order.uuid ?? orderId },
-			}),
 	});
+
+	// A closed print dialog is a cancel (debug); a real failure is one coded row and a
+	// toast, so neither a manual Print nor an autoprint can fail silently. Reported per
+	// INVOCATION (print() rethrows after onPrintError), so a manual print that fails while
+	// an autoprint is still in flight is never mislabelled PRINT101, nor the reverse.
+	const printAndReport = React.useCallback(
+		(autoPrint: boolean) =>
+			print().catch((error: unknown) =>
+				reportPrintFailure(
+					getLogger(['wcpos', 'pos', 'receipt']),
+					'Receipt print failed',
+					error,
+					t,
+					{
+						autoPrint,
+						context: { event: 'receipt.print_failed', orderId: order.uuid ?? orderId },
+					}
+				)
+			),
+		[order.uuid, orderId, print, t]
+	);
 
 	/**
 	 * Allow auto print for checkout
@@ -249,16 +261,10 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 			!hasAutoPrintedRef.current
 		) {
 			hasAutoPrintedRef.current = true;
-			// Errors are reported via onPrintError (as PRINT101 while this flag is set);
-			// auto-print must not surface an unhandled rejection.
-			autoPrintingRef.current = true;
-			print()
-				.catch(() => undefined)
-				.finally(() => {
-					autoPrintingRef.current = false;
-				});
+			// Reported as PRINT101: the sale is saved, print it from the receipt.
+			void printAndReport(true);
 		}
-	}, [hasFinalData, print, uiSettings.autoPrintReceipt]);
+	}, [hasFinalData, printAndReport, uiSettings.autoPrintReceipt]);
 
 	// Final API data can arrive without causing the receipt frame to load again.
 	React.useEffect(() => {
@@ -367,8 +373,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 					</ModalAction>
 					<ModalAction
 						testID="receipt-print-button"
-						// Reported via onPrintError; a rejection here must not go unhandled.
-						onPress={() => void print().catch(() => undefined)}
+						onPress={() => void printAndReport(false)}
 						loading={isPrinting || isSyncing}
 					>
 						{t('receipt.print_receipt')}
