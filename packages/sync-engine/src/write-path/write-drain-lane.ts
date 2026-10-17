@@ -483,6 +483,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const row = doc?.toJSON() as { status?: unknown } | undefined;
 								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
+							hasServerIdentity: async (mutation) => {
+								const facet = facetFor(mutation.collectionName);
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								return !!facet && remoteIdOrNull(doc?.toJSON()[facet.remoteIdField]) !== null;
+							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)

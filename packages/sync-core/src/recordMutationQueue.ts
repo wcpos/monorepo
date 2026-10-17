@@ -346,8 +346,12 @@ export class RecordMutationQueue {
 	 * drain, or already superseded by a concurrent write) — the caller re-reads
 	 * the queue and retries its coalesce decision.
 	 */
-	async coalesceInto(priorMutationId: string, replacement: QueuedMutation): Promise<boolean> {
-		await this.clearExpiredAnnihilation((this.recovery.now ?? Date.now)());
+	async coalesceInto(
+		priorMutationId: string,
+		replacement: QueuedMutation,
+		nowMs = (this.recovery.now ?? Date.now)()
+	): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === priorMutationId
@@ -464,6 +468,26 @@ export class RecordMutationQueue {
 		return this.holdRecord(collection, record, token, nowMs, true);
 	}
 
+	/** Renew only the still-live owner; a resumed expired writer must re-decide. */
+	async renewWriter(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === fenceId(collection, record)
+			);
+			if (
+				stored?.mutation.admittedBy !== token ||
+				(stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs
+			)
+				return false;
+			return this.storage.appendIfUnchanged({ ...stored.mutation, admittedAt: nowMs }, stored.rev);
+		});
+	}
+
 	async releaseWriter(collection: string, record: string, token: string): Promise<void> {
 		await this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
@@ -481,6 +505,7 @@ export class RecordMutationQueue {
 		token: string,
 		nowMs: number
 	): Promise<boolean> {
+		if (this.recovery.enabled?.() === false) return false; // Frozen v5 cannot persist fences.
 		return this.holdRecord(collection, record, token, nowMs, false);
 	}
 

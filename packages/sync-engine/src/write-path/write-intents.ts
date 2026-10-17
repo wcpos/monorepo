@@ -645,6 +645,8 @@ export async function enqueueWriteIntent(input: {
 			};
 		}
 
+		const residentSnapshot = JSON.stringify(stored);
+		const queueSnapshot = JSON.stringify(recordRows);
 		// Hold admission through bookkeeping/compensation as well as the append: a
 		// void cannot remove the resident while this writer still owns its changes.
 		if (!legacyQueue && !(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs()))) {
@@ -655,7 +657,17 @@ export async function enqueueWriteIntent(input: {
 			continue;
 		}
 		let committed = false;
+		const renew = async () => {
+			if (!legacyQueue && !(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs())))
+				throw voidInProgress();
+		};
 		try {
+			if (!legacyQueue) {
+				const freshDoc = await collection.findOne(recordId).exec();
+				if (JSON.stringify((await queue.pending()).filter(isRecordRow)) !== queueSnapshot) continue;
+				if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) throw voidInProgress();
+			}
+			await renew();
 			if (prior) {
 				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
 				// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
@@ -693,7 +705,7 @@ export async function enqueueWriteIntent(input: {
 				};
 				// Conditional swap: refuses when the prior row is no longer pending
 				// (drain-claimed or consumed by a concurrent write) — re-decide then.
-				if (!(await queue.coalesceInto(prior.mutationId, replacement))) continue;
+				if (!(await queue.coalesceInto(prior.mutationId, replacement, nowMs()))) continue;
 				input.observe?.({
 					type: 'queue.write.coalesce',
 					level: 'debug',
@@ -737,6 +749,7 @@ export async function enqueueWriteIntent(input: {
 			// entirely.
 			if (doc) {
 				try {
+					await renew();
 					await doc.incrementalModify((data) => {
 						const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
 						const pending = (

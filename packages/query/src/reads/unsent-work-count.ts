@@ -1,11 +1,11 @@
-import { combineLatest, from, type Observable } from 'rxjs';
+import { from, type Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION, type RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { observeResidentRead } from '../resident-read';
 
-/** Whole queue minus coordination rows; snapshot probes execute fresh counts. */
+/** Count work from one snapshot, including legacy rows with no status. */
 export function observeUnsentWorkCount(
 	engine: RxdbSyncEngine,
 	{ snapshot = false } = {}
@@ -15,19 +15,15 @@ export function observeUnsentWorkCount(
 		absent: null,
 		read: (database) => {
 			const queue = database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as {
-				count(query?: { selector: { status: string } }): {
-					$: Observable<number>;
-					exec(): Promise<number>;
+				find(): {
+					$: Observable<{ status?: string }[]>;
+					exec(): Promise<{ status?: string }[]>;
 				};
 			};
-			// SQLite's $ne hides absent statuses (legacy pending rows): subtract by equality.
-			const all = queue.count();
-			const internal = queue.count({ selector: { status: 'internal' } });
-			return (
-				snapshot
-					? from(Promise.all([all.exec(), internal.exec()]))
-					: combineLatest([all.$, internal.$])
-			).pipe(map(([total, coordination]) => Math.max(0, total - coordination)));
+			const rows = queue.find();
+			return (snapshot ? from(rows.exec()) : rows.$).pipe(
+				map((items) => items.filter((row) => row.status !== 'internal').length)
+			);
 		},
 	});
 }

@@ -48,6 +48,52 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it.each([
+		'admission',
+		'revision',
+		'remote identity',
+		'resolution claim',
+		'pushed after snapshot',
+	])('does not annihilate across %s', async (race) => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		const now = Date.now();
+		await q.enqueue(mut({ operation: 'create', origin: 'minted' }));
+		await q.enqueue(mut({ mutationId: 'delete', operation: 'delete' }));
+		if (race === 'admission') await other.admitWriter('products', 'rec-A', 'writer', now);
+		if (race === 'resolution claim')
+			await other.replace({
+				...mut({ mutationId: 'dead' }),
+				status: 'rejected',
+				resolutionClaimBy: 'resolver',
+				resolutionClaimUntil: new Date(now + 60_000).toISOString(),
+			});
+		const remove = q.removePending.bind(q);
+		vi.spyOn(q, 'removePending').mockImplementation(async (id, options) => {
+			if (race === 'pushed after snapshot' && id === 'm1') {
+				await other.replace({
+					...(await other.all()).find((row) => row.mutationId === id)!,
+					attempts: 1,
+				});
+			}
+			return remove(id, options);
+		});
+		const removeResident = vi.fn(async () => {});
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (m) => ok(m),
+			removeResident,
+			limit: 0,
+			now: () => now,
+			currentRevision: async () => (race === 'revision' ? 'server-revision' : null),
+			hasServerIdentity: async () => race === 'remote identity',
+		});
+		expect(result.annihilated).toBe(0);
+		expect(removeResident).not.toHaveBeenCalled();
+		expect((await q.pending()).map((row) => row.mutationId)).toEqual(['m1', 'delete']);
+	});
+
 	it('skips a marked row and its successors, then resumes after unmark', async () => {
 		const q = await queueWith(mut(), mut({ mutationId: 'later' }));
 		const [row] = await q.pending();

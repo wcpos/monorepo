@@ -904,7 +904,7 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	// 2026-10-17: RepeatChip's `count` member access was removed on next (not a raw query; the
 	// rule matched a `.count(` on a non-collection receiver). Retired, never re-added.
 	'screens/main/health/components/repeat-chip.tsx :: raw query construction :: RepeatChip :: count :: 1',
-	"screens/main/hooks/use-unsent-changes.ts :: mutation queue ::  :: import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine'; :: 1",
+	"screens/main/hooks/use-unsent-changes.ts :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
 	'screens/main/hooks/use-unsent-changes.ts :: raw query construction :: countUnsentChanges :: queueOf(database).count :: 1',
 	'screens/main/hooks/use-unsent-changes.ts :: raw query construction :: unsentCount$ :: queueOf(database).count :: 1',
 	'screens/main/hooks/use-unsent-changes.ts :: storage token :: queueOf :: database.collections :: 1',
@@ -912,4 +912,4 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 ];
 export const SEAM_RETIRED_FLOOR = 6;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'e69e96a8629a36703669d0d4ff991316169283081a010f3a74fadf221cfa1b1a';
+	'81f07bac07e776a24c55a112d97e48f65d9c4bdc92f46eb86185d90951c9d1d4';

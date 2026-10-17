@@ -117,6 +117,60 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each(['void between read and admission', 'expired admission'])(
+		'refuses a stale writer: %s',
+		async (race) => {
+			const storage = createFakeMutationCollection();
+			let present = true;
+			let now = Date.now();
+			const resident = {
+				toJSON: () => ({ payload: { id: 0 }, sync: {} }),
+				remove: async () => {
+					present = false;
+				},
+				incrementalModify: vi.fn(),
+			};
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => (present ? resident : null) }) },
+					recordMutations: storage,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			const other = new RecordMutationQueue(new RxRecordMutationStorage(() => storage));
+			const admit = queue.admitWriter.bind(queue);
+			let id = 0;
+			const deps = { db, mintUuid: () => `race-${++id}`, now: () => new Date(now).toISOString() };
+			vi.spyOn(queue, 'admitWriter').mockImplementationOnce(async (name, record, token, time) => {
+				if (race === 'void between read and admission') {
+					await enqueueWriteIntent({
+						...deps,
+						intent: { collection: 'orders', recordId: record, operation: 'delete' },
+					});
+					return admit(name, record, token, time);
+				}
+				const admitted = await admit(name, record, token, time);
+				now += 30_001;
+				await other.clearExpiredAnnihilation(now);
+				expect(await other.fenceForVoid(name, record, 'other-void', now)).toBe(true);
+				return admitted;
+			});
+			await expect(
+				enqueueWriteIntent({
+					...deps,
+					intent: {
+						collection: 'orders',
+						recordId: 'order-1',
+						operation: 'create',
+						payload: { id: 0 },
+					},
+				})
+			).rejects.toMatchObject({ status: 428 });
+			expect(await queue.all()).toEqual([]);
+			expect(resident.incrementalModify).not.toHaveBeenCalled();
+		}
+	);
+
 	it.each(['foreign admission', 'owned committed fence'])(
 		'a refused fence releases only uncommitted marks: %s',
 		async (owner) => {
