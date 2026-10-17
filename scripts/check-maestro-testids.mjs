@@ -88,10 +88,18 @@ for (const dir of isMain ? sourceDirs : []) {
 		for (const m of text.matchAll(/\w*[tT]estID\s*=\s*\{[^}\n]*?\?([^}\n]*)\}/g)) {
 			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
 		}
-		// A ternary assigned to a *TestID variable (`const testID = drill ? 'a' : 'b';`, then
-		// `testID={testID}`): its results only, bounded to the statement on this line.
-		for (const m of text.matchAll(/\b(?:const|let)\s+\w*[tT]estID\s*=\s*[^?;\n]*\?([^;\n]*)/g)) {
-			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
+		// A ternary assigned to a *TestID variable (`const testID: string = drill ? 'a' : 'b';`,
+		// then `testID={testID}`): its results only, bounded to the statement on this line. The
+		// arms start at the conditional `?`, never at optional chaining (`?.`) or `??` in the
+		// condition, whose literals are not testIDs.
+		for (const m of text.matchAll(
+			/\b(?:const|let)\s+\w*[tT]estID\s*(?::[^=;\n]+)?=\s*([^;\n]*)/g
+		)) {
+			const conditional = /(?<!\?)\?(?![.?])/.exec(m[1]);
+			if (!conditional) continue;
+			for (const value of m[1].slice(conditional.index + 1).matchAll(/["']([^"']+)["']/g)) {
+				literals.add(value[1]);
+			}
 		}
 		// Template-literal values, including inside short expressions (ternaries).
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:][^`\n]{0,80}`([^`]+)`/g)) {

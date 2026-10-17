@@ -56,6 +56,19 @@ return <Pressable testID={testID} />;`;
 	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - yes\n');
 });
 
+test('reads a typed testID variable and starts the arms at the conditional, not at ?. or ??', (t) => {
+	const source = `const testID: string = product?.kind === 'cond-a' ? 'typed-a' : 'typed-b';
+const otherTestID = (mode ?? 'cond-b') === 'x' ? 'typed-c' : 'typed-d';`;
+	const present = check(t, "id: 'typed-a'\nid: 'typed-b'\nid: 'typed-c'\nid: 'typed-d'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'cond-a'\nid: 'cond-b'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(
+		missing.stderr,
+		'✖ Maestro flows reference testIDs missing from source:\n  - cond-a\n  - cond-b\n'
+	);
+});
+
 test('collects both ternary results without the condition or neighboring expressions', (t) => {
 	const source = `<View testID={c === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'} label={'outside'} />
 <View testID={value} label={c ? 'neighbor' : 'other'} />`;
