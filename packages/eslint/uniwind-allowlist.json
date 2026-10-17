@@ -44,12 +44,6 @@
   "packages/core/src/screens/main/health/components/code-chip.tsx": {
     "arbitrary-px": 1
   },
-  "packages/core/src/screens/main/health/components/pill.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/health/components/repeat-chip.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
     "duration-literal": 2
   },
