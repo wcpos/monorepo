@@ -14,13 +14,15 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { CashierSheetProvider, useCashierSheet } from '../../pos/cart/cashier-sheet-state';
-import { SessionHoldBanner } from '../header/session-hold-banner';
+import { SessionHoldBanner } from '../session-hold-banner';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
 
 type Props = React.PropsWithChildren<{
 	title?: string;
+	/** A scoped room's scope control in the title's place (Reports). */
+	titleSlot?: React.ReactNode;
 	testID: string;
 	search?: React.ReactNode;
 	back?: React.ComponentProps<typeof PageBar>['back'];
@@ -35,7 +37,7 @@ export function ManagementBar(props: Props) {
 	);
 }
 
-function ManagementBarContent({ title, testID, search, back, children }: Props) {
+function ManagementBarContent({ title, titleSlot, testID, search, back, children }: Props) {
 	const { screenSize } = useTheme();
 	const phone = useIsPhone();
 	const navigation = useNavigation();
@@ -54,6 +56,7 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 		<>
 			<PageBar
 				title={title}
+				titleSlot={titleSlot}
 				testID={testID}
 				back={back}
 				status={badge}
@@ -85,7 +88,9 @@ function ManagementBarContent({ title, testID, search, back, children }: Props) 
 			)}
 			{/* Under the bar, where the drawer header showed it: a held session is a state. */}
 			<SessionHoldBanner />
-			<UserSheet open={userOpen} onOpenChange={setUserOpen} />
+			{/* The root host, as the rail's: the POS host sits inside the POS screen, which is
+			    hidden (web) or detached (native) while a management page is on screen. */}
+			<UserSheet open={userOpen} onOpenChange={setUserOpen} portalHost={null} />
 		</>
 	);
 }

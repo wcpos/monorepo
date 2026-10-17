@@ -36,11 +36,12 @@ jest.mock('../notification-bell/notification-bell', () => ({
 }));
 jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
 let mockHeld = false;
-jest.mock('../header/session-hold-banner', () => ({
+jest.mock('../session-hold-banner', () => ({
 	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
 }));
 jest.mock('../../pos/cart/user-sheet', () => ({
-	UserSheet: ({ open }: { open: boolean }) => (open ? <div data-testid="user-sheet" /> : null),
+	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
+		open ? <div data-testid="user-sheet" data-host={String(portalHost)} /> : null,
 }));
 beforeEach(() => {
 	mockPhone = false;
@@ -60,7 +61,8 @@ it('rehosts drawer and avatar below lg and opens the user sheet', () => {
 	fireEvent.click(screen.getByTestId('orders-bar-menu'));
 	expect(mockDrawer).toHaveBeenCalledTimes(1);
 	fireEvent.click(screen.getByTestId('orders-bar-avatar'));
-	expect(screen.getByTestId('user-sheet')).toBeTruthy();
+	// The root host: the POS host lives inside the POS screen, hidden while a page is up.
+	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('null');
 	expect(screen.getByTestId('orders-bar-bell')).toBeTruthy();
 });
 it('leaves drawer and avatar to the wide rail', () => {
@@ -120,4 +122,11 @@ it('passes the phone back crumb through with its label, selector and action', ()
 	expect(screen.queryByTestId('settings-bar-menu')).toBeNull();
 	fireEvent.click(screen.getByTestId('settings-navigation-back'));
 	expect(onBack).toHaveBeenCalledTimes(1);
+});
+it("puts a scoped room's control in the title's place", () => {
+	render(<ManagementBar testID="reports-bar" titleSlot={<button data-testid="reports-scope" />} />);
+	expect(screen.queryByTestId('reports-bar-title')).toBeNull();
+	expect(
+		screen.getByTestId('reports-bar-title-slot').contains(screen.getByTestId('reports-scope'))
+	).toBe(true);
 });

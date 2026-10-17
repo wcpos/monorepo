@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { SessionHoldBanner } from '@wcpos/core/screens/main/components/header/session-hold-banner';
+import { SessionHoldBanner } from '@wcpos/core/screens/main/components/session-hold-banner';
 import { RegisterBar } from '@wcpos/core/screens/main/pos/cart/register-bar';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 

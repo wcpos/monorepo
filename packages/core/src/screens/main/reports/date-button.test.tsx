@@ -178,9 +178,29 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
-jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
-jest.mock('../components/header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
-jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
+jest.mock('../components/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+// The page bar has its own suites; here it only seats the scope and the phone crumb.
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({
+		testID,
+		titleSlot,
+		back,
+	}: {
+		testID: string;
+		titleSlot?: React.ReactNode;
+		back?: { label: string; onPress: () => void; testID?: string };
+	}) => (
+		<div data-testid={testID}>
+			{back && (
+				<button data-testid={back.testID} data-crumb="phone" onClick={back.onPress}>
+					{back.label}
+				</button>
+			)}
+			<div data-testid={`${testID}-title-slot`}>{titleSlot}</div>
+		</div>
+	),
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),

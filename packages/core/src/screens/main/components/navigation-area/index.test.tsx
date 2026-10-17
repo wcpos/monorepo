@@ -54,7 +54,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../notification-bell/notification-bell', () => ({ NotificationBell: () => null }));
 jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
-jest.mock('../header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+jest.mock('../session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('../../pos/cart/user-sheet', () => ({ UserSheet: () => null }));
 
 const items: NavigationAreaItem[] = [

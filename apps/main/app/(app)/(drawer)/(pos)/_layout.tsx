@@ -6,8 +6,8 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';

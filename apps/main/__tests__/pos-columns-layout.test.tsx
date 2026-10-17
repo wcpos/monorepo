@@ -178,7 +178,7 @@ jest.mock('@wcpos/core/screens/main/pos/cart/register-bar', () => {
 		RegisterBar: () => react.createElement(View, { testID: 'register-bar-stub' }),
 	};
 });
-jest.mock('@wcpos/core/screens/main/components/header/session-hold-banner', () => ({
+jest.mock('@wcpos/core/screens/main/components/session-hold-banner', () => ({
 	SessionHoldBanner: () => null,
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({

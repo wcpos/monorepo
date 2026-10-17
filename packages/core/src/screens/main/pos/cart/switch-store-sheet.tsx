@@ -18,15 +18,23 @@ import { usePanelSide } from '../contexts/overlay-side';
 export function SwitchStoreSheet({
 	open,
 	onOpenChange,
+	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	/** `null` off the POS: the root host, as the user sheet it opens from. */
+	portalHost?: string | null;
 }) {
 	const side = usePanelSide('cart');
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="switch-store-sheet">
+			<DialogContent
+				side={side}
+				size="lg"
+				portalHost={portalHost ?? undefined}
+				testID="switch-store-sheet"
+			>
 				<DialogHeader>
 					<DialogTitle>{t('register.switch_store')}</DialogTitle>
 				</DialogHeader>
