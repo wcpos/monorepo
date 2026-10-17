@@ -296,10 +296,11 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 #### Chips, badges and switches
 | Element | Component | Sizes |
 |---|---|---|
-| A selectable choice (a filter, a reader, a split option) | `Chip`, `on` when selected (border and text go primary) | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
+| A selectable choice (a filter, a reader) | `Chip`, `on` when selected (border and text go primary) | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
 | A count, or a short state tag in a dense row ("1 stuck", "Unsynced") | `Badge` (solid tone by `variant`); `tinted` for a quiet state label beside a row's own text (a printer scan's *Ready*): the tone's wash, words in the foreground (`muted` has no wash and stays the solid muted) | `sm` 16, default 20, `lg` 24; full radius |
 | A named state ("Signed in", "Out of stock", an order's status) | `StatusBadge`: a tone dot and the word | the text's own line height |
 | A few-way view switch (List / Grid, Fixed / Percent) | `SegmentedControl` | 44 (`min-h-ctl`) |
+| A choice the cashier hits by position (a split option, a payment method, a denomination) | `Tile` | 64 at Regular (`min-h-tile`) |
 | Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
 | An on/off setting | `Switch` | — |
 
