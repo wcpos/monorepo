@@ -6,6 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { createTestT } from '../../../../jest/translate';
+import { URL_IMPLEMENTATIONS, withGlobalUrl } from '../../../../jest/url-implementations';
 import { upsertSiteData } from '../../../utils/site-writes';
 import { connectionAddressOf, normalizeSiteAddress, useSiteConnect } from './use-site-connect';
 
@@ -62,6 +63,18 @@ describe('normalizeSiteAddress', () => {
 	])('compares %s with %s: same address = %s', (saved, incoming, same) => {
 		expect(normalizeSiteAddress(saved) === normalizeSiteAddress(incoming)).toBe(same);
 	});
+
+	describe.each(URL_IMPLEMENTATIONS)('%s', (_, impl) => {
+		withGlobalUrl(impl);
+
+		it.each([
+			['https://münchen-laden.de/', 'xn--mnchen-laden-dlb.de', true],
+			['https://Bücher.example/shop', 'https://xn--bcher-kva.example/shop/', true],
+			['https://bücher.example:443/shop', 'https://xn--bcher-kva.example:443/shop', true],
+		])('compares %s with %s: same address = %s', (saved, incoming, same) => {
+			expect(normalizeSiteAddress(saved) === normalizeSiteAddress(incoming)).toBe(same);
+		});
+	});
 });
 
 describe('connectionAddressOf', () => {
@@ -70,6 +83,7 @@ describe('connectionAddressOf', () => {
 		['http://Example.com/?rest_route=/wcpos/v2/', 'example.com'],
 		['https://example.com/staging/wp-json/wcpos/v2/', 'example.com/staging'],
 		['https://192.168.1.5:8080/wp-json/wcpos/v2/', '192.168.1.5:8080'],
+		['https://münchen-laden.de/wp-json/', 'xn--mnchen-laden-dlb.de'],
 		[undefined, ''],
 	])('reduces %s to the address reached, %s', (apiUrl, address) => {
 		expect(connectionAddressOf(apiUrl)).toBe(address);
