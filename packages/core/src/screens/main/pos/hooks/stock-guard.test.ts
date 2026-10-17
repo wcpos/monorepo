@@ -245,7 +245,14 @@ describe('useCartStockGuard', () => {
 			available: null,
 			name: 'Deleted product',
 		});
-		expect(stockLogger.warn).toHaveBeenCalled();
+		// Not "out of stock": the stock record has not reached this device yet.
+		expect(stockLogger.info).toHaveBeenCalledWith(
+			'Stock record is not on this device yet',
+			expect.objectContaining({
+				showToast: true,
+				toast: { title: 'pos_cart.stock_not_loaded', type: 'warning' },
+			})
+		);
 	});
 
 	it('evaluates a soft-deleted product tombstone', async () => {

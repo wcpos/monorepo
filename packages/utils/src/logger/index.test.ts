@@ -371,6 +371,39 @@ describe('logger/index', () => {
 				})
 			);
 		});
+		it('maps the level to the toast variant by default', () => {
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).warn('A warning', { showToast: true });
+
+			expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }));
+		});
+
+		it('lets the call site choose the toast variant independently of the level', () => {
+			// A caller whose incident is already on record logs at debug and still owes
+			// the cashier an error toast; a benign info row can warrant a warning toast.
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).debug('Already reported by the engine', {
+				showToast: true,
+				toast: { title: 'The store refused this change.', type: 'error' },
+			});
+			getLogger(['wcpos', 'test']).info('Stock not loaded yet', {
+				showToast: true,
+				toast: { title: 'Try again in a moment.', type: 'warning' },
+			});
+
+			expect(mockToast).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ type: 'error', title: 'The store refused this change.' })
+			);
+			expect(mockToast).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({ type: 'warning', title: 'Try again in a moment.' })
+			);
+		});
 	});
 
 	describe('setDatabase', () => {

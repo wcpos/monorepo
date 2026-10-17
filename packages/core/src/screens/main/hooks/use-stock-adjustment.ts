@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
 
@@ -47,8 +46,10 @@ export const useStockAdjustment = () => {
 					() => handle.release(),
 					(error) => {
 						handle.release();
-						stockLogger.error('Stock refresh failed', {
-							code: ERROR_CODES.PRODUCT_UNEXPECTED,
+						// A background re-pull after a sale that already succeeded; the engine
+						// wrote the coded row for the failed require (SYNC321) and the stock
+						// catches up on the next sync.
+						stockLogger.debug('Stock refresh failed', {
 							context: {
 								collection: request.collection,
 								error: getErrorMessage(error),

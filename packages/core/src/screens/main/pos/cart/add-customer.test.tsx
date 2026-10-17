@@ -53,6 +53,7 @@ jest.mock('@wcpos/components/tooltip', () => ({
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => String(error),
+	isErrorReported: () => false,
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
 		success: (...args: unknown[]) => mockLoggerSuccess(...args),
@@ -133,6 +134,27 @@ describe.each([
 		// The form toasts "Saved {name}" itself, so the hook's generic toast stays off.
 		expect(mockUseMutationProps).toHaveBeenCalledWith(
 			expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
+		);
+	});
+
+	it('says the created customer was not attached, with the customer-specific next step', async () => {
+		const payload = { id: 37, first_name: 'Ada', billing: {}, shipping: {} };
+		mockCreate.mockResolvedValue({ payload, getLatest: () => ({ payload }) });
+		mockLocalPatch.mockRejectedValueOnce(new Error('cart write failed'));
+
+		render(renderComponent());
+		await act(async () => {
+			await mockSubmitCustomer?.({ first_name: 'Ada' });
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'Customer created but not added to the cart',
+			expect.objectContaining({
+				toast: {
+					title: 'pos_cart.customer_saved_not_attached',
+					text2: 'pos_cart.customer_saved_not_attached_hint',
+				},
+			})
 		);
 	});
 

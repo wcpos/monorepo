@@ -3,13 +3,13 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
-import { useRecordField, WriteOutcomeTimeoutError } from '@wcpos/query';
+import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { pushFailureCode } from '../../../contexts/push-failure-code';
+import { reportPushFailure } from '../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -75,16 +75,15 @@ export function PayButton() {
 				}
 			});
 		} catch (error) {
-			const errorMessage = getErrorMessage(error);
-			orderLogger.error('Checkout failed', {
-				showToast: true,
-				code: pushFailureCode(error, ERROR_CODES.CHECKOUT_FAILED_CART_SAFE),
-				toast: { title: t('pos_cart.checkout_failed') },
-				context: {
-					error: errorMessage,
-					// Why a push never went out: connectivity, auth hold, queue depth, last drain.
-					...(error instanceof WriteOutcomeTimeoutError ? { pushState: error.diagnostics } : {}),
-				},
+			// A timeout carries the push state (connectivity, auth hold, queue depth,
+			// last drain) so a push that never went out says why.
+			reportPushFailure(orderLogger, 'Checkout failed', error, {
+				fallback: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				title: t('pos_cart.checkout_failed'),
+				// The store dedupes the order on its uuid, so pressing Checkout again is safe.
+				stillSendingTitle: t('pos_cart.checkout_still_sending'),
+				// SYNC191's "nothing to do" would contradict the title's "press Checkout again".
+				stillSendingText2: t('pos_cart.checkout_still_sending_hint'),
 			});
 		} finally {
 			setLoading(false);

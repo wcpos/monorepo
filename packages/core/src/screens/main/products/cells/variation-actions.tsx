@@ -24,7 +24,6 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
@@ -68,16 +67,18 @@ export function VariationActions({
 		void handle.ready
 			.finally(() => handle.release())
 			.catch((error) => {
-				syncLogger.error('Failed to refresh variation', {
-					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				// The engine already wrote the coded row for this require (SYNC321), and the
+				// device's copy is untouched: the cashier only needs to know it didn't refresh.
+				syncLogger.debug('Failed to refresh variation', {
 					showToast: true,
+					toast: { title: t('common.refresh_failed'), type: 'warning' },
 					context: {
 						variationId: variation.id,
 						error: getErrorMessage(error),
 					},
 				});
 			});
-	}, [runtime, variation.id]);
+	}, [runtime, variation.id, t]);
 
 	/**
 	 * Handle delete button click

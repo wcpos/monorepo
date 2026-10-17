@@ -11,6 +11,7 @@ const mockFindEngineResident = jest.fn();
 const mockRequire = jest.fn();
 const mockEvents = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerDebug = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
 	engineCollection: (database: { variations?: unknown } | null, name: string) =>
@@ -40,7 +41,10 @@ let residentScopeId = 'scope-1';
 let activeScopeId = 'scope-1';
 
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		debug: (...args: unknown[]) => mockLoggerDebug(...args),
+	}),
 	getErrorMessage: (error: unknown) => String(error),
 }));
 
@@ -233,7 +237,7 @@ it('does not re-run into a scope that changed while the first fetch was in fligh
 	expect(mockRequire).toHaveBeenCalledTimes(1);
 });
 
-it('releases the requirement and logs without a toast when the fetch fails', async () => {
+it('releases the requirement and logs forensically when the fetch fails (the engine wrote the row)', async () => {
 	mount();
 
 	act(() => emit(ack('variation-uuid')));
@@ -244,8 +248,11 @@ it('releases the requirement and logs without a toast when the fetch fails', asy
 	});
 
 	expect(releases[0]).toHaveBeenCalledTimes(1);
-	expect(mockLoggerError).toHaveBeenCalledTimes(1);
-	expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('showToast', true);
+	expect(mockLoggerError).not.toHaveBeenCalled();
+	expect(mockLoggerDebug).toHaveBeenCalledWith(
+		'Failed to refresh variable product price range',
+		expect.not.objectContaining({ showToast: true })
+	);
 });
 
 it('unsubscribes on unmount and declares nothing afterwards', async () => {

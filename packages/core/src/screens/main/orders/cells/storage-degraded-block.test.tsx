@@ -9,6 +9,7 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { Actions } from './actions';
 
@@ -28,13 +29,19 @@ const mockDisabled = new Map<string, boolean>();
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 
+const mockEngineRequire = jest.fn();
+const mockAwaitWriteOutcome = jest.fn(async (..._args: unknown[]) => undefined as unknown);
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
-		engine: { write: mockEngineWrite, require: jest.fn() },
+		engine: { write: mockEngineWrite, require: mockEngineRequire },
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
-	awaitWriteOutcome: jest.fn(async () => undefined),
-	WriteOutcomeError: class WriteOutcomeError extends Error {},
+	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteOutcomeError: class WriteOutcomeError extends Error {
+		constructor(public reason?: string) {
+			super('write-rejected');
+		}
+	},
 }));
 
 jest.mock('@wcpos/sync-core', () => ({
@@ -232,5 +239,63 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		});
 
 		expect(mockPush).not.toHaveBeenCalled();
+	});
+});
+
+describe('Orders list action reports', () => {
+	const logger = getLogger(['test']) as unknown as Record<'debug' | 'warn' | 'error', jest.Mock>;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockHandlers.clear();
+		mockDisabled.clear();
+	});
+
+	it('toasts a failed refresh without a second row (the engine logged the require)', async () => {
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.reject(new Error('require: unreachable')),
+			release: jest.fn(),
+		});
+		render(<Actions {...cellProps} />);
+
+		await act(async () => {
+			await mockHandlers.get('order-refresh-menu-item')!();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(
+			'Failed to refresh order',
+			expect.objectContaining({
+				showToast: true,
+				toast: { title: 'orders.refresh_failed', type: 'warning' },
+			})
+		);
+	});
+
+	it('toasts a store delete refusal with the role hint, without a second row', async () => {
+		const { WriteOutcomeError } = jest.requireMock('@wcpos/query') as {
+			WriteOutcomeError: new (reason?: string) => Error;
+		};
+		mockEngineWrite.mockResolvedValueOnce({ mutationId: 'delete-1', annihilated: false });
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeError('woocommerce_rest_cannot_delete')
+		);
+		render(<Actions {...cellProps} />);
+
+		await act(async () => {
+			await mockHandlers.get('order-delete-confirm-button')!();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalledWith(
+			'Server refused to delete order',
+			expect.objectContaining({
+				showToast: true,
+				code: 'AUTH201',
+				toast: { title: 'orders.delete_not_permitted', type: 'error' },
+			})
+		);
 	});
 });

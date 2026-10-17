@@ -139,8 +139,9 @@ export const findByProductVariationID = (
 	variationId = 0
 ) => {
 	if (!Array.isArray(lineItems)) {
+		// An invariant break, not a checkout outcome: no "do not re-charge" advice.
 		posLogger.error('lineItems is not an array', {
-			code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: {
 				lineItems,
 				productId,

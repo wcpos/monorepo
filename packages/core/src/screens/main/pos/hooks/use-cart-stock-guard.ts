@@ -97,9 +97,10 @@ export const useCartStockGuard = () => {
 				: await readStockDocument('products', productId);
 			if (!product) {
 				const name = suppliedName ?? '';
-				cartLogger.warn('Product is out of stock', {
+				// Not out of stock: its stock record has not reached this device yet.
+				cartLogger.info('Stock record is not on this device yet', {
 					showToast: true,
-					toast: { title: t('pos_products.out_of_stock', { name }) },
+					toast: { title: t('pos_cart.stock_not_loaded', { name }), type: 'warning' },
 					context: { productId, variationId, reason: 'missing_stock_record' },
 				});
 				return { allowed: false, warning: null, available: null, name };
@@ -111,9 +112,9 @@ export const useCartStockGuard = () => {
 				: undefined;
 			const name = suppliedName ?? product.name ?? '';
 			if (variationId && !variation) {
-				cartLogger.warn('Product is out of stock', {
+				cartLogger.info('Stock record is not on this device yet', {
 					showToast: true,
-					toast: { title: t('pos_products.out_of_stock', { name }) },
+					toast: { title: t('pos_cart.stock_not_loaded', { name }), type: 'warning' },
 					context: { productId, variationId, reason: 'missing_stock_record' },
 				});
 				return { allowed: false, warning: null, available: null, name };
@@ -142,9 +143,11 @@ export const useCartStockGuard = () => {
 					result.available === null
 						? 'Stock check failed because availability is unknown'
 						: 'Stock check found insufficient inventory';
-				cartLogger.warn(message, {
+				// The store's overselling rule doing its job: the toast warns, the row is
+				// lifecycle, not an amber problem.
+				cartLogger.info(message, {
 					showToast: true,
-					toast: { title: toastTitle },
+					toast: { title: toastTitle, type: 'warning' },
 					context: { productId, variationId, available: result.available },
 				});
 			}
@@ -166,8 +169,8 @@ export const useCartStockGuard = () => {
 
 	const showBackorderWarning = React.useCallback(
 		(name: string) => {
-			cartLogger.warn('Product will be backordered', {
-				toast: { title: t('pos_cart.will_be_backordered', { name }) },
+			cartLogger.info('Product will be backordered', {
+				toast: { title: t('pos_cart.will_be_backordered', { name }), type: 'warning' },
 				showToast: true,
 			});
 		},

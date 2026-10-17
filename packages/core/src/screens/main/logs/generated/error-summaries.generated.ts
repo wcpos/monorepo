@@ -66,6 +66,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.PAYMENT201');
 		case 'PAYMENT301':
 			return t('health.logs.error_summary.PAYMENT301');
+		case 'PAYMENT311':
+			return t('health.logs.error_summary.PAYMENT311');
 		case 'PAYMENT401':
 			return t('health.logs.error_summary.PAYMENT401');
 		case 'PRINT101':
@@ -168,6 +170,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC171');
 		case 'SYNC181':
 			return t('health.logs.error_summary.SYNC181');
+		case 'SYNC191':
+			return t('health.logs.error_summary.SYNC191');
 		case 'CHECKOUT111':
 			return t('health.logs.error_summary.CHECKOUT111');
 		case 'PRODUCT321':

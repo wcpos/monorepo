@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import type { CellContext } from '@wcpos/core/table-types';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
@@ -44,9 +44,10 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 			rowRef.pulseRemove(() =>
 				removeLineItem(uuid, type).catch((error: unknown) => {
 					// `localPatch` logs and toasts every failure it handles, and re-raises
-					// only ActiveScopeChangedTwiceError, so a rejection getting this far
-					// is unexpected. Log it — without a second toast, which would double
-					// up on the cashier.
+					// only ActiveScopeChangedTwiceError — already reported, so skipped. Any
+					// other rejection getting this far is unexpected. Log it — without a
+					// second toast, which would double up on the cashier.
+					if (isErrorReported(error)) return;
 					cartLogger.error('Cart line removal failed', {
 						code: ERROR_CODES.CART_UPDATE_FAILED,
 						context: { uuid, itemType: type, error: getErrorMessage(error) },

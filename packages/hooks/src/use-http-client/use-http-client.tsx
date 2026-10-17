@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import axios, { AxiosHeaders, type RawAxiosHeaders } from 'axios';
+import axios, { AxiosHeaders, isAxiosError, type RawAxiosHeaders } from 'axios';
 import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
@@ -25,8 +25,8 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 // `protocolHeaders` (a per-site verdict relayed by callers that have a site in
 // scope — this interceptor does not, so the flag rides the request config) and
 // `quietErrors` (failure is routine and non-fatal for this request — e.g.
-// decorative image fetches — so log it as a warning instead of an error;
-// the error itself still throws and is enriched identically).
+// decorative image fetches; every failure row here is debug now, so the flag
+// only marks that row `quiet`, and the error still throws enriched identically).
 export type WcposRequestConfig = AxiosRequestConfig & {
 	wcposPreamble?: Omit<RequestPreambleContext, 'client'>;
 	wcposHeaders?: boolean;
@@ -368,12 +368,18 @@ export const useHttpClient = (
 				const wpError = axiosError.response?.data
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
-				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				// A transport failure with no reply (offline, DNS, timeout, reset) is the
+				// store being unreachable, not "an unexpected error, report it".
+				const unreachable = !axiosError.response && isAxiosError(error);
+				const mappedException =
+					axiosError.response || unreachable ? undefined : mapExceptionToCode(error);
 				const errorCode =
 					wpError?.code ??
 					(axiosError.response
 						? mapToInternalCode(null, axiosError.response.status)
-						: mappedException?.code);
+						: unreachable
+							? ERROR_CODES.SYNC_UNREACHABLE
+							: mappedException?.code);
 				if (errorCode === ERROR_CODES.APP_UPDATE_REQUIRED && axiosError.response) {
 					const details = parseUpdateRequiredBody(axiosError.response.data);
 					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
@@ -398,17 +404,15 @@ export const useHttpClient = (
 						...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 						...(wpError?.triage && { triage: true }),
 					};
-					if (reqConfig.quietErrors) {
-						httpLogger.warn(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					} else {
-						httpLogger.error(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					}
+					// Forensic only. The transport cannot see how the operation ends — a
+					// queued email, a receipt built from local data and an image placeholder
+					// all recover — so the caller owns the one merchant-visible row and
+					// toast (LEVELS.md: producers that cannot see the ending must not guess).
+					httpLogger.debug(`HTTP request failed: ${method} ${endpoint}`, {
+						code: errorCode ?? ERROR_CODES.UNEXPECTED_ERROR,
+						context: { ...failureContext, ...(reqConfig.quietErrors && { quiet: true }) },
+						terminal: { outcome: 'failed' },
+					});
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing

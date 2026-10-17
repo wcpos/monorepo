@@ -115,9 +115,9 @@ export function useVariationParentRefresh(): void {
 			try {
 				await handle.ready;
 			} catch (error) {
-				// Background repair of a derived display value: logged, never toasted.
-				parentLogger.error('Failed to refresh variable product price range', {
-					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				// Background repair of a derived display value, and the engine already wrote
+				// the coded row for the failed require (SYNC321): forensic only.
+				parentLogger.debug('Failed to refresh variable product price range', {
 					context: { parentId: String(parentRemoteId), error: getErrorMessage(error) },
 				});
 			} finally {

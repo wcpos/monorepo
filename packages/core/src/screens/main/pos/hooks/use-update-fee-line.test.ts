@@ -159,7 +159,8 @@ describe('useUpdateFeeLine', () => {
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Fee line update targeted a line that is no longer in the cart',
 			{
 				showToast: true,

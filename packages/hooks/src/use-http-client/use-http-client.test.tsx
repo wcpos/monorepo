@@ -1,7 +1,7 @@
 import 'whatwg-fetch';
 
 import { renderHook } from '@testing-library/react';
-import { CanceledError, isCancel } from 'axios';
+import { AxiosError, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
@@ -155,14 +155,18 @@ describe('useHttpClient network audit logs', () => {
 			)
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				method: 'GET',
 				endpoint: '/wc/v3/products',
 				status: 503,
 			}),
+			terminal: { outcome: 'failed' },
 		});
+		// The caller owns the merchant-visible row; the transport never writes one.
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
 		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
 	});
 
@@ -182,12 +186,13 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				serverCode: 'merchant_plugin_unknown_error',
 				triage: true,
 			}),
+			terminal: { outcome: 'failed' },
 		});
 	});
 
@@ -213,8 +218,11 @@ describe('useHttpClient network audit logs', () => {
 			pluginVersion: '1.11.0',
 			status: 426,
 		});
+		const transportRow = loggerMock.__debug.mock.calls.findIndex(
+			([message]) => message === 'HTTP request failed: POST /wcpos/v2/orders'
+		);
 		expect(onUpdateRequired.mock.invocationCallOrder[0]).toBeLessThan(
-			loggerMock.__error.mock.invocationCallOrder[0]
+			loggerMock.__debug.mock.invocationCallOrder[transportRow]
 		);
 	});
 
@@ -225,7 +233,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
+		expect(loggerMock.__debug).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'CLIENT999',
 			context: expect.objectContaining({
 				status: 0,
@@ -233,11 +241,31 @@ describe('useHttpClient network audit logs', () => {
 				name: 'Error',
 				message: 'network down',
 			}),
+			terminal: { outcome: 'failed' },
 		});
 		expect(loggerMock.mapExceptionToCode).toHaveBeenCalledWith(failure);
 	});
 
-	it('demotes quietErrors transport failures to warn and still rethrows', async () => {
+	it('codes a reply-less axios failure as the store being unreachable, not CLIENT999', async () => {
+		const failure = new AxiosError('Network Error', 'ERR_NETWORK');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.post('/wcpos/v1/orders/1/refunds', {})).rejects.toBe(failure);
+
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
+			'HTTP request failed: POST /wcpos/v1/orders/1/refunds',
+			{
+				code: 'SYNC121',
+				context: expect.objectContaining({ status: 0 }),
+				terminal: { outcome: 'failed' },
+			}
+		);
+		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+	});
+
+	it('keeps quietErrors transport failures forensic and still rethrows', async () => {
 		const failure = new Error('network down');
 		(http.request as jest.Mock).mockRejectedValue(failure);
 		const { result } = renderHook(() => useHttpClient());
@@ -247,7 +275,8 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith(
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
+		expect(loggerMock.__debug).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/product.jpg',
 			{
 				code: 'CLIENT999',
@@ -256,7 +285,9 @@ describe('useHttpClient network audit logs', () => {
 					endpoint: '/wp-content/uploads/product.jpg',
 					status: 0,
 					codeFallback: true,
+					quiet: true,
 				}),
+				terminal: { outcome: 'failed' },
 			}
 		);
 	});

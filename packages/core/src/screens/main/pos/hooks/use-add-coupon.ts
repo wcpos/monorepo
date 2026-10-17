@@ -10,7 +10,7 @@ import {
 	wooMetaCarrier,
 } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import {
 	type CouponLineItem,
 	type CouponRejection,
@@ -69,8 +69,10 @@ export const useAddCoupon = () => {
 			 * unsearchable, and untranslatable back. `reason` is now the stable
 			 * enum and `params` carries what the sentence interpolated.
 			 */
+			// A store rule doing its job (expired, minimum spend…), shown inline by the
+			// coupon form: lifecycle, not an amber row.
 			const rejectCoupon = (rejection: CouponRejection) => {
-				orderLogger.warn('Coupon application rejected', {
+				orderLogger.info('Coupon application rejected', {
 					context: {
 						event: 'coupon.rejected',
 						couponCode: couponCode.toLowerCase().trim(),
@@ -267,12 +269,14 @@ export const useAddCoupon = () => {
 
 				return { success: true };
 			} catch (error) {
-				const message = getErrorMessage(error);
-				reportCartFailure(orderLogger, 'Local mutation failed', {
-					toastTitle: t('common.there_was_an_error', { message }),
-					error,
-				});
-				return { success: false, error: message };
+				// localPatch already reported its own rethrow (a scope that moved twice).
+				if (!isErrorReported(error)) {
+					reportCartFailure(orderLogger, 'Coupon could not be applied', {
+						toastTitle: t('pos_cart.coupon_apply_failed'),
+						error,
+					});
+				}
+				return { success: false, error: t('pos_cart.coupon_apply_failed') };
 			}
 		},
 		[runtime, currentOrderRecord, localPatch, t, orderLogger, recalculate, couponRejectionMessage]

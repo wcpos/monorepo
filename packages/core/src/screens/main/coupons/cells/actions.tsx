@@ -28,7 +28,6 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
@@ -64,15 +63,17 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }
 		void handle.ready
 			.finally(() => handle.release())
 			.catch((error) => {
-				syncLogger.error('Failed to refresh coupons', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+				// The engine already wrote the coded row for this require (SYNC321), and the
+				// device's copy is untouched: the cashier only needs to know it didn't refresh.
+				syncLogger.debug('Failed to refresh coupons', {
 					showToast: true,
+					toast: { title: t('common.refresh_failed'), type: 'warning' },
 					context: {
 						error: getErrorMessage(error),
 					},
 				});
 			});
-	}, [runtime]);
+	}, [runtime, t]);
 
 	const handleDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {

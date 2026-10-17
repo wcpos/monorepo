@@ -15,7 +15,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose } from '@wcpos/components/modal';
@@ -29,10 +28,8 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	calculateLineItemRefund,
@@ -43,6 +40,7 @@ import {
 	formatRefundUnitPrice,
 } from './calculate-refund';
 import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
+import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -155,6 +153,7 @@ export function RefundOrderForm({ order }: Props) {
 	});
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
 	const isPosCash = orderData.payment_method === 'pos_cash';
+	const awaitingGateway = gatewaysLoading && !isPosCash;
 	const defaultDestination: RefundDestination = isPosCash
 		? 'cash'
 		: refundOptions[0]?.enabled
@@ -192,7 +191,12 @@ export function RefundOrderForm({ order }: Props) {
 				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
 				setRefundDetailsLoading(false);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
+				// The refund limits fall back to the order's saved refunds; recorded so a
+				// support case can see the store's history was not read.
+				refundLogger.info('Refund history not loaded from the store; using the saved refunds', {
+					context: { orderId: orderData.id, error: getErrorMessage(error) },
+				});
 				if (!mounted) return;
 				setRefundDetails(getRefundsFallback());
 				setRefundDetailsLoading(false);
@@ -314,7 +318,10 @@ export function RefundOrderForm({ order }: Props) {
 	const isValid = !refundDetailsLoading && refundTotalNum > 0 && refundTotalNum <= maxRefundable;
 
 	const handleSubmit = React.useCallback(async () => {
-		if (loading || refundDetailsLoading) return;
+		// Gateways still loading: the destination is not known yet (it must not default
+		// to cash and refund the wrong way), so nothing is submitted. A POS cash order
+		// needs no gateway contract — its refund is always cash.
+		if (loading || refundDetailsLoading || awaitingGateway) return;
 		if (!orderData.id) return;
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
@@ -388,22 +395,34 @@ export function RefundOrderForm({ order }: Props) {
 			// generic "refund failed" toast on top of it.
 			if (isStorageBlockedError(err)) return;
 
-			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
-			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
-			refundLogger[logLevel](serverMessage, {
+			const report = classifyRefundFailure(err, t);
+			const options = {
 				showToast: true,
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				toast: {
+					title: report.title,
+					...(report.text2 !== undefined && { text2: report.text2 }),
+				},
 				context: {
 					orderId: orderData.id,
+					status: err?.response?.status,
 					error: getErrorMessage(err),
 				},
-			});
+			};
+			if (report.code === undefined) {
+				refundLogger.info('Refund not sent: WCPOS was in the background', options);
+			} else {
+				refundLogger[report.level === 'error' ? 'error' : 'warn']('Refund failed', {
+					...options,
+					code: report.code,
+				});
+			}
 		} finally {
 			setLoading(false);
 		}
 	}, [
 		blockIfDegraded,
 		loading,
+		awaitingGateway,
 		refundDetailsLoading,
 		form,
 		order,
@@ -558,8 +577,8 @@ export function RefundOrderForm({ order }: Props) {
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction
 						testID="process-refund-button"
-						loading={loading}
-						disabled={!isValid || storageDegraded}
+						loading={loading || awaitingGateway}
+						disabled={!isValid || storageDegraded || awaitingGateway}
 						onPress={() => setConfirmOpen(true)}
 					>
 						{t('orders.process_refund')}
@@ -584,7 +603,7 @@ export function RefundOrderForm({ order }: Props) {
 							variant="destructive"
 							testID="confirm-process-refund-button"
 							onPress={handleSubmit}
-							disabled={loading || storageDegraded}
+							disabled={loading || storageDegraded || awaitingGateway}
 						>
 							{t('orders.process_refund')}
 						</AlertDialogAction>

@@ -583,6 +583,30 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "PAYMENT311",
+		"symbol": "REFUND_OUTCOME_UNKNOWN",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Open the order and check its refunds before trying again — a retry could refund twice.",
+		"retryPolicy": "manual",
+		"dataSafety": "outcome-unknown",
+		"escalation": "support-with-export",
+		"summary": "WCPOS couldn't confirm whether this refund went through.",
+		"docsBody": "The refund request was sent, but WCPOS never got a definite answer — the reply was lost, timed out, or the store failed while handling it. The store may or may not have created the refund (and, for a card refund, sent it to the payment provider). Each new attempt is a brand-new refund request, so retrying without checking can refund the customer twice.",
+		"troubleshooting": [
+			"Open the order (or WooCommerce → Orders) and look at its refunds. If the refund is there, it went through — don't retry.",
+			"If the refund is not there, try again from the order once the store is reachable.",
+			"For a card refund, also check the payment provider's dashboard; if the store and the provider disagree, export debug info and contact support."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs",
+			"payment-provider"
+		],
+		"evidence": "2026-10-17 owner ruling on monorepo#2673: a refund timeout or 5xx was reported as PAYMENT999 \"confirm whether the payment went through\"; refund retries mint a new idempotency key, so the instruction must be to check the order's refunds first.",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"code": "PAYMENT401",
 		"symbol": "TERMINAL_PAIRING_INCOMPLETE",
 		"domain": "PAYMENT",
@@ -1689,6 +1713,28 @@
 		],
 		"evidence": "2026-08-25 demo store coupons screen spun forever while every existing signal stayed silent; report-only stall detector added in monorepo#1596",
 		"introducedIn": "1.10.6"
+	},
+	{
+		"code": "SYNC191",
+		"symbol": "WRITE_STILL_SENDING",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "Nothing to do — don't enter it again. It sends automatically and appears once the store confirms.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "This change is still on its way to your store.",
+		"docsBody": "WCPOS saved the change on this device and queued it for your store, but stopped waiting for the store's answer before it arrived — usually because the store is slow or the connection dropped for a moment. The change is not lost and has not failed: it stays in the queue and the sync engine keeps sending it until the store confirms. Entering it again would create a second copy (for example, a duplicate customer or order).",
+		"troubleshooting": [
+			"Don't re-enter the change. Wait a moment; it appears with its store number once the store confirms.",
+			"If it is a sale, you can press Checkout again: the store recognises the same order and doesn't create a second one.",
+			"If the change still hasn't appeared after the connection is back, open Store health → Database: anything held or refused by the store is listed there with what to do."
+		],
+		"logSources": [
+			"network-inspector"
+		],
+		"evidence": "2026-10-17 owner ruling on monorepo#2673: a create that timed out at 15 s while still queued was reported as SYNC999 \"re-enter and save\", which invited duplicate customers and orders.",
+		"introducedIn": "1.11.3"
 	},
 	{
 		"code": "CHECKOUT111",

@@ -2,10 +2,10 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
-import { pushFailureCode } from '../../../contexts/push-failure-code';
+import { reportPushFailure } from '../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -54,15 +54,10 @@ export function SaveButton() {
 				}
 			});
 		} catch (error) {
-			const errorMessage = getErrorMessage(error);
-			cartLogger.error('Failed to save order', {
-				showToast: true,
-				code: pushFailureCode(error),
-				toast: { title: t('common.failed_to_save_order') },
-				context: {
-					orderId: currentOrderRecord.payload.id,
-					error: errorMessage,
-				},
+			reportPushFailure(cartLogger, 'Failed to save order', error, {
+				title: t('common.failed_to_save_order'),
+				stillSendingTitle: t('common.order_still_sending'),
+				context: { orderId: currentOrderRecord.payload.id },
 			});
 		} finally {
 			setLoading(false);

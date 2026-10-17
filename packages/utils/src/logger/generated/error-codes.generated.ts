@@ -26,6 +26,7 @@ export type ErrorCode =
 	| 'PAYMENT101'
 	| 'PAYMENT201'
 	| 'PAYMENT301'
+	| 'PAYMENT311'
 	| 'PAYMENT401'
 	| 'PRINT101'
 	| 'PRINT201'
@@ -77,6 +78,7 @@ export type ErrorCode =
 	| 'SYNC161'
 	| 'SYNC171'
 	| 'SYNC181'
+	| 'SYNC191'
 	| 'CHECKOUT111'
 	| 'PRODUCT321'
 	| 'PRODUCT421'
@@ -351,6 +353,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Take another payment method; ask the admin to check the gateway.',
 		dataSafety: 'no-impact',
 		summary: 'The selected payment gateway is unavailable for this store.',
+	},
+	PAYMENT311: {
+		code: 'PAYMENT311',
+		symbol: 'REFUND_OUTCOME_UNKNOWN',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Open the order and check its refunds before trying again — a retry could refund twice.',
+		dataSafety: 'outcome-unknown',
+		summary: "WCPOS couldn't confirm whether this refund went through.",
 	},
 	PAYMENT401: {
 		code: 'PAYMENT401',
@@ -833,6 +845,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'outcome-unknown',
 		summary: 'Saving or loading on this device is very slow, and its outcome is not yet known.',
 	},
+	SYNC191: {
+		code: 'SYNC191',
+		symbol: 'WRITE_STILL_SENDING',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Nothing to do — don't enter it again. It sends automatically and appears once the store confirms.",
+		dataSafety: 'no-impact',
+		summary: 'This change is still on its way to your store.',
+	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
 		symbol: 'CART_UPDATE_FAILED',
@@ -995,6 +1017,7 @@ export const ERROR_CODES = {
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
+	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',
 	PRINT_JOB_FAILED: 'PRINT201',
@@ -1046,6 +1069,7 @@ export const ERROR_CODES = {
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',
 	LOCAL_DB_STALLED: 'SYNC181',
+	WRITE_STILL_SENDING: 'SYNC191',
 	CART_UPDATE_FAILED: 'CHECKOUT111',
 	BARCODE_AMBIGUOUS: 'PRODUCT321',
 	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',

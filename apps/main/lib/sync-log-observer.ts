@@ -7,6 +7,7 @@ import type {
 } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { rejectedWriteCode } from '@wcpos/utils/logger/rejected-write-code';
 import { isReportedRequestStatus } from '@wcpos/sync-engine';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
@@ -562,13 +563,9 @@ export const CONFORMANCE_TABLE = {
 		operationType: 'sync.record',
 		outcome: 'rejected',
 		level: (_event, fields) => (fields.revertPending === true ? 'info' : 'error'),
-		code: (_event, fields) => {
-			if (fields.status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
-			if (fields.reason === 'pos_data_invalid' || fields.reason === 'rest_invalid_param') {
-				return ERROR_CODES.RECORD_INVALID_FIELD;
-			}
-			return ERROR_CODES.RECORD_REJECTED;
-		},
+		// One mapping shared with the screen's toast (`pushFailureCode`), so the row and
+		// the toast always give the same instruction for the same refusal.
+		code: (_event, fields) => rejectedWriteCode(fields.status, fields.reason),
 		message: recordMessage('rejected by server'),
 	},
 	// R1: the write SUCCEEDED — the server accepted the order and the till
