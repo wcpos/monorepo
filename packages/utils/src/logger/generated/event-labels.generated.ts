@@ -151,6 +151,9 @@ export const SYNC_EVENT_TYPES = [
 	'signal.tick.error',
 	'targeted.pull.shortfall-prune',
 	'transport.request',
+	'void.cleanup-failed',
+	'void.recovery.identity-appeared',
+	'write.admission-release-failed',
 ] as const;
 
 export type SyncEventType = (typeof SYNC_EVENT_TYPES)[number];
@@ -1373,6 +1376,36 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.transport_request',
 		description: 'The POS made a web request to your store.',
 		introducedIn: '1.10.0',
+	},
+	'void.cleanup-failed': {
+		type: 'void.cleanup-failed',
+		domain: 'SYNC',
+		key: 'health.logs.event.void_cleanup_failed',
+		label: 'An order was cancelled but its tidy-up did not finish',
+		descriptionKey: 'health.logs.event_description.void_cleanup_failed',
+		description:
+			'The cancellation itself went through; a leftover bookkeeping row could not be removed right away and is cleared automatically later.',
+		introducedIn: '2.0.0',
+	},
+	'void.recovery.identity-appeared': {
+		type: 'void.recovery.identity-appeared',
+		domain: 'SYNC',
+		key: 'health.logs.event.void_recovery_identity_appeared',
+		label: 'A cancelled order turned out to exist on your store and was kept',
+		descriptionKey: 'health.logs.event_description.void_recovery_identity_appeared',
+		description:
+			'While an order was being cancelled on this device, your store reported it as a real order, so the device kept it instead of removing it; cancel it again from Orders if it should go.',
+		introducedIn: '2.0.0',
+	},
+	'write.admission-release-failed': {
+		type: 'write.admission-release-failed',
+		domain: 'SYNC',
+		key: 'health.logs.event.write_admission_release_failed',
+		label: 'A change was saved but its bookkeeping could not be released',
+		descriptionKey: 'health.logs.event_description.write_admission_release_failed',
+		description:
+			'The change is queued for your store; a leftover bookkeeping row could not be released right away and is cleared automatically later.',
+		introducedIn: '2.0.0',
 	},
 };
 

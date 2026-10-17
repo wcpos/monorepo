@@ -306,6 +306,12 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.targeted_pull_shortfall_prune');
 		case 'transport.request':
 			return t('health.logs.event.transport_request');
+		case 'void.cleanup-failed':
+			return t('health.logs.event.void_cleanup_failed');
+		case 'void.recovery.identity-appeared':
+			return t('health.logs.event.void_recovery_identity_appeared');
+		case 'write.admission-release-failed':
+			return t('health.logs.event.write_admission_release_failed');
 		default: {
 			const exhaustive: never = type;
 			return exhaustive;
@@ -479,6 +485,12 @@ export function translateEventDescription(
 			return t('health.logs.event_description.signal_tick_error');
 		case 'transport.request':
 			return t('health.logs.event_description.transport_request');
+		case 'void.cleanup-failed':
+			return t('health.logs.event_description.void_cleanup_failed');
+		case 'void.recovery.identity-appeared':
+			return t('health.logs.event_description.void_recovery_identity_appeared');
+		case 'write.admission-release-failed':
+			return t('health.logs.event_description.write_admission_release_failed');
 		default:
 			return undefined;
 	}
