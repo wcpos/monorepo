@@ -57,6 +57,7 @@ import { stories as tabs } from '@wcpos/components/tabs/gallery';
 import { stories as panels } from '@wcpos/components/panels/gallery';
 import { stories as table } from '@wcpos/components/table/gallery';
 import { stories as listItem } from '@wcpos/components/list-item/gallery';
+import { stories as listRow } from '@wcpos/components/list-row/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
@@ -71,6 +72,7 @@ const registry: Record<string, Story[]> = {
 	panels,
 	table,
 	'list-item': listItem,
+	'list-row': listRow,
 	badge,
 	avatar,
 	loader,

@@ -27,7 +27,10 @@ jest.mock('../hooks/use-order-status-label', () => ({
 jest.mock('../../../hooks/use-store-day-label', () => ({
 	useStoreDayLabel: () => ({ day: () => 'Sat 12 Sep', dateTime: () => 'Sat 12 Sep · 15:48' }),
 }));
-jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => true }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	useIsPhone: () => true,
+	usePointer: () => 'coarse',
+}));
 const record = {
 	uuid: 'one',
 	payload: {

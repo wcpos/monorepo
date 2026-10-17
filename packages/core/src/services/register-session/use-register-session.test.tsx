@@ -1611,6 +1611,31 @@ it.each([
 );
 
 it.each([
+	['before-tip', 1],
+	['after-tip', 0],
+	[undefined, 0],
+] as const)(
+	'compares opaque ledger version %s at the same timestamp',
+	async (version, requests) => {
+		entries = [];
+		const updated = '2026-09-15T08:00:00';
+		active = [
+			{
+				...active[0],
+				server_ledger_row_ids: ['card'],
+				server_ledger_rows: [{ id: 'card', status: 'captured', updated_at_gmt: updated, version }],
+			},
+		];
+		mockOrders.next([
+			parentHit('session', false, updated, { amount: '110', version: 'after-tip' }),
+		]);
+		const result = await settled();
+		expect(result.current.expected).toEqual({ cash: '100' });
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(requests);
+	}
+);
+
+it.each([
 	['cash', 'captured', 'voided'],
 	['cash', 'authorized', 'failed'],
 	['cheque', 'authorized', 'voided'],

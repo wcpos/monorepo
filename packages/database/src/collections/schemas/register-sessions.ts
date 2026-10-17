@@ -53,6 +53,7 @@ export const registerSessionsLiteral = {
 					id: { type: 'string' },
 					updated_at_gmt: { type: 'string' },
 					status: { type: 'string' },
+					version: { type: 'string' },
 				},
 			},
 		},

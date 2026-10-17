@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon } from '@wcpos/components/icon';
 import { usePointer } from '@wcpos/components/lib/device';
+import { ListRow } from '@wcpos/components/list-row';
 import { PosterThumb, tintOf } from '@wcpos/components/poster-tile';
 import { Text } from '@wcpos/components/text';
 
@@ -48,45 +49,48 @@ export function TermRow({
 				? term.description
 				: undefined;
 	return (
-		<Pressable
+		<ListRow
+			size="sm"
 			onPress={() => onPress(term)}
-			accessibilityRole="button"
 			accessibilityLabel={name}
-			className={`border-border min-h-row active:bg-muted flex-row items-center border-b ${pointer === 'fine' ? 'web:hover:bg-muted' : 'gap-3 px-3'}`}
+			// It sits among the products table's rows, so it keeps their height; on a fine pointer
+			// its thumb and name sit in the table's own columns, which carry the padding.
+			className={pointer === 'fine' ? 'gap-0 px-0 py-0' : 'py-0'}
+			bodyClassName={pointer === 'fine' ? 'gap-0.5 px-3 py-1.5' : 'gap-0.5'}
 			testID={termTestId(term)}
+			trailing={<Icon name="chevronRight" className="text-muted-foreground" />}
+			leading={
+				showImage && (
+					<View
+						style={getColumnStyle({ width: TERM_IMAGE_COLUMN_WIDTH })}
+						className={pointer === 'fine' ? 'px-3 py-1.5' : undefined}
+					>
+						<PosterThumb
+							stacked
+							size={pointer === 'coarse' ? 'md' : 'sm'}
+							picture={
+								term.kind === 'term' && term.imageSrc
+									? { kind: 'image', source: { uri: term.imageSrc }, recyclingKey: termKey(term) }
+									: { kind: 'tint', tint: term.kind === 'term' ? tintOf(term.id) : 5 }
+							}
+							mark={
+								term.kind === 'term'
+									? { kind: 'folder' }
+									: { kind: 'glyph', name: term.kind === 'all' ? 'grid' : 'sliders' }
+							}
+						/>
+					</View>
+				)
+			}
 		>
-			{showImage && (
-				<View
-					style={getColumnStyle({ width: TERM_IMAGE_COLUMN_WIDTH })}
-					className={pointer === 'fine' ? 'px-3 py-1.5' : undefined}
-				>
-					<PosterThumb
-						stacked
-						size={pointer === 'coarse' ? 'md' : 'sm'}
-						picture={
-							term.kind === 'term' && term.imageSrc
-								? { kind: 'image', source: { uri: term.imageSrc }, recyclingKey: termKey(term) }
-								: { kind: 'tint', tint: term.kind === 'term' ? tintOf(term.id) : 5 }
-						}
-						mark={
-							term.kind === 'term'
-								? { kind: 'folder' }
-								: { kind: 'glyph', name: term.kind === 'all' ? 'grid' : 'sliders' }
-						}
-					/>
-				</View>
-			)}
-			<View className={`flex-1 gap-0.5 ${pointer === 'fine' ? 'px-3 py-1.5' : ''}`}>
-				<Text className="font-bold" numberOfLines={1} decodeHtml>
-					{name}
+			<Text className="font-bold" numberOfLines={1} decodeHtml>
+				{name}
+			</Text>
+			{sub ? (
+				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+					{sub}
 				</Text>
-				{sub ? (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1}>
-						{sub}
-					</Text>
-				) : null}
-			</View>
-			<Icon name="chevronRight" className="text-muted-foreground" />
-		</Pressable>
+			) : null}
+		</ListRow>
 	);
 }

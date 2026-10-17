@@ -370,9 +370,14 @@ export function useRegisterSession() {
 	const baselineVersion = (id: string | number | undefined) =>
 		versions.find((row) => row.id === id)?.updated_at_gmt ?? session?.server_expected_at;
 	const baselineStale =
-		!!drawerInput?.ledgerRowsBySession.some(
-			(row) => baselineHas?.(row.id) && afterBaseline(row.updated_at_gmt, baselineVersion(row.id))
-		) ||
+		!!drawerInput?.ledgerRowsBySession.some((row) => {
+			if (!baselineHas?.(row.id)) return false;
+			const snapshot = session?.server_ledger_rows?.find(({ id }) => id === row.id);
+			// Tokens are server-owned: compare them, never reconstruct their financial hash.
+			return snapshot?.version !== undefined
+				? row.version !== snapshot.version
+				: afterBaseline(row.updated_at_gmt, baselineVersion(row.id));
+		}) ||
 		(data?.refundRecords ?? []).some(
 			(row) =>
 				baselineHas?.(row.id) && afterBaseline(row.date_modified_gmt, baselineVersion(row.id))
