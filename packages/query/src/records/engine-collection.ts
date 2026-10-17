@@ -1,9 +1,3 @@
-import { map } from 'rxjs/operators';
-
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
-import { observeEngineDatabases } from '../engine-query';
-
 import type { EngineRecord, EngineRecordCollectionName } from './engine-record';
 import type { Observable } from 'rxjs';
 
@@ -66,16 +60,4 @@ export function engineCollection<C extends EngineRecordCollectionName>(
 ): EngineCollection<C> | null {
 	const collection = database?.collections?.[name];
 	return collection ? (collection as EngineCollection<C>) : null;
-}
-
-/**
- * The same resolution as a stream: re-resolves on every `db$` emission, so scope moves and
- * resets rebind to the live collection. Emits `null` while no database (or no collection)
- * is open.
- */
-export function observeEngineCollection<C extends EngineRecordCollectionName>(
-	engine: RxdbSyncEngine,
-	name: C
-): Observable<EngineCollection<C> | null> {
-	return observeEngineDatabases(engine).pipe(map((database) => engineCollection(database, name)));
 }

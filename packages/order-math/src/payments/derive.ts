@@ -2,12 +2,12 @@
  * Pure derivation mirrors the server ledger so balance and order status have one contract.
  */
 
+import { isLivePaymentStatus } from './ledger';
 import { fromMinor, toMinor } from './money';
 
 import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './types';
 
 const COUNTING_STATUSES = new Set(['authorized', 'captured']);
-const LIVE_STATUSES = new Set(['pending', 'authorized', 'captured']);
 
 function captureTime(value: string | null): number {
 	if (value === null) return Number.POSITIVE_INFINITY;
@@ -73,7 +73,7 @@ export function derive(
 	const methodIds: string[] = [];
 	const seenMethodIds = new Set<string>();
 	for (const row of payments) {
-		if (LIVE_STATUSES.has(row.status) && !seenMethodIds.has(row.method_id)) {
+		if (isLivePaymentStatus(row.status) && !seenMethodIds.has(row.method_id)) {
 			seenMethodIds.add(row.method_id);
 			methodIds.push(row.method_id);
 		}
