@@ -19,14 +19,30 @@ const sites = scanRepository();
 // Reuse the Lint job's immutable PR base; local edits compare with HEAD. No fetch.
 const base = readEvent(prContext()?.eventPath)?.pull_request?.base?.sha ?? 'HEAD';
 const prior = readBlob(base, 'packages/eslint/uniwind-allowlist.json', ROOT);
+const scanBase = (paths) =>
+	countSites(
+		paths.flatMap((path) => scanSource(readBlob(base, path, ROOT), path, animationTokens()))
+	);
 // Bootstrap only: today's exceptions must already exist in the base source.
-const baseline = prior
-	? JSON.parse(prior)
-	: countSites(
-			Object.keys(allowlist).flatMap((path) =>
-				scanSource(readBlob(base, path, ROOT), path, animationTokens())
-			)
-		);
+const baseline = prior ? withNewCategories(JSON.parse(prior)) : scanBase(Object.keys(allowlist));
+
+/**
+ * A construct the base allowlist never names is a category this change adds (raw-pressable,
+ * hex-colour): like the bootstrap, it may seed only the sites that already exist in the base
+ * source, so a new category starts green on today's code and still cannot license a new site.
+ */
+function withNewCategories(priorList) {
+	const known = new Set(Object.values(priorList).flatMap((constructs) => Object.keys(constructs)));
+	const added = Object.entries(allowlist).filter(([, constructs]) =>
+		Object.keys(constructs).some((construct) => !known.has(construct))
+	);
+	const scanned = scanBase(added.map(([path]) => path));
+	const merged = structuredClone(priorList);
+	for (const [path, constructs] of added)
+		for (const construct of Object.keys(constructs))
+			if (!known.has(construct)) (merged[path] ??= {})[construct] = scanned[path]?.[construct] ?? 0;
+	return merged;
+}
 
 test('Uniwind sites match the shrinking allowlist exactly', () => {
 	assert.deepEqual(ratchetErrors(sites, allowlist, baseline), []);
@@ -237,5 +253,45 @@ test('adding a real violation together with its allowlist entry still fails', ()
 			{ [path]: { 'hover:': 1 } }
 		),
 		[`Allowlist grew: ${path}:hover: (2 > 1)`]
+	);
+});
+
+test('a raw React Native pressable outside the design system is a site; a type import is not', () => {
+	const source = `
+		import { Pressable, type PressableProps, View } from 'react-native';
+		import { TouchableOpacity as Touch } from 'react-native';
+		import type { TouchableHighlight } from 'react-native';
+		import { Pressable as GesturePressable } from 'react-native-gesture-handler';
+	`;
+	assert.deepEqual(
+		countSites(scanSource(source, 'packages/core/src/a.tsx'))['packages/core/src/a.tsx'],
+		{
+			'raw-pressable': 2,
+		}
+	);
+	assert.deepEqual(countSites(scanSource(source, 'apps/main/app/b.tsx'))['apps/main/app/b.tsx'], {
+		'raw-pressable': 2,
+	});
+	assert.deepEqual(scanSource(source, 'packages/components/src/button/index.tsx'), []);
+});
+
+test('a hex colour in any string is a site, outside the design system and the named exemptions', () => {
+	const source = `
+		// #ffffff in a comment is prose
+		<View className="bg-[#F0F4F8]" style={{ color: '#000' }} />;
+		const css = \`border: 1px solid #99999980;\`;
+		const order = 'Order #1234567 · #12 · ##fff · a#fff';
+	`;
+	assert.deepEqual(countSites(scanSource(source, 'apps/main/components/x.tsx')), {
+		'apps/main/components/x.tsx': { 'hex-colour': 3 },
+	});
+	assert.deepEqual(scanSource(source, 'apps/main/components/pre-theme-colours.ts'), []);
+	assert.deepEqual(scanSource(source, 'packages/components/src/x.tsx'), []);
+});
+
+test('the class rules stay on the packages; the app trees get only the app rules', () => {
+	assert.deepEqual(
+		scanSource('<View className="hover:bg-card truncate" />', 'apps/main/app/x.tsx'),
+		[]
 	);
 });
