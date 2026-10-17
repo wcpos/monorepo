@@ -72,7 +72,7 @@ export function TotalsSection({ order }: { order: OrderPayload }) {
 								<Text className="text-muted-foreground text-sm">{t('common.discount')}</Text>
 								{couponLabel ? (
 									<View className="bg-primary/10 rounded px-1.5 py-0.5">
-										<Text className="text-primary text-[10px] font-medium tabular-nums">
+										<Text className="text-primary text-xs font-medium tabular-nums">
 											{couponLabel}
 										</Text>
 									</View>

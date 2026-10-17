@@ -94,7 +94,7 @@ export function AddressesRail({ order, last }: { order: OrderPayload; last?: boo
 			<View className="gap-3">
 				{hasAddress(billing) ? (
 					<View>
-						<Text className="text-muted-foreground mb-1 text-[10px] tracking-wide uppercase">
+						<Text className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 							{t('common.billing_address')}
 						</Text>
 						<FormatAddress address={billing as Record<string, string>} showName />
@@ -102,7 +102,7 @@ export function AddressesRail({ order, last }: { order: OrderPayload; last?: boo
 				) : null}
 				{!same && hasAddress(shipping) ? (
 					<View>
-						<Text className="text-muted-foreground mb-1 text-[10px] tracking-wide uppercase">
+						<Text className="text-muted-foreground mb-1 text-xs tracking-wide uppercase">
 							{t('common.shipping_address')}
 						</Text>
 						<FormatAddress address={shipping as Record<string, string>} showName />
