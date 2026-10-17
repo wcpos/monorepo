@@ -33,11 +33,12 @@ export function useCartWrite() {
 				{ document, data },
 				{
 					localPatch: ({ changes }) => changes(document.getLatest().payload),
-					configForOrder,
+					// The birth runs after its dispatch hooks settle: read the config current then.
+					configForOrder: (order) => configRef.current(order),
 					serverOwnsMoney,
 				}
 			),
-		[configForOrder, serverOwnsMoney]
+		[serverOwnsMoney]
 	);
 	return { localPatch: write, settleIntent };
 }
