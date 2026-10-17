@@ -56,9 +56,11 @@ function isBasicCredential(token: string): boolean {
 	const decoded = decodeBase64(token);
 	// user:password with a non-empty user made of printable, non-space characters; a
 	// bare colon or a leading colon (`Only` decodes to `:yr`) is prose, not a credential.
+	// The decoder yields one character per byte, so 0x80–0xFF are UTF-8 lead and
+	// continuation bytes (RFC 7617 allows UTF-8 credentials), not control characters.
 	return (
 		decoded !== null &&
-		/^[\x21-\x39\x3b-\x7e\u00a0-\uffff]+:[\x20-\x7e\u00a0-\uffff]*$/.test(decoded)
+		/^[\x21-\x39\x3b-\x7e\u0080-\u00ff]+:[\x20-\x7e\u0080-\u00ff]*$/.test(decoded)
 	);
 }
 

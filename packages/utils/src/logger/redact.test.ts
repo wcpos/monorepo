@@ -8,6 +8,8 @@ describe('redactSensitiveFields', () => {
 		['Basic YWJjZDplZg==, Basic YTpi', 'Basic [REDACTED], Basic [REDACTED]'],
 		['Authorization: Basic YTpi', 'Authorization: Basic [REDACTED]'],
 		['token=YWRtaW46c2VjcmV0 Basic YWRtaW46c2VjcmV0', 'token=[REDACTED] Basic [REDACTED]'],
+		// test:€ — a UTF-8 password (RFC 7617) must still be recognised.
+		['Authorization: Basic dGVzdDrigqw=', 'Authorization: Basic [REDACTED]'],
 	])('redacts Basic credentials in %s while preserving the scheme', (input, expected) => {
 		expect(redactSensitiveFields(input)).toBe(expected);
 	});
