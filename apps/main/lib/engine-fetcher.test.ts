@@ -1468,6 +1468,68 @@ describe('createEngineFetcher', () => {
 		]);
 	});
 
+	it('ends a request failure streak when a refreshed retry succeeds', async () => {
+		let accessToken = 'token';
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response('{}', { status: 200 }))
+			.mockResolvedValueOnce(new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'refreshed';
+					return accessToken;
+				},
+			},
+		});
+
+		for (let index = 0; index < 4; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+		}
+
+		const statusRows = appMetricsObserver.mock.calls
+			.map(([event]) => event)
+			.filter((event) => event.fields.status === 503);
+		// The refreshed 200 ended the streak, so the next 503 is a first failure again.
+		expect(statusRows.map((event) => event.level)).toEqual(['info', 'info', 'info']);
+	});
+
+	it('keys the streak by the whole request, so concurrent queries are separate operations', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (const search of ['a', 'b', 'c']) {
+			await fetcher(`https://store.example.test/wp-json/wcpos/v2/products?search=${search}`);
+		}
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?search=a');
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?search=a');
+		expect(appMetricsObserver.mock.calls.at(-1)?.[0].level).toBe('warn');
+	});
+
+	it('marks the error it wrote a status-0 transport row for, and only that one', async () => {
+		const { requestStatusOf } =
+			jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
+		const offline = new TypeError('Network request failed');
+		const fetch = jest.fn().mockRejectedValueOnce(offline);
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await expect(fetcher('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toBe(
+			offline
+		);
+
+		expect(requestStatusOf(offline)).toBe(0);
+	});
+
 	it('counts each path on its own, so one blip across lanes stays quiet', async () => {
 		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });

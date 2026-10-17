@@ -8,13 +8,14 @@ import { createWriteDrainLane, type WriteDrainLaneDeps } from './write-drain-lan
  */
 function laneWith(runGuarded: () => Promise<unknown>) {
 	const diagnostics = vi.fn();
+	const manager = { activeScope: 'scope-1', runGuarded };
 	const deps = {
 		connectivity: () => 'online',
-		manager: { activeScope: 'scope-1', runGuarded },
+		manager,
 		setLastError: vi.fn(),
 		diagnostics,
 	} as unknown as WriteDrainLaneDeps;
-	return { lane: createWriteDrainLane(deps), diagnostics };
+	return { lane: createWriteDrainLane(deps), diagnostics, manager };
 }
 
 describe('write drain tick errors', () => {
@@ -30,6 +31,24 @@ describe('write drain tick errors', () => {
 		fail = false;
 		await lane.tick();
 		fail = true;
+		await lane.tick();
+
+		expect(
+			diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'queue.write.tick.error')
+				.map((event) => event.fields.consecutiveFailures)
+		).toEqual([1, 2, 1]);
+	});
+
+	it('starts the streak over when the scope switched between crashes', async () => {
+		const { lane, diagnostics, manager } = laneWith(async () => {
+			throw new Error('queue read failed');
+		});
+
+		await lane.tick();
+		await lane.tick();
+		manager.activeScope = 'scope-2';
 		await lane.tick();
 
 		expect(

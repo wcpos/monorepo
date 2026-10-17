@@ -117,6 +117,7 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		expect(stallEvents[0]?.fields).toMatchObject({
 			requirementId: 'req-stalled',
 			kind: 'search',
+			consecutiveStalls: 1,
 		});
 		// Both executions announced themselves — the evidence pair a wedged artifact lacked.
 		expect(

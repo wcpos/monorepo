@@ -201,12 +201,15 @@ it('numbers consecutive deadlines per lane and restarts after any answer', async
 	).toEqual([1, 2, 3, 1]);
 });
 
-it('marks a thrown transport failure as a request with no response', async () => {
-	const offline = new TypeError('Network request failed');
-	fetch.mockRejectedValueOnce(offline);
+it('leaves a thrown failure unmarked unless the host wrote its transport row', async () => {
+	// The engine's wrapper also sees rejections no transport row reported (a body
+	// stream that broke after a 200); only the host, at the line that writes the
+	// row, may mark an error as already reported.
+	const broken = new TypeError('body stream failed');
+	fetch.mockRejectedValueOnce(broken);
 	const { fetcher } = harness.engine.hostTransport();
 
-	await expect(fetcher('https://example.test/probe')).rejects.toBe(offline);
+	await expect(fetcher('https://example.test/probe')).rejects.toBe(broken);
 
-	expect(requestStatusOf(offline)).toBe(0);
+	expect(requestStatusOf(broken)).toBeUndefined();
 });

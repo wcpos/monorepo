@@ -982,6 +982,84 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it.each([
+		['queue.write.reschedule-failed', 'consecutiveFailures', 'SYNC101', {}],
+		['queue.write.ack-failed', 'consecutiveFailures', 'SYNC101', {}],
+		['coverage.require.stalled', 'consecutiveStalls', 'SYNC181', {}],
+		['coverage.existence-reconcile', 'consecutiveFailures', 'SYNC101', { outcome: 'failed' }],
+	] as const)(
+		'keeps %s at info until its %s streak persists, then warns %s',
+		(type, field, errorCode, extra) => {
+			for (const count of [1, 3]) {
+				observer.observe(
+					event({
+						type,
+						level: 'warn',
+						fields: { recordId: 'r-1', pruned: 0, ...extra, [field]: count },
+					})
+				);
+			}
+
+			expect(rows.map((row) => [row.level, row.code])).toEqual([
+				['info', undefined],
+				['warn', errorCode],
+			]);
+		}
+	);
+
+	it('files an ack that failed after its push landed as unknown, never a stuck upload', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.ack-failed',
+				level: 'warn',
+				fields: { recordId: 'o-1', consecutiveFailures: 1 },
+			})
+		);
+
+		expect(rows[0].terminal?.outcome).toBe('unknown');
+	});
+
+	it('warns SYNC401 on scheduler task failures no other row reported, once they persist', () => {
+		for (const consecutiveUnreportedFailures of [1, 3]) {
+			observer.observe(
+				event({
+					type: 'queue.scheduler.drain',
+					level: 'warn',
+					fields: {
+						succeeded: 0,
+						failed: 2,
+						failedUnreported: 1,
+						consecutiveUnreportedFailures,
+					},
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC401'],
+		]);
+	});
+
+	it.each([300, 302, 101])(
+		'treats an unexpected %s as a request the transport already reported',
+		(status) => {
+			observer.observe(
+				event({
+					type: 'signal.tick.error',
+					level: 'error',
+					fields: { lane: 'change-signal', status, consecutiveFailures: 5 },
+				})
+			);
+			observer.observe(event({ type: 'transport.request', level: 'info', fields: { status } }));
+
+			expect(rows.map((row) => [row.level, row.code, row.terminal?.outcome])).toEqual([
+				['info', undefined, 'failed'],
+				['info', undefined, 'failed'],
+			]);
+		}
+	);
+
 	it('streak-gates a write drain crash and keeps the claim-release failure quiet', () => {
 		for (const consecutiveFailures of [1, 3]) {
 			observer.observe(
@@ -1011,19 +1089,6 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
-	});
-
-	it('leaves a catalogue push.rejected the engine will revert to the auto-reverted row', () => {
-		// The engine lowers it to info (create-rxdb-sync-engine); the table keeps that.
-		observer.observe(
-			event({ type: 'push.rejected', level: 'info', fields: { recordId: 'p-1', status: 403 } })
-		);
-
-		expect(rows[0]).toMatchObject({
-			level: 'info',
-			code: undefined,
-			terminal: { outcome: 'rejected' },
-		});
 	});
 
 	it('parks needs-revision under the conflict code, not "fix the named field"', () => {

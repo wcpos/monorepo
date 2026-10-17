@@ -340,6 +340,11 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 	// Cursor persistence: the host's blob store when provided, else session-scoped memory.
 	// One helper pair serves the reconcile ring cursor and the prime rotation cursors.
 	const inMemoryCursors = new Map<string, string>();
+	// Existence-audit cursor writes that failed in a row. The audit swallows the
+	// failure and returns normally, so no lane error follows; a cursor that never
+	// advances rescans the same buckets forever, and this streak is the only row
+	// that can say so.
+	let consecutiveCursorWriteFailures = 0;
 	const cursorGet = (key: string): Promise<string | null> =>
 		options.reconcileCursorStore
 			? options.reconcileCursorStore.get(key)
@@ -566,13 +571,16 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 					EXISTENCE_RECONCILE_CURSOR_KEY,
 					JSON.stringify(commitDrillDowns(candidates, cursor, completed))
 				);
+				consecutiveCursorWriteFailures = 0;
 			} catch (error) {
+				consecutiveCursorWriteFailures += 1;
 				observe({
 					type: 'coverage.existence-reconcile',
 					level: 'warn',
 					message: `Existence reconcile cursor write failed: ${error instanceof Error ? error.message : String(error)}`,
 					fields: {
 						outcome: 'failed',
+						consecutiveFailures: consecutiveCursorWriteFailures,
 						buckets: summary.buckets,
 						emptyBuckets: summary.emptyBuckets,
 						pruned: summary.pruned,

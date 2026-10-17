@@ -140,6 +140,11 @@ function loadCreateAppEngine(
 		// identity stub keeps these engine-lifecycle tests transport-free.
 		hydrateResponse: jest.fn(async (response: Response) => response),
 		writeOutcomeChannelName,
+		// Pure helpers the fetcher and the log observer share; the real ones, so the
+		// reported-request rule under test is the engine's own.
+		...jest.requireActual<typeof import('../../../packages/sync-engine/src/transport-failure')>(
+			'../../../packages/sync-engine/src/transport-failure'
+		),
 	}));
 	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
 		virtual: true,

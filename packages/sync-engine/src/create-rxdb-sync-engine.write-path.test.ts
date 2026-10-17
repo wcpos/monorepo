@@ -256,9 +256,9 @@ async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unkno
 	return doc?.toJSON() ?? null;
 }
 
-function rejectedProductFetch(options: { failPull?: boolean } = {}) {
+function rejectedProductFetch(options: { failPull?: boolean; hangPull?: boolean } = {}) {
 	const pulls: number[][] = [];
-	const fetch = async (url: string): Promise<Response> => {
+	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 		const parsed = new URL(url);
 		if (parsed.pathname.includes('/push/')) {
 			return Response.json(
@@ -274,6 +274,13 @@ function rejectedProductFetch(options: { failPull?: boolean } = {}) {
 			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
 		);
 		if (options.failPull) return new Response('unavailable', { status: 503 });
+		if (options.hangPull) {
+			return new Promise<Response>((_, reject) =>
+				init?.signal?.addEventListener('abort', () =>
+					reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+				)
+			);
+		}
 		return Response.json([productPayload(9)]);
 	};
 	return { pulls, fetch };
@@ -1764,10 +1771,9 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
-			// The revert is the verdict; the dead letter about the same refusal is narration.
-			expect(
-				diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
-			).toEqual(['info']);
+			// The revert is the verdict: the held dead letter about the same refusal
+			// is dropped once the revert lands, never written.
+			expect(diagnostics.some((event) => event.type === 'push.rejected')).toBe(false);
 		} finally {
 			await engine.dispose();
 		}
@@ -2052,6 +2058,34 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('releases a held catalogue rejection when the engine is disposed mid-revert', async () => {
+		const route = rejectedProductFetch({ hangPull: true });
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		await engine.ready;
+		await insertServerBornProduct(engine, 2);
+		await engine.write({
+			collection: 'products',
+			operation: 'update',
+			recordId: UUID_A,
+			payload: productPayload(2),
+		});
+
+		expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+		await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+		// The revert is still in flight, so its verdict is held, not written.
+		expect(diagnostics.some((event) => event.type === 'push.rejected')).toBe(false);
+
+		await engine.dispose();
+		// No revert can land any more: the coded dead-letter verdict is the row.
+		expect(
+			diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
+		).toEqual(['warn']);
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
@@ -2114,13 +2148,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			// The revert did not happen, so the parked row's verdict is owed after all.
 			await vi.waitFor(() =>
 				expect(
-					diagnostics
-						.filter((event) => event.type === 'push.rejected')
-						.map((event) => [event.level, event.fields?.autoRevertFailed])
-				).toEqual([
-					['info', undefined],
-					['warn', true],
-				])
+					diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
+				).toEqual(['warn'])
 			);
 		} finally {
 			await engine.dispose();

@@ -7,6 +7,7 @@ import type {
 } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { isReportedRequestStatus } from '@wcpos/sync-engine';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
 import { presetFor } from '../components/health/performance-logic';
@@ -105,13 +106,14 @@ const streakLevel = (count: unknown): RowLevel =>
 
 /**
  * True when the failure was a request the transport layer already reported:
- * status 0 (the deadline row or the thrown-fetch transport row) or an HTTP
- * error status (the transport row). Those rows own the incident, so the lane
+ * status 0 (the deadline row or the thrown-fetch transport row) or any non-2xx
+ * answer but 304 (the transport row). Those rows own the incident, so the lane
  * or requirement row about the same request stays info. A 2xx poison page is
- * NOT covered — the transport row read it as a success.
+ * NOT covered — the transport row read it as a success. The rule is the
+ * engine's own (`isReportedRequestStatus`), so stamping and reading agree.
  */
 const requestReported = (fields: SyncEventFieldsBase): boolean =>
-	typeof fields.status === 'number' && (fields.status === 0 || fields.status >= 400);
+	isReportedRequestStatus(fields.status);
 
 /** The outcome vocabulary an emitter may stamp explicitly via `fields.outcome`. */
 const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
@@ -420,14 +422,18 @@ export const CONFORMANCE_TABLE = {
 		level: (_event, fields) => (requestReported(fields) ? 'info' : 'warn'),
 	},
 	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok', code: null },
-	// Info even when the audit's cursor write fails (stamped outcome failed): the
-	// reconcile is a periodic convergence pass, and the next one simply resumes
-	// from the last cursor it did save.
+	// A failed audit-cursor write (stamped outcome failed) is info while the next
+	// pass can still save it; a cursor that keeps failing never advances, so the
+	// audit rescans the same buckets forever — warn SYNC101 once that persists.
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
-		code: null,
-		level: 'info',
+		code: (_event, fields) =>
+			fields.outcome === 'failed' && streakLevel(fields.consecutiveFailures) === 'warn'
+				? ERROR_CODES.LOCAL_DB_WRITE_FAILED
+				: null,
+		level: (_event, fields) =>
+			fields.outcome === 'failed' ? streakLevel(fields.consecutiveFailures) : 'info',
 		// Prune is the audit's only executed action. `missing`/`changed` are
 		// observations, and windowed stores keep `missing` > 0 by design — counting
 		// them as work would persist a steady-state row every audit cycle.
@@ -469,7 +475,7 @@ export const CONFORMANCE_TABLE = {
 		// part of a refresh arc (carries an operationId, #899) is chain evidence,
 		// not idle traffic — rare (once per JWT TTL), and without it the recovered
 		// chain would be missing its successful ending under verbose.
-		didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+		didWork: (f) => requestReported(f) || typeof f.operationId === 'string',
 		forensic: true,
 	},
 	'push.outcome': {
@@ -540,12 +546,12 @@ export const CONFORMANCE_TABLE = {
 	// The dead-letter verdict: the record parks for Store health. Error, the
 	// severity of every code it maps to — and the level that reaches Sentry, now
 	// that the push.error before it is an info attempt. For a catalogue edit the
-	// engine reverts to server truth instead and emits this at info, so
-	// queue.write.auto-reverted is the one coded row.
+	// engine holds this row until its auto-revert settles and writes it only if
+	// the revert does not land; otherwise queue.write.auto-reverted is the row.
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		level: (event) => (event.level === 'info' ? 'info' : 'error'),
+		level: 'error',
 		code: (_event, fields) => {
 			if (fields.status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
 			if (fields.reason === 'pos_data_invalid' || fields.reason === 'rest_invalid_param') {
@@ -650,14 +656,29 @@ export const CONFORMANCE_TABLE = {
 		code: ERROR_CODES.RECORD_CONFLICT,
 		message: recordMessage('conflict transition failed'),
 	},
-	// Only the backoff write failed: the next drain re-pushes without the delay,
-	// and the push.error before it already reported the failure itself.
+	// The backoff write failed: the next drain re-pushes without the delay, and
+	// the push.error before it reported the push failure. But with `attempts`
+	// unpersisted that push.error never counts past attempt 1, so this row's own
+	// streak (kept outside the queue row) is the verdict for storage that keeps
+	// refusing the write.
 	'queue.write.reschedule-failed': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: null,
-		level: 'info',
+		code: (_event, fields) =>
+			streakLevel(fields.consecutiveFailures) === 'warn' ? ERROR_CODES.LOCAL_DB_WRITE_FAILED : null,
+		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
 		message: recordMessage('reschedule failed'),
+	},
+	// The push landed but recording it here failed; the next drain re-pushes and
+	// the server dedupes. No push.error follows a push that landed, so a streak
+	// of these is the only signal that this device cannot record its sends.
+	'queue.write.ack-failed': {
+		operationType: 'sync.record',
+		outcome: 'unknown',
+		code: (_event, fields) =>
+			streakLevel(fields.consecutiveFailures) === 'warn' ? ERROR_CODES.LOCAL_DB_WRITE_FAILED : null,
+		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
+		message: recordMessage('sent, but could not be recorded on this device'),
 	},
 	'queue.write.resolve': {
 		operationType: 'sync.record',
@@ -685,14 +706,18 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
 	},
-	// An aggregate of background tasks the cashier cannot retry: failed tasks
-	// retry after 30s by themselves, lost claims are routine contention, and each
-	// real failure already has its own transport or coverage.require.error row.
+	// An aggregate of background tasks: failed tasks retry after 30s by
+	// themselves and lost claims are routine contention, so the row is info —
+	// unless a task keeps failing with a cause no transport/deadline row reported
+	// (a local failure after the fetch). Nothing else reports that, so it warns
+	// SYNC401 once it has repeated over several drains.
 	'queue.scheduler.drain': {
 		operationType: 'sync.queue',
 		outcome: 'ok',
-		code: null,
-		level: 'info',
+		code: (_event, fields) =>
+			num(fields.failedUnreported) > 0 ? ERROR_CODES.SYNC_TASK_CRASHED : null,
+		level: (_event, fields) =>
+			num(fields.failedUnreported) > 0 ? streakLevel(fields.consecutiveUnreportedFailures) : 'info',
 		// Lost-work counters still count as work: they are the support evidence
 		// for a slow server, now that no warn level carries them past the gate.
 		didWork: (f) =>
@@ -766,15 +791,16 @@ export const CONFORMANCE_TABLE = {
 	// where a started line with no outcome names a wedged requirement.
 	'coverage.require.started': INVISIBLE,
 	// decided: visible — a data request stopped making progress and was abandoned so
-	// the rest of the queue could keep loading. Info: the screen that asked
-	// re-declares it on its own, and a slow store's requests carry their own
-	// deadline rows — SYNC321's "retry only the records that failed" named a
-	// retry the cashier has no button for.
+	// the rest of the queue could keep loading. The screen that asked re-declares
+	// it, so one stall is info; stalls with nothing completing in between (a
+	// storage promise that never settles, before any request) have no other row,
+	// so they warn SYNC181 once they persist. SYNC321's "retry only the records
+	// that failed" named a retry the cashier has no button for.
 	'coverage.require.stalled': {
 		operationType: 'sync.coverage',
 		outcome: 'failed',
-		code: null,
-		level: 'info',
+		code: ERROR_CODES.LOCAL_DB_STALLED,
+		level: (_event, fields) => streakLevel(fields.consecutiveStalls),
 	},
 	// decided: invisible — the breadcrumb recording that an abandoned request
 	// eventually settled; pure diagnostics narration.
@@ -951,7 +977,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const attemptMs = num(fields.durationMs);
 			httpMs += attemptMs;
 			if (attemptMs > httpMaxMs) httpMaxMs = attemptMs;
-			if (fields.status === 0 || num(fields.status) >= 400) httpErrors += 1;
+			if (requestReported(fields)) httpErrors += 1;
 		}
 		if (isInvisible && !isVerboseDiagnostics()) return;
 

@@ -53,6 +53,7 @@ import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hol
 import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import { createScopedFailureStreak } from '../failure-streak';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
@@ -326,7 +327,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
 	// re-runs the drain, so the log treats one crash as an attempt and only a
 	// streak as a failure that has persisted. A tick that RAN resets it.
-	let consecutiveTickFailures = 0;
+	const tickFailureStreak = createScopedFailureStreak();
+	// The drain's settlement-write failure streaks (see drainMutationQueue's
+	// settleFailures): they must outlive one drain to count anything.
+	const settleFailures = new Map<string, number>();
 
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
@@ -697,6 +701,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									reason,
 								}),
 							observe: deps.diagnostics,
+							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
@@ -858,7 +863,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				deps.setLastError(null);
 				return report;
 			});
-			if (tickReport.status === 'ran') consecutiveTickFailures = 0;
+			if (tickReport.status === 'ran') tickFailureStreak.reset();
 			return tickReport;
 		} catch (error) {
 			if (signal?.aborted) {
@@ -867,12 +872,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			deps.setLastError(message);
-			consecutiveTickFailures += 1;
+			const consecutiveFailures = tickFailureStreak.fail(deps.manager.activeScope);
 			deps.diagnostics({
 				type: 'queue.write.tick.error',
 				level: 'error',
 				message,
-				fields: { consecutiveFailures: consecutiveTickFailures },
+				fields: { consecutiveFailures },
 			});
 			return { lane: 'write-drain', status: 'error', error: message };
 		}

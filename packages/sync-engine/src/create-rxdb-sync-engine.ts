@@ -52,11 +52,11 @@ import type {
 	ScopeDatabase,
 	ScopeEvent,
 	StoreScopeIdentity,
+	SyncEvent,
 	SyncObserver,
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
-import { markTransportFailure } from './transport-failure';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -774,6 +774,29 @@ export function createRxdbSyncEngine(
 	let onLedgerRebuilt: (() => void) | undefined;
 	// All tick emitters share per-lane severity state, including rejected automatic ticks.
 	const laneLastEmittedError = new Map<string, string>();
+	// A refused catalogue edit is reverted to server truth right after it
+	// dead-letters (see emitWriteEvent below), and `queue.write.auto-reverted` is
+	// then the verdict the cashier reads. Its push.rejected is therefore HELD,
+	// keyed by mutationId, until the revert's outcome is known: dropped once the
+	// revert lands, released unchanged — still the coded dead-letter verdict — on
+	// every path where it does not (a born-local create that never reverts, a
+	// discard that throws, a tick that ended before the revert started, dispose).
+	// A create is never held: a born-local one parks for Store health instead.
+	const heldRejections = new Map<string, SyncEvent>();
+	const revertsInFlight = new Set<string>();
+	const forwardDiagnostic = (event: SyncEvent): void => {
+		try {
+			ports.diagnostics?.(event);
+		} catch {
+			// The observer seam must never throw into the engine (ADR 0018).
+		}
+	};
+	const releaseHeldRejection = (mutationId: string): void => {
+		const held = heldRejections.get(mutationId);
+		heldRejections.delete(mutationId);
+		revertsInFlight.delete(mutationId);
+		if (held !== undefined) forwardDiagnostic(held);
+	};
 	const diagnostics: SyncObserver = (event) => {
 		if (
 			(event.type === 'engine.lane.tick' || event.type === 'signal.tick.error') &&
@@ -793,19 +816,15 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
-		// A catalogue edit the store refused is reverted to server truth right after
-		// it dead-letters (see emitWriteEvent below), and `queue.write.auto-reverted`
-		// is the verdict the cashier reads — so the dead-letter row about the same
-		// refusal is narration. A create is never assumed to revert: a born-local
-		// one parks for Store health instead, and its push.rejected is the verdict.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&
 			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
 			event.fields?.op !== 'create' &&
-			event.fields?.autoRevertFailed !== true
+			typeof event.fields?.mutationId === 'string'
 		) {
-			event = { ...event, level: 'info' };
+			heldRejections.set(event.fields.mutationId, event);
+			return;
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
@@ -814,11 +833,7 @@ export function createRxdbSyncEngine(
 				// Re-resolution is best-effort; the rebuild itself already succeeded.
 			}
 		}
-		try {
-			ports.diagnostics?.(event);
-		} catch {
-			// The observer seam must never throw into the engine (ADR 0018).
-		}
+		forwardDiagnostic(event);
 	};
 	const nowMs = ports.now ?? (() => Date.now());
 	const timers = ports.timers ?? systemTimers;
@@ -944,9 +959,6 @@ export function createRxdbSyncEngine(
 				init?.signal?.aborted === true;
 			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
-			// The host fetcher wrote this failure's status-0 transport row; a lane
-			// failing on it must not report the same incident again.
-			if (!aborted) markTransportFailure(error);
 			throw error;
 		}
 		// Plain permalinks carry the REST route in ?rest_route= with pathname '/',
@@ -1196,6 +1208,13 @@ export function createRxdbSyncEngine(
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const engineStartedAtMs = nowMs();
 	const recordLaneTick = (report: SyncReport, startedAtMs: number): SyncReport => {
+		// A held rejection whose revert never started (the tick's post-drain
+		// cleanup threw before write-rejected) has no revert coming: release it.
+		if (report.lane === 'write-drain' || report.lane === 'all') {
+			for (const mutationId of [...heldRejections.keys()]) {
+				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
+			}
+		}
 		if (report.lane !== 'all')
 			laneLastTick.set(report.lane, {
 				atMs: nowMs(),
@@ -1938,6 +1957,7 @@ export function createRxdbSyncEngine(
 			// health lists the rejected row and "Send again" rebuilds the payload
 			// from the kept resident.
 			if (event.bornLocalCreate === true) {
+				releaseHeldRejection(event.mutationId);
 				return;
 			}
 			// Reactive revert (#1082): a rejected catalog change is settled for the
@@ -1949,9 +1969,13 @@ export function createRxdbSyncEngine(
 			// exactly between that overlay's read and its upsert can still flash
 			// server truth for a beat — accepted: the newer mutation's queue row
 			// survives and the next drain re-decides the record either way.
+			revertsInFlight.add(event.mutationId);
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
+					// Reverted: the auto-reverted row below is the verdict.
+					heldRejections.delete(event.mutationId);
+					revertsInFlight.delete(event.mutationId);
 					diagnostics({
 						type: 'queue.write.auto-reverted',
 						level: 'error',
@@ -1969,19 +1993,8 @@ export function createRxdbSyncEngine(
 					});
 				} catch {
 					// The rejected row stays parked for Store Health when discard cannot
-					// settle it — so the dead-letter verdict quieted above is owed after all.
-					diagnostics({
-						type: 'push.rejected',
-						level: 'warn',
-						collection: event.collection,
-						fields: {
-							recordId: event.recordId,
-							mutationId: event.mutationId,
-							status: event.status,
-							reason: event.reason,
-							autoRevertFailed: true,
-						},
-					});
+					// settle it — so the held dead-letter verdict is the row after all.
+					releaseHeldRejection(event.mutationId);
 				}
 			})();
 		},
@@ -2681,6 +2694,9 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			changeSignalLane.stopActivation();
+			// No revert can land for this instance any more: every held dead-letter
+			// verdict is the row now.
+			for (const mutationId of [...heldRejections.keys()]) releaseHeldRejection(mutationId);
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's

@@ -457,6 +457,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.ack-failed",
+		"domain": "SYNC",
+		"label": "Could not record a sent change on this device",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"type": "queue.write.annihilate",
 		"domain": "SYNC",
 		"label": "A change cancelled itself out before it was sent",

@@ -1,15 +1,32 @@
 import { RequestTimeoutError } from './write-path/request-timeout';
 
 /**
- * Errors the engine's own transport threw: the fetch itself rejected (DNS, a
- * refused connection, a dropped socket). The host fetcher already wrote a
- * `transport.request` row for each, so a lane that fails on one is reporting
- * the same incident a second time. A WeakSet rather than a wrapper type, so
- * callers that check `error.name` or `instanceof TypeError` see the original.
+ * Errors whose failed request the host fetcher already wrote a status-0
+ * `transport.request` row for (the fetch itself rejected: DNS, a refused
+ * connection, a dropped socket). A lane that fails on one is reporting the same
+ * incident a second time. A WeakSet rather than a wrapper type, so callers that
+ * check `error.name` or `instanceof TypeError` see the original.
+ *
+ * Marked by the host, at the line that writes the row — never by a wrapper
+ * around the whole fetch, which also sees rejections (a broken body stream
+ * after a 200) that no transport row reported.
  */
 const transportThrown = new WeakSet<object>();
 
-/** Record that `error` came out of the transport (see `transportThrown`). */
+/**
+ * Whether a request that ended with `status` is one the transport layer
+ * reports as failed: 0 (no response), or any answer outside 2xx except the
+ * 304 a conditional poll expects. The cashier log keeps a lane or requirement
+ * row about such a request quiet; a 2xx poison page is NOT reported (the
+ * transport row read it as a success), so the lane row still owns it.
+ */
+export function isReportedRequestStatus(status: unknown): boolean {
+	return (
+		typeof status === 'number' && status !== 304 && (status === 0 || status < 200 || status >= 300)
+	);
+}
+
+/** Record that the host wrote a transport row for `error` (see `transportThrown`). */
 export function markTransportFailure(error: unknown): void {
 	if (typeof error === 'object' && error !== null) transportThrown.add(error);
 }

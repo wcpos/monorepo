@@ -47,6 +47,7 @@ import {
 } from './change-signal-source';
 import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
+import { createScopedFailureStreak } from '../failure-streak';
 import { requestStatusOf } from '../transport-failure';
 
 import type { RxDatabase } from 'rxdb';
@@ -168,7 +169,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	// retries from the saved cursor, so one failure is an attempt and only a streak
 	// is a failure that persisted. A tick that RAN resets it; a skipped one polled
 	// nothing and proves nothing.
-	let consecutiveFailures = 0;
+	const failureStreak = createScopedFailureStreak();
 	// The initial barrier holds admission until the first activation. It settles only
 	// by activation or by stopActivation: a requirement queued before any scope opened
 	// must REJECT on dispose (as the base did through runGuarded) rather than hang.
@@ -525,7 +526,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					}
 				}
 				lastError = null;
-				if (report.status === 'ran') consecutiveFailures = 0;
+				if (report.status === 'ran') failureStreak.reset();
 				return report;
 			});
 		} catch (error) {
@@ -548,7 +549,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			// request already has its transport or deadline row, so the observer keeps
 			// this one quiet and saves the alarm for local failures that persist.
 			const status = requestStatusOf(error);
-			consecutiveFailures += 1;
+			const consecutiveFailures = failureStreak.fail(tickScopeId);
 			deps.diagnostics({
 				type: 'signal.tick.error',
 				level: 'error',

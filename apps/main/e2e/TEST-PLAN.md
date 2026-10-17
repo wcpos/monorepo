@@ -130,7 +130,7 @@ Products Page (pro only):
 - [x] Variation actions menu with Edit/Sync/Delete
 - [x] Collapse expanded variable product
 - [x] Inline edit stock quantity: server accepts, row + REST read-back updated, stock status flips to instock (#1088)
-- [x] Inline edit stock quantity: forced 403 push rejection shows red snackbar and auto-reverts the cell (#1088, #1082)
+- [x] Inline edit stock quantity: forced 403 push rejection shows the SYNC202 revert snackbar and auto-reverts the cell (#1088, #1082)
 
 Products Page (free only):
 

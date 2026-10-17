@@ -3,6 +3,7 @@ import type { SyncEvent } from '@wcpos/sync-core';
 import {
 	type EngineFetcher,
 	hydrateResponse,
+	markTransportFailure,
 	type QueryTotalWooRequest,
 	type ResponseEnvelopeTransportState,
 	type SyncCollectionName,
@@ -56,22 +57,38 @@ function createRateLimitObserver(): (status: number) => void {
 }
 
 /**
- * Per-fetcher, per-path streak of failed requests. The lanes retry a failed
- * request on their next tick, so one 503 or one dropped connection is an
- * attempt, not something to tell the merchant about; the same path failing
- * `PERSISTENT_FAILURE_STREAK` times running is. Keyed by path (query stripped)
- * so one blip that fails three different lanes' requests at once is still one
- * blip. Per fetcher for the same reason as the rate-limit streak above.
+ * Failing requests tracked at once. Each distinct request that is CURRENTLY
+ * failing holds one entry; a few hundred covers every lane, page and search an
+ * outage can leave failing, and the oldest is dropped past it so a long outage
+ * of one-off searches cannot grow the map without bound.
  */
-function createFailureStreaks(): (path: string, failed: boolean) => number {
+const MAX_TRACKED_FAILING_REQUESTS = 200;
+
+/**
+ * Per-fetcher streak of failed attempts at ONE logical request (method + URL,
+ * query included). The lanes retry a failed request on their next tick, so one
+ * 503 or one dropped connection is an attempt, not something to tell the
+ * merchant about; the same request failing `PERSISTENT_FAILURE_STREAK` times
+ * running is. Keyed by the full request, not the pathname: concurrent demand
+ * and background requests to `/products` with different queries are different
+ * operations, so one outage cannot count three of them as three retries, and a
+ * healthy one cannot reset another that keeps failing. Per fetcher for the
+ * same reason as the rate-limit streak above.
+ */
+function createFailureStreaks(): (key: string, failed: boolean) => number {
 	const streaks = new Map<string, number>();
-	return (path, failed) => {
+	return (key, failed) => {
 		if (!failed) {
-			streaks.delete(path);
+			streaks.delete(key);
 			return 0;
 		}
-		const streak = (streaks.get(path) ?? 0) + 1;
-		streaks.set(path, streak);
+		const streak = (streaks.get(key) ?? 0) + 1;
+		streaks.delete(key);
+		streaks.set(key, streak);
+		if (streaks.size > MAX_TRACKED_FAILING_REQUESTS) {
+			const oldest = streaks.keys().next().value;
+			if (oldest !== undefined) streaks.delete(oldest);
+		}
 		return streak;
 	};
 }
@@ -176,6 +193,8 @@ export function createEngineFetcher(input: {
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
+		// The failure-streak key: one logical request, query included (see createFailureStreaks).
+		const operationKey = `${method} ${url.split('#', 1)[0]}`;
 		let isPushRequest = false;
 		try {
 			isPushRequest = isPushRoute(new URL(url));
@@ -258,7 +277,7 @@ export function createEngineFetcher(input: {
 				// A push's failure is push.error's to report (attempt-counted); any
 				// other path alarms only once it has failed several times running.
 				// An abort is ours, so it neither counts nor resets the streak.
-				const streak = aborted ? 0 : failureStreak(requestPath ?? url, true);
+				const streak = aborted ? 0 : failureStreak(operationKey, true);
 				input.emitTransport(
 					{
 						type: 'transport.request',
@@ -275,6 +294,9 @@ export function createEngineFetcher(input: {
 					},
 					!aborted
 				);
+				// The row above reports this failure; a lane failing on the same
+				// error must not report the incident a second time.
+				if (!aborted) markTransportFailure(error);
 				// The metric follows the same verdict as the row: an abort is OUR
 				// cancellation (a superseded tick, a scope switch), so it counts as a
 				// request that happened and never as a fault. Counting it turned the
@@ -432,7 +454,7 @@ export function createEngineFetcher(input: {
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
 			const healthy = attempt.response.ok || status === 304 || (status === 404 && isTickProbe);
-			const streak = failureStreak(requestPath ?? url, !healthy);
+			const streak = failureStreak(operationKey, !healthy);
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
@@ -514,6 +536,8 @@ export function createEngineFetcher(input: {
 			// automatically' info row the refresh layer writes.
 			first.settle('debug', { outcome: 'recovered', operationId });
 			retry.settle('debug', { operationId });
+			// A healthy answer ends this request's failure streak, refreshed or not.
+			failureStreak(operationKey, false);
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.

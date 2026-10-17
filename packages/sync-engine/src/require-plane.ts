@@ -82,7 +82,7 @@ import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
-import { requestStatusOf } from './transport-failure';
+import { isReportedRequestStatus, requestStatusOf } from './transport-failure';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
@@ -502,6 +502,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
 	let running = false;
+	// Requirement stalls with no requirement completing in between, stamped on
+	// coverage.require.stalled: the screen re-declares a stalled requirement, so
+	// one stall is an attempt; repeated ones (storage that never settles, a walk
+	// that never progresses) have no other row and must reach the merchant.
+	let consecutiveStalls = 0;
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
@@ -614,7 +619,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		const mine = input.drain.tasks.filter((outcome) => owned.has(outcome.taskId));
 		const failed = mine.filter((outcome) => outcome.kind === 'failed');
 		if (failed.length > 0) {
-			throw new Error(`require: scheduler drain failed ${failed.length} task(s)`);
+			// Keep the cause: when every failed task died on a request the transport
+			// already reported, the requirement error carries that status so the log
+			// does not report the same incident as a local failure.
+			const reported = failed.every((outcome) => isReportedRequestStatus(outcome.requestStatus));
+			throw Object.assign(new Error(`require: scheduler drain failed ${failed.length} task(s)`), {
+				...(reported ? { status: failed[0]!.requestStatus } : {}),
+			});
 		}
 		const documents = mine.reduce((total, outcome) => total + outcome.documents, 0);
 		const requests = mine.reduce((total, outcome) => total + outcome.requests, 0);
@@ -681,6 +692,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		// surviving handle must find the entry already abandoned rather than
 		// re-running abandonment (or cascading it to a predecessor).
 		entry.released = true;
+		consecutiveStalls += 1;
 		deps.diagnostics({
 			type: 'coverage.require.stalled',
 			level: 'warn',
@@ -690,6 +702,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				requirementId: entry.requirement.id,
 				kind: entry.requirement.kind,
 				durationMs,
+				consecutiveStalls,
 			},
 		});
 		const stallError = new Error(`require: stalled after ${durationMs}ms with no progress`);
@@ -1448,6 +1461,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				try {
 					if ('outcome' in raced) {
 						const outcome = raced.outcome;
+						consecutiveStalls = 0;
 						deps.diagnostics({
 							type: 'coverage.require.outcome',
 							level: 'info',
