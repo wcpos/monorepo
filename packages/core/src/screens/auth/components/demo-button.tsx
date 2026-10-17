@@ -4,14 +4,20 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
+import { peekRedirectClaim } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { useLoginHandler } from '../hooks/use-login-handler';
 import { useSiteConnect } from '../hooks/use-site-connect';
 
 const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 
+// claimKey that routes the web redirect-return result back to this button.
+export const DEMO_CLAIM_KEY = 'demo';
+
 export function DemoButton() {
+	const { user } = useAppState();
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
 	const [connectedSite, setConnectedSite] = React.useState<
 		import('@wcpos/database').SiteDocument | null
@@ -36,7 +42,43 @@ export function DemoButton() {
 				}
 			: null,
 		extraParams: { user: 'demo' },
+		claimKey: DEMO_CLAIM_KEY,
 	});
+
+	// The fallback redirect reloads the page and loses connectedSite. Resolve
+	// the stored site so this button's auth hook can claim the pending result.
+	React.useEffect(() => {
+		const claim = peekRedirectClaim();
+		if (!claim || claim.claimKey !== DEMO_CLAIM_KEY) return;
+		let cancelled = false;
+
+		void (async () => {
+			try {
+				const sites: import('@wcpos/database').SiteDocument[] = await user.populate('sites');
+				if (cancelled) return;
+				const site = sites.find((site) => site.wcpos_login_url === claim.loginUrl);
+				if (!site) {
+					authLogger.error('Demo login could not resume after redirect: demo site not found', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
+						showToast: true,
+					});
+					return;
+				}
+				authTriggeredRef.current = true;
+				setConnectedSite(site);
+			} catch (err) {
+				if (cancelled) return;
+				authLogger.error(`Demo login could not resume after redirect: ${getErrorMessage(err)}`, {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					showToast: true,
+				});
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [user]);
 
 	// Handle OAuth response. Side-effect only (login / logging); the
 	// processedResponseRef both dedupes and signals completion - no state is set
