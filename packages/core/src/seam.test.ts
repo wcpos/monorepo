@@ -2,6 +2,7 @@
  * ADR 0033 item 7: UI code acquires data only through named reads and writes only through
  * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
  * violation must be frozen and not retired; vanished fingerprints require pinned retirement.
+ * Declaration chains distinguish identical accesses in different functions, methods and classes.
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -27,8 +28,8 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 553;
-const FROZEN_DIGEST = '396395d78e7068b66b96ce6920d32ae8c7750a5dad181862104bc19c9fce166a';
+const FROZEN_LENGTH = 574;
+const FROZEN_DIGEST = '9e378ca876101e0684efed014567fc573f23fb44738c4f9b0511a95be35da12d';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -107,7 +108,51 @@ function staticName(node: ts.Node | undefined): string | undefined {
 	return undefined;
 }
 
-function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; text: string }[] {
+function memberReceiver(node: ts.Node | undefined, name: string): ts.Expression | undefined {
+	if (node && ts.isPropertyAccessExpression(node) && node.name.text === name)
+		return node.expression;
+	if (
+		node &&
+		ts.isElementAccessExpression(node) &&
+		ts.isStringLiteralLike(node.argumentExpression) &&
+		node.argumentExpression.text === name
+	)
+		return node.expression;
+}
+
+function isEngineReceiver(node: ts.Node | undefined): boolean {
+	return (
+		!!node &&
+		((ts.isIdentifier(node) && node.text === 'engine') || !!memberReceiver(node, 'engine'))
+	);
+}
+
+function declarationChain(node: ts.Node): string {
+	const names: string[] = [];
+	for (let parent = node.parent; parent; parent = parent.parent) {
+		if (
+			ts.isFunctionDeclaration(parent) ||
+			ts.isFunctionExpression(parent) ||
+			ts.isMethodDeclaration(parent) ||
+			ts.isClassDeclaration(parent) ||
+			ts.isClassExpression(parent) ||
+			ts.isGetAccessorDeclaration(parent) ||
+			ts.isSetAccessorDeclaration(parent)
+		)
+			names.unshift(parent.name?.getText().replace(/\s+/g, ' ').trim() ?? '<anonymous>');
+		else if (ts.isConstructorDeclaration(parent)) names.unshift('constructor');
+		else if (
+			ts.isArrowFunction(parent) &&
+			ts.isVariableDeclaration(parent.parent) &&
+			ts.isVariableDeclarationList(parent.parent.parent) &&
+			parent.parent.parent.flags & ts.NodeFlags.Const
+		)
+			names.unshift(parent.parent.name.getText());
+	}
+	return names.join('>');
+}
+
+function violations(source: string, path = 'seam-fixture.tsx') {
 	const root = ts.createSourceFile(
 		path,
 		source,
@@ -120,8 +165,9 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 		throw new Error(
 			`${path}: ${diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ')}`
 		);
-	const found: { rule: string; text: string }[] = [];
-	const report = (rule: string, node: ts.Node) => found.push({ rule, text: node.getText(root) });
+	const found: { rule: string; declaration: string; text: string }[] = [];
+	const report = (rule: string, node: ts.Node) =>
+		found.push({ rule, declaration: declarationChain(node), text: node.getText(root) });
 	const checkImport = (
 		node: ts.Node,
 		specifier: ts.Node | undefined,
@@ -160,16 +206,12 @@ function violations(source: string, path = 'seam-fixture.tsx'): { rule: string; 
 		if (storageNames.has(name)) report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
-		if (
-			(name === 'write' || name === 'resolveConflict') &&
-			receiver &&
-			((ts.isIdentifier(receiver) && receiver.text === 'engine') ||
-				(ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'engine') ||
-				(ts.isElementAccessExpression(receiver) &&
-					ts.isStringLiteralLike(receiver.argumentExpression) &&
-					receiver.argumentExpression.text === 'engine'))
-		)
+		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
 			report('write plane outside a command module', node);
+		if (name === 'require' && isEngineReceiver(receiver))
+			report('require plane outside a named read', node);
+		if (name === 'resetCollection' && isEngineReceiver(memberReceiver(receiver, 'scope')))
+			report('collection reset outside the reset command', node);
 	};
 	const visit = (node: ts.Node) => {
 		if (ts.isImportDeclaration(node)) {
@@ -267,10 +309,10 @@ const violationsByFile = sourceFiles(__dirname).flatMap((path) => {
 	return matches.length ? [{ file: relative(__dirname, path).split(sep).join('/'), matches }] : [];
 });
 
-function fingerprints(file: string, matches: { rule: string; text: string }[]): string[] {
+function fingerprints(file: string, matches: ReturnType<typeof violations>): string[] {
 	const occurrences = new Map<string, number>();
-	return matches.map(({ rule, text }) => {
-		const key = `${rule} :: ${text.replace(/\s+/g, ' ').trim()}`;
+	return matches.map(({ rule, declaration, text }) => {
+		const key = `${rule} :: ${declaration} :: ${text.replace(/\s+/g, ' ').trim()}`;
 		const occurrence = (occurrences.get(key) ?? 0) + 1;
 		occurrences.set(key, occurrence);
 		return `${file} :: ${key} :: ${occurrence}`;
@@ -330,22 +372,22 @@ it('keeps the frozen fingerprints immutable', () => {
 
 it('normalises whitespace and numbers repeated rule/text pairs independently per file', () => {
 	const matches = [
-		{ rule: 'storage import', text: "import {\n Thing\t} from 'storage';" },
-		{ rule: 'other rule', text: "import { Thing } from 'storage';" },
-		{ rule: 'storage import', text: "import { Thing } from 'storage';" },
+		{ rule: 'storage import', declaration: '', text: "import {\n Thing\t} from 'storage';" },
+		{ rule: 'other rule', declaration: '', text: "import { Thing } from 'storage';" },
+		{ rule: 'storage import', declaration: '', text: "import { Thing } from 'storage';" },
 	];
 	expect(fingerprints('file.ts', matches)).toEqual([
-		"file.ts :: storage import :: import { Thing } from 'storage'; :: 1",
-		"file.ts :: other rule :: import { Thing } from 'storage'; :: 1",
-		"file.ts :: storage import :: import { Thing } from 'storage'; :: 2",
+		"file.ts :: storage import ::  :: import { Thing } from 'storage'; :: 1",
+		"file.ts :: other rule ::  :: import { Thing } from 'storage'; :: 1",
+		"file.ts :: storage import ::  :: import { Thing } from 'storage'; :: 2",
 	]);
 	expect(fingerprints('other.ts', matches.slice(2))).toEqual([
-		"other.ts :: storage import :: import { Thing } from 'storage'; :: 1",
+		"other.ts :: storage import ::  :: import { Thing } from 'storage'; :: 1",
 	]);
 });
 
 it('rejects same-count substitutions and extra occurrences', () => {
-	const frozen = new Set(['file.ts :: record mutator :: doc.remove :: 1']);
+	const frozen = new Set(['file.ts :: record mutator ::  :: doc.remove :: 1']);
 	for (const source of ['doc.save;', 'doc.remove; doc.remove;']) {
 		const issues = fingerprintIssues(fingerprints('file.ts', violations(source)), frozen);
 		expect(issues.filter((issue) => issue.includes('route this access'))).toHaveLength(1);
@@ -357,7 +399,7 @@ it('rejects same-count substitutions and extra occurrences', () => {
 });
 
 it('requires explicit retirement of vanished fingerprints', () => {
-	const fingerprint = 'file.ts :: record mutator :: doc.remove :: 1';
+	const fingerprint = 'file.ts :: record mutator ::  :: doc.remove :: 1';
 	expect(fingerprintIssues([], new Set([fingerprint]))).toEqual([
 		`retire fingerprint: ${fingerprint}`,
 	]);
@@ -365,10 +407,52 @@ it('requires explicit retirement of vanished fingerprints', () => {
 });
 
 it('rejects reintroducing the exact text of a retired violation', () => {
-	const fingerprint = 'file.ts :: record mutator :: doc.remove :: 1';
+	const fingerprint = 'file.ts :: record mutator ::  :: doc.remove :: 1';
 	const current = fingerprints('file.ts', violations('doc.remove;'));
 	expect(fingerprintIssues(current, new Set([fingerprint]), [fingerprint])).toEqual([
 		`${fingerprint} — route this access through a named read or command`,
+	]);
+});
+
+it('fingerprints the enclosing declaration chain, outermost first', () => {
+	const source = `function outer() {
+		class Store { refresh() { const reload = () => {
+			function inner() { doc.remove(); }
+		}; } }
+	}`;
+	expect(fingerprints('file.ts', violations(source))).toEqual([
+		'file.ts :: record mutator :: outer>Store>refresh>reload>inner :: doc.remove :: 1',
+	]);
+});
+
+it.each([
+	[
+		'function before() { doc.remove(); } function after() {}',
+		'function before() {} function after() { doc.remove(); }',
+	],
+	['const before = () => doc.remove();', 'const after = () => doc.remove();'],
+	['class Store { before() { doc.remove(); } }', 'class Store { after() { doc.remove(); } }'],
+	['class Before { run() { doc.remove(); } }', 'class After { run() { doc.remove(); } }'],
+])('rejects moving a frozen access to a different declaration: %s', (before, after) => {
+	const frozen = new Set(fingerprints('file.ts', violations(before)));
+	const issues = fingerprintIssues(fingerprints('file.ts', violations(after)), frozen);
+	expect(issues.filter((issue) => issue.includes('route this access'))).toHaveLength(1);
+	expect(issues.filter((issue) => issue.startsWith('retire fingerprint:'))).toHaveLength(1);
+});
+
+it('numbers repeated accesses within their declaration, independent of other declarations', () => {
+	expect(
+		fingerprints(
+			'file.ts',
+			violations(`
+			function first() { doc.remove(); doc.remove(); }
+			function second() { doc.remove(); }
+		`)
+		)
+	).toEqual([
+		'file.ts :: record mutator :: first :: doc.remove :: 1',
+		'file.ts :: record mutator :: first :: doc.remove :: 2',
+		'file.ts :: record mutator :: second :: doc.remove :: 1',
 	]);
 });
 
@@ -479,12 +563,12 @@ it.each([
 it('walks TSX and nested template expressions but ignores string and comment contents', () => {
 	expect(
 		violations('<View title={`literal doc.remove() ${(() => { return `${doc.save}`; })()}`} />')
-	).toEqual([{ rule: 'record mutator', text: 'doc.save' }]);
+	).toEqual([{ rule: 'record mutator', declaration: '', text: 'doc.save' }]);
 });
 
 it('reports the full accessed AST text so fingerprints distinguish long accesses', () => {
 	const source = `${'receiver'.repeat(20)}.remove`;
-	expect(violations(source)).toEqual([{ rule: 'record mutator', text: source }]);
+	expect(violations(source)).toEqual([{ rule: 'record mutator', declaration: '', text: source }]);
 });
 
 // Engine methods are fenced by receiver, not on unrelated objects with the same names.
@@ -503,6 +587,43 @@ it.each(['write', 'resolveConflict'])('fences engine %s calls and extraction', (
 				'write plane outside a command module',
 			]);
 	}
+});
+
+it.each([
+	['require', 'require plane outside a named read'],
+	['resetCollection', 'collection reset outside the reset command'],
+])('fences receiver-aware %s calls and extraction', (name, rule) => {
+	for (const engine of ['engine', 'runtime.engine', "runtime['engine']", "runtime?.['engine']"]) {
+		const receivers =
+			name === 'require'
+				? [engine]
+				: [`${engine}.scope`, `${engine}['scope']`, `${engine}?.['scope']`];
+		for (const receiver of receivers) {
+			for (const source of [
+				`${receiver}.${name}();`,
+				`${receiver}['${name}']();`,
+				`${receiver}?.['${name}']?.();`,
+				`const fn = ${receiver}.${name};`,
+				`const fn = ${receiver}['${name}'];`,
+				`const { ${name}: fn } = ${receiver};`,
+				`const { ['${name}']: fn } = ${receiver};`,
+			])
+				expect(violations(source).map(({ rule }) => rule)).toEqual([rule]);
+		}
+	}
+});
+
+it.each([
+	'other.require();',
+	'const { require: fn } = other;',
+	"runtime[engine]['require']();",
+	'other.scope.resetCollection();',
+	'engine.resetCollection();',
+	'engine.other.resetCollection();',
+	"engine[scope]['resetCollection']();",
+	'const { resetCollection } = other.scope;',
+])('allows unrelated require/reset receivers in %s', (source) => {
+	expect(violations(source)).toEqual([]);
 });
 
 it.each([
@@ -531,7 +652,7 @@ it.each([
 
 it('parses TypeScript assertions and generic arrows as TS, not TSX', () => {
 	expect(violations('const fn = <T>(doc: T) => (<T>doc).remove;', 'fixture.ts')).toEqual([
-		{ rule: 'record mutator', text: '(<T>doc).remove' },
+		{ rule: 'record mutator', declaration: 'fn', text: '(<T>doc).remove' },
 	]);
 });
 
