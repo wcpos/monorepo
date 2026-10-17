@@ -1,7 +1,7 @@
 // This pins the OTA lane's contract; flipping any of these silently returns
 // mobile to store-build-only delivery.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SourceSkips } from '@expo/fingerprint';
@@ -80,24 +80,15 @@ describe('mobile OTA configuration', () => {
 		expect(fingerprintConfig.preset).toBe('balanced');
 	});
 
-	it('hashes every pnpm patch that edits native code, and no JS-only patch', () => {
-		// Adding a patch means classifying it here.
-		const PATCH_CLASS: Record<string, 'native' | 'js'> = {
-			'@expo__cli@58.1.11.patch': 'js',
-			'@shopify__flash-list@2.3.2.patch': 'js',
-			'@shopify__react-native-skia@2.14.0.patch': 'js',
-			'expo@58.0.14.patch': 'js',
-			'react-native-drawer-layout@4.2.10.patch': 'js',
-			'rxdb@17.6.0.patch': 'js',
-			'expo-modules-core@58.0.22.patch': 'native',
-			'react-native-esc-pos-printer@4.5.0.patch': 'native',
-		};
+	it('hashes every pnpm patch not listed as runtime JS', () => {
+		const { JS_ONLY_PATCHES, isNativePatch } = require('../fingerprint-patches');
 		const patchesDir = resolve(__dirname, '../../../patches');
-		expect(
-			readdirSync(patchesDir)
-				.filter((name) => name.endsWith('.patch'))
-				.sort()
-		).toEqual(Object.keys(PATCH_CLASS).sort());
+		for (const [name, reason] of Object.entries(JS_ONLY_PATCHES)) {
+			expect(existsSync(resolve(patchesDir, name))).toBe(true);
+			expect(typeof reason).toBe('string');
+			expect(reason).not.toBe('');
+			expect(isNativePatch(readFileSync(resolve(patchesDir, name), 'utf8'))).toBe(false);
+		}
 		const fingerprintConfig = require(resolve(__dirname, '../fingerprint.config.js'));
 		const listed = fingerprintConfig.extraSources.map(
 			(source: { type: string; filePath: string }) => {
@@ -106,18 +97,24 @@ describe('mobile OTA configuration', () => {
 				return source.filePath;
 			}
 		);
-		expect(listed.sort()).toEqual(
-			Object.keys(PATCH_CLASS)
-				.filter((name) => PATCH_CLASS[name] === 'native')
-				.sort()
-				.map((name) => `../../patches/${name}`)
+		expect(listed).toEqual([
+			'../../patches/expo-modules-core@58.0.22.patch',
+			'../../patches/react-native-esc-pos-printer@4.5.0.patch',
+		]);
+	});
+
+	it('loads through @expo/fingerprint without falling back to an empty config', async () => {
+		// The loader turns a config that throws into {}.
+		const fingerprintConfig = await require('@expo/fingerprint/build/Config').loadConfigAsync(
+			resolve(__dirname, '..'),
+			true
 		);
-		const { isNativePatch } = require('../fingerprint-patches');
-		for (const [name, classification] of Object.entries(PATCH_CLASS)) {
-			expect(isNativePatch(readFileSync(resolve(patchesDir, name), 'utf8'))).toBe(
-				classification === 'native'
-			);
-		}
+		expect(
+			fingerprintConfig.extraSources.map((source: { filePath: string }) => source.filePath)
+		).toEqual([
+			'../../patches/expo-modules-core@58.0.22.patch',
+			'../../patches/react-native-esc-pos-printer@4.5.0.patch',
+		]);
 	});
 
 	it('reuses the resolved runtime only in the E2E Metro process', () => {

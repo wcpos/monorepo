@@ -10,8 +10,8 @@ const { nativePatchFiles } = require('./fingerprint-patches');
 //
 // The balanced preset (the default since @expo/fingerprint 0.21) hashes each autolinked
 // native module as `name@version`, so pnpm patches alone leave that hash unchanged.
-// Hash a patch unless every file it touches is plain app JS/TS (fail safe); JS-only
-// patches reach the app through Metro and stay out.
+// Every pnpm patch is hashed unless fingerprint-patches.js lists it as runtime JS.
+// Listed patches reach the app through Metro and stay out.
 // An explicit `sourceSkips` replaces the balanced preset's own skip list rather than
 // adding to it, so only `ExpoConfigVersions` is skipped.
 const PATCHES_DIR = join(__dirname, '../../patches');
