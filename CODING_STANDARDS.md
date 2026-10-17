@@ -280,11 +280,12 @@ never shares a colour with Void (§7).
 
 #### Situation → overlay
 One shell (`lib/overlay.tsx`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
-anchored overlay becomes a bottom sheet and every side panel becomes a page.
+anchored menu, select and popover becomes a bottom sheet (a tooltip stays a tooltip) and every side panel
+becomes a page.
 
 | Situation | Overlay | Notes |
 |---|---|---|
-| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side="right"` | on the POS it opens over the other column |
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side` | `right` on a page; on the POS `usePanelSide` puts it over the other column |
 | Confirm a loss | `AlertDialog` | no ×, the scrim does not dismiss, the confirm is solid `destructive` |
 | Row actions | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator |
 | Display or column settings | side panel (`UISettingsDialog`) | on every screen, never a popover |
@@ -307,8 +308,8 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 A Button is never a toggle. Among pills, full radius belongs to `Chip` and `Badge` alone; a circular control (`Switch`, `RadioGroup`, a `Slider` thumb) is its own shape.
 
 #### Page bars
-- Every non-POS screen (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`.
-- The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide / 44 on a phone, with no rule under it.
+- Every non-POS drawer destination (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`; sign-in and recovery screens have no bar.
+- The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide with no rule under it; on a phone the bar is 44 and search is its own ruled row under it.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 
