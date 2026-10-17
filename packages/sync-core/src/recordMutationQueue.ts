@@ -591,8 +591,12 @@ export class RecordMutationQueue {
 			))
 		)
 			throw new Error('Could not persist the writer receipt');
-		if (!(await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null)))
-			throw new Error('Writer receipt lost record ownership');
+		try {
+			await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null);
+		} catch {
+			// The row receipt already committed. Expiry recovers the holder; the
+			// write-intent caller emits write.admission-release-failed even on success.
+		}
 	}
 
 	private async finishWriterRelease(
@@ -1380,6 +1384,7 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 				if (next.markedAt === undefined) delete next.markedAt;
 				if (next.admittedBy === undefined) delete next.admittedBy;
 				if (next.admittedAt === undefined) delete next.admittedAt;
+				if (next.rejectedReason === undefined) delete next.rejectedReason;
 				return next;
 			});
 			return true;

@@ -600,6 +600,20 @@ describe('RxRecordMutationStorage', () => {
 		return col;
 	}
 
+	it('void back-off clears optional keys before persisting the pending row', async () => {
+		const storage = new RxRecordMutationStorage(fakeCollection());
+		const q = new RecordMutationQueue(storage);
+		await q.replace({ ...mut(), admittedBy: 'lost-writer' });
+		expect(await q.markForAnnihilation('m1', 'void', 0, 'lost')).toBe(true);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(true);
+		const [row] = await storage.list();
+		expect(row.status).toBe('pending');
+		expect(Object.keys(row).filter((key) => row[key as keyof typeof row] === undefined)).toEqual(
+			[]
+		);
+		expect(row).not.toHaveProperty('rejectedReason');
+	});
+
 	it('append persists a mutation and list returns it via toJSON', async () => {
 		const storage = new RxRecordMutationStorage(fakeCollection());
 		await storage.append(mut({ mutationId: 'm1' }));

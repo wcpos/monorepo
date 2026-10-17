@@ -1533,6 +1533,45 @@ describe('admission crash recovery', () => {
 		const db = { collections } as unknown as RxDatabase;
 		return { storage, resident, collections, db, queue: queueFor(db) };
 	};
+	it('returns a successful write and delivers it when synthetic receipt holder cleanup throws', async () => {
+		const { db, queue } = fixture();
+		vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('release failed'));
+		const append = RxRecordMutationStorage.prototype.appendIfUnchanged;
+		const fault = vi.spyOn(RxRecordMutationStorage.prototype, 'appendIfUnchanged');
+		fault.mockImplementation(async function (this: RxRecordMutationStorage, row, rev) {
+			if (row.status === 'internal' && row.payload.phase === 'released')
+				throw new Error('holder cleanup failed');
+			return append.call(this, row, rev);
+		});
+		const observe = vi.fn();
+		try {
+			await expect(
+				enqueueWriteIntent({
+					db,
+					mintUuid: () => 'receipt',
+					now: () => new Date().toISOString(),
+					observe,
+					intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: {} },
+				})
+			).resolves.toMatchObject({ mutationId: 'receipt' });
+		} finally {
+			fault.mockRestore();
+		}
+		expect(observe).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+		expect(
+			await drainMutationQueue({
+				queue,
+				push: async (mutation) => ({
+					outcome: 'created',
+					mutation,
+					document: { id: 1 },
+					currentRevision: 'r1',
+				}),
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(await queue.all()).toEqual([]);
+	});
+
 	it('delivers a committed receipt when expiry swept its holder during the dirty mark', async () => {
 		const { resident, collections, db, queue } = fixture();
 		let now = Date.now();

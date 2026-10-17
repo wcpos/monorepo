@@ -242,11 +242,24 @@ async function annihilateNeverPushedChains(input: {
 			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
 				continue;
 			const fresh: QueuedMutation[] = [];
+			let settlementRefused = false;
 			for (const row of (await input.queue.all()).filter(
 				(row) => recordKey(row) === recordKey(head)
 			)) {
-				if ((await input.queue.admissionState(row, input.now())) !== 'lost') fresh.push(row);
+				if (
+					row.status !== 'rejected' &&
+					(await input.queue.admissionState(row, input.now())) === 'lost'
+				) {
+					if (
+						!(await input.queue.markForAnnihilation(row.mutationId, token, input.now(), 'lost'))
+					) {
+						settlementRefused = true;
+						break;
+					}
+					marked.push(row);
+				} else fresh.push(row);
 			}
+			if (settlementRefused) continue;
 			if (
 				fresh.some(
 					(row) =>
@@ -254,7 +267,6 @@ async function annihilateNeverPushedChains(input: {
 				)
 			)
 				continue;
-			let settlementRefused = false;
 			for (const row of fresh.filter((row) => row.status === 'rejected')) {
 				if (
 					!(await (legacyQueue

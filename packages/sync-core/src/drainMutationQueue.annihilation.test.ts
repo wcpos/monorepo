@@ -77,6 +77,28 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it('settles lost pending rows with a drain-time void before releasing its fence', async () => {
+		const q = await queueWith(create(), del());
+		await q.replace({ ...update(), admittedBy: 'swept-writer' });
+		let settled: QueuedMutation | undefined;
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (m) => ok(m),
+			removeResident: async () => {
+				settled = (await q.all()).find((row) => row.mutationId === 'm-update');
+			},
+		});
+		expect(settled).toMatchObject({ status: 'rejected', rejectedReason: 'superseded-by-void' });
+		expect(result).toMatchObject({ annihilated: 1, pushed: 0, rejected: [] });
+		expect(await q.hasVoidFence('orders', 'order-A', Date.now())).toBe(false);
+		await expect(q.recordWriterReceipt('m-update')).rejects.toThrow();
+		expect(await q.all()).toEqual([]);
+		expect(await drainMutationQueue({ queue: q, push: async (m) => ok(m) })).toMatchObject({
+			pushed: 0,
+			rejected: [],
+		});
+	});
+
 	it.each(['between receipt writes', 'after claim'])('delivers a receipt %s', async (timing) => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
