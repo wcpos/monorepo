@@ -4,6 +4,7 @@
 import type { SyncEvent } from '@wcpos/sync-core';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { rejectedWriteCode } from '@wcpos/utils/logger/rejected-write-code';
 
 import { CONFORMANCE_TABLE, createSyncLogObserver } from './sync-log-observer';
 
@@ -1110,6 +1111,21 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
+	});
+
+	// Drift guard: the screen's toast codes the same refusal through the shared
+	// rejectedWriteCode helper; this row and that toast must never disagree.
+	it.each([
+		{ status: 403, reason: 'woocommerce_rest_cannot_edit' },
+		{ status: 400, reason: 'pos_data_invalid' },
+		{ status: 400, reason: 'rest_invalid_param' },
+		{ status: 400, reason: 'woocommerce_rest_invalid_id' },
+	])('codes push.rejected %j exactly as the shared rejectedWriteCode does', (fields) => {
+		observer.observe(
+			event({ type: 'push.rejected', level: 'warn', fields: { recordId: 'o-1', ...fields } })
+		);
+
+		expect(rows[0]?.code).toBe(rejectedWriteCode(fields.status, fields.reason));
 	});
 
 	it('warns SYNC131 once a push has found the record locked for 3 attempts', () => {

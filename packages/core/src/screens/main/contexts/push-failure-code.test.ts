@@ -19,6 +19,13 @@ describe('pushFailureCode', () => {
 		expect(pushFailureCode(new WriteDeferredError('m-1', 401))).toBe('AUTH101');
 		expect(pushFailureCode(new WriteOutcomeError('write-rejected', 'm-1', 403))).toBe('AUTH201');
 		expect(pushFailureCode(new Error('local'), 'CHECKOUT101')).toBe('CHECKOUT101');
+		// An invalid field is SYNC211 ("correct the value"), as on the observer's row.
+		expect(
+			pushFailureCode(new WriteOutcomeError('write-rejected', 'm-1', 400, 'rest_invalid_param'))
+		).toBe('SYNC211');
+		expect(
+			pushFailureCode(new WriteOutcomeError('write-rejected', 'm-1', 400, 'pos_data_invalid'))
+		).toBe('SYNC211');
 	});
 });
 

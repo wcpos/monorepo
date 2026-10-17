@@ -5,13 +5,14 @@ import {
 	ERROR_CODES,
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { rejectedWriteCode } from '@wcpos/utils/logger/rejected-write-code';
 import type { ExtendedLogger } from '@wcpos/utils/logger';
 
 /**
  * The log code for a failed push, from the failure's HTTP status: a 401 is the
  * session (AUTH101, "Sign in again"), a 403 is the cashier's role (AUTH201);
- * a store refusal is SYNC201 and a parked clash SYNC221 — the codes the sync
- * observer already stamped on the engine's own row for the same write; anything
+ * a store refusal is SYNC211 for an invalid field and SYNC201 otherwise, a parked
+ * clash SYNC221 — the codes the sync observer stamps on the engine's own row; anything
  * else keeps the caller's code (the generic sync code by default). Lives apart
  * from `usePushDocument` so a test that mocks the hook module does not lose the
  * helper.
@@ -25,9 +26,11 @@ export function pushFailureCode(
 		if (error.status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
 	}
 	if (error instanceof WriteOutcomeError) {
+		// A refusal uses the observer's own mapping (shared helper), so the toast says
+		// "correct the value" exactly when the engine's row does.
 		return error.eventType === 'write-conflict'
 			? ERROR_CODES.RECORD_CONFLICT
-			: ERROR_CODES.RECORD_REJECTED;
+			: rejectedWriteCode(error.status, error.reason);
 	}
 	return fallback;
 }
