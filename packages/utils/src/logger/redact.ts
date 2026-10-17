@@ -21,11 +21,51 @@ function maskValue(value: string): string {
 	return `${value.slice(0, 6)}...${value.slice(-5)}`;
 }
 
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Decode a standard or URL-safe base64 token without Buffer/atob (neither is
+ * guaranteed on every runtime this logger runs in). Returns null when the token
+ * is not well-formed base64.
+ */
+function decodeBase64(token: string): string | null {
+	const normalized = token.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+	if (normalized.length % 4 === 1) return null;
+	let bits = 0;
+	let buffer = 0;
+	let out = '';
+	for (const char of normalized) {
+		const index = BASE64_ALPHABET.indexOf(char);
+		if (index < 0) return null;
+		buffer = (buffer << 6) | index;
+		bits += 6;
+		if (bits >= 8) {
+			bits -= 8;
+			out += String.fromCharCode((buffer >> bits) & 0xff);
+		}
+	}
+	return out;
+}
+
+/**
+ * A Basic credential is `base64(user:password)`: redact a candidate only when it
+ * decodes to printable text with a colon, so `Basic YTpi` (a:b) is scrubbed while
+ * prose such as "Basic authentication failed" is left readable.
+ */
+function isBasicCredential(token: string): boolean {
+	const decoded = decodeBase64(token);
+	return decoded !== null && decoded.includes(':') && !/[\x00-\x08\x0e-\x1f\x7f]/.test(decoded);
+}
+
 export function redactSensitiveText(value: string): string {
 	return value
 		.replace(/(https?:\/\/)[^/\s@]+@/gi, '$1[REDACTED]@')
 		.replace(/\bBearer\s+[^\s,;"']+/gi, 'Bearer [REDACTED]')
-		.replace(/\bBasic\s+[A-Za-z0-9+/=_-]{8,}/gi, 'Basic [REDACTED]')
+		.replace(
+			/\b(Basic)\s+([A-Za-z0-9+/_-]{4,}={0,2})/gi,
+			(match, _scheme: string, token: string) =>
+				isBasicCredential(token) ? `Basic [REDACTED]` : match
+		)
 		.replace(CREDENTIAL_PAIR, '$1[REDACTED]');
 }
 
