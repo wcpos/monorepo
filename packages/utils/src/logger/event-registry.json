@@ -505,7 +505,7 @@
 	{
 		"type": "queue.write.conflict-transition",
 		"domain": "SYNC",
-		"label": "Could not settle a clashing change",
+		"label": "Change held — your store has a newer version",
 		"introducedIn": "1.10.0"
 	},
 	{
