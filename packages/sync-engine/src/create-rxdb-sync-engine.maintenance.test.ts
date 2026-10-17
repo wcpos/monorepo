@@ -279,6 +279,33 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it.each(['deadline', 'HTTP 500'])(
+		'classifies a forced census failure from %s without misreporting a task crash',
+		async (failure) => {
+			const harness = await createEngineHarness({
+				mode: 'manual',
+				queryTotal: {
+					fetchWooQueryTotal: () =>
+						failure === 'deadline' ? new Promise(() => {}) : Promise.reject(new Error('HTTP 500')),
+				},
+			});
+			vi.useFakeTimers();
+			try {
+				const check = harness.engine.checkCollection('products');
+				await vi.advanceTimersByTimeAsync(25_000);
+				await expect(check).resolves.toMatchObject({ status: 'error' });
+				const error = harness.diagnostics.find((event) => event.type === 'maintenance.lane.error');
+				expect(error?.fields).toEqual({
+					lane: 'query-total-retry',
+					...(failure === 'deadline' ? { status: 0 } : {}),
+				});
+			} finally {
+				vi.useRealTimers();
+				await harness.dispose();
+			}
+		}
+	);
+
 	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
 		let failProbe = true;
 		const fetchWooQueryTotal = vi.fn(async () => {
