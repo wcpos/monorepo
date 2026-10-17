@@ -5,6 +5,7 @@ import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
 import { useRemoveCoupon } from './use-remove-coupon';
 
@@ -32,7 +33,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('./use-recalculate-coupons', () => ({
@@ -125,7 +128,7 @@ describe('useRemoveCoupon', () => {
 			expect(recalculate).toHaveBeenCalledWith(lineItems, remaining);
 			expect(localPatch).toHaveBeenCalledWith({
 				document: currentOrderRecord,
-				data: { coupon_lines: remaining, line_items: lineItems },
+				data: expect.objectContaining({ coupon_lines: remaining, line_items: lineItems }),
 			});
 		}
 	);
@@ -232,10 +235,10 @@ describe('useRemoveCoupon', () => {
 
 		expect(localPatch).toHaveBeenCalledWith({
 			document: currentOrderRecord,
-			data: {
+			data: expect.objectContaining({
 				coupon_lines: recalculatedCouponLines,
 				line_items: recalculatedLineItems,
-			},
+			}),
 		});
 		expect(getLogger([]).info).toHaveBeenCalledWith('Coupon removed', {
 			showToast: true,
@@ -259,3 +262,7 @@ describe('useRemoveCoupon', () => {
 		);
 	});
 });
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

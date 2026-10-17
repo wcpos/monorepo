@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
 import { useUpdateCartLine as useWriter } from './use-update-cart-line';
 import * as actions from '../../../../extensions/actions';
@@ -48,7 +49,9 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(mockPatch),
+	}),
 	documentRecordId: (value: CurrentOrderRecord) => value.uuid,
 }));
 jest.mock('../contexts/current-order', () => ({
@@ -77,6 +80,7 @@ jest.mock('./use-action-context', () => ({
 jest.mock('./use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
 	return {
+		useCartConfigReader: () => () => jest.requireMock('./use-cart-config').useCartConfig(),
 		useCartConfig: () =>
 			createCartConfig({
 				rates: [],
@@ -237,8 +241,8 @@ it('a fee edit and a line edit queued together land in order on the saved record
 		await Promise.all([fee, line]);
 	});
 	expect(mockPatch.mock.calls.map(([call]) => Object.keys(call.data))).toEqual([
-		['fee_lines'],
-		['line_items'],
+		expect.arrayContaining(['fee_lines', 'total']),
+		expect.arrayContaining(['line_items', 'total']),
 	]);
 	expect(mockPatch.mock.calls.every(([call]) => call.document === saved)).toBe(true);
 	expect(saved.payload.fee_lines?.[0].name).toBe('Edited fee');
@@ -311,3 +315,5 @@ it('passes cart lines for inherited shipping tax with an inclusive amount', asyn
 	});
 	expect(mockOrder.payload.shipping_lines?.[0]).toMatchObject({ total: '10', total_tax: '1' });
 });
+
+afterEach(() => expectSettledWrites(mockPatch));

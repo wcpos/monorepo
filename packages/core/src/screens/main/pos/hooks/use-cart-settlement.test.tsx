@@ -70,6 +70,7 @@ const moneyWrites = () => localPatch.mock.calls.filter(([args]) => !('coupon_lin
 const createCartConfig = jest.fn((config: Record<string, unknown>) => config);
 
 jest.mock('@wcpos/order-math', () => ({
+	settlementPatch: jest.requireActual('@wcpos/order-math').settlementPatch,
 	createCartConfig: (config: Record<string, unknown>) => createCartConfig(config),
 	settleCart: (snapshot: unknown, config: unknown, options?: unknown) =>
 		settleCart(snapshot, config, options),
@@ -84,10 +85,12 @@ jest.mock('@wcpos/query', () => ({
 		selector: (value: {
 			woocommerce_calc_discounts_sequentially: string;
 			calc_discounts_sequentially: string;
+			tax_based_on: string;
 		}) => unknown
 	) =>
 		selector({
 			woocommerce_calc_discounts_sequentially: 'no',
+			tax_based_on: 'billing',
 			calc_discounts_sequentially: 'no',
 		}),
 }));
@@ -250,9 +253,12 @@ const getCouponContext: jest.MockedFunction<
 	(lineItems: LineItem[]) => Promise<ReturnType<typeof emptyCouponContext>>
 > = jest.fn(async (_lineItems: LineItem[]) => emptyCouponContext());
 
+const ownedOrderIds = new Set<string>();
 let divergenceValue: { serverTotal: string } | null = null;
 
 jest.mock('../contexts/order-money-divergence', () => ({
+	useServerOwnsMoneyReader: () => (uuid: string) =>
+		ownedOrderIds.has(uuid) || (uuid === currentOrderRecord.uuid && divergenceValue !== null),
 	useOrderMoneyDivergence: () => ({
 		divergence: divergenceValue,
 		serverOwnsMoney: divergenceValue !== null,
@@ -264,6 +270,7 @@ jest.mock('./use-coupon-context', () => ({
 	useCouponContext: () => ({ getCouponContext }),
 }));
 
+const mockLocation = { country: '', state: '', city: '', postcode: '' };
 let allRates: unknown[] = [];
 let taxRoundAtSubtotal = false;
 let priceNumDecimals = 2;
@@ -274,7 +281,7 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 }));
 
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxLocation: () => ({ rates: [] }),
+	useTaxLocation: () => ({ rates: [], location: mockLocation }),
 	useTaxSettings: () => ({
 		allRates,
 		shippingTaxClass: '',
@@ -291,9 +298,20 @@ type LocalPatchArgs = {
 	data: Record<string, unknown>;
 };
 const localPatch = jest.fn(async (_args: LocalPatchArgs) => undefined);
+type ResolverPatchArgs = Omit<LocalPatchArgs, 'data'> & {
+	data?: Record<string, unknown>;
+	changes?: (payload: Record<string, unknown>) => Record<string, unknown>;
+};
+// Existing assertions observe actual writes, not resolver calls that abort without a write.
+const applyLocalPatch = async (args: ResolverPatchArgs) => {
+	const data = args.changes ? args.changes(currentPayload()) : args.data!;
+	if (Object.keys(data).length) return localPatch({ document: args.document, data });
+};
+const resolveLocalPatch = jest.fn(applyLocalPatch);
+beforeEach(() => resolveLocalPatch.mockReset().mockImplementation(applyLocalPatch));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({ localPatch: resolveLocalPatch }),
 }));
 
 /** A deferred `whenSettledInBackground` the test resolves by hand. */
@@ -361,6 +379,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 		getCouponContext.mockClear();
 		feeLineIsPercent = false;
 		divergenceValue = null;
+		ownedOrderIds.clear();
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -374,6 +393,160 @@ describe('useCartSettlement reference demand (#952)', () => {
 		shippingLines$.next([]);
 		revision = buildRevision();
 		currentOrderRecord = buildCurrentOrderRecord();
+	});
+
+	it.each(['divergence', 'command', 'replay-owner', 'replay-edit'])(
+		'stands down when %s arrives during the resident await',
+		async (scenario) => {
+			const replay = scenario.startsWith('replay');
+			if (replay) {
+				couponLines$.next([{ code: 'SAVE' }]);
+				settleAggregate.mockReturnValue({ ...successfulAggregate(), changed: false });
+			} else if (scenario === 'command') {
+				settleAggregate.mockImplementation(jest.requireActual('@wcpos/order-math').settleAggregate);
+				lineItems$.next([{ total: '10', total_tax: '0', product_id: 1 }]);
+			}
+			let release!: () => void;
+			let written: Record<string, unknown> | undefined;
+			resolveLocalPatch.mockImplementation(async (args: ResolverPatchArgs) => {
+				if (replay && resolveLocalPatch.mock.calls.length === 1) return applyLocalPatch(args);
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				written = args.changes ? args.changes(currentPayload()) : args.data;
+			});
+			renderHook(() => useCartSettlement());
+			await act(async () => {});
+			if (scenario === 'divergence') ownedOrderIds.add(currentOrderRecord.uuid);
+			if (scenario === 'replay-owner')
+				revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+			if (scenario === 'command' || scenario === 'replay-edit') {
+				lineItems$.value.splice(0, lineItems$.value.length, {
+					product_id: 1,
+					total: '20',
+					total_tax: '0',
+				});
+				revision = buildRevision({ total: '20' });
+			}
+			await act(async () => {
+				release();
+			});
+			expect(written).toEqual(
+				scenario === 'command' ? expect.objectContaining({ total: '20' }) : {}
+			);
+		}
+	);
+
+	it('does not write after a command has persisted the same settled aggregate', async () => {
+		allRates = [{ id: 2, country: 'NZ', rate: '20', class: 'standard', shipping: true }];
+		shippingLines$.next([{ method_id: 'flat_rate', total: '10' }]);
+		const math = jest.requireActual('@wcpos/order-math');
+		settleAggregate.mockImplementation(math.settleAggregate);
+		const { settleCartWrite } = jest.requireActual('../commands/settle-cart-write');
+		const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
+		await settleCartWrite(
+			{ document: currentOrderRecord, data: { billing: { country: 'NZ' } } },
+			{
+				localPatch: ({ changes }: { changes: (payload: object) => LocalPatchArgs['data'] }) => {
+					const data = changes(currentOrderRecord.payload);
+					revision = { ...revision, ...data };
+					shippingLines$.next(data.shipping_lines as unknown[]);
+				},
+				configForOrder: (order: Record<string, unknown>) =>
+					cartConfigForOrder({
+						settings: {
+							calcTaxes: true,
+							taxBasedOn: 'billing',
+							pricesIncludeTax: false,
+							taxRoundAtSubtotal: false,
+							priceNumDecimals: 2,
+							shippingTaxClass: '',
+							taxClassSlugs: [],
+							calcDiscountsSequentially: false,
+						},
+						rates: allRates,
+						baseLocation: {},
+						order,
+					}),
+				serverOwnsMoney: () => false,
+			}
+		);
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		expect(settleAggregate).toHaveReturnedWith(expect.objectContaining({ changed: false }));
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('stands down when the order payload says the server owns money', async () => {
+		revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		expect(settleAggregate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('does not overwrite command money with a queued pre-command aggregate', async () => {
+		const math = jest.requireActual('@wcpos/order-math');
+		settleAggregate.mockImplementation(math.settleAggregate);
+		let release!: () => void;
+		localPatch.mockImplementationOnce(async ({ data }) => {
+			revision = { ...revision, ...data };
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		});
+		localPatch.mockImplementation(async ({ data }) => {
+			revision = { ...revision, ...data };
+		});
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		await act(async () => {
+			editCart([{ total: '10', total_tax: '0', product_id: 1 }]);
+		});
+		// The command lands after the queued pass computed 10, without another line signal.
+		revision = { ...revision, ...{ ...MONEY_PATCH, total: '20', discount_total: '0' } };
+		const commandLine = { subtotal: '20', total: '20', total_tax: '0', product_id: 1 };
+		lineItems$.value[0] = commandLine;
+		await act(async () => {
+			release();
+		});
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(currentPayload()).toMatchObject({ total: '20' });
+	});
+
+	it('keeps queued order A ownership after switching to unowned order B', async () => {
+		let release!: () => void;
+		localPatch.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		});
+		const orderA = getLatest();
+		currentOrderRecord = { ...currentOrderRecord, getLatest: () => orderA };
+		const { rerender } = renderHook(() => useCartSettlement());
+		await act(async () => {});
+		await act(async () => {
+			editCart([{ total: '10', total_tax: '0', product_id: 1 }]);
+		});
+		ownedOrderIds.add(orderA.uuid);
+		revision = buildRevision({ uuid: 'order-B' });
+		currentOrderRecord = buildCurrentOrderRecord('order-B');
+		rerender();
+		await act(async () => {
+			release();
+		});
+		expect(
+			localPatch.mock.calls.filter(([args]) => args.document.uuid === orderA.uuid)
+		).toHaveLength(1);
+		ownedOrderIds.clear();
+	});
+
+	it('stands down when ownership arrives before the queued aggregate write', async () => {
+		renderHook(() => useCartSettlement());
+		revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+		await act(async () => {});
+		expect(settleAggregate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', async () => {
@@ -1005,6 +1178,23 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
+	it('stands down when ownership arrives after arming the coupon replay', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(background.signals).toHaveLength(1);
+		localPatch.mockClear();
+		revision = buildRevision({
+			...revision,
+			meta_data: [{ key: '_wcpos_money_owner', value: 'server' }],
+		});
+		await act(async () => background.settle());
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
@@ -1405,6 +1595,7 @@ describe('the settle path reports engine warnings', () => {
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		divergenceValue = null;
+		ownedOrderIds.clear();
 		couponLines$.next([]);
 		lineItems$.next([]);
 		feeLines$.next([]);
@@ -1432,6 +1623,27 @@ describe('the settle path reports engine warnings', () => {
 		expect(codedWarnings()[0][1]).toMatchObject({
 			context: { site: 'settleAggregate', orderId: 'order-uuid-1', rateId: 42 },
 		});
+	});
+
+	it('reports only the authoritative warnings after a nonempty pre-flight', async () => {
+		settleAggregate
+			.mockReturnValueOnce({
+				...successfulAggregate(),
+				warnings: [{ code: 'unknown_tax_rate_id', rateId: 41 }],
+			})
+			.mockReturnValue({
+				...successfulAggregate(),
+				warnings: [{ code: 'unknown_tax_rate_id', rateId: 42 }],
+			});
+		resolveLocalPatch.mockImplementation(async (args: ResolverPatchArgs) => {
+			args.changes!(currentPayload()); // Pure pre-flight; no warning may escape.
+			expect(codedWarnings()).toHaveLength(0);
+			return applyLocalPatch(args);
+		});
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+		expect(codedWarnings()).toHaveLength(1);
+		expect(codedWarnings()[0][1]).toMatchObject({ context: { rateId: 42 } });
 	});
 
 	it('reports the coupon pass on its FAILED branch, where the warnings matter most', async () => {

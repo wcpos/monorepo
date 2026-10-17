@@ -80,13 +80,18 @@ export async function getTemporaryOrder(uuid: string): Promise<TemporaryOrderDoc
  */
 export async function patchTemporaryOrderPayload(
 	uuid: string,
-	changes: Record<string, unknown>
+	changes: Record<string, unknown> | ((payload: Record<string, unknown>) => Record<string, unknown>)
 ): Promise<TemporaryOrderDocument | null> {
 	const document = await getTemporaryOrder(uuid);
 	if (!document) return null;
 	return (await document.incrementalModify((data) => ({
 		...data,
-		payload: { ...(data.payload as Record<string, unknown>), ...changes },
+		payload: {
+			...(data.payload as Record<string, unknown>),
+			...(typeof changes === 'function'
+				? changes(data.payload as Record<string, unknown>)
+				: changes),
+		},
 	}))) as TemporaryOrderDocument;
 }
 

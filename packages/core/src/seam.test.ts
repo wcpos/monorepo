@@ -733,6 +733,26 @@ it.each([
 	expect(violations(source)).toEqual([]);
 });
 
+it.each(['doc.patch({});', 'doc.incrementalPatch({});', 'result.patch({});'])(
+	'fences a mutator call: %s',
+	(source) => {
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+	}
+);
+
+it.each([
+	'const mutate = order.incrementalPatch; mutate({});',
+	'const { patch } = order; patch({});',
+])('fences an extracted mutator: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+});
+
+it('fences a mutator bound for a later call', () => {
+	expect(violations('wpUser.incrementalPatch.bind(wpUser);').map(({ rule }) => rule)).toEqual([
+		'record mutator',
+	]);
+});
+
 // Every mutator spelling is fenced across calls, extraction and binding patterns.
 it.each(
 	(
@@ -813,7 +833,9 @@ it('walks TSX and nested template expressions but ignores string and comment con
 
 it('reports the full accessed AST text so fingerprints distinguish long accesses', () => {
 	const source = `${'receiver'.repeat(20)}.remove`;
-	expect(violations(source)).toEqual([{ rule: 'record mutator', declaration: '', text: source }]);
+	expect(violations(`${source}()`)).toEqual([
+		{ rule: 'record mutator', declaration: '', text: source },
+	]);
 });
 
 // Engine methods are fenced by receiver, not on unrelated objects with the same names.

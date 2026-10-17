@@ -19,7 +19,7 @@ import {
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
@@ -32,7 +32,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  * and adds it to the order's coupon_lines.
  */
 export const useAddCoupon = () => {
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const t = useT();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { getCouponContext } = useCouponContext();

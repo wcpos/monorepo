@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { config, expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import {
 	type ActionEventInput,
@@ -14,7 +15,9 @@ import { useSetCartCustomer } from './use-set-cart-customer';
 const localPatch = jest.fn();
 const mockActionLog = jest.fn();
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('./use-action-context', () => ({
 	useActionContext: () => ({
@@ -72,7 +75,7 @@ it('dispatches the customer with the previous id, then writes the four fields', 
 	]);
 	expect(localPatch).toHaveBeenCalledWith({
 		document: order,
-		data: { customer_id: 9, billing, shipping, tax_ids: [] },
+		data: expect.objectContaining({ customer_id: 9, billing, shipping, tax_ids: [] }),
 	});
 });
 
@@ -96,7 +99,11 @@ it('a rewritten address is what gets written; the customer id cannot be rewritte
 	});
 	expect(localPatch).toHaveBeenCalledWith({
 		document: order,
-		data: { customer_id: 9, billing: { ...billing, company: 'Loyalty Ltd' }, shipping },
+		data: expect.objectContaining({
+			customer_id: 9,
+			billing: { ...billing, company: 'Loyalty Ltd' },
+			shipping,
+		}),
 	});
 });
 
@@ -106,7 +113,7 @@ it('taxIds null leaves the order snapshot alone and an absent address is written
 		await result.current(order, { customerId: 0, billing, shipping: undefined, taxIds: null });
 	});
 	const { data } = localPatch.mock.calls[0][0];
-	expect(data).toEqual({ customer_id: 0, billing, shipping: undefined });
+	expect(data).toMatchObject({ customer_id: 0, billing, shipping: undefined });
 	expect('tax_ids' in data).toBe(false);
 });
 
@@ -153,7 +160,7 @@ it('without a customer id the write keeps whoever the order is for, read inside 
 	});
 	const { data } = localPatch.mock.calls[0][0];
 	expect('customer_id' in data).toBe(false);
-	expect(data).toEqual({ billing, shipping, tax_ids: [] });
+	expect(data).toMatchObject({ billing, shipping, tax_ids: [] });
 });
 
 it('lands on the saved order a first add left on the slot, not the temporary record it was called with', async () => {
@@ -179,4 +186,72 @@ it('lands on the saved order a first add left on the slot, not the temporary rec
 	expect(localPatch).toHaveBeenCalledWith(
 		expect.objectContaining({ document: saved, data: expect.objectContaining({ customer_id: 9 }) })
 	);
+});
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
+
+it('settles the target post-edit address, not the rendered order, without repricing products', async () => {
+	const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
+	const { settleAggregate, snapshotFromOrderJSON } = jest.requireActual('@wcpos/order-math');
+	const configForOrder = jest.fn((payload) =>
+		cartConfigForOrder({
+			settings: { ...config, calcTaxes: true, priceNumDecimals: 2, taxBasedOn: 'billing' },
+			rates: [
+				{ id: 1, country: 'AU', rate: '10', class: 'standard', shipping: true, priority: 1 },
+				{ id: 2, country: 'NZ', rate: '20', class: 'standard', shipping: true, priority: 1 },
+			],
+			baseLocation: { country: 'AU' },
+			order: payload,
+		})
+	);
+	jest.requireMock('./use-cart-config').useCartConfigForOrder.mockReturnValueOnce(configForOrder);
+	const product = {
+		product_id: 1,
+		quantity: 1,
+		subtotal: '10',
+		total: '10',
+		total_tax: '1',
+		subtotal_tax: '1',
+		taxes: [{ id: 1, total: '1', subtotal: '1' }],
+	};
+	const target = {
+		uuid: 'order-Y',
+		payload: {
+			billing: { country: 'AU' },
+			line_items: [product],
+			shipping_lines: [
+				{
+					method_id: 'flat_rate',
+					total: '10',
+				},
+			],
+		},
+		getLatest() {
+			return this;
+		},
+	};
+	const { result } = renderHook(() => useSetCartCustomer());
+	await act(async () => {
+		await result.current(target as never, {
+			billing: { country: 'NZ' },
+			shipping: undefined,
+			taxIds: null,
+		});
+	});
+	const after = { ...target.payload, billing: { country: 'NZ' }, shipping: undefined };
+	expect(configForOrder).toHaveBeenCalledWith(after);
+	expect(localPatch).toHaveBeenCalledTimes(1);
+	const { data } = localPatch.mock.calls[0][0];
+	expect(data).toMatchObject({
+		billing: { country: 'NZ' },
+		total: '23',
+		total_tax: '3',
+		shipping_tax: '2',
+	});
+	expect(data).toMatchObject(
+		settleAggregate(snapshotFromOrderJSON(after), configForOrder(after)).patch
+	);
+	expect(data).not.toHaveProperty('line_items');
 });

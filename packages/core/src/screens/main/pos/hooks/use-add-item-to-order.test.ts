@@ -5,6 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -88,7 +89,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 const order: Record<string, unknown> & {
@@ -128,7 +129,11 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 		completeEngineRecord(await mockInsertEngineResident(...args)),
 	patchEngineResident: async (...args: unknown[]) =>
 		completeEngineRecord(await mockPatchEngineResident(...args)),
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({
@@ -164,6 +169,52 @@ describe('useAddItemToOrder', () => {
 		order.toJSON = () => ({ payload: { ...order.payload } });
 		order.toMutableJSON = () => ({ payload: { ...order.payload } });
 	});
+
+	it.each([false, true])(
+		'settles resident and create money before birth (orphan: %s)',
+		async (orphan) => {
+			order.isNew = true;
+			const payload = { uuid: 'order-uuid', line_items: [] };
+			if (orphan)
+				mockFindEngineResident.mockResolvedValue({
+					payload,
+					toMutableJSON: () => ({ payload }),
+				});
+			mockInsertEngineResident.mockImplementation(async ({ payload }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			}));
+			mockPatchEngineResident.mockImplementation(async ({ changes }) => ({
+				payload: changes,
+				toMutableJSON: () => ({ payload: changes }),
+			}));
+			mockWrite.mockResolvedValue({ mutationId: 'birth' });
+			const { result } = renderHook(() => useAddItemToOrder());
+			await act(async () => {
+				await result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					subtotal_tax: '2',
+					total_tax: '2',
+					taxes: [{ id: 1, total: '2', subtotal: '2' }],
+				});
+			});
+			const money = {
+				total: '12',
+				total_tax: '2',
+				tax_lines: [expect.objectContaining({ rate_id: 1, tax_total: '2' })],
+			};
+			expect(
+				orphan
+					? mockPatchEngineResident.mock.calls[0][0].changes
+					: mockInsertEngineResident.mock.calls[0][0].payload
+			).toMatchObject(money);
+			expect(mockWrite).toHaveBeenCalledTimes(1);
+			expect(mockWrite.mock.calls[0][0]).toMatchObject({ operation: 'create', payload: money });
+		}
+	);
 
 	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
 		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
@@ -348,7 +399,9 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: resident,
-			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
+			data: expect.objectContaining({
+				line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })],
+			}),
 		});
 		// Stock is read on both adds; the guard sees the recovered resident's line because the
 		// lookup runs before the dispatch, and the second patch above carries both lines.
@@ -676,13 +729,13 @@ describe('useAddItemToOrder', () => {
 			expect.objectContaining({
 				collection: 'orders',
 				recordId: 'order-uuid',
-				changes: {
+				changes: expect.objectContaining({
 					line_items: [{ product_id: 1, quantity: 1 }, expect.objectContaining({ product_id: 2 })],
 					meta_data: expect.arrayContaining([
 						{ key: '_pos_user', value: '7' },
 						{ key: '_pos_store', value: '11' },
 					]),
-				},
+				}),
 			})
 		);
 		expect(mockWrite).toHaveBeenCalledTimes(1);
@@ -1039,3 +1092,5 @@ describe('useAddItemToOrder', () => {
 jest.mock('../../../../services/register/use-register', () => ({
 	useRegister: () => ({ id: 'till', sites: { site: { register_id: 'register' } } }),
 }));
+
+afterEach(() => expectSettledWrites(mockLocalPatch));

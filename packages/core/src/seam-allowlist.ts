@@ -916,7 +916,26 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/cart/new-customer-link-bridge.tsx :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: queue .findOne :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: database.collections :: 1',
+	'screens/main/pos/hooks/use-add-coupon.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-coupon.ts :: resident helper write :: useAddCoupon :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-quick-discount.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-quick-discount.ts :: resident helper write :: useAddQuickDiscount :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-coupon.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-coupon.ts :: resident helper write :: useRemoveCoupon :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-line-item.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-line-item.ts :: resident helper write :: useRemoveLineItem :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-set-cart-customer.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-set-cart-customer.ts :: resident helper write :: useSetCartCustomer :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-split-line-item.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-split-line-item.ts :: resident helper write :: useSplitLineItem :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write :: useUpdateCartLine :: useLocalMutation :: 1',
+	// Settlement result reads now go through the order-math accessor.
+	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 1',
+	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 2',
 ];
-export const SEAM_RETIRED_FLOOR = 12;
+export const SEAM_RETIRED_FLOOR = 30;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c966adf1491d7ee255a21b695a115289b356aa60fb85d50983fecccb78dad95f';
+	'f07dfd64d37ba293d1b8ebdb0239232a7ec6d9c1f3dd2ea610bd03365681791c';

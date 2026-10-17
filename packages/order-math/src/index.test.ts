@@ -41,6 +41,7 @@ test('public value surface is exactly the spec', () => {
 		// entry point rather than a flag that changes what settleCart returns.
 		'settleAggregate',
 		'settleCart',
+		'settlementPatch',
 		'settlesAtRoundedDue',
 		'snapshotFromOrderJSON',
 		'splitPlanMeta',
@@ -51,4 +52,9 @@ test('public value surface is exactly the spec', () => {
 		'withMetaReplaced',
 		'withSaleProvenance',
 	]);
+});
+
+test('settlementPatch returns the settlement money patch', () => {
+	const result = { patch: { total: '10.00' } } as api.SettleAggregateResult;
+	expect(api.settlementPatch(result)).toBe(result.patch);
 });

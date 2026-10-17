@@ -13,7 +13,7 @@ export {
 } from './snapshot';
 export type { CartSnapshot } from './snapshot';
 
-export { settleCart, settleAggregate } from './settle';
+export { settleCart, settleAggregate, settlementPatch } from './settle';
 export type {
 	SettleOptions,
 	SettlePatch,

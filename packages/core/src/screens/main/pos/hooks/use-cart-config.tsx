@@ -1,13 +1,17 @@
 import * as React from 'react';
 
-import { createCartConfig } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import type { CartConfig } from '@wcpos/order-math';
 
+import {
+	cartConfigForOrder,
+	cartConfigFromLocation,
+	type OrderPayload,
+} from '../commands/cart-config-for-order';
+import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import { useAppState } from '../../../../contexts/app-state';
 import { useExtraData } from '../../contexts/extra-data/use-extra-data';
 import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
-import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 
 /**
  * The single assembly point for `@wcpos/order-math`'s `CartConfig`.
@@ -22,8 +26,9 @@ import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from '../../hooks
  * is a dependency of the settlement subscription: a fresh object every render would
  * re-arm it on every render.
  */
-export const useCartConfig = (): CartConfig => {
-	const { rates } = useTaxLocation();
+const useCartConfigInputs = () => {
+	const baseLocation = useBaseTaxLocation();
+	const { country, state, city, postcode } = baseLocation;
 	const {
 		allRates,
 		shippingTaxClass,
@@ -34,6 +39,7 @@ export const useCartConfig = (): CartConfig => {
 	} = useTaxSettings();
 	const { store } = useAppState();
 	const { extraData } = useExtraData();
+	const taxBasedOn = useDocField(store, (value) => value.tax_based_on);
 	// `wc/v3 taxes/classes` order — standard first, then the merchant's own classes.
 	// This is WooCommerce's own candidate order for resolving the 'inherit' sentinel
 	// (`array_merge([''], WC_Tax::get_tax_class_slugs())`); the rate-derived list on
@@ -57,36 +63,83 @@ export const useCartConfig = (): CartConfig => {
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	return React.useMemo(
-		() =>
-			createCartConfig({
-				rates,
-				allRates,
+		() => ({
+			settings: {
+				shippingTaxClass,
 				calcTaxes,
 				pricesIncludeTax,
 				taxRoundAtSubtotal,
-				dp: priceNumDecimals,
-				// Round-trip, not redundancy: the store spells the standard class '' on the
-				// wire, the UI spells it 'standard', and this normalises either spelling to
-				// the wire form the engine's rate filter matches on. WooCommerce's 'inherit'
-				// sentinel is NOT a spelling of standard and survives untouched — the engine
-				// resolves it against the cart's line items.
-				shippingTaxClass:
-					shippingTaxClass === INHERIT_TAX_CLASS
-						? INHERIT_TAX_CLASS
-						: taxClassToWire(taxClassFromWire(shippingTaxClass)),
+				priceNumDecimals,
 				taxClassSlugs,
 				calcDiscountsSequentially,
-			}),
+				taxBasedOn,
+			},
+			rates: allRates,
+			baseLocation: { country, state, city, postcode },
+		}),
 		[
 			allRates,
-			calcDiscountsSequentially,
-			calcTaxes,
-			priceNumDecimals,
-			pricesIncludeTax,
-			rates,
 			shippingTaxClass,
-			taxClassSlugs,
+			calcTaxes,
+			pricesIncludeTax,
 			taxRoundAtSubtotal,
+			priceNumDecimals,
+			taxClassSlugs,
+			calcDiscountsSequentially,
+			taxBasedOn,
+			country,
+			state,
+			city,
+			postcode,
 		]
 	);
 };
+
+export const useCartConfigForOrder = () => {
+	const inputs = useCartConfigInputs();
+	return React.useCallback(
+		(order?: OrderPayload): CartConfig => cartConfigForOrder({ ...inputs, order }),
+		[inputs]
+	);
+};
+
+/** The location provider dedupes cart writes before they reach product tiles. */
+export const useCartConfig = (): CartConfig => {
+	const { settings, rates } = useCartConfigInputs();
+	const { location } = useTaxLocation();
+	return React.useMemo(
+		() => cartConfigFromLocation(settings, rates, location),
+		[settings, rates, location]
+	);
+};
+
+const CartConfigReaderContext = React.createContext<((order?: OrderPayload) => CartConfig) | null>(
+	null
+);
+
+/**
+ * Session-owned cart config: queued commands keep receiving settings after the
+ * component that queued them unmounts. Committed inputs are published after every
+ * render; the reader (held by a queued command long after the render that enqueued
+ * it) reads them at CALL time, inside the command's slot, never during render.
+ */
+export function CartConfigProvider({ children }: { children: React.ReactNode }) {
+	const inputs = useCartConfigInputs();
+	const latest = React.useRef({ inputs });
+	React.useLayoutEffect(() => {
+		latest.current = { inputs };
+	}, [inputs]);
+	const read = React.useCallback(
+		(order?: OrderPayload) => cartConfigForOrder({ ...latest.current.inputs, order }),
+		[]
+	);
+	return (
+		<CartConfigReaderContext.Provider value={read}>{children}</CartConfigReaderContext.Provider>
+	);
+}
+
+export function useCartConfigReader() {
+	const read = React.useContext(CartConfigReaderContext);
+	if (!read) throw new Error('useCartConfigReader requires CartConfigProvider');
+	return read;
+}

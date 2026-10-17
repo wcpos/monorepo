@@ -6,8 +6,8 @@ import { map } from 'rxjs/operators';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, type QueryHandle, useDocField, useRecordField } from '@wcpos/query';
-import { wooMetaCarrier } from '@wcpos/sync-core';
 
+import { orderTaxLocation } from '../../pos/commands/cart-config-for-order';
 import { filterTaxRates } from './tax-rates.helpers';
 import { useStoreSession } from '../../../../contexts/app-state';
 import {
@@ -210,14 +210,6 @@ function TaxSettingsFromRates({
 	return <TaxSettingsContext.Provider value={value}>{children}</TaxSettingsContext.Provider>;
 }
 
-function isTaxBasedOn(value: unknown): value is TaxBasedOn {
-	return value === 'base' || value === 'shipping' || value === 'billing';
-}
-
-function addressValue(value: unknown): string {
-	return typeof value === 'string' ? value : '';
-}
-
 /**
  * Order-dependent. Re-renders when the order identity changes, but the value it publishes
  * is deduped, so consumers only re-render when the tax basis or address actually moved.
@@ -257,35 +249,17 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	 * legacy flattened document face.
 	 */
 	const storeTaxBasedOn = useDocField(store, (value) => value.tax_based_on);
-	const override = wooMetaCarrier.taxBasedOnOverride(meta);
-	const taxBasedOn = (isTaxBasedOn(override) ? override : storeTaxBasedOn) as TaxBasedOn;
 	const hasOrder = Boolean(order);
-	const baseCountry = addressValue(baseLocation.country);
-	const baseState = addressValue(baseLocation.state);
-	const baseCity = addressValue(baseLocation.city);
-	const basePostcode = addressValue(baseLocation.postcode);
-
-	/**
-	 * The tax rates causes a render and recalculates the all the tax in the app,
-	 * so we want to make sure we only emit rates when they have actually changed
-	 */
-	const location = React.useMemo<TaxLocation>(() => {
-		if (!hasOrder || taxBasedOn === 'base') {
-			return {
-				country: baseCountry,
-				state: baseState,
-				city: baseCity,
-				postcode: basePostcode,
-			};
-		}
-		const address = taxBasedOn === 'billing' ? billing : shipping;
-		return {
-			country: addressValue(address?.country),
-			state: addressValue(address?.state),
-			city: addressValue(address?.city),
-			postcode: addressValue(address?.postcode),
-		};
-	}, [baseCity, baseCountry, basePostcode, baseState, billing, hasOrder, shipping, taxBasedOn]);
+	const { country, state, city, postcode } = baseLocation;
+	const { taxBasedOn, location } = React.useMemo(
+		() =>
+			orderTaxLocation(
+				{ country, state, city, postcode },
+				storeTaxBasedOn,
+				hasOrder ? { billing, shipping, meta_data: meta } : undefined
+			),
+		[country, state, city, postcode, storeTaxBasedOn, hasOrder, billing, shipping, meta]
+	);
 
 	/**
 	 * Filter tax rates based on address - store, billing or shipping
@@ -296,7 +270,7 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	}, [allRates, location]);
 
 	const value = React.useMemo<TaxLocationContextProps>(
-		() => ({ rates, taxBasedOn, location }),
+		() => ({ rates, taxBasedOn: taxBasedOn as TaxBasedOn, location }),
 		[rates, taxBasedOn, location]
 	);
 
