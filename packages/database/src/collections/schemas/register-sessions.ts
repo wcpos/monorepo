@@ -42,6 +42,30 @@ export const registerSessionsLiteral = {
 		// Null means an older server omitted membership; an empty array is an empty snapshot.
 		server_order_ids: { type: ['array', 'null'], items: { type: 'number' }, default: null },
 		server_ledger_row_ids: { type: ['array', 'null'], items: { type: 'string' }, default: null },
+		server_refund_ids: { type: ['array', 'null'], items: { type: 'number' }, default: null },
+		server_ledger_rows: {
+			type: ['array', 'null'],
+			default: null,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string' },
+					updated_at_gmt: { type: 'string' },
+					status: { type: 'string' },
+				},
+			},
+		},
+		server_refunds: {
+			type: ['array', 'null'],
+			default: null,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'number' },
+					updated_at_gmt: { type: 'string' },
+				},
+			},
+		},
 		server_expected_at: { type: ['string', 'null'], default: null },
 		server_sales_count: { type: ['number', 'null'], default: null },
 		...sessionOutboxProperties,

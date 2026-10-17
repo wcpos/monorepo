@@ -1531,3 +1531,62 @@ it.each([
 		);
 	}
 );
+
+it.each([
+	[[], '2026-09-15T09:00:00', '80.0000'],
+	[[20], '2026-09-15T10:00:00', '100'],
+	[null, '2026-09-15T10:00:00', '80.0000'],
+	[null, '2026-09-15T08:00:00', '100'],
+] as const)(
+	'uses snapshot refund ids %j at %s for display and closure',
+	async (ids, createdAt, cash) => {
+		entries = [];
+		active = [{ ...active[0], server_refund_ids: ids }];
+		const refund = refundHit();
+		refund.record.payload.date_created_gmt = createdAt;
+		mockOrders.next([parentHit('old-session', false)]);
+		mockRefunds.next([refund]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe(cash);
+		jest
+			.mocked(actions.closeSession)
+			.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+		await act(async () => {
+			await result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).toHaveBeenCalledWith(
+			expect.objectContaining({ tillExpected: { cash } })
+		);
+	}
+);
+
+it.each([
+	['ledger', '2026-09-15T08:00:01', 1],
+	['refund', '2026-09-15T08:00:01', 1],
+	['ledger', '2026-09-15T10:00:00', 0],
+	['refund', '2026-09-15T10:00:00', 0],
+] as const)(
+	'refreshes edited %s version %s, not snapshot time',
+	async (kind, updated, requests) => {
+		entries = [];
+		const version = requests ? '2026-09-15T08:00:00' : updated;
+		active = [
+			{
+				...active[0],
+				server_ledger_row_ids: ['card'],
+				server_refund_ids: [20],
+				server_ledger_rows: [{ id: 'card', updated_at_gmt: version, status: 'captured' }],
+				server_refunds: [{ id: 20, updated_at_gmt: version }],
+			},
+		];
+		mockOrders.next([parentHit('session', false, kind === 'ledger' ? updated : version)]);
+		const refund = refundHit('30');
+		refund.record.payload.date_created_gmt = '2026-09-15T08:00:00';
+		refund.record.payload.date_modified_gmt = kind === 'refund' ? updated : version;
+		mockRefunds.next([refund]);
+		const result = await settled();
+		expect(result.current.expected.cash).toBe('100');
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(requests);
+	}
+);

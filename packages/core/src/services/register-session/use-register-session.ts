@@ -50,6 +50,7 @@ function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
 }
 
 function afterBaseline(at?: string | null, baselineAt?: string | null) {
+	baselineAt = baselineAt?.replace(/Z?$/, 'Z');
 	return (
 		!!at && !!baselineAt && Date.parse(at.endsWith('Z') ? at : `${at}Z`) > Date.parse(baselineAt)
 	);
@@ -71,11 +72,14 @@ function baselineContains(
 	movements: readonly { id: string }[],
 	baselineAt?: string | null,
 	movementIds: readonly string[] = [],
-	ledgerRowIds?: readonly string[] | null
+	ledgerRowIds?: readonly string[] | null,
+	refundIds?: readonly number[] | null
 ) {
 	if (!baselineAt) return undefined;
 	const pending = new Set<string | number | null | undefined>([
-		...refunds.filter((row) => outsideBaseline(row, baselineAt)).map((row) => row.payload.id),
+		...refunds
+			.filter((row) => outsideBaseline(row, baselineAt, refundIds))
+			.map((row) => row.payload.id),
 		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
 		...orders.flatMap((order) =>
 			readLedger(order.payload.meta_data)
@@ -344,14 +348,24 @@ export function useRegisterSession() {
 		entries,
 		session?.server_expected_at,
 		session?.server_movement_ids,
-		session?.server_ledger_row_ids
+		session?.server_ledger_row_ids,
+		session?.server_refund_ids
 	);
 	// Offline edits of synced captured legs are rare (a void needs the server). Keep
 	// the baseline plus other deltas until refreshed rather than inventing prior state:
 	// baseline-known rows cancel in deriveUnsyncedDelta even after amount/status edits.
-	const baselineStale = !!drawerInput?.ledgerRowsBySession.some(
-		(row) => baselineHas?.(row.id) && afterBaseline(row.updated_at_gmt, session?.server_expected_at)
-	);
+	// Compare each row's snapshot version; older plugins fall back to the snapshot time.
+	const versions = [...(session?.server_ledger_rows ?? []), ...(session?.server_refunds ?? [])];
+	const baselineVersion = (id: string | number | undefined) =>
+		versions.find((row) => row.id === id)?.updated_at_gmt ?? session?.server_expected_at;
+	const baselineStale =
+		!!drawerInput?.ledgerRowsBySession.some(
+			(row) => baselineHas?.(row.id) && afterBaseline(row.updated_at_gmt, baselineVersion(row.id))
+		) ||
+		!!data?.refundRecords.some(
+			(row) =>
+				baselineHas?.(row.id) && afterBaseline(row.date_modified_gmt, baselineVersion(row.id))
+		);
 	// Ask the existing bridge to refresh external state; it debounces requests across consumers.
 	React.useEffect(() => {
 		if (baselineStale && sessions && binding.registerId)
@@ -515,7 +529,8 @@ export function useRegisterSession() {
 							entries,
 							latestSession.server_expected_at,
 							latestSession.server_movement_ids,
-							latestSession.server_ledger_row_ids
+							latestSession.server_ledger_row_ids,
+							latestSession.server_refund_ids
 						)
 					),
 					userDB,

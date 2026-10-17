@@ -41,6 +41,9 @@ export async function refreshSessions({
 			as_of_gmt?: string;
 			order_ids?: number[];
 			ledger_row_ids?: string[];
+			refund_ids?: number[];
+			ledger_rows?: RegisterSessionRow['server_ledger_rows'];
+			refunds?: RegisterSessionRow['server_refunds'];
 			movements: CashMovementRow[];
 			// Omitted for a cashier without the reports capability: the count is blind.
 			expected?: Record<string, string>;
@@ -59,6 +62,9 @@ export async function refreshSessions({
 			server_movement_ids: (detail.movements ?? []).map(({ id }) => id),
 			server_order_ids: detail.order_ids ?? null,
 			server_ledger_row_ids: detail.ledger_row_ids ?? null,
+			server_refund_ids: detail.refund_ids ?? null,
+			server_ledger_rows: detail.ledger_rows ?? null,
+			server_refunds: detail.refunds ?? null,
 			server_sales_count: detail.sales_count ?? null,
 		});
 		for (const movement of detail.movements ?? []) {

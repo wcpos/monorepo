@@ -965,8 +965,14 @@ it('persists snapshot membership arrays and clears them when an older detail omi
 	const row = await open();
 	await row.incrementalPatch({ sync_status: 'synced' });
 	for (const ids of [
-		{ order_ids: [1, 2], ledger_row_ids: ['cash', 'card'] },
-		{ order_ids: [], ledger_row_ids: [] },
+		{
+			order_ids: [1, 2],
+			ledger_row_ids: ['cash', 'card'],
+			refund_ids: [20],
+			ledger_rows: [{ id: 'cash', updated_at_gmt: '2026-09-15T08:00:00', status: 'captured' }],
+			refunds: [{ id: 20, updated_at_gmt: '2026-09-15T08:00:00' }],
+		},
+		{ order_ids: [], ledger_row_ids: [], refund_ids: [], ledger_rows: [], refunds: [] },
 		{},
 	]) {
 		http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
@@ -988,6 +994,9 @@ it('persists snapshot membership arrays and clears them when an older detail omi
 		expect(row.getLatest().toJSON()).toMatchObject({
 			server_order_ids: ids.order_ids ?? null,
 			server_ledger_row_ids: ids.ledger_row_ids ?? null,
+			server_refund_ids: ids.refund_ids ?? null,
+			server_ledger_rows: ids.ledger_rows ?? null,
+			server_refunds: ids.refunds ?? null,
 		});
 	}
 });
