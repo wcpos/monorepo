@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { useAddCoupon } from './use-add-coupon';
 
 jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
@@ -457,3 +458,7 @@ describe('useAddCoupon per-user usage limits', () => {
 		await expect(result.current.addCoupon('once')).resolves.toEqual({ success: true });
 	});
 });
+
+afterEach(() => expectSettledWrites(localPatch));
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

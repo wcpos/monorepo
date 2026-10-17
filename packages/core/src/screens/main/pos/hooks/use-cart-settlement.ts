@@ -9,7 +9,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
-import { useCartConfig } from './use-cart-config';
+import { useCartConfig, useCartConfigForOrder } from './use-cart-config';
 import { readQuickDiscountIntent } from './quick-discount';
 import { useCouponContext } from './use-coupon-context';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -145,6 +145,7 @@ export const useCartSettlement = () => {
 	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
 	const reportEngineWarnings = useReportEngineWarnings();
 	const cartConfig = useCartConfig();
+	const configForOrder = useCartConfigForOrder();
 	const t = useT();
 
 	/**
@@ -267,7 +268,7 @@ export const useCartSettlement = () => {
 		async (freshOrder: CurrentOrderRecord) => {
 			const result = settleAggregate(
 				snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
-				cartConfig
+				configForOrder(freshOrder.payload)
 			);
 			// Before the `changed` bail, not after: a cart whose money is already
 			// correct can still be resting on a tax rate the store has dropped, and
@@ -288,7 +289,7 @@ export const useCartSettlement = () => {
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[cartConfig, localPatch, reportEngineWarnings]
+		[configForOrder, localPatch, reportEngineWarnings]
 	);
 
 	/**
@@ -513,7 +514,12 @@ export const useCartSettlement = () => {
 		// server's now and the POS stops deriving it. Both passes, not just the money
 		// one — a coupon replay rewrites line-level `total`/`total_tax`, which is the
 		// same claim by another route.
-		if (serverOwnsMoney) {
+		if (
+			serverOwnsMoney ||
+			freshOrder.payload.meta_data?.some(
+				(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
+			)
+		) {
 			disarmReplayContinuation();
 			return;
 		}

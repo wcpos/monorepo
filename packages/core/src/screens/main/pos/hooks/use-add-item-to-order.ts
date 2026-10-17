@@ -6,6 +6,7 @@ import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
 
+import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
@@ -22,7 +23,6 @@ import {
 	findEngineResident,
 	insertEngineResident,
 	patchEngineResident,
-	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -79,7 +79,7 @@ export const useAddItemToOrder = () => {
 	// render-time subscription re-rendered the whole grid on every cart write.
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const { ctx, actor } = useActionContext();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();

@@ -15,7 +15,7 @@ import {
 	type ActionRefusal,
 	dispatchAction,
 } from '../../../../extensions/actions';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
@@ -89,7 +89,7 @@ const lineInfo = {
  */
 export const useUpdateCartLine = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { ctx, actor } = useActionContext();

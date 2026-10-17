@@ -1,13 +1,14 @@
 import * as React from 'react';
 
-import { createCartConfig } from '@wcpos/order-math';
-import { useDocField } from '@wcpos/query';
+import { useDocField, useRecordField } from '@wcpos/query';
 import type { CartConfig } from '@wcpos/order-math';
 
+import { cartConfigForOrder, type OrderPayload } from '../commands/cart-config-for-order';
+import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
+import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useExtraData } from '../../contexts/extra-data/use-extra-data';
-import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
-import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
+import { useTaxSettings } from '../../contexts/tax-rates';
 
 /**
  * The single assembly point for `@wcpos/order-math`'s `CartConfig`.
@@ -22,8 +23,9 @@ import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from '../../hooks
  * is a dependency of the settlement subscription: a fresh object every render would
  * re-arm it on every render.
  */
-export const useCartConfig = (): CartConfig => {
-	const { rates } = useTaxLocation();
+export const useCartConfigForOrder = () => {
+	const baseLocation = useBaseTaxLocation();
+	const { country, state, city, postcode } = baseLocation;
 	const {
 		allRates,
 		shippingTaxClass,
@@ -34,6 +36,7 @@ export const useCartConfig = (): CartConfig => {
 	} = useTaxSettings();
 	const { store } = useAppState();
 	const { extraData } = useExtraData();
+	const taxBasedOn = useDocField(store, (value) => value.tax_based_on);
 	// `wc/v3 taxes/classes` order — standard first, then the merchant's own classes.
 	// This is WooCommerce's own candidate order for resolving the 'inherit' sentinel
 	// (`array_merge([''], WC_Tax::get_tax_class_slugs())`); the rate-derived list on
@@ -56,37 +59,51 @@ export const useCartConfig = (): CartConfig => {
 	const legacySequential = useDocField(store, (value) => value.calc_discounts_sequentially);
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
-	return React.useMemo(
-		() =>
-			createCartConfig({
-				rates,
-				allRates,
-				calcTaxes,
-				pricesIncludeTax,
-				taxRoundAtSubtotal,
-				dp: priceNumDecimals,
-				// Round-trip, not redundancy: the store spells the standard class '' on the
-				// wire, the UI spells it 'standard', and this normalises either spelling to
-				// the wire form the engine's rate filter matches on. WooCommerce's 'inherit'
-				// sentinel is NOT a spelling of standard and survives untouched — the engine
-				// resolves it against the cart's line items.
-				shippingTaxClass:
-					shippingTaxClass === INHERIT_TAX_CLASS
-						? INHERIT_TAX_CLASS
-						: taxClassToWire(taxClassFromWire(shippingTaxClass)),
-				taxClassSlugs,
-				calcDiscountsSequentially,
+	return React.useCallback(
+		(order?: OrderPayload): CartConfig =>
+			cartConfigForOrder({
+				settings: {
+					shippingTaxClass,
+					calcTaxes,
+					pricesIncludeTax,
+					taxRoundAtSubtotal,
+					priceNumDecimals,
+					taxClassSlugs,
+					calcDiscountsSequentially,
+					taxBasedOn,
+				},
+				rates: allRates,
+				baseLocation: { country, state, city, postcode },
+				order,
 			}),
 		[
 			allRates,
-			calcDiscountsSequentially,
-			calcTaxes,
-			priceNumDecimals,
-			pricesIncludeTax,
-			rates,
 			shippingTaxClass,
-			taxClassSlugs,
+			calcTaxes,
+			pricesIncludeTax,
 			taxRoundAtSubtotal,
+			priceNumDecimals,
+			taxClassSlugs,
+			calcDiscountsSequentially,
+			taxBasedOn,
+			country,
+			state,
+			city,
+			postcode,
 		]
+	);
+};
+
+/** Memoised on settlement inputs, not unrelated writes to the current order. */
+export const useCartConfig = (): CartConfig => {
+	const configForOrder = useCartConfigForOrder();
+	const order = useCurrentOrderOptional();
+	const billing = useRecordField(order, (record) => record.payload.billing);
+	const shipping = useRecordField(order, (record) => record.payload.shipping);
+	const meta_data = useRecordField(order, (record) => record.payload.meta_data);
+	const hasOrder = Boolean(order);
+	return React.useMemo(
+		() => configForOrder(hasOrder ? { billing, shipping, meta_data } : undefined),
+		[configForOrder, hasOrder, billing, shipping, meta_data]
 	);
 };

@@ -321,7 +321,20 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		)
 			report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
-		if (mutatorNames.has(name)) report('record mutator', node);
+		let access = node;
+		while (access.parent && unwrap(access.parent) === node) access = access.parent;
+		if (
+			['bind', 'call', 'apply'].some((method) => memberReceiver(access.parent, method) === access)
+		)
+			access = access.parent;
+		const called = ts.isCallExpression(access.parent) && access.parent.expression === access;
+		const owner = unwrap(receiver);
+		const recordReceiver =
+			owner &&
+			(isChangeStreamReceiver(owner) ||
+				(ts.isIdentifier(owner) && (owner.text === 'doc' || owner.text === 'record')));
+		// A result's data field (e.g. settleAggregate().patch) is not a record mutation.
+		if (mutatorNames.has(name) && (called || recordReceiver)) report('record mutator', node);
 		if (rawQueryNames.has(name)) report('raw query construction', node);
 		if ((name === '$' || name === 'eventBulks$') && receiver && isChangeStreamReceiver(receiver))
 			report('raw change stream', node);
@@ -733,6 +746,28 @@ it.each([
 	expect(violations(source)).toEqual([]);
 });
 
+it.each([
+	'result.patch;',
+	'result["patch"];',
+	'const { patch } = settleAggregate(snapshot, config);',
+	'({ patch } = result);',
+])('allows a non-record mutator-named data read: %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+it.each(['doc.patch({});', 'doc.incrementalPatch({});', 'result.patch({});'])(
+	'fences a mutator call: %s',
+	(source) => {
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+	}
+);
+
+it('fences a mutator bound for a later call', () => {
+	expect(violations('wpUser.incrementalPatch.bind(wpUser);').map(({ rule }) => rule)).toEqual([
+		'record mutator',
+	]);
+});
+
 // Every mutator spelling is fenced across calls, extraction and binding patterns.
 it.each(
 	(
@@ -813,7 +848,9 @@ it('walks TSX and nested template expressions but ignores string and comment con
 
 it('reports the full accessed AST text so fingerprints distinguish long accesses', () => {
 	const source = `${'receiver'.repeat(20)}.remove`;
-	expect(violations(source)).toEqual([{ rule: 'record mutator', declaration: '', text: source }]);
+	expect(violations(`${source}()`)).toEqual([
+		{ rule: 'record mutator', declaration: '', text: source },
+	]);
 });
 
 // Engine methods are fenced by receiver, not on unrelated objects with the same names.

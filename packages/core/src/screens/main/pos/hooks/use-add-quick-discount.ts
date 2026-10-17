@@ -25,13 +25,13 @@ import {
 import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 export const useAddQuickDiscount = () => {
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { recalculate } = useRecalculateCoupons();
 	const { ctx, actor } = useActionContext();

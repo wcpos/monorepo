@@ -216,3 +216,5 @@ describe('EditCartCustomerForm', () => {
 		expect(screen.queryByTestId('pos_cart.save_to_order_customer')).toBeNull();
 	});
 });
+
+jest.mock('../hooks/use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

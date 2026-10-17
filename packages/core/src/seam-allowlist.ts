@@ -916,7 +916,34 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	"screens/main/pos/cart/new-customer-link-bridge.tsx :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: queue .findOne :: 1',
 	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: database.collections :: 1',
+	'screens/main/pos/hooks/use-add-coupon.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-coupon.ts :: resident helper write :: useAddCoupon :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-item-to-order.ts :: resident helper write :: useAddItemToOrder :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-quick-discount.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-add-quick-discount.ts :: resident helper write :: useAddQuickDiscount :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-coupon.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-coupon.ts :: resident helper write :: useRemoveCoupon :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-line-item.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-remove-line-item.ts :: resident helper write :: useRemoveLineItem :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-set-cart-customer.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-set-cart-customer.ts :: resident helper write :: useSetCartCustomer :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-split-line-item.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-split-line-item.ts :: resident helper write :: useSplitLineItem :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write ::  :: useLocalMutation :: 1',
+	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write :: useUpdateCartLine :: useLocalMutation :: 1',
+	// Scanner false positives: non-record data/method reads, not RxDB mutators.
+	'screens/main/components/customer/tax-ids-form.tsx :: record mutator :: TaxIdsForm :: remove :: 1',
+	'screens/main/components/meta-data-form.tsx :: record mutator :: MetaDataForm :: remove :: 1',
+	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
+	'screens/main/coupons/index.tsx :: record mutator :: CouponsList :: patch :: 1',
+	'screens/main/pos/cart/edit-cart-customer.tsx :: record mutator :: EditCartCustomerForm :: patch :: 1',
+	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 1',
+	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 2',
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: productsPatch :: 1',
+	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: variationsPatch :: 1',
+	'screens/main/settings/barcode-scanning/test-panel.tsx :: record mutator :: TestPanel :: suggestion.patch :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 12;
+export const SEAM_RETIRED_FLOOR = 38;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'c966adf1491d7ee255a21b695a115289b356aa60fb85d50983fecccb78dad95f';
+	'2f3048320479195972156ab8da7a5c6fe8e80d884a10d8bf1e2326149f42c184';

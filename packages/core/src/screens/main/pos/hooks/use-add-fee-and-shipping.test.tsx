@@ -26,7 +26,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
 });
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/current-order', () => ({

@@ -139,6 +139,9 @@ jest.mock('../contexts/current-order', () => ({
 					},
 				];
 				return {
+					getLatest() {
+						return this;
+					},
 					uuid: 'order-uuid',
 					payload: { id: 17, line_items: lineItems },
 					toMutableJSON: () => ({ payload: { line_items: lineItems } }),
@@ -172,7 +175,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
 });
 
 // Mock useLineItemData

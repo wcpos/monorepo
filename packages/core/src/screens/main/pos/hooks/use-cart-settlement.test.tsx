@@ -84,10 +84,12 @@ jest.mock('@wcpos/query', () => ({
 		selector: (value: {
 			woocommerce_calc_discounts_sequentially: string;
 			calc_discounts_sequentially: string;
+			tax_based_on: string;
 		}) => unknown
 	) =>
 		selector({
 			woocommerce_calc_discounts_sequentially: 'no',
+			tax_based_on: 'billing',
 			calc_discounts_sequentially: 'no',
 		}),
 }));
@@ -374,6 +376,53 @@ describe('useCartSettlement reference demand (#952)', () => {
 		shippingLines$.next([]);
 		revision = buildRevision();
 		currentOrderRecord = buildCurrentOrderRecord();
+	});
+
+	it('does not write after a command has persisted the same settled aggregate', async () => {
+		allRates = [{ id: 2, country: 'NZ', rate: '20', class: 'standard', shipping: true }];
+		shippingLines$.next([{ method_id: 'flat_rate', total: '10' }]);
+		const math = jest.requireActual('@wcpos/order-math');
+		settleAggregate.mockImplementation(math.settleAggregate);
+		const { settleCartWrite } = jest.requireActual('../commands/settle-cart-write');
+		const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
+		await settleCartWrite(
+			{ document: currentOrderRecord, data: { billing: { country: 'NZ' } } },
+			{
+				localPatch: ({ data }: LocalPatchArgs) => {
+					revision = { ...revision, ...data };
+					shippingLines$.next(data.shipping_lines as unknown[]);
+				},
+				configForOrder: (order: Record<string, unknown>) =>
+					cartConfigForOrder({
+						settings: {
+							calcTaxes: true,
+							taxBasedOn: 'billing',
+							pricesIncludeTax: false,
+							taxRoundAtSubtotal: false,
+							priceNumDecimals: 2,
+							shippingTaxClass: '',
+							taxClassSlugs: [],
+							calcDiscountsSequentially: false,
+						},
+						rates: allRates,
+						baseLocation: {},
+						order,
+					}),
+				serverOwnsMoney: () => false,
+			}
+		);
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		expect(settleAggregate).toHaveReturnedWith(expect.objectContaining({ changed: false }));
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('stands down when the order payload says the server owns money', async () => {
+		revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		expect(settleAggregate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', async () => {

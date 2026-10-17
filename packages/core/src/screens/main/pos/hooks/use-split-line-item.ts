@@ -13,7 +13,7 @@ import { reducedStockQuantity } from './stock-guard';
 import { useActionContext } from './use-action-context';
 import { useCartConfig } from './use-cart-config';
 import { dispatchAction } from '../../../../extensions/actions';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
@@ -85,7 +85,7 @@ function splitLine(lineItemToSplit: LineItem, cartConfig: ReturnType<typeof useC
 
 export const useSplitLineItem = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { ctx, actor } = useActionContext();

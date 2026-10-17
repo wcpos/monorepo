@@ -5,6 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
+import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
 import { resetActionHookStrikes } from '../../../../extensions/actions';
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -88,7 +89,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
 });
 
 const order: Record<string, unknown> & {
@@ -348,7 +349,9 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: resident,
-			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
+			data: expect.objectContaining({
+				line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })],
+			}),
 		});
 		// Stock is read on both adds; the guard sees the recovered resident's line because the
 		// lookup runs before the dispatch, and the second patch above carries both lines.
@@ -1039,3 +1042,5 @@ describe('useAddItemToOrder', () => {
 jest.mock('../../../../services/register/use-register', () => ({
 	useRegister: () => ({ id: 'till', sites: { site: { register_id: 'register' } } }),
 }));
+
+afterEach(() => expectSettledWrites(mockLocalPatch));

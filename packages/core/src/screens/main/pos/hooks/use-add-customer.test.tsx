@@ -194,3 +194,5 @@ describe('useAddCustomer', () => {
 		expect(getLogger([]).success).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));

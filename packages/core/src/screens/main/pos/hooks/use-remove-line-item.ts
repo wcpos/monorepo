@@ -10,7 +10,7 @@ import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { useT } from '../../../../contexts/translations';
 import { dispatchAction } from '../../../../extensions/actions';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCartWrite } from '../commands/use-cart-write';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 import type { OrderMutationContext } from './order-mutation-queue';
@@ -29,7 +29,7 @@ type LineItem =
  */
 export const useRemoveLineItem = () => {
 	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useLocalMutation();
+	const { localPatch } = useCartWrite();
 	const { ctx, actor } = useActionContext();
 	const t = useT();
 
