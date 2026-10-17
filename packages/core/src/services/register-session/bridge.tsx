@@ -43,6 +43,8 @@ export function RegisterSessionBridge() {
 	// One cycle failing is a blip; the same cycle still failing a minute later is the merchant's
 	// problem. The rubric's terminal-outcome rule puts the verdict here, where the arc is visible.
 	const consecutiveFailures = React.useRef(0);
+	const inFlight = React.useRef(false);
+	const rerun = React.useRef<(() => void) | null>(null);
 	// Imperative outbox delivery has mount/connectivity and timer triggers, not render state.
 	React.useEffect(() => {
 		if (!sessions || !movements || !closures) return;
@@ -110,10 +112,24 @@ export function RegisterSessionBridge() {
 				consecutiveFailures: failures,
 			});
 		};
-		const cycle = () =>
-			sync().then(() => {
-				consecutiveFailures.current = 0;
-			}, report);
+		const cycle = () => {
+			// Coalesce triggers so an older response cannot overwrite a newer snapshot.
+			if (inFlight.current) {
+				rerun.current = cycle;
+				return;
+			}
+			inFlight.current = true;
+			void sync()
+				.then(() => {
+					consecutiveFailures.current = 0;
+				}, report)
+				.finally(() => {
+					inFlight.current = false;
+					const next = rerun.current;
+					rerun.current = null;
+					next?.();
+				});
+		};
 		const refreshRequests = sessionRefreshRequests
 			.pipe(
 				filter((request) => request.sessions === sessions && request.registerId === registerId),
@@ -125,6 +141,7 @@ export function RegisterSessionBridge() {
 			void cycle();
 		}, 60_000);
 		return () => {
+			if (rerun.current === cycle) rerun.current = null;
 			clearInterval(tick);
 			refreshRequests.unsubscribe();
 		};

@@ -362,7 +362,7 @@ export function useRegisterSession() {
 		!!drawerInput?.ledgerRowsBySession.some(
 			(row) => baselineHas?.(row.id) && afterBaseline(row.updated_at_gmt, baselineVersion(row.id))
 		) ||
-		!!data?.refundRecords.some(
+		(data?.refundRecords ?? []).some(
 			(row) =>
 				baselineHas?.(row.id) && afterBaseline(row.date_modified_gmt, baselineVersion(row.id))
 		);

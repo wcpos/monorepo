@@ -239,9 +239,14 @@ it('recovers only an interrupted local close; imported history and written closu
 		entries: [],
 		orders: { hits: [] },
 		closureRows: [] as unknown[],
+		refundRecords: [],
 	};
 	observed = data;
 	const view = renderHook(() => useRegisterSession());
+	// An older emission without refund records must also remain usable.
+	observed = { ...data, refundRecords: undefined };
+	view.rerender();
+	observed = data;
 	// Imported closed history: synced, no local closure row.
 	expect(view.result.current.session).toBeNull();
 	// A close this till made whose closure write was interrupted: pending, no closure row.
@@ -266,5 +271,39 @@ it('debounces snapshot refresh requests through the existing bridge cycle', asyn
 		mockRefreshRequests.next({ sessions, registerId: 'register' });
 		await jest.advanceTimersByTimeAsync(500);
 	});
+	expect(refresh).toHaveBeenCalledTimes(2);
+});
+
+it('coalesces mid-cycle invalidations without overlapping or overwriting the later snapshot', async () => {
+	const finish: (() => void)[] = [];
+	let snapshot = 0;
+	let active = 0;
+	let peak = 0;
+	refresh.mockImplementation(() => {
+		const version = refresh.mock.calls.length;
+		peak = Math.max(peak, ++active);
+		return new Promise<void>((resolve) =>
+			finish.push(() => {
+				snapshot = version;
+				active--;
+				resolve();
+			})
+		);
+	});
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+	for (let i = 0; i < 2; i++) {
+		await act(async () => {
+			mockRefreshRequests.next({ sessions, registerId: 'register' });
+			await jest.advanceTimersByTimeAsync(250);
+		});
+	}
+	expect(refresh).toHaveBeenCalledTimes(1);
+	await act(async () => finish[0]());
+	expect(refresh).toHaveBeenCalledTimes(2);
+	expect(snapshot).toBe(1);
+	await act(async () => finish[1]());
+	expect(peak).toBe(1);
+	expect(snapshot).toBe(2);
 	expect(refresh).toHaveBeenCalledTimes(2);
 });
