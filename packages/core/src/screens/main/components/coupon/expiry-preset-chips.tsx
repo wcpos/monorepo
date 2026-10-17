@@ -38,6 +38,8 @@ export function ExpiryPresetChips({ value, onChange }: ExpiryPresetChipsProps) {
 				<Chip
 					key={preset.key}
 					label={preset.label}
+					// A preset reads as picked while the field holds the date it sets today.
+					on={value === expiryPresetToDate(preset.key, timezone)}
 					onPress={() => onChange(expiryPresetToDate(preset.key, timezone))}
 					testID={`coupon-expiry-${preset.key}`}
 				/>

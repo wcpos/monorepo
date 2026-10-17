@@ -172,6 +172,9 @@ function TermChips<C extends 'tags' | 'brands'>({
 					<Chip
 						key={id}
 						label={decode(record?.payload.name ?? String(id))}
+						// The whole chip removes the term, as the button it replaced did; the label
+						// half is never a focusable button that does nothing.
+						onPress={() => onRemove(id)}
 						onClear={() => onRemove(id)}
 						clearTestID={`quick-filter-term-remove-${id}`}
 					/>
