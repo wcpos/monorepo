@@ -10,7 +10,7 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 
-it('keeps the shadow and rounded header while quieting the title and insets', () => {
+it('is flat with a rounded header while quieting the title and insets', () => {
 	const { container } = render(
 		<Card>
 			<CardHeader>
@@ -21,7 +21,7 @@ it('keeps the shadow and rounded header while quieting the title and insets', ()
 		</Card>
 	);
 	const card = container.firstElementChild!;
-	expect(card).toHaveClass('shadow-md');
+	expect(card.className).not.toContain('shadow');
 	expect(card.children[0]).toHaveClass('p-4', 'rounded-t-lg');
 	expect(card.children[1]).toHaveClass('p-4', 'pt-0');
 	expect(card.children[2]).toHaveClass('p-4', 'pt-0');

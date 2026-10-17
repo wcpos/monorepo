@@ -39,7 +39,7 @@ export function ElectronBtPicker({
 			key={d.id}
 			testID={`electron-bt-device-${d.id}`}
 			onPress={() => onSelect(d.id)}
-			className={`flex-row items-center gap-2 rounded-md border p-2 ${
+			className={`flex-row items-center gap-2 rounded-lg border p-2 ${
 				isLikely ? 'border-primary bg-primary/5' : 'border-border'
 			}`}
 		>

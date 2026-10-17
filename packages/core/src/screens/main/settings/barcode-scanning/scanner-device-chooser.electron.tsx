@@ -146,7 +146,7 @@ export function ScannerDeviceChooser() {
 						key={device.id}
 						testID={`scanner-device-${device.id}`}
 						onPress={() => reply(device.id)}
-						className="border-border flex-row items-center gap-2 rounded-md border p-2"
+						className="border-border flex-row items-center gap-2 rounded-lg border p-2"
 					>
 						<Text className="text-sm">{device.name}</Text>
 					</Pressable>
