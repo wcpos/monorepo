@@ -123,10 +123,15 @@ jest.mock('../health/components', () => ({
 			{code}
 		</button>
 	),
-	HairlineHeaderCell: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	HairlineHeaderRow: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	LevelIndicator: () => <span />,
 }));
+// The shared table pulls the pulse row's worklets into jest; the heads are plain here.
+jest.mock('@wcpos/components/table', () => {
+	function Head({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
+		return <div data-testid={testID}>{children}</div>;
+	}
+	return { TableHead: Head, TableHeader: Head, TableRow: Head };
+});
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));

@@ -11,6 +11,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
 import { Suspense } from '@wcpos/components/suspense';
+import { TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { QueryHandle } from '@wcpos/query';
@@ -18,13 +19,7 @@ import type { QueryHandle } from '@wcpos/query';
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot } from '../../../query';
-import {
-	CodeChip,
-	HairlineHeaderCell,
-	HairlineHeaderRow,
-	LevelIndicator,
-	type LevelKind,
-} from '../health/components';
+import { CodeChip, LevelIndicator, type LevelKind } from '../health/components';
 import { useEventTitle } from './event-title';
 import {
 	chainMarkedIds,
@@ -348,23 +343,27 @@ export function Ledger({
 
 	return (
 		<VStack testID="logs-ledger" className="min-h-0 flex-1 gap-0">
-			<HairlineHeaderRow className="hidden pl-2 md:flex">
-				<HairlineHeaderCell testID="logs-heading-time" className="w-20">
-					{t('health.logs.col_time')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-level" className="w-16">
-					{t('health.logs.col_level')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-event" className="flex-1">
-					{t('health.logs.col_event')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-took" className="w-16 text-right">
-					{t('health.logs.col_took')}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-status" className="w-32 text-right">
-					{t('health.logs.col_status')}
-				</HairlineHeaderCell>
-			</HairlineHeaderRow>
+			{/* The shared table head, flush (`px-0`) over the rows' own `gap-3` gutter; the
+			    transparent left edge is the rows' chain mark, so the heads sit over their cells. */}
+			<TableHeader className="hidden md:flex">
+				<TableRow className="items-center gap-3 border-l-2 border-l-transparent pl-2">
+					<TableHead testID="logs-heading-time" className="w-20 flex-none px-0">
+						<Text>{t('health.logs.col_time')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-level" className="w-16 flex-none px-0">
+						<Text>{t('health.logs.col_level')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-event" className="min-w-0 px-0">
+						<Text>{t('health.logs.col_event')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-took" className="w-16 flex-none items-end px-0">
+						<Text>{t('health.logs.col_took')}</Text>
+					</TableHead>
+					<TableHead testID="logs-heading-status" className="w-32 flex-none items-end px-0">
+						<Text>{t('health.logs.col_status')}</Text>
+					</TableHead>
+				</TableRow>
+			</TableHeader>
 
 			<ScrollView
 				className="min-h-0 flex-1"
