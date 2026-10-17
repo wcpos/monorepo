@@ -13,9 +13,10 @@ const gatewaysLogger = getLogger(['wcpos', 'pos', 'checkout', 'gateways']);
 /**
  * An auth flow cancels in-flight requests on purpose (CanceledError) — a token refresh
  * as often as a full re-login, and a refresh latches no auth hold, so no "auth
- * restored" signal is guaranteed to follow. Every cancel therefore schedules a retry
- * after this delay: long enough for a refresh to land, short enough that checkout's
- * pending state is barely noticed.
+ * restored" signal is guaranteed to follow. A cancel with NO hold latched therefore
+ * schedules a retry after this delay: long enough for a refresh to land, short enough
+ * that checkout's pending state is barely noticed. With the hold latched there is no
+ * timer at all — the hold clearing is the retry.
  */
 const RETRY_AFTER_CANCEL_MS = 1_000;
 function isCancellation(error: unknown): boolean {
@@ -65,10 +66,21 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 				// long as it takes — a sign-in can take minutes, and settling to an empty
 				// catalogue would send checkout to the legacy webview and refunds to cash.
 				awaitingRetryRef.current = true;
-				retryTimerRef.current = setTimeout(() => {
-					retryTimerRef.current = null;
-					if (mountedRef.current && awaitingRetryRef.current) void fetchGatewaysRef.current?.();
-				}, RETRY_AFTER_CANCEL_MS);
+				// With the auth hold latched, every request is intercepted (another "Please
+				// log in" toast, another cancel) — so no timer: the hold clearing is the one
+				// retry signal. Only a cancel with NO hold (a direct-401 fallback) polls.
+				if (!requestStateManager.isAuthFailed()) {
+					retryTimerRef.current = setTimeout(() => {
+						retryTimerRef.current = null;
+						if (
+							mountedRef.current &&
+							awaitingRetryRef.current &&
+							!requestStateManager.isAuthFailed()
+						) {
+							void fetchGatewaysRef.current?.();
+						}
+					}, RETRY_AFTER_CANCEL_MS);
+				}
 				return gatewaysRef.current;
 			}
 			// The one row for this failure (the HTTP transport row is forensic). The
@@ -94,7 +106,15 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	React.useEffect(
 		() =>
 			requestStateManager.onAuthFailed((failed) => {
-				if (!failed && awaitingRetryRef.current) void fetchGateways();
+				if (failed) {
+					// The hold latched: stop polling — the clearing signal retries.
+					if (retryTimerRef.current) {
+						clearTimeout(retryTimerRef.current);
+						retryTimerRef.current = null;
+					}
+					return;
+				}
+				if (awaitingRetryRef.current) void fetchGateways();
 			}),
 		[fetchGateways]
 	);

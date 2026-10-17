@@ -229,4 +229,56 @@ describe('usePaymentGateways', () => {
 			errorSpy.mockRestore();
 		});
 	});
+
+	describe('cancellation while the auth hold is latched', () => {
+		const { requestStateManager } = jest.requireActual('@wcpos/hooks/use-http-client') as {
+			requestStateManager: { setAuthFailed(failed: boolean): void };
+		};
+		const cancelled = () =>
+			Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' });
+
+		beforeEach(() => jest.useFakeTimers());
+		afterEach(() => {
+			act(() => requestStateManager.setAuthFailed(false));
+			jest.useRealTimers();
+		});
+
+		it('sends nothing while the hold is latched, then loads once when it clears', async () => {
+			act(() => requestStateManager.setAuthFailed(true));
+			mockGet.mockRejectedValueOnce(cancelled()).mockResolvedValueOnce({
+				data: [{ id: 'stripe', capabilities: { supports_checkout: true } }],
+			});
+
+			const { result } = renderHook(() => usePaymentGateways('stripe'));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(30_000);
+			});
+			// No polling into the auth handler (each would toast "Please log in" again).
+			expect(mockGet).toHaveBeenCalledTimes(1);
+			expect(result.current.loading).toBe(true);
+
+			await act(async () => {
+				requestStateManager.setAuthFailed(false);
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			expect(mockGet).toHaveBeenCalledTimes(2);
+			expect(result.current.loading).toBe(false);
+			expect(result.current.gateway?.id).toBe('stripe');
+		});
+
+		it('stops a pending poll the moment the hold latches', async () => {
+			mockGet.mockRejectedValueOnce(cancelled());
+
+			renderHook(() => usePaymentGateways('stripe'));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			act(() => requestStateManager.setAuthFailed(true));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(5_000);
+			});
+
+			expect(mockGet).toHaveBeenCalledTimes(1);
+		});
+	});
 });
