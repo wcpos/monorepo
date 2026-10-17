@@ -256,6 +256,7 @@ export type EngineStringStore = {
 };
 
 export type RxdbSyncEnginePorts = {
+	getInstanceId?: () => string | undefined | Promise<string | undefined>;
 	site: { syncBaseUrl: string; wpJsonRoot: string; wcposVersion?: () => string | undefined };
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
@@ -940,6 +941,13 @@ export function createRxdbSyncEngine(
 				status: updateRequiredRefusal.status,
 				headers: { 'Content-Type': 'application/json' },
 			});
+		}
+		const headers = new Headers(init?.headers);
+		const installId = await ports.getInstanceId?.();
+		if (installId !== undefined || headers.has('X-WCPOS-Instance')) {
+			headers.delete('X-WCPOS-Instance');
+			if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
+			init = { ...init, headers };
 		}
 		let response: Response;
 		try {

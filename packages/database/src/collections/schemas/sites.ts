@@ -95,6 +95,9 @@ export const sitesLiteral = {
 		use_protocol_headers: {
 			type: 'boolean',
 		},
+		use_instance_header: {
+			type: 'boolean',
+		},
 		/**
 		 * Meta keys the store ADDED to search through the plugin's `woocommerce_pos_search_fields`
 		 * filter, per collection, as published by `wcpos/v2/site` (monorepo#2411). The till folds

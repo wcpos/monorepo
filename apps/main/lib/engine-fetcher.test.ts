@@ -42,6 +42,7 @@ function createFetcherHarness(
 			useJwtAsParam?: boolean;
 			bareAuthParam?: boolean;
 			useProtocolHeaders?: boolean;
+			useInstanceHeader?: boolean;
 		};
 		clockSkew?: { generation: number; evaluated: boolean };
 		scope?: { storeId?: number | string | null };
@@ -1482,3 +1483,28 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 });
+
+it.each([true, false, undefined])(
+	'gates the web instance header on the site verdict: %s',
+	async (flag) => {
+		const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+		const platform = jest.replaceProperty(AppInfo, 'platform', 'web');
+		try {
+			const fetch = jest.fn(async () => new Response('{}'));
+			const { fetcher } = createFetcherHarness({
+				auth: { ...BASE_AUTH, useInstanceHeader: flag },
+				fetch,
+			});
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick', {
+				headers: { 'X-WCPOS-Instance': 'till' },
+			});
+			expect(
+				new Headers((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers).get(
+					'X-WCPOS-Instance'
+				)
+			).toBe(flag ? 'till' : null);
+		} finally {
+			platform.restore();
+		}
+	}
+);
