@@ -1,6 +1,10 @@
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -51,9 +55,14 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 	const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
 	const status = response?.status;
 	if (response && isRefusal(status)) {
+		// The HTTP client's mapped WordPress code (a missing route, a specific auth
+		// refusal) says more than the status does; fall back on the status only.
+		const wpCode = (error as { wpCode?: ErrorCode } | null)?.wpCode;
+		const code =
+			wpCode ?? (status === 403 ? ERROR_CODES.INSUFFICIENT_ROLE : ERROR_CODES.RECORD_INVALID_FIELD);
 		return {
-			level: 'error',
-			code: status === 403 ? ERROR_CODES.INSUFFICIENT_ROLE : ERROR_CODES.RECORD_INVALID_FIELD,
+			level: ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn',
+			code,
 			// The store's own sentence ("Invalid refund amount.") is the reason.
 			title: extractErrorMessage(response.data, t('orders.refund_failed')),
 		};

@@ -85,4 +85,18 @@ describe('usePaymentGateways', () => {
 			context: { error: 'Network Error' },
 		});
 	});
+
+	it('writes no failure row when an auth flow cancelled the request on purpose', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' })
+		);
+
+		const { result } = renderHook(() => usePaymentGateways('pos_cash'));
+
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(getLogger([]).warn).not.toHaveBeenCalledWith(
+			'Payment gateways could not be loaded',
+			expect.anything()
+		);
+	});
 });

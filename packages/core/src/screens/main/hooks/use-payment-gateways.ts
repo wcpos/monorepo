@@ -30,6 +30,12 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			setGateways(next);
 			return next;
 		} catch (err) {
+			// An auth flow in progress cancels the request on purpose (CanceledError): not a
+			// failure, and certainly not "store unreachable".
+			const cancelled =
+				(err as { code?: unknown } | null)?.code === 'ERR_CANCELED' ||
+				(err as { name?: unknown } | null)?.name === 'CanceledError';
+			if (cancelled) return gatewaysRef.current;
 			// The one row for this failure (the HTTP transport row is forensic). The
 			// checkout screen's inline error is the instruction, so no toast; offline is
 			// forensic too, since nothing was attempted.

@@ -33,6 +33,19 @@ describe('classifyRefundFailure', () => {
 		});
 	});
 
+	it('keeps the HTTP client’s mapped WordPress code for a refusal', () => {
+		const noRoute = Object.assign(new Error('404'), {
+			wpCode: 'AUTH311',
+			response: { status: 404, data: { code: 'rest_no_route', message: 'No route was found.' } },
+		});
+
+		expect(classifyRefundFailure(noRoute, t)).toEqual({
+			level: 'error',
+			code: 'AUTH311',
+			title: 'No route was found.',
+		});
+	});
+
 	it('codes a permission refusal as the cashier’s role', () => {
 		const forbidden = Object.assign(new Error('403'), {
 			response: { status: 403, data: { code: 'x', message: 'Sorry, you are not allowed.' } },
