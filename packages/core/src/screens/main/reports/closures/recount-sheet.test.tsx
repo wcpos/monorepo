@@ -10,6 +10,8 @@ import { RecountSheet } from './recount-sheet';
 
 import type { Correction } from '../../../../services/register-session/settled-figures';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
+// The approve sheet (rendered by the recount sheet) toasts on failure; the toast module is ESM-only.
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 const viewedStores = of([
 	{
 		id: 0,
