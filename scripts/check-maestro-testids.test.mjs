@@ -56,6 +56,18 @@ return <Pressable testID={testID} />;`;
 	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - yes\n');
 });
 
+test('counts an arm only when the arm is the literal, not a quoted call argument', (t) => {
+	const source = `const testID = drill ? makeID('suffix') : nested ? 'arm-b' : 'arm-c';`;
+	const present = check(t, "id: 'arm-b'\nid: 'arm-c'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'suffix'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(
+		missing.stderr,
+		'✖ Maestro flows reference testIDs missing from source:\n  - suffix\n'
+	);
+});
+
 test('reads a typed testID variable and starts the arms at the conditional, not at ?. or ??', (t) => {
 	const source = `const testID: string = product?.kind === 'cond-a' ? 'typed-a' : 'typed-b';
 const otherTestID = (mode ?? 'cond-b') === 'x' ? 'typed-c' : 'typed-d';`;

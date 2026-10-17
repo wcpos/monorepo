@@ -97,7 +97,10 @@ for (const dir of isMain ? sourceDirs : []) {
 		)) {
 			const conditional = /(?<!\?)\?(?![.?])/.exec(m[1]);
 			if (!conditional) continue;
-			for (const value of m[1].slice(conditional.index + 1).matchAll(/["']([^"']+)["']/g)) {
+			// An arm counts only when it IS a literal (after `?` or `:`, before `:` or the end),
+			// never a string nested in a call such as `makeID('suffix')`.
+			const arms = m[1].slice(conditional.index);
+			for (const value of arms.matchAll(/[?:]\s*["']([^"']+)["']\s*(?=:|$|[;)\]}])/g)) {
 				literals.add(value[1]);
 			}
 		}
