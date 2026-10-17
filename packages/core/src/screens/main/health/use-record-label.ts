@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { EMPTY, from, merge, Observable } from 'rxjs';
+import { EMPTY, merge, Observable } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 import {
@@ -73,9 +73,10 @@ export type RecordLabel = {
  * the three can never disagree about what a record is called. The raw id is
  * never the visible line — support reads it from the row's Details.
  *
- * Effect (last resort per project.mdc): one read per opened database through
- * the typed collection stream — the label is decoration on top of the
- * log-derived row, so it neither suspends nor holds a live query per row.
+ * Effect (last resort per project.mdc): observes the one matching document
+ * through the typed collection stream, so the name follows the record —
+ * a re-download refilling it, an edit renaming it, a delete removing it. It
+ * never suspends: the label is decoration on top of the log-derived row.
  */
 export function useRecordLabel(
 	collection: string | null | undefined,
@@ -116,8 +117,9 @@ export function useRecordLabel(
 		// emission drops the previous answer first — store ids overlap across
 		// stores, so another store's record name must never stand in.
 		// Clear & re-download replaces the collection IN the same database, so
-		// `db$` stays quiet; the engine's `collection-reset` event is the signal
-		// to read the replacement (the record may be gone with it).
+		// `db$` stays quiet and the old collection's query goes dead; the engine's
+		// `collection-reset` event is the signal to observe the replacement, which
+		// then reports the record as the refill lands.
 		const replaced$ = new Observable<void>((subscriber) =>
 			engine.events((event) => {
 				if (event.type === 'collection-reset' && event.collection === rowKey) subscriber.next();
@@ -128,8 +130,8 @@ export function useRecordLabel(
 				tap(() => setResolved(null)),
 				switchMap((records) =>
 					records
-						? from(records.findOne(query).exec()).pipe(
-								// Per read, so the next database the engine opens still gets one.
+						? records.findOne(query).$.pipe(
+								// Per query, so the next database the engine opens still gets one.
 								catchError((error: unknown) => {
 									// Not `collection`/`recordId`: a context carrying those keys
 									// is itself labelled by this hook on the Logs screen, and a

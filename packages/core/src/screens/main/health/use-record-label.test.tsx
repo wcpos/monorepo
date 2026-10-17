@@ -2,12 +2,19 @@
  * @jest-environment jsdom
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { BehaviorSubject, defer, from, type Observable } from 'rxjs';
 
 import { recordHandle } from './record-handle';
 import { useRecordLabel } from './use-record-label';
 
 const mockExec = jest.fn();
-const mockFindOne = jest.fn((_query: unknown) => ({ exec: mockExec }));
+// `$` replays mockExec's answer, so each test drives the reactive read the
+// same way; `mockDoc$`, when set, stands in for a live document stream.
+let mockDoc$: Observable<unknown> | null = null;
+const mockFindOne = jest.fn((_query: unknown) => ({
+	exec: mockExec,
+	$: mockDoc$ ?? defer(() => from(Promise.resolve(mockExec()))),
+}));
 let mockDatabase: unknown = {
 	collections: {
 		orders: { findOne: (query: unknown) => mockFindOne(query) },
@@ -89,6 +96,7 @@ describe('recordHandle', () => {
 describe('useRecordLabel', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockDoc$ = null;
 		mockDatabase = {
 			collections: {
 				orders: { findOne: (query: unknown) => mockFindOne(query) },
@@ -213,6 +221,20 @@ describe('useRecordLabel', () => {
 		const { result } = renderHook(() => useRecordLabel('coupons', 'c-1'));
 
 		await waitFor(() => expect(result.current?.text).toBe('Coupon: SAVE10'));
+	});
+
+	// The reset's refill lands AFTER the collection is replaced: a one-shot read
+	// at reset time would say "not on this device" for good.
+	it('follows the document, so a refill after Clear & re-download names it', async () => {
+		const doc$ = new BehaviorSubject<unknown>(null);
+		mockDoc$ = doc$;
+		const { result } = renderHook(() => useRecordLabel('orders', 'o-9'));
+		await waitFor(() => expect(result.current?.status).toBe('missing'));
+
+		act(() => doc$.next({ uuid: 'o-9', number: '9', payload: { total: '1.00' } }));
+
+		await waitFor(() => expect(result.current?.text).toBe('Order: #9 · 1.00'));
+		expect(result.current?.status).toBe('found');
 	});
 
 	it('looks up a pull-only collection by its store id too', async () => {

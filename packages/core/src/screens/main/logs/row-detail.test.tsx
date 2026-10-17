@@ -522,6 +522,31 @@ describe('RowDetail', () => {
 			expect(screen.getByTestId('logs-go-database-log-1')).not.toBeNull();
 		});
 
+		it('opens a coupon on its edit screen by the found uuid', () => {
+			mockRecordLabel = {
+				kind: 'Coupon',
+				handle: 'SAVE10',
+				uuid: 'c-uuid',
+				status: 'found',
+				text: 'Coupon: SAVE10',
+			};
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC211',
+						context: { type: 'push.rejected', collection: 'coupons', recordId: 'c-uuid' },
+					}}
+					kind="warn"
+					title="Change refused"
+				/>
+			);
+
+			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
+			expect(mockPush).toHaveBeenCalledWith('/coupons/edit/c-uuid');
+		});
+
 		it('offers no Open record while the read is still in flight', () => {
 			mockRecordLabel = { kind: 'Order', handle: null, status: 'unresolved', text: 'Order' };
 			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);

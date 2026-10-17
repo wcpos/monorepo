@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { defer, from } from 'rxjs';
 
 import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
@@ -14,6 +15,8 @@ import { useCollectionCheck } from './use-manual-sync';
 import type { StuckRecord } from '../logs/logs-logic';
 
 const mockExec = jest.fn();
+// The label observes the document; replay mockExec's answer as that stream.
+const mockDoc$ = () => defer(() => from(Promise.resolve(mockExec())));
 const mockSync = jest.fn();
 const mockCheckCollection = jest.fn();
 const mockPush = jest.fn();
@@ -21,9 +24,9 @@ const mockEngine = {
 	active: jest.fn(() => ({
 		database: {
 			collections: {
-				products: { findOne: () => ({ exec: mockExec }) },
-				variations: { findOne: () => ({ exec: mockExec }) },
-				customers: { findOne: () => ({ exec: mockExec }) },
+				products: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
+				variations: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
+				customers: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
 			},
 		},
 	})),

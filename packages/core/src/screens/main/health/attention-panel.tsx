@@ -21,6 +21,7 @@ export const FIX_ROUTES: Record<string, (uuid: string) => Href> = {
 	variations: (uuid) => `/(app)/(drawer)/products/(modals)/edit/variation/${uuid}`,
 	orders: (uuid) => `/orders/edit/${uuid}`,
 	customers: (uuid) => `/customers/edit/${uuid}`,
+	coupons: (uuid) => `/coupons/edit/${uuid}`,
 };
 
 /**
