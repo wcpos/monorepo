@@ -17,7 +17,7 @@ export function CodeChip({
 	onPress?: () => void;
 	testID?: string;
 }) {
-	const text = <Text className="text-destructive font-mono text-[11px] font-semibold">{code}</Text>;
+	const text = <Text className="text-destructive font-mono text-xs font-semibold">{code}</Text>;
 	const chipClass = 'bg-destructive/10 self-end rounded-md px-2 py-0.5';
 
 	if (!onPress) {
