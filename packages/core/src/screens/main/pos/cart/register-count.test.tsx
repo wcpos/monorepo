@@ -235,10 +235,12 @@ it.each([
 });
 
 it('closes without a second approval when the approved count is entered again', () => {
-	// A failed close or a restart keeps the approval; the same count is not re-approved.
-	approved_counted = { cash: '480.80' };
+	// A failed close or a restart keeps the approval; the same over-threshold count is not
+	// re-approved (expected cash is 480.80, so 463.30 is a 17.50 short against a 5 threshold).
+	varianceThreshold = '5';
+	approved_counted = { cash: '463.30' };
 	render(<RegisterCount onClosed={jest.fn()} />);
-	enter('480.80');
+	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(screen.queryByTestId('approve-sheet')).toBeNull();
 	expect(closeSession).toHaveBeenCalled();
