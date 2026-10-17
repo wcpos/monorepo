@@ -140,7 +140,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			'WCPOS tries again on the next sync. If it keeps happening, ask your site admin to check WooCommerce → Status → Logs.',
+			'Try the action again. If it keeps happening, ask your site admin to check WooCommerce → Status → Logs.',
 		dataSafety: 'local-only',
 		summary: "Your store had an error and didn't finish this request.",
 	},
@@ -169,9 +169,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'RECORD_INVALID_FIELD',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: "The store's reason names the value. Open the record, correct it, and save again.",
+		actionHint:
+			"The store's reason names the value. Correct it where you entered it, then save again.",
 		dataSafety: 'local-only',
-		summary: "Your store refused a value in this change, so it hasn't reached the store.",
+		summary: 'Your store refused a value it was sent.',
 	},
 	SYNC301: {
 		code: 'SYNC301',
@@ -287,7 +288,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint:
-			"Open Orders and look for this sale by its total and time. If it's there, it went through — don't charge again.",
+			"Open the order and check its status before retrying. If it's paid or completed, don't charge again.",
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS could not confirm whether checkout completed.',
 	},
@@ -297,7 +298,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint:
-			"Open Orders and look for this sale by its total and time. If it's there, it went through — don't charge again.",
+			"Open the order and check its status before retrying. If it's paid or completed, don't charge again.",
 		dataSafety: 'outcome-unknown',
 		summary: 'The store returned no checkout result, so the order status is unknown.',
 	},
@@ -527,9 +528,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'PRINT_UNEXPECTED',
 		domain: 'PRINT',
 		severity: 'error',
-		actionHint: 'Print or send the receipt again from the order. Contact support if it repeats.',
+		actionHint:
+			'Repeat the print or receipt action named in this entry. Contact support if it repeats.',
 		dataSafety: 'no-impact',
-		summary: 'Printing or a receipt email hit an unexpected problem. The sale is saved.',
+		summary: 'Printing hit an unexpected problem. No sale is affected.',
 	},
 	PRODUCT999: {
 		code: 'PRODUCT999',
@@ -575,10 +577,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint:
-			"Open Store health → Database and find the held change. Tap Send again to keep this device's version, or Use server version to keep the store's.",
+			"If Store health → Database lists a held change for it, tap Send again to keep this device's version, or Use server version to keep the store's. Otherwise, nothing to do.",
 		dataSafety: 'order-safe',
-		summary:
-			'This record was also changed in your store, so this device held its change. Nothing is lost.',
+		summary: 'A change on this device met a newer edit in your store. Nothing is lost.',
 	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
@@ -744,7 +745,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint:
-			"Nothing on this device is lost. Ask your host to stop caching the store's /wp-json/ API, then reconnect.",
+			"Nothing on this device is lost. Ask your host to stop caching the store's API (both /wp-json/ and ?rest_route= addresses), then reconnect.",
 		dataSafety: 'no-impact',
 		summary: "Your host's cache could show one person's data to another, so WCPOS won't connect.",
 	},
@@ -763,16 +764,17 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint:
-			"Nothing to do now. If this appears often, ask your site admin to check the site's PHP error log for warnings.",
+			"Check the action you were doing finished. If this appears often, ask your site admin to check the site's PHP error log for warnings.",
 		dataSafety: 'no-impact',
-		summary: "Your store's reply had stray text in it; WCPOS cleaned it up and carried on.",
+		summary: "Your store's reply had stray text in it, which WCPOS tried to clean up.",
 	},
 	SYNC161: {
 		code: 'SYNC161',
 		symbol: 'LOCAL_DB_UNAVAILABLE',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint: 'Restart WCPOS (on the web, reload the tab), then check your last sale saved.',
+		actionHint:
+			'Restart WCPOS (on the web, reload the tab), then check your last sale or change saved.',
 		dataSafety: 'data-at-risk',
 		summary: "This device's storage stopped responding, so saving is paused.",
 	},
@@ -829,7 +831,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'error',
 		actionHint:
-			"The sale is saved. Check the email address and send it again from the receipt. If every email fails, ask your site admin to check the store's email sending.",
+			"The sale is saved. Check the email address, or the device's storage for a PDF, then try again from the receipt. If every email fails, ask your site admin to check email sending.",
 		dataSafety: 'order-safe',
 		summary: 'This receipt could not be emailed or downloaded.',
 	},
