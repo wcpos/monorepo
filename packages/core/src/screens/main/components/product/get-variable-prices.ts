@@ -101,7 +101,12 @@ function warnPriceProblem(
 	const key = `${message}:${String(ownerId)}`;
 	// Only a known record can be de-duplicated; an anonymous read always reports.
 	if (ownerId != null && reportedPriceProblems.has(key)) return;
-	if (reportedPriceProblems.size >= MAX_REPORTED_PRICE_PROBLEMS) reportedPriceProblems.clear();
+	// Evict only the oldest record (a Set keeps insertion order): clearing everything
+	// would let every remembered record flood the log again on the next render.
+	if (reportedPriceProblems.size >= MAX_REPORTED_PRICE_PROBLEMS) {
+		const oldest = reportedPriceProblems.values().next().value;
+		if (oldest !== undefined) reportedPriceProblems.delete(oldest);
+	}
 	reportedPriceProblems.add(key);
 	uiLogger.warn(message, { code: ERROR_CODES.VARIABLE_PRICE_META_INVALID, context });
 }

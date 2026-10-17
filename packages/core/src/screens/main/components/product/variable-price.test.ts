@@ -293,4 +293,16 @@ describe('getVariablePrices reporting', () => {
 		expect(getLogger([]).error).not.toHaveBeenCalled();
 		expect(getLogger([]).warn).toHaveBeenCalledTimes(1);
 	});
+
+	it('keeps remembering recent records when the cap is reached (evicts only the oldest)', () => {
+		const meta = [{ key: '_woocommerce_pos_variable_prices', value: 'not json {' }];
+		for (let index = 0; index < 501; index += 1) {
+			getVariablePrices(meta, { recordId: `uuid-${index}` });
+		}
+		jest.clearAllMocks();
+
+		getVariablePrices(meta, { recordId: 'uuid-500' });
+
+		expect(getLogger([]).warn).not.toHaveBeenCalled();
+	});
 });

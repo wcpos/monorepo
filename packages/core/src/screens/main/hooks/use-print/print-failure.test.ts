@@ -92,4 +92,11 @@ describe('logTestPrintFailure', () => {
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.debug).toHaveBeenCalled();
 	});
+
+	it('never files a drawer that did not open as a failed print job', () => {
+		logTestPrintFailure(logger, new Error('Epson print failed (code: EX_BUSY)'), {}, 'drawer');
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).toHaveBeenCalledWith('Cash drawer did not open', expect.anything());
+	});
 });

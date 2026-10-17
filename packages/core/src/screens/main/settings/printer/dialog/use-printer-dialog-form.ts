@@ -374,7 +374,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
-			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
+			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' }, 'drawer');
 			setTestError(toTestPrintFailure(err));
 		} finally {
 			setDrawerLoading(false);

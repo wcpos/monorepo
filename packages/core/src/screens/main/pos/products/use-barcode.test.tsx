@@ -1389,6 +1389,14 @@ describe('barcodeLookupErrorCode', () => {
 		);
 	});
 
+	it('codes a reply it could not parse SYNC151, not "unreachable"', () => {
+		expect(
+			barcodeLookupErrorCode(
+				'resolve/barcode request failed: Unexpected token < in JSON at position 0'
+			)
+		).toBe('SYNC151');
+	});
+
 	it('codes a store error SYNC131 and an ended session AUTH101', () => {
 		expect(barcodeLookupErrorCode('resolve/barcode failed: 502 Bad Gateway')).toBe('SYNC131');
 		expect(barcodeLookupErrorCode('resolve/barcode failed: 401 {"code":"jwt"}')).toBe('AUTH101');

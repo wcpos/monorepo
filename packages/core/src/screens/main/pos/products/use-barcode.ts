@@ -35,7 +35,13 @@ const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
  */
 export function barcodeLookupErrorCode(message: string | undefined): ErrorCode {
 	if (!message) return ERROR_CODES.PRODUCT_UNEXPECTED;
-	if (message.startsWith('resolve/barcode request failed:')) return ERROR_CODES.SYNC_UNREACHABLE;
+	if (message.startsWith('resolve/barcode request failed:')) {
+		// The resolver wraps a reply it could not parse in the same prefix: the store
+		// answered, with a malformed body (SYNC151), so it is not "unreachable".
+		return /JSON|Unexpected token|SyntaxError/i.test(message)
+			? ERROR_CODES.STORE_RESPONSE_MALFORMED
+			: ERROR_CODES.SYNC_UNREACHABLE;
+	}
 	const status = /^resolve\/barcode failed: (\d{3})/.exec(message)?.[1];
 	if (status === '401') return ERROR_CODES.SESSION_EXPIRED;
 	if (status !== undefined && status.startsWith('5')) return ERROR_CODES.STORE_SERVER_ERROR;

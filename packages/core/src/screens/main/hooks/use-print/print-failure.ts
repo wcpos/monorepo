@@ -70,21 +70,29 @@ export function reportPrintFailure(
 }
 
 /**
- * The row for a failed TEST print. The settings screen shows its own toast or inline
- * error, so this writes the coded row only (the transport rows are forensic) — a
- * printer fault must still reach Logs and support.
+ * The row for a failed TEST print (or cash-drawer test). The settings screen shows
+ * its own toast or inline error, so this writes the row only (the transport rows
+ * are forensic) — a printer fault must still reach Logs and support. A drawer that
+ * did not open is no print job: PRINT301 only when the printer was unreachable,
+ * otherwise an uncoded warn, never PRINT201's "check before reprinting".
  */
 export function logTestPrintFailure(
 	logger: PrintLogger,
 	error: unknown,
-	context?: Record<string, unknown>
+	context?: Record<string, unknown>,
+	operation: 'print' | 'drawer' = 'print'
 ): void {
 	const failure = classifyPrintFailure(error);
 	const fullContext = { ...context, error: getErrorMessage(error) };
+	const subject = operation === 'drawer' ? 'Cash drawer test' : 'Test print';
 	if (failure.cancelled) {
-		logger.debug('Test print cancelled', { context: fullContext });
+		logger.debug(`${subject} cancelled`, { context: fullContext });
+		return;
+	}
+	if (operation === 'drawer' && failure.code !== ERROR_CODES.PRINTER_UNREACHABLE) {
+		logger.warn('Cash drawer did not open', { context: fullContext });
 		return;
 	}
 	const level = ERROR_CATALOGUE[failure.code].severity === 'error' ? 'error' : 'warn';
-	logger[level]('Test print failed', { code: failure.code, context: fullContext });
+	logger[level](`${subject} failed`, { code: failure.code, context: fullContext });
 }
