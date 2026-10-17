@@ -15,6 +15,7 @@ import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { CashierSheetProvider, useCashierSheet } from '../../pos/cart/cashier-sheet-state';
 import { SessionHoldBanner } from '../session-hold-banner';
+import { requestRegisterPicker } from '../../pos/cart/register-picker-request';
 import { UserSheet } from '../../pos/cart/user-sheet';
 import { NotificationBell } from '../notification-bell/notification-bell';
 import { UserAvatar } from '../user-avatar';
@@ -90,7 +91,14 @@ function ManagementBarContent({ title, titleSlot, testID, search, back, children
 			<SessionHoldBanner />
 			{/* The root host, as the rail's: the POS host sits inside the POS screen, which is
 			    hidden (web) or detached (native) while a management page is on screen. */}
-			<UserSheet open={userOpen} onOpenChange={setUserOpen} portalHost={null} />
+			{/* The one cashier surface carries the same rows on every screen (ruling 2026-10-16,
+			    decision 6): Switch register raises the same request the rail's sheet does. */}
+			<UserSheet
+				open={userOpen}
+				onOpenChange={setUserOpen}
+				portalHost={null}
+				onSwitchRegister={requestRegisterPicker}
+			/>
 		</>
 	);
 }

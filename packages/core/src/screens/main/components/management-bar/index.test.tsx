@@ -40,8 +40,23 @@ jest.mock('../session-hold-banner', () => ({
 	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
 }));
 jest.mock('../../pos/cart/user-sheet', () => ({
-	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="user-sheet" data-host={String(portalHost)} /> : null,
+	UserSheet: ({
+		open,
+		portalHost,
+		onSwitchRegister,
+	}: {
+		open: boolean;
+		portalHost?: string | null;
+		onSwitchRegister?: () => void;
+	}) =>
+		open ? (
+			<div data-testid="user-sheet" data-host={String(portalHost)}>
+				{onSwitchRegister && <button data-testid="switch-register" onClick={onSwitchRegister} />}
+			</div>
+		) : null,
+}));
+jest.mock('../../pos/cart/register-picker-request', () => ({
+	requestRegisterPicker: jest.fn(),
 }));
 beforeEach(() => {
 	mockPhone = false;
@@ -63,6 +78,12 @@ it('rehosts drawer and avatar below lg and opens the user sheet', () => {
 	fireEvent.click(screen.getByTestId('orders-bar-avatar'));
 	// The root host: the POS host lives inside the POS screen, hidden while a page is up.
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('null');
+	// The same cashier rows as the rail's sheet: Switch register raises the picker request.
+	fireEvent.click(screen.getByTestId('switch-register'));
+	expect(
+		jest.requireMock<{ requestRegisterPicker: jest.Mock }>('../../pos/cart/register-picker-request')
+			.requestRegisterPicker
+	).toHaveBeenCalledTimes(1);
 	expect(screen.getByTestId('orders-bar-bell')).toBeTruthy();
 });
 it('leaves drawer and avatar to the wide rail', () => {
