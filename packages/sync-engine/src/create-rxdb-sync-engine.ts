@@ -57,6 +57,7 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { createScopedFailureStreak, type ScopedFailureStreak } from './failure-streak';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -1040,12 +1041,18 @@ export function createRxdbSyncEngine(
 	};
 	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
 	// answer is retried by the next tick, so the log alarms only on a streak.
-	// Any answer on the lane — whatever its status — ends the streak.
-	const consecutiveDeadlines = new Map<string, number>();
+	// Any answer on the lane — whatever its status — ends the streak. Scoped like
+	// the lane streaks: a deadline under another store scope starts over.
+	// Late-bound: the scope manager is created further down.
+	let activeScopeForStreaks: () => string | null = () => null;
+	const consecutiveDeadlines = new Map<string, ScopedFailureStreak>();
 	const noteDeadline = (lane: string): number => {
-		const streak = (consecutiveDeadlines.get(lane) ?? 0) + 1;
-		consecutiveDeadlines.set(lane, streak);
-		return streak;
+		let streak = consecutiveDeadlines.get(lane);
+		if (streak === undefined) {
+			streak = createScopedFailureStreak();
+			consecutiveDeadlines.set(lane, streak);
+		}
+		return streak.fail(activeScopeForStreaks());
 	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
@@ -1057,7 +1064,7 @@ export function createRxdbSyncEngine(
 		);
 		try {
 			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
-			consecutiveDeadlines.delete(lane);
+			consecutiveDeadlines.get(lane)?.reset();
 			return response;
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
@@ -1095,7 +1102,7 @@ export function createRxdbSyncEngine(
 								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
-							consecutiveDeadlines.delete('query-total-retry');
+							consecutiveDeadlines.get('query-total-retry')?.reset();
 							return total;
 						} catch (error) {
 							if (error instanceof RequestTimeoutError) {
@@ -1381,10 +1388,11 @@ export function createRxdbSyncEngine(
 		}
 	};
 
-	const manager = new StoreScopeManager({
+	const manager: StoreScopeManager = new StoreScopeManager({
 		createDatabase: openScopeDatabase,
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
+	activeScopeForStreaks = () => manager.activeScope;
 
 	/** The engine-owned default: checkpoint/cursor keys live inside the scope's
 	 * own database, so per-scope isolation and volatile-db-volatile-cursor both

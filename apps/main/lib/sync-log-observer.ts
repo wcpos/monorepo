@@ -490,7 +490,9 @@ export const CONFORMANCE_TABLE = {
 	//  - 401: the write drain holds the session, and the auth layer's row
 	//    (refresh failure / "Sync paused") is the one to act on;
 	//  - 428: the drain refreshes the revision and re-pushes once; a failure
-	//    parks as queue.write.needs-revision or dead-letters as push.rejected;
+	//    parks as queue.write.needs-revision or dead-letters as push.rejected.
+	//    Only when the refresh itself keeps throwing does the row back off and
+	//    retry with nothing else reporting it — so a 428 counts its attempts too;
 	//  - not retryable (a permanent 4xx, identity-ambiguous): it dead-letters,
 	//    and push.rejected / queue.write.auto-reverted carry the verdict.
 	// The push route's transport row is info for the same reason (engine-fetcher).
@@ -498,7 +500,8 @@ export const CONFORMANCE_TABLE = {
 		operationType: 'sync.record',
 		outcome: 'failed',
 		level: (_event, fields) => {
-			if (fields.status === 401 || fields.status === 428) return 'info';
+			if (fields.status === 401) return 'info';
+			if (fields.status === 428) return streakLevel(fields.attempt);
 			if (fields.retryable !== true) return 'info';
 			return streakLevel(fields.attempt);
 		},
@@ -509,6 +512,9 @@ export const CONFORMANCE_TABLE = {
 		code: (_event, fields) => {
 			const status = typeof fields.status === 'number' ? fields.status : 0;
 			if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
+			// A 428 that keeps coming back: the store demands a revision the till
+			// cannot fetch, which the site admin has to look at.
+			if (status === 428) return ERROR_CODES.STORE_SERVER_ERROR;
 			if (status >= 500 || (status >= 200 && status < 300)) return ERROR_CODES.STORE_SERVER_ERROR;
 			return ERROR_CODES.SYNC_UNREACHABLE;
 		},

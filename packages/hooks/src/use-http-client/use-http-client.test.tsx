@@ -32,6 +32,7 @@ jest.mock('./http', () => ({
 }));
 
 jest.mock('./request-queue', () => ({
+	isDroppedRequestError: jest.fn(() => false),
 	scheduleRequest: jest.fn((request: () => Promise<unknown>) => request()),
 }));
 
@@ -48,11 +49,10 @@ jest.mock('./request-state-manager', () => ({
 
 /* eslint-disable import/first -- mocks must precede the code under test */
 import { http } from './http';
+import { isDroppedRequestError, scheduleRequest } from './request-queue';
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { requestStateManager } from './request-state-manager';
 import { useHttpClient, type WcposRequestConfig } from './use-http-client';
-
-import type { HttpErrorHandler } from './types';
 /* eslint-enable import/first */
 
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
@@ -374,6 +374,18 @@ describe('useHttpClient network audit logs', () => {
 		await expect(result.current.get('/wc/v3/products')).rejects.toThrow('offline');
 		expect(http.request).not.toHaveBeenCalled();
 		expect(loggerMock.__error).not.toHaveBeenCalled();
+	});
+
+	it('leaves a queue-dropped request to the queue CLIENT131 row, not a CLIENT999 of its own', async () => {
+		const dropped = new Error('This job has been dropped by Bottleneck');
+		(scheduleRequest as jest.Mock).mockRejectedValueOnce(dropped);
+		(isDroppedRequestError as jest.Mock).mockReturnValueOnce(true);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.post('/wc/v3/orders', {})).rejects.toBe(dropped);
+		expect(scheduleRequest).toHaveBeenCalledWith(expect.any(Function), 'POST /wc/v3/orders');
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).not.toHaveBeenCalled();
 	});
 
 	it('does not persist a completion after the active store changes', async () => {

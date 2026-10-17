@@ -280,6 +280,19 @@ describe('error registry', () => {
 		expect(guidance).toContain('must not be downloaded');
 	});
 
+	// A device that cannot open its data, or cannot start, may be holding the
+	// only copy of sales that never reached the store. SYNC311 and CLIENT101
+	// once told the cashier to clear the local database — against their own
+	// troubleshooting (2026-10-17 audit). No in-app action may say it again.
+	it('never tells the cashier to clear local data in an in-app action', () => {
+		const offenders = registry
+			.filter(({ actionHint }) =>
+				/clear (the |this device's |)local (database|data)|loses any unsynced/i.test(actionHint)
+			)
+			.map(({ code }) => code);
+		expect(offenders).toEqual([]);
+	});
+
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {
 		const entry = entryFor('SYNC411');
 		const guidance = entry.troubleshooting.join(' ');

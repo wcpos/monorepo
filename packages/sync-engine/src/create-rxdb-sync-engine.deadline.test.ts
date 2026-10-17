@@ -213,3 +213,43 @@ it('leaves a thrown failure unmarked unless the host wrote its transport row', a
 
 	expect(requestStatusOf(broken)).toBeUndefined();
 });
+
+it('starts the deadline streak over under another store scope', async () => {
+	// The census count is the one deadline lane a scope switch never answers on,
+	// so only the scope change itself can start the streak over here.
+	const census = await createEngineHarness({
+		mode: 'manual',
+		queryTotal: { fetchWooQueryTotal: () => new Promise(() => {}) },
+	});
+	vi.useFakeTimers();
+	try {
+		const blackHole = async () => {
+			const check = census.engine.checkCollection('products');
+			await vi.advanceTimersByTimeAsync(25_000);
+			await check;
+		};
+		await blackHole();
+		await blackHole();
+		vi.useRealTimers();
+		await census.engine.scope.switch({
+			site: 'https://engine-harness.example.test',
+			storeId: 2,
+			cashierId: 'deadline-streak-other-store',
+		});
+		vi.useFakeTimers();
+		await blackHole();
+
+		// Store A's two deadlines must not make store B's first read as its third.
+		expect(
+			census.diagnostics
+				.filter(
+					(event) =>
+						event.type === 'engine.request.deadline' && event.fields?.lane === 'query-total-retry'
+				)
+				.map((event) => (event.fields as { consecutiveDeadlines?: number }).consecutiveDeadlines)
+		).toEqual([1, 2, 1]);
+	} finally {
+		vi.useRealTimers();
+		await census.dispose();
+	}
+});

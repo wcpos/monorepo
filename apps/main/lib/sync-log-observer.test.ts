@@ -227,8 +227,7 @@ describe('createSyncLogObserver', () => {
 	it.each([
 		// The drain holds the session; the auth layer writes the verdict.
 		[{ status: 401, retryable: true }],
-		// The drain refreshes the revision; needs-revision / push.rejected follow.
-		[{ status: 428, reason: 'precondition-required', retryable: false }],
+
 		// Dead-letters next: push.rejected / auto-reverted carry the verdict.
 		[{ status: 403, retryable: false }],
 		[{ status: 400, reason: 'pos_data_invalid', retryable: false }],
@@ -239,6 +238,26 @@ describe('createSyncLogObserver', () => {
 		);
 
 		expect(rows[0]).toMatchObject({ level: 'info', code: undefined });
+	});
+
+	it('warns SYNC131 once a 428 has looped for 3 pushes (the revision refresh keeps failing)', () => {
+		// The drain refreshes the revision and re-pushes; only a refresh that keeps
+		// throwing backs the row off and retries with nothing else reporting it.
+		for (const attempt of [1, 2, 3]) {
+			observer.observe(
+				event({
+					type: 'push.error',
+					level: 'warn',
+					fields: { status: 428, reason: 'precondition-required', retryable: false, attempt },
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['info', undefined],
+			['warn', 'SYNC131'],
+		]);
 	});
 
 	it('keeps the first startup stall at info and warns from the repeat per the CLIENT111 ruling', () => {
