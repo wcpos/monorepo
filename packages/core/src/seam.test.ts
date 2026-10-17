@@ -5,11 +5,12 @@
  * Declaration chains distinguish identical accesses in different functions, methods and classes.
  * Raw queries, resident helper writes, engine aliases, cross-package relative imports and raw
  * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
- * evasion. Transparent receiver wrappers and baseUrl-rooted package imports do not bypass
- * these checks. A record's own change stream remains allowed (ADR 0028).
+ * evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
+ * bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
+ * remains allowed (ADR 0028), including element access and destructuring.
  */
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, posix, relative, sep } from 'node:path';
 
 import * as ts from 'typescript';
@@ -44,6 +45,8 @@ const forbiddenQueryNames = new Set([
 	'useFollowedCollection$',
 	'useLocalQuery$',
 	'observeEngineQuery',
+	'observeBinding',
+	'observeResidentRead',
 	'EngineQueryDescriptor',
 	'EngineQueryRelation',
 	'CompiledQueryRead',
@@ -65,7 +68,9 @@ function sourceFiles(directory: string): string[] {
 		const path = join(directory, entry.name);
 		if (entry.isDirectory())
 			return /^(?:__tests__|__mocks__|jest)$/.test(entry.name) ? [] : sourceFiles(path);
-		return /\.tsx?$/.test(entry.name) && !/\.(?:test|stories)\./.test(entry.name) ? [path] : [];
+		return /\.(?:tsx?|mts|cts)$/.test(entry.name) && !/\.(?:test|stories)\./.test(entry.name)
+			? [path]
+			: [];
 	});
 }
 
@@ -174,7 +179,7 @@ function isCollectionReceiver(node: ts.Node | undefined): boolean {
 	return false;
 }
 
-function isChangeStreamReceiver(node: ts.Expression): boolean {
+function isChangeStreamReceiver(node: ts.Node): boolean {
 	const receiver = unwrap(node)!;
 	return (
 		isCollectionReceiver(receiver) ||
@@ -305,6 +310,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
 		if (rawQueryNames.has(name)) report('raw query construction', node);
+		if (name === '$' && receiver && isChangeStreamReceiver(receiver))
+			report('raw change stream', node);
 		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
 			report('write plane outside a command module', node);
 		if (name === 'require' && isEngineReceiver(receiver))
@@ -319,6 +326,12 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			(isEngineReceiver(node.initializer) ||
 				isEngineReceiver(memberReceiver(node.initializer, 'scope')) ||
 				bindsEngine(node.name))
+		)
+			report('engine handle aliased', node);
+		if (
+			ts.isBinaryExpression(node) &&
+			node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+			(isEngineReceiver(node.right) || isEngineReceiver(memberReceiver(node.right, 'scope')))
 		)
 			report('engine handle aliased', node);
 		if (ts.isImportDeclaration(node)) {
@@ -371,7 +384,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			if (!allowsResidentHelpers && name && residentHelperNames.has(name))
 				report('resident helper write', node);
 			const findReceiver = memberReceiver(callee, 'find');
-			const argument = node.arguments[0];
+			const argument = unwrap(node.arguments[0]);
 			if (
 				findReceiver &&
 				(!argument ||
@@ -409,11 +422,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					report('database or collection lifecycle (close) outside the data layer', node);
 			}
 		}
-		if (ts.isPropertyAccessExpression(node)) {
-			checkProperty(node, node.name.text, node.expression);
-			if (node.name.text === '$' && isChangeStreamReceiver(node.expression))
-				report('raw change stream', node);
-		}
+		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text, node.expression);
 		if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
 			checkProperty(node, node.argumentExpression.text, node.expression);
 		if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent) && !node.dotDotDotToken)
@@ -439,7 +448,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 				assignment.left === pattern &&
 				assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken
 			)
-				checkProperty(node, staticName(node.name));
+				checkProperty(
+					node,
+					staticName(node.name),
+					pattern === node.parent ? assignment.right : undefined
+				);
 		}
 		ts.forEachChild(node, visit);
 	};
@@ -1053,4 +1066,112 @@ it.each([
 	["import { helper } from 'packages/utils/src';", ['cross-package relative import']],
 ])('fences baseUrl-rooted package imports: %s', (source, rules) => {
 	expect(violations(source).map(({ rule }) => rule)).toEqual(rules);
+});
+
+// Round 7: transparent arguments, assignments and alternate access/file spellings.
+it.each(['VALUE as Query', 'VALUE satisfies Query', '(VALUE)', 'VALUE!', '<Query>VALUE'])(
+	'unwraps find arguments before classifying them: %s',
+	(wrapper) => {
+		for (const argument of ['{}', 'query', 'options.query', "options['query']"]) {
+			const source = `collection.find((${wrapper.replace('VALUE', argument)}));`;
+			expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([
+				'raw query construction',
+			]);
+		}
+		expect(
+			violations(`items.find((${wrapper.replace('VALUE', '{}')}));`, 'fixture.ts').map(
+				({ rule }) => rule
+			)
+		).toEqual(['raw query construction']);
+		for (const argument of ['(x => x.id)', '(function(x) { return x.id; })'])
+			expect(
+				violations(`collection.find((${wrapper.replace('VALUE', argument)}));`, 'fixture.ts')
+			).toEqual([]);
+		expect(
+			violations(`items.find((${wrapper.replace('VALUE', 'predicateFn')}));`, 'fixture.ts')
+		).toEqual([]);
+	}
+);
+
+it.each([
+	'writer = engine;',
+	'writer = runtime.engine;',
+	"writer = runtime['engine'];",
+	'scope = engine.scope;',
+	"scope = runtime['engine']['scope'];",
+	'holder.writer = (runtime.engine as Engine);',
+])('fences an engine handle assigned to an existing target: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['engine handle aliased']);
+});
+
+it.each(['writer = other;', 'scope = other.scope;', 'writer === runtime.engine;'])(
+	'allows unrelated assignments and engine comparisons: %s',
+	(source) => expect(violations(source)).toEqual([])
+);
+
+it.each([
+	['observeBinding', 'engine-query'],
+	['observeResidentRead', 'resident-read'],
+])('fences query primitive %s at the root and every subpath', (name, subpath) => {
+	for (const module of ['@wcpos/query', `@wcpos/query/${subpath}`, '@wcpos/query/other']) {
+		for (const source of [
+			`import { ${name} as read } from '${module}';`,
+			`export { ${name} as read } from '${module}';`,
+		])
+			expect(violations(source).map(({ rule }) => rule)).toEqual(['query escape hatch']);
+	}
+});
+
+it.each([
+	'collection',
+	'db',
+	'database',
+	'ordersCollection',
+	'collections.orders',
+	"collections['orders']",
+])('fences element and destructured change streams on %s', (receiver) => {
+	for (const source of [
+		`${receiver}['$'];`,
+		`${receiver}?.['$'];`,
+		`const { $: changes } = ${receiver};`,
+		`const { ['$']: changes } = ${receiver};`,
+		`({ $: changes } = ${receiver});`,
+	])
+		expect(violations(source).filter(({ rule }) => rule === 'raw change stream')).toHaveLength(1);
+});
+
+it.each(['order', 'record', 'this'])(
+	'allows element and destructured record change streams on %s',
+	(receiver) => {
+		for (const source of [`${receiver}['$'];`, `const { $: changes } = ${receiver};`])
+			expect(violations(source)).toEqual([]);
+	}
+);
+
+it('walks ts/tsx/mts/cts sources while excluding tests, stories and test directories', () => {
+	const directory = mkdtempSync(join(__dirname, '.seam-walker-'));
+	try {
+		for (const extension of ['ts', 'tsx', 'mts', 'cts', 'js']) {
+			for (const name of ['source', 'source.test', 'source.stories'])
+				writeFileSync(join(directory, `${name}.${extension}`), 'doc.remove();');
+		}
+		for (const name of ['nested', '__tests__', '__mocks__', 'jest']) {
+			mkdirSync(join(directory, name));
+			writeFileSync(join(directory, name, 'source.mts'), '(<Record>doc).remove();');
+		}
+		const paths = sourceFiles(directory);
+		expect(paths.map((path) => relative(directory, path).split(sep).join('/')).sort()).toEqual([
+			'nested/source.mts',
+			'source.cts',
+			'source.mts',
+			'source.ts',
+			'source.tsx',
+		]);
+		for (const path of paths)
+			expect(violations(readFileSync(path, 'utf8'), path).map(({ rule }) => rule)).toEqual([
+				'record mutator',
+			]);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });
