@@ -793,7 +793,8 @@ export async function enqueueWriteIntent(input: {
 					// the queue as-is (the enqueue stands; only the dirty-mark is missing,
 					// and the drain's ack/reject bookkeeping self-heals it) and rethrow.
 					const unwound =
-						(await queue.admissionState(mutation, nowMs())) !== 'lost' &&
+						(legacyQueue ||
+							(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs(), true))) &&
 						(await queue.removePending(mutation.mutationId));
 					if (unwound && prior) await queue.replace(prior);
 					throw error;

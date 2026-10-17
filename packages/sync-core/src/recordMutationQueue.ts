@@ -62,7 +62,7 @@ const fenceId = (collection: string, record: string) => `${collection}/${record}
  * bookkeeping ⇒ a fresh mutation: 0 attempts, `pending`, ready to push now.
  */
 export type QueuedMutation = RecordMutation & {
-	/** Void-attempt ownership: held out of drain/coalesce until unmarked or removed. */
+	/** Void/coalesce ownership: held out of drain until unmarked or removed. */
 	readonly supersededBy?: string;
 	readonly markedAt?: number;
 	/** Internal record fence, never exposed as a deliverable mutation. */
@@ -371,6 +371,17 @@ export class RecordMutationQueue {
 				(row.attempts ?? 0) !== 0
 			)
 				return false;
+			if (replacement.admittedBy) {
+				// Keep the receipted generation until this admission durably releases.
+				if (
+					!(await this.storage.appendIfUnchanged(
+						{ ...row, supersededBy: `coalesce:${replacement.admittedBy}`, markedAt: nowMs },
+						stored.rev
+					))
+				)
+					return false;
+				return this.storage.appendIfUnchanged(replacement, null);
+			}
 			// Insert the replacement under its FRESH id (nobody else holds it), then
 			// remove the prior row CONDITIONALLY on the revision we just read. If the
 			// prior moved between the read and the remove — a concurrent claim,
@@ -453,7 +464,11 @@ export class RecordMutationQueue {
 					row.payload.phase === 'committed' ||
 					(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
 			)
-			.map((row) => row.mutationId);
+			.map((row) =>
+				isInternalRow(row)
+					? JSON.stringify([row.mutationId, row.admittedBy, row.supersededBy])
+					: row.mutationId
+			);
 	}
 
 	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {
@@ -475,12 +490,13 @@ export class RecordMutationQueue {
 		return this.holdRecord(collection, record, token, nowMs, true);
 	}
 
-	/** Renew only the still-live owner; a resumed expired writer must re-decide. */
+	/** Expired ownership may renew only for compensation, never to admit new work. */
 	async renewWriter(
 		collection: string,
 		record: string,
 		token: string,
-		nowMs: number
+		nowMs: number,
+		allowExpiredOwner = false
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
@@ -488,7 +504,7 @@ export class RecordMutationQueue {
 			);
 			if (
 				stored?.mutation.admittedBy !== token ||
-				(stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs
+				(!allowExpiredOwner && (stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs)
 			)
 				return false;
 			return this.storage.appendIfUnchanged({ ...stored.mutation, admittedAt: nowMs }, stored.rev);
@@ -550,6 +566,21 @@ export class RecordMutationQueue {
 		const holder = rows.find(({ mutation }) => mutation.mutationId === fenceId(collection, record));
 		if (holder?.mutation.admittedBy !== token || holder.mutation.payload.phase !== 'released')
 			return;
+		for (const { mutation, rev } of rows) {
+			if (mutation.supersededBy !== `coalesce:${token}`) continue;
+			const replacement = rows.some(
+				({ mutation: row }) => !isInternalRow(row) && row.admittedBy === token
+			);
+			if (
+				!(await (replacement
+					? this.storage.removeIfUnchanged(mutation.mutationId, rev)
+					: this.storage.appendIfUnchanged(
+							{ ...mutation, supersededBy: undefined, markedAt: undefined },
+							rev
+						)))
+			)
+				return;
+		}
 		for (const { mutation, rev } of rows) {
 			if (
 				isInternalRow(mutation) ||
@@ -696,7 +727,7 @@ export class RecordMutationQueue {
 				await this.storage.removeIfUnchanged(row.mutationId, rev);
 				continue;
 			}
-			if (row.supersededBy === undefined) continue;
+			if (row.supersededBy === undefined || row.supersededBy.startsWith('coalesce:')) continue;
 			if (
 				stored.some(
 					({ mutation: fence }) =>
@@ -713,6 +744,18 @@ export class RecordMutationQueue {
 					{ ...row, supersededBy: undefined, markedAt: undefined },
 					rev
 				);
+		}
+		for (const row of await this.all()) {
+			if (!row.supersededBy?.startsWith('coalesce:')) continue;
+			const token = row.supersededBy.slice('coalesce:'.length);
+			// Expiry first CAS-removes the holder above; a normal release wins instead.
+			if (
+				(await this.storage.list()).some((item) => item.admittedBy === token && isInternalRow(item))
+			)
+				continue;
+			const replacement = (await this.all()).find((item) => item.admittedBy === token);
+			if (replacement && !(await this.removePending(replacement.mutationId))) continue;
+			await this.unmarkForAnnihilation(row.mutationId, row.supersededBy);
 		}
 	}
 

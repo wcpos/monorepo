@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { InMemoryRecordMutationStorage, RecordMutationQueue } from './recordMutationQueue';
 import {
 	type Fetcher,
 	MUTATION_QUEUE_COLLECTION,
@@ -747,6 +748,24 @@ describe('StoreScopeManager', () => {
 });
 
 describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
+	it('refuses reset when the same admission id gets a new owner after confirmation', async () => {
+		const { manager, fakes } = makeManager();
+		await manager.switchTo('scope-a');
+		const fake = fakes.get('scope-a')!;
+		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await queue.admitWriter('orders', 'order', 'old', 0);
+		fake.pendingMutationIds.mockImplementation(() => queue.pendingResetIds(1));
+		const result = await manager.resetCollection('scope-a', MUTATION_QUEUE_COLLECTION, {
+			confirmDestroyQueue: true,
+			beforeDrop: async () => {
+				await queue.releaseWriter('orders', 'order', 'old', 1);
+				await queue.admitWriter('orders', 'order', 'new', 1);
+			},
+		});
+		expect(result).toBe('needs-confirmation');
+		expect(fake.resetCalls).toEqual([]);
+	});
+
 	it.each([false, true, 'replaced'])(
 		'refuses a queue reset (confirmed=%s) when a guarded writer appends after the initial count',
 		async (confirmDestroyQueue) => {

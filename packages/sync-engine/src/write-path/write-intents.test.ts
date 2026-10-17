@@ -175,7 +175,7 @@ describe('enqueueWriteIntent', () => {
 		}
 	);
 
-	it('a slow dirty mark releases its unchanged admission and the receipted row delivers', async () => {
+	it.each([false, true, 'renewal'])('slow dirty mark: failed=%s', async (failed) => {
 		const storage = createFakeMutationCollection();
 		let now = Date.now();
 		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
@@ -183,6 +183,7 @@ describe('enqueueWriteIntent', () => {
 			toJSON: () => data,
 			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
 				now += 30_001;
+				if (failed) throw new Error('dirty mark failed');
 				data = modify(data);
 			},
 		};
@@ -192,15 +193,31 @@ describe('enqueueWriteIntent', () => {
 				recordMutations: storage,
 			},
 		} as unknown as RxDatabase;
-		const receipt = await enqueueWriteIntent({
+		const queue = queueFor(db);
+		if (failed === 'renewal') {
+			const enqueue = queue.enqueue.bind(queue);
+			vi.spyOn(queue, 'enqueue').mockImplementationOnce(async (row) => {
+				const appended = await enqueue(row);
+				now += 30_001;
+				return appended;
+			});
+		}
+		const writing = enqueueWriteIntent({
 			db,
 			mintUuid: () => 'slow',
 			now: () => new Date(now).toISOString(),
-			intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: { id: 0 } },
+			intent: {
+				collection: 'orders',
+				operation: 'create',
+				recordId: 'order',
+				payload: { id: 0 },
+			},
 		});
-		expect(receipt).toMatchObject({ mutationId: 'slow', recordId: 'order' });
-		expect(data.local).toMatchObject({ dirty: true, pendingMutationIds: ['slow'] });
-		const queue = queueFor(db);
+		if (failed) await expect(writing).rejects.toThrow();
+		else {
+			expect(await writing).toMatchObject({ mutationId: 'slow', recordId: 'order' });
+			expect(data.local).toMatchObject({ dirty: true, pendingMutationIds: ['slow'] });
+		}
 		const push = vi.fn(async (mutation) => ({
 			outcome: 'created' as const,
 			mutation,
@@ -208,10 +225,10 @@ describe('enqueueWriteIntent', () => {
 			currentRevision: 'r1',
 		}));
 		expect(await drainMutationQueue({ queue, push, now: () => now })).toMatchObject({
-			pushed: 1,
+			pushed: failed ? 0 : 1,
 			rejected: [],
 		});
-		expect(push).toHaveBeenCalledTimes(1);
+		expect(push).toHaveBeenCalledTimes(failed ? 0 : 1);
 		expect(await queue.all()).toEqual([]);
 	});
 

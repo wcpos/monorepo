@@ -280,6 +280,8 @@ async function annihilateNeverPushedChains(input: {
 				}
 			}
 			if (refused) continue;
+			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
+				continue;
 			if (
 				!legacyQueue &&
 				!(await input.queue.setVoidPhase(head.collectionName, head.recordId, token, 'committed'))

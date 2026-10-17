@@ -48,6 +48,43 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it.each(['marked', 'appended', 'released'])('coalesce crash: %s', async (phase) => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const prior = await q.enqueue(mut({ mutationId: 'prior', payload: { name: 'receipted' } }));
+		await q.admitWriter('products', 'rec-A', 'writer', 0);
+		if (phase === 'marked') {
+			const append = storage.appendIfUnchanged.bind(storage);
+			vi.spyOn(storage, 'appendIfUnchanged').mockImplementation(async (row, rev) => {
+				if (row.mutationId === 'replacement') throw new Error('crash');
+				return append(row, rev);
+			});
+		}
+		const coalescing = q.coalesceInto(
+			'prior',
+			{
+				...prior,
+				mutationId: 'replacement',
+				admittedBy: 'writer',
+				payload: { name: 'unreceipted' },
+			},
+			1
+		);
+		if (phase === 'marked') await expect(coalescing).rejects.toThrow('crash');
+		else await coalescing;
+		if (phase === 'released') await q.releaseWriter('products', 'rec-A', 'writer', 2);
+		const restarted = new RecordMutationQueue(storage);
+		const push = vi.fn(async (m: RecordMutation) => ok(m));
+		const result = await drainMutationQueue({ queue: restarted, push, now: () => 30_001 });
+		expect(result.rejected).toEqual([]);
+		expect(result.pushed).toBe(1);
+		expect(push.mock.calls[0][0]).toMatchObject({
+			mutationId: phase === 'released' ? 'replacement' : 'prior',
+			payload: { name: phase === 'released' ? 'unreceipted' : 'receipted' },
+		});
+		expect(await restarted.all()).toEqual([]);
+	});
+
 	it.each(['live', 'released', 'release interrupted', 'release during scan', 'expired', 'fenced'])(
 		'delivers only completed admissions: %s',
 		async (state) => {
@@ -99,6 +136,7 @@ describe('drainMutationQueue', () => {
 		'expired fence',
 		'revision',
 		'remote identity',
+		'identity after marking',
 		'resolution claim',
 		'pushed after snapshot',
 	])('does not annihilate across %s', async (race) => {
@@ -106,6 +144,7 @@ describe('drainMutationQueue', () => {
 		const q = new RecordMutationQueue(storage);
 		const other = new RecordMutationQueue(storage);
 		let now = Date.now();
+		let pulled = false;
 		await q.enqueue(mut({ operation: 'create', origin: 'minted' }));
 		await q.enqueue(mut({ mutationId: 'delete', operation: 'delete' }));
 		if (race === 'admission') await other.admitWriter('products', 'rec-A', 'writer', now);
@@ -125,6 +164,7 @@ describe('drainMutationQueue', () => {
 				});
 			}
 			const marked = await mark(id, ...args);
+			if (race === 'identity after marking') pulled = true;
 			if (race === 'expired fence' && id === 'm1') {
 				now += 120_001;
 				expect(await other.admitWriter('products', 'rec-A', 'writer', now)).toBe(true);
@@ -140,7 +180,7 @@ describe('drainMutationQueue', () => {
 			limit: 0,
 			now: () => now,
 			currentRevision: async () => (race === 'revision' ? 'server-revision' : null),
-			hasServerIdentity: async () => race === 'remote identity',
+			hasServerIdentity: async () => pulled || race === 'remote identity',
 		});
 		expect(result.annihilated).toBe(0);
 		expect(removeResident).not.toHaveBeenCalled();
