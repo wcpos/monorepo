@@ -180,6 +180,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					pending_status: null,
 					...synced,
 					approval_required: true,
+					approved_counted: null,
 					sync_error: 'wcpos_override_refused',
 					closed_at_gmt: null,
 				});

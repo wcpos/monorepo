@@ -256,6 +256,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		server_status: 'counting',
 		sync_status: 'synced',
 		status: 'counting',
+		approved_counted: { cash: '80', card: '10' },
 	});
 	await closeSession(db.register_sessions, row.id, { counted: { cash: '80', card: '10' } });
 	http.post.mockRejectedValue({
@@ -270,6 +271,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		pending_status: null,
 		sync_status: 'synced',
 		approval_required: true,
+		approved_counted: null,
 		sync_error: 'wcpos_override_refused',
 		counted: { cash: '80', card: '10' },
 	});

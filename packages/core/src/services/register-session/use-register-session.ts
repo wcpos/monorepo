@@ -82,6 +82,18 @@ function baselineContains(
 			.map((row) => row.payload.id),
 		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
 		...orders.flatMap((order) =>
+			readLedger(order.payload.meta_data).flatMap((row) =>
+				(row.refunds ?? [])
+					.filter((refund) => {
+						const at = (refund as { created_at_gmt?: string }).created_at_gmt;
+						return refundIds != null
+							? !refundIds.includes(refund.id)
+							: !at || afterBaseline(at, baselineAt);
+					})
+					.map(({ id }) => id)
+			)
+		),
+		...orders.flatMap((order) =>
 			readLedger(order.payload.meta_data)
 				.filter((row) =>
 					ledgerRowIds != null

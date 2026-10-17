@@ -812,8 +812,7 @@ it.each([false, true])(
 			expect(active[0].server_expected).toEqual({ cash: '100' });
 			expect((await closing).toJSON()).toMatchObject({
 				period_refunds_total: '20.0000',
-				// An edited baseline leg cannot supply its prior refund state.
-				till_expected: allocationOnly ? { cash: '100' } : { cash: '100', stripe: '-20.0000' },
+				till_expected: { cash: '100', stripe: '-20.0000' },
 				breakdowns: {
 					refund_count: 1,
 					payment_methods: {
@@ -1087,7 +1086,7 @@ it('keeps the baseline without attempting anchor patches', async () => {
 	});
 	expect(actions.writeClosure).toHaveBeenLastCalledWith(
 		expect.objectContaining({
-			tillExpected: { cash: '100' },
+			tillExpected: { cash: '100', stripe: '-20.0000' },
 			orders: [parentHit('session', true, '2026-09-16').record],
 			refundRecords: [],
 		})
@@ -1562,6 +1561,24 @@ it.each([
 		);
 	}
 );
+
+it.each([
+	[[], undefined, '-20.0000'],
+	[[20], undefined, undefined],
+	[null, undefined, '-20.0000'],
+	[null, '2026-09-15T10:00:00', '-20.0000'],
+	[null, '2026-09-15T08:00:00', undefined],
+] as const)('accounts for allocation-only refund ids %j at %s', async (ids, at, stripe) => {
+	entries = [];
+	active = [{ ...active[0], server_refund_ids: ids, server_ledger_row_ids: ['card'] }];
+	mockOrders.next([
+		parentHit('session', true, '2026-09-15', {
+			refunds: [{ id: 20, amount: '20', status: 'succeeded', created_at_gmt: at }],
+		}),
+	]);
+	const result = await settled();
+	expect(result.current.expected.stripe).toBe(stripe);
+});
 
 it.each([
 	['ledger', '2026-09-15T08:00:01', 1],

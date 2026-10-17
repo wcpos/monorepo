@@ -229,7 +229,14 @@ it.each(['settings', 'support', 'clear-local-data'])(
 	}
 );
 
-let mockCart: { payload: { meta_data: { key: string; value: string }[] } } | undefined = {
+let mockCart:
+	| {
+			payload: {
+				meta_data: { key: string; value: string }[];
+				line_items?: { product_id: number }[];
+			};
+	  }
+	| undefined = {
 	payload: { meta_data: [] as { key: string; value: string }[] },
 };
 jest.mock('../contexts/current-order/context', () => ({ useCurrentOrderOptional: () => mockCart }));
@@ -238,7 +245,12 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	mockCart =
 		attributed === undefined
 			? undefined
-			: { payload: { meta_data: attributed ? [{ key: '_wcpos_register', value: 'A' }] : [] } };
+			: {
+					payload: {
+						meta_data: attributed ? [{ key: '_wcpos_register', value: 'A' }] : [],
+						line_items: attributed ? [{ product_id: 1 }] : [],
+					},
+				};
 	const blocked = attributed !== false;
 	const switchRegister = jest.fn();
 	render(
@@ -253,6 +265,18 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 	);
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
+});
+
+it('allows switching from an empty attributed template', () => {
+	mockCart = { payload: { meta_data: [{ key: '_wcpos_register', value: 'A' }] } };
+	const switchRegister = jest.fn();
+	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
+	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+	expect(button.disabled).toBe(false);
+	expect(button.getAttribute('aria-disabled')).toBe('false');
+	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
+	fireEvent.click(button);
+	expect(switchRegister).toHaveBeenCalledTimes(1);
 });
 
 describe('switch store', () => {
