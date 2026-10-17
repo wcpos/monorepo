@@ -85,4 +85,31 @@ describe('describeBareException', () => {
 		expect(event).toHaveProperty('contexts.thrown.string', 'Bearer [REDACTED]');
 		expect(event.exception.values[0].value).toBe('Request failed with Bearer [REDACTED]');
 	});
+
+	it('scrubs Basic credentials from bare exception diagnostics in beforeSend', () => {
+		const credential = 'Basic YWRtaW46c2VjcmV0';
+		// Sentry's event builder copies Error.name into `type` before beforeSend runs.
+		const event = { exception: { values: [{ type: credential, value: 'No error message' }] } };
+		const error = Object.assign(new Error(''), { name: credential, code: credential });
+		error.stack = `Error: ${credential}`;
+		error.toString = () => `Request failed with ${credential}`;
+		Object.defineProperty(error, Symbol.toStringTag, { value: credential });
+		Object.defineProperty(error, 'constructor', { value: { name: credential } });
+		Object.defineProperty(error, credential, { value: 1, enumerable: true });
+
+		const result = prepareEvent(event, { originalException: error });
+
+		expect(result).toHaveProperty('exception.values.0.type', 'Basic [REDACTED]');
+		expect(result).toHaveProperty('contexts.thrown.string', 'Request failed with Basic [REDACTED]');
+		expect(result).toHaveProperty('contexts.thrown.stackHead', 'Error: Basic [REDACTED]');
+		for (const field of ['name', 'code', 'constructor']) {
+			expect(result).toHaveProperty(`contexts.thrown.${field}`, 'Basic [REDACTED]');
+		}
+		expect(result).toHaveProperty('contexts.thrown.tag', '[object Basic [REDACTED]]');
+		expect(result).toHaveProperty(
+			'contexts.thrown.keys',
+			expect.arrayContaining(['Basic [REDACTED]'])
+		);
+		expect(JSON.stringify(result)).not.toContain('YWRtaW46c2VjcmV0');
+	});
 });
