@@ -12,6 +12,7 @@ import {
 	setVariationMatch,
 } from '../../variation-matches';
 import { useVariationRow } from '../context';
+import { useT } from '../../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
 import type { DataTableFeatures } from '../../../data-table';
@@ -32,6 +33,7 @@ export function VariationsFilterBar({ row }: Props) {
 		{ searchTerm: string; matches: import('../../../../../../query').VariationMatch[] }
 	>((state) => ({ searchTerm: state.search, matches: state.filters.attributeMatches }));
 	const actions = useQueryStateActions<'variations'>();
+	const t = useT();
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -41,7 +43,13 @@ export function VariationsFilterBar({ row }: Props) {
 		<HStack className="bg-card-header p-2">
 			<HStack className="flex-1">
 				{!!searchTerm && (
-					<Chip size="sm" icon="magnifyingGlass" label={searchTerm} onClear={actions.clearSearch} />
+					<Chip
+						size="sm"
+						icon="magnifyingGlass"
+						label={searchTerm}
+						onClear={actions.clearSearch}
+						clearLabel={t('common.remove')}
+					/>
 				)}
 				{(attributes || [])
 					.filter((attribute) => attribute.variation)

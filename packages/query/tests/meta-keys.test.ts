@@ -1,4 +1,4 @@
-import { collectMetaKeys } from './meta-keys';
+import { collectMetaKeys } from '../src/reads/product-meta-keys';
 
 describe('collectMetaKeys', () => {
 	it('returns sorted distinct meta keys, skipping empty/undefined', () => {

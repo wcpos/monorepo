@@ -35,6 +35,7 @@ export async function commitGatewaySale(
 				completing: true,
 				source,
 				settledOrderStatus: input.settledOrderStatus,
+				settledOrderGateway: input.methodId ?? undefined,
 				settledOrderStatuses: input.settledOrderStatuses,
 			});
 			await persistSaleProvenance(ctx, { order, source, sessionId, online });

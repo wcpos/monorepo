@@ -62,61 +62,35 @@ it('omits empty ids and empty groups', () => {
 	expect(result.groups).toEqual([]);
 });
 
-type Order = {
-	payload: {
-		payment_method: string;
-		payment_method_title?: string;
-		meta_data: { key: string; value: string }[];
-	};
-};
-type Database = { collections: { orders: { find: () => { $: BehaviorSubject<Order[]> } } } };
-const mockDatabases = new BehaviorSubject<Database | null>(null);
-const mockRuntime = {
-	engine: {
-		db$: (next: (db: Database | null) => void) => {
-			const subscription = mockDatabases.subscribe(next);
-			return () => subscription.unsubscribe();
-		},
-	},
-};
+const mockObserved = new BehaviorSubject<import('@wcpos/query').ObservedPaymentMethod[]>([]);
+const mockRuntime = { engine: {} };
 const mockInventory = [
 	{ id: 'pos_cash', title: 'Cash', kind: 'cash', order: 0, pos_enabled: false },
 ];
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => mockRuntime }));
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => mockRuntime,
+	observePaymentMethodHistory: () => mockObserved,
+}));
 jest.mock('./use-payment-methods', () => ({
 	usePaymentMethods: () => ({ methods: mockInventory }),
 }));
 
-it('observes payloads and all split legs live, rebinds on reset, and unsubscribes on unmount', () => {
-	const first = new BehaviorSubject<Order[]>([
+it('merges named history, clears history on null database, and unsubscribes on unmount', () => {
+	mockObserved.next([
 		{
-			payload: {
-				payment_method: 'old_card',
-				payment_method_title: 'Old card',
-				meta_data: [
-					{ key: '_wcpos_payment_method', value: 'pos_cash' },
-					{ key: '_wcpos_payment_method', value: 'gift' },
-					{ key: '_wcpos_payment_method', value: 'gift' },
-				],
-			},
+			payment_method: 'old_card',
+			payment_method_title: 'Old card',
+			indexMethods: ['pos_cash', 'gift', 'gift'],
 		},
 	]);
-	mockDatabases.next({ collections: { orders: { find: () => ({ $: first }) } } });
 	const { result, unmount } = renderHook(() => usePaymentMethodOptions());
 	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash', 'gift', 'old_card']);
 	expect(result.current.getLabel('old_card')).toBe('Old card');
-	act(() => first.next([{ payload: { payment_method: 'new_card', meta_data: [] } }]));
+	act(() => mockObserved.next([{ payment_method: 'new_card', indexMethods: [] }]));
 	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash', 'new_card']);
-	const second = new BehaviorSubject<Order[]>([]);
-	act(() => mockDatabases.next({ collections: { orders: { find: () => ({ $: second }) } } }));
-	act(() => first.next([{ payload: { payment_method: 'stale', meta_data: [] } }]));
-	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash']);
-	act(() => second.next([{ payload: { payment_method: 'gone_with_db', meta_data: [] } }]));
-	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash', 'gone_with_db']);
-	// A disposed engine emits null: the previous database's history is forgotten, not kept.
-	act(() => mockDatabases.next(null));
+	// The named read emits [] when the database becomes null.
+	act(() => mockObserved.next([]));
 	expect(result.current.items.map((item) => item.value)).toEqual(['pos_cash']);
 	unmount();
-	expect(mockDatabases.observed).toBe(false);
-	expect(second.observed).toBe(false);
+	expect(mockObserved.observed).toBe(false);
 });

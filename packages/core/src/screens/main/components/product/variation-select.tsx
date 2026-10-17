@@ -69,6 +69,7 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 						label={label}
 						on={isActive}
 						onClear={isActive ? onRemove : undefined}
+						clearLabel={t('common.remove')}
 					/>
 				</SelectPrimitiveTrigger>
 				<SelectContent>
@@ -104,6 +105,7 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 					label={label}
 					on={isActive}
 					onClear={isActive ? onRemove : undefined}
+					clearLabel={t('common.remove')}
 				/>
 			</ComboboxTrigger>
 			<ComboboxContent>

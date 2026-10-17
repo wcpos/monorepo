@@ -65,6 +65,7 @@ function Display({ selection, onSelectionChange, className, disabled, ref, ...pr
 Display.displayName = 'NumpadDisplay';
 
 interface NumpadProps {
+	changeSignLabel: string;
 	ref?: React.Ref<{ getValue: () => number } | null>;
 	initialValue?: number;
 	calculator?: boolean;
@@ -83,6 +84,7 @@ interface NumpadProps {
  * - for the reducer we need to use strings, but at least we know that the deceimal separator is a dot
  */
 function Numpad({
+	changeSignLabel,
 	ref,
 	initialValue = 0,
 	calculator = false,
@@ -203,7 +205,7 @@ function Numpad({
 							{
 								value: '+/-',
 								icon: 'plusMinus',
-								accessibilityLabel: '+/-',
+								accessibilityLabel: changeSignLabel,
 								testID: 'numpad-key-icon-plusMinus',
 							},
 							{ value: '0', label: '0', testID: 'numpad-key-0' },

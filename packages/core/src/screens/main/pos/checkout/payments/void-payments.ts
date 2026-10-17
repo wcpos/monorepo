@@ -1,4 +1,4 @@
-import { readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import { isLivePaymentStatus, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
 import type { MetaDataEntry, OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 /**
@@ -52,9 +52,7 @@ export async function voidPayments(
 	deps: VoidPaymentsDeps
 ): Promise<VoidPaymentsOutcome> {
 	const ledger = readLedger(order.meta_data);
-	const liveRows = ledger.filter(({ status }) =>
-		['pending', 'authorized', 'captured'].includes(status)
-	);
+	const liveRows = ledger.filter(({ status }) => isLivePaymentStatus(status));
 	if (liveRows.length === 0) {
 		return { kind: 'voided', via: 'offline', rows: [], failed: [], order: null };
 	}

@@ -5,6 +5,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { of } from 'rxjs';
 
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
+import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { UserSheet, useSalesToday } from './user-sheet';
 
@@ -232,6 +233,7 @@ it.each(['settings', 'support', 'clear-local-data'])(
 let mockCart:
 	| {
 			payload: {
+				status?: string;
 				meta_data: { key: string; value: string }[];
 				line_items?: { product_id: number }[];
 			};
@@ -268,7 +270,9 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', (attribu
 });
 
 it('allows switching from an empty attributed template', () => {
-	mockCart = { payload: { meta_data: [{ key: '_wcpos_register', value: 'A' }] } };
+	mockCart = {
+		payload: { status: 'pos-open', meta_data: [{ key: '_wcpos_register', value: 'A' }] },
+	};
 	const switchRegister = jest.fn();
 	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
 	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
@@ -278,6 +282,34 @@ it('allows switching from an empty attributed template', () => {
 	fireEvent.click(button);
 	expect(switchRegister).toHaveBeenCalledTimes(1);
 });
+
+it.each(['pos-partial', 'ledger'])(
+	'blocks a line-empty attributed cart with %s payment state',
+	(state) => {
+		mockCart = {
+			payload: {
+				status: state === 'pos-partial' ? state : 'pos-open',
+				meta_data: [{ key: '_wcpos_register', value: 'A' }],
+			},
+		};
+		if (state === 'ledger')
+			mockCart.payload.meta_data.push({
+				key: LEDGER_META_KEY,
+				value: JSON.stringify({
+					schema: 1,
+					payments: [{ id: 'p1', amount: '50', method: 'cash', status: 'captured' }],
+				}),
+			});
+		const switchRegister = jest.fn();
+		render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
+		const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		expect(button.getAttribute('aria-disabled')).toBe('true');
+		expect(screen.getByText('register.switch_register_blocked_cart')).toBeTruthy();
+		fireEvent.click(button);
+		expect(switchRegister).not.toHaveBeenCalled();
+	}
+);
 
 describe('switch store', () => {
 	afterEach(() => {

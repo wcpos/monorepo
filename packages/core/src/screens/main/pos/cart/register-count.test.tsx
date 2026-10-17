@@ -4,6 +4,10 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as audit from '../../../../services/register-session/audit';
+import {
+	backToSelling as resumeSelling,
+	startCounting,
+} from '../../../../services/register-session/session-store';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
@@ -234,16 +238,48 @@ it.each([
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
 
-it('closes without a second approval when the approved count is entered again', () => {
+it('retries a failed close without a second approval for the same count', async () => {
 	// A failed close or a restart keeps the approval; the same over-threshold count is not
 	// re-approved (expected cash is 480.80, so 463.30 is a 17.50 short against a 5 threshold).
 	varianceThreshold = '5';
 	approved_counted = { cash: '463.30' };
+	closeSession.mockRejectedValueOnce(new Error('offline'));
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('463.30');
+	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+	await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+	expect(screen.queryByTestId('approve-sheet')).toBeNull();
+	expect(closeSession).toHaveBeenCalledTimes(2);
+});
+
+it('requires approval for the same count after returning to selling and counting again', async () => {
+	varianceThreshold = '5';
+	approved_counted = { cash: '463.30' };
+	approval_required = true;
+	const sessions = {
+		findOne: () => ({
+			exec: async () => ({
+				incrementalPatch: async (patch: Record<string, unknown>) => {
+					if ('approved_counted' in patch)
+						approved_counted = patch.approved_counted as typeof approved_counted;
+					if ('approval_required' in patch) approval_required = patch.approval_required as boolean;
+				},
+			}),
+		}),
+	} as unknown as Parameters<typeof resumeSelling>[0];
+	backToSelling.mockImplementationOnce(async () => {
+		await resumeSelling(sessions, 's');
+	});
+	const view = render(<RegisterCount onClosed={jest.fn()} />);
+	await act(async () => fireEvent.click(screen.getByTestId('count-back')));
+	await startCounting(sessions, 's');
+	view.unmount();
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));
-	expect(screen.queryByTestId('approve-sheet')).toBeNull();
-	expect(closeSession).toHaveBeenCalled();
+	expect(closeSession).not.toHaveBeenCalled();
+	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
+	expect(approval_required).toBe(true);
 });
 
 it('requests approval again when the count changes after approval', () => {

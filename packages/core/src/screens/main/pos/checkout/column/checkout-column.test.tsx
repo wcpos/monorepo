@@ -9,7 +9,7 @@ import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
-import { CheckoutLedger } from '../../cart/checkout-ledger';
+import { CheckoutTotals } from '../../cart/checkout-totals';
 import { useCheckoutBack } from './use-checkout-back';
 import { CheckoutColumn } from './checkout-column';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
@@ -134,6 +134,8 @@ jest.mock('react-native-reanimated', () => ({
 	},
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+// The shared table module's pulse row pulls worklets into jest; only its header recipe is read here.
+jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'table-head-text' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 // The tender pane's declared-fields helpers draw host controls; their native deps stay out of jsdom.
 jest.mock('@wcpos/components/checkbox', () => ({ Checkbox: () => null }));
@@ -280,12 +282,12 @@ jest.mock('@wcpos/components/card', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
-it('reads the ledger independently, with balance only in the tender header', () => {
+it('reads the stilled totals independently, with balance only in the tender header', () => {
 	mockFlow = makeFlow({ paidMinor: 5000, balanceMinor: 4295 });
 	render(
 		<>
 			<CheckoutColumn order={order} />
-			<CheckoutLedger order={order} />
+			<CheckoutTotals view={{ ...mockFlow, format: (minor) => `$${(minor / 100).toFixed(2)}` }} />
 		</>
 	);
 	expect(mockUseFlow).toHaveBeenCalledTimes(1);
@@ -295,28 +297,6 @@ it('reads the ledger independently, with balance only in the tender header', () 
 	expect(screen.getByTestId('checkout-label').textContent).toContain('$42.95');
 	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('$42.95');
 	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('$50.00');
-	expect(screen.getByTestId('checkout-ledger-header').textContent).toContain('Guest');
-});
-it('lays each ledger line under the stilled head: qty, name, unit price, total per tax display', () => {
-	mockLineItems = [
-		{
-			id: 7,
-			name: 'Belt &amp; Buckle',
-			quantity: 2,
-			total: '110.00',
-			total_tax: '9.80',
-			meta_data: [],
-		},
-	];
-	const { unmount } = render(<CheckoutLedger order={order} />);
-	expect(screen.getByTestId('checkout-ledger-qty-7').textContent).toBe('2');
-	expect(screen.getByTestId('checkout-ledger-price-7').textContent).toBe('$55.00');
-	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$110.00');
-	expect(screen.queryByText(/2 ×/)).toBeNull();
-	unmount();
-	mockTaxDisplayCart = 'incl';
-	render(<CheckoutLedger order={order} />);
-	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$119.80');
 });
 it('owns Android hardware back only while mounted', () => {
 	const os = jest.replaceProperty(Platform, 'OS', 'android');

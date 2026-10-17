@@ -80,7 +80,7 @@ export function OsPrintersSection({
 							form.setValue('address', p.address ?? '', { shouldValidate: true });
 							form.setValue('name', p.name);
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
+						className={`flex-row items-center gap-2 rounded-lg border p-2 ${
 							selected ? 'border-primary bg-primary/5' : 'border-border'
 						}`}
 					>

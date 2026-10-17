@@ -27,8 +27,8 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: Props) => <span data-testid={testID}>{children}</span>,
 }));
-jest.mock('./components/pill', () => ({
-	Pill: ({ children }: Props) => <span>{children}</span>,
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: Props) => <span>{children}</span>,
 }));
 jest.mock('./components/section', () => ({
 	Section: ({ children, testID, title }: Props & { title: string }) => (

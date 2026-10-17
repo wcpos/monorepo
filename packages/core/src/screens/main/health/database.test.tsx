@@ -177,6 +177,12 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
@@ -207,6 +213,45 @@ jest.mock('@wcpos/components/vstack', () => ({
 		);
 	},
 }));
+// The shared table: plain elements that keep testID and className, and register the
+// root's onLayout as the VStack mock does (the wide/compact switch reads it).
+jest.mock('@wcpos/components/table', () => {
+	function Cell({
+		children,
+		testID,
+		className,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) {
+		return (
+			<div data-testid={testID} className={className}>
+				{children}
+			</div>
+		);
+	}
+	return {
+		Table: ({
+			children,
+			testID,
+			onLayout,
+		}: {
+			children: React.ReactNode;
+			testID?: string;
+			onLayout?: LayoutHandler;
+		}) => {
+			if (typeof onLayout === 'function' && typeof testID === 'string') {
+				mockLayoutHandlers[testID] = onLayout;
+			}
+			return <div data-testid={testID}>{children}</div>;
+		},
+		TableCell: Cell,
+		TableHead: Cell,
+		TableHeader: Cell,
+		TableRow: Cell,
+	};
+});
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
@@ -271,8 +316,6 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 jest.mock('./components', () => ({
 	Callout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	CoverageBar: ({ percent }: { percent: number }) => <div>{percent}</div>,
-	HairlineHeaderCell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	HairlineHeaderRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 	Stat: () => null,
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -412,6 +455,22 @@ describe('DatabaseScreen coverage', () => {
 		expect(getByTestId('db-row-products').className).toContain('flex');
 		expect(getByTestId('db-row-products').className).not.toContain('hidden');
 		expect(getByTestId('db-row-sm-products').className).toContain('hidden');
+	});
+
+	it('lays the heads, the collection rows and the storage lines on the same columns', () => {
+		const { getByTestId } = render(<DatabaseScreen />);
+		act(() => mockLayoutHandlers['db-table']({ nativeEvent: { layout: { width: 760 } } }));
+		const classes = (testID: string) =>
+			Array.from(getByTestId(testID).children).map((cell) => cell.className);
+		const head = Array.from(getByTestId('db-table').children[0].children[0].children).map(
+			(cell) => cell.className
+		);
+		const row = classes('db-row-products');
+		// Same six columns, the last the menu button's own width (the old w-9 spacer sat
+		// 8 px short of the 44 px menu, pushing every head right of its numbers).
+		expect(row).toEqual(head);
+		expect(row.at(-1)).toContain('w-ctl');
+		expect(classes('db-row-cached-images').at(-1)).toBe(row.at(-1));
 	});
 
 	it('keeps the wider health layout with the shared screen spacing', () => {

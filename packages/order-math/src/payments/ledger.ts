@@ -16,6 +16,10 @@ export const LIVE_PAYMENT_STATUSES: readonly PaymentRow['status'][] = [
 	'captured',
 ];
 
+export function isLivePaymentStatus(status: string): boolean {
+	return (LIVE_PAYMENT_STATUSES as readonly string[]).includes(status);
+}
+
 /** One `meta_data` entry as the order document carries it (`key` is optional there). */
 export type MetaDataEntry = {
 	id?: number;

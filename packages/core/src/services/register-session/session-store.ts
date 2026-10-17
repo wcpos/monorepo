@@ -23,8 +23,6 @@ import {
 } from '../register/register-document';
 import { attributeRefunds, deriveExpected } from './expected';
 
-import type { DeepReadonly } from 'rxdb';
-
 export const pending = {
 	sync_status: 'pending',
 	sync_attempts: 0,
@@ -117,7 +115,9 @@ async function transition(
 export const startCounting = (sessions: RegisterSessionCollection, id: string) =>
 	transition(sessions, id, 'counting');
 export const backToSelling = (sessions: RegisterSessionCollection, id: string) =>
-	transition(sessions, id, 'open');
+	// The approval snapshot belongs to the counting attempt it was given for; `approval_required`
+	// is the server's flag and stays until the server clears it.
+	transition(sessions, id, 'open', { approved_counted: null });
 export const closeSession = async (
 	sessions: RegisterSessionCollection,
 	id: string,
@@ -221,7 +221,24 @@ export async function writeClosure({
 	closures: ClosureCollection;
 	userDB: UserDatabase;
 	siteUuid: string;
-	session: DeepReadonly<RegisterSessionRow>;
+	session: Readonly<
+		Pick<
+			RegisterSessionRow,
+			| 'id'
+			| 'register_id'
+			| 'store_id'
+			| 'opened_at_gmt'
+			| 'opened_by'
+			| 'closed_at_gmt'
+			| 'closed_by'
+			| 'business_day'
+			| 'approved_by'
+			| 'counted_float'
+			| 'expected_float'
+			| 'opening_variance'
+			| 'sync_status'
+		>
+	>;
 	counted: string;
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];

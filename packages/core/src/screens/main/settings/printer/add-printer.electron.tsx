@@ -77,7 +77,7 @@ function DeviceList({
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);
 							}
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
+						className={`flex-row items-center gap-2 rounded-lg border p-2 ${
 							selected ? 'border-primary bg-primary/5' : 'border-border'
 						}`}
 					>

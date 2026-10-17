@@ -359,11 +359,7 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 												<DataTableHeader
 													collectionName={props.collectionName}
 													columnId={header.column.id}
-													header={
-														<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-															{flexRender(header.column.columnDef.header, header.getContext())}
-														</Text>
-													}
+													header={flexRender(header.column.columnDef.header, header.getContext())}
 													disableSort={!header.column.getCanSort()}
 													sortBy={sortBy}
 													sortDirection={sortDirection}

@@ -18,7 +18,7 @@ type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 export function refreshOrderRecord(
 	runtime: QueryRuntime,
 	orderId: number
-): Promise<'refreshed' | 'timed-out'> {
+): Promise<'refreshed' | 'timed-out' | 'failed'> {
 	// Deliberately not `async`: an engine that cannot even take the request throws
 	// from here, synchronously, to whoever asked for the refresh. Only the WAIT for
 	// readiness is the caller's to absorb.
@@ -31,7 +31,11 @@ export function refreshOrderRecord(
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([
-		handle.ready.then((): 'refreshed' => 'refreshed'),
+		handle.ready.then((result): 'refreshed' | 'failed' =>
+			result.action === 'fetched' && result.appliedRecordIds?.includes(String(orderId))
+				? 'refreshed'
+				: 'failed'
+		),
 		new Promise<'timed-out'>((resolve) => {
 			timer = setTimeout(() => resolve('timed-out'), ORDER_REFRESH_TIMEOUT_MS);
 		}),
@@ -47,7 +51,8 @@ export async function reconcileCompletedOrder(
 	refresh = true,
 	adjustStock = (lineItems: Parameters<typeof stockAdjustment>[1]) =>
 		stockAdjustment(runtime, lineItems)
-): Promise<void> {
+): Promise<'refreshed' | 'timed-out' | 'failed' | 'skipped'> {
+	let refreshOutcome: 'refreshed' | 'timed-out' | 'failed' | 'skipped' = 'skipped';
 	if (refresh) {
 		const orderId = order.getLatest().payload.id;
 		if (!orderId) {
@@ -56,8 +61,8 @@ export async function reconcileCompletedOrder(
 		// Outside the try on purpose — see refreshOrderRecord.
 		const refreshed = refreshOrderRecord(runtime, orderId);
 		try {
-			const outcome = await refreshed;
-			if (outcome === 'timed-out') {
+			refreshOutcome = await refreshed;
+			if (refreshOutcome === 'timed-out') {
 				// Previously invisible: the race resolved on the timer and completion carried
 				// on with no row at all, so a store that never answered looked identical to
 				// one that answered instantly.
@@ -67,6 +72,7 @@ export async function reconcileCompletedOrder(
 				});
 			}
 		} catch (error) {
+			refreshOutcome = 'failed';
 			// The payment is already recorded and the receipt stage already shown; a
 			// refresh that fails must degrade to the local record, not surface as a
 			// payment error and skip the stock reconciliation below. Per LEVELS.md that
@@ -86,4 +92,5 @@ export async function reconcileCompletedOrder(
 		(item.meta_data as { key: string }[] | undefined)?.some((meta) => meta.key === '_reduced_stock')
 	);
 	adjustStock(reducedStockItems);
+	return refreshOutcome;
 }

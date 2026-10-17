@@ -5,6 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -16,6 +17,7 @@ import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { readOnlyLineKey, useCartTableReadOnly } from './read-only';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
@@ -24,6 +26,8 @@ interface Props {
 }
 export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
+	const readOnly = useCartTableReadOnly();
+	const paidBy = readOnly?.paidBy?.[readOnlyLineKey(uuid, item)];
 	const { currentOrderRecord } = useCurrentOrder();
 	const { updateCartLine } = useUpdateCartLine();
 	const stockRejection = useObservableEagerState(stockRejection$);
@@ -66,17 +70,31 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	return (
 		<VStack className="w-full gap-0">
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
-			<View className="w-full" ref={scrollRef}>
+			{/* Read-only (checkout, receipt): the name the field shows, nothing to press, and no
+			    scroll target — the stilled cart never scrolls to a row. */}
+			<View className="w-full" ref={readOnly ? undefined : scrollRef}>
 				{/* Two lines: the name is what the cashier reads, and the amount columns hold
 				    their width at every scale step, so a long name wraps rather than truncates. */}
-				<EditableField
-					variant="ghost"
-					bold={false}
-					numberOfLines={2}
-					value={item.name}
-					onChangeText={(name) => updateCartLine('line_items', uuid, { name })}
-				/>
+				{readOnly ? (
+					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{item.name ?? ''}
+					</Text>
+				) : (
+					<EditableField
+						variant="ghost"
+						bold={false}
+						numberOfLines={2}
+						value={item.name}
+						onChangeText={(name) => updateCartLine('line_items', uuid, { name })}
+					/>
+				)}
 			</View>
+			{paidBy ? (
+				<StatusBadge
+					variant="success"
+					label={t('pos_checkout.line_paid_by', { methods: paidBy.join(' + ') })}
+				/>
+			) : null}
 			{stockMark && (
 				// Attention, not destructive (rule 7); dark words on the amber tint (the amber is ~2.5:1 as text).
 				<HStack

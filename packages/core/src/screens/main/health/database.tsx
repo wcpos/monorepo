@@ -12,6 +12,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
@@ -25,6 +26,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
+import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -48,15 +50,7 @@ import {
 	useEngineStatus,
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
-import {
-	Callout,
-	CoverageBar,
-	HairlineHeaderCell,
-	HairlineHeaderRow,
-	Pill,
-	Stat,
-	StatHeader,
-} from './components';
+import { Callout, CoverageBar, Stat, StatHeader } from './components';
 import {
 	censusFreshnessWindow,
 	censusRefreshDue,
@@ -250,6 +244,22 @@ function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent)
 	return { wide, onLayout };
 }
 
+/**
+ * The wide layout's columns, shared by the heads, the collection rows and the storage
+ * lines so they line up. The shared table's cells, flush (`px-0`): the row's `gap-3` is
+ * the gutter, as the hairline layout had it, and the actions column is the menu button's
+ * own width (`w-ctl`), so the heads no longer sit 8 px right of the numbers under them.
+ */
+const DB_ROW = 'items-center gap-3 py-2';
+const DB_COLUMN = {
+	name: 'min-w-0 px-0 py-0',
+	local: 'w-20 flex-none items-end px-0 py-0',
+	server: 'w-24 flex-none items-end px-0 py-0',
+	coverage: 'w-32 flex-none items-end px-0 py-0',
+	size: 'w-20 flex-none items-end px-0 py-0',
+	actions: 'w-ctl flex-none px-0 py-0',
+} as const;
+
 function CollectionRowView({
 	row,
 	label,
@@ -368,19 +378,16 @@ function CollectionRowView({
 	return (
 		<>
 			{/* wide — table row */}
-			<HStack
-				testID={`db-row-${row.key}`}
-				className={cn('border-border items-center gap-3 border-b py-2', wide ? 'flex' : 'hidden')}
-			>
-				<View className={isVariations ? 'min-w-0 flex-1 pl-4' : 'min-w-0 flex-1'}>
+			<TableRow testID={`db-row-${row.key}`} className={cn(DB_ROW, wide ? 'flex' : 'hidden')}>
+				<TableCell className={cn(DB_COLUMN.name, isVariations && 'pl-4')}>
 					<HStack className="items-center gap-2">
 						<Text className={isVariations ? undefined : 'font-medium'}>
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					{isVariations ? (
@@ -396,19 +403,25 @@ function CollectionRowView({
 						</Text>
 					) : null}
 					{clearingSub}
-				</View>
-				<Text className="w-20 text-right tabular-nums">{row.local.toLocaleString()}</Text>
-				<Text className="text-muted-foreground w-24 text-right text-sm tabular-nums">
-					{story.serverText}
-				</Text>
-				<View className="w-32 items-end">
+				</TableCell>
+				<TableCell className={DB_COLUMN.local}>
+					<Text className="text-right tabular-nums">{row.local.toLocaleString()}</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.server}>
+					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+						{story.serverText}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.coverage}>
 					<CoverageCell coverage={story.coverage} />
-				</View>
-				<Text className="text-muted-foreground w-20 text-right text-sm tabular-nums">
-					{sizeText ? `≈ ${sizeText}` : '—'}
-				</Text>
-				{menu}
-			</HStack>
+				</TableCell>
+				<TableCell className={DB_COLUMN.size}>
+					<Text className="text-muted-foreground text-right text-sm tabular-nums">
+						{sizeText ? `≈ ${sizeText}` : '—'}
+					</Text>
+				</TableCell>
+				<TableCell className={DB_COLUMN.actions}>{menu}</TableCell>
+			</TableRow>
 
 			{/* compact — two-line list row */}
 			<HStack
@@ -421,9 +434,9 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-sm-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-sm-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					<Text
@@ -524,14 +537,16 @@ function FootprintRow({
 	const text = formatBytes(bytes);
 	if (bytes <= 0 || !text) return null;
 	return (
-		<HStack testID={testID} className="border-border items-center gap-3 border-b py-2">
-			<View className="min-w-0 flex-1">
+		<TableRow testID={testID} className={DB_ROW}>
+			<TableCell className={DB_COLUMN.name}>
 				<Text className="text-muted-foreground">{label}</Text>
 				{sub ? <Text className="text-muted-foreground/80 text-xs">{sub}</Text> : null}
-			</View>
-			<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
-			<View className="w-9" />
-		</HStack>
+			</TableCell>
+			<TableCell className="flex-none items-end px-0 py-0">
+				<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
+			</TableCell>
+			<TableCell className={DB_COLUMN.actions} />
+		</TableRow>
 	);
 }
 
@@ -697,25 +712,27 @@ export function DatabaseScreen() {
 
 				{/* Per-collection rows (table header in the wide layout only; rows render both
 				    layouts and show one, chosen by the measured table width) */}
-				<VStack testID="db-table" className="gap-0" onLayout={tableLayout.onLayout}>
-					<HairlineHeaderRow className={tableLayout.wide ? 'flex' : 'hidden'}>
-						<HairlineHeaderCell className="flex-1">
-							{t('health.database.col_collection')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_on_device')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-24 text-right">
-							{t('health.database.col_on_server')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-32 text-right">
-							{t('health.database.col_coverage')}
-						</HairlineHeaderCell>
-						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_size')}
-						</HairlineHeaderCell>
-						<View className="w-9" />
-					</HairlineHeaderRow>
+				<Table testID="db-table" onLayout={tableLayout.onLayout}>
+					<TableHeader className={tableLayout.wide ? 'flex' : 'hidden'}>
+						<TableRow className="items-center gap-3">
+							<TableHead className={DB_COLUMN.name}>
+								<Text>{t('health.database.col_collection')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.local}>
+								<Text>{t('health.database.col_on_device')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.server}>
+								<Text>{t('health.database.col_on_server')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.coverage}>
+								<Text>{t('health.database.col_coverage')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.size}>
+								<Text>{t('health.database.col_size')}</Text>
+							</TableHead>
+							<TableHead className={DB_COLUMN.actions} />
+						</TableRow>
+					</TableHeader>
 					{rows.map((row) => (
 						<CollectionRowView
 							key={row.key}
@@ -779,7 +796,7 @@ export function DatabaseScreen() {
 							) : null}
 						</>
 					) : null}
-				</VStack>
+				</Table>
 
 				{/* Receipt emails that have not gone out yet (#165). Unlike the dead
 				    letters above there is no cheap precomputed count to gate on, so the

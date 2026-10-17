@@ -200,7 +200,7 @@ export function TerminalLegView({
 				</Text>
 			</HStack>
 			<View className="min-h-4 flex-1" />
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
 				{t('pos_checkout.on_the_terminal')}
 			</Text>
 			<Text className={`text-foreground font-bold tabular-nums ${phone ? 'text-5xl' : 'text-7xl'}`}>

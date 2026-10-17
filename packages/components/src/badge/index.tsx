@@ -115,7 +115,11 @@ export function Badge({
 		return (
 			<View className={cn(badgeVariants({ variant, size }), className)} {...props}>
 				<TextClassContext.Provider value={undefined}>
-					<Text className={badgeTextVariants({ variant, size })}>{children}</Text>
+					{/* One line: a long label (a customer's name in the stilled cart head) truncates
+					    inside the badge instead of wrapping out of its fixed height. */}
+					<Text className={badgeTextVariants({ variant, size })} numberOfLines={1}>
+						{children}
+					</Text>
 				</TextClassContext.Provider>
 			</View>
 		);

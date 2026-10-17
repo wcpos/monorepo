@@ -17,7 +17,9 @@ jest.mock('../text', () => ({
 
 it('preserves digit, sign and decimal IDs and feeds Keypad presses to the reducer', () => {
 	const ref = React.createRef<{ getValue: () => number }>();
-	render(<Numpad ref={ref} decimalSeparator="," discounts={[10]} />);
+	render(
+		<Numpad changeSignLabel="Cambiar signo" ref={ref} decimalSeparator="," discounts={[10]} />
+	);
 	for (const digit of '0123456789')
 		expect(screen.getByTestId(`numpad-key-${digit}`)).toBeInTheDocument();
 	fireEvent.click(screen.getByTestId('numpad-key-1'));

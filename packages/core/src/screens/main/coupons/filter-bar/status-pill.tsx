@@ -41,6 +41,7 @@ export function StatusPill() {
 					icon="circleInfo"
 					label={value?.label || t('common.status')}
 					on={isActive}
+					clearLabel={t('common.remove')}
 					onClear={isActive ? () => clearFilter('status') : undefined}
 				/>
 			</SelectPrimitiveTrigger>

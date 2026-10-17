@@ -204,7 +204,9 @@ it('leaves anchored positioning to the primitive without deferring focus', () =>
 	expect(OVERLAY_MOTION.anchored.enter).toBe('web:animate-pop-in');
 	expect(OVERLAY_MOTION.anchored.exit).toBe('web:animate-pop-out');
 	expect(OVERLAY_PANEL.anchored).toContain('bg-card');
-	expect(OVERLAY_PANEL.anchored).toContain('shadow-md');
+	// Flat: a hairline border carries the panel, no shadow (decision 11, CODING_STANDARDS § Design 7).
+	expect(OVERLAY_PANEL.anchored).toContain('border');
+	expect(OVERLAY_PANEL.anchored).not.toContain('shadow');
 	expect(OVERLAY_PANEL.bottom).toContain('rounded-t-2xl');
 	expect(OVERLAY_PANEL.bottom).not.toContain('shadow');
 	// Web: SCRIM_WRAPPER skips a `[data-sheet]`, so the sheet panel keeps its own cap.

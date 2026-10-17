@@ -2,12 +2,16 @@ import * as React from 'react';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useNumberFormat } from '../../../hooks/use-number-format';
+import { useCartTableReadOnly } from './read-only';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
@@ -16,10 +20,28 @@ interface Props {
 	type: 'line_items';
 }
 
-/**
- *
- */
-export function FeePrice({ row }: CellContext<Props, 'price'>) {
+export function FeePrice(props: CellContext<Props, 'price'>) {
+	return useCartTableReadOnly() ? <ReadOnlyFeePrice {...props} /> : <EditableFeePrice {...props} />;
+}
+
+/** What the fee's input shows: a percentage beside its icon, or the amount. */
+function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
+	const { getFeeLineData } = useFeeLineData();
+	const { percent, amount } = getFeeLineData(row.original.item);
+	const { format } = useCurrentOrderCurrencyFormat();
+	// The store's separators, as the percentage input shows them (`12,5`, not `12.5`).
+	const { format: formatNumber } = useNumberFormat();
+	return (
+		<HStack space="xs" className="justify-center">
+			<Text className="text-muted-foreground text-right tabular-nums">
+				{percent ? formatNumber(Number(amount) || 0) : format(Number(amount) || 0)}
+			</Text>
+			{percent && <Icon name="percent" size="sm" />}
+		</HStack>
+	);
+}
+
+function EditableFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
 	const { getFeeLineData } = useFeeLineData();

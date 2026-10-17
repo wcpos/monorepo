@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import isEqual from 'lodash/isEqual';
 
-import { type PaymentRow, readLedger } from '@wcpos/order-math';
+import { isLivePaymentStatus, type PaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -183,12 +183,7 @@ export function resolveStage(
 ): 'cart' | 'checkout' | 'receipt' {
 	if (!uuid) return 'cart';
 	if (mode.receiptOrders.has(uuid)) return 'receipt';
-	if (
-		mode.checkoutOrders.has(uuid) ||
-		rows.some(
-			(row) => row.status === 'pending' || row.status === 'authorized' || row.status === 'captured'
-		)
-	)
+	if (mode.checkoutOrders.has(uuid) || rows.some((row) => isLivePaymentStatus(row.status)))
 		return 'checkout';
 	return 'cart';
 }

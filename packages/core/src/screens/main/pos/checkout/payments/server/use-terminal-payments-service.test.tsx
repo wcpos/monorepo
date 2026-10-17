@@ -195,6 +195,8 @@ jest.mock('@wcpos/utils/logger', () => ({
 		error: (...args: unknown[]) => mockMirrorError(...args),
 		warn: (...args: unknown[]) => mockWarn(...args),
 		info: (...args: unknown[]) => mockInfo(...args),
+		// Recovered arcs (a refresh that timed out or failed) log at debug; the hook must not crash on them.
+		debug: () => undefined,
 	}),
 	getErrorMessage: String,
 }));
