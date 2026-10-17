@@ -542,11 +542,14 @@ export const CONFORMANCE_TABLE = {
 		level: 'info',
 		message: recordMessage('push conflict'),
 	},
+	// Another writer holds the reservation or the record lock; the drain retries
+	// with backoff and the lock usually frees. One that keeps holding is a wedged
+	// reservation on the server, so it warns SYNC131 once it has persisted.
 	'push.in_progress': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: null,
-		level: 'info',
+		code: ERROR_CODES.STORE_SERVER_ERROR,
+		level: (_event, fields) => streakLevel(fields.attempt),
 		message: recordMessage('push already in progress'),
 	},
 	// The dead-letter verdict: the record parks for Store health. Error, the

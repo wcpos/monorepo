@@ -585,7 +585,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										observe: deps.diagnostics,
 										attempt,
 									});
-									pushFailures.delete(mutation.mutationId);
+									// A 409 is not the end of the sequence: the drain re-anchors and
+									// re-pushes (#1204), and that push settles the streak. Clearing
+									// here would make a repeating 409-then-503 forever attempt 1.
+									if (pushed.outcome !== 'conflict') pushFailures.delete(mutation.mutationId);
 									return pushed;
 								} catch (error) {
 									// Our own cancellation (a scope switch) is not a push failure.

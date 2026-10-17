@@ -260,7 +260,9 @@ export async function pushRecordMutation(input: {
 				type: 'push.in_progress',
 				level: 'warn',
 				collection: mutation.collectionName,
-				fields: baseFields,
+				// Retried like any transient failure; the attempt lets the log tell a
+				// lock that frees from a reservation that never does.
+				fields: { ...baseFields, reason, ...failureFields(null) },
 			});
 			throw new RecordPushError(mutation, 409, reason);
 		}

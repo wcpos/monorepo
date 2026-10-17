@@ -2262,6 +2262,46 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('keeps the push streak across a 409 the drain re-anchors past', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let pushes = 0;
+		// Every drain: the push 409s, the drain re-anchors and re-pushes, and that 503s.
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (!url.includes('/push/')) return server.fetch(url, init as never);
+			pushes += 1;
+			return pushes % 2 === 1
+				? Response.json(
+						{ current: { id: 42 }, currentRevision: 'sha256:server-r2' },
+						{ status: 409 }
+					)
+				: new Response('upstream boom', { status: 503 });
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			// The 409 is not the end of the sequence, so it must not clear the streak.
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('write() on a collection without a push/ack contract is caller misuse', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });

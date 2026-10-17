@@ -793,21 +793,21 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
-		// A refused catalogue edit is reverted to server truth right after it
+		// A refused catalogue change is reverted to server truth right after it
 		// dead-letters (see emitWriteEvent below), and the verdict is emitted where
 		// that outcome is known: `queue.write.auto-reverted` when the revert lands,
-		// a `push.rejected` marked `revertFailed` when it does not. This dead
-		// letter is stamped `revertPending` so the log keeps it an uncoded attempt.
-		// A create is never stamped: a born-local one parks for Store health, and
-		// its push.rejected is the verdict. Residual: if the post-drain cleanup
-		// throws before write-rejected (so no revert runs), the edit keeps only this
+		// a `push.rejected` marked `revertFailed` when it does not, or marked
+		// `revertSkipped` for a born-local create (which never reverts — it parks
+		// for Store health). This dead letter is stamped `revertPending` so the log
+		// keeps it an uncoded attempt. Residual: if the post-drain cleanup throws
+		// before write-rejected (so no verdict path runs), the change keeps only this
 		// info row and its parked entry in Store health's attention panel.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&
 			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
-			event.fields?.op !== 'create' &&
-			event.fields?.revertFailed !== true
+			event.fields?.revertFailed !== true &&
+			event.fields?.revertSkipped !== true
 		) {
 			event = { ...event, fields: { ...event.fields, revertPending: true } };
 		}
@@ -1948,7 +1948,24 @@ export function createRxdbSyncEngine(
 			// warns before deleting). It dead-letters like an order instead: Store
 			// health lists the rejected row and "Send again" rebuilds the payload
 			// from the kept resident.
+			// The dead-letter verdict the stamped push.rejected deferred to, emitted
+			// here because this is where the change's outcome is known.
+			const rejectionVerdict = (marker: 'revertFailed' | 'revertSkipped') =>
+				diagnostics({
+					type: 'push.rejected',
+					level: 'error',
+					collection: event.collection,
+					fields: {
+						recordId: event.recordId,
+						mutationId: event.mutationId,
+						...(event.status !== undefined ? { status: event.status } : {}),
+						...(event.reason !== undefined ? { reason: event.reason } : {}),
+						...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
+						[marker]: true,
+					},
+				});
 			if (event.bornLocalCreate === true) {
+				rejectionVerdict('revertSkipped');
 				return;
 			}
 			// Reactive revert (#1082): a rejected catalog change is settled for the
@@ -1979,21 +1996,8 @@ export function createRxdbSyncEngine(
 						},
 					});
 				} catch {
-					// The revert failed: the rejected row stays parked for Store Health,
-					// and this is the dead-letter verdict the stamped row deferred to.
-					diagnostics({
-						type: 'push.rejected',
-						level: 'error',
-						collection: event.collection,
-						fields: {
-							recordId: event.recordId,
-							mutationId: event.mutationId,
-							...(event.status !== undefined ? { status: event.status } : {}),
-							...(event.reason !== undefined ? { reason: event.reason } : {}),
-							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
-							revertFailed: true,
-						},
-					});
+					// The revert failed: the rejected row stays parked for Store Health.
+					rejectionVerdict('revertFailed');
 				}
 			})();
 		},

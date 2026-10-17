@@ -1110,6 +1110,23 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
 	});
 
+	it('warns SYNC131 once a push has found the record locked for 3 attempts', () => {
+		for (const attempt of [1, 3]) {
+			observer.observe(
+				event({
+					type: 'push.in_progress',
+					level: 'warn',
+					fields: { recordId: 'o-1', reason: 'record-locked', attempt, retryable: true },
+				})
+			);
+		}
+
+		expect(rows.map((row) => [row.level, row.code])).toEqual([
+			['info', undefined],
+			['warn', 'SYNC131'],
+		]);
+	});
+
 	it('keeps a catalogue dead letter whose revert is pending an uncoded attempt', () => {
 		observer.observe(
 			event({

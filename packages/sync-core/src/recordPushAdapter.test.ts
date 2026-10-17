@@ -260,9 +260,12 @@ describe('pushRecordMutation', () => {
 				fetcher: async () =>
 					jsonResponse(409, { code: 'woo_rxdb_sync_in_progress', message: 'retry' }),
 				observe: (e) => events.push(e),
+				attempt: 4,
 			})
 		).rejects.toMatchObject({ name: 'RecordPushError', reason: 'in-progress', status: 409 });
 		expect(events[0].type).toBe('push.in_progress');
+		// Retried like any transient failure, so it carries the push streak too.
+		expect(events[0].fields).toMatchObject({ reason: 'in-progress', attempt: 4, retryable: true });
 	});
 
 	it('treats a 409 record_locked (per-record CAS lock held) as a retryable error, not a conflict', async () => {
