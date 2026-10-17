@@ -3,6 +3,8 @@ import * as React from 'react';
 import { Image as ExpoImage, ImageProps as ExpoImageProps } from 'expo-image';
 import { withUniwind } from 'uniwind';
 
+import { IMAGE_FADE } from '../lib/motion';
+
 /**
  * Styled ExpoImage component with className support.
  * withUniwind automatically maps className → style prop.
@@ -21,7 +23,7 @@ export type ImageProps = ExpoImageProps & {
 // source counts as a source change and fades). 'memory', not 'all': the first sight after a
 // cold start is a disk hit, and its fade still masks the decode. Native only; index.web.tsx
 // keeps its plain 250 ms fade.
-const FADE = { duration: 250, skipOnCacheHit: 'memory' } as const;
+const FADE = { duration: IMAGE_FADE, skipOnCacheHit: 'memory' } as const;
 
 /**
  * Image component with Tailwind className support via Uniwind.
