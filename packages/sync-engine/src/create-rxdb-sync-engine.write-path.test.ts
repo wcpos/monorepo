@@ -2093,6 +2093,56 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
 	});
 
+	it("leaves a drain's held rejection to that drain when a manual drain overlaps it", async () => {
+		let openPull!: () => void;
+		const route = rejectedProductFetch({
+			gatePull: new Promise<void>((resolve) => {
+				openPull = resolve;
+			}),
+		});
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// The moment drain A durably dead-letters the edit (push.rejected is emitted
+			// right after this write), a manual drain B starts beside it with nothing
+			// to send, and settles while A is still between its dead letter and the
+			// revert it is about to start.
+			const queue = queueFor(engine.active()!.database as never);
+			const replace = queue.replace.bind(queue);
+			let drainB: Promise<unknown> | undefined;
+			const replaceSpy = vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
+				await replace(row);
+				if (row.status === 'rejected' && drainB === undefined) drainB = engine.sync('write-drain');
+			});
+			const drainA = await engine.sync('write-drain');
+			await drainB;
+			replaceSpy.mockRestore();
+			expect(drainA).toMatchObject({ rejected: 1 });
+			// The empty drain settling must not release the other drain's held verdict.
+			expect(diagnostics.some((event) => event.type === 'push.rejected')).toBe(false);
+
+			openPull();
+			await vi.waitFor(() =>
+				expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(true)
+			);
+			expect(diagnostics.some((event) => event.type === 'push.rejected')).toBe(false);
+		} finally {
+			openPull();
+			await engine.dispose();
+		}
+	});
+
 	it('lets a revert already running at dispose settle the one verdict', async () => {
 		let openPull!: () => void;
 		const route = rejectedProductFetch({

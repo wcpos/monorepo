@@ -57,7 +57,7 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
-import { createScopedFailureStreak, type ScopedFailureStreak } from './failure-streak';
+import { createFailureStreak, type FailureStreak } from './failure-streak';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -1041,23 +1041,21 @@ export function createRxdbSyncEngine(
 	};
 	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
 	// answer is retried by the next tick, so the log alarms only on a streak.
-	// Any answer on the lane — whatever its status — ends the streak. Scoped like
-	// the lane streaks, to the scope the REQUEST started under (captured at its
-	// start): a late completion after a switch never touches the incoming scope.
-	// Late-bound: the scope manager is created further down.
-	let activeScopeForStreaks: () => string | null = () => null;
-	const consecutiveDeadlines = new Map<string, ScopedFailureStreak>();
-	const deadlineStreakFor = (lane: string): ScopedFailureStreak => {
+	// Any answer on the lane — whatever its status — ends the streak. Like the
+	// lane streaks, the instances are dropped on every scope activation (see the
+	// 'switched' handler) and each request settles the instance it started with.
+	const consecutiveDeadlines = new Map<string, FailureStreak>();
+	const deadlineStreakFor = (lane: string): FailureStreak => {
 		let streak = consecutiveDeadlines.get(lane);
 		if (streak === undefined) {
-			streak = createScopedFailureStreak(() => activeScopeForStreaks());
+			streak = createFailureStreak();
 			consecutiveDeadlines.set(lane, streak);
 		}
 		return streak;
 	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
-		const requestScopeId = activeScopeForStreaks();
+		const deadlineStreak = deadlineStreakFor(lane);
 		const observation = createRequestObservation(startedAtMs, init?.signal);
 		const deadlineFetcher = withRequestTimeout(
 			(url, init) => transportFetcher(url, init, observation),
@@ -1066,7 +1064,7 @@ export function createRxdbSyncEngine(
 		);
 		try {
 			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
-			deadlineStreakFor(lane).reset(requestScopeId);
+			deadlineStreak.reset();
 			return response;
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
@@ -1077,7 +1075,7 @@ export function createRxdbSyncEngine(
 					fields: {
 						lane,
 						elapsedMs: nowMs() - startedAtMs,
-						consecutiveDeadlines: deadlineStreakFor(lane).fail(requestScopeId),
+						consecutiveDeadlines: deadlineStreak.fail(),
 					},
 				});
 			}
@@ -1096,7 +1094,7 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
-						const requestScopeId = activeScopeForStreaks();
+						const deadlineStreak = deadlineStreakFor('query-total-retry');
 						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
 							const total = await withRequestTimeout(
@@ -1105,7 +1103,7 @@ export function createRxdbSyncEngine(
 								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
-							deadlineStreakFor('query-total-retry').reset(requestScopeId);
+							deadlineStreak.reset();
 							return total;
 						} catch (error) {
 							if (error instanceof RequestTimeoutError) {
@@ -1116,8 +1114,7 @@ export function createRxdbSyncEngine(
 									fields: {
 										lane: 'query-total-retry',
 										elapsedMs: nowMs() - startedAtMs,
-										consecutiveDeadlines:
-											deadlineStreakFor('query-total-retry').fail(requestScopeId),
+										consecutiveDeadlines: deadlineStreak.fail(),
 									},
 								});
 							}
@@ -1219,13 +1216,6 @@ export function createRxdbSyncEngine(
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const engineStartedAtMs = nowMs();
 	const recordLaneTick = (report: SyncReport, startedAtMs: number): SyncReport => {
-		// A held rejection whose revert never started (the tick's post-drain
-		// cleanup threw before write-rejected) has no revert coming: release it.
-		if (report.lane === 'write-drain' || report.lane === 'all') {
-			for (const mutationId of [...heldRejections.keys()]) {
-				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
-			}
-		}
 		if (report.lane !== 'all')
 			laneLastTick.set(report.lane, {
 				atMs: nowMs(),
@@ -1392,11 +1382,10 @@ export function createRxdbSyncEngine(
 		}
 	};
 
-	const manager: StoreScopeManager = new StoreScopeManager({
+	const manager = new StoreScopeManager({
 		createDatabase: openScopeDatabase,
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
-	activeScopeForStreaks = () => manager.activeScope;
 
 	/** The engine-owned default: checkpoint/cursor keys live inside the scope's
 	 * own database, so per-scope isolation and volatile-db-volatile-cursor both
@@ -1606,6 +1595,9 @@ export function createRxdbSyncEngine(
 	manager.onEvent((event: ScopeEvent) => {
 		switch (event.type) {
 			case 'switched': {
+				// Every deadline streak belongs to the outgoing scope: drop them all,
+				// so requests started from here on count from zero.
+				consecutiveDeadlines.clear();
 				for (const collection of SYNC_COLLECTION_NAMES) {
 					collectionCoverageGeneration.set(
 						collection,
@@ -2009,6 +2001,14 @@ export function createRxdbSyncEngine(
 					releaseHeldRejection(event.mutationId);
 				}
 			})();
+		},
+		// The drain that dead-lettered these has settled: a held rejection of its
+		// whose revert never started (the post-drain cleanup threw before
+		// write-rejected) has no revert coming, so its verdict is the row.
+		onDrainSettled: (rejectedMutationIds) => {
+			for (const mutationId of rejectedMutationIds) {
+				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
+			}
 		},
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,

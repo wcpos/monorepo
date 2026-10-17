@@ -59,6 +59,7 @@ function stubPlane(input: { readLane: LaneRead } & StubOverrides) {
 		manager: {
 			activeScope: 'scope-1',
 			runGuarded: (operation: (scope: unknown) => Promise<unknown>) => operation(bound),
+			onEvent: () => () => undefined,
 		} as never,
 		databaseFor: () => database as never,
 		coverageFor: () => ({ readLane: input.readLane }) as never,

@@ -82,7 +82,7 @@ import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
-import { createScopedFailureStreak } from './failure-streak';
+import { type FailureStreak, scopeBoundFailureStreak } from './failure-streak';
 import { isReportedRequestStatus, requestStatusOf } from './transport-failure';
 
 import type { SyncCollectionName } from './collections/engine-collections';
@@ -507,9 +507,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// coverage.require.stalled: the screen re-declares a stalled requirement, so
 	// one stall is an attempt; repeated ones (storage that never settles, a walk
 	// that never progresses) have no other row and must reach the merchant.
-	// Scoped to the scope each execution STARTED under: a scope-A execution
-	// that times out after the switch to B never counts toward B's streak.
-	const stallStreak = createScopedFailureStreak(activeScope);
+	// Replaced on every scope activation; each execution settles the instance it
+	// started with, so a scope-A execution timing out after the switch to B
+	// never counts toward B's streak.
+	const stallStreaks = scopeBoundFailureStreak(deps.manager);
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
@@ -687,7 +688,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const abandonStalledExecution = (
 		entry: QueuedRequirement,
 		startedAt: number,
-		executionScopeId: string | null,
+		executionStreak: FailureStreak,
 		execution: Promise<CoverageOutcome>
 	): void => {
 		const durationMs = Date.now() - startedAt;
@@ -696,7 +697,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		// surviving handle must find the entry already abandoned rather than
 		// re-running abandonment (or cascading it to a predecessor).
 		entry.released = true;
-		const consecutiveStalls = stallStreak.fail(executionScopeId);
+		const consecutiveStalls = executionStreak.fail();
 		deps.diagnostics({
 			type: 'coverage.require.stalled',
 			level: 'warn',
@@ -1426,7 +1427,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				next.started = true;
 				const startedAt = Date.now();
-				const executionScopeId = activeScope();
+				const executionStreak = stallStreaks();
 				// The start line is the stall watchdog's evidence twin: when a stall IS hit, the
 				// artifact's last started-without-outcome pair names exactly which requirement
 				// wedged — the line run 33445432662 did not have.
@@ -1459,14 +1460,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (raced === STALLED) {
 					// One hung await must never starve the queue (the serial pump IS the
 					// choke point): abandon this execution and keep draining.
-					abandonStalledExecution(next, startedAt, executionScopeId, execution);
+					abandonStalledExecution(next, startedAt, executionStreak, execution);
 					forgetSearch(next);
 					continue;
 				}
 				try {
 					if ('outcome' in raced) {
 						const outcome = raced.outcome;
-						stallStreak.reset(executionScopeId);
+						executionStreak.reset();
 						deps.diagnostics({
 							type: 'coverage.require.outcome',
 							level: 'info',

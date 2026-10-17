@@ -53,7 +53,7 @@ import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hol
 import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
-import { createScopedFailureStreak } from '../failure-streak';
+import { scopeBoundFailureStreak } from '../failure-streak';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
@@ -300,6 +300,15 @@ export type WriteDrainLaneDeps = {
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	/**
+	 * Called once THIS drain tick has settled, with the mutationIds it
+	 * dead-lettered (each emitted a `push.rejected`). The engine holds a
+	 * catalogue rejection until its revert settles; a held one whose revert this
+	 * drain never started has nothing left to settle it. Per drain, so an
+	 * overlapping drain (a manual sync beside an automatic tick) never releases
+	 * another drain's rejection before that drain has started its revert.
+	 */
+	onDrainSettled?: (rejectedMutationIds: readonly string[]) => void;
 	mintUuid: () => string;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	drainInstanceIdFor: () => string;
@@ -327,7 +336,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
 	// re-runs the drain, so the log treats one crash as an attempt and only a
 	// streak as a failure that has persisted. A tick that RAN resets it.
-	const tickFailureStreak = createScopedFailureStreak(() => deps.manager.activeScope);
+	const tickFailureStreaks = scopeBoundFailureStreak(deps.manager);
 	// The drain's settlement-write failure streaks (see drainMutationQueue's
 	// settleFailures): they must outlive one drain to count anything.
 	const settleFailures = new Map<string, number>();
@@ -349,8 +358,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		if (deps.manager.activeScope === null) {
 			return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
 		}
-		// The scope this tick's streak belongs to, captured before it can move.
-		const tickScopeId = deps.manager.activeScope;
+		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
+		const tickStreak = tickFailureStreaks();
+		// The rejections THIS drain dead-lettered (see deps.onDrainSettled).
+		const drainRejections: string[] = [];
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -717,7 +728,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									status,
 									reason,
 								}),
-							observe: deps.diagnostics,
+							observe: (event) => {
+								if (
+									event.type === 'push.rejected' &&
+									typeof event.fields?.mutationId === 'string'
+								) {
+									drainRejections.push(event.fields.mutationId);
+								}
+								deps.diagnostics(event);
+							},
 							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -880,7 +899,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				deps.setLastError(null);
 				return report;
 			});
-			if (tickReport.status === 'ran') tickFailureStreak.reset(tickScopeId);
+			if (tickReport.status === 'ran') tickStreak.reset();
 			return tickReport;
 		} catch (error) {
 			if (signal?.aborted) {
@@ -889,7 +908,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			deps.setLastError(message);
-			const consecutiveFailures = tickFailureStreak.fail(tickScopeId);
+			const consecutiveFailures = tickStreak.fail();
 			deps.diagnostics({
 				type: 'queue.write.tick.error',
 				level: 'error',
@@ -897,6 +916,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				fields: { consecutiveFailures },
 			});
 			return { lane: 'write-drain', status: 'error', error: message };
+		} finally {
+			if (drainRejections.length > 0) deps.onDrainSettled?.(drainRejections);
 		}
 	}
 

@@ -64,7 +64,7 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
-import { createScopedFailureStreak } from '../failure-streak';
+import { scopeBoundFailureStreak } from '../failure-streak';
 import { requestStatusOf } from '../transport-failure';
 
 import type {
@@ -276,7 +276,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		// Failed ticks in a row for THIS lane, stamped on maintenance.lane.error: the
 		// lane re-runs on its next tick, so the log alarms only on a streak. A tick
 		// that ran resets it.
-		const failureStreak = createScopedFailureStreak(() => deps.manager.activeScope);
+		const failureStreaks = scopeBoundFailureStreak(deps.manager);
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
 		 * that ran on the bench and never in a browser — cost four live soaks and a
@@ -354,8 +354,8 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (starvationReservationAtMs !== null) {
 					lastRanAtMs.set(name, starvationReservationAtMs);
 				}
-				// The scope this tick's streak belongs to, captured before it can move.
-				const tickScopeId = deps.manager.activeScope;
+				// This tick's streak instance, read once: a switch mid-tick leaves it dead.
+				const tickStreak = failureStreaks();
 				try {
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {
 						const db = deps.databaseFor(bound.scopeId);
@@ -470,7 +470,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						return { lane: name, status: 'ran' };
 					});
 					lastError = null;
-					if (report.status === 'ran') failureStreak.reset(tickScopeId);
+					if (report.status === 'ran') tickStreak.reset();
 					return report;
 				} catch (error) {
 					if (
@@ -483,7 +483,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
-					const consecutiveFailures = failureStreak.fail(tickScopeId);
+					const consecutiveFailures = tickStreak.fail();
 					const status = requestStatusOf(error);
 					deps.diagnostics({
 						type: 'maintenance.lane.error',
@@ -517,8 +517,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	// Drains in a row with a task failure no other row reported (a local failure
 	// after the fetch, or a poison 2xx): the failed tasks retry after 30s, so one
 	// is an attempt, and a streak is the only verdict such a failure gets.
-	const unreportedTaskFailures = createScopedFailureStreak(() => deps.manager.activeScope);
+	const unreportedTaskFailureStreaks = scopeBoundFailureStreak(deps.manager);
 	const schedulerDrain = lane('scheduler-drain', async (db, _scopeId, signal, fetcher) => {
+		const unreportedTaskFailures = unreportedTaskFailureStreaks();
 		const coverage = deps.coverageFor(_scopeId);
 		if (!coverage) return { summary: null };
 		// A reader, not a snapshot: this drain runs many tasks and a config poll can
@@ -559,9 +560,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
 		const consecutiveUnreportedFailures =
-			result.failedUnreported > 0 ? unreportedTaskFailures.fail(_scopeId) : 0;
+			result.failedUnreported > 0 ? unreportedTaskFailures.fail() : 0;
 		if (result.failedUnreported === 0 && result.succeeded + result.failed > 0) {
-			unreportedTaskFailures.reset(_scopeId);
+			unreportedTaskFailures.reset();
 		}
 		// A failed task (including `failureLost`, where the fetch threw and only the
 		// failure write was lost) is a WARNING here, never an error. This row is an

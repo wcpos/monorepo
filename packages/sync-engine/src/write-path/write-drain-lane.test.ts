@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ScopeEvent } from '@wcpos/sync-core';
+
 import { createWriteDrainLane, type WriteDrainLaneDeps } from './write-drain-lane';
 
 /**
@@ -8,7 +10,19 @@ import { createWriteDrainLane, type WriteDrainLaneDeps } from './write-drain-lan
  */
 function laneWith(runGuarded: () => Promise<unknown>) {
 	const diagnostics = vi.fn();
-	const manager = { activeScope: 'scope-1', runGuarded };
+	let listener: (event: ScopeEvent) => void = () => undefined;
+	const manager = {
+		activeScope: 'scope-1',
+		runGuarded,
+		onEvent: (cb: (event: ScopeEvent) => void) => {
+			listener = cb;
+			return () => undefined;
+		},
+		switchTo(scopeId: string) {
+			manager.activeScope = scopeId;
+			listener({ type: 'switched', scopeId, epoch: 0 } as unknown as ScopeEvent);
+		},
+	};
 	const deps = {
 		connectivity: () => 'online',
 		manager,
@@ -45,33 +59,38 @@ describe('write drain tick errors', () => {
 		let failures = 0;
 		const { lane, diagnostics, manager } = laneWith(async () => {
 			failures += 1;
-			// The third tick began under scope-1 and fails after the switch.
-			if (failures === 3) manager.activeScope = 'scope-2';
+			// The second tick began under scope-1 and fails after the switch.
+			if (failures === 2) manager.switchTo('scope-2');
 			throw new Error('queue read failed');
 		});
-		manager.activeScope = 'scope-2';
 		await lane.tick();
 		await lane.tick();
-		manager.activeScope = 'scope-1';
 		await lane.tick();
 		await lane.tick();
 
+		// The late scope-1 failure lands on scope-1's dead tracker; scope-2 counts from zero.
 		expect(
 			diagnostics.mock.calls
 				.map(([event]) => event)
 				.filter((event) => event.type === 'queue.write.tick.error')
 				.map((event) => event.fields.consecutiveFailures)
-		).toEqual([1, 2, 1, 3]);
+		).toEqual([1, 2, 1, 2]);
 	});
 
-	it('starts the streak over when the scope switched between crashes', async () => {
+	it('starts a return to the first scope at zero after another scope ran in between', async () => {
+		let fail = true;
 		const { lane, diagnostics, manager } = laneWith(async () => {
-			throw new Error('queue read failed');
+			if (fail) throw new Error('queue read failed');
+			return { lane: 'write-drain', status: 'ran', pushed: 0 };
 		});
 
 		await lane.tick();
 		await lane.tick();
-		manager.activeScope = 'scope-2';
+		manager.switchTo('scope-2');
+		fail = false;
+		await lane.tick();
+		manager.switchTo('scope-1');
+		fail = true;
 		await lane.tick();
 
 		expect(

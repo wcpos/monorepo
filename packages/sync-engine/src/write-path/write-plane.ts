@@ -45,6 +45,8 @@ type WritePlaneDeps = {
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	isWritePlaneOwner: () => boolean;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	/** Forwarded to the write-drain lane (see WriteDrainLaneDeps.onDrainSettled). */
+	onDrainSettled?: (rejectedMutationIds: readonly string[]) => void;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	persistOrderRepull: (input: {
@@ -106,6 +108,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		},
 		setLastError: (error) => void (lastError = error),
 		...(deps.onActivityChange ? { onActivityChange: deps.onActivityChange } : {}),
+		...(deps.onDrainSettled ? { onDrainSettled: deps.onDrainSettled } : {}),
 		...(deps.barcodeSelectorsFor ? { barcodeSelectorsFor: deps.barcodeSelectorsFor } : {}),
 		now: deps.now,
 	});

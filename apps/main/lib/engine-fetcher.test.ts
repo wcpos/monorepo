@@ -1530,6 +1530,27 @@ describe('createEngineFetcher', () => {
 		expect(requestStatusOf(offline)).toBe(0);
 	});
 
+	it('starts a return to the first store at zero after another store served in between', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver, scope } = createFetcherHarness({
+			fetch,
+			scope: { storeId: 1 },
+		});
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		await fetcher(url);
+		await fetcher(url);
+		scope.storeId = 2;
+		fetch.mockImplementationOnce(async () => new Response('{}', { status: 200 }));
+		await fetcher(url);
+		scope.storeId = 1;
+		await fetcher(url);
+
+		// Back in store 1: its two old failures went with the old tracker.
+		expect(appMetricsObserver.mock.calls.at(-1)?.[0].level).toBe('info');
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).not.toContain('warn');
+	});
+
 	it('starts the streak over when the store scope or the cashier changes', async () => {
 		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
 		const auth = { ...BASE_AUTH };

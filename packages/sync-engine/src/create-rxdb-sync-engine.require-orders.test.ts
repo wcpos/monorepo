@@ -291,6 +291,7 @@ describe('require() for orders (the durable path)', () => {
 			manager: {
 				runGuarded: async (operation: (captured: typeof bound) => Promise<unknown>) =>
 					operation(bound),
+				onEvent: () => () => undefined,
 			} as never,
 			databaseFor: () => database as never,
 			coverageFor: () =>
