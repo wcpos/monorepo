@@ -241,6 +241,9 @@ describe('enqueueWriteIntent', () => {
 		const resident = {
 			toJSON: () => ({ payload: { id: 0 }, sync: {} }),
 			remove: async () => {
+				expect(await queue.all()).toMatchObject([
+					{ status: 'rejected', rejectedReason: 'superseded-by-void' },
+				]);
 				present = false;
 			},
 			incrementalModify: vi.fn(),
@@ -285,18 +288,11 @@ describe('enqueueWriteIntent', () => {
 			})
 		).rejects.toMatchObject({ reason: 'void-in-progress' });
 		expect(present).toBe(false);
-		expect(await queue.pendingResetCount(now)).toBe(1);
+		expect(await queue.pendingResetCount(now)).toBe(0);
 		const push = vi.fn();
 		await drainMutationQueue({ queue, push, now: () => now });
 		expect(push).not.toHaveBeenCalled();
-		expect(await queue.all()).toMatchObject([
-			{
-				mutationId: 'late',
-				admittedBy: 'late',
-				status: 'rejected',
-				rejectedReason: 'admission-lost',
-			},
-		]);
+		expect(await queue.all()).toEqual([]);
 	});
 
 	it.each([
@@ -1565,6 +1561,40 @@ describe('admission crash recovery', () => {
 			})
 		).toMatchObject({ pushed: 1, rejected: [] });
 		expect(delivered).toEqual(['receipt']);
+	});
+
+	it('settles a swept pending writer before releasing the void fence', async () => {
+		const { resident, db, queue } = fixture();
+		const now = Date.now();
+		await queue.admitWriter('orders', 'order', 'swept', now - 30_001);
+		await queue.replace({ ...prior, admittedBy: 'swept', baseRevision: null });
+		await queue.clearExpiredAnnihilation(now);
+		Object.assign(resident, {
+			remove: async () => {
+				expect(await queue.all()).toEqual([
+					expect.objectContaining({ status: 'rejected', rejectedReason: 'superseded-by-void' }),
+				]);
+			},
+		});
+		expect(
+			await enqueueWriteIntent({
+				db,
+				mintUuid: () => 'void',
+				now: () => new Date(now).toISOString(),
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+			})
+		).toMatchObject({ annihilated: true });
+		expect(await queue.hasVoidFence('orders', 'order', now)).toBe(false);
+		await expect(queue.recordWriterReceipt('prior')).rejects.toThrow();
+		expect(await queue.all()).toEqual([]);
+		expect(
+			await drainMutationQueue({
+				queue,
+				push: async () => {
+					throw new Error('recreated');
+				},
+			})
+		).toMatchObject({ pushed: 0, rejected: [] });
 	});
 
 	it('settles an admission-lost dead letter with a born-local void', async () => {

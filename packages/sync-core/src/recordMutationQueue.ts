@@ -565,7 +565,11 @@ export class RecordMutationQueue {
 	async recordWriterReceipt(mutationId: string): Promise<void> {
 		const rows = await this.storage.listStored();
 		const stored = rows.find((item) => item.mutation.mutationId === mutationId);
-		if (!stored?.mutation.admittedBy || stored.mutation.supersededBy)
+		if (
+			!stored?.mutation.admittedBy ||
+			stored.mutation.supersededBy ||
+			stored.mutation.rejectedReason === 'superseded-by-void'
+		)
 			throw new Error('Writer receipt no longer owns its mutation');
 		const row = stored.mutation;
 		const id = fenceId(row.collectionName, row.recordId);
@@ -579,8 +583,6 @@ export class RecordMutationQueue {
 			status: 'internal' as const,
 			payload: { phase: 'released' },
 		};
-		if (!(await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null)))
-			throw new Error('Writer receipt lost record ownership');
 		if (
 			!stored?.mutation.admittedBy ||
 			!(await this.storage.appendIfUnchanged(
@@ -589,6 +591,8 @@ export class RecordMutationQueue {
 			))
 		)
 			throw new Error('Could not persist the writer receipt');
+		if (!(await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null)))
+			throw new Error('Writer receipt lost record ownership');
 	}
 
 	private async finishWriterRelease(
@@ -889,7 +893,7 @@ export class RecordMutationQueue {
 		mutationId: string,
 		token: string,
 		nowMs = Date.now(),
-		status: 'pending' | 'rejected' = 'pending'
+		status: 'pending' | 'rejected' | 'lost' = 'pending'
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
@@ -899,7 +903,8 @@ export class RecordMutationQueue {
 			if (
 				!row ||
 				row.supersededBy !== undefined ||
-				(row.status ?? 'pending') !== status ||
+				(row.status ?? 'pending') !== (status === 'lost' ? 'pending' : status) ||
+				(status === 'lost' && (await this.admissionState(row, nowMs)) !== 'lost') ||
 				(status === 'rejected'
 					? row.resolutionClaimBy !== undefined &&
 						Date.parse(row.resolutionClaimUntil ?? '') > nowMs
@@ -909,7 +914,14 @@ export class RecordMutationQueue {
 			)
 				return false;
 			return this.storage.appendIfUnchanged(
-				{ ...row, supersededBy: token, markedAt: nowMs },
+				{
+					...row,
+					supersededBy: token,
+					markedAt: nowMs,
+					...(status === 'lost'
+						? { status: 'rejected' as const, rejectedReason: 'superseded-by-void' }
+						: {}),
+				},
 				stored.rev
 			);
 		});
@@ -936,7 +948,14 @@ export class RecordMutationQueue {
 			return remove
 				? this.storage.removeIfUnchanged(mutationId, stored.rev)
 				: this.storage.appendIfUnchanged(
-						{ ...stored.mutation, supersededBy: undefined, markedAt: undefined },
+						{
+							...stored.mutation,
+							supersededBy: undefined,
+							markedAt: undefined,
+							...(stored.mutation.rejectedReason === 'superseded-by-void'
+								? { status: 'pending' as const, rejectedReason: undefined }
+								: {}),
+						},
 						stored.rev
 					);
 		});

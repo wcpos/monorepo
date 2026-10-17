@@ -4,7 +4,9 @@ import type { RxDatabase } from 'rxdb';
 
 export async function hasQueuedDelete(db: RxDatabase, collectionName: string, recordId: string) {
 	const rows = await db.collections[MUTATION_QUEUE_RXDB_COLLECTION].find({
-		selector: { collectionName, recordId, operation: 'delete', supersededBy: { $exists: false } },
+		selector: { collectionName, recordId, operation: 'delete' },
 	}).exec();
-	return rows.some((row) => row.status !== 'internal');
+	return rows.some(
+		(row) => row.status !== 'internal' && !row.supersededBy?.startsWith('coalesce:')
+	);
 }

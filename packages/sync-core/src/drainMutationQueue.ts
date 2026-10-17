@@ -793,7 +793,10 @@ export async function drainMutationQueue(input: {
 			}
 			continue;
 		}
-		if (admission === 'lost') {
+		if (
+			admission === 'lost' &&
+			(await input.queue.admissionState(draining, now())) !== 'released'
+		) {
 			await deadLetter(draining, { reason: 'admission-lost' });
 			continue;
 		}

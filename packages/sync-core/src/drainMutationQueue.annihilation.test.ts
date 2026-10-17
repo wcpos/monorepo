@@ -77,6 +77,33 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it.each(['between receipt writes', 'after claim'])('delivers a receipt %s', async (timing) => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.enqueue(update());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'swept-writer' });
+		const claim = q.claim.bind(q);
+		vi.spyOn(q, 'claim').mockImplementationOnce(async (row, now) => {
+			let claimed = false;
+			if (timing === 'after claim') claimed = await claim(row, now);
+			else {
+				const append = storage.appendIfUnchanged.bind(storage);
+				vi.spyOn(storage, 'appendIfUnchanged').mockImplementationOnce(async (next, rev) => {
+					const written = await append(next, rev);
+					claimed = await claim(row, now);
+					return written;
+				});
+			}
+			await q.recordWriterReceipt(row.mutationId).catch(() => undefined);
+			return claimed;
+		});
+		const results = [];
+		for (let pass = 0; pass < 2; pass++)
+			results.push(await drainMutationQueue({ queue: q, push: async (m) => ok(m) }));
+		expect(results.flatMap((result) => result.rejected)).toEqual([]);
+		expect(results.reduce((n, result) => n + result.pushed, 0)).toBe(1);
+	});
+
 	it('a receipt landing between admission read and claim is delivered, not rejected', async () => {
 		const q = await queueWith(update(), del());
 		await q.replace({ ...(await q.all())[0], admittedBy: 'writer' });

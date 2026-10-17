@@ -358,6 +358,12 @@ export async function enqueueWriteIntent(input: {
 		)
 			throw refuse();
 		if (token !== undefined) {
+			for (const row of (await queue.pending()).filter(isRecordRow)) {
+				if ((await queue.admissionState(row, nowMs())) !== 'lost') continue;
+				if (!(await queue.markForAnnihilation(row.mutationId, token, nowMs(), 'lost')))
+					throw refuse();
+				marked!.push(row);
+			}
 			for (const row of deadLetters) {
 				if (
 					!(await (legacyQueue
