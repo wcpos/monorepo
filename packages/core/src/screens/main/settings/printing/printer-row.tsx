@@ -6,6 +6,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
@@ -157,6 +158,10 @@ export function PrinterRow({
 									<Icon name="star" />
 									<Text>{t('settings.set_default')}</Text>
 								</DropdownMenuItem>
+							)}
+							{canDelete && (
+								// The red row is last and set apart from the actions above it.
+								<DropdownMenuSeparator />
 							)}
 							{canDelete && (
 								<DropdownMenuItem

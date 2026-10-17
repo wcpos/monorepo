@@ -1,67 +1,71 @@
 {
-  "name": "@wcpos/utils",
-  "version": "1.9.1",
-  "description": "Shared utils for WooCommerce POS",
-  "author": "kilbot <paul@kilbot.com>",
-  "homepage": "https://github.com/wcpos/utils#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/wcpos/utils.git"
-  },
-  "license": "MIT",
-  "main": "src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./app-info": {
-      "browser": "./src/app-info/index.web.ts",
-      "default": "./src/app-info/index.ts"
-    },
-    "./logger": "./src/logger/index.ts",
-    "./logger/constants": "./src/logger/constants.ts",
-    "./open-external-url": {
-      "browser": "./src/open-external-url.web.ts",
-      "default": "./src/open-external-url.ts"
-    },
-    "./platform": {
-      "browser": "./src/platform/index.web.ts",
-      "default": "./src/platform/index.ts"
-    },
-    "./*": "./src/*"
-  },
-  "files": [
-    "src/**"
-  ],
-  "scripts": {
-    "test": "jest",
-    "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
-    "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
-    "typecheck": "tsc --noEmit"
-  },
-  "peerDependencies": {
-    "expo-application": "~58.1.2",
-    "expo-constants": "~58.0.12",
-    "expo-file-system": "~58.0.9",
-    "react-native": "*"
-  },
-  "peerDependenciesMeta": {
-    "expo-application": {
-      "optional": true
-    },
-    "expo-constants": {
-      "optional": true
-    },
-    "expo-file-system": {
-      "optional": true
-    }
-  },
-  "dependencies": {
-    "@sentry/browser": "10.75.0",
-    "@sentry/react-native": "~8.28.0",
-    "react-native-logs": "^5.6.0"
-  },
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "jest": "^30.5.2",
-    "ts-jest": "29.4.12"
-  }
+	"name": "@wcpos/utils",
+	"version": "1.9.1",
+	"description": "Shared utils for WooCommerce POS",
+	"author": "kilbot <paul@kilbot.com>",
+	"homepage": "https://github.com/wcpos/utils#readme",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/wcpos/utils.git"
+	},
+	"license": "MIT",
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./app-info": {
+			"browser": "./src/app-info/index.web.ts",
+			"default": "./src/app-info/index.ts"
+		},
+		"./get-instance-id": {
+			"browser": "./src/get-instance-id.web.ts",
+			"default": "./src/get-instance-id.ts"
+		},
+		"./logger": "./src/logger/index.ts",
+		"./logger/constants": "./src/logger/constants.ts",
+		"./open-external-url": {
+			"browser": "./src/open-external-url.web.ts",
+			"default": "./src/open-external-url.ts"
+		},
+		"./platform": {
+			"browser": "./src/platform/index.web.ts",
+			"default": "./src/platform/index.ts"
+		},
+		"./*": "./src/*"
+	},
+	"files": [
+		"src/**"
+	],
+	"scripts": {
+		"test": "jest",
+		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+		"lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"expo-application": "~58.1.2",
+		"expo-constants": "~58.0.12",
+		"expo-file-system": "~58.0.9",
+		"react-native": "*"
+	},
+	"peerDependenciesMeta": {
+		"expo-application": {
+			"optional": true
+		},
+		"expo-constants": {
+			"optional": true
+		},
+		"expo-file-system": {
+			"optional": true
+		}
+	},
+	"dependencies": {
+		"@sentry/browser": "10.75.0",
+		"@sentry/react-native": "~8.28.0",
+		"react-native-logs": "^5.6.0"
+	},
+	"devDependencies": {
+		"@types/jest": "^30.0.0",
+		"jest": "^30.5.2",
+		"ts-jest": "29.4.12"
+	}
 }

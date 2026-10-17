@@ -10,9 +10,13 @@ import { Chip } from './index';
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const presses = new Map();
+	const slops = new Map();
+	const layouts = new Map();
 	return {
 		...actual,
 		presses,
+		slops,
+		layouts,
 		View: ({ testID, ...props }: { testID?: string }) =>
 			React.createElement('div', { ...props, 'data-testid': testID }),
 		Pressable: ({
@@ -22,6 +26,8 @@ jest.mock('react-native', () => {
 			ref?: React.Ref<import('react-native').View>;
 		}) => {
 			presses.set(props.testID, props.onPress);
+			slops.set(props.testID, props.hitSlop);
+			layouts.set(props.testID, props.onLayout);
 			return React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } });
 		},
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
@@ -29,6 +35,13 @@ jest.mock('react-native', () => {
 	};
 });
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+// The measure itself is `lib/min-target`'s test; here, which Pressable gets the grown target.
+jest.mock('../lib/min-target', () => ({
+	useMinTargetSlop: (enabled: boolean) => ({
+		hitSlop: enabled ? { top: 6, bottom: 6 } : undefined,
+		onLayout: undefined,
+	}),
+}));
 jest.mock('../icon', () => ({
 	Icon: ({ name }: { name: string }) => React.createElement('span', { 'data-icon': name }),
 }));
@@ -43,6 +56,43 @@ it.each([
 	expect(screen.getByTestId('chip').dataset.classes).toContain(root);
 	expect(screen.getByTestId('chip-label').dataset.classes).toContain(label);
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
+});
+it('gives a sm chip the 44 pt target on its root, which presses as the label when clearable', () => {
+	const { slops, presses, layouts } = jest.requireMock<{
+		slops: Map<string, unknown>;
+		presses: Map<string, unknown>;
+		layouts: Map<string, unknown>;
+	}>('react-native');
+	const onPress = jest.fn();
+	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} />);
+	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
+	expect(presses.get('chip')).toBe(onPress);
+	// `hitSlop` never reaches past a parent, so the band is the root's even with a clear control.
+	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={() => {}} />);
+	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
+	expect(slops.get('chip-label')).toBeUndefined();
+	// The band above and below routes by where it landed: past the clear half's x it clears.
+	const onClear = jest.fn();
+	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={onClear} />);
+	const route = presses.get('chip') as (event: object) => void;
+	const layoutClear = layouts.get('chip-clear') as (event: object) => void;
+	layoutClear({ nativeEvent: { layout: { x: 50, width: 32 } } });
+	route({ nativeEvent: { locationX: 10 } });
+	expect(onPress).toHaveBeenCalledTimes(1);
+	expect(onClear).not.toHaveBeenCalled();
+	route({ nativeEvent: { locationX: 60 } });
+	expect(onClear).toHaveBeenCalledTimes(1);
+	expect(onPress).toHaveBeenCalledTimes(1);
+	// Right to left the clear half comes first: its span, not its side, decides.
+	layoutClear({ nativeEvent: { layout: { x: 0, width: 32 } } });
+	route({ nativeEvent: { locationX: 60 } });
+	expect(onPress).toHaveBeenCalledTimes(2);
+	route({ nativeEvent: { locationX: 10 } });
+	expect(onClear).toHaveBeenCalledTimes(2);
+	// Without the grown target a clearable root still takes no press.
+	rerender(<Chip label="Menu" testID="chip" onPress={onPress} onClear={() => {}} />);
+	expect(slops.get('chip')).toBeUndefined();
+	expect(presses.get('chip')).toBeUndefined();
 });
 it.each([
 	[undefined, 'h-ctl', 'text-base'],

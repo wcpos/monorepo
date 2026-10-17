@@ -1,5 +1,16 @@
+import { Platform } from 'react-native';
+
+import * as Application from 'expo-application';
 import * as Sentry from '@sentry/react-native';
 import { File } from 'expo-file-system';
+
+import { getInstanceId } from '../get-instance-id';
+
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('expo-application', () => ({
+	getIosIdForVendorAsync: jest.fn(async () => 'device-ios'),
+	getAndroidId: () => 'device-android',
+}));
 
 jest.mock('@sentry/react-native', () => ({
 	init: jest.fn(),
@@ -44,6 +55,101 @@ describe('sentry-sink.native', () => {
 		files.clear();
 		jest.clearAllMocks();
 	});
+
+	it('keeps the instance id stable in its own file across consent denial', async () => {
+		const id = await getInstanceId();
+		expect(id).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+		setTelemetryConsent('denied');
+		expect(await getInstanceId()).toBe(id);
+		expect(JSON.parse(files.get('file:///documents/wcpos_instance_id')!)).toEqual({
+			id,
+			device: 'device-ios',
+		});
+	});
+
+	it('omits the instance id when native storage is unavailable', async () => {
+		jest.mocked(File).mockImplementationOnce(() => {
+			throw new Error('unavailable');
+		});
+		// A fresh module: the id above is memoised for the life of the process.
+		await jest.isolateModulesAsync(async () => {
+			const fresh = jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(await fresh.getInstanceId()).toBeUndefined();
+		});
+	});
+
+	it.each([
+		['ios', 'device-ios', 'existing'],
+		['android', 'device-android', 'existing'],
+		['ios', 'other-device', 'e49735e4-34af-4abd-a8f6-78f17b350a82'],
+		['ios', null, 'existing'],
+	])('binds %s instance files from %s to this device', async (os, device, expected) => {
+		Platform.OS = os as typeof Platform.OS;
+		const path = 'file:///documents/wcpos_instance_id';
+		files.set(path, device ? JSON.stringify({ id: 'existing', device }) : 'existing');
+		await jest.isolateModulesAsync(async () => {
+			const fresh = jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(await fresh.getInstanceId()).toBe(expected);
+			expect(await fresh.getInstanceId()).toBe(expected);
+			expect(JSON.parse(files.get(path)!)).toEqual({ id: expected, device: `device-${os}` });
+		});
+		Platform.OS = 'ios';
+	});
+
+	it('rechecks a locked device identity before accepting a restored id', async () => {
+		const path = 'file:///documents/wcpos_instance_id';
+		const raw = JSON.stringify({ id: 'restored', device: 'other-device' });
+		files.set(path, raw);
+		jest.mocked(Application.getIosIdForVendorAsync).mockResolvedValueOnce(null);
+		await jest.isolateModulesAsync(async () => {
+			const { getInstanceId } =
+				jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(await getInstanceId()).toBe('restored');
+			expect(files.get(path)).toBe(raw);
+			expect(await getInstanceId()).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+			expect(JSON.parse(files.get(path)!).device).toBe('device-ios');
+		});
+	});
+
+	it.each([undefined, '{"id":'])(
+		'keeps a provisional id until unlock with file %s',
+		async (raw) => {
+			const path = 'file:///documents/wcpos_instance_id';
+			if (raw) files.set(path, raw);
+			jest.spyOn(crypto, 'randomUUID').mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa');
+			jest
+				.mocked(Application.getIosIdForVendorAsync)
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce(null);
+			await jest.isolateModulesAsync(async () => {
+				const { getInstanceId } =
+					jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+				const ids = [await getInstanceId(), await getInstanceId(), await getInstanceId()];
+				jest.restoreAllMocks();
+				const id = ids[0];
+				expect(ids).toEqual([id, id, id]);
+				expect(files.get(path)).toBe(raw);
+				expect(await getInstanceId()).toBe(id);
+				expect(JSON.parse(files.get(path)!)).toEqual({ id, device: 'device-ios' });
+			});
+		}
+	);
+
+	it.each(['{"id":', '{"id":42}', '{"id":"old","device":42}'])(
+		'replaces corrupt instance record %s',
+		async (raw) => {
+			const path = 'file:///documents/wcpos_instance_id';
+			files.set(path, raw);
+			await jest.isolateModulesAsync(async () => {
+				const { getInstanceId } =
+					jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+				const id = await getInstanceId();
+				expect(id).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+				expect(JSON.parse(files.get(path)!)).toEqual({ id, device: 'device-ios' });
+			});
+		}
+	);
 
 	it('does not initialize or capture before consent', () => {
 		expect(initCallsOnImport).toBe(0);

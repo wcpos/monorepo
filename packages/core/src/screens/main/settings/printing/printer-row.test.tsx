@@ -30,6 +30,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -77,6 +78,8 @@ it('renders a saved printer without the wizard entry, even when the wizard is av
 	expect(screen.getByText('TM-m30III')).toBeInTheDocument();
 	expect(screen.getByTestId('printer-row-p1-test')).toBeInTheDocument();
 	expect(screen.queryByText('settings.having_trouble')).toBeNull();
+	// Delete is the menu's last row, set apart by a separator (CODING_STANDARDS, overlay table).
+	expect(screen.getByTestId('menu-separator')).toBeInTheDocument();
 });
 
 it.each(['generic', 'epson', 'star'] as const)(

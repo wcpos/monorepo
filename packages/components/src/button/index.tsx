@@ -9,6 +9,7 @@ import { HStack } from '../hstack';
 import { Icon, type IconName, type IconProps } from '../icon';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
+import { useMinTargetSlop } from '../lib/min-target';
 import { Text, TextClassContext } from '../text';
 
 import type { VariantProps } from 'class-variance-authority';
@@ -161,6 +162,8 @@ function Button({
 	// pass (monorepo#1614, defect 1).
 	const [hovered, setHovered] = React.useState(false);
 	const disabled = !!(props.disabled || loading);
+	// `sm` is drawn under 44 to sit in a row; the finger still gets 44 (§ Design 2).
+	const target = useMinTargetSlop(size === 'sm', props.onLayout);
 
 	/**
 	 * Render icon component based on type
@@ -208,7 +211,9 @@ function Button({
 				disabled && 'web:pointer-events-none web:cursor-not-allowed opacity-45'
 			)}
 			role="button"
+			hitSlop={target.hitSlop}
 			{...props}
+			onLayout={target.onLayout}
 			onHoverIn={(event) => {
 				setHovered(true);
 				props.onHoverIn?.(event);

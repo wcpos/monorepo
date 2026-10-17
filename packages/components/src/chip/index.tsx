@@ -1,6 +1,8 @@
+import * as React from 'react';
 import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
+import { useMinTargetSlop } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
@@ -57,6 +59,25 @@ export function Chip({
 	const inactive = !!(disabled || dimmed);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const sm = size === 'sm';
+	// `sm` is drawn under 44 for a dense cell; the press target still gets 44 (§ Design 2). The
+	// slop sits on the root, because `hitSlop` never reaches past a parent's bounds.
+	const target = useMinTargetSlop(sm, props.onLayout);
+	// A clearable chip's root takes no press (the label half does), except on native when it
+	// carries the grown target: the band above and below is the root's, so the root routes a
+	// press there by where it landed, inside the clear half's measured span clearing and the
+	// rest pressing as the label (span, not side: a right-to-left layout puts it first). Native gives a touch to the deepest responder, so inside the chip the label
+	// and the clear halves still win and nothing fires twice; the web never measures.
+	const clearSpan = React.useRef({ start: 0, end: 0 });
+	const rootPress: PressableProps['onPress'] =
+		!onClear || !target.hitSlop
+			? onClear
+				? undefined
+				: onPress
+			: (event) => {
+					const x = event.nativeEvent.locationX;
+					if (x >= clearSpan.current.start && x < clearSpan.current.end) onClear();
+					else onPress?.(event);
+				};
 	const content = (
 		<>
 			{icon && <Icon name={icon} className="text-foreground" />}
@@ -85,12 +106,14 @@ export function Chip({
 	);
 	return (
 		<Pressable
+			hitSlop={target.hitSlop}
 			{...props}
+			onLayout={target.onLayout}
 			testID={testID}
 			disabled={inactive}
 			// With a clear control the chip is a container: the label half takes the press, so
 			// the handler and the focus live there and never fire twice from one tap.
-			onPress={onClear ? undefined : onPress}
+			onPress={rootPress}
 			role={onClear ? undefined : 'button'}
 			{...(onClear ? {} : selectedState(on))}
 			tabIndex={onClear ? -1 : 0}
@@ -131,6 +154,10 @@ export function Chip({
 						testID={clearTestID ?? id('clear')}
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
+						onLayout={(event) => {
+							const { x, width } = event.nativeEvent.layout;
+							clearSpan.current = { start: x, end: x + width };
+						}}
 						className={cn(
 							'items-center justify-center self-stretch active:opacity-70',
 							// The clear control spans the chip's height and as much width, so it is never
