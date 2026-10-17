@@ -11,6 +11,7 @@ import {
 	createOrdersSchedulerFetcher,
 } from '../scheduler/rx-scheduler-order-fetcher';
 import * as refundSeeder from '../scheduler/rx-refund-scheduler-task-seeder';
+import { queueFor } from './write-intents';
 import { EngineOrderRepository } from './engine-order-repository';
 
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -59,6 +60,29 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	it.each(['writer', 'void'])('rechecks a late %s hold', async (hold) => {
+		const h = await harness();
+		await h.repo.upsertMany([parent(42, [])]);
+		const queue = queueFor(h.scope.database as never);
+		const incoming = parent(42, []);
+		incoming.payload.status = 'processing';
+		const orders = h.collection<ReturnType<typeof parent>>('orders');
+		const getLocal = orders.getLocal.bind(orders);
+		vi.spyOn(orders, 'getLocal').mockImplementationOnce(async (id) => {
+			if (hold === 'writer') await queue.admitWriter('orders', incoming.uuid, 'hold', Date.now());
+			else await queue.fenceForVoid('orders', incoming.uuid, 'hold', Date.now());
+			return getLocal(id);
+		});
+		expect(await h.repo.upsertMany([incoming])).toEqual([]);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe('completed');
+		if (hold === 'writer') await queue.releaseWriter('orders', incoming.uuid, 'hold');
+		else await queue.releaseVoidFence('orders', incoming.uuid, 'hold');
+		expect(await h.repo.upsertMany([incoming])).toHaveLength(1);
+		expect((await orders.findOne(incoming.uuid).exec())?.toJSON().payload.status).toBe(
+			'processing'
+		);
+	});
+
 	// Remove the per-parent catch: one failed scheduler write rejects already-applied orders and skips 44.
 	it('continues seeding later parents after one seed rejects without rejecting applied writes', async () => {
 		const h = await harness();

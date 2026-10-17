@@ -2050,7 +2050,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'v5', 'v5 abort'] as const)(
+	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'fence', 'v5', 'v5 abort'])(
 		'drain annihilation preserves the removal outcome on %s',
 		async (fault) => {
 			const events: SyncEvent[] = [];
@@ -2092,9 +2092,18 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				engine.events((event) => outcomes.push(event));
 				if (fault === 'queue cleanup failure')
 					vi.spyOn(queue, 'removeMarked').mockRejectedValueOnce(new Error('disk'));
+				if (fault === 'fence')
+					vi.spyOn(queue, 'releaseVoidFence').mockRejectedValueOnce(new Error('disk'));
 				await engine.sync('write-drain');
-				if (fault === 'queue cleanup failure')
-					expect(outcomes.filter((event) => event.type === 'write-annihilated')).toHaveLength(2);
+				if (fault === 'fence' || fault.includes('cleanup failure')) {
+					const cancelled = () =>
+						outcomes.filter((e) => e.type === 'write-annihilated').map((e) => e.mutationId);
+					expect(cancelled()).toEqual(['create', 'delete']);
+					await queue.clearExpiredAnnihilation(Date.now() + 120_001);
+					await engine.sync('write-drain');
+					expect(cancelled()).toEqual(['create', 'delete']);
+					expect(await engine.active()!.database.recordMutations.find().exec()).toEqual([]);
+				}
 				expect(
 					(await queue.pending()).filter((row) => !row.supersededBy).map((row) => row.operation)
 				).toEqual(aborted ? ['create', 'delete'] : []);

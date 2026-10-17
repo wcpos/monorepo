@@ -22,6 +22,7 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
+import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
@@ -52,7 +53,9 @@ type StoredOrderDoc = {
 	toJSON(): unknown;
 	/** rxdb's write queue: the modifier runs against the CURRENT document when the write lands. */
 	incrementalModify?(
-		modifier: (data: Record<string, unknown>) => Record<string, unknown>
+		modifier: (
+			data: Record<string, unknown>
+		) => Record<string, unknown> | Promise<Record<string, unknown>>
 	): Promise<unknown>;
 };
 
@@ -88,6 +91,7 @@ type SyncCheckpointsCollection = {
 
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
+	recordMutations?: unknown;
 	orders: OrdersCollection;
 	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
@@ -274,7 +278,7 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
-		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		let applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
 		if (applicable.length === 0) return [];
 		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
 		const counts = { ...stash?.get('counts') };
@@ -327,7 +331,7 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		const changed = withoutUnchanged(
+		let changed = withoutUnchanged(
 			this.db.orders,
 			residents,
 			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
@@ -338,6 +342,10 @@ export class EngineOrderRepository {
 		// drain carrying one) is kept, never overwritten by this pull's older snapshot. (rxdb's
 		// bulkUpsert updates an existing document the same way, one queued write per document, but
 		// with a modifier that ignores the current data.)
+		const skipped = new Set<string>();
+		const heldIds = this.db.recordMutations
+			? createOrderPendingMutationIds(this.db.recordMutations)
+			: async () => new Set<string>();
 		const inserts = changed.filter((document) => !residents.has(document.uuid));
 		const updates = changed.filter((document) => residents.has(document.uuid));
 		if (inserts.length > 0)
@@ -345,9 +353,15 @@ export class EngineOrderRepository {
 		for (const document of updates) {
 			const resident = residents.get(document.uuid)!;
 			if (resident.incrementalModify) {
-				await resident.incrementalModify((current) =>
-					withPreservedPrintCount(current, document as unknown as Record<string, unknown>)
-				);
+				await resident.incrementalModify(async (current) => {
+					// Re-run inside RxDB's per-record write queue, including on conflict retry.
+					if (hasPendingLocalWork(current) || (await heldIds()).has(document.uuid)) {
+						skipped.add(document.uuid);
+						return current;
+					}
+					skipped.delete(document.uuid);
+					return withPreservedPrintCount(current, document as unknown as Record<string, unknown>);
+				});
 			} else {
 				assertBulkSuccess(
 					await this.db.orders.bulkUpsert([document]),
@@ -355,6 +369,8 @@ export class EngineOrderRepository {
 				);
 			}
 		}
+		changed = changed.filter((document) => !skipped.has(document.uuid));
+		applicable = applicable.filter((document) => !skipped.has(document.uuid));
 		// Stash entries this commit wrote into its documents are retired; anything stashed since this
 		// pull read the stash lands now.
 		const written: Record<string, number> = {};

@@ -310,7 +310,7 @@ async function annihilateNeverPushedChains(input: {
 			residentRemoved = true;
 			try {
 				if (!legacyQueue) {
-					for (const row of marked) await input.queue.removeMarked(row.mutationId, token);
+					for (const row of marked) await input.queue.removeMarked(row.mutationId, token, true);
 					await input.queue.releaseVoidFence(head.collectionName, head.recordId, token);
 				}
 			} catch (error) {
@@ -323,7 +323,14 @@ async function annihilateNeverPushedChains(input: {
 				});
 			}
 			annihilated += 1;
-			annihilatedMutations.push(...pendingRows);
+			// Failed cleanup is still durable in the committed fence; the lane acks after emitting.
+			annihilatedMutations.push(
+				...(legacyQueue
+					? pendingRows
+					: marked
+							.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+							.map((row): QueuedMutation => ({ ...row, status: 'internal' })))
+			);
 			input.emit({
 				type: 'queue.write.annihilate',
 				level: 'info',
@@ -591,7 +598,7 @@ export async function drainMutationQueue(input: {
 		blockedRecords.add(recordKey(mutation));
 	};
 
-	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
+	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void | false> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const { status, reason, serverMessage } = error as {
 			status?: number;
@@ -605,14 +612,17 @@ export async function drainMutationQueue(input: {
 			// `requeuedFrom` / `requeueCount` ride along untouched (the spread), so a
 			// row that dead-letters AGAIN after a recovery still reports how many
 			// recoveries it has already survived.
-			await input.queue.replace({
+			const rejectedRow: QueuedMutation = {
 				...mutation,
 				status: 'rejected',
 				...(status !== undefined ? { rejectedStatus: status } : {}),
 				...(reason !== undefined ? { rejectedReason: reason } : {}),
 				...(serverMessage !== undefined ? { rejectedMessage: serverMessage } : {}),
 				rejectedAt: new Date(now()).toISOString(),
-			});
+			};
+			if (reason === 'admission-lost') {
+				if (!(await input.queue.claim(rejectedRow, now()))) return false;
+			} else await input.queue.replace(rejectedRow);
 			// Counted ONLY once the verdict is durable. A dead letter that exists
 			// solely in this drain's return value is not a dead letter: `rejected`
 			// feeds the drain log AND the Store health gate that mounts the recovery
@@ -809,9 +819,14 @@ export async function drainMutationQueue(input: {
 			admission === 'lost' &&
 			(await input.queue.admissionState(draining, now())) !== 'released'
 		) {
-			await deadLetter(draining, { reason: 'admission-lost' });
-			continue;
+			if (
+				(await deadLetter(draining, { reason: 'admission-lost' })) !== false ||
+				(await input.queue.admissionState(draining, now())) !== 'released' ||
+				!(await stillOwnLease(draining.mutationId))
+			)
+				continue;
 		}
+		if (admission === 'lost') draining.admissionReleased = draining.admittedBy;
 		attemptStartedAt = now();
 		attempted += 1;
 		let result: PushResult;

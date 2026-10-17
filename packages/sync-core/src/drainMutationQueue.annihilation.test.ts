@@ -77,6 +77,47 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it('keeps active void outcomes durable until a later instance publishes them', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.enqueue(create());
+		await q.enqueue(del());
+		await drainMutationQueue({ queue: q, push: async (m) => ok(m) });
+		const restarted = new RecordMutationQueue(storage);
+		const recovered = await drainMutationQueue({ queue: restarted, push: async (m) => ok(m) });
+		const ids = recovered.annihilatedMutations.map((row) => row.mutationId);
+		expect(ids).toEqual(['m-create', 'm-delete']);
+		for (const row of recovered.annihilatedMutations) {
+			expect(row.status).toBe('internal');
+			await restarted.acknowledge([row.mutationId]);
+		}
+		expect(await storage.list()).toEqual([]);
+	});
+
+	it('delivers a receipt landing during the final admission-lost lease check', async () => {
+		const q = await queueWith(update());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'writer' });
+		const admission = q.admissionState.bind(q);
+		vi.spyOn(q, 'admissionState').mockImplementation(async (row, now) => {
+			const state = await admission(row, now);
+			if (row.status === 'claimed') {
+				const all = q.all.bind(q);
+				vi.spyOn(q, 'all').mockImplementationOnce(async () => {
+					const snapshot = await all();
+					await q.recordWriterReceipt(row.mutationId);
+					return snapshot;
+				});
+			}
+			return state;
+		});
+		const push = vi.fn(async (m: RecordMutation) => ok(m));
+		expect(await drainMutationQueue({ queue: q, drainInstanceId: 'leader', push })).toMatchObject({
+			pushed: 1,
+			rejected: [],
+		});
+		expect(push).toHaveBeenCalledWith(expect.objectContaining({ admissionReleased: 'writer' }));
+	});
+
 	it('settles lost pending rows with a drain-time void before releasing its fence', async () => {
 		const q = await queueWith(create(), del());
 		await q.replace({ ...update(), admittedBy: 'swept-writer' });
@@ -237,8 +278,8 @@ describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
 			expect(observe).toHaveBeenCalledWith(
 				expect.objectContaining({ type: 'void.cleanup-failed' })
 			);
-			expect((await storage.list()).find((row) => row.status === 'internal')?.payload.phase).toBe(
-				'committed'
+			expect((await storage.list()).find((row) => row.payload.phase === 'committed')?.status).toBe(
+				'internal'
 			);
 		}
 	);
@@ -278,6 +319,11 @@ describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
 				},
 			});
 			expect(result.annihilated).toBe(1);
+			expect((await storage.list()).map((row) => [row.mutationId, row.payload.phase])).toEqual([
+				['m-create', 'annihilated'],
+				['m-delete', 'annihilated'],
+			]);
+			await q.acknowledge(result.annihilatedMutations.map((row) => row.mutationId));
 			expect(await storage.list()).toEqual([]);
 			expect(
 				snapshot?.filter((row) => row.status !== 'internal').map((row) => row.mutationId)

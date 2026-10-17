@@ -48,6 +48,39 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it('keeps the receipted replacement when receipt wins the recovery removal CAS', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		let ids = ['next'];
+		const q = new RecordMutationQueue(storage, {
+			restoreCoalesced: async () => {
+				ids = ['prior'];
+			},
+		});
+		const prior = await q.enqueue(mut({ mutationId: 'prior' }));
+		await q.admitWriter('products', 'rec-A', 'next', 0);
+		await q.coalesceInto('prior', { ...prior, mutationId: 'next', admittedBy: 'next' }, 1);
+		const remove = storage.removeIfUnchanged.bind(storage);
+		vi.spyOn(storage, 'removeIfUnchanged').mockImplementation(async (id, rev) => {
+			if (id === 'next') await q.recordWriterReceipt(id);
+			return remove(id, rev);
+		});
+		await q.clearExpiredAnnihilation(30_001);
+		expect(ids).toEqual(['next']);
+		const pushed: string[] = [];
+		await drainMutationQueue({
+			queue: q,
+			now: () => 30_001,
+			push: async (m) => {
+				pushed.push(m.mutationId);
+				ids = ids.filter((id) => id !== m.mutationId);
+				return ok(m);
+			},
+		});
+		expect(pushed).toEqual(['next']);
+		expect(ids).toEqual([]);
+		expect(await q.all()).toEqual([]);
+	});
+
 	it.each(['marked', 'appended', 'released'])('coalesce crash: %s', async (phase) => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);

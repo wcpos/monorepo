@@ -880,14 +880,24 @@ export class RecordMutationQueue {
 				(await this.storage.list()).some((item) => item.admittedBy === token && isInternalRow(item))
 			)
 				continue;
-			const replacement = (await this.all()).find((item) => item.admittedBy === token);
+			const storedReplacement = (await this.storage.listStored()).find(
+				({ mutation }) => !isInternalRow(mutation) && mutation.admittedBy === token
+			);
+			const replacement = storedReplacement?.mutation;
 			if (replacement?.admissionReleased === token) {
 				await this.removeMarked(row.mutationId, row.supersededBy);
 				continue;
 			}
-			// Repair before removal so another crash can replay this idempotently.
+			// Decide against the unreleased revision BEFORE restoring resident bookkeeping.
+			if (
+				storedReplacement &&
+				!(await this.storage.removeIfUnchanged(replacement!.mutationId, storedReplacement.rev))
+			) {
+				if ((await this.admissionState(replacement!, nowMs)) === 'released')
+					await this.removeMarked(row.mutationId, row.supersededBy);
+				continue;
+			}
 			await this.recovery.restoreCoalesced?.(row, replacement?.mutationId ?? token);
-			if (replacement && !(await this.removePending(replacement.mutationId))) continue;
 			await this.unmarkForAnnihilation(row.mutationId, row.supersededBy);
 		}
 	}
@@ -935,30 +945,37 @@ export class RecordMutationQueue {
 		return this.settleAnnihilationMark(mutationId, token, false);
 	}
 
-	async removeMarked(mutationId: string, token: string): Promise<boolean> {
-		return this.settleAnnihilationMark(mutationId, token, true);
+	async removeMarked(mutationId: string, token: string, retainOutcome = false): Promise<boolean> {
+		return this.settleAnnihilationMark(mutationId, token, retainOutcome ? 'annihilated' : true);
 	}
 
 	private settleAnnihilationMark(
 		mutationId: string,
 		token: string,
-		remove: boolean
+		remove: boolean | 'annihilated'
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === mutationId
 			);
 			if (!stored || stored.mutation.supersededBy !== token) return false;
-			return remove
+			return remove === true
 				? this.storage.removeIfUnchanged(mutationId, stored.rev)
 				: this.storage.appendIfUnchanged(
 						{
 							...stored.mutation,
 							supersededBy: undefined,
 							markedAt: undefined,
-							...(stored.mutation.rejectedReason === 'superseded-by-void'
-								? { status: 'pending' as const, rejectedReason: undefined }
-								: {}),
+							...(remove === 'annihilated'
+								? {
+										status: 'internal' as const,
+										payload: { phase: 'annihilated' },
+										admittedBy: undefined,
+										admittedAt: undefined,
+									}
+								: stored.mutation.rejectedReason === 'superseded-by-void'
+									? { status: 'pending' as const, rejectedReason: undefined }
+									: {}),
 						},
 						stored.rev
 					);
