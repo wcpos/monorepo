@@ -64,6 +64,7 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
+import { RequestTimeoutError } from '../write-path/request-timeout';
 
 import type {
 	BarcodeSelectors,
@@ -141,7 +142,7 @@ type MaintenanceLaneDeps = {
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
-	fetcher: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	fetcher: (url: string, init?: { signal?: AbortSignal }, lane?: string) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	withCollectionActivity?: <T>(
@@ -386,7 +387,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								signal.addEventListener('abort', abort, { once: true });
 							}
 							try {
-								return await deps.fetcher(url, { ...init, signal: combined.signal });
+								return await deps.fetcher(url, { ...init, signal: combined.signal }, name);
 							} finally {
 								ticketSignal?.removeEventListener('abort', abort);
 								signal.removeEventListener('abort', abort);
@@ -478,7 +479,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						type: 'maintenance.lane.error',
 						level: 'error',
 						message,
-						fields: { lane: name },
+						fields: { lane: name, ...(error instanceof RequestTimeoutError ? { status: 0 } : {}) },
 					});
 					return { lane: name, status: 'error', error: message };
 				}
@@ -756,6 +757,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
 				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
+					if (result.timedOut === result.failed) throw result.lastFailure;
 					throw new Error(
 						forced === undefined
 							? 'Census refresh failed during full refresh'
