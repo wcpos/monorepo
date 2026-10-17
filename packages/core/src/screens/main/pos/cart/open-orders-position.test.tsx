@@ -18,7 +18,7 @@ let mockStage = 'cart';
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
-jest.mock('../../components/header/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,

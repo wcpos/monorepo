@@ -74,11 +74,7 @@ jest.mock('../../../../contexts/translations', () => {
 });
 
 // eslint-disable-next-line import/first -- Initialize the shared logger mock before the banner.
-import {
-	resetSessionHoldBannerState,
-	SessionHoldBanner,
-	SessionHoldProvider,
-} from './session-hold-banner';
+import { resetSessionHoldBannerState, SessionHoldBanner, SessionHoldProvider } from './index';
 
 // One owner, as the app mounts it; a test that needs two bars renders two banners inside it.
 function Held() {

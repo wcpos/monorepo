@@ -33,7 +33,7 @@ import { RegisterCount } from './register-count';
 import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
-import { SessionHoldBanner } from '../../components/header/session-hold-banner';
+import { SessionHoldBanner } from '../../components/session-hold-banner';
 import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
 import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';

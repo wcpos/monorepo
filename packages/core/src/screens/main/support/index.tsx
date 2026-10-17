@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
-import { UpgradeNotice } from '../components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
+import { UpgradeNotice } from '../components/upgrade-notice';
+import { UpgradeNoticeContext } from '../components/upgrade-notice/context';
 import { ManagementBar } from '../components/management-bar';
 import Discord from './discord';
 

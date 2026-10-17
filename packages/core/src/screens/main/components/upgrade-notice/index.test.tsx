@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
-import { UpgradeNotice } from './upgrade-notice';
+import { UpgradeNotice } from './index';
 
 let mockScreenSize = 'lg';
 jest.mock('../../../../contexts/theme', () => ({

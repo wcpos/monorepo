@@ -3,8 +3,8 @@ import * as React from 'react';
 import { Slot } from 'expo-router';
 
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
-import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 import { useT } from '@wcpos/core/contexts/translations';
 import { NavigationAreaLayout } from '@wcpos/core/screens/main/components/navigation-area';
 

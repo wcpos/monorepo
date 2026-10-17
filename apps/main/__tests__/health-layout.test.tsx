@@ -12,7 +12,7 @@ const mockLayoutProps: Record<string, unknown>[] = [];
 jest.mock('expo-router', () => ({ Slot: () => null }));
 jest.mock('@wcpos/core/contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/core/hooks/use-app-info', () => ({ useAppInfo: () => ({ license: null }) }));
-jest.mock('@wcpos/core/screens/main/components/header/upgrade-notice', () => ({
+jest.mock('@wcpos/core/screens/main/components/upgrade-notice', () => ({
 	UpgradeNotice: () => null,
 }));
 jest.mock('@wcpos/core/screens/main/components/navigation-area', () => ({

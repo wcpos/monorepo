@@ -59,13 +59,6 @@ const buttonVariants = cva(
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**
-				 * For buttons living on the sidebar / header surface, which is dark in
-				 * every theme. Square by design — these sit flush in the header bar.
-				 */
-				sidebar:
-					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
-
-				/**
 				 * Reads as a link, behaves as a button — no surface at all. For
 				 * in-flow navigation (a back affordance, an "open docs" jump), where a
 				 * ghost's hover surface would be too much furniture.
@@ -122,7 +115,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			'ghost-primary': 'text-primary',
 			'ghost-secondary': 'text-secondary',
 			'ghost-destructive': 'text-destructive',
-			sidebar: 'text-sidebar-foreground',
 			link: 'text-primary web:hover:underline',
 		},
 		size: {
