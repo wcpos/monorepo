@@ -26,12 +26,23 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (v: unknown, select: (v: unknown) => unknown) => select(v),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/popover', () => ({
-	Popover: ({ children }: React.PropsWithChildren) => children,
-	PopoverTrigger: ({ children }: React.PropsWithChildren) => children,
-	PopoverContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => {
-		return <div data-testid={testID}>{children}</div>;
-	},
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({ children }: React.PropsWithChildren) => children,
+	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<div data-testid={testID}>{children}</div>
+	),
+	DialogHeader: ({ children }: React.PropsWithChildren) => children,
+	DialogTitle: ({ children }: React.PropsWithChildren) => children,
+	DialogBody: ({ children }: React.PropsWithChildren) => children,
+	DialogFooter: ({ children }: React.PropsWithChildren) => children,
+	DialogClose: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
+		<button data-testid={testID}>{children}</button>
+	),
+}));
+jest.mock('@wcpos/components/tooltip', () => ({
+	Tooltip: ({ children }: React.PropsWithChildren) => children,
+	TooltipTrigger: ({ children }: React.PropsWithChildren) => children,
+	TooltipContent: () => null,
 }));
 jest.mock('@wcpos/components/dnd', () => ({
 	DragHandle: ({ children }: React.PropsWithChildren) => children,
@@ -43,19 +54,21 @@ jest.mock('@wcpos/components/dnd', () => ({
 		renderItem: (item: { id: string }, index: number) => React.ReactNode;
 	}) => items.map(renderItem),
 }));
-it('patches a column immediately and restores defaults without a dialog footer', async () => {
+it('opens the columns in the settings panel, patches immediately and restores from its footer', async () => {
 	render(<DisplayOptions />);
+	expect(screen.getByTestId('customers-display-options')).toBeTruthy();
 	fireEvent.click(screen.getAllByRole('switch')[0]);
 	await waitFor(() => expect(mockPatch).toHaveBeenCalledWith({ 'columns.0.show': false }));
 	fireEvent.click(screen.getByTestId('customers-display-restore'));
 	expect(mockReset).toHaveBeenCalledTimes(1);
+	// Per-page footer ids: the POS panels' generic ids stay unique to them.
+	expect(screen.getByTestId('customers-display-close')).toBeTruthy();
 	expect(screen.queryByTestId('ui-settings-close')).toBeNull();
+	expect(screen.queryByTestId('ui-settings-restore-defaults')).toBeNull();
 });
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
-jest.mock('@wcpos/components/dialog', () => ({}));
-jest.mock('@wcpos/components/tooltip', () => ({}));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: ({ children }: React.PropsWithChildren) => children,
 	CollapsibleContent: ({ children }: React.PropsWithChildren) => children,
