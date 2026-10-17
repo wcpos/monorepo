@@ -13,6 +13,7 @@ import { File, Paths } from 'expo-file-system';
  * Undefined when storage is unavailable; the header is then simply omitted.
  */
 let cached: string | undefined;
+let provisional: string | undefined;
 let deviceIdentity: string | null = null;
 
 export async function getInstanceId(): Promise<string | undefined> {
@@ -38,9 +39,9 @@ export async function getInstanceId(): Promise<string | undefined> {
 		}
 		const id =
 			!stored.id || (device && stored.device && stored.device !== device)
-				? globalThis.crypto.randomUUID()
+				? (provisional ??= globalThis.crypto.randomUUID())
 				: stored.id;
-		// Before first unlock, use the id but defer binding and memoisation.
+		// Before first unlock, reuse a provisional id but defer binding and the final memo.
 		if (!device) return id;
 		const record = JSON.stringify({ id, device: device ?? stored.device });
 		if (raw !== record) file.write(record);

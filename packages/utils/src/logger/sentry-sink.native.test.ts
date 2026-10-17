@@ -111,6 +111,31 @@ describe('sentry-sink.native', () => {
 		});
 	});
 
+	it.each([undefined, '{"id":'])(
+		'keeps a provisional id until unlock with file %s',
+		async (raw) => {
+			const path = 'file:///documents/wcpos_instance_id';
+			if (raw) files.set(path, raw);
+			jest.spyOn(crypto, 'randomUUID').mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa');
+			jest
+				.mocked(Application.getIosIdForVendorAsync)
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce(null);
+			await jest.isolateModulesAsync(async () => {
+				const { getInstanceId } =
+					jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+				const ids = [await getInstanceId(), await getInstanceId(), await getInstanceId()];
+				jest.restoreAllMocks();
+				const id = ids[0];
+				expect(ids).toEqual([id, id, id]);
+				expect(files.get(path)).toBe(raw);
+				expect(await getInstanceId()).toBe(id);
+				expect(JSON.parse(files.get(path)!)).toEqual({ id, device: 'device-ios' });
+			});
+		}
+	);
+
 	it.each(['{"id":', '{"id":42}', '{"id":"old","device":42}'])(
 		'replaces corrupt instance record %s',
 		async (raw) => {
