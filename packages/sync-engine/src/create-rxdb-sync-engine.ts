@@ -1975,6 +1975,10 @@ export function createRxdbSyncEngine(
 			// exactly between that overlay's read and its upsert can still flash
 			// server truth for a beat — accepted: the newer mutation's queue row
 			// survives and the next drain re-decides the record either way.
+			// The scope this revert belongs to: a revert cut short by a store or
+			// cashier switch is stale, not failed — its verdict would land in the
+			// incoming scope's log. The change stays parked for Store health.
+			const revertScopeId = manager.activeScope;
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
@@ -1995,7 +1999,7 @@ export function createRxdbSyncEngine(
 					});
 				} catch {
 					// The revert failed: the rejected row stays parked for Store Health.
-					rejectionVerdict('revertFailed');
+					if (manager.activeScope === revertScopeId) rejectionVerdict('revertFailed');
 				}
 			})();
 		},

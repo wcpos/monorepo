@@ -70,7 +70,7 @@ describe('change-signal cursor observability', () => {
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'signal.tick.error',
-				fields: { lane: 'change-signal', status: 401, consecutiveFailures: 1 },
+				fields: { lane: 'change-signal', status: 401, consecutiveFailures: 0 },
 			})
 		);
 	});
@@ -107,7 +107,7 @@ describe('change-signal cursor observability', () => {
 			expect.objectContaining({
 				type: 'signal.tick.error',
 				level: 'error',
-				fields: { lane: 'change-signal', status: 401, consecutiveFailures: 1 },
+				fields: { lane: 'change-signal', status: 401, consecutiveFailures: 0 },
 			})
 		);
 	});

@@ -256,7 +256,9 @@ async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unkno
 	return doc?.toJSON() ?? null;
 }
 
-function rejectedProductFetch(options: { failPull?: boolean } = {}) {
+function rejectedProductFetch(
+	options: { failPull?: boolean; pullAnswer?: Promise<Response> } = {}
+) {
 	const pulls: number[][] = [];
 	const fetch = async (url: string): Promise<Response> => {
 		const parsed = new URL(url);
@@ -274,6 +276,7 @@ function rejectedProductFetch(options: { failPull?: boolean } = {}) {
 			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
 		);
 		if (options.failPull) return new Response('unavailable', { status: 503 });
+		if (options.pullAnswer) return options.pullAnswer;
 		return Response.json([productPayload(9)]);
 	};
 	return { pulls, fetch };
@@ -2111,6 +2114,49 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it("treats a revert cut short by a scope switch as stale, never as the incoming scope's verdict", async () => {
+		let answerPull!: (response: Response) => void;
+		const route = rejectedProductFetch({
+			pullAnswer: new Promise<Response>((resolve) => {
+				answerPull = resolve;
+			}),
+		});
+		const diagnostics: SyncEvent[] = [];
+		const a = freshIdentity();
+		const engine = engineWith({
+			fetch: route.fetch,
+			identity: a,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+
+			// The cashier switches while the revert's pull is in flight; it then fails.
+			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
+			answerPull(new Response('unavailable', { status: 503 }));
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// No revertFailed verdict lands in the incoming scope's log.
+			expect(
+				diagnostics.some(
+					(event) => event.type === 'push.rejected' && event.fields?.revertFailed === true
+				)
+			).toBe(false);
+		} finally {
+			answerPull(new Response('unavailable', { status: 503 }));
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
@@ -2354,6 +2400,48 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(
 				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
 			).toEqual([1, 2]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('starts a fresh push streak after a parked conflict is retried on the server base', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let mode: 'fail' | 'server' = 'fail';
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> =>
+			mode === 'fail' && url.includes('/push/')
+				? new Response('upstream boom', { status: 503 })
+				: server.fetch(url, init as never);
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+			// Two failed pushes, then the clash parks (two 409s outlive the recovery).
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			mode = 'server';
+			conflictPastAutoRecovery(server, 'sha256:server-r2');
+			expect(await engine.sync('write-drain')).toMatchObject({ conflicts: 1 });
+			// Retried on the server base: a NEW push sequence, so its first failure is attempt 1.
+			await engine.resolveConflict(receipt.mutationId, 'retry-with-server-base');
+			mode = 'fail';
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2, 1]);
 		} finally {
 			await engine.dispose();
 		}

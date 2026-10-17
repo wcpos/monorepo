@@ -298,7 +298,8 @@ describe('maintenance lanes through the public handle', () => {
 				expect(error?.fields).toEqual({
 					lane: 'query-total-retry',
 					...(failure === 'deadline' ? { status: 0 } : {}),
-					consecutiveFailures: 1,
+					// A deadline has its own row, so it never advances the local-crash streak.
+					consecutiveFailures: failure === 'deadline' ? 0 : 1,
 				});
 			} finally {
 				vi.useRealTimers();
@@ -306,6 +307,37 @@ describe('maintenance lanes through the public handle', () => {
 			}
 		}
 	);
+
+	it('counts only failures no other row reported toward the local-crash streak', async () => {
+		let hang = true;
+		const harness = await createEngineHarness({
+			mode: 'manual',
+			queryTotal: {
+				fetchWooQueryTotal: () =>
+					hang ? new Promise(() => {}) : Promise.reject(new Error('census store write failed')),
+			},
+		});
+		vi.useFakeTimers();
+		try {
+			for (let index = 0; index < 2; index += 1) {
+				const check = harness.engine.checkCollection('products');
+				await vi.advanceTimersByTimeAsync(25_000);
+				await check;
+			}
+			hang = false;
+			await harness.engine.checkCollection('products');
+			// Two deadlines (each with its own row), then the first LOCAL failure:
+			// it is the first, not the third.
+			expect(
+				harness.diagnostics
+					.filter((event) => event.type === 'maintenance.lane.error')
+					.map((event) => event.fields?.consecutiveFailures)
+			).toEqual([0, 0, 1]);
+		} finally {
+			vi.useRealTimers();
+			await harness.dispose();
+		}
+	});
 
 	it('numbers consecutive lane failures and restarts the streak after a tick that ran', async () => {
 		let fail = true;

@@ -65,7 +65,7 @@ import {
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
 import { scopeBoundFailureStreak } from '../failure-streak';
-import { requestStatusOf } from '../transport-failure';
+import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 
 import type {
 	BarcodeSelectors,
@@ -483,8 +483,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
-					const consecutiveFailures = tickStreak.fail();
 					const status = requestStatusOf(error);
+					// Only a failure no other row reported counts toward the local-crash streak.
+					const consecutiveFailures = isReportedRequestStatus(status) ? 0 : tickStreak.fail();
 					deps.diagnostics({
 						type: 'maintenance.lane.error',
 						level: 'error',

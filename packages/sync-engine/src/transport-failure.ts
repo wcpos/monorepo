@@ -42,6 +42,12 @@ export function markTransportFailure(error: unknown): void {
  * too — the transport row calls that a success, so the lane row still owns it.
  */
 export function requestStatusOf(error: unknown): number | undefined {
+	// Several concurrent failures: reported only if EVERY one was — a local
+	// failure inside the aggregate has no other row to report it.
+	if (error instanceof AggregateError) {
+		const statuses = error.errors.map(requestStatusOf);
+		return statuses.length > 0 && statuses.every(isReportedRequestStatus) ? statuses[0] : undefined;
+	}
 	if (error instanceof RequestTimeoutError) return 0;
 	if (typeof error === 'object' && error !== null && transportThrown.has(error)) return 0;
 	const status = (error as { status?: unknown } | null)?.status;

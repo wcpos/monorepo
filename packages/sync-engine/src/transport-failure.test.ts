@@ -26,6 +26,21 @@ describe('requestStatusOf', () => {
 		expect(requestStatusOf(new Error(message))).toBe(status);
 	});
 
+	it('reads an aggregate as reported only when every failure inside it was', () => {
+		const reported = new AggregateError([
+			new Error('existence scan fetch failed: 503'),
+			new RequestTimeoutError(60_000),
+		]);
+		const mixed = new AggregateError([
+			new Error('existence scan fetch failed: 503'),
+			new SyntaxError('Unexpected token < in JSON'),
+		]);
+
+		expect(requestStatusOf(reported)).toBe(503);
+		// The parse failure has no transport row: the aggregate is a local failure.
+		expect(requestStatusOf(mixed)).toBeUndefined();
+	});
+
 	it('leaves a local failure without a status', () => {
 		expect(requestStatusOf(new Error('bulkUpsert failed'))).toBeUndefined();
 		// An unmarked TypeError is a bug, not the network.

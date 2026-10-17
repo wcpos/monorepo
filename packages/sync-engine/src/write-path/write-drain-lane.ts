@@ -805,6 +805,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							});
 						}
 						for (const conflict of result.conflicts) {
+							// A parked conflict is a terminal verdict of its own: a later
+							// "retry with server base" starts a new push sequence.
+							pushFailures.delete(conflict.mutation.mutationId);
 							deps.emitWriteEvent({
 								type: 'write-conflict',
 								collection: conflict.mutation.collectionName,

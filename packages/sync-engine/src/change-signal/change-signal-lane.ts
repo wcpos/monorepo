@@ -48,7 +48,7 @@ import {
 import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
 import { scopeBoundFailureStreak } from '../failure-streak';
-import { requestStatusOf } from '../transport-failure';
+import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 
 import type { RxDatabase } from 'rxdb';
 import type {
@@ -551,7 +551,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			// request already has its transport or deadline row, so the observer keeps
 			// this one quiet and saves the alarm for local failures that persist.
 			const status = requestStatusOf(error);
-			const consecutiveFailures = tickStreak.fail();
+			// Only a failure no other row reported counts toward the local-crash streak.
+			const consecutiveFailures = isReportedRequestStatus(status) ? 0 : tickStreak.fail();
 			deps.diagnostics({
 				type: 'signal.tick.error',
 				level: 'error',
