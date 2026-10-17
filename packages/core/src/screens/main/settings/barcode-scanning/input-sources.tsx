@@ -6,7 +6,15 @@ import { useObservableState } from 'observable-hooks';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { DocsLink } from '@wcpos/components/docs-link';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -118,17 +126,27 @@ function ScannerProfileRow({
 			<Text className={`text-2xs font-medium ${tone}`} testID="scanner-profile-status">
 				{statusLabel[status]}
 			</Text>
-			{/* Quiet by design: a destructive-red button on every row is alarm for a
-			    list, not emphasis. ghost keeps the surface clear and
-			    de-emphasises only the label. */}
-			<Button
-				variant="ghost"
-				size="sm"
-				testID="scanner-profile-delete"
-				onPress={() => onRemove(profile)}
-			>
-				<ButtonText>{t('settings.scanner_remove')}</ButtonText>
-			</Button>
+			{/* Removing a scanner is the row's only action and it loses the pairing: the last,
+			    red row of the row's ⋮ menu, never a red button on every row of a list. */}
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						name="ellipsisVertical"
+						testID="scanner-profile-menu"
+						accessibilityLabel={t('common.actions')}
+					/>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem
+						variant="destructive"
+						testID="scanner-profile-delete"
+						onPress={() => onRemove(profile)}
+					>
+						<Icon name="trash" className="fill-destructive" />
+						<Text>{t('settings.scanner_remove')}</Text>
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</HStack>
 	);
 }
