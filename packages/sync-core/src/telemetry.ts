@@ -85,6 +85,7 @@ export type SyncEventType =
 	| 'engine.disposed'
 	| 'engine.guard'
 	| 'engine.lane.tick'
+	| 'engine.request.deadline'
 	| 'engine.listener-error'
 	| 'engine.pos-bootstrap-error'
 	| 'engine.ready'

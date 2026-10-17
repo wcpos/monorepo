@@ -141,7 +141,7 @@ type MaintenanceLaneDeps = {
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
-	fetcher: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	fetcher: (url: string, init?: { signal?: AbortSignal }, lane?: string) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	withCollectionActivity?: <T>(
@@ -386,7 +386,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								signal.addEventListener('abort', abort, { once: true });
 							}
 							try {
-								return await deps.fetcher(url, { ...init, signal: combined.signal });
+								return await deps.fetcher(url, { ...init, signal: combined.signal }, name);
 							} finally {
 								ticketSignal?.removeEventListener('abort', abort);
 								signal.removeEventListener('abort', abort);

@@ -56,6 +56,7 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
@@ -345,6 +346,8 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+// Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
+const ENGINE_REQUEST_DEADLINE_MS = 60_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -829,7 +832,7 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const fetcher: EngineFetcher = async (url, init) => {
+	const transportFetcher: EngineFetcher = async (url, init) => {
 		if (updateRequiredRefusal !== null) {
 			return new Response(updateRequiredRefusal.body, {
 				status: updateRequiredRefusal.status,
@@ -973,6 +976,21 @@ export function createRxdbSyncEngine(
 		}
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
+	};
+	const deadlineFetcher = withRequestTimeout(transportFetcher, ENGINE_REQUEST_DEADLINE_MS, timers);
+	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
+		const startedAtMs = nowMs();
+		try {
+			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+		} catch (error) {
+			if (error instanceof RequestTimeoutError)
+				diagnostics({
+					type: 'engine.request.deadline',
+					level: 'warn',
+					fields: { lane, elapsedMs: nowMs() - startedAtMs },
+				});
+			throw error;
+		}
 	};
 	const rawQueryTotal = ports.queryTotal;
 	const queryTotal =
@@ -1716,7 +1734,7 @@ export function createRxdbSyncEngine(
 		needsPrime: (scopeId) => !bootstrappedScopes.has(scopeId),
 		timers,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'change-signal'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
 		writeBlob,
@@ -1741,7 +1759,7 @@ export function createRxdbSyncEngine(
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'require'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
@@ -1780,7 +1798,7 @@ export function createRxdbSyncEngine(
 		},
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'write-drain'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		mintUuid: uuid,
 		now: nowMs,
