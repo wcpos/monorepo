@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Pressable, type PressableProps } from 'react-native';
+import { Platform, Pressable, type PressableProps } from 'react-native';
+
+import * as Haptics from 'expo-haptics';
 
 import { usePointer } from '../lib/device';
 import { TILE_SURFACE } from '../lib/tile-surface';
@@ -19,6 +21,8 @@ export type TileProps = Omit<PressableProps, 'children'> & {
 	className?: string;
 	children?: React.ReactNode;
 	testID?: string;
+	/** A tile gives the same light press haptic on native as a Button; opt out per tile. */
+	disableHaptics?: boolean;
 };
 
 const sizes: Record<TileSize, string> = {
@@ -41,9 +45,17 @@ export function Tile({
 	onPress,
 	role,
 	accessibilityRole,
+	disableHaptics = false,
 	...props
 }: TileProps) {
 	const pointer = usePointer();
+	const press: PressableProps['onPress'] = onPress
+		? (event) => {
+				if (Platform.OS !== 'web' && !disabled && !disableHaptics)
+					void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				onPress(event);
+			}
+		: undefined;
 	const radio = (role ?? accessibilityRole) === 'radio';
 	return (
 		<Pressable
@@ -55,7 +67,7 @@ export function Tile({
 			// `aria-checked` instead.
 			aria-selected={radio ? undefined : selected}
 			disabled={disabled}
-			onPress={onPress}
+			onPress={press}
 			className={cn(
 				TILE_SURFACE.base,
 				variant === 'dashed' ? TILE_SURFACE.dashed : TILE_SURFACE.rest,

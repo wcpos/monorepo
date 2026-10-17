@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -15,6 +16,11 @@ jest.mock('react-native', () => {
 	};
 });
 jest.mock('../lib/device', () => ({ usePointer: () => mockPointer }));
+const mockImpact = jest.fn();
+jest.mock('expo-haptics', () => ({
+	impactAsync: (...args: unknown[]) => mockImpact(...args),
+	ImpactFeedbackStyle: { Light: 'light' },
+}));
 
 const classes = (testID: string) => screen.getByTestId(testID).dataset.classes ?? '';
 
@@ -84,4 +90,24 @@ it('is no tab stop without an action, and leaves a radio its checked state', () 
 	expect(screen.getByTestId('inert')).not.toHaveAttribute('tabindex', '0');
 	expect(screen.getByTestId('radio')).not.toHaveAttribute('aria-selected');
 	expect(screen.getByTestId('radio')).toHaveAttribute('aria-checked', 'true');
+});
+
+it('gives the light press haptic on native, as a Button does, unless opted out or disabled', () => {
+	const os = Platform.OS;
+	(Platform as { OS: string }).OS = 'ios';
+	try {
+		mockImpact.mockClear();
+		const onPress = jest.fn();
+		const { rerender } = render(<Tile testID="tile" onPress={onPress} />);
+		fireEvent.click(screen.getByTestId('tile'));
+		expect(mockImpact).toHaveBeenCalledWith('light');
+		expect(onPress).toHaveBeenCalledTimes(1);
+		mockImpact.mockClear();
+		rerender(<Tile testID="tile" onPress={onPress} disableHaptics />);
+		fireEvent.click(screen.getByTestId('tile'));
+		expect(mockImpact).not.toHaveBeenCalled();
+		expect(onPress).toHaveBeenCalledTimes(2);
+	} finally {
+		(Platform as { OS: string }).OS = os;
+	}
 });

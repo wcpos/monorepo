@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { usePointer } from '../lib/device';
 import { TILE_SURFACE } from '../lib/tile-surface';
 
 /**
@@ -85,11 +86,19 @@ export function ListItem({
 	// Explicit non-default variant (e.g. "warning") wins over selected.
 	const resolvedVariant =
 		variant && variant !== 'default' ? variant : selected ? 'selected' : 'default';
+	const pointer = usePointer();
+	const { onPress, role, accessibilityRole } = pressableProps;
 
 	return (
 		<Pressable
+			// An actionable row is a button unless the caller names it otherwise (a checkbox, a
+			// radio); react-native-web also needs the role for Space to press it. A row without an
+			// action is no tab stop.
+			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
+			tabIndex={onPress ? undefined : -1}
 			className={cn(
 				listItemVariants({ variant: resolvedVariant }),
+				pointer === 'fine' && 'web:hover:bg-muted',
 				pressableProps.disabled && TILE_SURFACE.disabled,
 				className
 			)}
