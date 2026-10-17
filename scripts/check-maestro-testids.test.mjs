@@ -45,6 +45,17 @@ test('checks every literal alternative and reports only the missing one', (t) =>
 	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - y\n');
 });
 
+test('collects ternary results assigned to a testID variable, not its condition', (t) => {
+	// pos/products/tiles/product-tile.tsx names its testID this way; flow 10 waits on it.
+	const source = `const testID = onDrill === 'yes' ? 'variable-product-tile' : 'product-tile';
+return <Pressable testID={testID} />;`;
+	const present = check(t, "id: 'product-tile'\nid: 'variable-product-tile'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'yes'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - yes\n');
+});
+
 test('collects both ternary results without the condition or neighboring expressions', (t) => {
 	const source = `<View testID={c === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'} label={'outside'} />
 <View testID={value} label={c ? 'neighbor' : 'other'} />`;

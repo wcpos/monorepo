@@ -88,6 +88,11 @@ for (const dir of isMain ? sourceDirs : []) {
 		for (const m of text.matchAll(/\w*[tT]estID\s*=\s*\{[^}\n]*?\?([^}\n]*)\}/g)) {
 			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
 		}
+		// A ternary assigned to a *TestID variable (`const testID = drill ? 'a' : 'b';`, then
+		// `testID={testID}`): its results only, bounded to the statement on this line.
+		for (const m of text.matchAll(/\b(?:const|let)\s+\w*[tT]estID\s*=\s*[^?;\n]*\?([^;\n]*)/g)) {
+			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
+		}
 		// Template-literal values, including inside short expressions (ternaries).
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:][^`\n]{0,80}`([^`]+)`/g)) {
 			const template = m[1];
