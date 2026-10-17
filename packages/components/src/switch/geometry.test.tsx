@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Switch } from './index';
 import { CROSSFADE, EASE } from '../lib/motion';
@@ -41,8 +41,24 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('uniwind', () => ({ useCSSVariable: () => ['border', 'primary'] }));
 jest.mock('@rn-primitives/switch', () => ({
-	Root: ({ children, className, testID }: React.PropsWithChildren<Record<string, string>>) => (
-		<div data-testid={testID} className={className}>
+	Root: ({
+		children,
+		className,
+		testID,
+		onPressIn,
+		onPressOut,
+	}: React.PropsWithChildren<{
+		className?: string;
+		testID?: string;
+		onPressIn?: () => void;
+		onPressOut?: () => void;
+	}>) => (
+		<div
+			data-testid={testID}
+			className={className}
+			onMouseDown={() => onPressIn?.()}
+			onMouseUp={() => onPressOut?.()}
+		>
 			{children}
 		</div>
 	),
@@ -81,8 +97,31 @@ it('gives the finger a 44 pt square over the drawn track without growing its lay
 	// …and the press area is the control token, centred over it and out of layout, so it
 	// overflows the track (which iOS and Android both hit-test) instead of relying on hitSlop.
 	const press = screen.getByTestId('toggle');
-	expect(press).toHaveClass('h-ctl', 'w-ctl');
+	// It fills a track wider than the token (lg at Spacious, a caller's width) and never
+	// drops under 44.
+	expect(press).toHaveClass('h-full', 'w-full', 'min-h-ctl', 'min-w-ctl');
 	expect(press.parentElement).toHaveClass('absolute', 'inset-0', 'items-center', 'justify-center');
 	// The overlay itself never takes a touch meant for the track's neighbours.
 	expect(press.parentElement).toHaveAttribute('data-pointer-events', 'box-none');
+});
+
+it('paints a pressed-state style on the visible track, not the transparent press area', () => {
+	animatedViews.length = 0;
+	const onPressIn = jest.fn();
+	render(
+		<Switch
+			onCheckedChange={() => {}}
+			checked
+			testID="toggle"
+			onPressIn={onPressIn}
+			style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+		/>
+	);
+	const trackStyle = () => (animatedViews.at(-2)?.style as object[]).flat();
+	expect(trackStyle()).toContainEqual({ opacity: 1 });
+	act(() => {
+		fireEvent.mouseDown(screen.getByTestId('toggle'));
+	});
+	expect(trackStyle()).toContainEqual({ opacity: 0.5 });
+	expect(onPressIn).toHaveBeenCalledTimes(1);
 });

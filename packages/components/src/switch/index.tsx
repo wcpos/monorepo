@@ -151,10 +151,12 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 			},
 		],
 	}));
-	// A plain style object belongs to the wrapper (layout, margins, overrides); a
-	// pressed-state style function stays on the primitive that owns the press.
-	const wrapperStyle = typeof style === 'function' ? undefined : style;
-	const pressableStyle = typeof style === 'function' ? style : undefined;
+	// Every caller style lands on the painted track, the switch the cashier sees: a pressed-state
+	// style function is resolved here from the press area's own pressed state, because the press
+	// area under the finger is a transparent square, not the track.
+	const [pressed, setPressed] = React.useState(false);
+	const wrapperStyle = typeof style === 'function' ? style({ pressed }) : style;
+	const { onPressIn, onPressOut } = props;
 	return (
 		<Animated.View
 			style={[animatedRootStyle, wrapperStyle]}
@@ -174,16 +176,25 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 			>
 				<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
 			</Animated.View>
-			{/* The finger gets 44 × 44 (§ Design 2, both HIGs) while the row still lays out the
-			    drawn track: the press area is a control-token square centred over the track and
-			    overflowing it, out of layout. Not hitSlop: iOS drops a touch outside a parent
-			    that nothing overflows, so slop past a 20 pt row never reaches the switch; a real
-			    overflowing child is hit-tested on iOS and Android alike. */}
+			{/* The finger gets at least 44 × 44 (§ Design 2, both HIGs) while the row still lays
+			    out the drawn track: the press area fills the track and grows to the control token,
+			    centred over it and overflowing it, out of layout. Not hitSlop: iOS drops a touch
+			    outside a parent that nothing overflows, so slop past a 20 pt row never reaches the
+			    switch; a real overflowing child is hit-tested on iOS and Android alike. The row a
+			    switch sits in is at least 44 on native (FormSwitch, SwitchWithLabel), so stacked
+			    switches' squares never overlap. */}
 			<View pointerEvents="box-none" className="absolute inset-0 items-center justify-center">
 				<SwitchPrimitives.Root
-					className="h-ctl w-ctl bg-transparent"
-					style={pressableStyle}
+					className="min-h-ctl min-w-ctl h-full w-full bg-transparent"
 					{...props}
+					onPressIn={(event) => {
+						setPressed(true);
+						onPressIn?.(event);
+					}}
+					onPressOut={(event) => {
+						setPressed(false);
+						onPressOut?.(event);
+					}}
 					ref={ref}
 				/>
 			</View>
@@ -220,7 +231,8 @@ function SwitchWithLabel({ label, size, ref, onCheckedChange, ...props }: Switch
 	};
 
 	return (
-		<HStack className="w-full">
+		// At least a row tall on native, so the switch's 44 pt square stays inside its own row.
+		<HStack className="native:min-h-row w-full">
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
 			<Label
 				nativeID={props.nativeID}

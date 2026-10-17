@@ -33,7 +33,9 @@ export function FormSwitch({
 
 	return (
 		<FormItem className="px-1">
-			<View className="w-full flex-row items-center gap-3">
+			{/* At least a row tall on native, so the switch's 44 pt square stays inside its own
+			    row and stacked switches never take each other's touches. */}
+			<View className="native:min-h-row w-full flex-row items-center gap-3">
 				<Switch
 					ref={switchRef}
 					{...ariaProps}
