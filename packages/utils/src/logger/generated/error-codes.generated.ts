@@ -133,7 +133,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'warn',
 		actionHint:
 			'Nothing to do — keep selling. Changes send automatically when the connection returns.',
-		dataSafety: 'local-only',
+		dataSafety: 'no-impact',
 		summary: "Your store can't be reached right now.",
 	},
 	SYNC131: {
@@ -153,7 +153,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'warn',
 		actionHint:
 			"Nothing to do — WCPOS retries automatically. If this appears every day, ask your site admin about the store's rate limit.",
-		dataSafety: 'local-only',
+		dataSafety: 'no-impact',
 		summary: 'Your store asked WCPOS to slow down for a moment.',
 	},
 	SYNC201: {
@@ -264,7 +264,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint:
 			'Ask your site admin to check the WCPOS plugin is active (WP Admin → Plugins) and that no security plugin blocks the REST API.',
 		dataSafety: 'no-impact',
-		summary: "WCPOS can't reach its connection point on your store.",
+		summary: "Your store isn't answering WCPOS's requests.",
 	},
 	AUTH401: {
 		code: 'AUTH401',
@@ -317,7 +317,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		code: 'PAYMENT101',
 		symbol: 'PAYMENT_OK_STATUS_CHECK_FAILED',
 		domain: 'PAYMENT',
-		severity: 'info',
+		severity: 'warn',
 		actionHint: 'Reopen the order to update its status.',
 		dataSafety: 'money-moved',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
@@ -570,7 +570,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		code: 'SYNC401',
 		symbol: 'SYNC_TASK_CRASHED',
 		domain: 'SYNC',
-		severity: 'error',
+		severity: 'warn',
 		actionHint: 'Nothing to do — the task restarts automatically, and nothing is lost.',
 		dataSafety: 'no-impact',
 		summary: 'A background sync task stopped unexpectedly before finishing.',
