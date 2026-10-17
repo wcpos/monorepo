@@ -54,6 +54,7 @@ import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { scopeBoundFailureStreak } from '../failure-streak';
+import { AUTO_REVERT_COLLECTIONS } from './auto-revert-collections';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { withRequestTimeout, WRITE_DRAIN_REQUEST_TIMEOUT_MS } from './request-timeout';
 
@@ -351,6 +352,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
 		const tickStreak = tickFailureStreaks();
+		// Catalogue dead letters this tick has not yet handed to the engine's revert
+		// (via write-rejected). Their push.rejected was only a stamped attempt, so if
+		// post-drain processing fails first, the verdict is owed here: the row is no
+		// longer pending, and no later drain would ever revisit it.
+		let verdictsOwed: Awaited<ReturnType<typeof drainMutationQueue>>['rejected'] = [];
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -725,6 +731,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
+						verdictsOwed = result.rejected.filter(({ mutation: dead }) =>
+							AUTO_REVERT_COLLECTIONS.has(dead.collectionName)
+						);
 						if (result.sessionExpired) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
@@ -855,6 +864,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									typeof rejectedPayloadId !== 'number' &&
 									!rejectionSuggestsServerRecord(reason),
 							});
+							verdictsOwed = verdictsOwed.filter((owed) => owed.mutation !== dead);
 						}
 						deps.setQueueDepth(stillPending.size);
 						report = {
@@ -888,6 +898,22 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			if (tickReport.status === 'ran') tickStreak.reset();
 			return tickReport;
 		} catch (error) {
+			for (const { mutation: dead, status, reason, serverMessage } of verdictsOwed) {
+				deps.diagnostics({
+					type: 'push.rejected',
+					level: 'error',
+					collection: dead.collectionName,
+					fields: {
+						op: dead.operation,
+						recordId: dead.recordId,
+						mutationId: dead.mutationId,
+						...(status !== undefined ? { status } : {}),
+						...(reason !== undefined ? { reason } : {}),
+						...(serverMessage !== undefined ? { serverMessage } : {}),
+						revertSkipped: true,
+					},
+				});
+			}
 			if (signal?.aborted) {
 				deps.setLastError(null);
 				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };

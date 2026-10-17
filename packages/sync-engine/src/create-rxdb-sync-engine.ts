@@ -57,6 +57,7 @@ import type {
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
 import { createFailureStreak, type FailureStreak } from './failure-streak';
+import { AUTO_REVERT_COLLECTIONS } from './write-path/auto-revert-collections';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -154,13 +155,6 @@ import { type EngineTimers, systemTimers } from './engine-timers';
 import type { WriteOutcomeBridge } from './write-path/write-outcome-bridge';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
-
-const AUTO_REVERT_COLLECTIONS: ReadonlySet<string> = new Set([
-	'products',
-	'variations',
-	'customers',
-	'coupons',
-] satisfies SyncCollectionName[]);
 
 export type {
 	CoverageOutcome,
@@ -799,9 +793,9 @@ export function createRxdbSyncEngine(
 		// a `push.rejected` marked `revertFailed` when it does not, or marked
 		// `revertSkipped` for a born-local create (which never reverts — it parks
 		// for Store health). This dead letter is stamped `revertPending` so the log
-		// keeps it an uncoded attempt. Residual: if the post-drain cleanup throws
-		// before write-rejected (so no verdict path runs), the change keeps only this
-		// info row and its parked entry in Store health's attention panel.
+		// keeps it an uncoded attempt. If the post-drain cleanup throws before
+		// write-rejected (so no revert runs), the write drain emits the verdict
+		// itself (`revertSkipped`) on its way out.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&
@@ -1029,21 +1023,25 @@ export function createRxdbSyncEngine(
 	};
 	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
 	// answer is retried by the next tick, so the log alarms only on a streak.
-	// Any answer on the lane — whatever its status — ends the streak. Like the
-	// lane streaks, the instances are dropped on every scope activation (see the
-	// 'switched' handler) and each request settles the instance it started with.
+	// Keyed by lane AND request path (query stripped): a lane issues several
+	// requests, and a healthy `/changes/tick` probe must not reset the streak of
+	// a `/changes/sequence-log` that keeps timing out beside it. Any answer on
+	// that path — whatever its status — ends its streak. Like the lane streaks,
+	// the instances are dropped on every scope activation (see the 'switched'
+	// handler) and each request settles the instance it started with.
 	const consecutiveDeadlines = new Map<string, FailureStreak>();
-	const deadlineStreakFor = (lane: string): FailureStreak => {
-		let streak = consecutiveDeadlines.get(lane);
+	const deadlineStreakFor = (lane: string, url: string): FailureStreak => {
+		const key = `${lane} ${url.split(/[?#]/, 1)[0] ?? url}`;
+		let streak = consecutiveDeadlines.get(key);
 		if (streak === undefined) {
 			streak = createFailureStreak();
-			consecutiveDeadlines.set(lane, streak);
+			consecutiveDeadlines.set(key, streak);
 		}
 		return streak;
 	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
-		const deadlineStreak = deadlineStreakFor(lane);
+		const deadlineStreak = deadlineStreakFor(lane, url);
 		const observation = createRequestObservation(startedAtMs, init?.signal);
 		const deadlineFetcher = withRequestTimeout(
 			(url, init) => transportFetcher(url, init, observation),
@@ -1082,7 +1080,7 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
-						const deadlineStreak = deadlineStreakFor('query-total-retry');
+						const deadlineStreak = deadlineStreakFor('query-total-retry', input.request.endpoint);
 						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
 							const total = await withRequestTimeout(

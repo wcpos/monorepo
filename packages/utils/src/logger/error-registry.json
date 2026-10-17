@@ -1173,6 +1173,29 @@
 		"introducedIn": "1.11.3"
 	},
 	{
+		"code": "SYNC231",
+		"symbol": "RECORD_SENT_UNRECORDED",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "Nothing to do — don't enter it again. WCPOS keeps re-checking, and the store ignores the repeat.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "Your store received this change, but this device couldn't record that it was sent.",
+		"docsBody": "The store accepted this change, but this device could not save the note that it was sent, so it keeps the change queued and sends it again. The store recognises the repeat and ignores it, so nothing is duplicated. Do not enter the change again — that would create a second one.",
+		"troubleshooting": [
+			"Expand the log entry: it names the record whose send could not be recorded on this device.",
+			"Check the record in WP Admin — it is already there. Do not enter it again on the till: a second entry would be a second sale or record.",
+			"This device keeps re-sending until it can record the send; the store ignores each repeat, so nothing is duplicated.",
+			"If this keeps appearing, the device's storage is refusing writes: free up storage, then restart WCPOS. Contact support with Copy debug info if it continues."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "Independent review of monorepo#2671 (queue.write.ack-failed); server dedupes pushes on mutationId",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"code": "CHECKOUT401",
 		"symbol": "TOTALS_DIVERGED",
 		"domain": "CHECKOUT",

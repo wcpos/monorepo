@@ -53,6 +53,7 @@ export type ErrorCode =
 	| 'SYNC411'
 	| 'SYNC221'
 	| 'SYNC222'
+	| 'SYNC231'
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
 	| 'CLIENT111'
@@ -606,6 +607,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'This device saved its version over a newer edit made in your store.',
 	},
+	SYNC231: {
+		code: 'SYNC231',
+		symbol: 'RECORD_SENT_UNRECORDED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Nothing to do — don't enter it again. WCPOS keeps re-checking, and the store ignores the repeat.",
+		dataSafety: 'no-impact',
+		summary: "Your store received this change, but this device couldn't record that it was sent.",
+	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
 		symbol: 'TOTALS_DIVERGED',
@@ -1011,6 +1022,7 @@ export const ERROR_CODES = {
 	DEMAND_REQUEST_FLOOD: 'SYNC411',
 	RECORD_CONFLICT: 'SYNC221',
 	STORE_EDIT_OVERWRITTEN: 'SYNC222',
+	RECORD_SENT_UNRECORDED: 'SYNC231',
 	TOTALS_DIVERGED: 'CHECKOUT401',
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
 	APP_START_SLOW: 'CLIENT111',

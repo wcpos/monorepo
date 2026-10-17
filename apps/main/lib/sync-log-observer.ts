@@ -681,12 +681,16 @@ export const CONFORMANCE_TABLE = {
 	},
 	// The push landed but recording it here failed; the next drain re-pushes and
 	// the server dedupes. No push.error follows a push that landed, so a streak
-	// of these is the only signal that this device cannot record its sends.
+	// of these is the only signal that this device cannot record its sends. Its
+	// own code, never SYNC101: that one says "enter it again", which here would
+	// create a second sale — the store already has this one.
 	'queue.write.ack-failed': {
 		operationType: 'sync.record',
 		outcome: 'unknown',
 		code: (_event, fields) =>
-			streakLevel(fields.consecutiveFailures) === 'warn' ? ERROR_CODES.LOCAL_DB_WRITE_FAILED : null,
+			streakLevel(fields.consecutiveFailures) === 'warn'
+				? ERROR_CODES.RECORD_SENT_UNRECORDED
+				: null,
 		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
 		message: recordMessage('sent, but could not be recorded on this device'),
 	},

@@ -1003,7 +1003,9 @@ describe('createSyncLogObserver', () => {
 
 	it.each([
 		['queue.write.reschedule-failed', 'consecutiveFailures', 'SYNC101', {}],
-		['queue.write.ack-failed', 'consecutiveFailures', 'SYNC101', {}],
+		// SYNC231, never SYNC101: the store has the change, so "enter it again"
+		// would make a second sale.
+		['queue.write.ack-failed', 'consecutiveFailures', 'SYNC231', {}],
 		['coverage.require.stalled', 'consecutiveStalls', 'SYNC181', {}],
 		['coverage.existence-reconcile', 'consecutiveFailures', 'SYNC101', { outcome: 'failed' }],
 	] as const)(

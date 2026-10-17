@@ -120,6 +120,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC221');
 		case 'SYNC222':
 			return t('health.logs.error_summary.SYNC222');
+		case 'SYNC231':
+			return t('health.logs.error_summary.SYNC231');
 		case 'CHECKOUT401':
 			return t('health.logs.error_summary.CHECKOUT401');
 		case 'PRODUCT411':

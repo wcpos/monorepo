@@ -2054,6 +2054,63 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('owes the verdict when post-drain processing fails before the revert starts', async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// The first queue read AFTER the dead letter is durable fails once — the
+			// post-drain processing dies before write-rejected can start the revert.
+			const queue = queueFor(engine.active()!.database as never);
+			const replace = queue.replace.bind(queue);
+			const pending = queue.pending.bind(queue);
+			let deadLettered = false;
+			let failed = false;
+			vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
+				await replace(row);
+				if (row.status === 'rejected') deadLettered = true;
+			});
+			vi.spyOn(queue, 'pending').mockImplementation(async () => {
+				if (deadLettered && !failed) {
+					failed = true;
+					throw new Error('queue read failed');
+				}
+				return pending();
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'error' });
+			// A later healthy drain must not add a second verdict.
+			await engine.sync('write-drain');
+
+			const rejections = diagnostics.filter((event) => event.type === 'push.rejected');
+			// The stamped attempt, then exactly ONE coded verdict, emitted by the drain.
+			expect(
+				rejections.map((event) => {
+					const fields = event.fields as Record<string, unknown> | undefined;
+					return [event.level, fields?.revertPending, fields?.revertSkipped, fields?.status];
+				})
+			).toEqual([
+				['warn', true, undefined, 403],
+				['error', undefined, true, 403],
+			]);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });

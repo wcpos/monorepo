@@ -253,3 +253,29 @@ it('starts the deadline streak over under another store scope', async () => {
 		await census.dispose();
 	}
 });
+
+it("keeps a timing-out path's streak when a healthy probe answers on the same lane", async () => {
+	vi.useFakeTimers();
+	const { fetcher } = harness.engine.hostTransport();
+	const probe = async () => {
+		fetch.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+		await fetcher('https://example.test/probe/tick');
+	};
+	const timeout = async () => {
+		fetch.mockReturnValueOnce(new Promise(() => {}));
+		const request = fetcher('https://example.test/probe/sequence-log?since=4').catch(() => {});
+		await vi.advanceTimersByTimeAsync(60_000);
+		await request;
+	};
+	for (let cycle = 0; cycle < 3; cycle += 1) {
+		await probe();
+		await timeout();
+	}
+
+	// The probe's answers are another path's: the sequence-log streak reaches 3.
+	expect(
+		harness.diagnostics
+			.filter((event) => event.type === 'engine.request.deadline')
+			.map((event) => (event.fields as { consecutiveDeadlines?: number }).consecutiveDeadlines)
+	).toEqual([1, 2, 3]);
+});
