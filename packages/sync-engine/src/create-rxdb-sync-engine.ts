@@ -895,12 +895,11 @@ export function createRxdbSyncEngine(
 				headers: { 'Content-Type': 'application/json' },
 			});
 		}
+		const headers = new Headers(init?.headers);
+		headers.delete('X-WCPOS-Instance');
 		const installId = await ports.getInstanceId?.();
-		if (installId !== undefined) {
-			const headers = new Headers(init?.headers);
-			headers.set('X-WCPOS-Instance', installId);
-			init = { ...init, headers };
-		}
+		if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
+		init = { ...init, headers };
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
