@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -7,6 +6,7 @@ import { distinctUntilChanged, map, startWith, switchMap, tap } from 'rxjs/opera
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { EmptyState } from '@wcpos/components/empty-state';
+import { ListItem } from '@wcpos/components/list-item';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -182,7 +182,7 @@ export function StoreSelect({
 					>
 						<VStack space="sm">
 							{stores.map((store) => (
-								<Pressable
+								<ListItem
 									key={store.localID}
 									// Addressed by the WooCommerce store id, not `localID`. `localID` is a
 									// SHA-256 of {user, site, credentials, store}, so it gave E2E no way to
@@ -192,11 +192,7 @@ export function StoreSelect({
 									// (woocommerce-pos#1548).
 									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
-									className={`active:bg-muted min-h-row justify-center rounded-lg border px-3 py-2 ${
-										selectedStoreLocalID === store.localID
-											? 'border-primary bg-muted'
-											: 'border-border bg-card'
-									}`}
+									selected={selectedStoreLocalID === store.localID}
 								>
 									<RadioGroupOption
 										value={store.localID ?? ''}
@@ -209,7 +205,7 @@ export function StoreSelect({
 											) : null
 										}
 									/>
-								</Pressable>
+								</ListItem>
 							))}
 						</VStack>
 					</RadioGroup>

@@ -12,6 +12,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
@@ -230,10 +231,10 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const pills = flow.tiles.filter(canChoose).map((tile) => {
 		const selected = flow.state.methodId === tile.method.id;
 		return (
-			<Button
+			<Tile
 				key={tile.method.id}
-				variant="outline"
-				className={`min-h-tile border-border bg-background h-auto min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 py-2 ${selected ? 'border-primary bg-muted' : ''} ${busy ? 'opacity-45' : ''}`}
+				selected={selected}
+				className="min-w-0 flex-1"
 				testID={`checkout-method-${tile.method.id}`}
 				disabled={busy}
 				onPress={() => {
@@ -242,11 +243,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				}}
 			>
 				<Icon name={methodIcon(tile.method)} />
-				<ButtonText decodeHtml numberOfLines={2} className="text-center">
+				<Text decodeHtml numberOfLines={2} className="text-center font-medium">
 					{tile.method.title}
-				</ButtonText>
+				</Text>
 				<MethodStatus tile={tile} selected={selected} />
-			</Button>
+			</Tile>
 		);
 	});
 	// One rule: the picked card-reader tile settles later (the payment takes the offline path and

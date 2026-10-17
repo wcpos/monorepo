@@ -17,6 +17,7 @@ const registered = [
 	'table',
 	"'list-item': listItem",
 	"'list-row': listRow",
+	'tile',
 	'badge',
 	'avatar',
 	'loader',

@@ -8,6 +8,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
@@ -132,13 +133,10 @@ export function RegisterPanel({
 				)}
 				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
-						<Button
+						<Tile
 							key={type}
 							testID={`register-panel-${type.replace('_', '-')}`}
-							// A labelled tile, not a button; it moves onto the shared Tile when that lands (Phase F2).
-							// eslint-disable-next-line no-restricted-syntax
-							className="h-tile flex-1 gap-1"
-							variant="outline"
+							className="flex-1"
 							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
 						>
@@ -151,8 +149,10 @@ export function RegisterPanel({
 											: 'cashRegister'
 								}
 							/>
-							<Text numberOfLines={1}>{t(`register.${type}`)}</Text>
-						</Button>
+							<Text numberOfLines={1} className="font-medium">
+								{t(`register.${type}`)}
+							</Text>
+						</Tile>
 					))}
 				</View>
 				<ScrollView contentContainerClassName="bg-card px-4 py-2">

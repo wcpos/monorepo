@@ -36,8 +36,8 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 891;
-const FROZEN_DIGEST = '230f50e5724b475404e468021eaff5989e075093a55861deb3e889182a7454ca';
+const FROZEN_LENGTH = 873;
+const FROZEN_DIGEST = '6b36420c2b47be4089dc7189a225e8842559d81c2889ccd42d29a97b6e4307a4';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -269,8 +269,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			`${path}: ${diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ')}`
 		);
 	const found: { rule: string; declaration: string; text: string }[] = [];
-	const report = (rule: string, node: ts.Node) =>
-		found.push({ rule, declaration: declarationChain(node), text: node.getText(root) });
+	const report = (rule: string, node: ts.Node, text = node.getText(root)) =>
+		found.push({ rule, declaration: declarationChain(node), text });
 	const checkImport = (
 		node: ts.Node,
 		specifier: ts.Node | undefined,
@@ -278,15 +278,16 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		wholeModule = false
 	) => {
 		if (!specifier || !ts.isStringLiteralLike(specifier)) return;
+		const reportImport = (rule: string) => report(rule, node, `from '${specifier.text}'`);
 		const rootedPackage = specifier.text.startsWith('packages/');
-		if (rootedPackage) report('cross-package relative import', node);
+		if (rootedPackage) reportImport('cross-package relative import');
 		const module = rootedPackage
 			? specifier.text.replace(/^packages\/([^/]+)(?:\/src(?=\/|$))?/, '@wcpos/$1')
 			: specifier.text;
 		if (module.startsWith('.')) {
 			const target = posix.normalize(posix.join(posix.dirname(filePath), module));
 			if (target !== 'packages/core' && !target.startsWith('packages/core/'))
-				report('cross-package relative import', node);
+				reportImport('cross-package relative import');
 		}
 		const from = (name: string) => module === name || module.startsWith(`${name}/`);
 		const only = (allowed: Set<string>) =>
@@ -294,24 +295,23 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		if (from('rxdb') || from('rxdb-premium') || from('@wcpos/database')) {
 			if (module === '@wcpos/database' && only(taxNames)) return;
 			if (module === '@wcpos/database/live-tab' && only(liveTabNames)) return;
-			report('storage import', node);
+			reportImport('storage import');
 		}
-		if (from('@wcpos/query')) {
-			if (wholeModule) report('query escape hatch', node);
-			for (const name of names) {
-				if (
-					forbiddenQueryNames.has(name) ||
-					(module === '@wcpos/query/collection-map' && name !== 'sanitizeVariationAttributesRead')
-				)
-					report('query escape hatch', node);
-			}
-		}
-		if (from('@wcpos/sync-engine')) {
-			if (wholeModule) report('mutation queue', node);
-			for (const name of names) {
-				if (name === 'MUTATION_QUEUE_RXDB_COLLECTION') report('mutation queue', node);
-			}
-		}
+		if (
+			from('@wcpos/query') &&
+			(wholeModule ||
+				names.some(
+					(name) =>
+						forbiddenQueryNames.has(name) ||
+						(module === '@wcpos/query/collection-map' && name !== 'sanitizeVariationAttributesRead')
+				))
+		)
+			reportImport('query escape hatch');
+		if (
+			from('@wcpos/sync-engine') &&
+			(wholeModule || names.includes('MUTATION_QUEUE_RXDB_COLLECTION'))
+		)
+			reportImport('mutation queue');
 	};
 	const checkProperty = (node: ts.Node, name: string | undefined, receiver?: ts.Node) => {
 		if (!name) return;
@@ -412,7 +412,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					? staticName(callee.argumentExpression)
 					: staticName(callee);
 			if (!allowsResidentHelpers && name && residentHelperNames.has(name))
-				report('resident helper write', node);
+				report('resident helper write', callee);
 			const findReceiver = memberReceiver(callee, 'find');
 			const argument = unwrap(node.arguments[0]);
 			if (
@@ -570,6 +570,64 @@ it('normalises whitespace and numbers repeated rule/text pairs independently per
 	]);
 	expect(fingerprints('other.ts', matches.slice(2))).toEqual([
 		"other.ts :: storage import ::  :: import { Thing } from 'storage'; :: 1",
+	]);
+});
+
+it.each([
+	'patchEngineResident',
+	'useLocalMutation',
+	'insertEngineResident',
+	'helpers.patchEngineResident',
+])('keeps %s fingerprints stable when arguments change', (callee) => {
+	const expected = [`file.ts :: resident helper write ::  :: ${callee} :: 1`];
+	for (const args of ['record', 'record, patch, options'])
+		expect(fingerprints('file.ts', violations(`${callee}(${args});`))).toEqual(expected);
+});
+
+it.each([
+	['storage import', 'rxdb', 'DeepReadonly', 'RxDocument, RxCollection'],
+	[
+		'query escape hatch',
+		'@wcpos/query',
+		'EngineDocument',
+		'EngineDocument, EngineQueryDescriptor, type EngineRecord',
+	],
+	[
+		'mutation queue',
+		'@wcpos/sync-engine',
+		'MUTATION_QUEUE_RXDB_COLLECTION',
+		'MUTATION_QUEUE_RXDB_COLLECTION as queue, type EngineRecord',
+	],
+	['cross-package relative import', '../../query/src/safe', 'first', 'second, third'],
+])('keeps %s fingerprints stable when imported names change', (rule, module, before, after) => {
+	const expected = [`file.ts :: ${rule} ::  :: from '${module}' :: 1`];
+	for (const names of [before, after]) {
+		const current = fingerprints('file.ts', violations(`import { ${names} } from '${module}';`));
+		expect(current).toEqual(expected);
+		expect(fingerprintIssues(current, new Set(expected))).toEqual([]);
+	}
+});
+
+it('numbers separate imports from the same module as separate occurrences', () => {
+	expect(
+		fingerprints(
+			'file.ts',
+			violations(`
+		import type { DeepReadonly } from 'rxdb';
+		import { RxDocument, RxCollection } from 'rxdb';
+	`)
+		)
+	).toEqual([
+		"file.ts :: storage import ::  :: from 'rxdb' :: 1",
+		"file.ts :: storage import ::  :: from 'rxdb' :: 2",
+	]);
+});
+
+it('rejects a new rxdb import in a file without a frozen crossing', () => {
+	const frozen = new Set(["other.ts :: storage import ::  :: from 'rxdb' :: 1"]);
+	const current = fingerprints('file.ts', violations("import type { DeepReadonly } from 'rxdb';"));
+	expect(fingerprintIssues([...frozen, ...current], frozen)).toEqual([
+		"file.ts :: storage import ::  :: from 'rxdb' :: 1 — route this access through a named read or command",
 	]);
 });
 
