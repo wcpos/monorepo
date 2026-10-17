@@ -23,12 +23,6 @@
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 2
   },
-  "packages/core/src/screens/auth/components/add-user-button.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/auth/components/store-select.tsx": {
-    "raw-pressable": 1
-  },
   "packages/core/src/screens/auth/connect.tsx": {
     "arbitrary-px": 1
   },
@@ -116,16 +110,10 @@
   "packages/core/src/screens/main/pos/cart/conditions-notice.tsx": {
     "raw-pressable": 1
   },
-  "packages/core/src/screens/main/pos/cart/register-count.tsx": {
-    "raw-pressable": 1
-  },
   "packages/core/src/screens/main/pos/cart/tabs.tsx": {
     "raw-pressable": 1
   },
   "packages/core/src/screens/main/pos/checkout/tender/declared-fields-view.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/split-view.tsx": {
     "raw-pressable": 1
   },
   "packages/core/src/screens/main/pos/products/browse/gallery.tsx": {
@@ -184,35 +172,11 @@
   "packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
     "duration-literal": 3
   },
-  "packages/core/src/screens/main/settings/barcode-scanning/scanner-device-chooser.electron.tsx": {
-    "raw-pressable": 1
-  },
   "packages/core/src/screens/main/settings/index.tsx": {
     "bare-Suspense": 1
   },
-  "packages/core/src/screens/main/settings/printer/add-printer.electron.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/settings/printer/add-printer.web.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/settings/printer/dialog/connection/bluetooth-device-picker.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/settings/printer/dialog/connection/electron-bt-picker.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/settings/printer/dialog/connection/os-printers-section.tsx": {
-    "raw-pressable": 1
-  },
-  "packages/core/src/screens/main/settings/printer/dialog/connection/usb-device-picker.tsx": {
-    "raw-pressable": 1
-  },
   "packages/core/src/screens/main/settings/printing/printer-row.tsx": {
     "group-*": 1
-  },
-  "packages/core/src/screens/main/settings/theme.tsx": {
-    "raw-pressable": 1
   },
   "packages/core/src/screens/main/tax-rates/index.tsx": {
     "bare-Suspense": 1

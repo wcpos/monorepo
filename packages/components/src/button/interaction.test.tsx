@@ -49,22 +49,22 @@ it('lifts pressed and hovered text into the context and clears each on release',
 	const onHoverIn = jest.fn();
 	const onHoverOut = jest.fn();
 	const tree = () => (
-		<Button variant="outline-primary" onHoverIn={onHoverIn} onHoverOut={onHoverOut}>
+		<Button variant="outline-destructive" onHoverIn={onHoverIn} onHoverOut={onHoverOut}>
 			<Probe />
 		</Button>
 	);
 	const { rerender } = render(tree());
-	expect(screen.getByTestId('context')).not.toHaveClass('text-primary-foreground');
+	expect(screen.getByTestId('context')).not.toHaveClass('text-destructive-foreground');
 	pressed = true;
 	rerender(tree());
-	expect(screen.getByTestId('context')).toHaveClass('text-primary-foreground');
+	expect(screen.getByTestId('context')).toHaveClass('text-destructive-foreground');
 	pressed = false;
 	rerender(tree());
-	expect(screen.getByTestId('context')).not.toHaveClass('text-primary-foreground');
+	expect(screen.getByTestId('context')).not.toHaveClass('text-destructive-foreground');
 	act(() => (pressable.onHoverIn as (event: object) => void)({}));
-	expect(screen.getByTestId('context')).toHaveClass('text-primary-foreground');
+	expect(screen.getByTestId('context')).toHaveClass('text-destructive-foreground');
 	act(() => (pressable.onHoverOut as (event: object) => void)({}));
-	expect(screen.getByTestId('context')).not.toHaveClass('text-primary-foreground');
+	expect(screen.getByTestId('context')).not.toHaveClass('text-destructive-foreground');
 	expect(onHoverIn).toHaveBeenCalledTimes(1);
 	expect(onHoverOut).toHaveBeenCalledTimes(1);
 });

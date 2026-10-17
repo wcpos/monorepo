@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -43,11 +44,10 @@ export function DenominationTile({
 	// A held tile must stop ticking when the fold or count view unmounts.
 	React.useEffect(() => () => clearInterval(timer.current), []);
 	return (
-		<Pressable
+		<Tile
 			testID={`den-tile-${value}`}
-			accessibilityRole="button"
+			size="tile"
 			accessibilityLabel={format(Number(value))}
-			className="border-border bg-muted active:bg-accent size-tile items-center justify-center gap-1 rounded-lg border"
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
 			delayLongPress={400}
@@ -70,7 +70,7 @@ export function DenominationTile({
 			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
 				{count}
 			</Text>
-		</Pressable>
+		</Tile>
 	);
 }
 

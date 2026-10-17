@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
@@ -172,7 +173,7 @@ function EditPrinterDialog({
 			{discovery.printers
 				.filter((p) => p.connectionType === connectionType)
 				.map((device) => (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`add-printer-web-device-${device.id}`}
 						onPress={() => {
@@ -185,12 +186,11 @@ function EditPrinterDialog({
 								form.setValue('vendor', device.vendor);
 							}
 						}}
-						className="border-border flex-row items-center gap-2 rounded-lg border p-2"
 					>
 						<Text className="text-sm">
 							{device.name} ({device.connectionType})
 						</Text>
-					</Pressable>
+					</ListItem>
 				))}
 		</VStack>
 	);
