@@ -92,6 +92,14 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// no cache key, so existing documents need no change.
 			return oldDoc;
 		},
+		8(oldDoc) {
+			// v8 changes no document; it exists because two different v7 schemas shipped. Main's
+			// 1.11.2 `sites` v7 is v6 + `use_instance_header`; next's v7 also carries
+			// `search_meta_keys` and gained `use_instance_header` without a bump (#2646). Same
+			// version, different schema hash: RxDB throws DB6 on a 1.11.2 -> 2.0 upgrade and on a
+			// next build from before #2646. A higher version migrates either v7 instead.
+			return oldDoc;
+		},
 	},
 };
 
