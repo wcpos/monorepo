@@ -48,10 +48,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		version: isDev ? DEV_CLIENT_NATIVE_VERSION : packageJson.version,
 
 		// Fingerprint hashes native deps and config; a package.json version bump
-		// alone does NOT move it (verified with @expo/fingerprint 0.20.8, 2026-09-15).
+		// alone does NOT move it (verified with @expo/fingerprint 0.21.5, 2026-10-17).
 		// One store binary receives every JS-only patch until a native change lands.
 		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
 		// applies on the next cold start.
+		// maxUpdatesToKeep: the running update plus one older update stay on disk
+		// (expo-updates 58.0.11+; set explicitly so the cache bound is ours, not a default).
 		// CI resolves once before Metro: Expo otherwise fingerprints every manifest,
 		// exceeding the iOS launcher's 10 s timeout (expo/expo#46415).
 		runtimeVersion: (process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
@@ -60,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			url: 'https://u.expo.dev/eb1b6e66-92d7-47f5-b93f-95bf51287f60',
 			checkAutomatically: 'ON_LOAD',
 			fallbackToCacheTimeout: 0,
+			maxUpdatesToKeep: 2,
 		},
 
 		orientation: 'default',
@@ -203,19 +206,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 						// worker on 2026-09-28: the Gradle daemon was killed mid-C++ after 57 minutes
 						// (EAS build 8c72b2ba). Store and adhoc builds keep the template's four ABIs.
 						...(isDev ? { buildArchs: ['arm64-v8a', 'x86_64'] } : {}),
-					},
-					ios: {
-						// Build expo-modules-core from source. Expo's prebuilt ExpoModulesCore
-						// (58.0.16) binds the Swift back-deployment symbol
-						// `_swift_allocateMetadataPack` to ExpoModulesJSI, which Xcode 27 builds
-						// from source with that symbol hidden, so every iOS build on this lane
-						// since the SDK 58 line (EAS and local alike) died in dyld at launch:
-						// "Symbol not found: _swift_allocateMetadataPack ... Expected in:
-						// ExpoModulesJSI" (2026-10-13; EAS build 38d6adeb, local Xcode 27.0).
-						// One toolchain for both frameworks and the app launches; the cost is
-						// expo-modules-core's compile time per clean build. Revisit when Expo
-						// rebuilds the artefacts for Xcode 27.
-						usePrecompiledModules: false,
 					},
 				},
 			],

@@ -43,8 +43,8 @@ minimumReleaseAgeExclude:
   - "@react-native/virtualized-lists"
   - "@expo/config-types"
 overrides:
-  "expo": "~58.0.8"
-  "expo-modules-core": "~58.0.16"
+  "expo": "~58.0.14"
+  "expo-modules-core": "~58.0.22"
   "@expo/dom-webview": "~58.0.2"
   "lightningcss": "1.30.1"
   # react-native-web 0.21.4 (SDK 58.0.8) exports InputAccessoryView from its index; uniwind's web
@@ -54,15 +54,15 @@ overrides:
   "uniwind": "1.12.2"
   "react": "19.3.0"
   "react-dom": "19.3.0"
-  "react-native": "0.88.0-rc.4"
+  "react-native": "0.88.0"
   # Keep transitive auto-installed peers on the SDK native runtime.
-  "react-native-reanimated": "4.7.0"
+  "react-native-reanimated": "4.7.1"
   # expo-router floats ^4.2.2; pin so the patch below has one target. 4.2.10 carries upstream's
   # useLayoutEffect toggle (react-navigation#13186) and the accessibility-hiding animated props.
   "react-native-drawer-layout": "4.2.10"
   "react-native-edge-to-edge": "^1.6.2"
-  "react-native-gesture-handler": "~3.2.1"
-  "react-native-safe-area-context": "~5.9.1"
+  "react-native-gesture-handler": "~3.3.0"
+  "react-native-safe-area-context": "~5.10.1"
   # react-native-calendars lists moment as an OPTIONAL dependency and requires it
   # inside a try/catch, which Metro treats as an optional require: absent, it is
   # skipped; present, it is bundled. The lock had never resolved it, and every
@@ -155,9 +155,9 @@ patchedDependencies:
   # on "There was a problem loading the project" (apps/main/.maestro/README.md §4). The
   # patch reads a string runtime from the already-evaluated config; policy objects (local
   # dev, `fingerprint`) still go through the CLI. Ported from main's @expo/cli@57.0.16
-  # patch (#2532); 58.1.7 has the same per-request spawn. Drop when @expo/cli does this
+  # patch (#2532); 58.1.11 has the same per-request spawn. Drop when @expo/cli does this
   # itself (pinned by scripts/expo-cli-manifest-runtime.test.mjs).
-  "@expo/cli@58.1.7": "patches/@expo__cli@58.1.7.patch"
+  "@expo/cli@58.1.11": "patches/@expo__cli@58.1.11.patch"
   # FlashList 2.3.2 filters stale measurements only while truncating the layout table.
   # processDataUpdate can truncate it first, so move the guard outside that branch to
   # cover late ViewHolder measurements too (#1671). The 2.2.2 fix alone is insufficient.
@@ -172,9 +172,9 @@ patchedDependencies:
   # through the CLI-generated, gitignored `apps/main/expo-env.d.ts`, which `expo start`
   # rewrites, so it cannot be fixed there. Our sources use no web-only style key; className
   # and `hovered` are kept. Exact key on purpose: pnpm fails loudly when a patch becomes
-  # unused at a version bump. Still needed in 58.0.8; drop when Expo's file no longer
+  # unused at a version bump. Still needed in 58.0.14; drop when Expo's file no longer
   # augments the style interfaces.
-  "expo@58.0.8": "patches/expo@58.0.8.patch"
+  "expo@58.0.14": "patches/expo@58.0.14.patch"
   # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
   # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
   # then on close() delete the original, read the whole swap back and rewrite it. The
@@ -214,13 +214,13 @@ patchedDependencies:
   rxdb@17.6.0: patches/rxdb@17.6.0.patch
   # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
   # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
-  # Skia 2.13.1 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
+  # Skia 2.14.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
   # Drop when Skia stops deep-importing react-native on web.
-  "@shopify/react-native-skia@2.13.1": "patches/@shopify__react-native-skia@2.13.1.patch"
+  "@shopify/react-native-skia@2.14.0": "patches/@shopify__react-native-skia@2.14.0.patch"
   # Android shared-object registry: synchronize lookups and released-id validation on
-  # the same registry monitor as writes (d0afac0a6); 58.0.16 still reads the mutable map
+  # the same registry monitor as writes (d0afac0a6); 58.0.22 still reads the mutable map
   # without that lock in these three paths. Drop when all three use the writers' monitor.
-  expo-modules-core@58.0.16: patches/expo-modules-core@58.0.16.patch
+  expo-modules-core@58.0.22: patches/expo-modules-core@58.0.22.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The SQLite query-translation fix for it lives in
