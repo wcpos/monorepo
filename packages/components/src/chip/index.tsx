@@ -64,17 +64,18 @@ export function Chip({
 	const target = useMinTargetSlop(sm, props.onLayout);
 	// A clearable chip's root takes no press (the label half does), except on native when it
 	// carries the grown target: the band above and below is the root's, so the root routes a
-	// press there by where it landed, the clear half's x onward clearing and the rest pressing
-	// as the label. Native gives a touch to the deepest responder, so inside the chip the label
+	// press there by where it landed, inside the clear half's measured span clearing and the
+	// rest pressing as the label (span, not side: a right-to-left layout puts it first). Native gives a touch to the deepest responder, so inside the chip the label
 	// and the clear halves still win and nothing fires twice; the web never measures.
-	const clearStart = React.useRef(Number.POSITIVE_INFINITY);
+	const clearSpan = React.useRef({ start: 0, end: 0 });
 	const rootPress: PressableProps['onPress'] =
 		!onClear || !target.hitSlop
 			? onClear
 				? undefined
 				: onPress
 			: (event) => {
-					if (event.nativeEvent.locationX >= clearStart.current) onClear();
+					const x = event.nativeEvent.locationX;
+					if (x >= clearSpan.current.start && x < clearSpan.current.end) onClear();
 					else onPress?.(event);
 				};
 	const content = (
@@ -154,7 +155,8 @@ export function Chip({
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
 						onLayout={(event) => {
-							clearStart.current = event.nativeEvent.layout.x;
+							const { x, width } = event.nativeEvent.layout;
+							clearSpan.current = { start: x, end: x + width };
 						}}
 						className={cn(
 							'items-center justify-center self-stretch active:opacity-70',

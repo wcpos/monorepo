@@ -75,13 +75,20 @@ it('gives a sm chip the 44 pt target on its root, which presses as the label whe
 	const onClear = jest.fn();
 	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={onClear} />);
 	const route = presses.get('chip') as (event: object) => void;
-	(layouts.get('chip-clear') as (event: object) => void)({ nativeEvent: { layout: { x: 50 } } });
+	const layoutClear = layouts.get('chip-clear') as (event: object) => void;
+	layoutClear({ nativeEvent: { layout: { x: 50, width: 32 } } });
 	route({ nativeEvent: { locationX: 10 } });
 	expect(onPress).toHaveBeenCalledTimes(1);
 	expect(onClear).not.toHaveBeenCalled();
 	route({ nativeEvent: { locationX: 60 } });
 	expect(onClear).toHaveBeenCalledTimes(1);
 	expect(onPress).toHaveBeenCalledTimes(1);
+	// Right to left the clear half comes first: its span, not its side, decides.
+	layoutClear({ nativeEvent: { layout: { x: 0, width: 32 } } });
+	route({ nativeEvent: { locationX: 60 } });
+	expect(onPress).toHaveBeenCalledTimes(2);
+	route({ nativeEvent: { locationX: 10 } });
+	expect(onClear).toHaveBeenCalledTimes(2);
 	// Without the grown target a clearable root still takes no press.
 	rerender(<Chip label="Menu" testID="chip" onPress={onPress} onClear={() => {}} />);
 	expect(slops.get('chip')).toBeUndefined();
