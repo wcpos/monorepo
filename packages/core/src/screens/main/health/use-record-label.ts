@@ -1,6 +1,15 @@
 import * as React from 'react';
 
-import { COLLECTION_VOCABULARY, engineCollection, useQueryRuntime } from '@wcpos/query';
+import { EMPTY, from } from 'rxjs';
+import { catchError, switchMap } from 'rxjs/operators';
+
+import {
+	COLLECTION_VOCABULARY,
+	observeEngineCollection,
+	useQueryRuntime,
+	WRITEABLE_REMOTE_ID_FIELD,
+} from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -34,6 +43,8 @@ export type RecordLabel = {
 	kind: string;
 	/** The record's own handle ("#1234 · 45.00"), once read. */
 	handle: string | null;
+	/** The record's local uuid once found — the edit routes are keyed by it. */
+	uuid: string | null;
 	/**
 	 * 'found' — read from this device; 'missing' — this device does not hold it;
 	 * 'unresolved' — not read (yet), or a kind with no local record to read.
@@ -49,9 +60,9 @@ export type RecordLabel = {
  * the three can never disagree about what a record is called. The raw id is
  * never the visible line — support reads it from the row's Details.
  *
- * Effect (last resort per project.mdc): a one-shot async primary-key read
- * through the typed collection boundary — the label is decoration on top of
- * the log-derived row, so it neither suspends nor subscribes per row.
+ * Effect (last resort per project.mdc): one read per opened database through
+ * the typed collection stream — the label is decoration on top of the
+ * log-derived row, so it neither suspends nor holds a live query per row.
  */
 export function useRecordLabel(
 	collection: string | null | undefined,
@@ -65,6 +76,7 @@ export function useRecordLabel(
 	const [resolved, setResolved] = React.useState<{
 		key: string;
 		handle: string | null;
+		uuid: string | null;
 		found: boolean;
 	} | null>(null);
 
@@ -72,42 +84,55 @@ export function useRecordLabel(
 		if (!collection || !recordId || key === null) return;
 		const rowKey = rowKeyForTelemetryCollection(collection);
 		if (rowKey === null) return;
-		const records = engineCollection(engine.active()?.database, rowKey);
-		if (!records) return;
-		let cancelled = false;
-		void (async () => {
-			try {
-				const doc = await records.findOne(recordId).exec();
-				if (cancelled) return;
+		// Push-side rows carry the local uuid; pull-side repair rows
+		// (`apply.escalation`, SYNC331) carry the store's numeric id, which is the
+		// `remoteId` column, not the primary key.
+		const remoteId = remoteIdOrNull(recordId);
+		const remoteIdField = (WRITEABLE_REMOTE_ID_FIELD as Record<string, string | undefined>)[rowKey];
+		if (remoteId !== null && !remoteIdField) return;
+		const query =
+			remoteId !== null ? { selector: { [remoteIdField as string]: remoteId } } : recordId;
+		// Re-read on every database the engine opens: a row mounted on cold start,
+		// before the scope is open, must still get its name once it is.
+		const subscription = observeEngineCollection(engine, rowKey)
+			.pipe(
+				switchMap((records) => (records ? from(records.findOne(query).exec()) : EMPTY)),
+				catchError((error: unknown) => {
+					// Not `collection`/`recordId`: a context carrying those keys is
+					// itself labelled by this hook on the Logs screen, and a read that
+					// keeps failing must not feed itself new rows to fail on.
+					healthLogger.warn('Could not read a record to name it', {
+						context: { target: `${collection}/${recordId}`, error: getErrorMessage(error) },
+					});
+					return EMPTY;
+				})
+			)
+			.subscribe((doc) => {
 				const json = doc
 					? ((typeof (doc as { toJSON?: unknown }).toJSON === 'function'
 							? (doc as { toJSON(): unknown }).toJSON()
 							: doc) as Record<string, unknown>)
 					: null;
-				setResolved({ key, handle: json ? recordHandle(json) : null, found: json !== null });
-			} catch (error) {
-				if (cancelled) return;
-				// Not `collection`/`recordId`: a context carrying those keys is
-				// itself labelled by this hook on the Logs screen, and a read that
-				// keeps failing must not feed itself new rows to fail on.
-				healthLogger.warn('Could not read a record to name it', {
-					context: { target: `${collection}/${recordId}`, error: getErrorMessage(error) },
+				setResolved({
+					key,
+					handle: json ? recordHandle(json) : null,
+					uuid:
+						json && typeof json.uuid === 'string' ? json.uuid : remoteId === null ? recordId : null,
+					found: json !== null,
 				});
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
+			});
+		return () => subscription.unsubscribe();
 	}, [collection, engine, key, recordId]);
 
 	if (!collection || key === null) return null;
 	const kind = recordKind(collection, t);
 	const current = resolved !== null && resolved.key === key ? resolved : null;
-	if (current === null) return { kind, handle: null, status: 'unresolved', text: kind };
+	if (current === null) return { kind, handle: null, uuid: null, status: 'unresolved', text: kind };
 	if (!current.found) {
 		return {
 			kind,
 			handle: null,
+			uuid: null,
 			status: 'missing',
 			text: t('health.logs.record_not_on_device', { kind }),
 		};
@@ -115,6 +140,7 @@ export function useRecordLabel(
 	return {
 		kind,
 		handle: current.handle,
+		uuid: current.uuid,
 		status: 'found',
 		text: current.handle ? t('health.logs.record_label', { kind, label: current.handle }) : kind,
 	};

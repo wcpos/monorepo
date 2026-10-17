@@ -228,11 +228,20 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const showsGuidance = isProblem || entry !== null;
 	const record = recordRefOf(row);
 	const recordLabel = useRecordLabel(record?.collection, record?.recordId);
+	// Only once the record is FOUND: a tap while the read is in flight must not
+	// open an edit screen for a record this device may not hold. The route is
+	// keyed by the uuid the read returned (pull rows carry the store's id).
 	const fixRoute =
-		record && recordLabel?.status !== 'missing'
-			? (FIX_ROUTES[record.collection]?.(record.recordId) ?? null)
+		record && recordLabel?.status === 'found' && recordLabel.uuid
+			? (FIX_ROUTES[record.collection]?.(recordLabel.uuid) ?? null)
 			: null;
-	const toDatabase = row.code !== undefined && DATABASE_CODES.has(row.code);
+	// A recovered or settled row has nothing left on the Database tab — an
+	// auto-reverted SYNC201 already restored the store's copy.
+	const toDatabase =
+		row.code !== undefined &&
+		DATABASE_CODES.has(row.code) &&
+		row.outcome !== 'recovered' &&
+		row.outcome !== 'ok';
 
 	const context = row.context ?? {};
 	const reason =

@@ -27,6 +27,8 @@ const mockEngine = {
 			},
 		},
 	})),
+	db$: () => () => undefined,
+	ready: Promise.resolve(),
 	sync: mockSync,
 	checkCollection: mockCheckCollection,
 };
@@ -34,7 +36,8 @@ const mockEngine = {
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	engineCollection: jest.requireActual('@wcpos/query').engineCollection,
+	observeEngineCollection: jest.requireActual('@wcpos/query').observeEngineCollection,
+	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('../../../contexts/translations', () => {

@@ -87,7 +87,13 @@ jest.mock('../health/components', () => ({
 jest.mock('../../../contexts/translations', () => ({ useT: () => activeT }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-type MockRecordLabel = { kind: string; handle: string | null; status: string; text: string };
+type MockRecordLabel = {
+	kind: string;
+	handle: string | null;
+	uuid?: string | null;
+	status: string;
+	text: string;
+};
 let mockRecordLabel: MockRecordLabel | null = null;
 const mockUseRecordLabel = jest.fn(
 	(collection?: string | null, recordId?: string | null): MockRecordLabel | null =>
@@ -466,6 +472,7 @@ describe('RowDetail', () => {
 			mockRecordLabel = {
 				kind: 'Order',
 				handle: '#1234 · 45.00',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
 				status: 'found',
 				text: 'Order: #1234 · 45.00',
 			};
@@ -486,6 +493,7 @@ describe('RowDetail', () => {
 			mockRecordLabel = {
 				kind: 'Order',
 				handle: '#1234 · 45.00',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
 				status: 'found',
 				text: 'Order: #1234 · 45.00',
 			};
@@ -508,6 +516,54 @@ describe('RowDetail', () => {
 			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
 			// The held change is still resolved on the Database tab.
 			expect(screen.getByTestId('logs-go-database-log-1')).not.toBeNull();
+		});
+
+		it('offers no Open record while the read is still in flight', () => {
+			mockRecordLabel = { kind: 'Order', handle: null, status: 'unresolved', text: 'Order' };
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+		});
+
+		// A pull repair row names the product by the store's id; the edit route
+		// is keyed by the local uuid the read found.
+		it('opens a record found by its store id on its local uuid', () => {
+			mockRecordLabel = {
+				kind: 'Product',
+				handle: 'Blue Tee',
+				uuid: 'p-uuid',
+				status: 'found',
+				text: 'Product: Blue Tee',
+			};
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC331',
+						context: { type: 'apply.escalation', collection: 'products', recordId: 80 },
+					}}
+					kind="warn"
+					title="A record does not match"
+				/>
+			);
+
+			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
+			expect(mockPush).toHaveBeenCalledWith(
+				'/(app)/(drawer)/products/(modals)/edit/product/p-uuid'
+			);
+		});
+
+		it('offers no Database action on an auto-reverted (recovered) SYNC201 row', () => {
+			render(
+				<RowDetail
+					row={{ ...row, level: 'error', code: 'SYNC201', outcome: 'recovered' }}
+					kind="error"
+					title="Reverted a change"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
 		});
 
 		it.each(['SYNC201', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(

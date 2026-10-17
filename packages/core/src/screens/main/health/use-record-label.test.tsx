@@ -1,26 +1,37 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { recordHandle } from './record-handle';
 import { useRecordLabel } from './use-record-label';
 
 const mockExec = jest.fn();
-const mockFindOne = jest.fn((_id: string) => ({ exec: mockExec }));
+const mockFindOne = jest.fn((_query: unknown) => ({ exec: mockExec }));
 let mockDatabase: unknown = {
 	collections: {
-		orders: { findOne: (id: string) => mockFindOne(id) },
-		products: { findOne: (id: string) => mockFindOne(id) },
+		orders: { findOne: (query: unknown) => mockFindOne(query) },
+		products: { findOne: (query: unknown) => mockFindOne(query) },
 	},
 };
-const mockEngine = { active: () => ({ database: mockDatabase }) };
+let mockDbListener: ((database: unknown) => void) | null = null;
+const mockEngine = {
+	active: () => (mockDatabase ? { database: mockDatabase } : null),
+	db$: (listener: (database: unknown) => void) => {
+		mockDbListener = listener;
+		return () => {
+			mockDbListener = null;
+		};
+	},
+	ready: Promise.resolve(),
+};
 
 jest.mock('@wcpos/query', () => {
 	const actual = jest.requireActual('@wcpos/query');
 	return {
 		COLLECTION_VOCABULARY: actual.COLLECTION_VOCABULARY,
-		engineCollection: actual.engineCollection,
+		observeEngineCollection: actual.observeEngineCollection,
+		WRITEABLE_REMOTE_ID_FIELD: actual.WRITEABLE_REMOTE_ID_FIELD,
 		useQueryRuntime: () => ({ engine: mockEngine }),
 	};
 });
@@ -60,8 +71,8 @@ describe('useRecordLabel', () => {
 		jest.clearAllMocks();
 		mockDatabase = {
 			collections: {
-				orders: { findOne: (id: string) => mockFindOne(id) },
-				products: { findOne: (id: string) => mockFindOne(id) },
+				orders: { findOne: (query: unknown) => mockFindOne(query) },
+				products: { findOne: (query: unknown) => mockFindOne(query) },
 			},
 		};
 	});
@@ -96,17 +107,40 @@ describe('useRecordLabel', () => {
 		expect(result.current?.text).not.toContain('ae263330');
 	});
 
-	it('keeps the kind alone while no database is open', () => {
+	it('keeps the kind alone while no database is open, then names it once one opens', async () => {
 		mockDatabase = null;
+		mockExec.mockResolvedValue({ uuid: 'p-1', payload: { name: 'Blue Tee' } });
 
 		const { result } = renderHook(() => useRecordLabel('products', 'p-1'));
 
 		expect(result.current).toEqual({
 			kind: 'Product',
 			handle: null,
+			uuid: null,
 			status: 'unresolved',
 			text: 'Product',
 		});
 		expect(mockFindOne).not.toHaveBeenCalled();
+
+		const opened = {
+			collections: { products: { findOne: (query: unknown) => mockFindOne(query) } },
+		};
+		mockDatabase = opened;
+		act(() => mockDbListener?.(opened));
+
+		await waitFor(() => expect(result.current?.text).toBe('Product: Blue Tee'));
+		expect(result.current?.uuid).toBe('p-1');
+	});
+
+	// Pull-side repair rows (`apply.escalation`, SYNC331) carry the store's
+	// numeric id, not the local uuid the primary key is.
+	it("finds a record by the store's id when the row carries a numeric one", async () => {
+		mockExec.mockResolvedValue({ uuid: 'p-uuid', remoteId: '80', payload: { name: 'Blue Tee' } });
+
+		const { result } = renderHook(() => useRecordLabel('products', '80'));
+
+		await waitFor(() => expect(result.current?.status).toBe('found'));
+		expect(mockFindOne).toHaveBeenCalledWith({ selector: { remoteId: '80' } });
+		expect(result.current?.uuid).toBe('p-uuid');
 	});
 });
