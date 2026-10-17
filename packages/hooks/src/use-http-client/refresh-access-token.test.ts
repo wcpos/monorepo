@@ -509,6 +509,31 @@ describe('refreshAccessToken', () => {
 			expect(post).toHaveBeenCalledTimes(2);
 		});
 
+		it('keys the session by store as well as user: the same user id on another store starts fresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			// No `url`: the engine's session fetcher passes only the API bases.
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			await refreshAccessToken({ ...storeA, operationId: 'a' });
+			await refreshAccessToken({ ...storeB, operationId: 'b' });
+
+			// Store A's backoff did not skip store B's refresh.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
+		it('codes a 2xx refresh with an unreadable body SYNC151 (malformed), not "cannot be reached"', async () => {
+			const post = jest.fn().mockResolvedValue({ status: 200, data: { unexpected: true } });
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken({ ...config, operationId: 'malformed' });
+
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC151' })
+			);
+		});
+
 		it('warns with the store’s own code once transient refresh failures persist', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
 			const { config } = makeConfig(post);

@@ -103,7 +103,10 @@ export async function refreshAccessToken({
 	}
 	// Persistence is measured per session: another store's or cashier's failures must
 	// not make this session's first blip read as "keeps happening".
-	const session = `${site.url ?? ''}|${String(wpUser.id ?? '')}`;
+	// The engine's session fetcher passes no `url`, so fall back on the API bases: two
+	// stores with the same user id must never share one streak or one backoff.
+	const siteIdentity = site.url || site.wcpos_api_url || site.wp_api_url || '';
+	const session = `${siteIdentity}|${String(wpUser.id ?? '')}`;
 	if (session !== refreshStreakSession) {
 		refreshStreakSession = session;
 		// The backoff belongs to the previous session too: it must not skip this one's refresh.
@@ -234,7 +237,11 @@ export async function refreshAccessToken({
 					? ERROR_CODES.STORE_SERVER_ERROR
 					: typeof status === 'number'
 						? ERROR_CODES.AUTH_UNEXPECTED
-						: ERROR_CODES.SYNC_UNREACHABLE,
+						: // A 2xx whose body could not be read throws this marker with no status:
+							// the store answered, malformed — not "can't be reached".
+							error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID'
+							? ERROR_CODES.STORE_RESPONSE_MALFORMED
+							: ERROR_CODES.SYNC_UNREACHABLE,
 			context: {
 				error: error instanceof Error ? error.message : String(error),
 				terminal,
