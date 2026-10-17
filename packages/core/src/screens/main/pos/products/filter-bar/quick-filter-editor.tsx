@@ -163,6 +163,7 @@ function TermChips<C extends 'tags' | 'brands'>({
 	ids: number[];
 	onRemove: (id: number) => void;
 }) {
+	const t = useT();
 	const records = useObservableSuspense(resource);
 	return (
 		<HStack className="flex-wrap">
@@ -176,6 +177,7 @@ function TermChips<C extends 'tags' | 'brands'>({
 						// half is never a focusable button that does nothing.
 						onPress={() => onRemove(id)}
 						onClear={() => onRemove(id)}
+						clearLabel={t('common.remove')}
 						clearTestID={`quick-filter-term-remove-${id}`}
 					/>
 				);

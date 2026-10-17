@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { FormSegmentedControl } from './segmented-control';
 
@@ -105,11 +105,19 @@ describe('FormSegmentedControl', () => {
 
 	it('forwards the controller blur and ref to the control', () => {
 		const onBlur = jest.fn();
-		const ref = React.createRef<unknown>();
+		const ref = React.createRef<{ focus: () => void }>();
 		render(<Field onBlur={onBlur} ref={ref} testID="field" />);
-		expect(ref.current).toBe(screen.getByTestId('field'));
+		act(() => ref.current?.focus());
+		expect(screen.getByTestId('field-percent')).toHaveFocus();
 		fireEvent.blur(screen.getByTestId('field-fixed_cart'));
 		expect(onBlur).toHaveBeenCalled();
+	});
+
+	it('leaves the tab order when the field is disabled', () => {
+		render(<Field disabled />);
+		for (const segment of screen.getAllByRole('radio')) {
+			expect(segment).toHaveAttribute('tabindex', '-1');
+		}
 	});
 
 	it('disables every segment when the field is disabled', () => {

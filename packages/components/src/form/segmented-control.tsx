@@ -1,9 +1,8 @@
 import * as React from 'react';
-import type { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { SegmentedControl } from '../segmented-control';
+import { SegmentedControl, type SegmentedControlHandle } from '../segmented-control';
 
 import type { FormItemProps } from './common';
 
@@ -42,9 +41,10 @@ export function FormSegmentedControl({
 				testID={testID}
 				aria-disabled={!!disabled}
 				// The controller's blur marks the field touched (focus leaving a segment bubbles
-				// here) and its ref lets focus-on-error reach the control, as the toggle group did.
+				// here); its ref gets the control's handle, whose focus() lands on the tab stop
+				// segment, so focus-on-error reaches the field.
 				onBlur={onBlur}
-				ref={ref as React.Ref<React.ComponentRef<typeof View>>}
+				ref={ref as React.Ref<SegmentedControlHandle>}
 				{...ariaProps}
 			/>
 			{!!description && <FormDescription>{description}</FormDescription>}

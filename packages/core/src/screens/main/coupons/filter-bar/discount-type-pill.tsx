@@ -45,6 +45,7 @@ export function DiscountTypePill() {
 					icon="percent"
 					label={value?.label || t('coupons.discount_type')}
 					on={isActive}
+					clearLabel={t('common.remove')}
 					onClear={isActive ? () => clearFilter('discount_type') : undefined}
 				/>
 			</SelectPrimitiveTrigger>

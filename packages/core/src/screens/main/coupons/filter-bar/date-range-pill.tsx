@@ -80,6 +80,7 @@ export function DateRangePill() {
 					icon="calendarDays"
 					label={label}
 					on={isActive}
+					clearLabel={t('common.remove')}
 					onClear={isActive ? () => clearFilter('dateRange') : undefined}
 				/>
 			</PopoverTrigger>

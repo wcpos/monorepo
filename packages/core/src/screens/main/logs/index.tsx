@@ -454,6 +454,7 @@ function LogsScreenContent() {
 									on
 									onPress={() => actions.clearFilter('kind')}
 									onClear={() => actions.clearFilter('kind')}
+									clearLabel={t('common.remove')}
 									testID="logs-chip-kind"
 								/>
 							) : null}
