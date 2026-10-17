@@ -23,6 +23,8 @@ const examples: ({ id: string } & Props)[] = [
 	...VARIANTS.map((variant): { id: string } & Props => ({
 		id: variant,
 		name: variant === 'destructive' ? 'trash' : 'plus',
+		// An icon-only control's name says what it does.
+		...(variant === 'destructive' ? { accessibilityLabel: 'Delete product' } : {}),
 		variant,
 	})),
 	...SIZES.map((size): { id: string } & Props => ({ id: `size-${size}`, name: 'plus', size })),
