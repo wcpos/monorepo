@@ -666,7 +666,9 @@ export const CONFORMANCE_TABLE = {
 	'maintenance.lane.error': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_TASK_CRASHED,
+		// Status 0 is the request deadline (no response at all): unreachable, not a crash.
+		code: (_event, fields) =>
+			fields.status === 0 ? ERROR_CODES.SYNC_UNREACHABLE : ERROR_CODES.SYNC_TASK_CRASHED,
 		level: 'warn',
 		didWork: () => true,
 	},
