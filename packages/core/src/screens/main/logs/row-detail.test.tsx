@@ -386,7 +386,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Changes not yet sent are kept on this device — don't clear its data. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
+				"Don't clear this device's data — it may hold changes your store doesn't have yet. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 			)
 		).not.toBeNull();
 	});

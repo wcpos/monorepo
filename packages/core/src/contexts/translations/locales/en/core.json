@@ -1333,7 +1333,7 @@
 	"health.logs.safety_money_moved": "Payment has been taken — don't charge again.",
 	"health.logs.safety_outcome_unknown": "The result couldn't be confirmed — check before trying again.",
 	"health.logs.safety_data_at_risk": "Don't clear this device's data — it may hold sales that haven't reached your store.",
-	"health.logs.safety_local_only": "Changes not yet sent are kept on this device — don't clear its data.",
+	"health.logs.safety_local_only": "Don't clear this device's data — it may hold changes your store doesn't have yet.",
 	"health.logs.action_retry": "It is safe to try again.",
 	"health.logs.action_retry_after_edit": "Fix the issue above, then retry.",
 	"health.logs.action_repair_local": "Repair from Store health → Database.",
