@@ -69,7 +69,7 @@ it.each(['headers', 'body'])(
 	}
 );
 
-it('releases a black-holed query-total lane so the next run starts', async () => {
+it('releases a black-holed query-total lane before its lease expires so the next run starts', async () => {
 	await harness.dispose();
 	const fetchWooQueryTotal = vi.fn().mockResolvedValue(7);
 	harness = await createEngineHarness({
@@ -93,17 +93,39 @@ it('releases a black-holed query-total lane so the next run starts', async () =>
 	const first = gate.runLane('query-total-retry');
 	await vi.advanceTimersByTimeAsync(0);
 	expect(gate.runLane('query-total-retry')).toBe(first);
-	await vi.advanceTimersByTimeAsync(60_000);
+	await vi.advanceTimersByTimeAsync(25_000);
 	expect(fetchWooQueryTotal.mock.calls[0][0].signal.aborted).toBe(true);
 	await first;
 	expect(harness.diagnostics).toContainEqual(
 		expect.objectContaining({
 			type: 'engine.request.deadline',
-			fields: { lane: 'query-total-retry', elapsedMs: 60_000 },
+			fields: { lane: 'query-total-retry', elapsedMs: 25_000 },
 		})
 	);
 	const second = gate.runLane('query-total-retry');
 	expect(second).not.toBe(first);
 	await second;
 	expect(recordTick).toHaveBeenCalledTimes(2);
+});
+
+it('counts black-holed deadlines as pressure once even when abort rejects later', async () => {
+	let rejectLate!: (error: Error) => void;
+	const pending = new Promise<Response>((_, reject) => {
+		rejectLate = reject;
+	});
+	fetch.mockReturnValue(pending);
+	vi.useFakeTimers();
+	const { fetcher } = harness.engine.hostTransport();
+	const requests = Promise.all(
+		Array.from({ length: 3 }, () => fetcher('https://example.test/probe').catch((error) => error))
+	);
+	await vi.advanceTimersByTimeAsync(60_000);
+	expect(await requests).toEqual(Array(3).fill(expect.any(RequestTimeoutError)));
+	expect(harness.engine.status().serverPressure).toMatchObject({
+		multiplier: 2,
+		signal: 'timeout',
+	});
+	rejectLate(Object.assign(new Error('late abort'), { name: 'AbortError' }));
+	await vi.advanceTimersByTimeAsync(0);
+	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
 });

@@ -101,6 +101,7 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_LEASE_FOR_MS,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -348,6 +349,8 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
 // Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
 const ENGINE_REQUEST_DEADLINE_MS = 60_000;
+// Release the probe five seconds before its claim can be acquired again.
+const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -832,7 +835,11 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const transportFetcher: EngineFetcher = async (url, init) => {
+	const transportFetcher = async (
+		url: string,
+		init: Parameters<EngineFetcher>[1],
+		deadlineObservation: { observe?: () => void }
+	) => {
 		if (updateRequiredRefusal !== null) {
 			return new Response(updateRequiredRefusal.body, {
 				status: updateRequiredRefusal.status,
@@ -840,12 +847,15 @@ export function createRxdbSyncEngine(
 			});
 		}
 		const startedAtMs = nowMs();
+		let observed = false;
 		const observe = (
 			status: number,
 			retryAfter?: string | null,
 			pressure?: ServerPressure,
 			serverLoad1m?: number
 		): void => {
+			if (observed) return;
+			observed = true;
 			const atMs = nowMs();
 			const reportedBefore = serverPressure.reported();
 			const signalBefore = serverPressure.signal();
@@ -870,6 +880,7 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
+		deadlineObservation.observe = () => observe(0);
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -977,18 +988,25 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
-	const deadlineFetcher = withRequestTimeout(transportFetcher, ENGINE_REQUEST_DEADLINE_MS, timers);
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
+		const deadlineObservation: { observe?: () => void } = {};
+		const deadlineFetcher = withRequestTimeout(
+			(url, init) => transportFetcher(url, init, deadlineObservation),
+			ENGINE_REQUEST_DEADLINE_MS,
+			timers
+		);
 		try {
 			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
 		} catch (error) {
-			if (error instanceof RequestTimeoutError)
+			if (error instanceof RequestTimeoutError) {
+				deadlineObservation.observe?.();
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
 					fields: { lane, elapsedMs: nowMs() - startedAtMs },
 				});
+			}
 			throw error;
 		}
 	};
@@ -1006,7 +1024,7 @@ export function createRxdbSyncEngine(
 							return await withRequestTimeout(
 								(_url, init) =>
 									rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
-								ENGINE_REQUEST_DEADLINE_MS,
+								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
 						} catch (error) {

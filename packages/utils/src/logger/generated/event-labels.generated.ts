@@ -541,7 +541,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_request_deadline',
 		label: 'Sync request timed out',
-		introducedIn: '2.0.0',
+		introducedIn: '1.11.1',
 	},
 	'engine.reset-needs-confirmation': {
 		type: 'engine.reset-needs-confirmation',

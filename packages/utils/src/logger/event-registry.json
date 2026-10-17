@@ -344,7 +344,7 @@
 		"type": "engine.request.deadline",
 		"domain": "SYNC",
 		"label": "Sync request timed out",
-		"introducedIn": "2.0.0"
+		"introducedIn": "1.11.1"
 	},
 	{
 		"type": "engine.reset-needs-confirmation",
