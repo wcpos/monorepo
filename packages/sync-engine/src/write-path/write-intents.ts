@@ -186,6 +186,23 @@ export function queueFor(
 		{
 			...recovery,
 			enabled: () => collectionOf(db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version !== 5,
+			restoreCoalesced: async (prior, replacementId) => {
+				const doc = await collectionOf(db, prior.collectionName).findOne(prior.recordId).exec();
+				await doc?.incrementalModify((data: Record<string, unknown>) => {
+					const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
+					const pendingMutationIds = [
+						...new Set(
+							(local.pendingMutationIds ?? []).map((id: string) =>
+								id === replacementId ? prior.mutationId : id
+							)
+						),
+					];
+					return {
+						...data,
+						local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
+					};
+				});
+			},
 			removeResident: async (row) => {
 				const resident = await collectionOf(db, row.collectionName).findOne(row.recordId).exec();
 				if (!resident) return;
@@ -813,9 +830,15 @@ export async function enqueueWriteIntent(input: {
 		} finally {
 			if (!legacyQueue) {
 				try {
-					await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
+					try {
+						await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
+					} catch (error) {
+						if (!committed) throw error;
+						await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
+					}
 				} catch (error) {
 					if (!committed && !writeFailed) throw error;
+					if (committed) await queue.recordWriterReceipt(mutation.mutationId);
 					try {
 						input.observe?.({
 							type: 'write.admission-release-failed',

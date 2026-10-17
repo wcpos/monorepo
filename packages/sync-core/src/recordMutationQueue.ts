@@ -232,6 +232,7 @@ export class RecordMutationQueue {
 			enabled?: () => boolean;
 			now?: () => number;
 			removeResident?: (row: QueuedMutation) => Promise<void | boolean>;
+			restoreCoalesced?: (prior: QueuedMutation, replacementId: string) => Promise<void>;
 		} = {}
 	) {}
 
@@ -557,6 +558,21 @@ export class RecordMutationQueue {
 		});
 	}
 
+	/** Durable receipt when holder release failed after the resident write committed. */
+	async recordWriterReceipt(mutationId: string): Promise<void> {
+		const stored = (await this.storage.listStored()).find(
+			(item) => item.mutation.mutationId === mutationId
+		);
+		if (
+			!stored?.mutation.admittedBy ||
+			!(await this.storage.appendIfUnchanged(
+				{ ...stored.mutation, admissionReleased: stored.mutation.admittedBy },
+				stored.rev
+			))
+		)
+			throw new Error('Could not persist the writer receipt');
+	}
+
 	private async finishWriterRelease(
 		collection: string,
 		record: string,
@@ -564,7 +580,16 @@ export class RecordMutationQueue {
 	): Promise<void> {
 		const rows = await this.storage.listStored();
 		const holder = rows.find(({ mutation }) => mutation.mutationId === fenceId(collection, record));
-		if (holder?.mutation.admittedBy !== token || holder.mutation.payload.phase !== 'released')
+		if (holder?.mutation.admittedBy !== token) return;
+		if (
+			holder.mutation.payload.phase !== 'released' &&
+			!rows.some(
+				({ mutation }) =>
+					!isInternalRow(mutation) &&
+					mutation.admittedBy === token &&
+					mutation.admissionReleased === token
+			)
+		)
 			return;
 		for (const { mutation, rev } of rows) {
 			if (mutation.supersededBy !== `coalesce:${token}`) continue;
@@ -687,7 +712,7 @@ export class RecordMutationQueue {
 		if (this.recovery.enabled?.() === false) return;
 		const stored = await this.storage.listStored();
 		for (const { mutation: row } of stored) {
-			if (isInternalRow(row) && row.payload.phase === 'released' && row.admittedBy)
+			if (isInternalRow(row) && row.admittedBy)
 				await this.finishWriterRelease(row.collectionName, row.recordId, row.admittedBy);
 		}
 		const committed = stored.filter(
@@ -754,6 +779,12 @@ export class RecordMutationQueue {
 			)
 				continue;
 			const replacement = (await this.all()).find((item) => item.admittedBy === token);
+			if (replacement?.admissionReleased === token) {
+				await this.removeMarked(row.mutationId, row.supersededBy);
+				continue;
+			}
+			// Repair before removal so another crash can replay this idempotently.
+			await this.recovery.restoreCoalesced?.(row, replacement?.mutationId ?? token);
 			if (replacement && !(await this.removePending(replacement.mutationId))) continue;
 			await this.unmarkForAnnihilation(row.mutationId, row.supersededBy);
 		}

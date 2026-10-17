@@ -6,6 +6,8 @@ import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
 import { drainMutationQueue, RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
+import { writeFacetFor } from '../collections/collection-descriptors';
+import { withoutLocallyProtected } from './local-work-guard';
 import { enqueueWriteIntent, queueFor, requeueBornTwiceSnapshot } from './write-intents';
 
 import type { RxDatabase } from 'rxdb';
@@ -1506,4 +1508,119 @@ describe('enqueueWriteIntent', () => {
 			);
 		}
 	);
+});
+
+describe('admission crash recovery', () => {
+	const prior: QueuedMutation = {
+		mutationId: 'prior',
+		collectionName: 'orders',
+		recordId: 'order',
+		operation: 'update',
+		origin: 'existing',
+		payload: { id: 1 },
+		baseRevision: 'r0',
+		queuedAt: new Date().toISOString(),
+	};
+	const fixture = () => {
+		const storage = createFakeMutationCollection();
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				data = modify(data);
+			},
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => resident }) },
+			recordMutations: storage,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		return { storage, resident, collections, db, queue: queueFor(db) };
+	};
+	it.each([false, true, 'expired'] as const)(
+		'recovers a committed receipt when release fails persistently=%s',
+		async (persistent) => {
+			const { storage, collections, db, queue } = fixture();
+			await queue.enqueue(prior);
+			const release = vi.spyOn(queue, 'releaseWriter');
+			if (persistent) release.mockRejectedValue(new Error('release storage unavailable'));
+			else release.mockRejectedValueOnce(new Error('release storage unavailable'));
+			const now = Date.now();
+			expect(
+				await enqueueWriteIntent({
+					db,
+					mintUuid: () => 'receipt',
+					now: () => new Date(now).toISOString(),
+					intent: {
+						collection: 'orders',
+						operation: 'create',
+						recordId: 'order',
+						payload: { id: 0 },
+					},
+				})
+			).toMatchObject({ mutationId: 'receipt' });
+			if (!persistent) expect(storage.store.has('orders/order')).toBe(false);
+			const restarted = queueFor({ collections } as unknown as RxDatabase);
+			const delivered: string[] = [];
+			expect(
+				await drainMutationQueue({
+					queue: restarted,
+					now: () => now + (persistent === 'expired' ? 30_001 : 0),
+					push: async (mutation) => {
+						delivered.push(mutation.mutationId);
+						return { outcome: 'created', mutation, document: { id: 1 }, currentRevision: 'r1' };
+					},
+				})
+			).toMatchObject({ pushed: 1, rejected: [] });
+			expect(delivered).toEqual(['receipt']);
+			await restarted.clearExpiredAnnihilation(now + 30_001);
+			expect(await restarted.all()).toEqual([]);
+			expect(storage.store.has('orders/order')).toBe(false);
+		}
+	);
+
+	it('restores resident ids after a crash following the coalesced dirty mark', async () => {
+		const { resident, collections, db, queue } = fixture();
+		const now = Date.now();
+		await queue.enqueue(prior);
+		await queue.admitWriter('orders', 'order', 'replacement', now);
+		await queue.coalesceInto(
+			'prior',
+			{ ...prior, mutationId: 'replacement', admittedBy: 'replacement' },
+			now
+		);
+		await resident.incrementalModify((row) => ({
+			...row,
+			local: { dirty: true, pendingMutationIds: ['replacement'] },
+		}));
+		const restarted = queueFor({ collections } as unknown as RxDatabase);
+		await restarted.clearExpiredAnnihilation(now + 30_001);
+		expect(
+			(resident.toJSON().local as { pendingMutationIds: string[] }).pendingMutationIds
+		).toEqual(['prior']);
+		expect(
+			await drainMutationQueue({
+				queue: restarted,
+				now: () => now + 30_001,
+				push: async (mutation) => ({
+					outcome: 'updated',
+					mutation,
+					document: null,
+					currentRevision: 'r1',
+				}),
+				applyAck: async (mutation) =>
+					writeFacetFor('orders')!.reconcile(db, {
+						recordId: 'order',
+						remoteId: null,
+						mutation,
+						currentRevision: 'r1',
+						document: null,
+					}),
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(resident.toJSON().local).toEqual({ dirty: false, pendingMutationIds: [] });
+		const pull = [{ uuid: 'order' }];
+		const source = { findByIds: () => ({ exec: async () => new Map([['order', resident]]) }) };
+		expect(await withoutLocallyProtected(source, pull)).toEqual(pull);
+	});
 });
