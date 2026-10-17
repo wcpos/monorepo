@@ -201,38 +201,35 @@ function Verdict({
 
 	let headline: string;
 	let boxClass: string;
-	let textClass: string;
 	if (analysis.detectedAsScan) {
 		headline = t('settings.barcode_test_detected_scan', {
 			code: analysis.code,
 		});
 		boxClass = 'border-success/40 bg-success/10';
-		textClass = 'text-success';
 	} else if (analysis.nearMiss) {
 		headline = t('settings.barcode_test_near_miss', {
 			avg,
 			threshold: settings.threshold,
 		});
 		boxClass = 'border-warning/40 bg-warning/10';
-		textClass = 'text-warning';
 	} else if (!Number.isFinite(analysis.avgGapMs)) {
 		// A single (or modifier-only) keypress has no gaps — "Infinityms" is not
 		// a number a cashier should ever read.
 		headline = t('settings.barcode_test_single_key');
 		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,
 		});
 		boxClass = 'border-border bg-muted/50';
-		textClass = 'text-foreground';
 	}
 
 	return (
 		<VStack space="sm" testID="barcode-test-verdict">
 			<View className={`rounded-md border p-2 ${boxClass}`}>
-				<Text className={`text-sm font-medium ${textClass}`}>{headline}</Text>
+				{/* The tone is the box; its words stay in the foreground, as a tinted Badge's do:
+				    green or amber text on its own wash reads under the 4.5:1 text floor. */}
+				<Text className="text-foreground text-sm font-medium">{headline}</Text>
 				{analysis.detectedAsScan ? (
 					<Text className="text-muted-foreground text-xs">
 						{t('settings.barcode_test_scan_detail', {

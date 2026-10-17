@@ -150,3 +150,49 @@ test('controls share the web keyboard focus outline', () => {
 		/:where\(input, textarea, \[contenteditable\]\):focus-visible\s*\{\s*outline: none;/
 	);
 });
+
+// WCAG 2 contrast of two `oklch(L C h)` tokens, through OKLab to sRGB (clamped to the gamut,
+// as a browser paints an out-of-gamut colour).
+function oklchLuminance(value) {
+	const [L, C, h] = value.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/).slice(1).map(Number);
+	const a = C * Math.cos((h * Math.PI) / 180);
+	const b = C * Math.sin((h * Math.PI) / 180);
+	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+	const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+	const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+	const [r, g, bl] = [
+		4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+		-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+		-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+	].map((channel) => Math.min(1, Math.max(0, channel)));
+	return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+}
+function contrast(x, y) {
+	const [hi, lo] = [oklchLuminance(x), oklchLuminance(y)].sort((p, q) => q - p);
+	return (hi + 0.05) / (lo + 0.05);
+}
+function themeToken(body, token) {
+	const value = body.match(new RegExp(`--${token}\\s*:\\s*([^;]+);`))?.[1].trim();
+	assert.ok(value, `missing --${token}`);
+	const alias = value.match(/^var\(--([\w-]+)\)$/)?.[1];
+	return alias ? themeToken(body, alias) : value;
+}
+
+// Text contrast 4.5:1 (CODING_STANDARDS § Design 7). The light theme's --ok read 4.16:1 under
+// its own success-foreground at L 0.55; every success green is drawn from it.
+const TEXT_CONTRAST = 4.5;
+for (const name of themeNames) {
+	test(`${name}: success text and the words on a success fill reach 4.5:1`, () => {
+		const body = css.match(new RegExp(`@variant\\s+${name}\\s*\\{([^{}]*)\\}`))?.[1];
+		assert.ok(body, `Missing ${name} theme`);
+		const ok = themeToken(body, 'success');
+		for (const [pair, ground] of [
+			['success-foreground on success', themeToken(body, 'success-foreground')],
+			['text-success on card', themeToken(body, 'card')],
+			['text-success on background', themeToken(body, 'background')],
+		]) {
+			const ratio = contrast(ok, ground);
+			assert.ok(ratio >= TEXT_CONTRAST, `${name}: ${pair} is ${ratio.toFixed(2)}:1`);
+		}
+	});
+}

@@ -373,12 +373,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							{leg.state === 'done' ? (
 								<Icon name="check" size="xs" className="text-success" />
 							) : null}
-							<Text
-								className={
-									leg.state === 'done' ? 'text-success text-xs' : 'text-foreground text-xs'
-								}
-								decodeHtml
-							>
+							{/* Words stay in the foreground on every leg: green text on the done leg's
+							    green wash reads under 4.5:1; the wash and the check carry the state. */}
+							<Text className="text-foreground text-xs" decodeHtml>
 								{leg.state === 'rest'
 									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
 									: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
