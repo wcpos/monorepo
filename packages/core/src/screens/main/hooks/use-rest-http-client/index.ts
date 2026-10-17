@@ -6,6 +6,7 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
@@ -272,6 +273,13 @@ export const useRestHttpClient = (endpoint = '') => {
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
+			config.headers = Object.fromEntries(
+				Object.entries(config.headers ?? {}).filter(
+					([key]) => key.toLowerCase() !== 'x-wcpos-instance'
+				)
+			);
+			const installId = await getInstanceId();
+			if (installId !== undefined) config.headers['X-WCPOS-Instance'] = installId;
 
 			try {
 				const response = await httpClient.request(config);

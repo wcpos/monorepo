@@ -1,3 +1,4 @@
+export { getInstanceId } from './get-instance-id';
 export { bareAuthParamSupported, formatAuthorizationParam } from './auth-param';
 export {
 	deriveSyntheticPathBase,

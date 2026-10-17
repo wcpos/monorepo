@@ -8,6 +8,10 @@ import { renderHook } from '@testing-library/react';
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { useRestHttpClient } from './index';
+import { useHostCapabilities } from '../../mini-apps/capabilities/host';
+
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 const { useHttpClient: useSharedHttpClient } = jest.requireActual<
 	typeof import('@wcpos/hooks/use-http-client/use-http-client')
@@ -16,6 +20,7 @@ const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http
 	http: { request: jest.Mock };
 };
 
+jest.mock('@wcpos/utils/get-instance-id', () => ({ getInstanceId: jest.fn() }));
 jest.mock('@wcpos/hooks/use-http-client/http', () => ({
 	http: { request: jest.fn(), isCancel: () => false },
 }));
@@ -103,6 +108,28 @@ describe('useRestHttpClient methods', () => {
 		mockSite.wcpos_version = '';
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
+	});
+
+	it.each(['till-123', undefined])(
+		'adds the available instance id to default headers: %s',
+		async (installId) => {
+			jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockReturnValue(installId);
+			const { result } = renderHook(() => useRestHttpClient('orders'));
+			await result.current.get('/42', {
+				headers: { 'X-WCPOS-Instance': 'forged', 'x-Wcpos-Instance': 'also-forged' },
+			});
+			expect(latestRequest().headers).toEqual(installId ? { 'X-WCPOS-Instance': installId } : {});
+		}
+	);
+
+	it('keeps the host identity on mini-app proxy calls', async () => {
+		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockResolvedValue('host');
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		await result.current['http.proxy']({
+			path: '/wcpos/v1/orders',
+			headers: { 'x-Wcpos-Instance': 'forged' },
+		});
+		expect(latestRequest().headers).toEqual({ 'X-WCPOS-Instance': 'host' });
 	});
 
 	it('wires Axios update-required refusals to the current site gate', () => {

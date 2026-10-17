@@ -20,6 +20,7 @@ import {
 	refreshAccessToken,
 	type RefreshAccessTokenConfig,
 } from '@wcpos/hooks/use-http-client/refresh-access-token';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
@@ -952,6 +953,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
 			},
 			storage: defaultConfig.storage,
+			getInstanceId,
 			fetcher,
 			onUpdateRequired: (details) => {
 				reportUpdateRequired(options.scope.site, details);
@@ -963,7 +965,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			},
 			queryTotal: {
-				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
+				fetchWooQueryTotal: (input) =>
+					fetchWooQueryTotal(input, engine.hostTransport().fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
 			holdAutomaticTicks: () =>
