@@ -303,6 +303,8 @@ export async function drainMutationQueue(input: {
 	 * gets its attempt, so a cashier's new action probes the session.
 	 */
 	sessionExpired?: boolean;
+	/** A restored session gets one immediate attempt through existing retry delays. */
+	retryImmediately?: boolean;
 	/**
 	 * Called the moment a push fails retryably — before the drain moves on to the
 	 * next row — and again for every later row of the same record this drain then
@@ -628,6 +630,7 @@ export async function drainMutationQueue(input: {
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
 		// its window elapses. Skip it AND hold later edits to the same record (FIFO ordering).
 		if (
+			!input.retryImmediately &&
 			mutation.nextAttemptAt &&
 			Date.parse(mutation.nextAttemptAt) > now() &&
 			!(lastAttemptAt(mutation) <= (freshExplicitQueuedAt.get(recordKey(mutation)) ?? -Infinity))

@@ -405,6 +405,8 @@
 	"common.category": "Category",
 	"common.city": "City",
 	"common.class": "Class",
+	"common.backspace": "Delete last digit",
+	"common.change_sign": "Change sign",
 	"common.clear": "Clear",
 	"common.clear_all_local_data": "Clear All Local Data",
 	"common.clear_all_local_data_title": "Clear all local data?",

@@ -93,11 +93,18 @@ export async function recoverLogsCollectionStorage(
 		return false;
 	}
 
-	await collection.remove();
+	// Claim synchronously so concurrent query failures cannot both remove the collection.
 	if (sessionStorage) {
 		sessionStorage.setItem(RECOVERY_SESSION_KEY, '1');
 	} else {
 		logsRecoveryAttemptedInMemory = true;
+	}
+	try {
+		await collection.remove();
+	} catch (removeError) {
+		logsRecoveryAttemptedInMemory = false;
+		sessionStorage?.removeItem(RECOVERY_SESSION_KEY);
+		throw removeError;
 	}
 	(options.reload ?? reloadPage)();
 	return true;
