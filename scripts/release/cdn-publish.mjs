@@ -139,7 +139,8 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 		if (type) headers['Content-Type'] = type;
 		const response = await fetch(url, { method, headers, body });
 		if (!response.ok && !(allowMissing && response.status === 404)) {
-			throw new Error(`Cloudflare ${method} failed: HTTP ${response.status}`);
+			const detail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+			throw new Error(`Cloudflare ${method} ${new URL(url).pathname} failed: HTTP ${response.status} ${detail}`);
 		}
 		return response;
 	};
