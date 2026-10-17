@@ -1007,6 +1007,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return {
 			site,
 			storage: defaultConfig.storage,
+			getInstanceId,
 			fetcher: createEngineFetcher({
 				auth: { ...fetcherOptions },
 				clockSkew: { generation: 0, evaluated: false },

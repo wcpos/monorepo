@@ -2684,7 +2684,11 @@ describe('previous-generation database drain', () => {
 		}
 	});
 
-	it('with the REAL drain: the host ports send a closed v5 sale once through its pinned transport, then remove pos_v5', async () => {
+	const assertRealDrain = async (
+		platform: 'ios' | 'web',
+		useInstanceHeader: boolean | undefined,
+		expectedHeader: string | null
+	) => {
 		const { getRxStorageMemory } = jest.requireActual<typeof import('rxdb/plugins/storage-memory')>(
 			'rxdb/plugins/storage-memory'
 		);
@@ -2760,12 +2764,22 @@ describe('previous-generation database drain', () => {
 				return Response.json(await answer.json(), { status: answer.status });
 			});
 		const loaded = loadCreateAppEngine();
+		const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+		const appPlatform = jest.replaceProperty(AppInfo, 'platform', platform);
+		const instanceId = jest
+			.spyOn(
+				jest.requireActual<typeof import('@wcpos/utils/get-instance-id')>(
+					'@wcpos/utils/get-instance-id'
+				),
+				'getInstanceId'
+			)
+			.mockResolvedValue('host-instance');
 		jest.requireMock<{ defaultConfig: { storage: unknown } }>(
 			'@wcpos/database/adapters/default'
 		).defaultConfig.storage = storage;
 		loaded.drainLegacyScopeDatabase.mockImplementation(actual.drainLegacyScopeDatabase as never);
 		try {
-			await loaded.createAppSyncEngine(BASE_OPTIONS).ready;
+			await loaded.createAppSyncEngine({ ...BASE_OPTIONS, useInstanceHeader }).ready;
 			for (
 				let turn = 0;
 				turn < 200 &&
@@ -2787,12 +2801,24 @@ describe('previous-generation database drain', () => {
 			const [pushUrl, pushInit] = fetch.mock.calls.find(([url]) => String(url).includes('/push/'))!;
 			const wire = `${String(pushUrl)} ${JSON.stringify(Object.fromEntries(new Headers(pushInit?.headers)))}`;
 			expect(wire).toContain('store-1');
+			expect(new Headers(pushInit?.headers).get('X-WCPOS-Instance')).toBe(expectedHeader);
 			await discoveryFindsNothingElse(loaded);
 			expect(classifyUnsentChanges(0)).toEqual({ status: 'none' });
 		} finally {
 			fetch.mockRestore();
+			appPlatform.restore();
+			instanceId.mockRestore();
 		}
-	}, 30_000);
+	};
+	it.each([
+		['ios', undefined, 'host-instance'],
+		['web', true, 'host-instance'],
+		['web', undefined, null],
+	] as const)(
+		'with the REAL drain: %s verdict %s sends a closed v5 sale with instance header %s',
+		assertRealDrain,
+		30_000
+	);
 
 	it("logs a push the store refused during the drain with the store's reason and message", async () => {
 		const { createAppSyncEngine, drainLegacyScopeDatabase, networkWarn } = loadCreateAppEngine();

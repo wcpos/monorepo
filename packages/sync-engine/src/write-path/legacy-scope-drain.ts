@@ -89,7 +89,15 @@ export type LegacyScopeDatabaseFiles = {
 /** The host ports a drain needs — the live engine's, minus everything a one-tick drain never arms. */
 export type LegacyScopeDrainPorts = Pick<
 	RxdbSyncEnginePorts,
-	'site' | 'storage' | 'fetcher' | 'connectivity' | 'multiInstance' | 'uuid' | 'now' | 'diagnostics'
+	| 'site'
+	| 'storage'
+	| 'fetcher'
+	| 'connectivity'
+	| 'multiInstance'
+	| 'uuid'
+	| 'now'
+	| 'diagnostics'
+	| 'getInstanceId'
 > & {
 	/**
 	 * File-level existence and deletion. Absent (web sahpool, Electron IPC): the
