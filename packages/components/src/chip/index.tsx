@@ -33,10 +33,6 @@ function selectedState(on: boolean | undefined) {
 	return Platform.OS === 'web' ? { 'aria-pressed': on } : { 'aria-selected': on };
 }
 
-// `sm` is drawn 32 tall for a dense cell; 6 pt of slop on each side keeps the 44 pt target
-// (CODING_STANDARDS § Design 2). React Native Web ignores `hitSlop`; a pointer needs none.
-const SM_HIT_SLOP = 6;
-
 // Every variant carries the same root classes; a cell that renders full-width is a stale
 // baseline, not a prop-dependent layout (measured on wcpos/monorepo#2189).
 export function Chip({
@@ -89,7 +85,6 @@ export function Chip({
 	);
 	return (
 		<Pressable
-			hitSlop={sm ? SM_HIT_SLOP : undefined}
 			{...props}
 			testID={testID}
 			disabled={inactive}

@@ -266,8 +266,9 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 | `default` | 44 (`h-ctl`, the control token) | everywhere else |
 | `lg` | 56 (`h-14`) | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
 
-The heights are what is drawn: a `sm` Button, `IconButton size="sm"` and `Chip size="sm"` keep a 44 pt
-target through `hitSlop` (§2). No height or radius class on a Button (lint enforces it); a small pill is a
+Heights are at the Regular scale step; Compact and Spacious scale them with `--spacing`, and `h-ctl`
+never goes under 44 on a touch screen. They are what is drawn: a `sm` Button, `IconButton size="sm"` and
+`Chip size="sm"` still owe the finger a 44 pt target (§2). No height or radius class on a Button (lint enforces it); a small pill is a
 `Chip size="sm"`, never a Button. A row with a ⋮ menu puts remove or forget as the menu's last red row;
 `ghost-destructive` is for a dense row that has no menu. A selected choice is a
 `Chip`, never a Button that toggles its variant. Icon-only actions are an `IconButton` (44, `size="sm"`
@@ -288,7 +289,7 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 | Row actions | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator |
 | Display or column settings | side panel (`UISettingsDialog`) | on every screen, never a popover |
 | Pick one of a few | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons |
-| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | no form and no footer; a list inside may scroll |
+| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | a list, a picker or a keypad with at most a Done; never a settings form |
 | The cashier (switch user, register, store; sign out) | `UserSheet` (right panel) | the one cashier surface on every screen |
 | A multi-step task (checkout) | full screen | never a centred modal that grew |
 
