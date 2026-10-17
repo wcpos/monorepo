@@ -116,18 +116,26 @@ export const useCartConfig = (): CartConfig => {
 const CartConfigReaderContext = React.createContext<((order?: OrderPayload) => CartConfig) | null>(
 	null
 );
+
+/**
+ * Session-owned cart config: queued commands keep receiving settings after the
+ * component that queued them unmounts. Committed inputs are published after every
+ * render; the reader (held by a queued command long after the render that enqueued
+ * it) reads them at CALL time, inside the command's slot, never during render.
+ */
 export function CartConfigProvider({ children }: { children: React.ReactNode }) {
 	const inputs = useCartConfigInputs();
-	const latestInputs = React.useRef(inputs);
-	// Publish committed inputs without changing the reader held by queued commands.
+	const latest = React.useRef({ inputs });
 	React.useLayoutEffect(() => {
-		latestInputs.current = inputs;
-	});
+		latest.current = { inputs };
+	}, [inputs]);
 	const read = React.useCallback(
-		(order?: OrderPayload) => cartConfigForOrder({ ...latestInputs.current, order }),
+		(order?: OrderPayload) => cartConfigForOrder({ ...latest.current.inputs, order }),
 		[]
 	);
-	return React.createElement(CartConfigReaderContext.Provider, { value: read }, children);
+	return (
+		<CartConfigReaderContext.Provider value={read}>{children}</CartConfigReaderContext.Provider>
+	);
 }
 
 export function useCartConfigReader() {
