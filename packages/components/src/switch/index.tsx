@@ -155,7 +155,10 @@ function SwitchNative({ className, size = 'default', ref, style, ...props }: Swi
 	// style function is resolved here from the press area's own pressed state, because the press
 	// area under the finger is a transparent square, not the track.
 	const [pressed, setPressed] = React.useState(false);
-	const wrapperStyle = typeof style === 'function' ? style({ pressed }) : style;
+	// Native has no hover; the app's react-native-web typings add `hovered` to the state, so the
+	// state is built once and carries it for both typings.
+	const pressState = { pressed, hovered: false };
+	const wrapperStyle = typeof style === 'function' ? style(pressState) : style;
 	const { onPressIn, onPressOut } = props;
 	return (
 		<Animated.View
