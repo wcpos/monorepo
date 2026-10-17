@@ -151,6 +151,36 @@ describe('badge label', () => {
 	});
 });
 
+describe('badge tinted', () => {
+	it.each([
+		['success', 'bg-success/15', 'text-success'],
+		['warning', 'bg-warning/15', 'text-warning'],
+		['destructive', 'bg-destructive/15', 'text-destructive'],
+		['default', 'bg-primary/15', 'text-primary'],
+	] as const)(
+		'%s: a wash of the tone, the words in the tone, the solid height',
+		(tone, bg, text) => {
+			const { container } = render(
+				<Badge variant={tone} tinted>
+					Ready
+				</Badge>
+			);
+			const root = container.firstChild as HTMLElement;
+			expect(root).toHaveClass(bg, 'h-5', 'rounded-full');
+			expect(root.className).not.toMatch(new RegExp(`(^| )${bg.split('/')[0]}( |$)`));
+			const label = screen.getByText('Ready');
+			expect(label).toHaveClass(text);
+			expect(label.className).not.toMatch(/-foreground/);
+		}
+	);
+
+	it('leaves the solid badge as it was', () => {
+		const { container } = render(<Badge variant="success">Ready</Badge>);
+		expect(container.firstChild).toHaveClass('bg-success');
+		expect(screen.getByText('Ready')).toHaveClass('text-success-foreground');
+	});
+});
+
 describe('badge atoms skin', () => {
 	it('uses ramp text and fixed-width bold digits for small counts', () => {
 		const { container } = render(<Badge count={3} size="sm" />);

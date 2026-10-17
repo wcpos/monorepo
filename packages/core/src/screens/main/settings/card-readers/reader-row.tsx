@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { decode } from 'html-entities';
+
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -215,14 +218,9 @@ export function ReaderRow({
 						<Text className="flex-1 text-lg font-semibold" numberOfLines={1}>
 							{name || method.title}
 						</Text>
-						<Text
-							testID={`reader-row-${method.id}-provider`}
-							className="text-muted-foreground bg-muted max-w-32 overflow-hidden rounded-full px-2 py-0.5 text-xs"
-							numberOfLines={1}
-							decodeHtml
-						>
-							{method.title}
-						</Text>
+						<Badge testID={`reader-row-${method.id}-provider`} variant="muted" className="max-w-32">
+							{decode(method.title)}
+						</Badge>
 					</HStack>
 					{serial || locationName ? (
 						<HStack className="items-center gap-1.5">

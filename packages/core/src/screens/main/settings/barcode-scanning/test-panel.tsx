@@ -3,6 +3,7 @@ import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-n
 
 import { useObservableState } from 'observable-hooks';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -301,19 +302,15 @@ function History({ history }: { history: TraceAnalysis[] }) {
 						? t('settings.barcode_test_result_too_short')
 						: t('settings.barcode_test_result_scan')
 					: t('settings.barcode_test_result_typing');
-				const chipClass = entry.detectedAsScan
-					? entry.tooShort
-						? 'bg-warning/10 text-warning'
-						: 'bg-success/10 text-success'
-					: 'bg-muted text-muted-foreground';
+				const tone = entry.detectedAsScan ? (entry.tooShort ? 'warning' : 'success') : 'muted';
 				return (
 					<HStack key={index} className="border-border rounded-md border p-2">
 						<Text className="flex-1 font-mono text-sm" numberOfLines={1}>
 							{entry.code || entry.raw || '—'}
 						</Text>
-						<Text className={`rounded-full px-2 py-0.5 text-xs font-medium ${chipClass}`}>
+						<Badge variant={tone} tinted>
 							{result}
-						</Text>
+						</Badge>
 						<Text className="text-muted-foreground w-16 text-right text-xs">
 							{Number.isFinite(entry.avgGapMs) ? `${Math.round(entry.avgGapMs)}ms` : '—'}
 						</Text>

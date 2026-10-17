@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
+import { decode } from 'html-entities';
+
 import * as Alert from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -278,13 +281,9 @@ function TapToPayRow({
 								? t('settings.card_readers.tap_to_pay_android')
 								: t('settings.card_readers.tap_to_pay')}
 						</Text>
-						<Text
-							className="text-muted-foreground bg-muted max-w-32 overflow-hidden rounded-full px-2 py-0.5 text-xs"
-							numberOfLines={1}
-							decodeHtml
-						>
-							{method.title}
-						</Text>
+						<Badge variant="muted" className="max-w-32">
+							{decode(method.title)}
+						</Badge>
 					</HStack>
 					{/* One line: not set up, and who can set it up when this user cannot. */}
 					<Text
