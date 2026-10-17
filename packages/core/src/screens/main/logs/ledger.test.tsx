@@ -108,12 +108,16 @@ jest.mock('../../../hooks/use-local-date', () => ({
 jest.mock('./event-title', () => ({
 	useEventTitle: () => () => 'Database error',
 }));
+const mockUseRecordLabel = jest.fn();
 jest.mock('../health/use-record-label', () => ({
 	useRecordLabel: (collection: string, recordId: string) =>
-		collection === 'orders' && recordId === 'ae263330-fbff-4834-8798-3f52ff650c79'
-			? { kind: 'Order', handle: '#1234 · 45.00', status: 'found', text: 'Order: #1234 · 45.00' }
-			: null,
+		mockUseRecordLabel(collection, recordId),
 }));
+mockUseRecordLabel.mockImplementation((collection: string, recordId: string) =>
+	collection === 'orders' && recordId === 'ae263330-fbff-4834-8798-3f52ff650c79'
+		? { kind: 'Order', handle: '#1234 · 45.00', status: 'found', text: 'Order: #1234 · 45.00' }
+		: null
+);
 jest.mock('./row-detail', () => ({
 	RowDetail: () => <div data-testid="logs-row-detail" />,
 }));
@@ -207,7 +211,17 @@ describe('Ledger (layout B2)', () => {
 	it('names the record in the subline instead of its collection/uuid', () => {
 		const { container } = renderLedger();
 
-		expect(screen.getAllByTestId('logs-record-log-3')[0].textContent).toBe('Order: #1234 · 45.00');
+		expect(screen.getByTestId('logs-record-log-3').textContent).toBe('Order: #1234 · 45.00');
+		expect(screen.getByTestId('logs-record-sm-log-3').textContent).toBe('Order: #1234 · 45.00');
 		expect(container.textContent).not.toContain('ae263330');
+	});
+
+	// Both responsive layouts are mounted; the record must be read once per row.
+	it("resolves each row's record once, not once per layout", () => {
+		mockUseRecordLabel.mockClear();
+		renderLedger();
+
+		const calls = mockUseRecordLabel.mock.calls.filter(([collection]) => collection === 'orders');
+		expect(calls).toHaveLength(1);
 	});
 });

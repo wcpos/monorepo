@@ -63,34 +63,22 @@ export function useLevelLabel(): (kind: LevelKind) => string {
 }
 
 /**
- * The record the row is about, by name ("Order: #1234 · 45.00"), never its
- * uuid — a merchant cannot act on `orders/ae263330-…` (2026-10-17). Own
- * component so only rows that name a record read one.
- */
-function RecordName({
-	logId,
-	collection,
-	recordId,
-}: {
-	logId: string;
-	collection: string;
-	recordId: string;
-}) {
-	const label = useRecordLabel(collection, recordId);
-	if (!label) return null;
-	return (
-		<Text testID={`logs-record-${logId}`} className="text-muted-foreground/80 text-xs" decodeHtml>
-			{label.text}
-		</Text>
-	);
-}
-
-/**
  * No actor part on purpose (A1.4): the log DB is per-(site, store, cashier),
  * so the ledger is always the viewing cashier's own — a name here is noise.
  * Attribution stays in the data for export and support.
  */
-function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boolean }) {
+function Subline({
+	row,
+	includeDuration,
+	recordText,
+	recordTestID,
+}: {
+	row: LogRow;
+	includeDuration: boolean;
+	/** The record by name ("Order: #1234 · 45.00"), resolved once per row. */
+	recordText: string | null;
+	recordTestID: string;
+}) {
 	const parts: React.ReactNode[] = [];
 	const category = displayCategory(row.category);
 	if (category)
@@ -100,9 +88,14 @@ function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boole
 			</Text>
 		);
 
-	const record = recordRefOf(row);
-	if (record) {
-		parts.push(<RecordName key="rec" logId={row.logId} {...record} />);
+	// By name, never `orders/ae263330-…` — a merchant cannot act on a uuid
+	// (2026-10-17); the raw id stays in the row's Details.
+	if (recordText) {
+		parts.push(
+			<Text key="rec" testID={recordTestID} className="text-muted-foreground/80 text-xs" decodeHtml>
+				{recordText}
+			</Text>
+		);
 	}
 
 	if (includeDuration) {
@@ -234,6 +227,10 @@ function LedgerRow({
 	onKindPress: (kind: LevelKind) => void;
 }) {
 	const kind = displayKind(row);
+	// Once per row: both responsive layouts are mounted, so resolving inside the
+	// subline would read the record twice.
+	const record = recordRefOf(row);
+	const recordText = useRecordLabel(record?.collection, record?.recordId)?.text ?? null;
 
 	return (
 		<View
@@ -262,7 +259,12 @@ function LedgerRow({
 					</View>
 					<View className="min-w-0 flex-1">
 						<Text>{title}</Text>
-						<Subline row={row} includeDuration={false} />
+						<Subline
+							row={row}
+							includeDuration={false}
+							recordText={recordText}
+							recordTestID={`logs-record-${row.logId}`}
+						/>
 					</View>
 					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
 						{formatDurationMs(row.durationMs) ?? '—'}
@@ -296,7 +298,12 @@ function LedgerRow({
 						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
 					</HStack>
 					<Text className="text-sm">{title}</Text>
-					<Subline row={row} includeDuration />
+					<Subline
+						row={row}
+						includeDuration
+						recordText={recordText}
+						recordTestID={`logs-record-sm-${row.logId}`}
+					/>
 				</Pressable>
 				<View pointerEvents="box-none" className="absolute top-2 right-0 z-10">
 					<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />

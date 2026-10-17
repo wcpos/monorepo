@@ -31,7 +31,7 @@ jest.mock('@wcpos/query', () => {
 	return {
 		COLLECTION_VOCABULARY: actual.COLLECTION_VOCABULARY,
 		observeEngineCollection: actual.observeEngineCollection,
-		WRITEABLE_REMOTE_ID_FIELD: actual.WRITEABLE_REMOTE_ID_FIELD,
+		resolveLegacyField: actual.resolveLegacyField,
 		useQueryRuntime: () => ({ engine: mockEngine }),
 	};
 });
@@ -130,6 +130,49 @@ describe('useRecordLabel', () => {
 
 		await waitFor(() => expect(result.current?.text).toBe('Product: Blue Tee'));
 		expect(result.current?.uuid).toBe('p-1');
+	});
+
+	it('still reads in the next database after a read in the previous one failed', async () => {
+		mockExec
+			.mockRejectedValueOnce(new Error('database closing'))
+			.mockResolvedValueOnce({ uuid: 'o-2', number: '77', payload: {} });
+
+		const { result } = renderHook(() => useRecordLabel('orders', 'o-2'));
+		await waitFor(() => expect(mockExec).toHaveBeenCalledTimes(1));
+		expect(result.current?.status).toBe('unresolved');
+
+		const reopened = {
+			collections: { orders: { findOne: (query: unknown) => mockFindOne(query) } },
+		};
+		mockDatabase = reopened;
+		act(() => mockDbListener?.(reopened));
+
+		await waitFor(() => expect(result.current?.text).toBe('Order: #77'));
+	});
+
+	// Store ids overlap across stores: another store's name must not stand in.
+	it('drops the previous answer when the engine moves to another database', async () => {
+		mockExec.mockResolvedValueOnce({ uuid: 'p-1', payload: { name: 'Store A Tee' } });
+		const { result } = renderHook(() => useRecordLabel('products', '80'));
+		await waitFor(() => expect(result.current?.text).toBe('Product: Store A Tee'));
+
+		mockDatabase = null;
+		act(() => mockDbListener?.(null));
+
+		expect(result.current?.status).toBe('unresolved');
+		expect(result.current?.text).toBe('Product');
+	});
+
+	it('looks up a pull-only collection by its store id too', async () => {
+		mockDatabase = {
+			collections: { taxRates: { findOne: (query: unknown) => mockFindOne(query) } },
+		};
+		mockExec.mockResolvedValue({ uuid: 't-1', remoteId: '5', payload: { name: 'VAT' } });
+
+		const { result } = renderHook(() => useRecordLabel('tax_rates', '5'));
+
+		await waitFor(() => expect(result.current?.text).toBe('Tax rates: VAT'));
+		expect(mockFindOne).toHaveBeenCalledWith({ selector: { remoteId: '5' } });
 	});
 
 	// Pull-side repair rows (`apply.escalation`, SYNC331) carry the store's

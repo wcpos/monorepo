@@ -38,8 +38,10 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	if (!first) return null;
 
 	const fixRoute = FIX_ROUTES[first.collection]?.(first.recordId);
-	// The handle alone: the sentence around it already says what kind it is.
-	const displayName = label?.handle ?? `${first.collection}/${first.recordId.slice(0, 8)}`;
+	// The handle alone when there is one — the sentence around it already says
+	// what kind it is; otherwise the shared kind / "not on this device" line.
+	// Never the raw id: support reads that from the log row's Details.
+	const displayName = label?.handle ?? label?.text ?? first.collection;
 
 	return (
 		<Callout tone="destructive" testID="db-attention-panel">

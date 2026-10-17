@@ -37,7 +37,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	observeEngineCollection: jest.requireActual('@wcpos/query').observeEngineCollection,
-	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
+	resolveLegacyField: jest.requireActual('@wcpos/query').resolveLegacyField,
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('../../../contexts/translations', () => {
@@ -127,6 +127,19 @@ describe('AttentionPanel', () => {
 		await waitFor(() =>
 			expect(screen.getByTestId('db-attention-panel').textContent).toContain(label)
 		);
+	});
+
+	it('names a record it cannot read by its kind, never its raw id', async () => {
+		mockExec.mockResolvedValue(null);
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+
+		await waitFor(() =>
+			expect(screen.getByTestId('db-attention-panel').textContent).toContain(
+				'Product (not on this device)'
+			)
+		);
+		expect(screen.getByTestId('db-attention-panel').textContent).not.toContain('record-u');
 	});
 
 	it('does not warn when a label read rejects after the panel unmounts', async () => {

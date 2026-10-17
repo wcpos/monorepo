@@ -1,13 +1,13 @@
 import * as React from 'react';
 
 import { EMPTY, from } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { catchError, switchMap, tap } from 'rxjs/operators';
 
 import {
 	COLLECTION_VOCABULARY,
 	observeEngineCollection,
+	resolveLegacyField,
 	useQueryRuntime,
-	WRITEABLE_REMOTE_ID_FIELD,
 } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -20,9 +20,13 @@ const healthLogger = getLogger(['wcpos', 'health']);
 
 type Translate = ReturnType<typeof useT>;
 
-/** One record is "Order", not "Orders" — literal keys so the string extractor sees them. */
+/**
+ * One record is "Order", not "Orders". Literal keys throughout so the string
+ * extractor sees every one; kinds with no singular in the catalogue keep
+ * their collection name.
+ */
 function recordKind(collection: string, t: Translate): string {
-	switch (collection) {
+	switch (rowKeyForTelemetryCollection(collection)) {
 		case 'orders':
 			return t('common.order');
 		case 'products':
@@ -31,11 +35,19 @@ function recordKind(collection: string, t: Translate): string {
 			return t('common.variation');
 		case 'customers':
 			return t('common.customer');
+		case 'categories':
+			return t('common.category');
+		case 'brands':
+			return t('common.brand');
+		case 'tags':
+			return t('common.tag');
+		case 'taxRates':
+			return t('common.tax_rates');
+		case 'coupons':
+			return t('common.coupons');
+		default:
+			return collection;
 	}
-	const labelKey = (COLLECTION_VOCABULARY as Record<string, { labelKey?: string } | undefined>)[
-		collection
-	]?.labelKey;
-	return labelKey ? t(labelKey) : collection;
 }
 
 export type RecordLabel = {
@@ -85,27 +97,45 @@ export function useRecordLabel(
 		const rowKey = rowKeyForTelemetryCollection(collection);
 		if (rowKey === null) return;
 		// Push-side rows carry the local uuid; pull-side repair rows
-		// (`apply.escalation`, SYNC331) carry the store's numeric id, which is the
-		// `remoteId` column, not the primary key.
+		// (`apply.escalation`, SYNC331) carry the store's numeric id. Every
+		// collection, pull-only ones included (a tax-rate range checksum), keeps
+		// that id in the column the registry maps `id` to, not the primary key.
 		const remoteId = remoteIdOrNull(recordId);
-		const remoteIdField = (WRITEABLE_REMOTE_ID_FIELD as Record<string, string | undefined>)[rowKey];
-		if (remoteId !== null && !remoteIdField) return;
 		const query =
-			remoteId !== null ? { selector: { [remoteIdField as string]: remoteId } } : recordId;
+			remoteId !== null
+				? {
+						selector: {
+							[resolveLegacyField(COLLECTION_VOCABULARY[rowKey].legacyName, 'id').enginePath]:
+								remoteId,
+						},
+					}
+				: recordId;
 		// Re-read on every database the engine opens: a row mounted on cold start,
-		// before the scope is open, must still get its name once it is.
+		// before the scope is open, must still get its name once it is. Each
+		// emission drops the previous answer first — store ids overlap across
+		// stores, so another store's record name must never stand in.
 		const subscription = observeEngineCollection(engine, rowKey)
 			.pipe(
-				switchMap((records) => (records ? from(records.findOne(query).exec()) : EMPTY)),
-				catchError((error: unknown) => {
-					// Not `collection`/`recordId`: a context carrying those keys is
-					// itself labelled by this hook on the Logs screen, and a read that
-					// keeps failing must not feed itself new rows to fail on.
-					healthLogger.warn('Could not read a record to name it', {
-						context: { target: `${collection}/${recordId}`, error: getErrorMessage(error) },
-					});
-					return EMPTY;
-				})
+				tap(() => setResolved(null)),
+				switchMap((records) =>
+					records
+						? from(records.findOne(query).exec()).pipe(
+								// Per read, so the next database the engine opens still gets one.
+								catchError((error: unknown) => {
+									// Not `collection`/`recordId`: a context carrying those keys
+									// is itself labelled by this hook on the Logs screen, and a
+									// read that keeps failing must not feed itself rows to fail on.
+									healthLogger.warn('Could not read a record to name it', {
+										context: {
+											target: `${collection}/${recordId}`,
+											error: getErrorMessage(error),
+										},
+									});
+									return EMPTY;
+								})
+							)
+						: EMPTY
+				)
 			)
 			.subscribe((doc) => {
 				const json = doc
