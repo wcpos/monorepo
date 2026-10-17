@@ -352,7 +352,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'AUTOPRINT_DID_NOT_START',
 		domain: 'PRINT',
 		severity: 'warn',
-		actionHint: "The sale is saved. Open the order's receipt and tap Print.",
+		actionHint: "The sale is saved. Open the order's receipt and tap Print Receipt.",
 		dataSafety: 'no-impact',
 		summary: 'Automatic printing did not start for this receipt.',
 	},
@@ -390,7 +390,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'error',
 		actionHint:
-			'Nothing else changed. Check the variation uses attributes set on the parent product, then add it again.',
+			"Nothing else changed. Open the product and check whether the variation is there; if it isn't, make sure it uses attributes set on the parent product, then add it again.",
 		dataSafety: 'local-only',
 		summary: 'This variation could not be added to the product.',
 	},
@@ -483,7 +483,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'UNEXPECTED_ERROR',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Try once more. If it repeats, tap Copy debug info and send it to WCPOS support.',
+		actionHint:
+			'Check whether your last action went through before trying again — for a sale, open the order and check its status. If it repeats, tap Copy debug info and send it to WCPOS support.',
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS encountered an unexpected error.',
 	},
