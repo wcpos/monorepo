@@ -44,11 +44,16 @@ export function Tile({
 	...props
 }: TileProps) {
 	const pointer = usePointer();
+	const radio = (role ?? accessibilityRole) === 'radio';
 	return (
 		<Pressable
 			role={role}
 			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
-			aria-selected={selected}
+			// A tile without an action is no tab stop (react-native-web ignores `focusable`).
+			tabIndex={onPress ? undefined : -1}
+			// Native announces the picked one (RN maps it onto the selected state); a radio carries
+			// `aria-checked` instead.
+			aria-selected={radio ? undefined : selected}
 			disabled={disabled}
 			onPress={onPress}
 			className={cn(

@@ -16,3 +16,4 @@ Created 2026-10-17 by Phase F of the 2026-10-16 component-consistency board (dec
 4. `dashed` is the add-another tile: a dashed border and no surface — evidence: the auth screen's add-user button; test "has a dashed add-another tile…".
 5. Its children are plain: a tile sets no text style, so a label says its own weight (`font-medium` on the labels that came from outline Buttons) — evidence: the screen suites that mock `@wcpos/components/text` with `Text` alone, which a context provider here would break.
 6. Disabled is `opacity-50` and refuses the press — evidence: CODING_STANDARDS § Design 5; test "presses, and dims and refuses a press…".
+7. A tile without `onPress` is no tab stop (`tabIndex={-1}`; react-native-web's Pressable ignores `focusable`); `aria-selected` is left off a `radio` by either role prop, which carries `aria-checked` — evidence: the same review on `list-row` (CodeRabbit on #2640); test "is no tab stop without an action…".

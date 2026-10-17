@@ -73,3 +73,15 @@ it('presses, and dims and refuses a press when disabled', () => {
 	expect(onPress).toHaveBeenCalledTimes(1);
 	expect(classes('tile')).toContain('opacity-50');
 });
+
+it('is no tab stop without an action, and leaves a radio its checked state', () => {
+	render(
+		<>
+			<Tile testID="inert" />
+			<Tile testID="radio" role="radio" aria-checked selected onPress={() => {}} />
+		</>
+	);
+	expect(screen.getByTestId('inert')).not.toHaveAttribute('tabindex', '0');
+	expect(screen.getByTestId('radio')).not.toHaveAttribute('aria-selected');
+	expect(screen.getByTestId('radio')).toHaveAttribute('aria-checked', 'true');
+});
