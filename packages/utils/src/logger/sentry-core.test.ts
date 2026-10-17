@@ -87,8 +87,9 @@ describe('describeBareException', () => {
 	});
 
 	it('scrubs Basic credentials from bare exception diagnostics in beforeSend', () => {
-		const event = { exception: { values: [{ value: 'No error message' }] } };
 		const credential = 'Basic YWRtaW46c2VjcmV0';
+		// Sentry's event builder copies Error.name into `type` before beforeSend runs.
+		const event = { exception: { values: [{ type: credential, value: 'No error message' }] } };
 		const error = Object.assign(new Error(''), { name: credential, code: credential });
 		error.stack = `Error: ${credential}`;
 		error.toString = () => `Request failed with ${credential}`;
@@ -98,6 +99,7 @@ describe('describeBareException', () => {
 
 		const result = prepareEvent(event, { originalException: error });
 
+		expect(result).toHaveProperty('exception.values.0.type', 'Basic [REDACTED]');
 		expect(result).toHaveProperty('contexts.thrown.string', 'Request failed with Basic [REDACTED]');
 		expect(result).toHaveProperty('contexts.thrown.stackHead', 'Error: Basic [REDACTED]');
 		for (const field of ['name', 'code', 'constructor']) {

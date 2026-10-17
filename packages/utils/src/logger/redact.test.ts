@@ -10,6 +10,11 @@ describe('redactSensitiveFields', () => {
 		['token=YWRtaW46c2VjcmV0 Basic YWRtaW46c2VjcmV0', 'token=[REDACTED] Basic [REDACTED]'],
 		// test:€ — a UTF-8 password (RFC 7617) must still be recognised.
 		['Authorization: Basic dGVzdDrigqw=', 'Authorization: Basic [REDACTED]'],
+		// Firstname Lastname:secret — a space-separated user id (RFC 7613 §3.1).
+		[
+			'Authorization: Basic Rmlyc3RuYW1lIExhc3RuYW1lOnNlY3JldA==',
+			'Authorization: Basic [REDACTED]',
+		],
 	])('redacts Basic credentials in %s while preserving the scheme', (input, expected) => {
 		expect(redactSensitiveFields(input)).toBe(expected);
 	});

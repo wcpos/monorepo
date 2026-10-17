@@ -60,7 +60,12 @@ function isBasicCredential(token: string): boolean {
 	// continuation bytes (RFC 7617 allows UTF-8 credentials), not control characters.
 	return (
 		decoded !== null &&
-		/^[\x21-\x39\x3b-\x7e\u0080-\u00ff]+:[\x20-\x7e\u0080-\u00ff]*$/.test(decoded)
+		// RFC 7617 allows any printable text in the user-id except a colon, spaces included
+		// (`Firstname Lastname:secret`); the user part must be non-empty and not start with
+		// a space, which keeps `Only` (`:yr`) prose.
+		/^[\x21-\x39\x3b-\x7e\u0080-\u00ff][\x20-\x39\x3b-\x7e\u0080-\u00ff]*:[\x20-\x7e\u0080-\u00ff]*$/.test(
+			decoded
+		)
 	);
 }
 
