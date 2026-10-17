@@ -283,6 +283,28 @@ export async function enqueueWriteIntent(input: {
 		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
 		await queue.releaseVoidFence(name, recordId, token);
 	};
+	const cleanupCommittedVoid = async (marked: QueuedMutation[], token: string) => {
+		if (legacyQueue) return;
+		let step = 'removeMarked';
+		try {
+			for (const row of marked) await queue.removeMarked(row.mutationId, token);
+			step = 'releaseVoidFence';
+			await queue.releaseVoidFence(name, recordId, token);
+		} catch (error) {
+			// The resident is gone: retain the committed fence for expiry recovery,
+			// rather than reporting failure for a void that already took effect.
+			try {
+				input.observe?.({
+					type: 'void.cleanup-failed',
+					level: 'warn',
+					collection: name,
+					fields: { token, step, error: String(error) },
+				});
+			} catch {
+				/* Telemetry cannot undo a committed void either. */
+			}
+		}
+	};
 	// A void owns no resolution claim, so every live holder is foreign to it.
 	// Check both annihilation paths; retrying a recovery create would otherwise
 	// reclassify it as an ordinary never-pushed chain and destroy its resident.
@@ -469,8 +491,7 @@ export async function enqueueWriteIntent(input: {
 				throw error;
 			}
 			// After resident removal, keep any failed cleanup marked, never deliverable.
-			if (!legacyQueue) for (const row of marked) await queue.removeMarked(row.mutationId, token);
-			if (!legacyQueue) await queue.releaseVoidFence(name, recordId, token);
+			await cleanupCommittedVoid(marked, token);
 			input.observe?.({
 				type: 'queue.write.annihilate',
 				level: 'info',
@@ -574,9 +595,7 @@ export async function enqueueWriteIntent(input: {
 							if (await collection.findOne(recordId).exec()) await unmark(marked, token);
 							throw error;
 						}
-						if (!legacyQueue)
-							for (const row of marked) await queue.removeMarked(row.mutationId, token);
-						if (!legacyQueue) await queue.releaseVoidFence(name, recordId, token);
+						await cleanupCommittedVoid(marked, token);
 						input.observe?.({
 							type: 'queue.write.annihilate',
 							level: 'info',

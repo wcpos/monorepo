@@ -2070,6 +2070,81 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each([
+		{ status: 'pending', step: 'removeMarked' },
+		{ status: 'rejected', step: 'removeMarked' },
+		{ status: 'pending', step: 'releaseVoidFence' },
+		{ status: 'rejected', step: 'releaseVoidFence' },
+	] as const)(
+		'committed void survives $step failure for a $status create',
+		async ({ status, step }) => {
+			let now = Date.parse('2026-09-18T00:00:00.000Z');
+			const events: SyncEvent[] = [];
+			const engineEvents: EngineEvent[] = [];
+			const server = createFakeWriteServer();
+			const engine = engineWith({
+				fetch: server.fetch,
+				now: () => now,
+				diagnostics: (event) => events.push(event),
+			});
+			try {
+				await engine.ready;
+				engine.events((event) => engineEvents.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+				});
+				const db = engine.active()!.database;
+				const queue = queueFor(db);
+				const [create] = await queue.all();
+				if (status === 'rejected') await queue.replace({ ...create, status });
+				const failure = vi.spyOn(queue, step).mockRejectedValue(new Error('disk cleanup failed'));
+				const result = engine.write({
+					collection: 'orders',
+					operation: 'delete',
+					recordId: UUID_A,
+				});
+				await expect(result).resolves.toMatchObject({ annihilated: true });
+				const receipt = await result;
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				expect(fence?.toJSON()).toMatchObject({ payload: { phase: 'committed' } });
+				expect(events.filter((event) => event.type === 'void.cleanup-failed')).toEqual([
+					expect.objectContaining({
+						fields: {
+							token: fence!.toJSON().supersededBy,
+							step,
+							error: 'Error: disk cleanup failed',
+						},
+					}),
+				]);
+				expect(engineEvents).toContainEqual({
+					type: 'write-annihilated',
+					collection: 'orders',
+					recordId: UUID_A,
+					mutationId: receipt.mutationId,
+				});
+				if (step === 'removeMarked')
+					expect(await queue.all()).toEqual([
+						expect.objectContaining({
+							mutationId: create.mutationId,
+							supersededBy: fence!.toJSON().supersededBy,
+						}),
+					]);
+				failure.mockRestore();
+				now += 120_001;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0 });
+				expect(await db.collections.recordMutations.find().exec()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it.each(['drain', 'writer', 'identity'] as const)(
 		'live recovery via %s without reopening scope',
 		async (path) => {
