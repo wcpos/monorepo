@@ -2014,7 +2014,24 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it.each([false, true])('scope open respects void expiry: %s', async (expired) => {
+	it('reset confirmation ignores internal writer admission rows', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await queueFor(engine.active()!.database).admitWriter('orders', UUID_A, 'writer', Date.now());
+			expect(await engine.scope.resetCollection('mutations')).toBe('reset');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		[false, false, false],
+		[true, false, false],
+		[true, true, false],
+		[true, true, true],
+	])('void recovery: %s/%s/%s', async (expired, committed, removed) => {
 		const server = createFakeWriteServer({ firstId: 900_000_200 });
 		const options = {
 			fetch: (url: string, init?: RequestInit) => server.fetch(url, init as never),
@@ -2047,16 +2064,31 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					options.now()
 				)
 			).toBe(true);
+			if (committed) {
+				const db = before.active()!.database;
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				await fence!.incrementalPatch({ payload: { phase: 'committed' } });
+				if (removed) await (await db.collections.orders.findOne(UUID_A).exec())!.remove();
+			}
 		} finally {
 			await before.dispose();
 		}
-		const reopened = engineWith({ ...options, now: () => options.now() + (expired ? 120_001 : 1) });
+		const reopened = engineWith({
+			...options,
+			now: () => options.now() + (expired ? 120_001 : 1),
+		});
 		try {
 			await reopened.ready;
 			expect(
 				await queueFor(reopened.active()!.database).hasVoidFence('orders', UUID_A, options.now())
 			).toBe(!expired);
 			const rows = await queueFor(reopened.active()!.database).all();
+			if (committed) {
+				expect(rows).toEqual([]);
+				expect(await orderJson(reopened, UUID_A)).toBeNull();
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
 			expect(rows).toHaveLength(1);
 			if (!expired) {
 				expect(rows[0]).toHaveProperty('supersededBy', 'abandoned-void');

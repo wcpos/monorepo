@@ -118,6 +118,7 @@ async function enqueueCatalogPayload(
 
 describe('enqueueWriteIntent', () => {
 	it.each([
+		{ name: 'legacy rejected create', legacy: true, id: 0, rejected: true, annihilated: true },
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
 		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
 		{ name: 'bare-ack server record', id: 0, remoteId: '42', rejected: false, annihilated: false },
@@ -132,8 +133,15 @@ describe('enqueueWriteIntent', () => {
 			annihilated: false,
 		},
 	])('deletes $name only when it is born-local', async (testCase) => {
-		const { id, remoteId, rejected, reason, annihilated } = testCase;
-		const mutationCollection = createFakeMutationCollection();
+		const { id, remoteId, rejected, reason, annihilated, legacy } = testCase;
+		const mutationCollection = Object.assign(createFakeMutationCollection(), {
+			schema: { version: legacy ? 5 : 7 },
+		});
+		const insert = mutationCollection.bulkInsert.bind(mutationCollection);
+		mutationCollection.bulkInsert = async (rows) => {
+			if (legacy) for (const row of rows) expect(row).not.toHaveProperty('expiresAt');
+			return insert(rows);
+		};
 		if (rejected) {
 			await mutationCollection.bulkUpsert([
 				{
@@ -155,6 +163,10 @@ describe('enqueueWriteIntent', () => {
 		const resident = {
 			toJSON: () => ({ remoteId, payload: { id, status: 'pos-open' }, sync: {} }),
 			remove: async () => {
+				if (!legacy)
+					expect(mutationCollection.store.get('orders/order-1')?.mutation.payload.phase).toBe(
+						'committed'
+					);
 				removed = true;
 			},
 		};
@@ -353,15 +365,18 @@ describe('enqueueWriteIntent', () => {
 			let contended = false;
 			// Release the paused first append only AFTER the second writer's real
 			// admission CAS has observed it. The retry must then enqueue second.
-			vi.spyOn(otherQueue, 'admitWriter').mockImplementationOnce(async (...args) => {
+			let refusals = 0;
+			vi.spyOn(otherQueue, 'admitWriter').mockImplementation(async (...args) => {
 				const accepted = await admit(...args);
-				contended = !accepted;
-				release();
+				contended ||= !accepted;
+				if (!accepted && ++refusals === 12) release();
 				return accepted;
 			});
 			const second = write(otherDb, 'second');
-			await expect(first).resolves.toMatchObject({ mutationId: 'first' });
-			await expect(second).resolves.toMatchObject({ mutationId: 'second' });
+			await expect(Promise.all([first, second])).resolves.toMatchObject([
+				{ mutationId: 'first' },
+				{ mutationId: 'second' },
+			]);
 			expect(contended).toBe(true);
 		} finally {
 			release();

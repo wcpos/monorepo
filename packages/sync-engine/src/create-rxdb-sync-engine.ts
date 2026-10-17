@@ -64,7 +64,6 @@ import {
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
-	MUTATION_QUEUE_RXDB_COLLECTION,
 	resetEngineCollection,
 	type ResettableCollectionName,
 	SYNC_COLLECTION_NAMES,
@@ -1192,7 +1191,10 @@ export function createRxdbSyncEngine(
 			await db.addCollections(collectionCreators() as never);
 			if (scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION) {
 				try {
-					await queueFor(db).clearExpiredAnnihilation(nowMs());
+					await queueFor(db).clearExpiredAnnihilation(nowMs(), async (row) => {
+						const resident = await db.collections[row.collectionName].findOne(row.recordId).exec();
+						if (resident) await resident.remove();
+					});
 				} catch (error) {
 					diagnostics({
 						type: 'engine.guard',
@@ -1275,7 +1277,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: () => db.collections[MUTATION_QUEUE_RXDB_COLLECTION].count().exec(),
+				pendingMutationCount: async () => (await queueFor(db).all()).length,
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);

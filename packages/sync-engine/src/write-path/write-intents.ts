@@ -169,6 +169,8 @@ function storablePayload(
 	return toPlainValue(sanitizeOutboundPayload(collectionName, payload)) as Record<string, unknown>;
 }
 
+// Avoid burning the stale-placement budget while another local writer finishes its enqueue.
+const WRITER_ADMISSION_BACKOFF_MS = 20;
 const queues = new WeakMap<object, RecordMutationQueue>();
 export function queueFor(db: RxDatabase): RecordMutationQueue {
 	const existing = queues.get(db);
@@ -235,13 +237,23 @@ export async function enqueueWriteIntent(input: {
 	const queue = queueFor(input.db);
 	const { collection: name, recordId } = requested;
 	const nowMs = () => Date.parse(input.now());
-	// The drainable generation keeps its frozen v5 queue: no admission fields
-	// and no fence probes there. Current queues migrate to the admission schema.
+	// The frozen v5 queue retains conditional removal; it cannot persist marks or fences.
 	const legacyQueue = collectionOf(input.db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version === 5;
 
 	const isRecordRow = (item: QueuedMutation) =>
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
+	const mark = (row: QueuedMutation, token: string) =>
+		legacyQueue
+			? queue.removePending(row.mutationId, { requireNeverPushed: true })
+			: queue.markForAnnihilation(row.mutationId, token, nowMs());
+	const phase = (token: string, value: 'preparing' | 'committed') =>
+		legacyQueue ? Promise.resolve(true) : queue.setVoidPhase(name, recordId, token, value);
 	const unmark = async (marked: QueuedMutation[], token: string) => {
+		if (legacyQueue) {
+			for (const row of marked) await queue.replace(row);
+			return;
+		}
+		if (!(await phase(token, 'preparing'))) return;
 		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
 		await queue.releaseVoidFence(name, recordId, token);
 	};
@@ -274,7 +286,11 @@ export async function enqueueWriteIntent(input: {
 			throw refuse();
 		if (token !== undefined) {
 			for (const row of deadLetters) {
-				if (!(await queue.markForAnnihilation(row.mutationId, token, nowMs(), 'rejected'))) {
+				if (
+					!(await (legacyQueue
+						? queue.removeIfStatus(row.mutationId, 'rejected')
+						: queue.markForAnnihilation(row.mutationId, token, nowMs(), 'rejected')))
+				) {
 					throw refuse();
 				}
 				marked!.push(row);
@@ -289,7 +305,8 @@ export async function enqueueWriteIntent(input: {
 			reason: 'void-in-progress' as const,
 		});
 	const fence = async (token: string) => {
-		if (!(await queue.fenceForVoid(name, recordId, token, nowMs()))) throw voidInProgress();
+		if (!legacyQueue && !(await queue.fenceForVoid(name, recordId, token, nowMs())))
+			throw voidInProgress();
 	};
 
 	// The bounded CAS retry loop: each iteration re-reads the queue, decides
@@ -406,7 +423,7 @@ export async function enqueueWriteIntent(input: {
 			try {
 				let refused = false;
 				for (const row of [...placement.chain].reverse()) {
-					if (await queue.markForAnnihilation(row.mutationId, token, nowMs())) marked.push(row);
+					if (await mark(row, token)) marked.push(row);
 					else {
 						refused = true;
 						break;
@@ -419,14 +436,15 @@ export async function enqueueWriteIntent(input: {
 				await fence(token);
 				await guardAnnihilation(placement.chain, token, marked);
 				const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+				if (!(await phase(token, 'committed'))) throw voidInProgress();
 				if (resident) await resident.remove();
 			} catch (error) {
-				await unmark(marked, token);
+				if (await collection.findOne(recordId).exec()) await unmark(marked, token);
 				throw error;
 			}
 			// After resident removal, keep any failed cleanup marked, never deliverable.
-			for (const row of marked) await queue.removeMarked(row.mutationId, token);
-			await queue.releaseVoidFence(name, recordId, token);
+			if (!legacyQueue) for (const row of marked) await queue.removeMarked(row.mutationId, token);
+			if (!legacyQueue) await queue.releaseVoidFence(name, recordId, token);
 			input.observe?.({
 				type: 'queue.write.annihilate',
 				level: 'info',
@@ -511,7 +529,7 @@ export async function enqueueWriteIntent(input: {
 						try {
 							let refused = false;
 							for (const row of [...successors].reverse()) {
-								if (await queue.markForAnnihilation(row.mutationId, token, nowMs())) {
+								if (await mark(row, token)) {
 									marked.push(row);
 								} else {
 									refused = true;
@@ -524,13 +542,15 @@ export async function enqueueWriteIntent(input: {
 							}
 							await fence(token);
 							settledDeadLetters = await guardAnnihilation(successors, token, marked);
+							if (!(await phase(token, 'committed'))) throw voidInProgress();
 							await doc.remove();
 						} catch (error) {
-							await unmark(marked, token);
+							if (await collection.findOne(recordId).exec()) await unmark(marked, token);
 							throw error;
 						}
-						for (const row of marked) await queue.removeMarked(row.mutationId, token);
-						await queue.releaseVoidFence(name, recordId, token);
+						if (!legacyQueue)
+							for (const row of marked) await queue.removeMarked(row.mutationId, token);
+						if (!legacyQueue) await queue.releaseVoidFence(name, recordId, token);
 						input.observe?.({
 							type: 'queue.write.annihilate',
 							level: 'info',
@@ -582,8 +602,13 @@ export async function enqueueWriteIntent(input: {
 
 		// Hold admission through bookkeeping/compensation as well as the append: a
 		// void cannot remove the resident while this writer still owns its changes.
-		if (!legacyQueue && !(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs())))
+		if (!legacyQueue && !(await queue.admitWriter(name, recordId, mutation.mutationId, nowMs()))) {
+			if (!legacyQueue && (await queue.hasVoidFence(name, recordId, nowMs())))
+				throw voidInProgress();
+			await new Promise((resolve) => setTimeout(resolve, WRITER_ADMISSION_BACKOFF_MS));
+			attempt -= 1;
 			continue;
+		}
 		try {
 			if (prior) {
 				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;

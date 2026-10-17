@@ -6,6 +6,7 @@ import type { RecordMutation } from './recordMutation';
 const ANNIHILATION_TTL_MS = 120_000;
 // Admission covers only a local enqueue; 30 seconds recovers a crashed writer.
 const WRITER_ADMISSION_TTL_MS = 30_000;
+const isInternalRow = (row: QueuedMutation) => row.expiresAt !== undefined;
 const fenceId = (collection: string, record: string) => `${collection}/${record}`;
 
 /**
@@ -235,7 +236,7 @@ export class RecordMutationQueue {
 	async enqueue(mutation: RecordMutation): Promise<QueuedMutation> {
 		return this.transact(async () => {
 			for (;;) {
-				const seq = Math.max(0, ...(await this.storage.list()).map((item) => item.seq ?? 0)) + 1;
+				const seq = Math.max(0, ...(await this.all()).map((item) => item.seq ?? 0)) + 1;
 				const queued = { ...mutation, seq, status: 'pending' as const };
 				try {
 					await this.storage.append(queued);
@@ -256,7 +257,7 @@ export class RecordMutationQueue {
 	 * re-reads and re-decides its placement. Without this, a tail-placement
 	 * decision made on a stale read could slot an OLDER snapshot behind a
 	 * concurrent edit and overwrite it server-side (#516 review P1).
-	 * NOTE: `unchanged` receives the RAW storage rows (unsorted, every status).
+	 * NOTE: `unchanged` receives mutation rows only (unsorted, every status).
 	 */
 	async enqueueWhen(
 		mutation: RecordMutation,
@@ -264,7 +265,7 @@ export class RecordMutationQueue {
 	): Promise<QueuedMutation | null> {
 		return this.transact(async () => {
 			for (;;) {
-				const rows = await this.storage.list();
+				const rows = await this.all();
 				if (!unchanged(rows)) return null;
 				const seq = Math.max(0, ...rows.map((item) => item.seq ?? 0)) + 1;
 				const queued = { ...mutation, seq, status: 'pending' as const };
@@ -289,7 +290,7 @@ export class RecordMutationQueue {
 	async claim(next: QueuedMutation, nowMs: number = Date.now()): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === next.mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === next.mutationId
 			);
 			const row = stored?.mutation;
 			if (
@@ -332,7 +333,7 @@ export class RecordMutationQueue {
 	async coalesceInto(priorMutationId: string, replacement: QueuedMutation): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === priorMutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === priorMutationId
 			);
 			const row = stored?.mutation;
 			// Coalescing is valid ONLY into a never-pushed pending row (#516 rule 1).
@@ -369,7 +370,7 @@ export class RecordMutationQueue {
 	/** `removePending` without the transact wrapper — for use INSIDE a transaction. */
 	private async removePendingInternal(mutationId: string): Promise<boolean> {
 		const stored = (await this.storage.listStored()).find(
-			(item) => item.mutation.mutationId === mutationId
+			(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 		);
 		const row = stored?.mutation;
 		if (
@@ -393,7 +394,7 @@ export class RecordMutationQueue {
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			const row = stored?.mutation;
 			if (
@@ -419,7 +420,9 @@ export class RecordMutationQueue {
 
 	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {
 		return (await this.storage.list()).some(
-			(row) => row.mutationId === fenceId(collection, record) && (row.expiresAt ?? 0) > nowMs
+			(row) =>
+				row.mutationId === fenceId(collection, record) &&
+				((row.expiresAt ?? 0) > nowMs || row.payload.phase === 'committed')
 		);
 	}
 
@@ -467,6 +470,7 @@ export class RecordMutationQueue {
 			);
 			const row = stored?.mutation;
 			if (
+				row?.payload.phase === 'committed' ||
 				(row?.expiresAt ?? 0) > nowMs ||
 				(row?.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
 			)
@@ -501,14 +505,63 @@ export class RecordMutationQueue {
 	}
 
 	async releaseVoidFence(collection: string, record: string, token: string): Promise<void> {
+		if ((await this.all()).some((row) => row.supersededBy === token)) return;
 		await this.removeMarked(fenceId(collection, record), token);
 	}
 
-	async clearExpiredAnnihilation(nowMs: number): Promise<void> {
-		for (const { mutation: row, rev } of await this.storage.listStored()) {
+	async setVoidPhase(
+		collection: string,
+		record: string,
+		token: string,
+		phase: 'preparing' | 'committed'
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === fenceId(collection, record)
+			);
+			if (!stored) return phase === 'preparing';
+			if (stored.mutation.supersededBy !== token) return false;
+			return this.storage.appendIfUnchanged({ ...stored.mutation, payload: { phase } }, stored.rev);
+		});
+	}
+
+	async clearExpiredAnnihilation(
+		nowMs: number,
+		removeResident?: (row: QueuedMutation) => Promise<void>
+	): Promise<void> {
+		const stored = await this.storage.listStored();
+		const committed = stored.filter(
+			({ mutation: row }) => isInternalRow(row) && row.payload.phase === 'committed'
+		);
+		for (const { mutation: fence, rev } of committed) {
+			if ((fence.expiresAt ?? 0) > nowMs || !removeResident) continue;
+			if (
+				!(await this.storage.appendIfUnchanged(
+					{ ...fence, expiresAt: nowMs + ANNIHILATION_TTL_MS },
+					rev
+				))
+			)
+				continue;
+			await removeResident(fence);
+			for (const { mutation: row } of stored) {
+				if (!isInternalRow(row) && row.supersededBy === fence.supersededBy)
+					await this.removeMarked(row.mutationId, fence.supersededBy!);
+			}
+			await this.releaseVoidFence(fence.collectionName, fence.recordId, fence.supersededBy!);
+		}
+		for (const { mutation: row, rev } of stored) {
+			if (committed.some(({ mutation }) => mutation.supersededBy === row.supersededBy)) continue;
+			if (
+				row.admittedBy !== undefined &&
+				(row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs &&
+				(row.expiresAt ?? 0) <= nowMs
+			) {
+				await this.storage.removeIfUnchanged(row.mutationId, rev);
+				continue;
+			}
 			if (row.supersededBy === undefined) continue;
 			if ((row.expiresAt ?? (row.markedAt ?? 0) + ANNIHILATION_TTL_MS) > nowMs) continue;
-			if (row.expiresAt !== undefined) await this.storage.removeIfUnchanged(row.mutationId, rev);
+			if (isInternalRow(row)) await this.storage.removeIfUnchanged(row.mutationId, rev);
 			else
 				await this.storage.appendIfUnchanged(
 					{ ...row, supersededBy: undefined, markedAt: undefined },
@@ -526,7 +579,7 @@ export class RecordMutationQueue {
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			const row = stored?.mutation;
 			if (
@@ -582,7 +635,7 @@ export class RecordMutationQueue {
 	async restoreAheadOfRecordNewcomers(rows: readonly QueuedMutation[]): Promise<QueuedMutation[]> {
 		return this.transact(async () => {
 			if (rows.length === 0) return [];
-			const existing = await this.storage.list();
+			const existing = await this.all();
 			const head = rows[0];
 			const newcomers = existing.filter(
 				(item) => item.collectionName === head.collectionName && item.recordId === head.recordId
@@ -659,7 +712,7 @@ export class RecordMutationQueue {
 	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			if (
 				!stored ||
@@ -703,7 +756,7 @@ export class RecordMutationQueue {
 	}): Promise<'claimed' | 'held' | 'gone'> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === input.mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === input.mutationId
 			);
 			if (!stored || stored.mutation.status !== input.expectedStatus) return 'gone';
 			if (stored.mutation.supersededBy !== undefined) return 'held';
@@ -739,7 +792,7 @@ export class RecordMutationQueue {
 	async releaseResolutionClaim(mutationId: string, holder: string): Promise<void> {
 		await this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			if (!stored || stored.mutation.resolutionClaimBy !== holder) return;
 			await this.storage.appendIfUnchanged(
@@ -751,7 +804,7 @@ export class RecordMutationQueue {
 
 	/** EVERY stored entry, terminal rows included — the engine's `conflicts()` reads this. */
 	async all(): Promise<QueuedMutation[]> {
-		return (await this.storage.list()).filter((row) => row.expiresAt === undefined);
+		return (await this.storage.list()).filter((row) => !isInternalRow(row));
 	}
 
 	/**
@@ -762,7 +815,7 @@ export class RecordMutationQueue {
 	 * set is what queue-depth and the pull-apply guard key off.
 	 */
 	async pending(limit = Number.POSITIVE_INFINITY): Promise<QueuedMutation[]> {
-		const mutations = await this.storage.list();
+		const mutations = await this.all();
 		return mutations
 			.filter((mutation) => mutation.status !== 'rejected')
 			.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0) || (a.coalesced ?? 0) - (b.coalesced ?? 0))
@@ -789,7 +842,7 @@ export class RecordMutationQueue {
 export function pendingRecordIds(mutations: readonly QueuedMutation[]): Set<string> {
 	const ids = new Set<string>();
 	for (const mutation of mutations) {
-		if (mutation.status === 'rejected') continue;
+		if (isInternalRow(mutation) || mutation.status === 'rejected') continue;
 		ids.add(mutation.recordId);
 	}
 	return ids;

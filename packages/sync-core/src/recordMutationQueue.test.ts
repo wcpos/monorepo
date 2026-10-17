@@ -38,6 +38,42 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('only one scope opener finishes an expired committed void', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		await q.fenceForVoid('products', 'rec-A', 'void', 0);
+		await q.setVoidPhase('products', 'rec-A', 'void', 'committed');
+		let removals = 0;
+		const removeResident = async () => {
+			removals += 1;
+		};
+		await Promise.all([
+			q.clearExpiredAnnihilation(120_001, removeResident),
+			other.clearExpiredAnnihilation(120_001, removeResident),
+		]);
+		expect(removals).toBe(1);
+	});
+
+	it('internal admission rows cannot affect restored positions or pending counts', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.admitWriter('products', 'rec-A', 'writer', 1000);
+		expect(await q.pending()).toHaveLength(0);
+		const [restored] = await q.restoreAheadOfRecordNewcomers([mut()]);
+		expect(restored.seq).toBe(1);
+		expect((await storage.list()).find((row) => row.admittedBy)?.seq).toBeUndefined();
+	});
+
+	it('scope cleanup removes expired writer admissions but preserves live ones', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.admitWriter('products', 'stale', 'writer', 1000);
+		await q.admitWriter('products', 'fresh', 'writer', 30_000);
+		await q.clearExpiredAnnihilation(31_001);
+		expect((await storage.list()).map((row) => row.recordId)).toEqual(['fresh']);
+	});
+
 	it('a live writer admission blocks a void, but a crashed writer expires after 30 seconds', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
