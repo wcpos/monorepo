@@ -917,7 +917,11 @@ export const SEAM_FROZEN_VIOLATIONS_2026_10_16: readonly string[] = [
 
 // Append-only: never remove or reorder a retirement. Pin every append in the same commit.
 // Digest: sha256 of the first FLOOR entries joined with '\n' (no trailing newline).
-export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [];
-export const SEAM_RETIRED_FLOOR = 0;
+export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
+	// 2026-10-17: RepeatChip's `count` member access was removed on next (not a raw query; the
+	// rule matched a `.count(` on a non-collection receiver). Retired, never re-added.
+	'screens/main/health/components/repeat-chip.tsx :: raw query construction :: RepeatChip :: count :: 1',
+];
+export const SEAM_RETIRED_FLOOR = 1;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+	'424b4400393f1c58578f8eccb30703db20f5cbda1cd2eb54225c7fc038995b40';
