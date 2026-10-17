@@ -399,12 +399,9 @@ function GeneralSettingsForm({
 				{restoreFailed && (
 					<VStack>
 						<Text className="text-muted-foreground text-xs">{t('settings.restore_failed')}</Text>
-						<Button
-							variant="link"
-							testID="settings-general-restore-retry"
-							onPress={() => setRestoreOpen(true)}
-						>
-							<Text>{t('settings.try_again')}</Text>
+						{/* Try again after a refusal is the one action this line exists for. */}
+						<Button testID="settings-general-restore-retry" onPress={() => setRestoreOpen(true)}>
+							{t('settings.try_again')}
 						</Button>
 					</VStack>
 				)}

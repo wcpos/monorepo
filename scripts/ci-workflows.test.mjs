@@ -1472,6 +1472,16 @@ test('native budget refusal skips build work and devices and passes the gate', (
 	for (const platform of ['android', 'ios']) {
 		assert.match(workflow.jobs[platform].if, /needs\.build\.outputs\.refused != 'true'/);
 	}
+	// The queue step keeps its bare condition (the test jobs' refuse step mirrors it) and
+	// skips inside the script instead, so a refused build never holds dev-next.
+	const queue = findStep(workflow, 'build', QUEUE_STEP_NAME);
+	assert.equal(queue.env.REFUSED, '${{ steps.refuse.outputs.refused }}');
+	const skipped = spawnSync(process.execPath, [path.join(ROOT, 'scripts/wait-devnext-free.mjs')], {
+		env: { ...process.env, REFUSED: 'true', GH_TOKEN: '', GITHUB_RUN_ID: '', GITHUB_REPOSITORY: '' },
+		encoding: 'utf8',
+	});
+	assert.equal(skipped.status, 0, skipped.stdout + skipped.stderr);
+	assert.match(skipped.stdout, /queue is skipped/);
 	const gate = workflow.jobs['native-gate'].steps[0];
 	assert.equal(gate.env.REFUSED, '${{ needs.build.outputs.refused }}');
 	assert.match(

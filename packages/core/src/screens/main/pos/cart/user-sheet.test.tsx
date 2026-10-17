@@ -35,6 +35,7 @@ jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
 
 let mockStoreId = 2;
+let mockStores = ['store-a'];
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
 	{
@@ -73,7 +74,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ login: mockLogin }),
 	useStoreSession: () => ({
-		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier' },
+		wpCredentials: { id: 7, uuid: 'current', display_name: 'Cashier', stores: mockStores },
 		store: { id: mockStoreId },
 		site: { uuid: 'site', home: 'https://shop.example', populateResource: () => ({}) },
 		logout: jest.fn(),
@@ -91,6 +92,10 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [] }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
+jest.mock('./switch-store-sheet', () => ({
+	SwitchStoreSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
+		open ? <div data-testid="switch-store-sheet" data-host={String(portalHost)} /> : null,
+}));
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
@@ -219,3 +224,25 @@ it.each(['settings', 'support', 'clear-local-data'])(
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	}
 );
+
+describe('switch store', () => {
+	afterEach(() => {
+		mockStores = ['store-a'];
+	});
+
+	it('offers no store switch on a login with one store', () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('user-sheet-switch-store')).toBeNull();
+	});
+
+	it('closes the sheet and opens the store switch on its own host when the login has more stores', () => {
+		mockStores = ['store-a', 'store-b'];
+		const onOpenChange = jest.fn();
+		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
+		expect(screen.queryByTestId('switch-store-sheet')).toBeNull();
+		fireEvent.click(screen.getByTestId('user-sheet-switch-store'));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		// Off the POS the sheet portals to the root host, so the store sheet must too.
+		expect(screen.getByTestId('switch-store-sheet').getAttribute('data-host')).toBe('null');
+	});
+});

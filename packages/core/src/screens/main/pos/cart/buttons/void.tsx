@@ -19,10 +19,10 @@ export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {})
 	return (
 		<Button
 			testID="void-button"
-			size="lg"
 			onPress={voidOrder}
-			variant="destructive"
-			className="flex-1 rounded-t-none rounded-br-none"
+			// Void loses the order: a red outline, never filled, apart from Save on the
+			// footer's other end (CODING_STANDARDS § Design, Buttons).
+			variant="outline-destructive"
 			disabled={storageDegraded}
 		>
 			{t('pos_cart.void')}

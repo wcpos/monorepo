@@ -49,7 +49,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 			return (
 				<View className="p-4">
 					<Button
-						variant="success"
+						// The sale button: primary, never green (green is a status colour, not an action).
 						size="lg"
 						testID="checkout-complete-order"
 						loading={flow.busy}
@@ -88,7 +88,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				<View className="flex-1" />
 				{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 					<Button
-						variant="ghost-destructive"
+						variant="outline-destructive"
 						size="sm"
 						testID="checkout-cancel-payment"
 						onPress={() => flow.dispatch({ type: 'request-cancel' })}

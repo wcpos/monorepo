@@ -83,7 +83,6 @@ export function SaveButton({
 		<View>
 			<Button
 				testID="save-to-server-button"
-				variant="outline"
 				onPress={handleSave}
 				loading={loading}
 				disabled={loading || storageDegraded}

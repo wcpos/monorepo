@@ -193,3 +193,30 @@ it('floors the drawer control and lets the subtitle yield before the title', () 
 		source.match(/id\('subtitle'\)[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
 	expect(subtitle).toEqual(expect.arrayContaining(['shrink', 'min-w-0']));
 });
+
+it("puts a scoped room's control in the title's place, left of the search and the controls", () => {
+	const { unmount } = render(
+		<PageBar
+			testID="bar"
+			titleSlot={<button data-testid="scope" />}
+			search={<input data-testid="search" />}
+		>
+			<button data-testid="control" />
+		</PageBar>
+	);
+	expect(screen.queryByTestId('bar-title')).toBeNull();
+	expect(screen.getByTestId('bar-title-slot')).toContainElement(screen.getByTestId('scope'));
+	const row = screen.getByTestId('bar').firstElementChild as HTMLElement;
+	const order = [
+		screen.getByTestId('scope'),
+		screen.getByTestId('bar-search'),
+		screen.getByTestId('control'),
+	].map((node) => Array.from(row.querySelectorAll('*')).indexOf(node));
+	expect(order).toEqual([...order].sort((a, b) => a - b));
+	unmount();
+
+	// A title wins: one title, never a title and a scope control side by side.
+	render(<PageBar testID="bar" title="Reports" titleSlot={<button data-testid="scope" />} />);
+	expect(screen.getByTestId('bar-title')).toHaveTextContent('Reports');
+	expect(screen.queryByTestId('scope')).toBeNull();
+});

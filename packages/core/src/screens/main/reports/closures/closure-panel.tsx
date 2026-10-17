@@ -133,12 +133,7 @@ export function ClosurePanel({
 			}
 		>
 			{phone && (
-				<Button
-					testID="closure-back"
-					variant="ghost"
-					className="min-h-12 self-start"
-					onPress={onClose}
-				>
+				<Button testID="closure-back" variant="ghost" className="self-start" onPress={onClose}>
 					{t('common.back')}
 				</Button>
 			)}
@@ -173,12 +168,7 @@ export function ClosurePanel({
 				{documentError ? (
 					<View className="gap-3">
 						<Text testID="closure-document-error">{t('reports.load_failed')}</Text>
-						<Button
-							testID="closure-document-retry"
-							variant="outline"
-							className="min-h-12"
-							onPress={doc.refetch}
-						>
+						<Button testID="closure-document-retry" variant="outline" onPress={doc.refetch}>
 							{t('common.retry')}
 						</Button>
 					</View>
@@ -240,7 +230,7 @@ export function ClosurePanel({
 				<Button
 					testID="closure-recount"
 					variant="outline"
-					className="min-h-12 flex-1"
+					className="flex-1"
 					disabled={
 						doc.isOffline ||
 						doc.isSyncing ||
@@ -254,7 +244,7 @@ export function ClosurePanel({
 				</Button>
 				<Button
 					testID="closure-reprint"
-					className="min-h-12 flex-1"
+					className="flex-1"
 					loading={doc.isPrinting}
 					onPress={async () => {
 						setError('');

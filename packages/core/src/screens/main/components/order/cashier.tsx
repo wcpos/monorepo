@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -35,12 +35,10 @@ export function Cashier({
 	}
 
 	return (
-		<ButtonPill
-			variant="ghost-secondary"
-			size="xs"
+		<Chip
+			size="sm"
+			label={cashier.label}
 			onPress={() => actions?.setFilter('cashier', cashier.id)}
-		>
-			{cashier.label}
-		</ButtonPill>
+		/>
 	);
 }

@@ -424,7 +424,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				<VStack space="xs" className="w-full max-w-md">
 					{/* Styled as the quiet folded line it is: centred muted words, a chevron, no chrome. */}
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						className="flex-row gap-1 self-center"
 						testID="checkout-unavailable-toggle"
 						disabled={busy}
@@ -497,7 +497,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							</Text>
 							{!locked && flow.readers.length > 1 ? (
 								<Button
-									variant="secondary"
+									variant="outline"
 									size="sm"
 									testID="checkout-reader-change"
 									disabled={busy}
@@ -511,15 +511,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						<View className="flex-row flex-wrap gap-2">
 							{flow.readers.map((reader) => (
 								<VStack key={reader.id} space="xs">
-									<Button
-										size="sm"
-										variant={flow.state.readerId === reader.id ? 'default' : 'secondary'}
+									{/* A selected choice is a Chip; a Button is never a toggle. */}
+									<Chip
+										label={reader.label}
+										on={flow.state.readerId === reader.id}
 										testID={`checkout-reader-${reader.id}`}
 										disabled={busy || reader.inUseBy !== null}
 										onPress={() => flow.pickReader(reader.id)}
-									>
-										<ButtonText>{reader.label}</ButtonText>
-									</Button>
+									/>
 									{reader.inUseBy !== null ? (
 										<Text
 											className="text-muted-foreground text-xs"
@@ -644,13 +643,13 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 					: t('pos_checkout.invoice_sent_on', { date: sentOn ?? '' })}
 			</Text>
 			<Button
-				variant="ghost-destructive"
+				variant="outline-destructive"
 				size="sm"
 				testID="checkout-cancel-invoice"
 				disabled={busy || !flow.online}
 				onPress={() => void flow.cancelInvoice()}
 			>
-				<ButtonText className="underline">{t('pos_checkout.cancel_invoice')}</ButtonText>
+				<ButtonText>{t('pos_checkout.cancel_invoice')}</ButtonText>
 			</Button>
 		</View>
 	);

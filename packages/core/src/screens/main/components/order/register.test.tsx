@@ -5,10 +5,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Register } from './register';
 
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => (
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({ label, onPress }: { label: string; onPress?: () => void }) => (
 		<button data-testid="register-cell" onClick={onPress}>
-			{children}
+			{label}
 		</button>
 	),
 }));

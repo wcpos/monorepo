@@ -143,7 +143,6 @@ export function RecountSheet({
 					<Button
 						testID="recount-denominations"
 						variant="ghost"
-						className="min-h-12"
 						onPress={() => setNotesOpen(!notesOpen)}
 					>
 						{t('register.count_by_denominations')}
@@ -193,13 +192,7 @@ export function RecountSheet({
 						{t('reports.recount_reason_too_long', { limit: RECOUNT_REASON_LIMIT })}
 					</Text>
 				)}
-				<Button
-					testID="recount-save"
-					className="min-h-14"
-					loading={busy}
-					disabled={invalid}
-					onPress={save}
-				>
+				<Button testID="recount-save" loading={busy} disabled={invalid} onPress={save}>
 					{t('reports.recount_save')}
 				</Button>
 			</DialogContent>

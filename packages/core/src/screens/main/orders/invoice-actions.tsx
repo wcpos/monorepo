@@ -95,9 +95,9 @@ export function InvoiceActions({
 	}, [gateway, order, stamp, t]);
 	return (
 		<>
-			{/* Destructive sits apart from constructive: ghost on the left, never the same weight. */}
+			{/* Destructive sits apart from constructive: a red outline on the left, never filled. */}
 			<Button
-				variant="ghost-destructive"
+				variant="outline-destructive"
 				className="mr-auto"
 				testID="orders-cancel-invoice"
 				disabled={busy || !online}
