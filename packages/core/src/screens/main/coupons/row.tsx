@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
 import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
@@ -31,9 +31,8 @@ export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
 	const editable = !readOnly && caps.canEditCoupons;
 	const type = coupon.discount_type ?? 'percent';
 	return (
-		<Pressable
+		<ListRow
 			testID={`coupons-row-${record.uuid}`}
-			accessibilityRole={editable ? 'button' : undefined}
 			onPress={
 				editable
 					? () =>
@@ -43,31 +42,33 @@ export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
 							})
 					: undefined
 			}
-			className="border-border active:bg-muted min-h-14 flex-row items-center gap-3 border-b px-3"
+			bodyClassName="gap-1"
+			trailing={
+				<>
+					<ActiveBadge status={coupon.status} dateExpiresGmt={coupon.date_expires_gmt} />
+					<Icon name="chevronRight" className="text-muted-foreground" />
+				</>
+			}
 		>
-			<View className="min-w-0 flex-1 gap-1">
-				<Text numberOfLines={1} className="font-semibold">
-					{coupon.code}
-				</Text>
-				{!!coupon.description && (
-					<Text numberOfLines={1} className="text-muted-foreground text-sm">
-						{coupon.description}
-					</Text>
-				)}
+			<Text numberOfLines={1} className="font-semibold">
+				{coupon.code}
+			</Text>
+			{!!coupon.description && (
 				<Text numberOfLines={1} className="text-muted-foreground text-sm">
-					{[
-						typeLabels[type] ? t(typeLabels[type]) : type,
-						format(Number(coupon.amount)),
-						coupon.date_expires_gmt
-							? `${t('coupons.expires')} ${day(coupon.date_expires_gmt)}`
-							: null,
-					]
-						.filter(Boolean)
-						.join(' · ')}
+					{coupon.description}
 				</Text>
-			</View>
-			<ActiveBadge status={coupon.status} dateExpiresGmt={coupon.date_expires_gmt} />
-			<Icon name="chevronRight" className="text-muted-foreground" />
-		</Pressable>
+			)}
+			<Text numberOfLines={1} className="text-muted-foreground text-sm">
+				{[
+					typeLabels[type] ? t(typeLabels[type]) : type,
+					format(Number(coupon.amount)),
+					coupon.date_expires_gmt
+						? `${t('coupons.expires')} ${day(coupon.date_expires_gmt)}`
+						: null,
+				]
+					.filter(Boolean)
+					.join(' · ')}
+			</Text>
+		</ListRow>
 	);
 }

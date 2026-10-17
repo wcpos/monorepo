@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { DocsLink } from '@wcpos/components/docs-link';
 import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
 import {
 	Select,
 	SelectContent,
@@ -396,24 +397,26 @@ function BrowseByField({
 					return (
 						// `role`/`aria-*`, not `accessibilityState`: react-native-web drops the
 						// latter, so the web build would lose checked and disabled (as SegmentedControl).
-						<Pressable
+						<ListRow
 							key={row.value}
+							size="sm"
+							selected={on}
 							disabled={disabled}
 							role="radio"
 							aria-checked={on}
 							aria-disabled={disabled}
 							onPress={() => onChange(row.value)}
-							className={`border-border active:bg-muted min-h-ctl flex-row items-center gap-2 border-b px-3 last:border-b-0 ${on ? 'bg-muted' : ''}`}
+							className="gap-2 last:border-b-0"
 							testID={`ui-settings-browse-by-${row.value}`}
+							leading={<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />}
+							trailing={
+								<Text className="text-muted-foreground text-xs">
+									{disabled ? row.empty : count === undefined ? '' : row.count}
+								</Text>
+							}
 						>
-							<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />
-							<Text className={`flex-1 ${disabled ? 'text-muted-foreground' : ''}`}>
-								{row.label}
-							</Text>
-							<Text className="text-muted-foreground text-xs">
-								{disabled ? row.empty : count === undefined ? '' : row.count}
-							</Text>
-						</Pressable>
+							<Text>{row.label}</Text>
+						</ListRow>
 					);
 				})}
 			</View>
