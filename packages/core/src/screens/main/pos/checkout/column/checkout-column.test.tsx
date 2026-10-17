@@ -134,6 +134,8 @@ jest.mock('react-native-reanimated', () => ({
 	},
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+// The ledger reads the shared table-header recipe; the table module's pulse row pulls worklets into jest.
+jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'table-head-text' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 // The tender pane's declared-fields helpers draw host controls; their native deps stay out of jsdom.
 jest.mock('@wcpos/components/checkbox', () => ({ Checkbox: () => null }));
