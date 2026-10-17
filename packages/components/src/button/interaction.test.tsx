@@ -86,3 +86,15 @@ it('sizes icon roots separately from their glyphs and supports on', () => {
 	rerender(<IconButton name="plus" />);
 	expect(pressable.className).toContain('size-ctl');
 });
+it('keeps the 44 pt target on a 36 pt sm button, and a caller may still set its own slop', () => {
+	const { rerender } = render(<Button size="sm">Retry</Button>);
+	expect(pressable.hitSlop).toBe(4);
+	rerender(<Button>Retry</Button>);
+	expect(pressable.hitSlop).toBeUndefined();
+	rerender(
+		<Button size="sm" hitSlop={0}>
+			Retry
+		</Button>
+	);
+	expect(pressable.hitSlop).toBe(0);
+});

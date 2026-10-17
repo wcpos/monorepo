@@ -262,12 +262,14 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 
 | Size | Height | Where |
 |---|---|---|
-| `sm` | 36 (`h-9`) | in table rows, dense toolbars and panel footers |
+| `sm` | 36 (`h-9`) | in table rows and dense toolbars |
 | `default` | 44 (`h-ctl`, the control token) | everywhere else |
 | `lg` | 56 (`h-14`) | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
 
-No height or radius class on a Button (lint enforces it); a small pill is a `Chip size="sm"`, never a
-Button. Remove or forget a row is the last red row of its ⋮ menu, not a button. A selected choice is a
+The heights are what is drawn: a `sm` Button, `IconButton size="sm"` and `Chip size="sm"` keep a 44 pt
+target through `hitSlop` (§2). No height or radius class on a Button (lint enforces it); a small pill is a
+`Chip size="sm"`, never a Button. A row with a ⋮ menu puts remove or forget as the menu's last red row;
+`ghost-destructive` is for a dense row that has no menu. A selected choice is a
 `Chip`, never a Button that toggles its variant. Icon-only actions are an `IconButton` (44, `size="sm"`
 32 in dense rows), with an `accessibilityLabel`.
 
@@ -286,7 +288,7 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 | Row actions | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator |
 | Display or column settings | side panel (`UISettingsDialog`) | on every screen, never a popover |
 | Pick one of a few | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons |
-| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | no form, no scrolling, no footer |
+| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | no form and no footer; a list inside may scroll |
 | The cashier (switch user, register, store; sign out) | `UserSheet` (right panel) | the one cashier surface on every screen |
 | A multi-step task (checkout) | full screen | never a centred modal that grew |
 
@@ -299,12 +301,12 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 | Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
 | An on/off setting | `Switch` | — |
 
-A Button is never a toggle, and full radius belongs to `Chip` and `Badge` alone.
+A Button is never a toggle. Among labels and controls, full radius belongs to `Chip` and `Badge` alone (a `Switch` track is its own shape).
 
 #### Page bars
 - Every non-POS screen (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`.
 - The bar has the title left (16 px semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide / 44 on a phone, with no rule under it.
-- The POS keeps its `RegisterBar` (48, on the cart card) as ruled 2026-09-11.
+- The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 
 [^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.

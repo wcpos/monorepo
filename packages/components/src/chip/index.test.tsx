@@ -10,9 +10,11 @@ import { Chip } from './index';
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
 	const presses = new Map();
+	const slops = new Map();
 	return {
 		...actual,
 		presses,
+		slops,
 		View: ({ testID, ...props }: { testID?: string }) =>
 			React.createElement('div', { ...props, 'data-testid': testID }),
 		Pressable: ({
@@ -22,6 +24,7 @@ jest.mock('react-native', () => {
 			ref?: React.Ref<import('react-native').View>;
 		}) => {
 			presses.set(props.testID, props.onPress);
+			slops.set(props.testID, props.hitSlop);
 			return React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } });
 		},
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
@@ -43,6 +46,13 @@ it.each([
 	expect(screen.getByTestId('chip').dataset.classes).toContain(root);
 	expect(screen.getByTestId('chip-label').dataset.classes).toContain(label);
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
+});
+it('keeps the 44 pt target on a 32 pt sm chip', () => {
+	const { slops } = jest.requireMock<{ slops: Map<string, unknown> }>('react-native');
+	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" />);
+	expect(slops.get('chip')).toBe(6);
+	rerender(<Chip label="Menu" testID="chip" />);
+	expect(slops.get('chip')).toBeUndefined();
 });
 it.each([
 	[undefined, 'h-ctl', 'text-base'],

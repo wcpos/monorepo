@@ -82,6 +82,13 @@ const buttonVariants = cva(
 	}
 );
 
+/**
+ * `sm` is drawn 36 tall to sit inside a row; the finger still gets the 44 pt target
+ * (CODING_STANDARDS § Design 2): 4 pt of slop above and below, inside the 8 pt gap rows
+ * keep between targets. React Native Web ignores `hitSlop`; a pointer needs none.
+ */
+const SM_HIT_SLOP = 4;
+
 const buttonTextVariants = cva('text-foreground web:transition-colors text-base font-medium', {
 	variants: {
 		pressed: { true: '', false: '' },
@@ -208,6 +215,7 @@ function Button({
 				disabled && 'web:pointer-events-none web:cursor-not-allowed opacity-45'
 			)}
 			role="button"
+			hitSlop={size === 'sm' ? SM_HIT_SLOP : undefined}
 			{...props}
 			onHoverIn={(event) => {
 				setHovered(true);
