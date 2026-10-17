@@ -13,6 +13,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
+import { getLogger } from '@wcpos/utils/logger';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -30,10 +31,13 @@ import { describePrinterError } from '../printer/describe-printer-error';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { logTestPrintFailure } from '../../hooks/use-print/print-failure';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { PRINTER_DOCS_URL } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
+
+const printingLogger = getLogger(['wcpos', 'settings', 'printing']);
 
 export function PrintingSettings() {
 	const t = useT();
@@ -172,6 +176,7 @@ export function PrintingSettings() {
 					type: 'success',
 				});
 			} catch (err) {
+				logTestPrintFailure(printingLogger, err, { source: 'printing-settings' });
 				const { key } = describePrinterError(err);
 				Toast.show({
 					title: t(key),

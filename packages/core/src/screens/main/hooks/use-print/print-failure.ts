@@ -68,3 +68,23 @@ export function reportPrintFailure(
 		context: fullContext,
 	});
 }
+
+/**
+ * The row for a failed TEST print. The settings screen shows its own toast or inline
+ * error, so this writes the coded row only (the transport rows are forensic) — a
+ * printer fault must still reach Logs and support.
+ */
+export function logTestPrintFailure(
+	logger: PrintLogger,
+	error: unknown,
+	context?: Record<string, unknown>
+): void {
+	const failure = classifyPrintFailure(error);
+	const fullContext = { ...context, error: getErrorMessage(error) };
+	if (failure.cancelled) {
+		logger.debug('Test print cancelled', { context: fullContext });
+		return;
+	}
+	const level = ERROR_CATALOGUE[failure.code].severity === 'error' ? 'error' : 'warn';
+	logger[level]('Test print failed', { code: failure.code, context: fullContext });
+}

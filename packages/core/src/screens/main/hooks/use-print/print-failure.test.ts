@@ -1,4 +1,4 @@
-import { classifyPrintFailure, reportPrintFailure } from './print-failure';
+import { classifyPrintFailure, logTestPrintFailure, reportPrintFailure } from './print-failure';
 
 const t = (key: string) => key;
 const logger = { debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
@@ -66,5 +66,30 @@ describe('reportPrintFailure', () => {
 			'Receipt print failed',
 			expect.objectContaining({ showToast: true, code: 'PRINT101' })
 		);
+	});
+});
+
+describe('logTestPrintFailure', () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it('writes the coded row (no toast — the settings screen shows its own)', () => {
+		logTestPrintFailure(logger, new Error('TCP connection to 10.0.0.5:9100 timed out'), {
+			source: 'printing-settings',
+		});
+
+		expect(logger.error).toHaveBeenCalledWith('Test print failed', {
+			code: 'PRINT301',
+			context: {
+				source: 'printing-settings',
+				error: 'TCP connection to 10.0.0.5:9100 timed out',
+			},
+		});
+	});
+
+	it('keeps a cancelled test print forensic', () => {
+		logTestPrintFailure(logger, new Error('Print job cancelled'));
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.debug).toHaveBeenCalled();
 	});
 });

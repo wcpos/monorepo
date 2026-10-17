@@ -4,6 +4,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useCollectionCheck, useManualSync } from './use-manual-sync';
 
@@ -247,6 +248,11 @@ describe('useManualSync', () => {
 			text1: 'Couldn’t sync with the server.',
 			// The engine's raw reason stays in its own row; the cashier gets what to do.
 			text2: 'Check your connection and try again. Logs has the details.',
+		});
+		// …and Logs really has them: a throw happens before the engine writes any row.
+		expect(getLogger([]).error).toHaveBeenCalledWith('Manual sync threw', {
+			code: 'CLIENT999',
+			context: { error: 'engine disposed' },
 		});
 	});
 });

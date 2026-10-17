@@ -24,7 +24,7 @@ export async function logPrintJob<T extends number | void>(
 		});
 		return result;
 	} catch (error) {
-		// Forensic: the caller (receipt, test print) owns the one coded row and toast.
+		// Forensic: the caller owns the one coded row (receipt print: row + toast; test print: row).
 		printerLogger.debug(`${lane} print failed`, {
 			context: {
 				...context,

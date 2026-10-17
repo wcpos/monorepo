@@ -15,6 +15,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
+import { logTestPrintFailure } from '../../../hooks/use-print/print-failure';
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { persistPrinterProfile } from '../persist-printer-profile';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -345,6 +346,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
+			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
 			setTestError(toTestPrintFailure(err));
 		} finally {
 			setTestLoading(false);
@@ -372,6 +374,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
+			logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
 			setTestError(toTestPrintFailure(err));
 		} finally {
 			setDrawerLoading(false);
@@ -395,6 +398,7 @@ export function usePrinterDialogForm({
 			try {
 				await printerService.testPrint(buildProfile(data), { openDrawer: false });
 			} catch (err) {
+				logTestPrintFailure(printerLogger, err, { source: 'printer-dialog' });
 				setTestError(toTestPrintFailure(err));
 				setSaveLoading(false);
 				return;

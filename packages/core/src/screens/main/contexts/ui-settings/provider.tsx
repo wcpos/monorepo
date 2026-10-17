@@ -96,6 +96,11 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 					context: { settingsId: id },
 				});
 			}, 5000);
+			// Settled either way — a rejection must not leave the stall row to fire later.
+			void addStatePromise.then(
+				() => clearTimeout(timeoutId),
+				() => clearTimeout(timeoutId)
+			);
 
 			const observable$ = from(addStatePromise).pipe(
 				switchMap(async (state) => {

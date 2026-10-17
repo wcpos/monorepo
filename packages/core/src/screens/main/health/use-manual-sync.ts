@@ -7,6 +7,7 @@ import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 
@@ -80,7 +81,12 @@ export function useManualSync() {
 			const report = await engine.sync();
 			showReportToast(report, t);
 		} catch (error) {
-			manualSyncLogger.debug('Manual sync threw', { context: { error: getErrorMessage(error) } });
+			// Thrown before the engine wrote any row (e.g. disposed mid-switch): this is
+			// the one record the toast's "Logs has the details" points at.
+			manualSyncLogger.error('Manual sync threw', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error: getErrorMessage(error) },
+			});
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.sync_failed'),
@@ -106,7 +112,8 @@ export function useCollectionCheck() {
 			try {
 				showReportToast(await engine.checkCollection(name), t);
 			} catch (error) {
-				manualSyncLogger.debug('Collection check threw', {
+				manualSyncLogger.error('Collection check threw', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
 					context: { collection: name, error: getErrorMessage(error) },
 				});
 				Toast.show({
