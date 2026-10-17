@@ -2,16 +2,31 @@ import type * as React from 'react';
 
 import { IconButton } from './index';
 
-const examples: ({ id: string } & React.ComponentProps<typeof IconButton>)[] = [
-	{ id: 'default', name: 'plus' },
+type Props = React.ComponentProps<typeof IconButton>;
+
+// Every variant at the default size, then every size at the default variant: the two axes
+// are independent in the cva, so the cross product would only repeat cells.
+const VARIANTS = [
+	'default',
+	'outline',
+	'primary',
+	'muted',
+	'destructive',
+	'secondary',
+	'success',
+] as const satisfies readonly NonNullable<Props['variant']>[];
+const SIZES = ['xs', 'sm', 'lg', 'xl', '2xl', '3xl', '4xl'] as const satisfies readonly NonNullable<
+	Props['size']
+>[];
+
+const examples: ({ id: string } & Props)[] = [
+	...VARIANTS.map((variant): { id: string } & Props => ({
+		id: variant,
+		name: variant === 'destructive' ? 'trash' : 'plus',
+		variant,
+	})),
+	...SIZES.map((size): { id: string } & Props => ({ id: `size-${size}`, name: 'plus', size })),
 	{ id: 'on', name: 'plus', on: true },
-	{
-		id: 'destructive',
-		name: 'trash',
-		variant: 'destructive',
-		accessibilityLabel: 'Delete product',
-	},
-	{ id: 'sm', name: 'plus', size: 'sm' },
 	{ id: 'loading', name: 'plus', loading: true },
 	{ id: 'disabled', name: 'plus', disabled: true },
 ];

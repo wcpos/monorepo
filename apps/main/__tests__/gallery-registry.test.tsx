@@ -51,6 +51,8 @@ const registered = [
 	"'segmented-control': segmentedControl",
 	"'step-progress': stepProgress",
 	"'log-view': logView",
+	'tooltip',
+	"'poster-tile': posterTile",
 ];
 
 it('registers every new primitive before the gallery shoot', () => {
