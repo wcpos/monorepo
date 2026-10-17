@@ -334,6 +334,8 @@ jest.mock('@wcpos/utils/logger', () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
 		warn: (...args: unknown[]) => mockWarn(...args),
 		error: (...args: unknown[]) => mockError(...args),
+		// Recovered arcs (a refresh that timed out or failed) log at debug; the hook must not crash on them.
+		debug: () => undefined,
 	}),
 }));
 jest.mock('../../../../../contexts/translations', () => ({
