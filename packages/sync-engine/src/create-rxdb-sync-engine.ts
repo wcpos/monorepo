@@ -58,7 +58,6 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
-import { QUERY_TOTAL_LEASE_FOR_MS } from './scheduler/query-total-requests';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
@@ -110,6 +109,7 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_LEASE_FOR_MS,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,

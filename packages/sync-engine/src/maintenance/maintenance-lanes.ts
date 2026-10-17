@@ -764,6 +764,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
 				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
+					if (result.timedOut === result.failed && result.lastTimeout) throw result.lastTimeout;
 					throw new Error(
 						forced === undefined
 							? 'Census refresh failed during full refresh'

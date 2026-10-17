@@ -1,3 +1,5 @@
+import { RequestTimeoutError } from './write-path/request-timeout';
+
 import type {
 	QueryTotalCacheEntry,
 	QueryTotalRequestState,
@@ -56,6 +58,8 @@ export type QueryTotalRetryRunnerResult = {
 	succeeded: number;
 	unsupported: number;
 	failed: number;
+	timedOut: number;
+	lastTimeout?: RequestTimeoutError;
 	cacheEntries: QueryTotalCacheEntry[];
 };
 
@@ -133,6 +137,7 @@ export async function runQueryTotalRetryRequests(
 		succeeded: 0,
 		unsupported: 0,
 		failed: 0,
+		timedOut: 0,
 		cacheEntries: [],
 	};
 
@@ -184,13 +189,17 @@ export async function runQueryTotalRetryRequests(
 			await input.stateRepository.markIdle(claimedState, idleState(claimedState, input.nowMs));
 			result.cacheEntries.push(cacheEntry);
 			result.succeeded += 1;
-		} catch {
+		} catch (error) {
 			const failedAtMs = input.getNowMs?.() ?? input.nowMs;
 			await input.stateRepository.markFailed(
 				claimedState,
 				failedState(claimedState, input, failedAtMs)
 			);
 			result.failed += 1;
+			if (error instanceof RequestTimeoutError) {
+				result.timedOut += 1;
+				result.lastTimeout = error;
+			}
 		}
 	}
 
