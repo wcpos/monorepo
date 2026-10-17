@@ -82,6 +82,8 @@ export function PayButton() {
 				title: t('pos_cart.checkout_failed'),
 				// The store dedupes the order on its uuid, so pressing Checkout again is safe.
 				stillSendingTitle: t('pos_cart.checkout_still_sending'),
+				// SYNC191's "nothing to do" would contradict the title's "press Checkout again".
+				stillSendingText2: t('pos_cart.checkout_still_sending_hint'),
 			});
 		} finally {
 			setLoading(false);

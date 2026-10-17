@@ -580,6 +580,7 @@
 	"pos_cart.checkout": "Checkout {order_total}",
 	"pos_cart.checkout_failed": "Checkout failed",
 	"pos_cart.checkout_still_sending": "This order is still on its way to your store. Wait a moment, then press Checkout again.",
+	"pos_cart.checkout_still_sending_hint": "Nothing has been charged yet. The store recognises this order, so pressing Checkout again won't create a second one.",
 	"pos_cart.checkout_started": "Checkout started",
 	"pos_cart.coupon_applied": "Coupon applied",
 	"pos_cart.coupon_apply_failed": "Failed to apply coupon. Please try again.",

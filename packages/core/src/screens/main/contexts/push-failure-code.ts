@@ -55,6 +55,11 @@ interface PushFailureReport {
 	 * Callers whose write never awaits the store omit it (SYNC121's summary then).
 	 */
 	stillSendingTitle?: string;
+	/**
+	 * Already-translated second line for that case, when the caller's next step is
+	 * not SYNC191's "nothing to do" — Pay's is "press Checkout again".
+	 */
+	stillSendingText2?: string;
 	context?: Record<string, unknown>;
 }
 
@@ -72,7 +77,13 @@ export function reportPushFailure(
 	logger: PushFailureLogger,
 	message: string,
 	error: unknown,
-	{ fallback = ERROR_CODES.SYNC_UNEXPECTED, title, stillSendingTitle, context }: PushFailureReport
+	{
+		fallback = ERROR_CODES.SYNC_UNEXPECTED,
+		title,
+		stillSendingTitle,
+		stillSendingText2,
+		context,
+	}: PushFailureReport
 ): void {
 	const code = pushFailureCode(error, fallback);
 	const fullContext = { ...context, error: getErrorMessage(error) };
@@ -108,7 +119,14 @@ export function reportPushFailure(
 			showToast: true,
 			// SYNC191: still on its way — "don't enter it again", not "can't be reached".
 			code: ERROR_CODES.WRITE_STILL_SENDING,
-			...(stillSendingTitle !== undefined ? { toast: { title: stillSendingTitle } } : {}),
+			...(stillSendingTitle !== undefined || stillSendingText2 !== undefined
+				? {
+						toast: {
+							...(stillSendingTitle !== undefined && { title: stillSendingTitle }),
+							...(stillSendingText2 !== undefined && { text2: stillSendingText2 }),
+						},
+					}
+				: {}),
 			context: { ...fullContext, pushState: error.diagnostics, outcome: 'still-queued' },
 		});
 		return;
