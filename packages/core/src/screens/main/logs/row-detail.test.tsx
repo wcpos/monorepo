@@ -85,6 +85,19 @@ jest.mock('../health/components', () => ({
 	),
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => activeT }));
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
+}));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 type MockRecordLabel = {
@@ -124,6 +137,13 @@ beforeEach(() => {
 	mockPush.mockClear();
 	mockUseRecordLabel.mockClear();
 	mockRecordLabel = null;
+	mockIsPro = true;
+	mockCaps = {
+		canEditProducts: true,
+		canEditVariations: true,
+		canEditCustomers: true,
+		canEditCoupons: true,
+	};
 	activeT = mockT;
 });
 
@@ -545,6 +565,43 @@ describe('RowDetail', () => {
 
 			fireEvent.click(screen.getByTestId('logs-open-record-log-1'));
 			expect(mockPush).toHaveBeenCalledWith('/coupons/edit/c-uuid');
+		});
+
+		// The edit screens do not repeat the row actions' gate, so the link must.
+		it('offers no Open record on a free (read-only) store', () => {
+			mockIsPro = false;
+			mockRecordLabel = {
+				kind: 'Order',
+				handle: '#1234',
+				uuid: 'ae263330-fbff-4834-8798-3f52ff650c79',
+				status: 'found',
+				text: 'Order: #1234',
+			};
+			render(<RowDetail row={heldRow} kind="warn" title="Change held" />);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+		});
+
+		it('offers no Open record on a product for a cashier without edit_product', () => {
+			mockCaps = { ...mockCaps, canEditProducts: false };
+			mockRecordLabel = {
+				kind: 'Product',
+				handle: 'Blue Tee',
+				uuid: 'p-uuid',
+				status: 'found',
+				text: 'Product: Blue Tee',
+			};
+			render(
+				<RowDetail
+					row={{ ...heldRow, context: { ...heldRow.context, collection: 'products' } }}
+					kind="warn"
+					title="Change held"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-open-record-log-1')).toBeNull();
+			// The Database link is not an edit and stays.
+			expect(screen.getByTestId('logs-go-database-log-1')).not.toBeNull();
 		});
 
 		it('offers no Open record while the read is still in flight', () => {

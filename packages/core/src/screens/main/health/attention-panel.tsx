@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { type Href, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
@@ -8,21 +8,11 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
+import { useRecordEditRoute } from './record-edit-route';
 import { useManualSync } from './use-manual-sync';
 import { useRecordLabel } from './use-record-label';
 
 import type { StuckRecord } from '../logs/logs-logic';
-
-/** Edit routes per collection — only collections with an edit surface link out.
- * Shared with the conflicted-mutations panel so the two surfaces can never
- * disagree about where a record is edited. */
-export const FIX_ROUTES: Record<string, (uuid: string) => Href> = {
-	products: (uuid) => `/(app)/(drawer)/products/(modals)/edit/product/${uuid}`,
-	variations: (uuid) => `/(app)/(drawer)/products/(modals)/edit/variation/${uuid}`,
-	orders: (uuid) => `/orders/edit/${uuid}`,
-	customers: (uuid) => `/customers/edit/${uuid}`,
-	coupons: (uuid) => `/coupons/edit/${uuid}`,
-};
 
 /**
  * Database-tab attention panel (spec §9): the derived stuck-records view made
@@ -35,10 +25,13 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const { syncing, busy, sync } = useManualSync();
 	const first = stuck[0];
 	const label = useRecordLabel(first?.collection, first?.recordId);
+	const editRoute = useRecordEditRoute();
 
 	if (!first) return null;
 
-	const fixRoute = FIX_ROUTES[first.collection]?.(first.recordId);
+	// From the FOUND record's uuid: a pull-side row's id is the store's
+	// numeric id, which no edit screen can open.
+	const fixRoute = editRoute(first.collection, label?.status === 'found' ? label.uuid : null);
 	// The handle alone when there is one — the sentence around it already says
 	// what kind it is; otherwise the shared kind / "not on this device" line.
 	// Never the raw id: support reads that from the log row's Details.

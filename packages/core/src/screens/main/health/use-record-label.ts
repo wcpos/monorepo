@@ -156,7 +156,7 @@ export function useRecordLabel(
 					: null;
 				setResolved({
 					key,
-					handle: json ? recordHandle(json) : null,
+					handle: json ? recordHandle(collection, json) : null,
 					uuid:
 						json && typeof json.uuid === 'string' ? json.uuid : remoteId === null ? recordId : null,
 					found: json !== null,

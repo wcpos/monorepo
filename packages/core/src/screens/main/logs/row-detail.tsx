@@ -22,8 +22,8 @@ import {
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { FIX_ROUTES } from '../health/attention-panel';
 import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { useRecordEditRoute } from '../health/record-edit-route';
 import { useRecordLabel } from '../health/use-record-label';
 import { translateErrorAction } from './generated/error-actions.generated';
 import { translateErrorSummary } from './generated/error-summaries.generated';
@@ -228,12 +228,14 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const showsGuidance = isProblem || entry !== null;
 	const record = recordRefOf(row);
 	const recordLabel = useRecordLabel(record?.collection, record?.recordId);
+	const editRoute = useRecordEditRoute();
 	// Only once the record is FOUND: a tap while the read is in flight must not
 	// open an edit screen for a record this device may not hold. The route is
-	// keyed by the uuid the read returned (pull rows carry the store's id).
+	// keyed by the uuid the read returned (pull rows carry the store's id), and
+	// is null for a user who may not edit this kind of record.
 	const fixRoute =
-		record && recordLabel?.status === 'found' && recordLabel.uuid
-			? (FIX_ROUTES[record.collection]?.(recordLabel.uuid) ?? null)
+		record && recordLabel?.status === 'found'
+			? editRoute(record.collection, recordLabel.uuid)
 			: null;
 	const context = row.context ?? {};
 	// Only a row about a record or a queued change has anything on the Database

@@ -75,7 +75,11 @@ function toJson(row: MutationRow): EngineConflict {
  * parked UPDATE's payload may be partial (a lone stock tweak carries no name).
  */
 function labelFor(resident: Record<string, unknown> | null, entry: EngineConflict): string | null {
-	return recordHandle(resident, (entry.payload ?? {}) as Record<string, unknown>);
+	return recordHandle(
+		entry.collectionName,
+		resident,
+		(entry.payload ?? {}) as Record<string, unknown>
+	);
 }
 
 async function describe(

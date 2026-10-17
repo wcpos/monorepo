@@ -23,7 +23,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
-import { FIX_ROUTES } from './attention-panel';
+import { useRecordEditRoute } from './record-edit-route';
 import { Callout, Pill } from './components';
 import { useManualSync } from './use-manual-sync';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -54,6 +54,7 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
 export function ConflictedMutationsPanel() {
 	const t = useT();
 	const router = useRouter();
+	const editRoute = useRecordEditRoute();
 	const { engine } = useQueryRuntime();
 	const { syncing, sync } = useManualSync();
 	const { rows, readError } = useUnresolvedConflicts();
@@ -167,7 +168,7 @@ export function ConflictedMutationsPanel() {
 
 			<VStack className="gap-0">
 				{rows.map((row) => {
-					const fixRoute = FIX_ROUTES[row.collectionName]?.(row.recordId);
+					const fixRoute = editRoute(row.collectionName, row.recordId);
 					return (
 						<HStack
 							key={row.mutationId}

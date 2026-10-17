@@ -27,6 +27,7 @@ const mockEngine = {
 				products: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
 				variations: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
 				customers: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
+				coupons: { findOne: () => ({ exec: mockExec, $: mockDoc$() }) },
 			},
 		},
 	})),
@@ -37,6 +38,19 @@ const mockEngine = {
 	checkCollection: mockCheckCollection,
 };
 
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
+}));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
@@ -114,6 +128,13 @@ const stuck = (collection: string, retryable: boolean): StuckRecord => ({
 describe('AttentionPanel', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockIsPro = true;
+		mockCaps = {
+			canEditProducts: true,
+			canEditVariations: true,
+			canEditCustomers: true,
+			canEditCoupons: true,
+		};
 	});
 
 	it.each([
@@ -132,6 +153,32 @@ describe('AttentionPanel', () => {
 		await waitFor(() =>
 			expect(screen.getByTestId('db-attention-panel').textContent).toContain(label)
 		);
+	});
+
+	// A pull-side row's id is the store's numeric id; only the found record's
+	// uuid opens an edit screen.
+	it('routes Fix record by the found uuid, not the row id', async () => {
+		mockExec.mockResolvedValue({ uuid: 'coupon-uuid', payload: { code: 'SAVE10' } });
+
+		render(
+			<AttentionPanel stuck={[{ ...stuck('coupons', false), recordId: '80', direction: 'pull' }]} />
+		);
+
+		await waitFor(() => expect(screen.queryByTestId('db-attention-fix')).not.toBeNull());
+		fireEvent.click(screen.getByTestId('db-attention-fix'));
+		expect(mockPush).toHaveBeenCalledWith('/coupons/edit/coupon-uuid');
+	});
+
+	it('offers no Fix record before the record is found, or to a cashier who cannot edit it', async () => {
+		mockExec.mockResolvedValue({ uuid: 'record-uuid', payload: { name: 'Coffee' } });
+		mockCaps = { ...mockCaps, canEditProducts: false };
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+
+		await waitFor(() =>
+			expect(screen.getByTestId('db-attention-panel').textContent).toContain('Coffee')
+		);
+		expect(screen.queryByTestId('db-attention-fix')).toBeNull();
 	});
 
 	it('names a record it cannot read by its kind, never its raw id', async () => {

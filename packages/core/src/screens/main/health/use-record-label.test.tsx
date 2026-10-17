@@ -59,37 +59,77 @@ jest.mock('../../../contexts/translations', () => {
 
 describe('recordHandle', () => {
 	it('names an order by number and total', () => {
-		expect(recordHandle({ number: '1234', payload: { total: '45.00' } })).toBe('#1234 · 45.00');
+		expect(recordHandle('orders', { number: '1234', payload: { total: '45.00' } })).toBe(
+			'#1234 · 45.00'
+		);
 	});
 
 	it('names a product by its name before anything else', () => {
-		expect(recordHandle({ payload: { name: ' Blue Tee ', number: 7 } })).toBe('Blue Tee');
+		expect(recordHandle('products', { payload: { name: ' Blue Tee ', number: 7 } })).toBe(
+			'Blue Tee'
+		);
 	});
 
 	it('names a customer by first and last name, then username', () => {
-		expect(recordHandle({ payload: { first_name: 'Ada', last_name: 'Lovelace' } })).toBe(
-			'Ada Lovelace'
-		);
-		expect(recordHandle({ payload: { username: 'ada' } })).toBe('ada');
+		expect(
+			recordHandle('customers', { payload: { first_name: 'Ada', last_name: 'Lovelace' } })
+		).toBe('Ada Lovelace');
+		expect(recordHandle('customers', { payload: { username: 'ada' } })).toBe('ada');
 	});
 
 	it('skips a blank value so the payload or a later source still names it', () => {
-		expect(recordHandle({ name: '  ', payload: { name: 'Blue Tee' } })).toBe('Blue Tee');
-		expect(recordHandle({ name: '', payload: { name: ' ' } }, { name: 'Queued Name' })).toBe(
-			'Queued Name'
+		expect(recordHandle('products', { name: '  ', payload: { name: 'Blue Tee' } })).toBe(
+			'Blue Tee'
 		);
-		expect(recordHandle({ number: '', payload: { number: '1234' } })).toBe('#1234');
+		expect(
+			recordHandle('products', { name: '', payload: { name: ' ' } }, { name: 'Queued Name' })
+		).toBe('Queued Name');
+		expect(recordHandle('orders', { number: '', payload: { number: '1234' } })).toBe('#1234');
+	});
+
+	// Woo collapses a variation's stored name to the parent's at three or more
+	// attributes, so every sibling would read the same.
+	it('names a variation by its own attribute options, not the stored name', () => {
+		expect(
+			recordHandle('variations', {
+				payload: {
+					name: 'Hoodie',
+					attributes: [
+						{ name: 'Colour', option: 'Blue' },
+						{ name: 'Size', option: 'M' },
+						{ name: 'Fit', option: 'Slim' },
+					],
+				},
+			})
+		).toBe('Blue, M, Slim');
+		expect(recordHandle('variations', { payload: { name: 'Hoodie - Blue' } })).toBe(
+			'Hoodie - Blue'
+		);
+	});
+
+	// A sale rejected before the store numbered it keeps its total and billing.
+	it('names a born-local order with no number by billing name and total', () => {
+		expect(
+			recordHandle('orders', {
+				number: '',
+				total: '12.50',
+				payload: { billing: { first_name: 'Ada', last_name: 'Lovelace' } },
+			})
+		).toBe('Ada Lovelace · 12.50');
+		expect(recordHandle('orders', { number: '', payload: { total: '9.00', billing: {} } })).toBe(
+			'9.00'
+		);
 	});
 
 	it('names a coupon by its code', () => {
-		expect(recordHandle({ payload: { code: ' SAVE10 ', amount: '10' } })).toBe('SAVE10');
+		expect(recordHandle('coupons', { payload: { code: ' SAVE10 ', amount: '10' } })).toBe('SAVE10');
 	});
 
 	it('falls back to a later source when the first names nothing', () => {
-		expect(recordHandle({ payload: { stock_quantity: 3 } }, { name: 'Queued Name' })).toBe(
-			'Queued Name'
-		);
-		expect(recordHandle(null, {})).toBeNull();
+		expect(
+			recordHandle('products', { payload: { stock_quantity: 3 } }, { name: 'Queued Name' })
+		).toBe('Queued Name');
+		expect(recordHandle('products', null, {})).toBeNull();
 	});
 });
 

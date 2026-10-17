@@ -71,6 +71,19 @@ jest.mock('./components', () => ({
 	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
 }));
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
+}));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
 }));
