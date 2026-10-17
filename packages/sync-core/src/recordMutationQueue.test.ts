@@ -38,6 +38,23 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('live recovery preserves marks while their later-acquired fence is still live', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut());
+		await q.markForAnnihilation('m1', 'void', 0);
+		await q.fenceForVoid('products', 'rec-A', 'void', 1000);
+		expect(await q.hasVoidFence('products', 'rec-A', 120_001)).toBe(true);
+		expect((await q.all())[0].supersededBy).toBe('void');
+	});
+
+	it('coalescing recovers an expired pre-commit mark without a scope reopen', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut());
+		await q.markForAnnihilation('m1', 'crashed', 0);
+		expect(await q.coalesceInto('m1', mut({ mutationId: 'replacement' }))).toBe(true);
+		expect((await q.all()).map((row) => row.mutationId)).toEqual(['replacement']);
+	});
+
 	it('only one scope opener finishes an expired committed void', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
@@ -95,7 +112,7 @@ describe('RecordMutationQueue', () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
 		const other = new RecordMutationQueue(storage);
-		const row = { ...mut(), supersededBy: 'void' };
+		const row = { ...mut(), supersededBy: 'void', markedAt: Date.now() };
 		await q.enqueue(row);
 		expect(await other.coalesceInto('m1', mut({ mutationId: 'replacement' }))).toBe(false);
 		expect(await other.claim({ ...row, status: 'claimed' })).toBe(false);

@@ -373,6 +373,8 @@ export async function drainMutationQueue(input: {
 	const backoff = input.backoff ?? DEFAULT_RETRY_BACKOFF;
 	const limit = input.limit ?? Number.POSITIVE_INFINITY;
 
+	if (!input.signal?.aborted) await input.queue.clearExpiredAnnihilation(now());
+
 	// LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel never-pushed create→delete
 	// chains BEFORE the scan, so an annihilated create is never claimed or pushed
 	// (no phantom server order from a follower create+void). A no-op on

@@ -55,9 +55,16 @@ beforeEach(() => {
 });
 
 describe('countUnsentChanges', () => {
+	it('excludes internal coordination rows from the unsent mutation count', async () => {
+		const engine = fakeEngine({ count$: new BehaviorSubject(0) });
+		const count = jest.spyOn(engine.active()!.database.collections.recordMutations, 'count');
+		await countUnsentChanges(engine);
+		expect(count).toHaveBeenCalledWith({ selector: { status: { $ne: 'internal' } } });
+	});
+
 	it('counts the WHOLE queue — every row is a change the server has never seen', () => {
-		// No status selector on purpose: `status` is optional in the queue schema
-		// (an absent status means pending), so selecting on it would hide rows, and
+		// Only internal rows are excluded: `status` is optional in the queue schema
+		// (an absent status means pending), so a positive status allowlist would hide rows, and
 		// a hidden row is a sale nobody is warned about losing.
 		const engine = fakeEngine({ count$: new BehaviorSubject(3) });
 

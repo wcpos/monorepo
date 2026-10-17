@@ -51,7 +51,7 @@ describe('drainMutationQueue', () => {
 	it('skips a marked row and its successors, then resumes after unmark', async () => {
 		const q = await queueWith(mut(), mut({ mutationId: 'later' }));
 		const [row] = await q.pending();
-		await q.replace({ ...row, supersededBy: 'void' });
+		await q.replace({ ...row, supersededBy: 'void', markedAt: Date.now() });
 		const push = vi.fn(async (mutation: RecordMutation) => ok(mutation));
 		expect((await drainMutationQueue({ queue: q, push })).pushed).toBe(0);
 		expect(await q.pending()).toHaveLength(2);

@@ -130,6 +130,7 @@ export function NewCustomerLinkBridge(): null {
 							collectionName: { $eq: 'orders' },
 							recordId: { $eq: uuid },
 							operation: { $eq: 'delete' },
+							status: { $ne: 'internal' },
 						},
 					})
 					.exec();

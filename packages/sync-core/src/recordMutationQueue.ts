@@ -6,7 +6,7 @@ import type { RecordMutation } from './recordMutation';
 const ANNIHILATION_TTL_MS = 120_000;
 // Admission covers only a local enqueue; 30 seconds recovers a crashed writer.
 const WRITER_ADMISSION_TTL_MS = 30_000;
-const isInternalRow = (row: QueuedMutation) => row.expiresAt !== undefined;
+export const isInternalRow = (row: QueuedMutation) => row.status === 'internal';
 const fenceId = (collection: string, record: string) => `${collection}/${record}`;
 
 /**
@@ -77,7 +77,8 @@ export type QueuedMutation = RecordMutation & {
 	 * (428) and no current revision could be determined — parked until an
 	 * explicit resolution refreshes the revision (retry) or discards. Unlike
 	 * 'conflicted' it carries NO server truth: there was no 409 envelope. */
-	readonly status?: 'pending' | 'claimed' | 'conflicted' | 'needs-revision' | 'rejected';
+	readonly status?:
+		'pending' | 'claimed' | 'conflicted' | 'needs-revision' | 'rejected' | 'internal';
 	/** The server's `current` document from the 409 that conflicted this row — server truth for resolution. */
 	readonly conflictDocument?: Record<string, unknown>;
 	/** The server's current revision from that 409 — the base a retry re-stamps to. */
@@ -216,7 +217,14 @@ export class RecordMutationQueue {
 	 * both consume the same prior row.
 	 */
 	private chain: Promise<unknown> = Promise.resolve();
-	public constructor(private readonly storage: RecordMutationStorage) {}
+	public constructor(
+		private readonly storage: RecordMutationStorage,
+		private readonly recovery: {
+			enabled?: () => boolean;
+			now?: () => number;
+			removeResident?: (row: QueuedMutation) => Promise<void | boolean>;
+		} = {}
+	) {}
 
 	private transact<T>(op: () => Promise<T>): Promise<T> {
 		const run = this.chain.then(op, op);
@@ -331,6 +339,7 @@ export class RecordMutationQueue {
 	 * the queue and retries its coalesce decision.
 	 */
 	async coalesceInto(priorMutationId: string, replacement: QueuedMutation): Promise<boolean> {
+		await this.clearExpiredAnnihilation((this.recovery.now ?? Date.now)());
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === priorMutationId
@@ -418,7 +427,17 @@ export class RecordMutationQueue {
 		});
 	}
 
+	/** Reset must also protect a writer that has admission but has not appended yet. */
+	async pendingResetCount(nowMs: number): Promise<number> {
+		return (await this.storage.list()).filter(
+			(row) =>
+				!isInternalRow(row) ||
+				(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+		).length;
+	}
+
 	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
 		return (await this.storage.list()).some(
 			(row) =>
 				row.mutationId === fenceId(collection, record) &&
@@ -432,6 +451,7 @@ export class RecordMutationQueue {
 		token: string,
 		nowMs: number
 	): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
 		return this.holdRecord(collection, record, token, nowMs, true);
 	}
 
@@ -485,7 +505,7 @@ export class RecordMutationQueue {
 					payload: {},
 					baseRevision: null,
 					queuedAt: new Date(nowMs).toISOString(),
-					status: 'rejected',
+					status: 'internal',
 					// Clear an expired owner's fields on modify; omit them on insert (RxDB validation).
 					...(stored
 						? {
@@ -527,8 +547,9 @@ export class RecordMutationQueue {
 
 	async clearExpiredAnnihilation(
 		nowMs: number,
-		removeResident?: (row: QueuedMutation) => Promise<void>
+		removeResident = this.recovery.removeResident
 	): Promise<void> {
+		if (this.recovery.enabled?.() === false) return;
 		const stored = await this.storage.listStored();
 		const committed = stored.filter(
 			({ mutation: row }) => isInternalRow(row) && row.payload.phase === 'committed'
@@ -542,10 +563,12 @@ export class RecordMutationQueue {
 				))
 			)
 				continue;
-			await removeResident(fence);
+			const removed = await removeResident(fence);
 			for (const { mutation: row } of stored) {
-				if (!isInternalRow(row) && row.supersededBy === fence.supersededBy)
-					await this.removeMarked(row.mutationId, fence.supersededBy!);
+				if (isInternalRow(row) || row.supersededBy !== fence.supersededBy) continue;
+				if (removed === false)
+					await this.unmarkForAnnihilation(row.mutationId, fence.supersededBy!);
+				else await this.removeMarked(row.mutationId, fence.supersededBy!);
 			}
 			await this.releaseVoidFence(fence.collectionName, fence.recordId, fence.supersededBy!);
 		}
@@ -560,6 +583,15 @@ export class RecordMutationQueue {
 				continue;
 			}
 			if (row.supersededBy === undefined) continue;
+			if (
+				stored.some(
+					({ mutation: fence }) =>
+						isInternalRow(fence) &&
+						fence.supersededBy === row.supersededBy &&
+						(fence.expiresAt ?? 0) > nowMs
+				)
+			)
+				continue;
 			if ((row.expiresAt ?? (row.markedAt ?? 0) + ANNIHILATION_TTL_MS) > nowMs) continue;
 			if (isInternalRow(row)) await this.storage.removeIfUnchanged(row.mutationId, rev);
 			else
@@ -1094,7 +1126,7 @@ export const recordMutationQueueSchema = {
 		admittedAt: { type: 'number' },
 		status: {
 			type: 'string',
-			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
+			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected', 'internal'],
 		},
 		conflictDocument: { type: 'object', additionalProperties: true },
 		conflictRevision: { type: ['string', 'null'] },

@@ -91,10 +91,16 @@ const scope = () => ({
 				])
 			),
 			recordMutations: {
-				findOne: ({ selector }: { selector: Record<string, { $eq: unknown }> }) => ({
+				findOne: ({
+					selector,
+				}: {
+					selector: Record<string, { $eq?: unknown; $ne?: unknown }>;
+				}) => ({
 					exec: async () =>
 						queue.find((row) =>
-							Object.entries(selector).every(([field, { $eq }]) => row[field] === $eq)
+							Object.entries(selector).every(([field, condition]) =>
+								'$eq' in condition ? row[field] === condition.$eq : row[field] !== condition.$ne
+							)
 						) ?? null,
 				}),
 			},
@@ -481,6 +487,26 @@ describe('NewCustomerLinkBridge', () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 		// The rejection was not the customer's, so it neither reports nor reconciles.
 		expect(mockWrite.mock.calls.length).toBe(callsBefore);
+	});
+
+	it('an internal admission is not a queued order delete', async () => {
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		queue = [
+			{
+				mutationId: 'admission',
+				collectionName: 'orders',
+				recordId: ORDER,
+				operation: 'delete',
+				status: 'internal',
+			},
+		];
+		await linkOrderToCustomer();
+		render(<NewCustomerLinkBridge />);
+		await flush();
+		await acknowledgeCustomer(91);
+		ackCustomerEvent();
+		await flush();
+		expect(orderUpdates()).toHaveLength(1);
 	});
 
 	it('does not cancel a void made offline before the ack: no write, and the link is dropped', async () => {

@@ -172,14 +172,40 @@ function storablePayload(
 // Avoid burning the stale-placement budget while another local writer finishes its enqueue.
 const WRITER_ADMISSION_BACKOFF_MS = 20;
 const queues = new WeakMap<object, RecordMutationQueue>();
-export function queueFor(db: RxDatabase): RecordMutationQueue {
+export function queueFor(
+	db: RxDatabase,
+	recovery: { now?: () => number; observe?: SyncObserver } = {}
+): RecordMutationQueue {
 	const existing = queues.get(db);
 	if (existing) return existing;
 	const queue = new RecordMutationQueue(
 		new RxRecordMutationStorage(
 			() =>
 				collectionOf(db, MUTATION_QUEUE_RXDB_COLLECTION) as unknown as RxRecordMutationCollection
-		)
+		),
+		{
+			...recovery,
+			enabled: () => collectionOf(db, MUTATION_QUEUE_RXDB_COLLECTION).schema?.version !== 5,
+			removeResident: async (row) => {
+				const resident = await collectionOf(db, row.collectionName).findOne(row.recordId).exec();
+				if (!resident) return;
+				const stored = resident.toJSON();
+				const facet = writeFacetFor(row.collectionName);
+				if (
+					stored.sync?.revision ||
+					(facet && remoteIdOrNull(stored[facet.remoteIdField]) !== null)
+				) {
+					recovery.observe?.({
+						type: 'void.recovery.identity-appeared',
+						level: 'warn',
+						collection: row.collectionName,
+						fields: { recordId: row.recordId },
+					});
+					return false;
+				}
+				await resident.remove();
+			},
+		}
 	);
 	queues.set(db, queue);
 	return queue;
@@ -609,6 +635,7 @@ export async function enqueueWriteIntent(input: {
 			attempt -= 1;
 			continue;
 		}
+		let committed = false;
 		try {
 			if (prior) {
 				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
@@ -719,13 +746,30 @@ export async function enqueueWriteIntent(input: {
 				}
 			}
 
+			committed = true;
 			return {
 				mutationId: mutation.mutationId,
 				recordId: mutation.recordId,
 				...(prior ? { supersededMutationId: prior.mutationId } : {}),
 			};
 		} finally {
-			if (!legacyQueue) await queue.releaseWriter(name, recordId, mutation.mutationId);
+			if (!legacyQueue) {
+				try {
+					await queue.releaseWriter(name, recordId, mutation.mutationId);
+				} catch (error) {
+					if (!committed) throw error;
+					try {
+						input.observe?.({
+							type: 'write.admission-release-failed',
+							level: 'warn',
+							collection: name,
+							fields: { mutationId: mutation.mutationId, error: String(error) },
+						});
+					} catch {
+						/* Telemetry cannot undo a durable write either. */
+					}
+				}
+			}
 		}
 	}
 	throw new Error(

@@ -85,7 +85,14 @@ export function drainableGenerationCollectionCreators(): Record<string, Collecti
 			schema: {
 				...recordMutationQueueSchema,
 				version: 5,
-				properties: { ...drainableQueueProperties, mutationId: { type: 'string', maxLength: 64 } },
+				properties: {
+					...drainableQueueProperties,
+					mutationId: { type: 'string', maxLength: 64 },
+					status: {
+						type: 'string',
+						enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
+					},
+				},
 			},
 			migrationStrategies: drainableQueueMigrations,
 		},

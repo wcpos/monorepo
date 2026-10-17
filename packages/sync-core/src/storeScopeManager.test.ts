@@ -745,6 +745,35 @@ describe('StoreScopeManager', () => {
 });
 
 describe('in-flight guarded writes vs lifecycle ops (TOCTOU)', () => {
+	it.each([false, true])(
+		'refuses a queue reset (confirmed=%s) when a guarded writer appends after the initial count',
+		async (confirmDestroyQueue) => {
+			const { manager, fakes } = makeManager();
+			await manager.switchTo('scope-a');
+			const fake = fakes.get('scope-a')!;
+			let release!: () => void;
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			let writing!: Promise<'applied' | 'dropped'>;
+			await manager.runGuarded(async (bound) => {
+				writing = bound.guardWrite(async () => {
+					await gate;
+					fake.pendingMutationCount.mockResolvedValue(1);
+				});
+			});
+			const resetting = manager.resetCollection('scope-a', MUTATION_QUEUE_COLLECTION, {
+				confirmDestroyQueue,
+			});
+			await flushMicrotasks();
+			release();
+			await writing;
+			expect(await resetting).toBe('needs-confirmation');
+			expect(fake.resetCalls).toEqual([]);
+			expect(await fake.database.pendingMutationCount()).toBe(1);
+		}
+	);
+
 	it('resetCollection waits for a guarded write that already passed the check', async () => {
 		const order: string[] = [];
 		let releaseWrite: () => void = () => {};

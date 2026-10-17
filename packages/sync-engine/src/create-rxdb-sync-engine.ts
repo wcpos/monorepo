@@ -1191,10 +1191,9 @@ export function createRxdbSyncEngine(
 			await db.addCollections(collectionCreators() as never);
 			if (scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION) {
 				try {
-					await queueFor(db).clearExpiredAnnihilation(nowMs(), async (row) => {
-						const resident = await db.collections[row.collectionName].findOne(row.recordId).exec();
-						if (resident) await resident.remove();
-					});
+					await queueFor(db, { now: nowMs, observe: diagnostics }).clearExpiredAnnihilation(
+						nowMs()
+					);
 				} catch (error) {
 					diagnostics({
 						type: 'engine.guard',
@@ -1277,7 +1276,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: async () => (await queueFor(db).all()).length,
+				pendingMutationCount: async () => queueFor(db).pendingResetCount(nowMs()),
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);
