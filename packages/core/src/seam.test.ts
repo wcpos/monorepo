@@ -121,7 +121,7 @@ const residentHelperNames = new Set([
 	'useLocalMutation',
 	'useMutation',
 ]);
-const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
+const storageNames = new Set(['db$', 'collections', 'collections$', 'storageInstance', 'localDB']);
 
 function staticName(node: ts.Node | undefined): string | undefined {
 	if (!node) return undefined;
@@ -652,7 +652,7 @@ it.each(
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
 });
 
-it.each(['db$', 'collections', 'storageInstance', 'localDB', 'collection'])(
+it.each(['db$', 'collections', 'collections$', 'storageInstance', 'localDB', 'collection'])(
 	'fences all storage accesses of %s',
 	(name) => {
 		for (const source of [`doc?.${name};`, `doc?.['${name}'];`, `const { ${name}: value } = doc;`])
