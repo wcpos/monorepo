@@ -302,7 +302,9 @@
       --attention: var(--warn);
       --attention-foreground: oklch(0.25 0.03 90);
       --warning: var(--warn);
-      --warning-foreground: oklch(0.98 0.01 45);
+      /* Dark ink, as attention and the other four themes use: near-white on the light amber
+         read 2.8:1, under the 4.5:1 text floor (CODING_STANDARDS § Design 7). */
+      --warning-foreground: oklch(0.25 0.03 90);
       
       /* Borders and inputs */
       --border: oklch(0.90 0.008 250);
