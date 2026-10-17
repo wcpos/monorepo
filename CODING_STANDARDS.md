@@ -254,7 +254,7 @@ The seven kept variants (decision 1[^board]); nothing else is in the cva union, 
 | `default` (filled `bg-primary`) | Primary: the action the screen exists for | one per screen, full width on a phone | *Take 18,00 € in Cash*, *Try again* after a refusal, *Save order*, *Connect a reader* when nothing is connected |
 | `outline` | Secondary: the reversible alternative beside the primary | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Close*, *Help* |
 | `ghost` (muted label at rest) | Quiet: navigation, escapes, more | after the buttons, on its own line, or in a toolbar | *Reader guide*, *Details*, *Cancel* on a scan |
-| `link` | Inline text that behaves as a button | in the flow of text, no surface | *Open docs*, a back crumb |
+| `link` | Text that behaves as a button: no surface, the size's height | after the content; inline it is `DocsLink`, which drops the padding | *Open docs*, *Reader settings* |
 | `outline-destructive` | Destructive: what loses something (never filled) | never in the same row as a primary | *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
 | `ghost-destructive` | The quiet form of the same, in a dense row | inside a table or list row | *Remove* on a queued email's row |
 | `destructive` (solid red) | Only the confirm inside an `AlertDialog` and the swipe Remove block | the alert's footer, the swipe strip | *Delete* in *Delete this order?* |
@@ -302,11 +302,11 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 | Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
 | An on/off setting | `Switch` | — |
 
-A Button is never a toggle. Among labels and controls, full radius belongs to `Chip` and `Badge` alone (a `Switch` track is its own shape).
+A Button is never a toggle. Among pills, full radius belongs to `Chip` and `Badge` alone; a circular control (`Switch`, `RadioGroup`, a `Slider` thumb) is its own shape.
 
 #### Page bars
 - Every non-POS screen (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`.
-- The bar has the title left (16 px semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide / 44 on a phone, with no rule under it.
+- The bar has the title left (`text-base` semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide / 44 on a phone, with no rule under it.
 - The POS keeps its `RegisterBar` (48, on the cart card; on the desktop app it sits in the title-bar strip) as ruled 2026-09-11.
 - A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
 

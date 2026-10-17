@@ -10,7 +10,7 @@
 
 - [ ] Walked every state: empty, loading, saving, error, offline, disabled, long text, part-paid, phone width, dark mode
 - [ ] Screenshots of the changed states below, tablet and phone
-- [ ] No new hex or `oklch()` colour, no new explanatory paragraph, no new `useEffect` for layout
+- [ ] No new hex or `oklch()` colour in a component, no new explanatory paragraph, no new `useEffect` for layout
 - [ ] Touch targets and contrast checked, not assumed
 - [ ] Every interactive element carries a stable `testID`
 - [ ] The component tables (buttons, overlays, chips, page bars) are followed
