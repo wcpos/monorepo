@@ -297,7 +297,8 @@ anchored overlay becomes a bottom sheet and every side panel becomes a page.
 | Element | Component | Sizes |
 |---|---|---|
 | A selectable choice (a filter, a reader, a split option) | `Chip`, `on` when selected (border and text go primary) | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
-| A static count or state | `Badge` (solid tone by `variant`) | `sm` 16, default 20, `lg` 24; full radius |
+| A count, or a short state tag in a dense row ("1 stuck", "Unsynced") | `Badge` (solid tone by `variant`) | `sm` 16, default 20, `lg` 24; full radius |
+| A named state ("Signed in", "Out of stock", an order's status) | `StatusBadge`: a tone dot and the word | the text's own line height |
 | A few-way view switch (List / Grid, Fixed / Percent) | `SegmentedControl` | 44 (`min-h-ctl`) |
 | Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
 | An on/off setting | `Switch` | — |
