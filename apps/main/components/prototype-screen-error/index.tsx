@@ -165,7 +165,7 @@ function ProtoSwitcher({
 	const cycle = React.useCallback(
 		(direction: number) => {
 			const index = (VARIANTS.indexOf(variant) + direction + VARIANTS.length) % VARIANTS.length;
-			router.setParams({ variant: VARIANTS[index] });
+			router.replace({ pathname: '/reports', params: { variant: VARIANTS[index] } });
 		},
 		[router, variant]
 	);
