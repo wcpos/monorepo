@@ -10,6 +10,7 @@ import {
 	testAuthorizationMethod,
 } from '../../../contexts/app-state/hydration-steps';
 import { useT } from '../../../contexts/translations';
+import { asciiHost } from '../../../lib/url';
 import { upsertSiteData } from '../../../utils/site-writes';
 import { useApiDiscovery } from './use-api-discovery';
 import { useUrlDiscovery } from './use-url-discovery';
@@ -21,11 +22,15 @@ const siteLogger = getLogger(['wcpos', 'auth', 'site']);
  * slash dropped, port and path kept, so `example.com/staging` is another
  * site and `https://Example.com/` is `example.com`. A missing address
  * compares as empty rather than throwing inside the save.
+ * A non-ASCII host compares in its punycode form, so `münchen-laden.de`
+ * and `xn--mnchen-laden-dlb.de` are the same site.
  */
 export function normalizeSiteAddress(url: string | undefined): string {
 	return (url ?? '')
 		.replace(/^https?:\/\//i, '')
-		.replace(/^[^/]+/, (host) => host.toLowerCase())
+		.replace(/^[^/]+/, (segment) =>
+			segment.replace(/^[^?#]+/, (host) => asciiHost(host)).toLowerCase()
+		)
 		.replace(/\/$/, '');
 }
 
