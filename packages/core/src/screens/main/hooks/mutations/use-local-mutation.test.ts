@@ -12,10 +12,7 @@ import { config } from '../../../../../jest/cart-write';
 let cartConfig = config;
 let moneyOwned = false;
 jest.mock('../../pos/hooks/use-cart-config', () => ({
-	useCartConfigForOrder: () => {
-		const captured = cartConfig;
-		return () => captured;
-	},
+	useCartConfigReader: () => () => cartConfig,
 }));
 jest.mock('../../pos/contexts/order-money-divergence', () => ({
 	useServerOwnsMoneyReader: () => () => moneyOwned,

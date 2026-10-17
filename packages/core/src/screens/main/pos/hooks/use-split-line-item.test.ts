@@ -188,7 +188,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 const stockHooks = (['cart.line.add', 'cart.line.update', 'cart.line.split'] as const).map(

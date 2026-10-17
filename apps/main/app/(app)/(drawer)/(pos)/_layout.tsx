@@ -29,6 +29,7 @@ import {
 	useOpenOrdersHandle,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
+import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
@@ -190,52 +191,54 @@ function POSStack() {
 		<TaxRatesProvider>
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
-			<View
-				ref={registerPOSContainer}
-				className="bg-background flex-1"
-				style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
-			>
-				<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
-				{showUpgrade && (
-					<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
-						<UpgradeNotice setShowUpgrade={setShowUpgrade} />
-					</View>
-				)}
-				<SafeAreaInsetsContext.Provider value={stackInsets}>
-					<Stack
-						screenOptions={{
-							animation: 'none',
-							headerShown: false,
-							contentStyle: { backgroundColor: screenBackgroundColor },
-						}}
-					>
-						<Stack.Screen name="index" />
-						<Stack.Screen
-							name="(modals)/cart/[orderId]/checkout"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
+			<CartConfigProvider>
+				<View
+					ref={registerPOSContainer}
+					className="bg-background flex-1"
+					style={stripHeight > 0 ? { paddingTop: stripHeight } : undefined}
+				>
+					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
+					{showUpgrade && (
+						<View className="bg-warn-bg" style={{ paddingTop: edgeTop }}>
+							<UpgradeNotice setShowUpgrade={setShowUpgrade} />
+						</View>
+					)}
+					<SafeAreaInsetsContext.Provider value={stackInsets}>
+						<Stack
+							screenOptions={{
+								animation: 'none',
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
 							}}
-						/>
-						<Stack.Screen
-							name="(modals)/cart/receipt/[orderId]"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
-							}}
-						/>
-					</Stack>
-				</SafeAreaInsetsContext.Provider>
-			</View>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
+						>
+							<Stack.Screen name="index" />
+							<Stack.Screen
+								name="(modals)/cart/[orderId]/checkout"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/cart/receipt/[orderId]"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+						</Stack>
+					</SafeAreaInsetsContext.Provider>
+				</View>
+				{/**
+				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+				 * so that dialogs like add/edit product etc can access the context
+				 */}
+				<ErrorBoundary>
+					<PortalHost name="pos" />
+				</ErrorBoundary>
+			</CartConfigProvider>
 		</TaxRatesProvider>
 	);
 }

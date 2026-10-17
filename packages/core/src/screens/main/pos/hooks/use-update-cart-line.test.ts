@@ -80,7 +80,7 @@ jest.mock('./use-action-context', () => ({
 jest.mock('./use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
 	return {
-		useCartConfigForOrder: () => () => jest.requireMock('./use-cart-config').useCartConfig(),
+		useCartConfigReader: () => () => jest.requireMock('./use-cart-config').useCartConfig(),
 		useCartConfig: () =>
 			createCartConfig({
 				rates: [],

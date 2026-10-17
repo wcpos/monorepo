@@ -89,7 +89,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 const order: Record<string, unknown> & {

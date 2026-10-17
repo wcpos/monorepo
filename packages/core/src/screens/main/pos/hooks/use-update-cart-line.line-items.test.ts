@@ -177,7 +177,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config, useCartConfigForOrder: () => () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 // Mock useLineItemData

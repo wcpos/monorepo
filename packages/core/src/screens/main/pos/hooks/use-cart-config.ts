@@ -112,3 +112,26 @@ export const useCartConfig = (): CartConfig => {
 		[settings, rates, location]
 	);
 };
+
+const CartConfigReaderContext = React.createContext<((order?: OrderPayload) => CartConfig) | null>(
+	null
+);
+export function CartConfigProvider({ children }: { children: React.ReactNode }) {
+	const inputs = useCartConfigInputs();
+	const latestInputs = React.useRef(inputs);
+	// Publish committed inputs without changing the reader held by queued commands.
+	React.useLayoutEffect(() => {
+		latestInputs.current = inputs;
+	});
+	const read = React.useCallback(
+		(order?: OrderPayload) => cartConfigForOrder({ ...latestInputs.current, order }),
+		[]
+	);
+	return React.createElement(CartConfigReaderContext.Provider, { value: read }, children);
+}
+
+export function useCartConfigReader() {
+	const read = React.useContext(CartConfigReaderContext);
+	if (!read) throw new Error('useCartConfigReader requires CartConfigProvider');
+	return read;
+}
