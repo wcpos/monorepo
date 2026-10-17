@@ -11,7 +11,7 @@ import { useCartConfig } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
 import { dispatchAction } from '../../../../extensions/actions';
-import { cartRestartsOnAdd, restartStamp } from './cart-restart';
+import { cartRestartsOnAdd, isCartEmpty, restartStamp } from './cart-restart';
 import { enqueueCartAction } from './enqueue-cart-action';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -178,7 +178,8 @@ export const useAddItemToOrder = () => {
 						),
 						meta_data: ensurePosOrderIdentityMeta(
 							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
-							identity
+							identity,
+							true
 						),
 					},
 				});
@@ -186,7 +187,11 @@ export const useAddItemToOrder = () => {
 				const orderData = order.toMutableJSON().payload;
 				const orderJSON: Record<string, unknown> = {
 					...orderData,
-					meta_data: ensurePosOrderIdentityMeta(orderData.meta_data, identity),
+					meta_data: ensurePosOrderIdentityMeta(
+						orderData.meta_data,
+						identity,
+						isCartEmpty(orderData)
+					),
 					date_created_gmt,
 					[type]: [data],
 				};
@@ -295,7 +300,10 @@ export const useAddItemToOrder = () => {
 							// the start of the sale in front of the cashier, not of the abandoned
 							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
 							const restart = cartRestartsOnAdd(latest.payload)
-								? restartStamp(new Date(), resolveDayTimezone(store, site).timezone)
+								? {
+										...restartStamp(new Date(), resolveDayTimezone(store, site).timezone),
+										meta_data: ensurePosOrderIdentityMeta(latest.payload.meta_data, identity, true),
+									}
 								: {};
 							result = await localPatch({
 								document: latest,
@@ -321,6 +329,7 @@ export const useAddItemToOrder = () => {
 			ctx,
 			actor,
 			getCurrentOrderRecord,
+			identity,
 			localPatch,
 			runtime,
 			saveNewOrder,

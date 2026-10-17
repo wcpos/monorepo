@@ -28,7 +28,7 @@ export type SessionHttp = {
 	get: (
 		url: string,
 		options?: { params: Record<string, string | number> }
-	) => Promise<{ data: unknown }>;
+	) => Promise<{ data: unknown; headers?: Record<string, unknown> }>;
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 };
 type Deps = {
@@ -180,6 +180,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					pending_status: null,
 					...synced,
 					approval_required: true,
+					approved_counted: null,
 					sync_error: 'wcpos_override_refused',
 					closed_at_gmt: null,
 				});
@@ -345,7 +346,6 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					...(row.voids ? { voids: row.voids } : {}),
 				});
 				try {
-					await session.incrementalPatch({ server_expected: null, server_sales_count: null });
 					await row.incrementalModify((local) => ({
 						...local,
 						...(response.data as CashMovementRow),

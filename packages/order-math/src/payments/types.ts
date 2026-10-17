@@ -153,6 +153,7 @@ export interface PaymentRefundEntry {
 
 export interface PaymentRow {
 	id: string;
+	version?: string;
 	source: PaymentSource;
 	order_id: number;
 	method_id: string;

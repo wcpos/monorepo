@@ -5,6 +5,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { of } from 'rxjs';
 
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
+import { LEDGER_META_KEY } from '@wcpos/order-math';
 
 import { UserSheet, useSalesToday } from './user-sheet';
 
@@ -89,7 +90,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registers: [] }),
+	useRegisterBinding: () => ({ registers: [{ id: 'A' }, { id: 'B' }] }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('./switch-store-sheet', () => ({
@@ -107,12 +108,16 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		onPress,
+		disabled,
+		'aria-disabled': ariaDisabled,
 	}: {
 		children: React.ReactNode;
 		testID: string;
 		onPress: () => void;
+		disabled?: boolean;
+		'aria-disabled'?: boolean;
 	}) => (
-		<button data-testid={testID} onClick={onPress}>
+		<button data-testid={testID} onClick={onPress} disabled={disabled} aria-disabled={ariaDisabled}>
 			{children}
 		</button>
 	),
@@ -222,6 +227,87 @@ it.each(['settings', 'support', 'clear-local-data'])(
 			fireEvent.click(screen.getByTestId(`user-sheet-${action}`));
 		});
 		expect(onOpenChange).toHaveBeenCalledWith(false);
+	}
+);
+
+let mockCart:
+	| {
+			payload: {
+				status?: string;
+				meta_data: { key: string; value: string }[];
+				line_items?: { product_id: number }[];
+			};
+	  }
+	| undefined = {
+	payload: { meta_data: [] as { key: string; value: string }[] },
+};
+jest.mock('../contexts/current-order/context', () => ({ useCurrentOrderOptional: () => mockCart }));
+// Undefined is the rail variant: outside CurrentOrderProvider, switching fails closed.
+it.each([true, false, undefined])('guards cart and rail switching: %s', (attributed) => {
+	mockCart =
+		attributed === undefined
+			? undefined
+			: {
+					payload: {
+						meta_data: attributed ? [{ key: '_wcpos_register', value: 'A' }] : [],
+						line_items: attributed ? [{ product_id: 1 }] : [],
+					},
+				};
+	const blocked = attributed !== false;
+	const switchRegister = jest.fn();
+	render(
+		<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} portalHost={null} />
+	);
+	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+	expect(button.disabled).toBe(blocked);
+	expect(button.getAttribute('aria-disabled')).toBe(String(blocked));
+	expect(!!screen.queryByText('register.switch_register_blocked_cart')).toBe(attributed === true);
+	expect(!!screen.queryByText('register.switch_register_unavailable_here')).toBe(
+		attributed === undefined
+	);
+	fireEvent.click(button);
+	expect(switchRegister).toHaveBeenCalledTimes(blocked ? 0 : 1);
+});
+
+it('allows switching from an empty attributed template', () => {
+	mockCart = {
+		payload: { status: 'pos-open', meta_data: [{ key: '_wcpos_register', value: 'A' }] },
+	};
+	const switchRegister = jest.fn();
+	render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
+	const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+	expect(button.disabled).toBe(false);
+	expect(button.getAttribute('aria-disabled')).toBe('false');
+	expect(screen.queryByText('register.switch_register_blocked_cart')).toBeNull();
+	fireEvent.click(button);
+	expect(switchRegister).toHaveBeenCalledTimes(1);
+});
+
+it.each(['pos-partial', 'ledger'])(
+	'blocks a line-empty attributed cart with %s payment state',
+	(state) => {
+		mockCart = {
+			payload: {
+				status: state === 'pos-partial' ? state : 'pos-open',
+				meta_data: [{ key: '_wcpos_register', value: 'A' }],
+			},
+		};
+		if (state === 'ledger')
+			mockCart.payload.meta_data.push({
+				key: LEDGER_META_KEY,
+				value: JSON.stringify({
+					schema: 1,
+					payments: [{ id: 'p1', amount: '50', method: 'cash', status: 'captured' }],
+				}),
+			});
+		const switchRegister = jest.fn();
+		render(<UserSheet open onOpenChange={jest.fn()} onSwitchRegister={switchRegister} />);
+		const button = screen.getByTestId('user-sheet-switch-register') as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		expect(button.getAttribute('aria-disabled')).toBe('true');
+		expect(screen.getByText('register.switch_register_blocked_cart')).toBeTruthy();
+		fireEvent.click(button);
+		expect(switchRegister).not.toHaveBeenCalled();
 	}
 );
 

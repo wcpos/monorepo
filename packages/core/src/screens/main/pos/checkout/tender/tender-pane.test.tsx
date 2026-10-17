@@ -52,6 +52,33 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/tile', () => ({
+	Tile: ({
+		children,
+		testID,
+		disabled,
+		selected,
+		onPress,
+		className,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		disabled?: boolean;
+		selected?: boolean;
+		onPress?: () => void;
+		className?: string;
+	}) => (
+		<button
+			className={className}
+			data-testid={testID}
+			data-selected={String(Boolean(selected))}
+			disabled={disabled}
+			onClick={onPress}
+		>
+			{children}
+		</button>
+	),
+}));
 jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
 // The declared-fields helpers draw host controls; their native deps stay out of jsdom.
 type MockCheckboxProps = {
@@ -325,9 +352,8 @@ it('selects methods without committing and folds unavailable reasons', () => {
 		],
 	};
 	render(<TenderPane flow={flow} format={String} />);
-	expect(screen.getByTestId('checkout-method-pos_cash').getAttribute('data-variant')).toBe(
-		'outline'
-	);
+	// The picked method is the picked Tile, nothing more: choosing it commits nothing.
+	expect(screen.getByTestId('checkout-method-pos_cash').getAttribute('data-selected')).toBe('true');
 	fireEvent.click(screen.getByTestId('checkout-method-pos_cash'));
 	expect(flow.pickMethod).toHaveBeenCalledWith('pos_cash');
 	expect(flow.takeTender).not.toHaveBeenCalled();

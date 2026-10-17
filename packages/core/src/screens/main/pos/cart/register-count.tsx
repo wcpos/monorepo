@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { Tile } from '@wcpos/components/tile';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -22,6 +23,7 @@ import {
 	validAmount,
 	varianceText,
 } from './register-count.helpers';
+import { isSameCount } from '../../../../services/register-session/same-count';
 
 import type { ClosureCount } from './closure-sheet';
 
@@ -43,11 +45,10 @@ export function DenominationTile({
 	// A held tile must stop ticking when the fold or count view unmounts.
 	React.useEffect(() => () => clearInterval(timer.current), []);
 	return (
-		<Pressable
+		<Tile
 			testID={`den-tile-${value}`}
-			accessibilityRole="button"
+			size="tile"
 			accessibilityLabel={format(Number(value))}
-			className="border-border bg-muted active:bg-accent size-tile items-center justify-center gap-1 rounded-lg border"
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
 			delayLongPress={400}
@@ -70,7 +71,7 @@ export function DenominationTile({
 			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
 				{count}
 			</Text>
-		</Pressable>
+		</Tile>
 	);
 }
 
@@ -97,13 +98,20 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 	const amount = Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : cash;
 	const valid = validAmount(amount);
 	const variance = countVariance(amount, expected.cash ?? '0');
-	const needsManager =
-		!!session?.approval_required || (!blind && valid && overThreshold(variance, varianceThreshold));
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const counted = {
 		cash: amount,
 		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
 	};
+	// A manager who already approved exactly this count is not asked again (a failed close or
+	// a restart keeps the approval); a changed count or an unapproved over-threshold variance is.
+	const approvedThisCount =
+		!!session?.approved_counted && isSameCount(session.approved_counted, counted);
+	const needsManager =
+		!approvedThisCount &&
+		(!!session?.approval_required ||
+			!!session?.approved_counted ||
+			(!blind && valid && overThreshold(variance, varianceThreshold)));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {

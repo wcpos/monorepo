@@ -157,6 +157,7 @@ describe('useAddItemToOrder', () => {
 			name: '',
 		});
 		order.payload.line_items = [];
+		delete (order.payload as { meta_data?: unknown }).meta_data;
 		delete (order.payload as { status?: string }).status;
 		delete (order.payload as { date_created_gmt?: string }).date_created_gmt;
 		order.isNew = false;
@@ -198,8 +199,14 @@ describe('useAddItemToOrder', () => {
 		expect(mockReadCatalog).not.toHaveBeenCalled();
 	});
 
-	it('stamps missing POS identity meta before inserting a new engine order', async () => {
+	it('stamps the bound register over a stale template register', async () => {
 		order.isNew = true;
+		order.toMutableJSON = () => ({
+			payload: {
+				...order.payload,
+				meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
+			},
+		});
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => ({
 				toMutableJSON: () => ({ payload }),
@@ -685,6 +692,41 @@ describe('useAddItemToOrder', () => {
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 	});
 
+	it('rebinds an orphaned skeleton to the current register before creating the order', async () => {
+		order.isNew = true;
+		const skeletonPayload = {
+			uuid: 'order-uuid',
+			line_items: [],
+			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
+		};
+		mockFindEngineResident.mockResolvedValue({
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: '', source: 'skeleton' },
+			payload: skeletonPayload,
+			toMutableJSON: () => ({ payload: skeletonPayload }),
+		});
+		mockPatchEngineResident.mockImplementation(
+			async ({ changes }: { changes: Record<string, unknown> }) => {
+				const payload = { ...skeletonPayload, ...changes };
+				return { payload, toMutableJSON: () => ({ payload }) };
+			}
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', { product_id: 2, quantity: 1 });
+		});
+
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operation: 'create',
+				payload: expect.objectContaining({
+					meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
+				}),
+			})
+		);
+	});
+
 	it('keeps the orphaned skeleton and its lines when the retried create fails again', async () => {
 		order.isNew = true;
 		const skeletonPayload = { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] };
@@ -951,6 +993,7 @@ describe('useAddItemToOrder', () => {
 			status: 'pos-open',
 			date_created_gmt: '2026-07-01T00:00:00',
 			line_items: [{ id: 7, product_id: null, quantity: 1 }],
+			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
 		});
 		mockLocalPatch.mockResolvedValue({ document: order });
 
@@ -966,6 +1009,7 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch.mock.calls[0][0].data).toMatchObject({
 			date_created_gmt: expect.stringMatching(wcDate),
 			date_created: expect.stringMatching(wcDate),
+			meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
 		});
 		expect(mockLocalPatch.mock.calls[0][0].data.date_created_gmt).not.toBe('2026-07-01T00:00:00');
 		expect(mockLocalPatch.mock.calls[0][0].data.line_items).toHaveLength(2);

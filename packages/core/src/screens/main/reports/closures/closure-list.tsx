@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
 import { Badge } from '@wcpos/components/badge';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 
@@ -37,7 +38,7 @@ export function ClosureList({
 	const names = useRegisterNames();
 
 	return (
-		<View className="bg-card rounded-md border">
+		<View className="bg-card rounded-lg border">
 			{!rows.length && (
 				<Text testID="closures-empty" className="p-4">
 					{t('reports.no_closures')}
@@ -60,54 +61,57 @@ export function ClosureList({
 								{row.business_day ? heading(row.business_day) : ''}
 							</Text>
 						)}
-						<Pressable
+						<ListRow
 							disabled={unavailableIds?.has(row.server_closure_id ?? row.id)}
 							onPress={() => onSelect?.(row)}
-							accessibilityRole="button"
 							testID={`closure-row-${row.id}`}
-							className={`active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3 ${unavailableIds?.has(row.server_closure_id ?? row.id) ? 'opacity-50' : ''}`}
-						>
-							<View className="min-w-0 flex-1 gap-1">
-								<Text>
-									{t('reports.closure_n', { n: row.server_number ?? row.number })} ·{' '}
-									{String(
-										row.breakdowns.register_name ||
-											names[row.register_id] ||
-											row.register_id.slice(0, 8)
-									)}
-								</Text>
-								<Text className="text-muted-foreground">
-									{time(row.opened_at)} → {time(row.closed_at)} ·{' '}
-									{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
-								</Text>
-								{unavailableIds?.has(row.server_closure_id ?? row.id) && (
-									<Text testID={`closure-unavailable-${row.id}`}>
-										{t('reports.unavailable_offline')}
+							// Ruled above, not below: each day's heading opens its rows inside the card.
+							className="border-t border-b-0"
+							bodyClassName="gap-1"
+							trailing={
+								<>
+									<Text testID={`closure-counted-${row.id}`} className="tabular-nums">
+										{format(Number(row.counted.cash ?? 0))}
 									</Text>
-								)}
-								{badge && (
-									<Badge
-										testID={`closure-badge-${row.id}`}
-										variant="muted"
-										size="lg"
-										className="self-start"
+									<Text
+										testID={`closure-result-${row.id}`}
+										className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-success' : 'text-muted-foreground'}`}
 									>
-										<Text>{badge}</Text>
-									</Badge>
+										{variance
+											? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
+											: t('reports.exact')}
+									</Text>
+								</>
+							}
+						>
+							<Text>
+								{t('reports.closure_n', { n: row.server_number ?? row.number })} ·{' '}
+								{String(
+									row.breakdowns.register_name ||
+										names[row.register_id] ||
+										row.register_id.slice(0, 8)
 								)}
-							</View>
-							<Text testID={`closure-counted-${row.id}`} className="tabular-nums">
-								{format(Number(row.counted.cash ?? 0))}
 							</Text>
-							<Text
-								testID={`closure-result-${row.id}`}
-								className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-success' : 'text-muted-foreground'}`}
-							>
-								{variance
-									? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
-									: t('reports.exact')}
+							<Text className="text-muted-foreground">
+								{time(row.opened_at)} → {time(row.closed_at)} ·{' '}
+								{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
 							</Text>
-						</Pressable>
+							{unavailableIds?.has(row.server_closure_id ?? row.id) && (
+								<Text testID={`closure-unavailable-${row.id}`}>
+									{t('reports.unavailable_offline')}
+								</Text>
+							)}
+							{badge && (
+								<Badge
+									testID={`closure-badge-${row.id}`}
+									variant="muted"
+									size="lg"
+									className="self-start"
+								>
+									<Text>{badge}</Text>
+								</Badge>
+							)}
+						</ListRow>
 					</React.Fragment>
 				);
 			})}

@@ -8,6 +8,21 @@ import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { NetworkFields } from './network-fields';
 
+jest.mock('@wcpos/components/list-item', () => ({
+	ListItem: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<button type="button" data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
 jest.mock('react-native', () => ({
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>

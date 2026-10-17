@@ -35,7 +35,7 @@ beforeEach(async () => {
 	await db.addCollections({
 		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
-		cash_movements: { schema: cashMovementsLiteral },
+		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
 	await ensureRegister(userDB);
 });

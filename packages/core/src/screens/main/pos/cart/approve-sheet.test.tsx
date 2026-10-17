@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Toast } from '@wcpos/components/toast';
+
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { ApproveSheet } from './approve-sheet';
@@ -13,6 +15,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
 }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
@@ -111,17 +114,19 @@ it('refused credentials/capability show an error without closing', async () => {
 	expect(patch).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
 });
-it('approves on the server, persists only approved_by, then closes without a token', async () => {
-	post.mockResolvedValue({ data: { approved_by: 42 } });
+it('approves on the server, persists the approved count, then closes without a token', async () => {
+	post.mockResolvedValue({ data: { approved_by: 42, approved_counted: props.counted } });
 	render(<ApproveSheet {...props} />);
 	fill();
 	await waitFor(() => expect(props.onClosed).toHaveBeenCalled());
 	expect(post).toHaveBeenCalledWith('sessions/s/approve', {
 		username: 'manager',
 		password: 'secret',
+		counted: props.counted,
 	});
 	expect(patch).toHaveBeenCalledWith({
 		approved_by: 42,
+		approved_counted: props.counted,
 		approval_required: false,
 		sync_error: null,
 	});
@@ -156,7 +161,7 @@ it('409 stays in the sheet and never leaks the request error', async () => {
 });
 
 it('does not label a failed close as a refused approval', async () => {
-	post.mockResolvedValue({ data: { approved_by: 42 } });
+	post.mockResolvedValue({ data: { approved_by: 42, approved_counted: props.counted } });
 	closeSession.mockRejectedValueOnce(new Error('disk'));
 	render(<ApproveSheet {...props} />);
 	fill();
@@ -165,4 +170,19 @@ it('does not label a failed close as a refused approval', async () => {
 		expect.objectContaining({ kind: 'approval-refused' })
 	);
 	expect(recordFact).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+	{ approved_by: null, approved_counted: props.counted },
+	{ approved_by: 42 },
+	{ approved_by: 42, approved_counted: { cash: '1' } },
+])('rejects malformed approval %j without changing the session', async (data) => {
+	post.mockResolvedValue({ data });
+	render(<ApproveSheet {...props} />);
+	fill();
+	await waitFor(() => expect(screen.getByTestId('approve-error')).toBeTruthy());
+	expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+	expect(patch).not.toHaveBeenCalled();
+	expect(closeSession).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 });

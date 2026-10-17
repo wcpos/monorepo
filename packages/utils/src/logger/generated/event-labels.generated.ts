@@ -72,6 +72,7 @@ export const SYNC_EVENT_TYPES = [
 	'engine.ready-failed',
 	'engine.ready-stalled',
 	'engine.reconnect.retick',
+	'engine.request.deadline',
 	'engine.reset-needs-confirmation',
 	'engine.scope-switched',
 	'maintenance.lane.error',
@@ -692,6 +693,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.engine_reconnect_retick',
 		label: 'Resumed syncing after reconnecting',
 		introducedIn: '1.10.0',
+	},
+	'engine.request.deadline': {
+		type: 'engine.request.deadline',
+		domain: 'SYNC',
+		key: 'health.logs.event.engine_request_deadline',
+		label: 'Sync request timed out',
+		introducedIn: '2.0.0',
 	},
 	'engine.reset-needs-confirmation': {
 		type: 'engine.reset-needs-confirmation',

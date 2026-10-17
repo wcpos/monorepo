@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { debounceTime, filter } from 'rxjs';
+
 import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
@@ -11,7 +13,7 @@ import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client
 import { useRegisterBinding } from '../register/use-register-binding';
 import { failureFacts } from './failure-facts';
 import { drainRegisterSessionQueue } from './queue';
-import { refreshSessions } from './refresh';
+import { refreshSessions, sessionRefreshRequests } from './refresh';
 import {
 	useCashMovementCollection,
 	useClosureCollection,
@@ -41,6 +43,8 @@ export function RegisterSessionBridge() {
 	// One cycle failing is a blip; the same cycle still failing a minute later is the merchant's
 	// problem. The rubric's terminal-outcome rule puts the verdict here, where the arc is visible.
 	const consecutiveFailures = React.useRef(0);
+	const inFlight = React.useRef(false);
+	const rerun = React.useRef<(() => void) | null>(null);
 	// Imperative outbox delivery has mount/connectivity and timer triggers, not render state.
 	React.useEffect(() => {
 		if (!sessions || !movements || !closures) return;
@@ -108,15 +112,39 @@ export function RegisterSessionBridge() {
 				consecutiveFailures: failures,
 			});
 		};
-		const cycle = () =>
-			sync().then(() => {
-				consecutiveFailures.current = 0;
-			}, report);
+		const cycle = () => {
+			// Coalesce triggers so an older response cannot overwrite a newer snapshot.
+			if (inFlight.current) {
+				rerun.current = cycle;
+				return;
+			}
+			inFlight.current = true;
+			void sync()
+				.then(() => {
+					consecutiveFailures.current = 0;
+				}, report)
+				.finally(() => {
+					inFlight.current = false;
+					const next = rerun.current;
+					rerun.current = null;
+					next?.();
+				});
+		};
+		const refreshRequests = sessionRefreshRequests
+			.pipe(
+				filter((request) => request.sessions === sessions && request.registerId === registerId),
+				debounceTime(250)
+			)
+			.subscribe(() => void cycle());
 		void cycle();
 		const tick = setInterval(() => {
 			void cycle();
 		}, 60_000);
-		return () => clearInterval(tick);
+		return () => {
+			if (rerun.current === cycle) rerun.current = null;
+			clearInterval(tick);
+			refreshRequests.unsubscribe();
+		};
 	}, [
 		sessions,
 		movements,

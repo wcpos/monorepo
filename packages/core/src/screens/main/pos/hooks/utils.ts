@@ -81,13 +81,14 @@ type LineItemImage = LineItem['image'];
 type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;
 
 /**
- * Adds missing POS identity entries without replacing existing metadata values.
+ * Adds missing POS identity entries, rebinding the register only for an empty cart.
  *
  * @param metaData - Existing order metadata, or undefined for a new order.
  * @param identity - Identity values to add to the order.
  * @param identity.userId - The cashier's WordPress user ID.
  * @param identity.storeId - The store ID; zero omits the store entry.
  * @param identity.taxBasedOn - The tax-address basis, when available.
+ * @param rebindRegister - Use the current binding when starting an empty cart.
  * @returns A new metadata array containing every applicable identity entry.
  */
 export function ensurePosOrderIdentityMeta(
@@ -98,12 +99,15 @@ export function ensurePosOrderIdentityMeta(
 		taxBasedOn?: string;
 		registerId?: string;
 		tillId?: string;
-	}
+	},
+	rebindRegister = false
 ): OrderMetaData {
 	const existing = wooMetaCarrier.readIdentity(metaData);
 	let ensured = wooMetaCarrier.stampIdentity(metaData, {
 		userId: existing.cashierId ?? identity.userId,
-		registerId: existing.registerId ?? identity.registerId,
+		registerId: rebindRegister
+			? (identity.registerId ?? existing.registerId)
+			: (existing.registerId ?? identity.registerId),
 		tillId: existing.tillId ?? identity.tillId,
 		storeId: existing.storeId ?? identity.storeId,
 	}) as OrderMetaData;

@@ -43,7 +43,6 @@ const buttonVariants = cva(
 				 * Outline buttons
 				 */
 				outline: 'border-border bg-card web:hover:bg-muted active:bg-muted border',
-				'outline-primary': 'border-primary bg-card web:hover:bg-primary active:bg-primary border',
 				'outline-destructive':
 					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
@@ -98,9 +97,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			 * Outline buttons
 			 */
 			outline: '',
-			// Rest: the primary word on a card; hovered/pressed the compound below flips it to the
-			// foreground as the fill arrives (an active filter pill).
-			'outline-primary': 'text-primary font-semibold',
 			'outline-destructive': '',
 
 			/**
@@ -121,8 +117,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		{ variant: 'outline', hovered: true, class: 'text-foreground' },
 		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
 		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
-		{ variant: 'outline-primary', pressed: true, class: 'text-primary-foreground' },
-		{ variant: 'outline-primary', hovered: true, class: 'text-primary-foreground' },
 		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
 		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },

@@ -17,7 +17,7 @@ export function useSwitchStore() {
 	const t = useT();
 	const [isSwitching, setIsSwitching] = React.useState(false);
 	const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
-	const handleSwitchStore = async (nextStore: StoreDocument): Promise<void> => {
+	const handleSwitchStore = async (nextStore: StoreDocument): Promise<boolean> => {
 		setIsSwitching(true);
 		try {
 			await switchStore(nextStore);
@@ -34,6 +34,7 @@ export function useSwitchStore() {
 			} else {
 				router.replace('/');
 			}
+			return true;
 		} catch (error) {
 			Toast.show({
 				type: 'error',
@@ -44,6 +45,7 @@ export function useSwitchStore() {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error },
 			});
+			return false;
 		} finally {
 			setIsSwitching(false);
 		}

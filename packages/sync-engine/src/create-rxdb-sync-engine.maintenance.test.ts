@@ -278,6 +278,39 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it.each(['deadline', 'HTTP 500'])(
+		'classifies a forced census failure from %s',
+		async (failure) => {
+			const diagnostics = vi.fn();
+			const engine = engineWith({
+				diagnostics,
+				queryTotal: {
+					fetchWooQueryTotal: async () => {
+						if (failure === 'deadline') return new Promise<number>(() => {});
+						throw new Error('HTTP 500');
+					},
+				},
+			});
+			await engine.ready;
+			vi.useFakeTimers();
+			try {
+				const check = engine.checkCollection('products');
+				await vi.advanceTimersByTimeAsync(25_000);
+				expect(await check).toMatchObject({ status: 'error' });
+				const error = diagnostics.mock.calls.find(
+					([event]) => event.type === 'maintenance.lane.error'
+				);
+				expect(error?.[0].fields).toEqual({
+					lane: 'query-total-retry',
+					...(failure === 'deadline' ? { status: 0 } : {}),
+				});
+			} finally {
+				vi.useRealTimers();
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
 		let failProbe = true;
 		const fetchWooQueryTotal = vi.fn(async () => {
@@ -984,6 +1017,18 @@ describe('maintenance lanes through the public handle', () => {
 	});
 
 	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+		let releaseWrite!: () => void;
+		const writeBarrier = new Promise<void>((resolve) => {
+			releaseWrite = resolve;
+		});
+		const markFailed = RxQueryTotalRequestStateRepository.prototype.markFailed;
+		// Cancellation settles the host call immediately; keep its final database write pending.
+		vi.spyOn(RxQueryTotalRequestStateRepository.prototype, 'markFailed').mockImplementation(
+			async function (this: RxQueryTotalRequestStateRepository, ...args) {
+				await writeBarrier;
+				return markFailed.apply(this, args);
+			}
+		);
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'orders:total:guarded-dispose'
@@ -1030,6 +1075,7 @@ describe('maintenance lanes through the public handle', () => {
 		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
 
 		releaseFetch(42);
+		releaseWrite();
 		const report = await tick;
 		await disposing;
 		expect(closeStartedBeforeTickFinished).toBe(false);

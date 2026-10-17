@@ -4,6 +4,8 @@
 import { act, fireEvent, render } from '@testing-library/react';
 
 const mockOpenExternalURL = jest.fn();
+// ListItem reads the pointer, and this suite's react-native mock has no Platform.
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
 jest.mock('@wcpos/utils/open-external-url', () => ({
 	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
 }));
