@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { Platform, Share, View } from 'react-native';
 
+import { type Href, useRouter } from 'expo-router';
+import { decode } from 'html-entities';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -20,10 +23,18 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { useRecordEditRoute } from '../health/record-edit-route';
+import { useRecordLabel } from '../health/use-record-label';
 import { translateErrorAction } from './generated/error-actions.generated';
 import { translateErrorSummary } from './generated/error-summaries.generated';
 import { translateEventDescription } from './generated/event-titles.generated';
-import { buildLogEntryReport, eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
+import {
+	buildLogEntryReport,
+	eventTypeOf,
+	type LogRow,
+	recordRefOf,
+	rowDetailData,
+} from './logs-logic';
 
 export function catalogueFor(code: string | undefined): CatalogueEntry | null {
 	if (!code) return null;
@@ -139,6 +150,63 @@ function HelpLink({ code }: { code: string }) {
 }
 
 /**
+ * Codes resolved in Store health → Database: the held-changes, rejected and
+ * attention panels sit at the top of that tab, so landing on it is landing on
+ * them.
+ */
+const DATABASE_CODES: ReadonlySet<string> = new Set([
+	'SYNC201',
+	'SYNC211',
+	'SYNC221',
+	'SYNC321',
+	'SYNC331',
+]);
+
+/**
+ * The way from the row to where its problem is fixed: the record's own edit
+ * screen when it has one and this device holds it, and the Database tab for
+ * the codes resolved there. The copy says "Open Store health → Database…";
+ * this makes it one tap.
+ */
+function RowActions({
+	logId,
+	openRecord,
+	toDatabase,
+}: {
+	logId: string;
+	openRecord: Href | null;
+	toDatabase: boolean;
+}) {
+	const t = useT();
+	const router = useRouter();
+	if (!openRecord && !toDatabase) return null;
+	return (
+		<HStack className="flex-wrap items-center gap-1">
+			{openRecord ? (
+				<Button
+					variant="ghost"
+					size="sm"
+					testID={`logs-open-record-${logId}`}
+					onPress={() => router.push(openRecord)}
+				>
+					<ButtonText>{t('health.logs.open_record')}</ButtonText>
+				</Button>
+			) : null}
+			{toDatabase ? (
+				<Button
+					variant="ghost"
+					size="sm"
+					testID={`logs-go-database-${logId}`}
+					onPress={() => router.push('/health/database')}
+				>
+					<ButtonText>{t('health.logs.go_to_database')}</ButtonText>
+				</Button>
+			) : null}
+		</HStack>
+	);
+}
+
+/**
  * Inline expandable detail under a ledger row. Every kind shares one aligned
  * prose, facts, and context stack; problem rows add only a tone bar.
  *
@@ -154,17 +222,57 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const detail = rowDetailData(row);
 	const guidance = useGuidanceText(entry);
 	const isProblem = kind === 'error' || kind === 'warn';
-
+	// Any row with a registered code gets its summary, guidance and Help,
+	// whatever its level: a "Nothing to do" code logged at info still has to
+	// SAY nothing is needed, or the row is a title with no meaning.
+	const showsGuidance = isProblem || entry !== null;
+	const record = recordRefOf(row);
+	const recordLabel = useRecordLabel(record?.collection, record?.recordId);
+	const editRoute = useRecordEditRoute();
+	// Only once the record is FOUND: a tap while the read is in flight must not
+	// open an edit screen for a record this device may not hold. The route is
+	// keyed by the uuid the read returned (pull rows carry the store's id), and
+	// is null for a user who may not edit this kind of record.
+	const fixRoute =
+		record && recordLabel?.status === 'found'
+			? editRoute(record.collection, recordLabel.uuid)
+			: null;
 	const context = row.context ?? {};
+	// Only a row about a record or a queued change has anything on the Database
+	// tab (SYNC211 is also stamped on settings/auth 400s), and a recovered or
+	// settled row has nothing left there — an auto-reverted SYNC201 already
+	// restored the store's copy.
+	const hasRecordContext =
+		(context.recordId !== undefined && context.recordId !== null) ||
+		(context.mutationId !== undefined && context.mutationId !== null);
+	const toDatabase =
+		row.code !== undefined &&
+		DATABASE_CODES.has(row.code) &&
+		hasRecordContext &&
+		row.outcome !== 'recovered' &&
+		row.outcome !== 'ok';
+
 	const reason =
 		typeof context.reason === 'string' && context.reason.length > 0 ? context.reason : null;
 	const eventType = eventTypeOf(row);
 	const description =
-		!isProblem && eventType !== undefined && isSyncEventType(eventType)
+		!showsGuidance && eventType !== undefined && isSyncEventType(eventType)
 			? translateEventDescription((key) => t(key), eventType)
 			: undefined;
 
 	const entries: KVEntry[] = [];
+	if (recordLabel) {
+		// Names arrive the way the catalogue stores them ("Men&#8217;s T-shirt").
+		entries.push({ label: t('health.logs.kv_record'), value: decode(recordLabel.text) });
+	}
+	if (detail.field) entries.push({ label: t('health.logs.kv_field'), value: detail.field });
+	if (detail.sku) entries.push({ label: t('health.logs.kv_sku'), value: detail.sku });
+	if (detail.overwrittenFields) {
+		entries.push({
+			label: t('health.logs.kv_overwritten_fields'),
+			value: detail.overwrittenFields,
+		});
+	}
 	if (detail.operation) {
 		entries.push({
 			label: t('health.logs.kv_operation'),
@@ -217,7 +325,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// translated guidance on every non-English till, and on a row with no
 	// registered event type (the 147 code-carrying `logger.error` call sites in
 	// packages/core) it was the only merchant-readable sentence on the row.
-	const explanation = isProblem
+	const explanation = showsGuidance
 		? serverSaid !== null
 			? t('health.logs.server_said', { reason: serverSaid })
 			: entry
@@ -228,6 +336,14 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// same summary (`useEventTitle`, #2439), so the lead line would repeat the
 	// title word for word — the same dedupe `narration` applies to quiet rows.
 	const lead = explanation !== null && explanation !== title ? explanation : null;
+	// The store's own sentence joins the facts (after the record) unless the lead
+	// already quotes it; WP REST ships it HTML-encoded, as on the lead line.
+	if (detail.serverMessage && !(lead !== null && serverSaid === serverMessage)) {
+		entries.splice(recordLabel ? 1 : 0, 0, {
+			label: t('health.logs.kv_server_message'),
+			value: decode(detail.serverMessage),
+		});
+	}
 	// The persisted message, when it says something the row does not already say.
 	// On a quiet row it is the narration under the event description. On a
 	// problem row it is shown only when there is NO registered engine event: an
@@ -242,13 +358,14 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		row.message !== title &&
 		row.message !== eventType &&
 		row.message !== lead &&
-		(!isProblem || !isEngineRow)
+		(!showsGuidance || !isEngineRow)
 			? row.message
 			: null;
 	const hasContext = Object.keys(context).length > 0;
-	const hasProse = isProblem
-		? Boolean(lead || guidance || narration || (entry && row.code))
-		: Boolean(description || narration);
+	const hasActions = fixRoute !== null || toDatabase;
+	const hasProse = showsGuidance
+		? Boolean(lead || guidance || narration || (entry && row.code) || hasActions)
+		: Boolean(description || narration || hasActions);
 	const hasFacts = Boolean(eventType || entries.length > 0);
 
 	return (
@@ -263,7 +380,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			) : null}
 			{hasProse ? (
 				<VStack className="gap-1">
-					{isProblem ? (
+					{showsGuidance ? (
 						<>
 							{/* On the server-said branch this IS the server's own sentence, and WP
 							    REST ships its error copy HTML-encoded — decode so the row reads
@@ -277,6 +394,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 							{narration ? (
 								<Text className="text-muted-foreground text-xs">{narration}</Text>
 							) : null}
+							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>
 					) : (
@@ -285,6 +403,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 							{narration ? (
 								<Text className="text-muted-foreground text-xs">{narration}</Text>
 							) : null}
+							<RowActions logId={row.logId} openRecord={fixRoute} toDatabase={toDatabase} />
 						</>
 					)}
 				</VStack>
