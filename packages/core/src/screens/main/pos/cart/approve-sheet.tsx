@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
+import { Toast } from '@wcpos/components/toast';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { ClosureDocument } from '@wcpos/database';
@@ -12,6 +13,7 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { usePanelSide } from '../contexts/overlay-side';
+import { isSameCount } from '../../../../services/register-session/same-count';
 
 export function ApproveSheet({
 	counted,
@@ -37,7 +39,16 @@ export function ApproveSheet({
 		setBusy(true);
 		setError('');
 		try {
-			const response = await http.post(`sessions/${session.id}/approve`, { username, password });
+			const response = await http.post(`sessions/${session.id}/approve`, {
+				username,
+				password,
+				counted,
+			});
+			if (
+				typeof response.data?.approved_by !== 'number' ||
+				!isSameCount(response.data.approved_counted, counted)
+			)
+				throw new Error('invalid_approval_response');
 			recordRegisterFact({
 				kind: 'approval-granted',
 				actor,
@@ -48,6 +59,7 @@ export function ApproveSheet({
 			setPassword('');
 			await session.incrementalPatch({
 				approved_by: response.data.approved_by,
+				approved_counted: response.data.approved_counted,
 				approval_required: false,
 				sync_error: null,
 			});
@@ -64,7 +76,9 @@ export function ApproveSheet({
 					sessionId: session.id,
 					registerId: session.register_id,
 				});
-			setError(t(refused ? 'register.cannot_approve' : 'register.approval_failed'));
+			const message = t(refused ? 'register.cannot_approve' : 'register.approval_failed');
+			setError(message);
+			Toast.show({ type: 'error', title: message });
 		} finally {
 			setBusy(false);
 		}

@@ -26,6 +26,7 @@ export const registerSessionsLiteral = {
 		closed_by: { type: ['number', 'null'] },
 		approval_required: { type: 'boolean', default: false },
 		approved_by: { type: ['number', 'null'] },
+		approved_counted: { type: ['object', 'null'], additionalProperties: { type: 'string' } },
 		counted: { type: ['object', 'null'], additionalProperties: { type: 'string' } },
 		closure_id: { type: ['string', 'null'] },
 		pending_status: { type: ['string', 'null'], default: null },

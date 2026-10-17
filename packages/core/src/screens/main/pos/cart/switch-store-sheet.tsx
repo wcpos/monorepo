@@ -55,8 +55,7 @@ export function SwitchStoreSheet({
 					<StoreRows
 						isSwitching={isSwitching}
 						onSwitch={async (next) => {
-							await handleSwitchStore(next);
-							onOpenChange(false);
+							if (await handleSwitchStore(next)) onOpenChange(false);
 						}}
 					/>
 				</Suspense>

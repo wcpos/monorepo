@@ -426,7 +426,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
-				const row = await actions.startCounting(sessions!, session!.id);
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
+				const row = await actions.startCounting(sessions, session.id);
 				recordRegisterFact({
 					kind: 'counting-started',
 					actor,
@@ -436,7 +437,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			backToSelling: async () => {
-				const row = await actions.backToSelling(sessions!, session!.id);
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
+				const row = await actions.backToSelling(sessions, session.id);
 				recordRegisterFact({
 					kind: 'counting-abandoned',
 					actor,
@@ -446,6 +448,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
 				const closed =
 					session!.status === 'closed'
 						? session!

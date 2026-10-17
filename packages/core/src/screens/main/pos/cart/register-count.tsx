@@ -22,6 +22,7 @@ import {
 	validAmount,
 	varianceText,
 } from './register-count.helpers';
+import { isSameCount } from '../../../../services/register-session/same-count';
 
 import type { ClosureCount } from './closure-sheet';
 
@@ -97,13 +98,15 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 	const amount = Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : cash;
 	const valid = validAmount(amount);
 	const variance = countVariance(amount, expected.cash ?? '0');
-	const needsManager =
-		!!session?.approval_required || (!blind && valid && overThreshold(variance, varianceThreshold));
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const counted = {
 		cash: amount,
 		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
 	};
+	const needsManager =
+		!!session?.approval_required ||
+		(!!session?.approved_counted && !isSameCount(session.approved_counted, counted)) ||
+		(!blind && valid && overThreshold(variance, varianceThreshold));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {

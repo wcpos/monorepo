@@ -68,6 +68,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
+let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let blind = false,
 	approval_required = false,
@@ -79,7 +80,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		varianceThreshold,
-		session: { id: 's', register_id: 'r', approval_required },
+		session: { id: 's', register_id: 'r', approval_required, approved_counted },
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
@@ -110,6 +111,7 @@ jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="appr
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
+	approved_counted = null;
 	unsyncedCount = 3;
 	blind = false;
 	approval_required = false;
@@ -229,4 +231,13 @@ it.each([
 	unsyncedCount = count;
 	render(<RegisterCount onClosed={jest.fn()} />);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
+});
+
+it('requests approval again when the count changes after approval', () => {
+	approved_counted = { cash: '463.30' };
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('480.80');
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(closeSession).not.toHaveBeenCalled();
+	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
 });

@@ -74,6 +74,7 @@ function mockObserve(_engine: unknown, query: { collection: string; selector: Ro
 // The hook only trusts an emission whose collections are identical to the ones it holds now,
 // so these have to be stable across renders. Both session queries are register-scoped, so
 // whatever they return IS this register's set of sessions.
+let mockHasSessions = true;
 const mockSessions = {
 	find: (query?: { selector?: { status?: unknown } }) => ({
 		$: merge(of(null), mockSessionChanges).pipe(
@@ -104,7 +105,7 @@ const mockStoreSession = {
 };
 
 jest.mock('./use-register-session-collections', () => ({
-	useRegisterSessionCollection: () => mockSessions,
+	useRegisterSessionCollection: () => (mockHasSessions ? mockSessions : undefined),
 	useCashMovementCollection: () => mockMovements,
 	useClosureCollection: () => mockClosures,
 }));
@@ -156,6 +157,7 @@ async function settled() {
 }
 
 beforeEach(() => {
+	mockHasSessions = true;
 	jest.clearAllMocks();
 	active = [
 		{
@@ -1588,5 +1590,25 @@ it.each([
 		const result = await settled();
 		expect(result.current.expected.cash).toBe('100');
 		expect(mockRequestRefresh).toHaveBeenCalledTimes(requests);
+	}
+);
+
+it.each(['startCounting', 'backToSelling', 'closeSession'] as const)(
+	'%s rejects with the domain error when the session is missing',
+	async (action) => {
+		active = [{ ...session, sync_status: 'failed' }];
+		const { result } = renderHook(() => useRegisterSession());
+		await act(async () => {});
+		await expect(
+			result.current.actions[action]({ counted: { cash: '100' } })
+		).rejects.toBeInstanceOf(actions.RegisterSessionRequiredError);
+		mockHasSessions = false;
+		const missing = renderHook(() => useRegisterSession());
+		await expect(
+			missing.result.current.actions[action]({ counted: { cash: '100' } })
+		).rejects.toBeInstanceOf(actions.RegisterSessionRequiredError);
+		expect(actions.startCounting).not.toHaveBeenCalled();
+		expect(actions.backToSelling).not.toHaveBeenCalled();
+		expect(actions.closeSession).not.toHaveBeenCalled();
 	}
 );
