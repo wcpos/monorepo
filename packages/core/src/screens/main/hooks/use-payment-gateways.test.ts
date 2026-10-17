@@ -3,6 +3,8 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { usePaymentGateways } from './use-payment-gateways';
 
 const mockGet = jest.fn();
@@ -70,5 +72,17 @@ describe('usePaymentGateways', () => {
 		await waitFor(() => expect(result.current.loading).toBe(false));
 		expect(result.current.gateway).toBeNull();
 		expect(result.current.error).toBe('boom');
+	});
+
+	it('writes the one coded row for a failed catalog load (the transport row is forensic)', async () => {
+		mockGet.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+		const { result } = renderHook(() => usePaymentGateways('pos_cash'));
+
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(getLogger([]).warn).toHaveBeenCalledWith('Payment gateways could not be loaded', {
+			code: 'SYNC121',
+			context: { error: 'Network Error' },
+		});
 	});
 });

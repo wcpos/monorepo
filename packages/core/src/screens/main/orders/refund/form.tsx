@@ -190,7 +190,12 @@ export function RefundOrderForm({ order }: Props) {
 				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
 				setRefundDetailsLoading(false);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
+				// The refund limits fall back to the order's saved refunds; recorded so a
+				// support case can see the store's history was not read.
+				refundLogger.info('Refund history not loaded from the store; using the saved refunds', {
+					context: { orderId: orderData.id, error: getErrorMessage(error) },
+				});
 				if (!mounted) return;
 				setRefundDetails(getRefundsFallback());
 				setRefundDetailsLoading(false);

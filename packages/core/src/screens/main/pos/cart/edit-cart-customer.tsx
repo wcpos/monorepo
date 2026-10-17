@@ -90,8 +90,8 @@ export function EditCartCustomerForm() {
 	/**
 	 *
 	 */
-	const handleSaveToOrder = async (data: FormValues) => {
-		await localPatch({
+	const saveToOrder = async (data: FormValues): Promise<boolean> => {
+		const patched = await localPatch({
 			document: currentOrderRecord,
 			data: {
 				billing: data.billing,
@@ -99,7 +99,14 @@ export function EditCartCustomerForm() {
 				tax_ids: data.tax_ids ?? [],
 			},
 		});
+		// localPatch already reported a failed write; keep the dialog (and the edits) open.
+		if (!patched) return false;
 		onOpenChange(false);
+		return true;
+	};
+
+	const handleSaveToOrder = async (data: FormValues) => {
+		await saveToOrder(data);
 	};
 
 	/**
@@ -107,7 +114,8 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
 		const wooCustomerId = Number(customerID ?? 0);
-		await handleSaveToOrder(data);
+		// Never say "Saved to the order" (below) for an order write that failed.
+		if (!(await saveToOrder(data))) return;
 		setLoading(true);
 		try {
 			const customer = await findCustomerByWooId(runtime, wooCustomerId);

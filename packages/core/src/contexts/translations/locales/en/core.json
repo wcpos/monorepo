@@ -653,6 +653,7 @@
 	"pos_cart.will_be_backordered": "{name} will be backordered",
 	"pos_cart.stock_not_loaded": "Stock for {name} hasn't loaded on this device yet. Try again in a moment.",
 	"pos_cart.customer_profile_not_on_device": "Saved to the order. The customer's profile isn't on this device, so it wasn't updated.",
+	"pos_cart.customer_saved_not_attached": "The customer was saved, but not added to this order. Search for them and add them again.",
 	"pos_checkout.amount_to_pay": "Amount to Pay",
 	"pos_checkout.checkout": "Checkout",
 	"pos_checkout.insufficient_stock_message": "Stock changed while checking out — these items exceed what's available:",

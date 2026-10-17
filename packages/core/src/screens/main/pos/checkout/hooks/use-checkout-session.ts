@@ -99,7 +99,15 @@ export function classifyCheckoutFailure(
 		};
 	}
 	const status = (error as { response?: { status?: number } } | null)?.response?.status;
-	const refused = typeof status === 'number' && status >= 400 && status < 500 && status !== 409;
+	// 408/409/429: the start may still be processing (or retried by the store), so a
+	// retry — which gets a fresh idempotency key after a remount — could charge twice.
+	const refused =
+		typeof status === 'number' &&
+		status >= 400 &&
+		status < 500 &&
+		status !== 408 &&
+		status !== 409 &&
+		status !== 429;
 	if (phase === 'bootstrap' || (phase === 'start' && refused)) {
 		return {
 			level: 'error',

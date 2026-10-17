@@ -87,10 +87,12 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				// localPatch rethrow (a scope that moved twice) by localPatch.
 				if (isErrorReported(error)) return;
 				const errorMessage = getErrorMessage(error);
-				cartLogger.error('Failed to save customer', {
+				// The customer WAS created; only attaching it to the cart failed. "Failed to
+				// save customer" (and SYNC999's "save it again") invited a duplicate.
+				cartLogger.error('Customer created but not added to the cart', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					toast: { title: t('common.failed_to_save_customer') },
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos_cart.customer_saved_not_attached') },
 					context: {
 						error: errorMessage,
 					},

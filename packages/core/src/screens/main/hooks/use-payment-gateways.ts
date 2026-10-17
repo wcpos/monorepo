@@ -1,7 +1,13 @@
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+
 import { PaymentGatewayContract } from './payment-gateway-contract';
 import { useRestHttpClient } from './use-rest-http-client';
+import { storeRequestFailureCode } from '../../../utils/store-request-failure-code';
+
+const gatewaysLogger = getLogger(['wcpos', 'pos', 'checkout', 'gateways']);
 
 export function usePaymentGateways(selectedGatewayId?: string | null) {
 	const http = useRestHttpClient();
@@ -24,6 +30,13 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			setGateways(next);
 			return next;
 		} catch (err) {
+			// The one row for this failure (the HTTP transport row is forensic). The
+			// checkout screen's inline error is the instruction, so no toast; offline is
+			// forensic too, since nothing was attempted.
+			gatewaysLogger[isExpectedPreflightBlock(err) ? 'debug' : 'warn'](
+				'Payment gateways could not be loaded',
+				{ code: storeRequestFailureCode(err), context: { error: getErrorMessage(err) } }
+			);
 			setError(err instanceof Error ? err.message : 'payment_gateways_fetch_failed');
 			return gatewaysRef.current;
 		} finally {

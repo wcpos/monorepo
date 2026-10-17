@@ -1,10 +1,27 @@
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { useQueryRuntime } from '@wcpos/query';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { ExtraDataContext } from './context';
+
+const extraDataLogger = getLogger(['wcpos', 'extra-data']);
+
+/**
+ * The one record of a failed store-data refresh (the HTTP transport row is forensic).
+ * The last saved copy stays in use, so this is lifecycle, not a problem — offline,
+ * nothing was attempted at all.
+ */
+function noteRefreshFailure(what: string) {
+	return (error: unknown) =>
+		extraDataLogger[isExpectedPreflightBlock(error) ? 'debug' : 'info'](
+			`Store ${what} not refreshed; using the saved copy`,
+			{ context: { error: getErrorMessage(error) } }
+		);
+}
 
 function isMissing(value: unknown): boolean {
 	return value == null;
@@ -34,7 +51,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 						void extraData.set('taxClasses', () => response.data);
 					}
 				})
-				.catch(() => undefined);
+				.catch(noteRefreshFailure('tax classes'));
 		const fetchShippingMethods = (generation: number) =>
 			void http
 				.get('/shipping_methods')
@@ -43,7 +60,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 						void extraData.set('shippingMethods', () => response.data);
 					}
 				})
-				.catch(() => undefined);
+				.catch(noteRefreshFailure('shipping methods'));
 		const fetchOrderStatuses = (generation: number) =>
 			void http
 				.get('/data/order_statuses')
@@ -52,7 +69,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 						void extraData.set('orderStatuses', () => response.data);
 					}
 				})
-				.catch(() => undefined);
+				.catch(noteRefreshFailure('order statuses'));
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
 			fetchTaxClasses(generation);

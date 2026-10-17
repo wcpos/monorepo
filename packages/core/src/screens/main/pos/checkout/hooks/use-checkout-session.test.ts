@@ -45,7 +45,9 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 const mockCheckoutError = jest.fn();
 const mockCheckoutWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
+		debug: jest.fn(),
 		success: jest.fn(),
 		error: (...args: unknown[]) => mockCheckoutError(...args),
 		warn: (...args: unknown[]) => mockCheckoutWarn(...args),
@@ -521,7 +523,9 @@ describe('classifyCheckoutFailure', () => {
 		const lost = new Error('Network Error');
 		const crashed = Object.assign(new Error('500'), { response: { status: 500 } });
 		const inFlight = Object.assign(new Error('409'), { response: { status: 409 } });
-		for (const error of [lost, crashed, inFlight]) {
+		const timedOut = Object.assign(new Error('408'), { response: { status: 408 } });
+		const throttled = Object.assign(new Error('429'), { response: { status: 429 } });
+		for (const error of [lost, crashed, inFlight, timedOut, throttled]) {
 			expect(classifyCheckoutFailure(error, 'start', t).code).toBe('CHECKOUT201');
 		}
 	});
