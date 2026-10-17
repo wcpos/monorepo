@@ -54,15 +54,24 @@ it.each([
 	expect(screen.getByTestId('chip-label').dataset.classes).toContain(label);
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
 });
-it('gives a sm chip the 44 pt target on its press target, the label half when it can be cleared', () => {
-	const { slops } = jest.requireMock<{ slops: Map<string, unknown> }>('react-native');
-	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" />);
+it('gives a sm chip the 44 pt target on its root, which presses as the label when clearable', () => {
+	const { slops, presses } = jest.requireMock<{
+		slops: Map<string, unknown>;
+		presses: Map<string, unknown>;
+	}>('react-native');
+	const onPress = jest.fn();
+	const { rerender } = render(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} />);
 	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
-	rerender(<Chip label="Menu" testID="chip" size="sm" onClear={() => {}} />);
+	expect(presses.get('chip')).toBe(onPress);
+	// `hitSlop` never reaches past a parent, so the band is the root's even with a clear control.
+	rerender(<Chip label="Menu" testID="chip" size="sm" onPress={onPress} onClear={() => {}} />);
+	expect(slops.get('chip')).toEqual({ top: 6, bottom: 6 });
+	expect(slops.get('chip-label')).toBeUndefined();
+	expect(presses.get('chip')).toBe(onPress);
+	// Without the grown target a clearable root still takes no press.
+	rerender(<Chip label="Menu" testID="chip" onPress={onPress} onClear={() => {}} />);
 	expect(slops.get('chip')).toBeUndefined();
-	expect(slops.get('chip-label')).toEqual({ top: 6, bottom: 6 });
-	rerender(<Chip label="Menu" testID="chip" />);
-	expect(slops.get('chip')).toBeUndefined();
+	expect(presses.get('chip')).toBeUndefined();
 });
 it.each([
 	[undefined, 'h-ctl', 'text-base'],
