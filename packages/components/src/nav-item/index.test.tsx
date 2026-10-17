@@ -13,7 +13,10 @@ jest.mock('react-native', () => {
 		View: ({ testID, ...props }: { testID?: string }) =>
 			React.createElement('div', { ...props, 'data-testid': testID }),
 		Pressable: ({ className, ...props }: import('react-native').PressableProps) =>
-			React.createElement(actual.Pressable, { ...props, dataSet: { classes: className } }),
+			React.createElement(actual.Pressable, {
+				...props,
+				dataSet: { classes: className, state: JSON.stringify(props.accessibilityState) },
+			}),
 		Text: ({ className, ...props }: import('react-native').TextProps) =>
 			React.createElement(actual.Text, { ...props, dataSet: { classes: className } }),
 	};
@@ -87,4 +90,21 @@ it('renders a supplied icon element as is, the trailing badge and chevron, and p
 	expect(container.querySelector('[data-icon="chevronRight"]')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('item'));
 	expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('renders an element label as is and keeps selected beside a caller accessibility state', () => {
+	render(
+		<NavItem
+			selected
+			label={<span data-testid="styled-label">Reports</span>}
+			accessibilityState={{ disabled: true }}
+			testID="item"
+		/>
+	);
+	expect(screen.getByTestId('item')).toContainElement(screen.getByTestId('styled-label'));
+	expect(screen.getByTestId('item').getAttribute('aria-selected')).toBe('true');
+	expect(JSON.parse(screen.getByTestId('item').dataset.state ?? '{}')).toEqual({
+		disabled: true,
+		selected: true,
+	});
 });

@@ -12,7 +12,8 @@ export type NavItemProps = Omit<PressableProps, 'children'> & {
 	selected?: boolean;
 	/** A name is painted by the item's state; an element (a drawer icon) paints itself. */
 	icon?: IconName | React.ReactElement;
-	label?: string;
+	/** A string is painted by state; an element (a route's rendered `drawerLabel`) paints itself. */
+	label?: string | React.ReactElement;
 	/** Trailing, after the label (a count, a dot). */
 	badge?: React.ReactNode;
 	chevron?: boolean;
@@ -41,6 +42,7 @@ export function NavItem({
 	size = 'row',
 	className,
 	testID,
+	accessibilityState,
 	...props
 }: NavItemProps) {
 	const pointer = usePointer();
@@ -55,7 +57,7 @@ export function NavItem({
 	return (
 		<Pressable
 			accessibilityRole="button"
-			accessibilityState={{ selected }}
+			accessibilityState={{ ...accessibilityState, selected }}
 			aria-selected={selected}
 			className={cn(
 				'flex-row items-center gap-3 px-3',
@@ -74,7 +76,9 @@ export function NavItem({
 			) : (
 				icon
 			)}
-			{label ? (
+			{label && typeof label !== 'string' ? (
+				<View className="min-w-0 flex-1">{label}</View>
+			) : label ? (
 				<Text
 					testID={testID ? `${testID}-label` : undefined}
 					className={cn('flex-1', !drawer && 'text-sm', tint)}

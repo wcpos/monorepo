@@ -28,7 +28,13 @@ export function DrawerItem({ label, icon, focused, onPress, style, testID }: Pro
 			className="mx-2"
 			selected={!!focused}
 			icon={icon?.({ focused }) as React.ReactElement | undefined}
-			label={typeof text === 'string' ? text : undefined}
+			// A callback's element (a styled label) renders as is: dropping it left an unnamed,
+			// icon-only row (Codex and CodeRabbit review on #2622).
+			label={
+				typeof text === 'string' || React.isValidElement(text)
+					? (text as string | React.ReactElement)
+					: undefined
+			}
 			onPress={onPress}
 			style={style}
 			testID={testID}
