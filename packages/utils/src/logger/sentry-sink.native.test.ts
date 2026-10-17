@@ -1,7 +1,15 @@
+import { Platform } from 'react-native';
+
 import * as Sentry from '@sentry/react-native';
 import { File } from 'expo-file-system';
 
 import { getInstanceId } from '../get-instance-id';
+
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+jest.mock('expo-application', () => ({
+	getIosIdForVendorAsync: async () => 'device-ios',
+	getAndroidId: () => 'device-android',
+}));
 
 jest.mock('@sentry/react-native', () => ({
 	init: jest.fn(),
@@ -47,23 +55,44 @@ describe('sentry-sink.native', () => {
 		jest.clearAllMocks();
 	});
 
-	it('keeps the instance id stable in its own file across consent denial', () => {
-		const id = getInstanceId();
+	it('keeps the instance id stable in its own file across consent denial', async () => {
+		const id = await getInstanceId();
 		expect(id).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
 		setTelemetryConsent('denied');
-		expect(getInstanceId()).toBe(id);
-		expect(files.get('file:///documents/wcpos_instance_id')).toBe(id);
+		expect(await getInstanceId()).toBe(id);
+		expect(JSON.parse(files.get('file:///documents/wcpos_instance_id')!)).toEqual({
+			id,
+			device: 'device-ios',
+		});
 	});
 
-	it('omits the instance id when native storage is unavailable', () => {
+	it('omits the instance id when native storage is unavailable', async () => {
 		jest.mocked(File).mockImplementationOnce(() => {
 			throw new Error('unavailable');
 		});
 		// A fresh module: the id above is memoised for the life of the process.
-		jest.isolateModules(() => {
+		await jest.isolateModulesAsync(async () => {
 			const fresh = jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
-			expect(fresh.getInstanceId()).toBeUndefined();
+			expect(await fresh.getInstanceId()).toBeUndefined();
 		});
+	});
+
+	it.each([
+		['ios', 'device-ios', 'existing'],
+		['android', 'device-android', 'existing'],
+		['ios', 'other-device', 'e49735e4-34af-4abd-a8f6-78f17b350a82'],
+		['ios', null, 'existing'],
+	])('binds %s instance files from %s to this device', async (os, device, expected) => {
+		Platform.OS = os as typeof Platform.OS;
+		const path = 'file:///documents/wcpos_instance_id';
+		files.set(path, device ? JSON.stringify({ id: 'existing', device }) : 'existing');
+		await jest.isolateModulesAsync(async () => {
+			const fresh = jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(await fresh.getInstanceId()).toBe(expected);
+			expect(await fresh.getInstanceId()).toBe(expected);
+			expect(JSON.parse(files.get(path)!)).toEqual({ id: expected, device: `device-${os}` });
+		});
+		Platform.OS = 'ios';
 	});
 
 	it('does not initialize or capture before consent', () => {

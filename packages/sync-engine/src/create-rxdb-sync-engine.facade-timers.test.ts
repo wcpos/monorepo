@@ -109,6 +109,9 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			fetcher.mockClear();
 			try {
 				await engine.sync('change-signal');
+				await engine.hostTransport().fetcher(SYNC_BASE, {
+					headers: { 'x-wcpos-instance': 'forged' },
+				});
 				expect(fetcher.mock.calls.length).toBeGreaterThan(0);
 				for (const [, init] of fetcher.mock.calls) {
 					expect(new Headers(init?.headers).get('X-WCPOS-Instance')).toBe(installId ?? null);

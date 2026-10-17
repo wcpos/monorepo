@@ -126,6 +126,7 @@ function AppStack() {
 	) as boolean;
 	const useCacheBuster = useDocField(site, (value) => value.use_cache_buster) as boolean;
 	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
+	const useInstanceHeader = useDocField(site, (value) => value.use_instance_header) as boolean;
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
@@ -166,6 +167,7 @@ function AppStack() {
 						use_rest_route_param: useRestRouteParamField,
 						use_cache_buster: useCacheBuster,
 						use_protocol_headers: useProtocolHeaders,
+						use_instance_header: useInstanceHeader,
 					},
 					wpCredentials,
 					t('auth.session_renewed_automatically')
@@ -183,6 +185,7 @@ function AppStack() {
 			useCacheBuster,
 			wcposVersion,
 			useProtocolHeaders,
+			useInstanceHeader,
 			wpCredentials,
 			t,
 		]

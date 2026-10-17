@@ -878,12 +878,11 @@ export function createRxdbSyncEngine(
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
 	const fetcher: EngineFetcher = async (url, init) => {
+		const headers = new Headers(init?.headers);
+		headers.delete('X-WCPOS-Instance');
 		const installId = await ports.getInstanceId?.();
-		if (installId !== undefined) {
-			const headers = new Headers(init?.headers);
-			headers.set('X-WCPOS-Instance', installId);
-			init = { ...init, headers };
-		}
+		if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
+		init = { ...init, headers };
 		if (updateRequiredRefusal !== null) {
 			return new Response(updateRequiredRefusal.body, {
 				status: updateRequiredRefusal.status,
