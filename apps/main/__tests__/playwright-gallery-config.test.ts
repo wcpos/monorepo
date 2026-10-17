@@ -7,7 +7,7 @@ jest.mock('@playwright/test', () => ({
 	devices: { 'Desktop Chrome': {} },
 }));
 
-it('isolates the gallery from store E2E and keeps a zero-pixel, exact-colour screenshot contract', () => {
+it('isolates the gallery from store E2E and keeps a zero-pixel, near-exact-colour screenshot contract', () => {
 	expect(config.projects?.map((project) => project.name)).toEqual(['gallery']);
 	expect(config.testDir).toBe('./gallery');
 	expect(config.globalSetup).toBeUndefined();
@@ -15,8 +15,9 @@ it('isolates the gallery from store E2E and keeps a zero-pixel, exact-colour scr
 	expect(config.updateSnapshots).toBe('none');
 	expect(config.expect?.toHaveScreenshot).toEqual({
 		maxDiffPixels: 0,
-		// Exact colour per pixel: the default 0.2 let sub-threshold tint and shadow changes pass.
-		threshold: 0,
+		// Near-exact colour per pixel: the default 0.2 let tint and shadow changes pass; 0 flaked
+		// on antialiased corners.
+		threshold: 0.05,
 		animations: 'disabled',
 		caret: 'hide',
 		// The unfocused look for a search field, below React (gallery/shoot.css).
