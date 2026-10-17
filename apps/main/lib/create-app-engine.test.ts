@@ -140,6 +140,11 @@ function loadCreateAppEngine(
 		// identity stub keeps these engine-lifecycle tests transport-free.
 		hydrateResponse: jest.fn(async (response: Response) => response),
 		writeOutcomeChannelName,
+		// Pure helpers the fetcher and the log observer share; the real ones, so the
+		// reported-request rule under test is the engine's own.
+		...jest.requireActual<typeof import('../../../packages/sync-engine/src/transport-failure')>(
+			'../../../packages/sync-engine/src/transport-failure'
+		),
 	}));
 	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
 		virtual: true,
@@ -464,7 +469,8 @@ describe('createAppSyncEngine scope cache', () => {
 			type: 'engine.ready-stalled',
 			level: 'error',
 			message: 'open stalled',
-			fields: { phase: 'create-database', elapsedMs: 15_000 },
+			// The repeat stall: the first one is an info row (a slow open usually completes).
+			fields: { phase: 'create-database', elapsedMs: 75_000, stalls: 2 },
 		});
 		diagnostics?.({
 			type: 'engine.pos-bootstrap-error',
@@ -498,7 +504,7 @@ describe('createAppSyncEngine scope cache', () => {
 			context: expect.objectContaining({
 				type: 'engine.ready-stalled',
 				phase: 'create-database',
-				elapsedMs: 15_000,
+				elapsedMs: 75_000,
 			}),
 			terminal: {
 				operationType: 'sync.startup',
@@ -524,19 +530,20 @@ describe('createAppSyncEngine scope cache', () => {
 		const diagnostics = createRxdbSyncEngine.mock.calls[0]?.[0].diagnostics;
 
 		diagnostics?.({
-			type: 'push.error',
-			level: 'error',
+			type: 'push.rejected',
+			level: 'warn',
 			collection: 'orders',
-			message: 'HTTP 500',
+			message: 'HTTP 400',
+			fields: { op: 'create', status: 400, reason: 'woocommerce_rest_invalid_coupon' },
 		});
 
-		expect(networkError).toHaveBeenCalledWith('HTTP 500', {
-			code: 'SYNC121',
+		expect(networkError).toHaveBeenCalledWith('HTTP 400', {
+			code: 'SYNC201',
 			context: expect.objectContaining({
-				type: 'push.error',
+				type: 'push.rejected',
 				direction: 'push',
 			}),
-			terminal: { operationType: 'sync.record', outcome: 'failed' },
+			terminal: { operationType: 'sync.record', outcome: 'rejected' },
 		});
 	});
 

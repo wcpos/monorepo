@@ -64,7 +64,8 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
-import { RequestTimeoutError } from '../write-path/request-timeout';
+import { scopeBoundFailureStreak } from '../failure-streak';
+import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 
 import type {
 	BarcodeSelectors,
@@ -272,6 +273,10 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	): MaintenanceLane {
 		const existenceAudit = name === 'existence-prime' || name === 'existence-reconcile';
 		let lastError: string | null = null;
+		// Failed ticks in a row for THIS lane, stamped on maintenance.lane.error: the
+		// lane re-runs on its next tick, so the log alarms only on a streak. A tick
+		// that ran resets it.
+		const failureStreaks = scopeBoundFailureStreak(deps.manager);
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
 		 * that ran on the bench and never in a browser — cost four live soaks and a
@@ -349,6 +354,8 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (starvationReservationAtMs !== null) {
 					lastRanAtMs.set(name, starvationReservationAtMs);
 				}
+				// This tick's streak instance, read once: a switch mid-tick leaves it dead.
+				const tickStreak = failureStreaks();
 				try {
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {
 						const db = deps.databaseFor(bound.scopeId);
@@ -463,6 +470,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						return { lane: name, status: 'ran' };
 					});
 					lastError = null;
+					if (report.status === 'ran') tickStreak.reset();
 					return report;
 				} catch (error) {
 					if (
@@ -475,11 +483,18 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
+					const status = requestStatusOf(error);
+					// Only a failure no other row reported counts toward the local-crash streak.
+					const consecutiveFailures = isReportedRequestStatus(status) ? 0 : tickStreak.fail();
 					deps.diagnostics({
 						type: 'maintenance.lane.error',
 						level: 'error',
 						message,
-						fields: { lane: name, ...(error instanceof RequestTimeoutError ? { status: 0 } : {}) },
+						fields: {
+							lane: name,
+							...(status !== undefined ? { status } : {}),
+							consecutiveFailures,
+						},
 					});
 					return { lane: name, status: 'error', error: message };
 				}
@@ -500,7 +515,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	};
 
+	// Drains in a row with a task failure no other row reported (a local failure
+	// after the fetch, or a poison 2xx): the failed tasks retry after 30s, so one
+	// is an attempt, and a streak is the only verdict such a failure gets.
+	const unreportedTaskFailureStreaks = scopeBoundFailureStreak(deps.manager);
 	const schedulerDrain = lane('scheduler-drain', async (db, _scopeId, signal, fetcher) => {
+		const unreportedTaskFailures = unreportedTaskFailureStreaks();
 		const coverage = deps.coverageFor(_scopeId);
 		if (!coverage) return { summary: null };
 		// A reader, not a snapshot: this drain runs many tasks and a config poll can
@@ -540,6 +560,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.failureLost > 0 ||
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
+		const consecutiveUnreportedFailures =
+			result.failedUnreported > 0 ? unreportedTaskFailures.fail() : 0;
+		if (result.failedUnreported === 0 && result.succeeded + result.failed > 0) {
+			unreportedTaskFailures.reset();
+		}
 		// A failed task (including `failureLost`, where the fetch threw and only the
 		// failure write was lost) is a WARNING here, never an error. This row is an
 		// aggregate: counters only, no cause. Each failure is already reported on its
@@ -564,6 +589,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				scanned: result.scanned,
 				succeeded: result.succeeded,
 				failed: result.failed,
+				...(result.failedUnreported > 0
+					? { failedUnreported: result.failedUnreported, consecutiveUnreportedFailures }
+					: {}),
 				claimLost: result.claimLost,
 				completionLost: result.completionLost,
 				failureLost: result.failureLost,

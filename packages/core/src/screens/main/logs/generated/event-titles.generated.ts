@@ -160,6 +160,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_drain_progress');
 		case 'queue.scheduler.drain':
 			return t('health.logs.event.queue_scheduler_drain');
+		case 'queue.write.ack-failed':
+			return t('health.logs.event.queue_write_ack_failed');
 		case 'queue.write.annihilate':
 			return t('health.logs.event.queue_write_annihilate');
 		case 'queue.write.auto-reverted':

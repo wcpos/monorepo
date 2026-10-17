@@ -136,7 +136,9 @@ export function useRecordLabel(
 									// Not `collection`/`recordId`: a context carrying those keys
 									// is itself labelled by this hook on the Logs screen, and a
 									// read that keeps failing must not feed itself rows to fail on.
-									healthLogger.warn('Could not read a record to name it', {
+									// Debug: the label is decorative — the row still shows the
+									// kind, so a failed read is nothing for the merchant to act on.
+									healthLogger.debug('Could not read a record to name it', {
 										context: {
 											target: `${collection}/${recordId}`,
 											error: getErrorMessage(error),

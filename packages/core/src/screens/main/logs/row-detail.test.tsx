@@ -658,7 +658,29 @@ describe('RowDetail', () => {
 			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
 		});
 
-		it.each(['SYNC201', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
+		// SYNC222's row is a RECOVERED order (the till's values were saved over a
+		// store edit): there is nothing to settle on the Database tab — the copy
+		// sends the merchant to WP Admin — so, like every recovered row, it gets
+		// no Database action even though the code is in the set.
+		it('offers no Database action on a recovered SYNC222 overwrite row', () => {
+			render(
+				<RowDetail
+					row={{
+						...row,
+						level: 'warn',
+						code: 'SYNC222',
+						outcome: 'recovered',
+						context: { type: 'queue.write.conflict-overwrote-server', mutationId: 'm-1' },
+					}}
+					kind="warn"
+					title="Saved over a store edit"
+				/>
+			);
+
+			expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
+		});
+
+		it.each(['SYNC201', 'SYNC202', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
 			'takes a %s row to Store health → Database',
 			(code) => {
 				render(

@@ -59,6 +59,7 @@ function stubPlane(input: { readLane: LaneRead } & StubOverrides) {
 		manager: {
 			activeScope: 'scope-1',
 			runGuarded: (operation: (scope: unknown) => Promise<unknown>) => operation(bound),
+			onEvent: () => () => undefined,
 		} as never,
 		databaseFor: () => database as never,
 		coverageFor: () => ({ readLane: input.readLane }) as never,
@@ -117,6 +118,7 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		expect(stallEvents[0]?.fields).toMatchObject({
 			requirementId: 'req-stalled',
 			kind: 'search',
+			consecutiveStalls: 1,
 		});
 		// Both executions announced themselves — the evidence pair a wedged artifact lacked.
 		expect(

@@ -25,6 +25,13 @@ export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
 } from './transport/response-envelope';
+/** Who reports a failed request: the host marks the errors it wrote a transport
+ * row for, and the cashier log reads the same rule the lanes stamp by. */
+export {
+	isReportedRequestStatus,
+	markTransportFailure,
+	requestStatusOf,
+} from './transport-failure';
 /** Web multi-tab write-outcome feedback (#1209) — the host opens the channel
  * (named per scope database, re-pointed on a scope switch) and injects it as the
  * `writeOutcomeBridge` port. */

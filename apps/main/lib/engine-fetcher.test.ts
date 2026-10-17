@@ -600,6 +600,7 @@ describe('createEngineFetcher', () => {
 
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('Server clock is 120s ahead of the device clock', {
+			code: 'CLIENT171',
 			context: {
 				skewSeconds: 120,
 				serverDate: '1970-01-01T00:02:00.000Z',
@@ -742,7 +743,7 @@ describe('createEngineFetcher', () => {
 			'network down for https://store.example.test/wp-json/wcpos/v2/products?authorization=secret'
 		);
 		const fetch = jest.fn().mockRejectedValue(networkError);
-		const { fetcher, appMetricsObserver, recordTransport, networkWarn } = createFetcherHarness({
+		const { fetcher, appMetricsObserver, recordTransport, networkInfo } = createFetcherHarness({
 			fetch,
 		});
 
@@ -750,9 +751,10 @@ describe('createEngineFetcher', () => {
 			networkError
 		);
 
+		// One dropped request is an attempt the next tick retries: info, still durable.
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
-			level: 'warn',
+			level: 'info',
 			fields: {
 				durationMs: 40,
 				bytes: 0,
@@ -771,7 +773,7 @@ describe('createEngineFetcher', () => {
 		// The legacy networkLogger row is gone: the transport event now flows through
 		// the guarded log observer, so the failure lands as a wide terminal row with
 		// an outcome instead of a bare context blob (one writer per semantic event).
-		expect(networkWarn).toHaveBeenCalledWith('transport.request', {
+		expect(networkInfo).toHaveBeenCalledWith('transport.request', {
 			context: expect.objectContaining({
 				type: 'transport.request',
 				method: 'GET',
@@ -800,7 +802,7 @@ describe('createEngineFetcher', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'transport.request',
-				level: 'warn',
+				level: 'info',
 				fields: expect.objectContaining({ status: 0 }),
 			})
 		);
@@ -1218,7 +1220,7 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-	it('settles a 401 whose refresh yields no token as a warn row, not an error', async () => {
+	it('settles a 401 whose refresh yields no token as an info row the refresh layer owns', async () => {
 		const credentials = {
 			getLatest: jest.fn(() => ({ access_token: 'expired-token' })),
 		};
@@ -1233,15 +1235,16 @@ describe('createEngineFetcher', () => {
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		// The refresh layer logs its own verdict (error when terminal); the request
-		// row records the failure without double-escalating.
+		// row records the failure without a second "sign in again".
 		expect(response?.status).toBe(401);
 		expect(fetch).toHaveBeenCalledTimes(2);
 		expect(appMetricsObserver).toHaveBeenCalledTimes(2);
+		expect(mockRecordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: true }));
 		for (const [event] of appMetricsObserver.mock.calls) {
 			expect(event).toEqual(
 				expect.objectContaining({
 					type: 'transport.request',
-					level: 'warn',
+					level: 'info',
 					fields: expect.objectContaining({ status: 401, outcome: 'failed' }),
 				})
 			);
@@ -1411,27 +1414,313 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-	it('keeps a non-tick 404 at warn', async () => {
+	it('warns on a non-tick 404 only once the same path has failed 3 times running', async () => {
 		const credentials = {
 			getLatest: jest.fn(() => ({ access_token: 'token' })),
 		};
-		const fetch = jest.fn().mockResolvedValueOnce(new Response(null, { status: 404 }));
+		const fetch = jest.fn(async () => new Response(null, { status: 404 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { credentials },
 		});
 
-		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		for (let index = 0; index < 3; index += 1) {
+			await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products?page=1');
+		}
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'warn',
+		]);
+		expect(mockRecordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: true }));
+	});
+
+	it.each([
+		[503, 'a server error'],
+		[0, 'a dropped connection'],
+	])('restarts the %s streak after any healthy answer on the path (%s)', async (status) => {
+		const failure = () =>
+			status === 0
+				? Promise.reject(new Error('Network request failed'))
+				: Promise.resolve(new Response(null, { status }));
+		const fetch = jest
+			.fn()
+			.mockImplementationOnce(failure)
+			.mockImplementationOnce(failure)
+			.mockResolvedValueOnce(new Response('{}', { status: 200 }))
+			.mockImplementationOnce(failure)
+			.mockImplementationOnce(failure)
+			.mockImplementationOnce(failure);
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (let index = 0; index < 6; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes').catch(() => {});
+		}
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+			'info',
+			'info',
+			'warn',
+		]);
+	});
+
+	it('ends a request failure streak when a refreshed retry succeeds', async () => {
+		let accessToken = 'token';
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response('{}', { status: 200 }))
+			.mockResolvedValueOnce(new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'refreshed';
+					return accessToken;
+				},
+			},
+		});
+
+		for (let index = 0; index < 4; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+		}
+
+		const statusRows = appMetricsObserver.mock.calls
+			.map(([event]) => event)
+			.filter((event) => event.fields.status === 503);
+		// The refreshed 200 ended the streak, so the next 503 is a first failure again.
+		expect(statusRows.map((event) => event.level)).toEqual(['info', 'info', 'info']);
+	});
+
+	it('keys the streak by the whole request, so concurrent queries are separate operations', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (const search of ['a', 'b', 'c']) {
+			await fetcher(`https://store.example.test/wp-json/wcpos/v2/products?search=${search}`);
+		}
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?search=a');
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?search=a');
+		expect(appMetricsObserver.mock.calls.at(-1)?.[0].level).toBe('warn');
+	});
+
+	it('marks the error it wrote a status-0 transport row for, and only that one', async () => {
+		const { requestStatusOf } =
+			jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
+		const offline = new TypeError('Network request failed');
+		const fetch = jest.fn().mockRejectedValueOnce(offline);
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await expect(fetcher('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toBe(
+			offline
+		);
+
+		expect(requestStatusOf(offline)).toBe(0);
+	});
+
+	it('starts a return to the first store at zero after another store served in between', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver, scope } = createFetcherHarness({
+			fetch,
+			scope: { storeId: 1 },
+		});
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		await fetcher(url);
+		await fetcher(url);
+		scope.storeId = 2;
+		fetch.mockImplementationOnce(async () => new Response('{}', { status: 200 }));
+		await fetcher(url);
+		scope.storeId = 1;
+		await fetcher(url);
+
+		// Back in store 1: its two old failures went with the old tracker.
+		expect(appMetricsObserver.mock.calls.at(-1)?.[0].level).toBe('info');
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).not.toContain('warn');
+	});
+
+	it('starts the streak over when the store scope or the cashier changes', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const auth = { ...BASE_AUTH };
+		const { fetcher, appMetricsObserver, scope } = createFetcherHarness({
+			fetch,
+			auth,
+			scope: { storeId: 1 },
+		});
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		await fetcher(url);
+		await fetcher(url);
+		// Same site, another store: only the storeId header moves.
+		scope.storeId = 2;
+		await fetcher(url);
+		// Same store, another cashier: the credentials object is replaced in place.
+		await fetcher(url);
+		auth.credentials = { getLatest: () => ({ access_token: 'other-cashier' }) };
+		await fetcher(url);
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
+	it('settles a request still in flight at a cashier change into the outgoing tracker', async () => {
+		let releaseLate!: (response: Response) => void;
+		const fetch = jest
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise<Response>((resolve) => {
+						releaseLate = resolve;
+					})
+			)
+			.mockImplementation(async () => new Response(null, { status: 503 }));
+		const auth = { ...BASE_AUTH };
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch, auth });
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		const late = fetcher(url);
+		auth.credentials = { getLatest: () => ({ access_token: 'incoming-cashier' }) };
+		await fetcher(url);
+		await fetcher(url);
+		// The outgoing cashier's request fails late: it must not be the incoming third.
+		releaseLate(new Response(null, { status: 503 }));
+		await late;
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
+	it('counts each path on its own, so one blip across lanes stays quiet', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (const path of ['changes/tick', 'products', 'customers']) {
+			await fetcher(`https://store.example.test/wp-json/wcpos/v2/${path}`);
+		}
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
+	it.each([
+		[429, 'the rate-limit streak owns the HOST161 warn'],
+		[426, 'the update-required latch owns the verdict'],
+	])('settles a first %s at info (%s)', async (status) => {
+		const fetch = jest.fn(async () => new Response(null, { status }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(appMetricsObserver).toHaveBeenCalledWith(
-			expect.objectContaining({
-				type: 'transport.request',
-				level: 'warn',
-				fields: expect.objectContaining({ status: 404 }),
-			})
+			expect.objectContaining({ level: 'info', fields: expect.objectContaining({ status }) })
 		);
-		fetch.mockReset();
+		expect(mockRecordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: true }));
 	});
+
+	it('never escalates a repeated 429: HOST161 is the one rate-limit warn', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 429 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (let index = 0; index < 4; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		}
+
+		expect(new Set(appMetricsObserver.mock.calls.map(([event]) => event.level))).toEqual(
+			new Set(['info'])
+		);
+	});
+
+	it.each([
+		[500, 'push.error counts the attempts'],
+		[403, 'push.rejected carries the permission verdict'],
+		[400, 'push.rejected carries the refusal'],
+	])('keeps every push-route %s at info (%s)', async (status) => {
+		const fetch = jest.fn(async () => new Response(null, { status }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (let index = 0; index < 3; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/push/orders', { method: 'POST' });
+		}
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+		expect(mockRecordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: true }));
+	});
+
+	it('keeps a dropped push connection at info: push.error reports it', async () => {
+		const fetch = jest.fn(async () => {
+			throw new Error('Network request failed');
+		});
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
+
+		for (let index = 0; index < 3; index += 1) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/push/orders', {
+				method: 'POST',
+			}).catch(() => {});
+		}
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
+	it.each([
+		[true, 'info'],
+		[false, 'error'],
+	])(
+		'settles a still-401 retry at info when onAuthExhausted reports it (%s → %s)',
+		async (withHandler, level) => {
+			let accessToken = 'expired-token';
+			const onAuthExhausted = jest.fn();
+			const fetch = jest.fn(async () => new Response(null, { status: 401 }));
+			const { fetcher, appMetricsObserver } = createFetcherHarness({
+				fetch,
+				auth: {
+					credentials: { getLatest: () => ({ access_token: accessToken }) },
+					refreshAuth: async () => {
+						accessToken = 'refreshed-token';
+						return accessToken;
+					},
+					...(withHandler ? { onAuthExhausted } : {}),
+				},
+			});
+
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+			const retryRow = appMetricsObserver.mock.calls
+				.map(([event]) => event)
+				.find((event) => event.level !== 'debug');
+			expect(retryRow).toMatchObject({ level, fields: expect.objectContaining({ status: 401 }) });
+		}
+	);
 
 	it('retries with a peer-refreshed token instead of refreshing again on staggered 401s', async () => {
 		let accessToken = 'stale-token';
@@ -1469,7 +1758,7 @@ describe('createEngineFetcher', () => {
 		const originalUnauthorized = new Response(null, { status: 401 });
 		const refreshAuth = jest.fn().mockResolvedValue(null);
 		const fetch = jest.fn().mockResolvedValue(originalUnauthorized);
-		const { fetcher, networkWarn } = createFetcherHarness({
+		const { fetcher, networkInfo } = createFetcherHarness({
 			fetch,
 			auth: { ...BASE_AUTH, refreshAuth },
 		});
@@ -1479,8 +1768,9 @@ describe('createEngineFetcher', () => {
 		expect(response?.status).toBe(originalUnauthorized.status);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(1);
-		// The unauthorized attempt is a failed unit of work and gets a terminal row.
-		expect(networkWarn).toHaveBeenCalledWith('transport.request', {
+		// The unauthorized attempt is a failed unit of work and gets a terminal row
+		// — info, because the refresh layer writes the verdict.
+		expect(networkInfo).toHaveBeenCalledWith('transport.request', {
 			context: expect.objectContaining({
 				type: 'transport.request',
 				status: 401,

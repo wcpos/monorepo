@@ -7,6 +7,7 @@ export type ErrorCode =
 	| 'SYNC131'
 	| 'SYNC141'
 	| 'SYNC201'
+	| 'SYNC202'
 	| 'SYNC211'
 	| 'SYNC301'
 	| 'SYNC311'
@@ -51,6 +52,8 @@ export type ErrorCode =
 	| 'SYNC401'
 	| 'SYNC411'
 	| 'SYNC221'
+	| 'SYNC222'
+	| 'SYNC231'
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
 	| 'CLIENT111'
@@ -87,6 +90,7 @@ export type ErrorCode =
 	| 'CHECKOUT421'
 	| 'CLIENT151'
 	| 'CLIENT181'
+	| 'CLIENT171'
 	| 'AUTH131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
@@ -164,6 +168,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 			"Read the store's reason. If Store health → Database lists the change, fix the record and tap Send again, or Discard it. If not, the store's version was restored — make the change again if it's still needed.",
 		dataSafety: 'local-only',
 		summary: "Your store refused this change, so it hasn't reached the store.",
+	},
+	SYNC202: {
+		code: 'SYNC202',
+		symbol: 'RECORD_REVERTED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"The change wasn't saved. Read the store's reason, fix what it names, then make the change again.",
+		dataSafety: 'no-impact',
+		summary: "Your store refused this change, so this device went back to the store's version.",
 	},
 	SYNC211: {
 		code: 'SYNC211',
@@ -584,6 +598,26 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'A change on this device met a newer edit in your store. Nothing is lost.',
 	},
+	SYNC222: {
+		code: 'SYNC222',
+		symbol: 'STORE_EDIT_OVERWRITTEN',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Check the fields listed below in WP Admin. If the store's edit was the right one, make it again there.",
+		dataSafety: 'order-safe',
+		summary: 'This device saved its version over a newer edit made in your store.',
+	},
+	SYNC231: {
+		code: 'SYNC231',
+		symbol: 'RECORD_SENT_UNRECORDED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Nothing to do — don't enter it again. WCPOS keeps re-checking, and the store ignores the repeat.",
+		dataSafety: 'no-impact',
+		summary: "Your store received this change, but this device couldn't record that it was sent.",
+	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
 		symbol: 'TOTALS_DIVERGED',
@@ -923,6 +957,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: "WCPOS couldn't switch to that store.",
 	},
+	CLIENT171: {
+		code: 'CLIENT171',
+		symbol: 'CLOCK_OUT_OF_SYNC',
+		domain: 'CLIENT',
+		severity: 'warn',
+		actionHint:
+			"Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
+		dataSafety: 'order-safe',
+		summary: "This device's clock and your store's clock are more than a minute apart.",
+	},
 	AUTH131: {
 		code: 'AUTH131',
 		symbol: 'STORE_SESSION_INCOMPLETE',
@@ -942,6 +986,7 @@ export const ERROR_CODES = {
 	STORE_SERVER_ERROR: 'SYNC131',
 	STORE_RATE_LIMITED: 'SYNC141',
 	RECORD_REJECTED: 'SYNC201',
+	RECORD_REVERTED: 'SYNC202',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
@@ -986,6 +1031,8 @@ export const ERROR_CODES = {
 	SYNC_TASK_CRASHED: 'SYNC401',
 	DEMAND_REQUEST_FLOOD: 'SYNC411',
 	RECORD_CONFLICT: 'SYNC221',
+	STORE_EDIT_OVERWRITTEN: 'SYNC222',
+	RECORD_SENT_UNRECORDED: 'SYNC231',
 	TOTALS_DIVERGED: 'CHECKOUT401',
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
 	APP_START_SLOW: 'CLIENT111',
@@ -1022,5 +1069,6 @@ export const ERROR_CODES = {
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
 	STORE_SWITCH_FAILED: 'CLIENT181',
+	CLOCK_OUT_OF_SYNC: 'CLIENT171',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;
