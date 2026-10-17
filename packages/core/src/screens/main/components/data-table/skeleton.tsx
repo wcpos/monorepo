@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { usePointer } from '@wcpos/components/lib/device';
 import { Skeleton, SKELETON_MAX_ROWS, skeletonCount } from '@wcpos/components/skeleton';
 import { Table, TableCell, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
-import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
@@ -101,11 +100,7 @@ export function DataTableSkeleton({ id, rowCount }: { id: UISettingID; rowCount?
 									>
 										<DataTableHeader
 											columnId={column.key}
-											header={
-												<Text className="text-muted-foreground text-xs tracking-wide uppercase">
-													{column.hideLabel ? '' : getUILabel(column.key)}
-												</Text>
-											}
+											header={column.hideLabel ? '' : getUILabel(column.key)}
 											disableSort
 											sortBy=""
 											sortDirection="asc"
