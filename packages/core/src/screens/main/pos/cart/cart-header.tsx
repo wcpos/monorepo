@@ -19,7 +19,6 @@ import { UISettingsDialog } from '../../components/ui-settings';
 import { usePanelSide } from '../contexts/overlay-side';
 import { useAddCustomer } from '../hooks/use-add-customer';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { useOrderSaving } from '../checkout/use-order-save-state';
 import { useCurrentOrder } from '../contexts/current-order';
 
 import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
@@ -43,7 +42,6 @@ function StilledCartHeader() {
 	const shipping = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
 	const customerId = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
 	const number = useRecordField(currentOrderRecord, (order) => order.payload.number);
-	const saving = useOrderSaving(currentOrderRecord.uuid);
 	const { format } = useCustomerNameFormat();
 	return (
 		<HStack testID="checkout-ledger-header" className="border-border min-h-ctl border-b px-2 py-2">
@@ -63,8 +61,9 @@ function StilledCartHeader() {
 					</Badge>
 				</View>
 			</HStack>
-			{/* An order still saving has no number yet: a placeholder, never an empty "#". */}
-			{saving && !number ? (
+			{/* An order with no number yet (saving, queued offline or refused): a placeholder,
+			    never an empty "#". */}
+			{!number ? (
 				<View
 					className="bg-muted h-ctl w-16 self-center rounded-full"
 					testID="checkout-ledger-number-skeleton"

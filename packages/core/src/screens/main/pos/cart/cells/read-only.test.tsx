@@ -26,6 +26,9 @@ jest.mock('../../../hooks/use-current-order-currency-format', () => ({
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
+jest.mock('../../../hooks/use-number-format', () => ({
+	useNumberFormat: () => ({ format: (value: number) => String(value).replace('.', ',') }),
+}));
 jest.mock('../../hooks/use-line-item-data', () => ({
 	useLineItemData: () => ({
 		getLineItemData: () => ({ price: 55, regular_price: 55 }),
@@ -85,6 +88,18 @@ it('lays each line out as text under the table head: qty, unit price, total per 
 	expect(screen.queryByTestId('cart-quantity-input')).toBeNull();
 	expect(screen.queryByTestId('currency-input')).toBeNull();
 	unmount();
+	// A fractional quantity reads with the store's separators, as the input shows it.
+	const half = {
+		...props,
+		row: { original: { ...props.row.original, item: { ...item, quantity: 1.5 } } },
+	} as typeof props;
+	const { unmount: unmountHalf } = render(
+		<ReadOnly>
+			<Quantity {...half} />
+		</ReadOnly>
+	);
+	expect(screen.getByTestId('checkout-ledger-qty-7').textContent).toBe('1,5');
+	unmountHalf();
 	mockTaxDisplayCart = 'incl';
 	render(
 		<ReadOnly>

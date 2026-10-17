@@ -10,6 +10,7 @@ import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useNumberFormat } from '../../../hooks/use-number-format';
 import { useCartTableReadOnly } from './read-only';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -28,10 +29,12 @@ function ReadOnlyFeePrice({ row }: CellContext<Props, 'price'>) {
 	const { getFeeLineData } = useFeeLineData();
 	const { percent, amount } = getFeeLineData(row.original.item);
 	const { format } = useCurrentOrderCurrencyFormat();
+	// The store's separators, as the percentage input shows them (`12,5`, not `12.5`).
+	const { format: formatNumber } = useNumberFormat();
 	return (
 		<HStack space="xs" className="justify-center">
 			<Text className="text-muted-foreground text-right tabular-nums">
-				{percent ? String(amount) : format(Number(amount) || 0)}
+				{percent ? formatNumber(Number(amount) || 0) : format(Number(amount) || 0)}
 			</Text>
 			{percent && <Icon name="percent" size="sm" />}
 		</HStack>

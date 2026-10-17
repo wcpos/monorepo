@@ -15,9 +15,13 @@ const mockClose = jest.fn();
 let mockPercent = false;
 let mockFeeAmount = '10';
 
-// FeePrice's read-only branch formats in the order's currency; app-state is not under test.
+// FeePrice's read-only branch formats in the order's currency and the store's separators;
+// app-state is not under test.
 jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => String(value) }),
+}));
+jest.mock('../../hooks/use-number-format', () => ({
+	useNumberFormat: () => ({ format: (value: number) => String(value) }),
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogAction: ({

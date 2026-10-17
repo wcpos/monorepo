@@ -288,7 +288,9 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 		features: cartTableFeatures,
 		data,
 		columns,
-		getRowId: (line) => line.uuid,
+		// A line without POS uuid meta (an order made outside the POS, seen on a receipt) falls
+		// back to its server id within its kind, so two such lines never share a row identity.
+		getRowId: (line) => line.uuid || `${line.type}-${line.item.id ?? line.position}`,
 		// debugTable: true,
 		meta: {
 			onChange: (_data: unknown) => {
@@ -368,7 +370,7 @@ export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: C
 					))}
 				</TableHeader>
 				{readOnly ? (
-					<ScrollView testID="cart-table-scroll">
+					<ScrollView testID="checkout-cart-scroll">
 						<TableBody>
 							{table.getRowModel().rows.map((row) => (
 								<TableRow

@@ -8,7 +8,6 @@ import type { EngineRecord } from '@wcpos/query';
 import { CartHeader } from './cart-header';
 import { StilledCart } from './stilled-cart';
 
-let mockSaving = false;
 let mockPayload: Record<string, unknown> = {};
 const mockCartTable = jest.fn();
 let mockCurrentOrder: { uuid: string } = { uuid: 'order-1' };
@@ -30,7 +29,6 @@ jest.mock('../contexts/current-order', () => {
 			},
 	};
 });
-jest.mock('../checkout/use-order-save-state', () => ({ useOrderSaving: () => mockSaving }));
 jest.mock('../checkout/checkout-mode', () => ({
 	useCheckoutMode: () => ({ linesPaidBy: new Map([['order-9', { 'line-1': ['Cash'] }]]) }),
 }));
@@ -98,7 +96,6 @@ jest.mock('../hooks/use-add-customer', () => ({
 }));
 
 beforeEach(() => {
-	mockSaving = false;
 	mockPayload = { number: '1187', billing: { first_name: 'Ada' }, customer_id: 3 };
 	mockCurrentOrder = { uuid: 'order-1' };
 	mockCartTable.mockClear();
@@ -115,8 +112,7 @@ describe('CartHeader stilled', () => {
 		expect(screen.queryByTestId('cart-customer-name')).toBeNull();
 	});
 
-	it('holds a placeholder, never an empty "#", while the order saves without a number', () => {
-		mockSaving = true;
+	it('holds a placeholder, never an empty "#", while the order has no number (saving, offline, refused)', () => {
 		mockPayload = { billing: {}, customer_id: 0 };
 		render(<CartHeader stilled />);
 		expect(screen.getByTestId('checkout-ledger-number-skeleton')).toBeTruthy();

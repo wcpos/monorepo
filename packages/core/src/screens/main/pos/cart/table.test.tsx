@@ -21,6 +21,7 @@ const mockCartLines = {
 	shipping_lines: [] as TestLine[],
 };
 let mockSortLines = 'newest_bottom';
+let mockGetRowId: ((line: unknown) => string) | undefined;
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -34,10 +35,13 @@ jest.mock('@tanstack/react-table', () => ({
 	useTable: ({
 		data,
 		columns,
+		getRowId,
 	}: {
 		data: { uuid: string }[];
 		columns: { id: string; header: () => React.ReactNode }[];
+		getRowId: (line: unknown) => string;
 	}) => ({
+		_getRowId: (mockGetRowId = getRowId),
 		getHeaderGroups: () => [
 			{
 				id: 'headers',
@@ -296,4 +300,17 @@ describe('read-only (checkout and receipt)', () => {
 		render(<CartTable footer={<Probe />} />);
 		expect(screen.queryByTestId('probe')).toBeNull();
 	});
+});
+
+it('gives lines without POS uuid meta distinct row identities (a receipt of a server-made order)', () => {
+	render(<CartTable readOnly />);
+	const id = (type: string, itemId: number | undefined, position: number) =>
+		mockGetRowId!({ uuid: '', type, item: { id: itemId }, position });
+	expect(id('line_items', 11, 0)).toBe('line_items-11');
+	expect(id('line_items', 12, 1)).toBe('line_items-12');
+	expect(id('fee_lines', 11, 0)).toBe('fee_lines-11');
+	expect(id('line_items', undefined, 3)).toBe('line_items-3');
+	expect(mockGetRowId!({ uuid: 'pos-uuid', type: 'line_items', item: { id: 11 } })).toBe(
+		'pos-uuid'
+	);
 });
