@@ -52,6 +52,14 @@ describe('createSyncLogObserver', () => {
 		}
 	});
 
+	it('classifies a request deadline as unreachable rather than a crashed task', () => {
+		observer.observe(
+			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
+		);
+		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
+		expect(rows[0].message).toMatch(/deadline/i);
+	});
+
 	it('stamps mapped failure codes but not mapped info rows', () => {
 		observer.observe(
 			event({
