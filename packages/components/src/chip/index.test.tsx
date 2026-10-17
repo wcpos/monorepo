@@ -44,6 +44,16 @@ it.each([
 	expect(screen.getByTestId('chip-label').dataset.classes).toContain(label);
 	expect(screen.getByTestId('chip-label').dataset.classes).not.toMatch(/truncate|text-sm/);
 });
+it.each([
+	[undefined, 'h-ctl', 'text-base'],
+	['sm' as const, 'h-8', 'text-sm'],
+])('size %s sets the height and label size, keeping the on-state', (size, height, text) => {
+	render(<Chip label="Menu" testID="chip" size={size} on />);
+	const root = screen.getByTestId('chip').dataset.classes?.split(' ') ?? [];
+	expect(root).toEqual(expect.arrayContaining([height, 'rounded-full', 'border-primary']));
+	const label = screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? [];
+	expect(label).toEqual(expect.arrayContaining([text, 'text-primary', 'font-semibold']));
+});
 it('renders count zero and a leading icon', () => {
 	const { container } = render(<Chip label="Menu" count={0} icon="plus" testID="chip" />);
 	expect(screen.getByTestId('chip-count')).toHaveTextContent('0');
@@ -130,9 +140,9 @@ it('keeps the split wrapper out of the tree, floors the clear target and forward
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	expect(source).toContain('accessible={onClear ? false : undefined}');
 	expect(source).toContain('!!(disabled || dimmed)');
-	const clear = source.match(/hitSlop=\{8\}[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
-	expect(clear).toContain('min-w-ctl');
+	// The clear control is as wide as the chip is tall, at both sizes.
+	expect(source).toContain("sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3'");
 	// The pill's own class line, found by a class only it carries.
-	const root = source.match(/'([^']*rounded-full border px-3[^']*)'/)?.[1]?.split(' ') ?? [];
+	const root = source.match(/'([^']*rounded-full border[^']*)'/)?.[1]?.split(' ') ?? [];
 	expect(root).toContain('self-start');
 });

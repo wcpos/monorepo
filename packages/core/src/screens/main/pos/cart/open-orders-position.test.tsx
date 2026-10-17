@@ -18,6 +18,7 @@ let mockStage = 'cart';
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
+jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
 jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
 jest.mock('./open-register-card', () => ({
 	OpenRegisterCard: () => <div data-testid="open-register-card" />,
@@ -97,7 +98,6 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/button', () => ({
-	ButtonGroupSeparator: () => <div />,
 	Button: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 }));
 jest.mock('@wcpos/components/text', () => ({

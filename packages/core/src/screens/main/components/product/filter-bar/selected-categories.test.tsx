@@ -17,10 +17,6 @@ let mockSelectedResource: ObservableResource<CategoryRecord[]>;
 jest.mock('../../../hooks/use-engine-document', () => ({
 	useEngineRecordsByWooId: () => mockSelectedResource,
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
 jest.mock('@wcpos/components/tree-combobox', () => ({
 	TreeCombobox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	TreeComboboxContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
@@ -171,7 +172,7 @@ export function ReaderRow({
 						{t('settings.card_readers.cant_see')}
 					</DocsLink>
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						onPress={actions.cancelScan}
 						testID={`reader-row-${method.id}-cancel-scan`}
 					>
@@ -408,11 +409,12 @@ export function ReaderRow({
 			{__DEV__ && devControls.length > 0 && connected ? (
 				<HStack className="flex-wrap gap-2">
 					{devControls.map((control) => (
-						<Button
+						// An on/off dev control is a choice: a Chip, never a toggled Button.
+						<Chip
 							key={control.id}
+							label={control.label}
+							on={control.active}
 							testID={`reader-row-${method.id}-dev-control-${control.id}`}
-							size="sm"
-							variant={control.active ? 'default' : 'secondary'}
 							disabled={working}
 							onPress={() =>
 								void actions.runDev(method, async () => {
@@ -423,9 +425,7 @@ export function ReaderRow({
 									}
 								})
 							}
-						>
-							<ButtonText>{control.label}</ButtonText>
-						</Button>
+						/>
 					))}
 				</HStack>
 			) : null}

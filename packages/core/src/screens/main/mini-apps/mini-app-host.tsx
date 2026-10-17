@@ -140,7 +140,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				>
 					<Text>{t('common.retry')}</Text>
 				</Button>
-				<Button variant="secondary" onPress={() => close('cancelled')}>
+				<Button variant="outline" onPress={() => close('cancelled')}>
 					<Text>{t('settings.open_printer_settings')}</Text>
 				</Button>
 			</VStack>

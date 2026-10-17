@@ -26,13 +26,7 @@ export function SettingsDangerZone({
 	return (
 		<View className="border-border border-t-hairline mt-2 gap-3 pt-4 md:flex-row md:items-center md:justify-between">
 			<Text className="text-muted-foreground text-xs md:max-w-96 md:flex-1">{description}</Text>
-			<Button
-				variant="outline-destructive"
-				size="sm"
-				onPress={onPress}
-				loading={loading}
-				testID={testID}
-			>
+			<Button variant="outline-destructive" onPress={onPress} loading={loading} testID={testID}>
 				<Text>{buttonLabel}</Text>
 			</Button>
 		</View>

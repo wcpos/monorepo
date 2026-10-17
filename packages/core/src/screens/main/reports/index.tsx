@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StoreDocument } from '@wcpos/database';
 import { Text } from '@wcpos/components/text';
@@ -16,8 +15,6 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { UpgradeNotice } from '../components/header/upgrade-notice';
-import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import {
 	calendarDate,
@@ -26,7 +23,7 @@ import {
 	useStoreDay,
 	zoneOptions,
 } from '../../../hooks/use-store-day';
-import { HeaderLeft } from '../components/header/left';
+import { ManagementBar } from '../components/management-bar';
 import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
@@ -268,8 +265,6 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 
 function ReportsShell() {
 	const t = useT();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	const { top } = useSafeAreaInsets();
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -305,9 +300,9 @@ function ReportsShell() {
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
 	return (
-		// The safe-area inset sits above everything, so the Free strip never slides under the status bar.
-		<View className="flex-1" style={{ paddingTop: top }}>
-			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+		// Each room's bar pads the safe-area inset and shows the held-session banner and the Free
+		// strip under it, as every page bar does.
+		<View className="flex-1">
 			<ErrorBoundary>
 				<Suspense>
 					{room === 'sales' ? (
@@ -350,7 +345,6 @@ function ReportsShell() {
 }
 
 export function ReportsScreen() {
-	const { top } = useSafeAreaInsets();
 	const { closureId } = useLocalSearchParams<{ closureId?: string }>();
 	// Clearing a consumed link keeps the current room; a new link resets its selection.
 	const [link, setLink] = React.useState({ closureId, key: 0 });
@@ -363,11 +357,11 @@ export function ReportsScreen() {
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
 		<ReportsShell key={link.key} />
 	) : (
-		<View className="flex-1" style={{ paddingTop: top + 8 }}>
-			<View className="bg-sidebar self-start rounded-md p-2">
-				<HeaderLeft />
-			</View>
-			<Text testID="reports-denied">{t('reports.no_access')}</Text>
+		<View className="flex-1">
+			<ManagementBar title={t('common.reports')} testID="reports-bar" />
+			<Text testID="reports-denied" className="p-4">
+				{t('reports.no_access')}
+			</Text>
 		</View>
 	);
 }

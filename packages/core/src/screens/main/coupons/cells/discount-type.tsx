@@ -1,4 +1,4 @@
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -28,12 +28,10 @@ export function DiscountType({
 	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 
 	return (
-		<ButtonPill
-			variant="ghost-primary"
-			size="xs"
+		<Chip
+			size="sm"
+			label={label}
 			onPress={() => actions?.setFilter('discount_type', discountType)}
-		>
-			<ButtonText numberOfLines={1}>{label}</ButtonText>
-		</ButtonPill>
+		/>
 	);
 }

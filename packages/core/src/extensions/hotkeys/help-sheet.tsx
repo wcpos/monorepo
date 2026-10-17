@@ -61,7 +61,7 @@ export function HelpSheet({
 										<Button
 											variant="ghost"
 											testID={`hotkeys-help-row-${command.id}`}
-											className="min-h-row flex-row justify-between gap-3"
+											className="flex-row justify-between gap-3"
 											disabled={command.when?.(ctx) === false}
 											onPress={() => run(command.id)}
 										>

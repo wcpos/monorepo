@@ -183,7 +183,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				<Button
 					testID="count-denominations"
 					variant="ghost"
-					className="min-h-ctl flex-row justify-start gap-2 px-0"
+					className="flex-row justify-start gap-2 px-0"
 					onPress={() => setNotesOpen(!notesOpen)}
 				>
 					<Icon
@@ -220,7 +220,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					<Button
 						testID="count-clear"
 						variant="ghost"
-						className="min-h-row self-end"
+						className="self-end"
 						onPress={() => {
 							setPieces({});
 							setCash('0.00');
@@ -234,7 +234,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				<Button
 					testID="count-other-tenders"
 					variant="ghost"
-					className="min-h-ctl flex-row justify-start gap-2 px-0"
+					className="flex-row justify-start gap-2 px-0"
 					onPress={() => setTendersOpen(!tendersOpen)}
 				>
 					<Icon
@@ -276,7 +276,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			)}
 			<Button
 				testID="count-close"
-				size="xl"
+				size="lg"
 				className="w-full"
 				loading={busy}
 				disabled={
