@@ -298,6 +298,7 @@ describe('maintenance lanes through the public handle', () => {
 				expect(error?.fields).toEqual({
 					lane: 'query-total-retry',
 					...(failure === 'deadline' ? { status: 0 } : {}),
+					consecutiveFailures: 1,
 				});
 			} finally {
 				vi.useRealTimers();
@@ -305,6 +306,34 @@ describe('maintenance lanes through the public handle', () => {
 			}
 		}
 	);
+
+	it('numbers consecutive lane failures and restarts the streak after a tick that ran', async () => {
+		let fail = true;
+		const harness = await createEngineHarness({
+			mode: 'manual',
+			queryTotal: {
+				fetchWooQueryTotal: async () => {
+					if (fail) throw new Error('census store write failed');
+					return 5;
+				},
+			},
+		});
+		try {
+			await harness.engine.checkCollection('products');
+			await harness.engine.checkCollection('products');
+			fail = false;
+			await harness.engine.checkCollection('products');
+			fail = true;
+			await harness.engine.checkCollection('products');
+			expect(
+				harness.diagnostics
+					.filter((event) => event.type === 'maintenance.lane.error')
+					.map((event) => event.fields?.consecutiveFailures)
+			).toEqual([1, 2, 1]);
+		} finally {
+			await harness.dispose();
+		}
+	});
 
 	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
 		let failProbe = true;

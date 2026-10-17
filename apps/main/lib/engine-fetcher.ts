@@ -14,6 +14,7 @@ import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
 import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
 
 import { evaluateClockSkew } from './clock-skew';
+import { PERSISTENT_FAILURE_STREAK } from './sync-log-observer';
 import {
 	collectionFromSyncUrl,
 	getMetricsEpoch,
@@ -51,6 +52,27 @@ function createRateLimitObserver(): (status: number) => void {
 				context: { consecutive429s },
 			});
 		}
+	};
+}
+
+/**
+ * Per-fetcher, per-path streak of failed requests. The lanes retry a failed
+ * request on their next tick, so one 503 or one dropped connection is an
+ * attempt, not something to tell the merchant about; the same path failing
+ * `PERSISTENT_FAILURE_STREAK` times running is. Keyed by path (query stripped)
+ * so one blip that fails three different lanes' requests at once is still one
+ * blip. Per fetcher for the same reason as the rate-limit streak above.
+ */
+function createFailureStreaks(): (path: string, failed: boolean) => number {
+	const streaks = new Map<string, number>();
+	return (path, failed) => {
+		if (!failed) {
+			streaks.delete(path);
+			return 0;
+		}
+		const streak = (streaks.get(path) ?? 0) + 1;
+		streaks.set(path, streak);
+		return streak;
 	};
 }
 
@@ -102,6 +124,7 @@ export function createEngineFetcher(input: {
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
+	const failureStreak = createFailureStreaks();
 	// Paths that have already answered 403 on this fetcher. A permission error is
 	// a property of the session (a cashier role without that capability), not of
 	// the tick, so it is reported at error ONCE per path and at info after that;
@@ -232,10 +255,14 @@ export function createEngineFetcher(input: {
 				// SYNC321 failure (Sentry 2HK, 1.10.6–1.10.9).
 				if (isNativeCancel && error.name !== 'AbortError') error.name = 'AbortError';
 				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
+				// A push's failure is push.error's to report (attempt-counted); any
+				// other path alarms only once it has failed several times running.
+				// An abort is ours, so it neither counts nor resets the streak.
+				const streak = aborted ? 0 : failureStreak(requestPath ?? url, true);
 				input.emitTransport(
 					{
 						type: 'transport.request',
-						level: 'warn',
+						level: !isPushRequest && streak >= PERSISTENT_FAILURE_STREAK ? 'warn' : 'info',
 						collection: collectionFromSyncUrl(finalUrl),
 						fields: {
 							durationMs,
@@ -279,6 +306,7 @@ export function createEngineFetcher(input: {
 							engineLogger.warn(
 								`Server clock is ${Math.abs(result.skewSeconds)}s ${result.skewSeconds > 0 ? 'ahead of' : 'behind'} the device clock`,
 								{
+									code: ERROR_CODES.CLOCK_OUT_OF_SYNC,
 									context: {
 										skewSeconds: result.skewSeconds,
 										serverDate: result.serverDate,
@@ -383,20 +411,33 @@ export function createEngineFetcher(input: {
 		 *    latches tick-unsupported and falls back to sequence-log polling BY
 		 *    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
 		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
+		 *  - 401 → warn: it reaches here only when no refresh arc ran (no refresh
+		 *    port, or the refresh request itself), so nothing else reports it.
+		 *  - any other push failure → info, still a failed request in the metrics: the
+		 *    record-level events own every push verdict — push.error counts the
+		 *    attempts, push.rejected / auto-reverted / the conflict rows settle the
+		 *    rest. A warn here put a second coded row (a second SYNC221 action, a
+		 *    second "ask the admin") on one record's incident.
+		 *  - 429 → info, a failed request: cadence backoff absorbs bursts, and the
+		 *    rate-limit streak above writes the one HOST161 warn when it persists.
 		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
 		 *    it needs attention, not a refresh loop.
-		 *  - push 409 → info, still a failed request in the metrics: the server answered
-		 *    a push with a clash the record-level events narrate and settle (an
-		 *    order re-pushes once; a parked clash is the SYNC221 row). A warn here
-		 *    put a second SYNC221 action on a push that went on to save.
-		 *  - anything else !ok → warn (will need attention if it persists).
+		 *  - non-push 409 → warn: no record event settles a pull's clash.
+		 *  - anything else !ok (5xx, other 4xx, 426, an unexpected 1xx/3xx) → info
+		 *    while it is an attempt the next tick retries, warn once the same path
+		 *    has failed PERSISTENT_FAILURE_STREAK times running. A 426 refusal
+		 *    latches the engine's update-required screen and error row on the first
+		 *    reply, so its own requests never reach the streak.
 		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
+			const healthy = attempt.response.ok || status === 304 || (status === 404 && isTickProbe);
+			const streak = failureStreak(requestPath ?? url, !healthy);
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 409 && isPushRequest)
+			else if (status === 401) attempt.settle('warn', extraFields);
+			else if (isPushRequest || status === 429)
 				attempt.settle('info', extraFields, { failed: true });
 			else if (status === 403) {
 				if (forbiddenPathsOwner !== input.auth.credentials) {
@@ -413,7 +454,9 @@ export function createEngineFetcher(input: {
 					{ ...(repeat ? { outcome: 'forbidden-repeat' } : {}), ...extraFields },
 					{ failed: true }
 				);
-			} else attempt.settle('warn', extraFields);
+			} else if (status === 409) attempt.settle('warn', extraFields);
+			else if (streak >= PERSISTENT_FAILURE_STREAK) attempt.settle('warn', extraFields);
+			else attempt.settle('info', extraFields, { failed: true });
 		};
 
 		const first = await performAttempt();
@@ -437,17 +480,19 @@ export function createEngineFetcher(input: {
 					? currentToken
 					: await input.auth.refreshAuth({ operationId });
 		} catch (error) {
-			// The refresh itself failed hard — settle the attempt as a failure and let
-			// the refresh error propagate exactly as before.
-			first.settle('warn', { outcome: 'failed', operationId });
+			// The refresh itself failed hard — settle the attempt as a failed request
+			// and let the refresh error propagate exactly as before. Info: the refresh
+			// layer writes the verdict for it.
+			first.settle('info', { outcome: 'failed', operationId }, { failed: true });
 			throw error;
 		}
 		if (!retryToken) {
 			// No fresh token. The refresh layer logs its own verdict ('Unable to
-			// refresh session' — error when the refresh token is terminally rejected),
-			// so this row records the request-level failure without double-escalating.
-			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
-			first.settle('warn', { outcome: 'failed' });
+			// refresh session' — error when the refresh token is terminally rejected,
+			// retried after a cooldown when the failure was transient), so this row
+			// is an info request record, not a second "sign in again". Leave it
+			// uncorrelated so repeated post-rejection 401s can collapse.
+			first.settle('info', { outcome: 'failed' }, { failed: true });
 			return first.response;
 		}
 
@@ -472,8 +517,14 @@ export function createEngineFetcher(input: {
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.
+			// onAuthExhausted writes that verdict (error + toast, once per token), so
+			// the request row stays info; without a handler it is the only signal.
 			first.settle('debug', { outcome: 'failed', operationId });
-			retry.settle('error', { operationId });
+			retry.settle(
+				input.auth.onAuthExhausted ? 'info' : 'error',
+				{ operationId },
+				{ failed: true }
+			);
 			input.auth.onAuthExhausted?.(tokenUsed ?? null);
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that

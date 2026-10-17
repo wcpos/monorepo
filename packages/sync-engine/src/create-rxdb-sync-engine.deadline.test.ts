@@ -3,6 +3,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createAutomaticTickGate } from './automatic-tick-gate';
 import { createEngineHarness, type EngineHarness } from './testing';
+import { requestStatusOf } from './transport-failure';
 import { RequestTimeoutError } from './write-path/request-timeout';
 
 setPremiumFlag();
@@ -104,7 +105,7 @@ it('releases a black-holed query-total lane and counts its deadline as pressure 
 	expect(harness.diagnostics).toContainEqual(
 		expect.objectContaining({
 			type: 'engine.request.deadline',
-			fields: { lane: 'query-total-retry', elapsedMs: 25_000 },
+			fields: { lane: 'query-total-retry', elapsedMs: 25_000, consecutiveDeadlines: 1 },
 		})
 	);
 	fetch.mockRejectedValue(new Error('offline'));
@@ -176,4 +177,36 @@ it('settles caller cancellation immediately without deadline events or pressure'
 	await vi.advanceTimersByTimeAsync(0);
 	expect(harness.diagnostics.some((e) => e.type === 'engine.request.deadline')).toBe(false);
 	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
+});
+
+it('numbers consecutive deadlines per lane and restarts after any answer', async () => {
+	vi.useFakeTimers();
+	const { fetcher } = harness.engine.hostTransport();
+	const blackHole = () => {
+		fetch.mockReturnValueOnce(new Promise(() => {}));
+		const request = fetcher('https://example.test/probe').catch(() => {});
+		return vi.advanceTimersByTimeAsync(60_000).then(() => request);
+	};
+	await blackHole();
+	await blackHole();
+	await blackHole();
+	fetch.mockResolvedValueOnce(new Response('[]', { status: 503 }));
+	await fetcher('https://example.test/probe');
+	await blackHole();
+
+	expect(
+		harness.diagnostics
+			.filter((event) => event.type === 'engine.request.deadline')
+			.map((event) => event.fields?.consecutiveDeadlines)
+	).toEqual([1, 2, 3, 1]);
+});
+
+it('marks a thrown transport failure as a request with no response', async () => {
+	const offline = new TypeError('Network request failed');
+	fetch.mockRejectedValueOnce(offline);
+	const { fetcher } = harness.engine.hostTransport();
+
+	await expect(fetcher('https://example.test/probe')).rejects.toBe(offline);
+
+	expect(requestStatusOf(offline)).toBe(0);
 });

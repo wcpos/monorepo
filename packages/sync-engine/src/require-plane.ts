@@ -82,6 +82,7 @@ import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
+import { requestStatusOf } from './transport-failure';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
@@ -1524,6 +1525,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								},
 							});
 						} else {
+							const requestStatus = requestStatusOf(error);
 							const message =
 								error instanceof Error && error.message.startsWith('require: ')
 									? error.message
@@ -1553,6 +1555,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 									// (the HTTP client logs a full stack there).
 									errorName: error instanceof Error ? error.name : typeof error,
 									errorDetail: error instanceof Error ? error.message : String(error),
+									// A failed request already has its own transport or deadline
+									// row; the status lets the log keep this one quiet.
+									...(requestStatus !== undefined ? { status: requestStatus } : {}),
 								},
 							});
 							for (const subscriber of next.subscribers) {

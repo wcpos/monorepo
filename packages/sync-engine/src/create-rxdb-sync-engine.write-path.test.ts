@@ -1764,6 +1764,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
+			// The revert is the verdict; the dead letter about the same refusal is narration.
+			expect(
+				diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
+			).toEqual(['info']);
 		} finally {
 			await engine.dispose();
 		}
@@ -2074,6 +2078,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect(state.orderPulls).toEqual([]);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// No revert follows an order, so its dead letter keeps the verdict.
+			expect(
+				diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
+			).toEqual(['warn']);
 		} finally {
 			await engine.dispose();
 		}
@@ -2103,6 +2111,17 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect((await productJson(engine))?.stockQuantity).toBe(2);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// The revert did not happen, so the parked row's verdict is owed after all.
+			await vi.waitFor(() =>
+				expect(
+					diagnostics
+						.filter((event) => event.type === 'push.rejected')
+						.map((event) => [event.level, event.fields?.autoRevertFailed])
+				).toEqual([
+					['info', undefined],
+					['warn', true],
+				])
+			);
 		} finally {
 			await engine.dispose();
 		}
@@ -2138,8 +2157,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 	it('transient failure backs off durably, then succeeds once the window elapses', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_300 });
-		let failures = 1;
-		// One raw 500 (transient server error) before the fake server answers —
+		let failures = 2;
+		// Two raw 500s (transient server errors) before the fake server answers —
 		// the drain must back off durably, then land the re-push.
 		const flakyFetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (failures > 0) {
@@ -2149,7 +2168,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			return server.fetch(url, init as never);
 		};
 		let nowMs = 1_700_000_000_000;
-		const engine = engineWith({ fetch: flakyFetch, now: () => nowMs });
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: flakyFetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
 		await engine.ready;
 		await insertBornLocalOrder(engine, UUID_A);
 		await engine.write({
@@ -2166,9 +2190,22 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			deferred: 1,
 			pushed: 0,
 		});
-		// …and once the window elapses the re-push lands.
+		// …and once the window elapses the re-push fails again…
+		nowMs += 5 * 60_000;
+		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 0 });
+		// …then lands.
 		nowMs += 5 * 60_000;
 		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+		// Each push.error names its attempt, so the log can tell a first failure
+		// the drain retries from one that has persisted.
+		expect(
+			diagnostics
+				.filter((event) => event.type === 'push.error')
+				.map((event) => [event.fields?.attempt, event.fields?.retryable])
+		).toEqual([
+			[1, true],
+			[2, true],
+		]);
 		await engine.dispose();
 	});
 

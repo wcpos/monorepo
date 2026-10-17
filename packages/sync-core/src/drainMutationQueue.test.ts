@@ -246,6 +246,10 @@ describe('drainMutationQueue', () => {
 		expect((await q.all())[0]).toMatchObject({ status: 'rejected' });
 		expect(await q.pending()).toEqual([]); // dead-lettered (removed), NOT left to retry forever
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 400)).toBe(true);
+		// `op` lets the engine tell a catalogue edit (auto-reverted next) from a create.
+		expect(events.find((e) => e.type === 'push.rejected')?.fields).toMatchObject({
+			op: 'update',
+		});
 	});
 
 	it('dead-letters a cannot-delete refusal with its detail and never pushes it again', async () => {

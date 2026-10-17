@@ -388,9 +388,38 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			type: 'push.error',
 			level: 'error',
-			fields: { status: 500 },
+			fields: { status: 500, attempt: 1, retryable: true },
 		});
 	});
+
+	it.each([
+		// Retried with backoff by the drain.
+		[500, {}, true],
+		[429, {}, true],
+		[408, {}, true],
+		// Dead-lettered: push.rejected carries the verdict.
+		[400, { code: 'rest_invalid_param' }, false],
+		[403, {}, false],
+		[409, { code: 'woo_rxdb_sync_identity_ambiguous' }, false],
+	])(
+		'stamps push.error for HTTP %s with the attempt and whether the drain retries it',
+		async (status, body, retryable) => {
+			const events: SyncEvent[] = [];
+			await expect(
+				pushRecordMutation({
+					mutation: mut(),
+					resolveEndpoint,
+					fetcher: async () => jsonResponse(status, body),
+					observe: (e) => events.push(e),
+					attempt: 3,
+				})
+			).rejects.toBeInstanceOf(RecordPushError);
+			expect(events[0]).toMatchObject({
+				type: 'push.error',
+				fields: { status, attempt: 3, retryable },
+			});
+		}
+	);
 
 	it('marks WooCommerce delete refusals permanent and preserves their code', async () => {
 		const events: SyncEvent[] = [];
@@ -475,7 +504,13 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			type: 'push.error',
 			level: 'error',
-			fields: { reason: 'TypeError', message: 'Failed to fetch', phase: 'transport' },
+			fields: {
+				reason: 'TypeError',
+				message: 'Failed to fetch',
+				phase: 'transport',
+				attempt: 1,
+				retryable: true,
+			},
 		});
 	});
 

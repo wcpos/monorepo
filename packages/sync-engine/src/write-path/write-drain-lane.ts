@@ -323,6 +323,10 @@ export type WriteDrainLane = {
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
+	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
+	// re-runs the drain, so the log treats one crash as an attempt and only a
+	// streak as a failure that has persisted. A tick that RAN resets it.
+	let consecutiveTickFailures = 0;
 
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
@@ -336,7 +340,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
 		}
 		try {
-			return await deps.manager.runGuarded(async (bound) => {
+			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
 				// A LIVE read, never a tick-scoped snapshot: a drain works one row at a
 				// time and the change-signal lane can publish a new carrier between
@@ -565,6 +569,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									},
 									signal: tickAbort.signal,
 									observe: deps.diagnostics,
+									attempt: (mutation.attempts ?? 0) + 1,
 								});
 							},
 							applyAck: async (mutation, pushResult, signal) => {
@@ -853,6 +858,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				deps.setLastError(null);
 				return report;
 			});
+			if (tickReport.status === 'ran') consecutiveTickFailures = 0;
+			return tickReport;
 		} catch (error) {
 			if (signal?.aborted) {
 				deps.setLastError(null);
@@ -860,7 +867,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			deps.setLastError(message);
-			deps.diagnostics({ type: 'queue.write.tick.error', level: 'error', message });
+			consecutiveTickFailures += 1;
+			deps.diagnostics({
+				type: 'queue.write.tick.error',
+				level: 'error',
+				message,
+				fields: { consecutiveFailures: consecutiveTickFailures },
+			});
 			return { lane: 'write-drain', status: 'error', error: message };
 		}
 	}

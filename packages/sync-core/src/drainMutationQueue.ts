@@ -134,7 +134,7 @@ const RETRYABLE_4XX = new Set([SESSION_EXPIRED_STATUS, 408, 409, 425, 429]);
  * bare status would otherwise look transient), or its status is a permanent client error
  * (4xx, not in RETRYABLE_4XX).
  */
-function isNonRetryable(error: unknown): boolean {
+export function isNonRetryable(error: unknown): boolean {
 	const e = error as { status?: unknown; permanent?: unknown } | null;
 	if (e?.permanent === true) return true;
 	const status = e?.status;
@@ -267,8 +267,11 @@ async function annihilateNeverPushedChains(input: {
 
 export async function drainMutationQueue(input: {
 	queue: RecordMutationQueue;
-	/** Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard, telemetry). */
-	push: (mutation: RecordMutation) => Promise<PushResult>;
+	/**
+	 * Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard,
+	 * telemetry). It receives the queued row, so `attempts` is there to stamp the push.
+	 */
+	push: (mutation: QueuedMutation) => Promise<PushResult>;
 	/**
 	 * Apply the server ack for a successful push (reconcile id + write the document).
 	 * Receives the abort signal so a scope-switch can cancel the ack write itself.
@@ -531,6 +534,8 @@ export async function drainMutationQueue(input: {
 				level: 'warn',
 				collection: mutation.collectionName,
 				fields: {
+					// The engine reads `op` to tell whether a catalogue auto-revert follows.
+					op: mutation.operation,
 					recordId: mutation.recordId,
 					mutationId: mutation.mutationId,
 					status,

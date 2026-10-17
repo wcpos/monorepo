@@ -47,7 +47,7 @@ import {
 } from './change-signal-source';
 import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
-import { RequestTimeoutError } from '../write-path/request-timeout';
+import { requestStatusOf } from '../transport-failure';
 
 import type { RxDatabase } from 'rxdb';
 import type {
@@ -164,6 +164,11 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	};
 	let chain: Promise<unknown> = Promise.resolve();
 	let lastError: string | null = null;
+	// Failed ticks in a row, stamped on signal.tick.error: the next cadence tick
+	// retries from the saved cursor, so one failure is an attempt and only a streak
+	// is a failure that persisted. A tick that RAN resets it; a skipped one polled
+	// nothing and proves nothing.
+	let consecutiveFailures = 0;
 	// The initial barrier holds admission until the first activation. It settles only
 	// by activation or by stopActivation: a requirement queued before any scope opened
 	// must REJECT on dispose (as the base did through runGuarded) rather than hang.
@@ -520,6 +525,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					}
 				}
 				lastError = null;
+				if (report.status === 'ran') consecutiveFailures = 0;
 				return report;
 			});
 		} catch (error) {
@@ -538,20 +544,20 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				lastError = null;
 				return { lane: 'change-signal', status: 'skipped', reason: 'aborted' };
 			}
-			// A request deadline is a transport failure with no response: status 0, so the
-			// observer files it as unreachable beside the engine.request.deadline row rather
-			// than as a crashed task.
-			const status =
-				error instanceof ChangeSignalPoisonError
-					? error.status
-					: error instanceof RequestTimeoutError
-						? 0
-						: undefined;
+			// The request status behind the failure (0 = no response): a failed
+			// request already has its transport or deadline row, so the observer keeps
+			// this one quiet and saves the alarm for local failures that persist.
+			const status = requestStatusOf(error);
+			consecutiveFailures += 1;
 			deps.diagnostics({
 				type: 'signal.tick.error',
 				level: 'error',
 				message,
-				fields: { lane: 'change-signal', ...(status !== undefined ? { status } : {}) },
+				fields: {
+					lane: 'change-signal',
+					...(status !== undefined ? { status } : {}),
+					consecutiveFailures,
+				},
 			});
 			return { lane: 'change-signal', status: 'error', error: message };
 		} finally {

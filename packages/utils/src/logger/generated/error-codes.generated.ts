@@ -7,6 +7,7 @@ export type ErrorCode =
 	| 'SYNC131'
 	| 'SYNC141'
 	| 'SYNC201'
+	| 'SYNC202'
 	| 'SYNC211'
 	| 'SYNC301'
 	| 'SYNC311'
@@ -51,6 +52,7 @@ export type ErrorCode =
 	| 'SYNC401'
 	| 'SYNC411'
 	| 'SYNC221'
+	| 'SYNC222'
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
 	| 'CLIENT111'
@@ -86,6 +88,7 @@ export type ErrorCode =
 	| 'CHECKOUT411'
 	| 'CHECKOUT421'
 	| 'CLIENT151'
+	| 'CLIENT161'
 	| 'AUTH131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
@@ -159,6 +162,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Fix the field the store refused, then retry.',
 		dataSafety: 'local-only',
 		summary: 'This record was rejected by your store and is saved only on this device.',
+	},
+	SYNC202: {
+		code: 'SYNC202',
+		symbol: 'RECORD_REVERTED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"The change wasn't saved. Read the store's reason, fix what it names, then make the change again.",
+		dataSafety: 'no-impact',
+		summary: "Your store refused this change, so this device went back to the store's version.",
 	},
 	SYNC211: {
 		code: 'SYNC211',
@@ -557,6 +570,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'A change on this device clashed with an edit made in your store.',
 	},
+	SYNC222: {
+		code: 'SYNC222',
+		symbol: 'STORE_EDIT_OVERWRITTEN',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			"Check the fields listed below in WP Admin. If the store's edit was the right one, make it again there.",
+		dataSafety: 'order-safe',
+		summary: 'This device saved its version over a newer edit made in your store.',
+	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
 		symbol: 'TOTALS_DIVERGED',
@@ -885,6 +908,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'Part of the screen failed to load and was replaced by an error message.',
 	},
+	CLIENT161: {
+		code: 'CLIENT161',
+		symbol: 'CLOCK_OUT_OF_SYNC',
+		domain: 'CLIENT',
+		severity: 'warn',
+		actionHint:
+			"Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
+		dataSafety: 'order-safe',
+		summary: "This device's clock and your store's clock are more than a minute apart.",
+	},
 	AUTH131: {
 		code: 'AUTH131',
 		symbol: 'STORE_SESSION_INCOMPLETE',
@@ -904,6 +937,7 @@ export const ERROR_CODES = {
 	STORE_SERVER_ERROR: 'SYNC131',
 	STORE_RATE_LIMITED: 'SYNC141',
 	RECORD_REJECTED: 'SYNC201',
+	RECORD_REVERTED: 'SYNC202',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
@@ -948,6 +982,7 @@ export const ERROR_CODES = {
 	SYNC_TASK_CRASHED: 'SYNC401',
 	DEMAND_REQUEST_FLOOD: 'SYNC411',
 	RECORD_CONFLICT: 'SYNC221',
+	STORE_EDIT_OVERWRITTEN: 'SYNC222',
 	TOTALS_DIVERGED: 'CHECKOUT401',
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
 	APP_START_SLOW: 'CLIENT111',
@@ -983,5 +1018,6 @@ export const ERROR_CODES = {
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
+	CLOCK_OUT_OF_SYNC: 'CLIENT161',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;

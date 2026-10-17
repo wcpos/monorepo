@@ -22,6 +22,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC141');
 		case 'SYNC201':
 			return t('health.logs.error_action.SYNC201');
+		case 'SYNC202':
+			return t('health.logs.error_action.SYNC202');
 		case 'SYNC211':
 			return t('health.logs.error_action.SYNC211');
 		case 'SYNC301':
@@ -110,6 +112,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC411');
 		case 'SYNC221':
 			return t('health.logs.error_action.SYNC221');
+		case 'SYNC222':
+			return t('health.logs.error_action.SYNC222');
 		case 'CHECKOUT401':
 			return t('health.logs.error_action.CHECKOUT401');
 		case 'PRODUCT411':
@@ -180,6 +184,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT421');
 		case 'CLIENT151':
 			return t('health.logs.error_action.CLIENT151');
+		case 'CLIENT161':
+			return t('health.logs.error_action.CLIENT161');
 		case 'AUTH131':
 			return t('health.logs.error_action.AUTH131');
 		default: {

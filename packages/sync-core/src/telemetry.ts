@@ -163,11 +163,16 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
 export type SyncEventFieldsByType = {
 	'maintenance.lane.error': {
 		readonly lane: string;
+		/** The failed request's status (0 = no response); absent for a local failure. */
 		readonly status?: number;
+		/** Failed ticks in a row for this lane, this one included. */
+		readonly consecutiveFailures: number;
 	};
 	'engine.request.deadline': {
 		readonly lane: string;
 		readonly elapsedMs: number;
+		/** Deadlines in a row on this lane, this one included. */
+		readonly consecutiveDeadlines: number;
 	};
 	'signal.cycle': {
 		readonly collectionsChecked?: readonly string[];

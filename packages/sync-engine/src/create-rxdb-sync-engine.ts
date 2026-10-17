@@ -56,6 +56,7 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { markTransportFailure } from './transport-failure';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -792,6 +793,20 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
+		// A catalogue edit the store refused is reverted to server truth right after
+		// it dead-letters (see emitWriteEvent below), and `queue.write.auto-reverted`
+		// is the verdict the cashier reads — so the dead-letter row about the same
+		// refusal is narration. A create is never assumed to revert: a born-local
+		// one parks for Store health instead, and its push.rejected is the verdict.
+		if (
+			event.type === 'push.rejected' &&
+			event.collection !== undefined &&
+			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
+			event.fields?.op !== 'create' &&
+			event.fields?.autoRevertFailed !== true
+		) {
+			event = { ...event, level: 'info' };
+		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
 				onLedgerRebuilt?.();
@@ -929,6 +944,9 @@ export function createRxdbSyncEngine(
 				init?.signal?.aborted === true;
 			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
+			// The host fetcher wrote this failure's status-0 transport row; a lane
+			// failing on it must not report the same incident again.
+			if (!aborted) markTransportFailure(error);
 			throw error;
 		}
 		// Plain permalinks carry the REST route in ?rest_route= with pathname '/',
@@ -1008,6 +1026,15 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
+	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
+	// answer is retried by the next tick, so the log alarms only on a streak.
+	// Any answer on the lane — whatever its status — ends the streak.
+	const consecutiveDeadlines = new Map<string, number>();
+	const noteDeadline = (lane: string): number => {
+		const streak = (consecutiveDeadlines.get(lane) ?? 0) + 1;
+		consecutiveDeadlines.set(lane, streak);
+		return streak;
+	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
 		const observation = createRequestObservation(startedAtMs, init?.signal);
@@ -1017,14 +1044,20 @@ export function createRxdbSyncEngine(
 			timers
 		);
 		try {
-			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+			consecutiveDeadlines.delete(lane);
+			return response;
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
 				observation.observe(0);
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
-					fields: { lane, elapsedMs: nowMs() - startedAtMs },
+					fields: {
+						lane,
+						elapsedMs: nowMs() - startedAtMs,
+						consecutiveDeadlines: noteDeadline(lane),
+					},
 				});
 			}
 			throw error;
@@ -1044,19 +1077,25 @@ export function createRxdbSyncEngine(
 						const startedAtMs = nowMs();
 						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
-							return await withRequestTimeout(
+							const total = await withRequestTimeout(
 								(_url, init) =>
 									rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
 								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
+							consecutiveDeadlines.delete('query-total-retry');
+							return total;
 						} catch (error) {
 							if (error instanceof RequestTimeoutError) {
 								observe(0);
 								diagnostics({
 									type: 'engine.request.deadline',
 									level: 'warn',
-									fields: { lane: 'query-total-retry', elapsedMs: nowMs() - startedAtMs },
+									fields: {
+										lane: 'query-total-retry',
+										elapsedMs: nowMs() - startedAtMs,
+										consecutiveDeadlines: noteDeadline('query-total-retry'),
+									},
 								});
 							}
 							throw error;
@@ -1163,9 +1202,15 @@ export function createRxdbSyncEngine(
 				status: report.status,
 			});
 		scheduleStatusChange();
+		// Always info, a failed tick included: every lane that reports
+		// `status: 'error'` has already written its own row about the cause
+		// (signal.tick.error, maintenance.lane.error, queue.write.tick.error), and
+		// the next tick re-runs it. The observer still files the row as failed from
+		// the status. Error stays only for the ticks that THREW past their lane
+		// (automatic-tick-gate, rebaseline continuation), which nothing else reports.
 		diagnostics({
 			type: 'engine.lane.tick',
-			level: report.status === 'error' ? 'error' : 'info',
+			level: 'info',
 			fields: {
 				lane: report.lane,
 				status: report.status,
@@ -1923,7 +1968,20 @@ export function createRxdbSyncEngine(
 						},
 					});
 				} catch {
-					// The rejected row stays parked for Store Health when discard cannot settle it.
+					// The rejected row stays parked for Store Health when discard cannot
+					// settle it — so the dead-letter verdict quieted above is owed after all.
+					diagnostics({
+						type: 'push.rejected',
+						level: 'warn',
+						collection: event.collection,
+						fields: {
+							recordId: event.recordId,
+							mutationId: event.mutationId,
+							status: event.status,
+							reason: event.reason,
+							autoRevertFailed: true,
+						},
+					});
 				}
 			})();
 		},

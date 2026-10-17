@@ -64,7 +64,7 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
-import { RequestTimeoutError } from '../write-path/request-timeout';
+import { requestStatusOf } from '../transport-failure';
 
 import type {
 	BarcodeSelectors,
@@ -272,6 +272,10 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	): MaintenanceLane {
 		const existenceAudit = name === 'existence-prime' || name === 'existence-reconcile';
 		let lastError: string | null = null;
+		// Failed ticks in a row for THIS lane, stamped on maintenance.lane.error: the
+		// lane re-runs on its next tick, so the log alarms only on a streak. A tick
+		// that ran resets it.
+		let consecutiveFailures = 0;
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
 		 * that ran on the bench and never in a browser — cost four live soaks and a
@@ -463,6 +467,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						return { lane: name, status: 'ran' };
 					});
 					lastError = null;
+					if (report.status === 'ran') consecutiveFailures = 0;
 					return report;
 				} catch (error) {
 					if (
@@ -475,11 +480,17 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
+					consecutiveFailures += 1;
+					const status = requestStatusOf(error);
 					deps.diagnostics({
 						type: 'maintenance.lane.error',
 						level: 'error',
 						message,
-						fields: { lane: name, ...(error instanceof RequestTimeoutError ? { status: 0 } : {}) },
+						fields: {
+							lane: name,
+							...(status !== undefined ? { status } : {}),
+							consecutiveFailures,
+						},
 					});
 					return { lane: name, status: 'error', error: message };
 				}
