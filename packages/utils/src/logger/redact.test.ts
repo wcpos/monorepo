@@ -12,12 +12,15 @@ describe('redactSensitiveFields', () => {
 		expect(redactSensitiveFields(input)).toBe(expected);
 	});
 
-	it.each(['Basic authentication failed', 'Basic realm="WordPress"', 'Basic abcd+/_-'])(
-		'leaves prose after Basic alone when it is not a user:password encoding: %s',
-		(input) => {
-			expect(redactSensitiveText(input)).toBe(input);
-		}
-	);
+	it.each([
+		'Basic authentication failed',
+		'Basic realm="WordPress"',
+		'Basic abcd+/_-',
+		'Basic Only mode',
+		'Basic Auth required',
+	])('leaves prose after Basic alone when it is not a user:password encoding: %s', (input) => {
+		expect(redactSensitiveText(input)).toBe(input);
+	});
 
 	it('should redact access_token at top level', () => {
 		const input = { access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef' };

@@ -54,7 +54,12 @@ function decodeBase64(token: string): string | null {
  */
 function isBasicCredential(token: string): boolean {
 	const decoded = decodeBase64(token);
-	return decoded !== null && decoded.includes(':') && !/[\x00-\x08\x0e-\x1f\x7f]/.test(decoded);
+	// user:password with a non-empty user made of printable, non-space characters; a
+	// bare colon or a leading colon (`Only` decodes to `:yr`) is prose, not a credential.
+	return (
+		decoded !== null &&
+		/^[\x21-\x39\x3b-\x7e\u00a0-\uffff]+:[\x20-\x7e\u00a0-\uffff]*$/.test(decoded)
+	);
 }
 
 export function redactSensitiveText(value: string): string {
