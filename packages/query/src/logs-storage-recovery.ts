@@ -85,18 +85,16 @@ export async function recoverLogsCollectionStorage(
 	}
 
 	const sessionStorage = getSessionStorage();
-	if (
-		sessionStorage
-			? sessionStorage.getItem(RECOVERY_SESSION_KEY) === '1'
-			: logsRecoveryAttemptedInMemory
-	) {
+	if (logsRecoveryAttemptedInMemory || sessionStorage?.getItem(RECOVERY_SESSION_KEY) === '1') {
 		return false;
 	}
 
 	// Claim synchronously so concurrent query failures cannot both remove the collection.
-	if (sessionStorage) {
-		sessionStorage.setItem(RECOVERY_SESSION_KEY, '1');
-	} else {
+	try {
+		if (sessionStorage) sessionStorage.setItem(RECOVERY_SESSION_KEY, '1');
+		else logsRecoveryAttemptedInMemory = true;
+	} catch {
+		// Quota/blocked writes must not prevent recovery; keep the claim in this process.
 		logsRecoveryAttemptedInMemory = true;
 	}
 	try {

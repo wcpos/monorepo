@@ -67,9 +67,13 @@ describe('logs storage recovery', () => {
 		expect(reload).toHaveBeenCalledTimes(1);
 	});
 
-	it.each([true, false])(
+	it.each([true, false, 'blocked'])(
 		'claims concurrent logs recovery before removal (storage=%s)',
 		async (storage) => {
+			if (storage === 'blocked')
+				jest.spyOn(sessionStorage, 'setItem').mockImplementation(() => {
+					throw new Error('Quota exceeded');
+				});
 			if (!storage)
 				Object.defineProperty(globalThis, 'sessionStorage', {
 					configurable: true,
@@ -90,11 +94,15 @@ describe('logs storage recovery', () => {
 				const error = new Error('requestRemote SyntaxError: Expected JSON');
 				const first = recover(collection, error, { reload });
 				const second = recover(collection, error, { reload });
+				const results = Promise.allSettled([first, second]);
 				expect(remove).toHaveBeenCalledTimes(1);
-				if (storage)
+				if (storage === true)
 					expect(sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBe('1');
 				finish();
-				expect(await Promise.all([first, second])).toEqual([true, false]);
+				expect(await results).toEqual([
+					{ status: 'fulfilled', value: true },
+					{ status: 'fulfilled', value: false },
+				]);
 				expect(reload).toHaveBeenCalledTimes(1);
 			});
 		}

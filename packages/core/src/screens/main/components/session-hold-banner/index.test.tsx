@@ -9,6 +9,7 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const mockTrigger = jest.fn();
+const mockSessionRestored = jest.fn();
 const mockWarn = jest.fn();
 const mockInfo = jest.fn();
 let mockWpCredentials = { id: 1, access_token: 'initial', refresh_token: 'refresh' };
@@ -57,6 +58,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: { sessionRestored: mockSessionRestored } }),
 	useDocField: <T, R>(doc: T, select: (value: T) => R) => select(doc),
 }));
 
@@ -278,14 +280,16 @@ describe('SessionHoldBanner', () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it('keeps the sales warning after a recovery while the write session is still held', () => {
+	it('notifies the write engine on external credential renewal while awaiting its next snapshot', () => {
 		mockAuthRequired = true;
 		mockWriteSessionHeld = true;
 		mockSyncBacklogSales = 2;
 		requestStateManager.setAuthFailed(true);
 		const { rerender } = render(<Held />);
+		expect(mockSessionRestored).not.toHaveBeenCalled();
 		mockWpCredentials = { ...mockWpCredentials, access_token: 'new' };
 		rerender(<Held />);
+		expect(mockSessionRestored).toHaveBeenCalledTimes(1);
 		expect(requestStateManager.isAuthFailed()).toBe(false);
 		expect(screen.getByTestId('session-hold-banner').textContent).toContain(
 			'2 sales waiting to sync'
