@@ -14,10 +14,6 @@
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 2
   },
-  "packages/components/src/toggle-group/index.tsx": {
-    "focus-visible:": 4,
-    "group-*": 3
-  },
   "packages/core/src/screens/auth/connect.tsx": {
     "arbitrary-px": 1
   },
@@ -45,35 +41,14 @@
   "packages/core/src/screens/main/health/components/callout.tsx": {
     "arbitrary-px": 1
   },
-  "packages/core/src/screens/main/health/components/code-chip.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/health/components/pill.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/health/components/repeat-chip.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
     "duration-literal": 2
   },
   "packages/core/src/screens/main/logs/row-detail.tsx": {
     "arbitrary-px": 1
   },
-  "packages/core/src/screens/main/orders/view/sections/_section.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/orders/view/sections/customer.tsx": {
-    "arbitrary-px": 2
-  },
   "packages/core/src/screens/main/orders/view/sections/line-items.tsx": {
-    "arbitrary-px": 3
-  },
-  "packages/core/src/screens/main/orders/view/sections/refunds.tsx": {
-    "arbitrary-px": 5
-  },
-  "packages/core/src/screens/main/orders/view/sections/totals.tsx": {
-    "arbitrary-px": 1
+    "arbitrary-px": 2
   },
   "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
     "bare-Suspense": 1

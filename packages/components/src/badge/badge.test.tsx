@@ -139,6 +139,18 @@ describe('badge colour contract', () => {
 	});
 });
 
+describe('badge label', () => {
+	it('keeps a long label on one line', () => {
+		render(
+			<div data-testid="host">
+				<Badge variant="muted">A very long customer name that would otherwise wrap</Badge>
+			</div>
+		);
+		const label = screen.getByText('A very long customer name that would otherwise wrap');
+		expect(label.getAttribute('numberOfLines')).toBe('1');
+	});
+});
+
 describe('badge atoms skin', () => {
 	it('uses ramp text and fixed-width bold digits for small counts', () => {
 		const { container } = render(<Badge count={3} size="sm" />);

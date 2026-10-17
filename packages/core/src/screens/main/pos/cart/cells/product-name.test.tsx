@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 
 import { ProductName } from './product-name';
 import { openLineQuantity } from '../../conditions/use-cart-conditions';
+import { CartTableReadOnlyProvider } from './read-only';
 
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react-native').View }));
@@ -47,7 +48,12 @@ jest.mock('../../conditions/use-cart-conditions', () => ({
 	useCartUnmet: () => mockUnmet,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
-jest.mock('../../../components/editable-field', () => ({ EditableField: () => null }));
+jest.mock('../../../components/editable-field', () => ({
+	EditableField: () => <span data-testid="editable-name" />,
+}));
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: ({ label }: { label: string }) => <span data-testid="paid-by">{label}</span>,
+}));
 
 it('joins public metadata into a decoded subline while keeping value-only selectors', () => {
 	const props = {
@@ -142,5 +148,63 @@ describe('the stock mark (roadmap#62)', () => {
 		unmount();
 		openLineQuantity('line-s');
 		expect(scrollToRow).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('read-only (checkout and receipt)', () => {
+	const scrollToRow = jest.fn();
+	const props = {
+		row: {
+			original: {
+				uuid: 'line-7',
+				type: 'line_items',
+				item: { id: 7, name: 'Belt &amp; Buckle', meta_data: [] },
+			},
+		},
+		column: { columnDef: { meta: { show: () => false } } },
+		table: { options: { data: [], meta: { scrollToRow } } },
+	} as unknown as React.ComponentProps<typeof ProductName>;
+
+	it('shows the name as text, with no field to edit, and the split-payment annotation', () => {
+		render(
+			<CartTableReadOnlyProvider value={{ paidBy: { 'line-7': ['Cash', 'Card'] } }}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByText('Belt & Buckle')).toBeTruthy();
+		expect(screen.queryByTestId('editable-name')).toBeNull();
+		expect(screen.getByTestId('paid-by').textContent).toBe(
+			'pos_checkout.line_paid_by {"methods":"Cash + Card"}'
+		);
+	});
+
+	it('keys the annotation by the server line id when the line has no POS uuid', () => {
+		const serverOnly = {
+			...props,
+			row: { original: { ...props.row.original, uuid: '' } },
+		} as unknown as React.ComponentProps<typeof ProductName>;
+		render(
+			<CartTableReadOnlyProvider value={{ paidBy: { 7: ['Cash'] } }}>
+				<ProductName {...serverOnly} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByTestId('paid-by').textContent).toContain('Cash');
+	});
+
+	it('registers no scroll target: the stilled cart never scrolls to a row', () => {
+		const { unmount } = render(
+			<CartTableReadOnlyProvider value={{}}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		openLineQuantity('line-7');
+		expect(scrollToRow).not.toHaveBeenCalled();
+		unmount();
+	});
+
+	it('shows the editable field and no annotation in the cart', () => {
+		render(<ProductName {...props} />);
+		expect(screen.getByTestId('editable-name')).toBeTruthy();
+		expect(screen.queryByTestId('paid-by')).toBeNull();
 	});
 });

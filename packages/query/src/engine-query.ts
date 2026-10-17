@@ -170,7 +170,7 @@ function searchTermOf(descriptor: EngineQueryDescriptor): string {
  * identity (a store switch, a collection recreated by a reset); `null` while any is absent.
  * Every leg of one read hangs off ONE binding, so a store switch rebinds them together.
  */
-function observeBinding(
+export function observeBinding(
 	engine: RxdbSyncEngine,
 	collections: LegacyCollectionName[]
 ): Observable<AdapterDatabase | null> {

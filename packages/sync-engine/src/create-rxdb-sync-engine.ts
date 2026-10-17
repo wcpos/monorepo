@@ -719,6 +719,8 @@ export type RxdbSyncEngine = {
 	 * Throws for an unknown/non-terminal mutationId, for 'retry-with-server-base'
 	 * on a rejected row, or for 'requeue-rebuilt' on anything but a rejected row.
 	 */
+	/** Credentials were saved: release the session hold and kick the write drain. */
+	sessionRestored(): void;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
 	/** Component-declared data requirement (CONTEXT.md): coverage-aware ready
 	 * (serve-local without a fetch when every record is resident), priority
@@ -2417,6 +2419,11 @@ export function createRxdbSyncEngine(
 				writeDrainNudge.nudge();
 			}
 			return receipt;
+		},
+		sessionRestored: () => {
+			assertNotDisposed();
+			writePlane.sessionRestored();
+			writeDrainNudge.nudge();
 		},
 		conflicts: () => writePlane.conflicts(),
 		resolveConflict: (mutationId, resolution) => writePlane.resolveConflict(mutationId, resolution),

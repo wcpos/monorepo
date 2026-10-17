@@ -1535,6 +1535,40 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each([false, true])('session restoration bypasses probeAt (inFlight=%s)', async (inFlight) => {
+		const server = createFakeWriteServer();
+		let refused = true;
+		const engine = engineWith({
+			now: () => 1_700_000_000_000,
+			fetch: (url, init) => {
+				if (refused && init?.method === 'POST' && inFlight) engine.sessionRestored();
+				return refused && init?.method === 'POST'
+					? Promise.resolve(new Response('{}', { status: 401 }))
+					: server.fetch(url, init as never);
+			},
+		});
+		try {
+			await engine.ready;
+			const payload = {
+				status: 'completed',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			};
+			await insertBornLocalOrder(engine, UUID_A, payload, 'completed');
+			await engine.write({ collection: 'orders', operation: 'create', recordId: UUID_A, payload });
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(engine.status().writeSessionHeld).toBe(!inFlight);
+			refused = false;
+			if (!inFlight) await engine.sync('write-drain');
+			expect(engine.status().queueDepth).toBe(1);
+			if (!inFlight) engine.sessionRestored();
+			expect(engine.status().writeSessionHeld).toBe(false);
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ pushed: 1 });
+			expect(engine.status().queueDepth).toBe(0);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('a successful push clears the session hold', async () => {
 		const server = createFakeWriteServer();
 		let posts = 0;

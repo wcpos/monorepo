@@ -84,7 +84,7 @@ export function ReceiptPreviewViewport({
 		>
 			<div
 				data-testid={testID ? `${testID}-zoom-controls` : undefined}
-				className="bg-background/95 absolute top-2 right-2 z-10 inline-flex items-stretch overflow-hidden rounded-md border shadow-sm"
+				className="bg-background/95 absolute top-2 right-2 z-10 inline-flex items-stretch overflow-hidden rounded-lg border"
 			>
 				<button
 					type="button"

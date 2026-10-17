@@ -92,6 +92,7 @@ describe('per-task drain outcomes', () => {
 		expect(result.tasks).toEqual([
 			{
 				taskId: 'orders:browser:windowed',
+				appliedRecordIds: [],
 				requirementId: 'orders.open',
 				collection: 'orders',
 				queryKey: 'orders:browser',
@@ -101,6 +102,7 @@ describe('per-task drain outcomes', () => {
 			},
 			{
 				taskId: 'products:browse:windowed',
+				appliedRecordIds: [],
 				requirementId: 'orders.open',
 				collection: 'products',
 				queryKey: 'products:browse',
@@ -260,6 +262,7 @@ describe('runPersistedSchedulerTasks', () => {
 			tasks: [
 				{
 					taskId: 'orders:orders:open:windowed',
+					appliedRecordIds: [],
 					requirementId: 'orders.open',
 					collection: 'orders',
 					queryKey: 'orders:open',

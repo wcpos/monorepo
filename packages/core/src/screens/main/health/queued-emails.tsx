@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -20,7 +21,7 @@ import {
 	retryReceiptEmail,
 } from '../receipt/email-queue/queue';
 import { useReceiptEmailQueueCollection } from '../receipt/email-queue/use-receipt-email-queue-collection';
-import { Callout, Pill } from './components';
+import { Callout } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type QueuedEmail, useQueuedEmails } from './use-queued-emails';
 
@@ -145,13 +146,13 @@ export function QueuedEmailsPanel() {
 							<HStack className="items-center gap-2">
 								<Text className="font-medium">{describeRow(row, t)}</Text>
 								{row.status === 'failed' ? (
-									<Pill tone="destructive" testID={`db-queued-email-failed-${row.localID}`}>
+									<Badge variant="destructive" testID={`db-queued-email-failed-${row.localID}`}>
 										{t('health.database.emails.failed')}
-									</Pill>
+									</Badge>
 								) : (
-									<Pill tone="warning" testID={`db-queued-email-pending-${row.localID}`}>
+									<Badge variant="warning" testID={`db-queued-email-pending-${row.localID}`}>
 										{t('health.database.emails.pending')}
-									</Pill>
+									</Badge>
 								)}
 							</HStack>
 							<Text className="text-muted-foreground text-xs">

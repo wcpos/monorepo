@@ -256,6 +256,9 @@ export type EngineRequirement = EngineRequirementCommon &
 	);
 
 export type CoverageOutcome = {
+	/** Remote IDs confirmed by targeted pulls, not merely requested or received. */
+	appliedRecordIds?: string[];
+	prunedRecordIds?: string[];
 	action: 'serve-local' | 'fetched' | 'released';
 	missingRecordIds: RemoteId[];
 	reason: string;
@@ -1318,6 +1321,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					}
 					return waitMs;
 				};
+				const appliedRecordIds: string[] = [];
 				let remaining = missing;
 				let activeOrderWaitStep = 0;
 				const activeOrderWaitStepsMs = [50, 250, 1_000] as const;
@@ -1341,6 +1345,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						skippedActive = seedResult.skippedActive;
 						const ownedTaskIds = new Set(seedResult.taskIds);
 						const drainResult = await drainScheduler({ nowMs });
+						appliedRecordIds.push(
+							...drainResult.tasks
+								.filter((task) => ownedTaskIds.has(task.taskId) && task.kind === 'succeeded')
+								.flatMap((task) => task.appliedRecordIds ?? [])
+						);
 						// Only OUR targeted tasks count: an unrelated collection failing in the same
 						// tick must not abort a pull whose own tasks are fine.
 						failed = drainResult.tasks.filter(
@@ -1421,6 +1430,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched' as const,
 					missingRecordIds: missing,
 					reason: `pulled ${missing.length} missing order(s) via the persisted scheduler`,
+					appliedRecordIds,
+					prunedRecordIds: [],
 				};
 			}
 
@@ -1445,8 +1456,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					};
 				}
 				if (item.abortController.signal.aborted) return releasedOutcome();
+				let delivery: Awaited<ReturnType<typeof pullTargetedByIds>> | undefined;
 				const applied = await bound.guardWrite(async () => {
-					await pullTargetedByIds(ctx, descriptor, missing.map(wooIdOf));
+					delivery = await pullTargetedByIds(ctx, descriptor, missing.map(wooIdOf));
 				});
 				if (applied === 'dropped') {
 					throw new Error('require: scope moved mid-pull — writes dropped');
@@ -1456,6 +1468,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched' as const,
 					missingRecordIds: missing,
 					reason: `pulled ${missing.length} missing record(s)`,
+					...delivery,
 				};
 			}
 

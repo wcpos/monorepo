@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
+import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -19,6 +20,8 @@ export const useSessionLoginFlow = (
 ): { triggerAuthFlow: () => void } => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
 	const t = useT();
+	// Not destructured: ADR 0033's seam fences engine handles held in UI locals.
+	const runtime = useQueryRuntime();
 
 	/**
 	 * Ref to track processed OAuth responses.
@@ -152,6 +155,7 @@ export const useSessionLoginFlow = (
 				// 3. Clear authFailed AFTER tokens are saved
 				// This allows pending requests to proceed with new token
 				requestStateManager.setAuthFailed(false);
+				runtime.engine.sessionRestored();
 
 				// The silent refresh path already tells the cashier
 				// “Session renewed automatically” (auth.session_renewed_automatically),
@@ -217,7 +221,7 @@ export const useSessionLoginFlow = (
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name, wpCredentials.id, onUserMismatch, t]);
+	}, [response, handleLoginSuccess, site.name, wpCredentials.id, onUserMismatch, t, runtime]);
 
 	return { triggerAuthFlow };
 };

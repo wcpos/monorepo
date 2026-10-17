@@ -3,6 +3,10 @@ name: Publish Web Bundle
 # Builds the web bundle from a monorepo ref and publishes it to a web-bundle
 # branch for jsDelivr.
 #
+# The cdn job signs the built artifact, uploads it to cdn.wcpos.com (R2 + KV),
+# and verifies the public manifest and entry hashes. It runs only when the three CDN
+# secrets are configured. jsDelivr stays the fallback; its publish path is unchanged.
+#
 # ONE jsDelivr REF PER LANE, NAMED AFTER THE LANE (owner ruling, 2026-09-04):
 #
 #   monorepo `next`  →  https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next
@@ -78,7 +82,28 @@ jobs:
   publish:
     name: 🌐 Build & publish web bundle
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.build.outcome == 'success' && 'true' || 'false' }}
+      sha: ${{ steps.monorepo-sha.outputs.sha }}
+      app_version: ${{ steps.build-version.outputs.app_version }}
+      web_bundle_commit: ${{ steps.web-bundle.outputs.commit }}
+      cdn_configured: ${{ steps.cdn-config.outputs.configured }}
+      cdn_lane: ${{ steps.build-version.outputs.cdn_lane }}
     steps:
+      - name: 🔎 Is CDN publishing configured?
+        id: cdn-config
+        env:
+          CLOUDFLARE_CDN_TOKEN: ${{ secrets.CLOUDFLARE_CDN_TOKEN }}
+          CDN_PUBLISH_TOKEN: ${{ secrets.CDN_PUBLISH_TOKEN }}
+          CDN_SIGNING_PRIVATE_KEY: ${{ secrets.CDN_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$CLOUDFLARE_CDN_TOKEN" ] && [ -n "$CDN_PUBLISH_TOKEN" ] && [ -n "$CDN_SIGNING_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CDN secrets are not configured; skipping CDN publish."
+          fi
+
       - name: 🔑 Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
@@ -179,7 +204,31 @@ jobs:
 
       - name: 🔨 Build web bundle
         if: ${{ steps.published.outputs.already != 'true' }}
+        id: build
         run: pnpm web build
+
+      - name: 📌 Record the built app version
+        if: ${{ steps.build.outcome == 'success' || steps.published.outputs.already == 'true' }}
+        id: build-version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT: ${{ steps.build.outcome == 'success' }}
+          MONOREPO_SHA: ${{ steps.monorepo-sha.outputs.sha }}
+          BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILT" = true ]; then
+            app_version=$(node -p "require('./apps/main/package.json').version")
+          else
+            app_version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/apps/main/package.json?ref=${MONOREPO_SHA}" \
+              -H "Accept: application/vnd.github.raw" --jq .version)
+          fi
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          if [ "$BUNDLE_BRANCH" = next ] || [ "${app_version%%.*}" -ge 2 ]; then
+            echo "cdn_lane=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cdn_lane=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # The build copies apps/main/public into build/ and web-bundle's build.js keeps
       # its pinned indexeddb.worker.js; gate every worker about to be published.
@@ -232,8 +281,18 @@ jobs:
             --release "wcpos-app@${APP_VERSION}" --url-prefix '~/_expo/static/js/web' "$MAPS_DIR"
           cp "$MAPS_DIR"/*.js "$JS_DIR/"
 
+      # Capture the final bytes after Sentry injection, just as jsDelivr receives them.
+      - name: 📦 Save web build for CDN publishing
+        if: ${{ steps.build.outcome == 'success' && steps.cdn-config.outputs.configured == 'true' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: web-build
+          path: apps/web/build
+          retention-days: 1
+
       - name: 🚀 Publish to web-bundle@${{ github.event.inputs.bundle_branch }}
         if: ${{ steps.published.outputs.already != 'true' }}
+        id: web-bundle
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
@@ -289,6 +348,7 @@ jobs:
           # The SHA is what "already published" above matches on; keep it in the message.
           git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_SHA}, ref ${MONOREPO_REF})"
           git push origin "$BRANCH"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # Runs even when nothing was pushed or built: a re-run after a verification
       # failure finds the SHA already published (or builds the same bytes) and has
@@ -372,3 +432,72 @@ jobs:
           fi
           echo "::error::dev-next serves a different sqlite.worker.js than this bundle was built with (published ${want:0:12} [$(versions "$published")], served ${have:0:12} [$(versions "$served")]). The page will fail with RxDB RM1 until the plugins catch up: (1) re-vendor assets/js/sqlite.worker.js from web-bundle@next in wcpos/woocommerce-pos and merge to next; (2) gh workflow run deploy-dev.yml --repo wcpos/woocommerce-pos-pro --ref next (Pro vendors free at build time; the free plugin's own deploy does not reach dev-next's page)."
           exit 1
+
+  cdn:
+    name: ☁️ Publish to cdn.wcpos.com
+    needs: publish
+    if: needs.publish.outputs.cdn_configured == 'true' && needs.publish.outputs.cdn_lane == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 📥 Check out the workflow revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: 🟢 Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+
+      - name: 📦 Download web build
+        if: ${{ needs.publish.outputs.built == 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-build
+          path: ${{ runner.temp }}/web-build
+
+      - name: 📌 Resolve the CDN build directory
+        id: cdn-build
+        env:
+          BUILT: ${{ needs.publish.outputs.built }}
+          WEB_BUNDLE_COMMIT: ${{ needs.publish.outputs.web_bundle_commit }}
+          BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
+          MONOREPO_SHA: ${{ needs.publish.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILT" = true ]; then
+            echo "build_dir=$RUNNER_TEMP/web-build" >> "$GITHUB_OUTPUT"
+            echo "web_bundle_commit=$WEB_BUNDLE_COMMIT" >> "$GITHUB_OUTPUT"
+          else
+            git clone --depth 1 --branch "$BUNDLE_BRANCH" https://github.com/wcpos/web-bundle.git "$RUNNER_TEMP/web-bundle"
+            head_message=$(git -C "$RUNNER_TEMP/web-bundle" log -1 --format=%B)
+            if [[ "$head_message" != *"from monorepo $MONOREPO_SHA"* ]]; then
+              echo "::error::web-bundle@$BUNDLE_BRANCH has moved on; bytes for monorepo $MONOREPO_SHA are gone."
+              exit 1
+            fi
+            # The retention rule may leave hashed chunks from the previous day's build.
+            # A different build id than the artifact path would yield is accepted.
+            echo "build_dir=$RUNNER_TEMP/web-bundle/build" >> "$GITHUB_OUTPUT"
+            echo "web_bundle_commit=$(git -C "$RUNNER_TEMP/web-bundle" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ☁️ Sign, publish and verify CDN build
+        env:
+          CLOUDFLARE_CDN_TOKEN: ${{ secrets.CLOUDFLARE_CDN_TOKEN }}
+          CDN_PUBLISH_TOKEN: ${{ secrets.CDN_PUBLISH_TOKEN }}
+          CDN_SIGNING_PRIVATE_KEY: ${{ secrets.CDN_SIGNING_PRIVATE_KEY }}
+          APP_VERSION: ${{ needs.publish.outputs.app_version }}
+          MONOREPO_SHA: ${{ needs.publish.outputs.sha }}
+          BUILD_DIR: ${{ steps.cdn-build.outputs.build_dir }}
+          WEB_BUNDLE_COMMIT: ${{ steps.cdn-build.outputs.web_bundle_commit }}
+          BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
+        run: |
+          set -euo pipefail
+          args=(--build-dir "$BUILD_DIR" --app-version "$APP_VERSION"
+            --monorepo-sha "$MONOREPO_SHA" --run-id "$GITHUB_RUN_ID")
+          if [ "$BUNDLE_BRANCH" = next ]; then args+=(--lane next); fi
+          if [ -n "$WEB_BUNDLE_COMMIT" ]; then args+=(--web-bundle-commit "$WEB_BUNDLE_COMMIT"); fi
+          node scripts/release/cdn-publish.mjs "${args[@]}"

@@ -9,6 +9,8 @@ import {
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { PRE_THEME_COLOURS, PRE_THEME_RADIUS } from './pre-theme-colours';
+
 const appLogger = getLogger(['wcpos', 'app', 'startup']);
 
 export type ClearLocalDataStartupState = 'idle' | 'clearing' | 'blocked';
@@ -103,11 +105,12 @@ export function useClearLocalDataOnStartup(): ClearLocalDataStartupState {
 /**
  * Rendered above every provider (like the root error screen), so no theme and
  * no translations. It must never offer a way back into the app: the register
- * only becomes safe again once a relaunch finishes the clear.
+ * only becomes safe again once a relaunch finishes the clear. The colours and
+ * radius are the light theme's, from `pre-theme-colours.ts`.
  */
 const styles = StyleSheet.create({
 	container: {
-		backgroundColor: '#fafafa',
+		backgroundColor: PRE_THEME_COLOURS.background,
 		flex: 1,
 		justifyContent: 'center',
 	},
@@ -115,22 +118,22 @@ const styles = StyleSheet.create({
 		marginHorizontal: 16,
 	},
 	title: {
-		color: '#b3261e',
+		color: PRE_THEME_COLOURS.destructive,
 		fontSize: 24,
 		fontWeight: '700',
 		paddingBottom: 8,
 	},
 	body: {
-		color: '#000',
+		color: PRE_THEME_COLOURS.foreground,
 		paddingBottom: 16,
 	},
 	button: {
-		backgroundColor: '#2196f3',
-		borderRadius: 50,
+		backgroundColor: PRE_THEME_COLOURS.primary,
+		borderRadius: PRE_THEME_RADIUS,
 		padding: 16,
 	},
 	buttonText: {
-		color: '#fff',
+		color: PRE_THEME_COLOURS.primaryForeground,
 		fontWeight: '600',
 		textAlign: 'center',
 	},

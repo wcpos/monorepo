@@ -24,7 +24,7 @@ function CellView({ cell, tooltip }: { cell: UptimeCell; tooltip: string }) {
 			<View className="bg-ok h-6 rounded opacity-75" />
 		) : cell.state === 'errors' ? (
 			<View className="border-warn h-6 items-center justify-center rounded border">
-				<Text className="text-warn text-[11px]">⚠</Text>
+				<Text className="text-warn text-xs">⚠</Text>
 			</View>
 		) : (
 			<View className="border-border h-6 rounded border" />
@@ -88,13 +88,13 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 				))}
 			</HStack>
 			<HStack className="justify-between">
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{first ? hourLabel(first.hourStartMs) : ''}
 				</Text>
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{middle ? hourLabel(middle.hourStartMs) : ''}
 				</Text>
-				<Text className="text-muted-foreground/80 font-mono text-[11px]">
+				<Text className="text-muted-foreground/80 font-mono text-xs">
 					{t('health.performance.uptime_now')}
 				</Text>
 			</HStack>

@@ -20,7 +20,7 @@ export function TableSurface({ className, ...props }: ViewProps) {
 		<View
 			className={cn(
 				'bg-card border-border min-h-0 flex-1',
-				phone ? 'border-t' : 'mx-2 mb-2 overflow-hidden rounded-xl border',
+				phone ? 'border-t' : 'mx-2 mb-2 overflow-hidden rounded-lg border',
 				className
 			)}
 			{...props}

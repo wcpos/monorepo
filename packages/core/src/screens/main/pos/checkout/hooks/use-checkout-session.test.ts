@@ -200,6 +200,7 @@ describe('useCheckoutSession', () => {
 		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
 		expect(result.current.mode).toBe('webview');
 		expect(result.current.error).toBe('payment_gateways_fetch_failed');
+		expect(result.current).toMatchObject({ gatewayError: 'boom', refetch: expect.any(Function) });
 	});
 
 	it('maps every catalog entry to its stored settled status, keyed by gateway id', async () => {

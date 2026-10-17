@@ -1,5 +1,7 @@
 import { View } from 'react-native';
 
+import { useT } from '@wcpos/core/contexts/translations';
+
 import { Keypad, type KeypadKeyDescriptor } from './index';
 
 const digits = [
@@ -9,14 +11,21 @@ const digits = [
 ].map((row) => row.map((value) => ({ value, label: value })));
 const zero: KeypadKeyDescriptor = { value: '0', label: '0', span: 2 };
 const numeric = [...digits, [zero, { value: '.', label: '.' }]];
-const icons = [
+const icons = (t: (key: string) => string) => [
 	...digits,
 	[
-		{ value: 'clear', icon: 'xmark' as const },
+		{ value: 'clear', icon: 'xmark' as const, accessibilityLabel: t('common.clear') },
 		{ value: '0', label: '0' },
-		{ value: 'backspace', icon: 'deleteLeft' as const },
+		{ value: 'backspace', icon: 'deleteLeft' as const, accessibilityLabel: t('common.backspace') },
 	],
 ];
+function TranslatedKeypad({
+	rows,
+	...props
+}: Omit<React.ComponentProps<typeof Keypad>, 'rows'> & { rows: typeof numeric | typeof icons }) {
+	const t = useT();
+	return <Keypad {...props} rows={typeof rows === 'function' ? rows(t) : rows} />;
+}
 export const stories = Object.entries({
 	numeric,
 	icons,
@@ -26,7 +35,7 @@ export const stories = Object.entries({
 	id,
 	render: () => (
 		<View className={id === 'shrink' ? 'h-56 w-64' : 'w-64'}>
-			<Keypad
+			<TranslatedKeypad
 				rows={rows}
 				fit={id === 'shrink' ? 'shrink' : 'tile'}
 				onPress={() => {}}

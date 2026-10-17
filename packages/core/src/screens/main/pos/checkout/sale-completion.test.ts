@@ -134,6 +134,7 @@ beforeEach(async () => {
 		mockInfo(message, rest);
 	});
 	mockRefresh.mockReset();
+	mockReconcile.mockResolvedValue('refreshed');
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
 	mockStamp.mockResolvedValue([{ key: 'stamp', value: 1 }]);
@@ -910,3 +911,120 @@ it('audits the summary read after reconciliation, including counted payment legs
 		],
 	]);
 });
+
+it.each([
+	['a', 'a', true],
+	['a', 'b', false],
+	[undefined, 'b', true],
+] as const)(
+	'replay scalar gateway %s judges resident gateway %s as complete: %s',
+	(settledOrderGateway, payment_method, expected) => {
+		const outcome = {
+			source: 'replay' as const,
+			settledOrderStatus: 'pending',
+			settledOrderGateway,
+		};
+		expect(isSaleComplete(outcome, 2, { ...payload, status: 'pending', payment_method })).toBe(
+			expected
+		);
+	}
+);
+it('journals the gateway beside its scalar settled status', async () => {
+	const attempt = {
+		order,
+		completing: true,
+		source: 'gateway-contract' as const,
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'a',
+	};
+	await recordSaleAttempt(ctx, attempt);
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'a',
+	});
+});
+it.each(['pos-open', 'cancelled', 'pending'])(
+	'replay revalidates refreshed %s before receipt, audit, and journal resolution',
+	async (status) => {
+		let latest = { ...payload, status: 'pending', payment_method: 'a' };
+		const resident = { uuid: 'order', getLatest: () => ({ payload: latest }) } as never;
+		const outcome = { source: 'replay' as const, settledOrderStatus: 'pending' };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		mockReconcile.mockImplementationOnce(async () => {
+			expect(mockReceipt).not.toHaveBeenCalled();
+			latest = { ...latest, status };
+			return 'refreshed';
+		});
+		const result = await completeSale(ctx, resident, outcome, { host: 'background' });
+		expect(mockReconcile).toHaveBeenCalledTimes(1);
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, resident, true, ctx.stockAdjustment);
+		if (status === 'pending') {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+			expect(mockActionLog).toHaveBeenCalledTimes(1);
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+	}
+);
+it.each(['timed-out', 'failed', 'skipped', 'refreshed'])(
+	'replay requires a confirmed refresh before completing (%s)',
+	async (refreshResult) => {
+		const outcome = { source: 'replay' as const };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		const resolve = jest.spyOn(journal, 'resolveCompletionAttempt');
+		mockReconcile.mockResolvedValueOnce(refreshResult);
+		const result = await completeSale(ctx, order, outcome, { host: 'background' });
+		if (refreshResult === 'refreshed') {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalled();
+			expect(resolve).toHaveBeenCalled();
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect(resolve).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+		resolve.mockRestore();
+	}
+);
+it.each([
+	['released', [], []],
+	['serve-local', [], []],
+	['fetched', ['42'], []],
+	['fetched', [], ['42']],
+	['fetched', [], []],
+] as const)(
+	'replay completes only after a delivering requirement (%s, applied %j, pruned %j)',
+	async (action, appliedRecordIds, prunedRecordIds) => {
+		const { reconcileCompletedOrder } = jest.requireActual('./hooks/reconcile-completed-order');
+		const release = jest.fn();
+		const ready = Promise.resolve({ action, appliedRecordIds, prunedRecordIds });
+		const runtime = {
+			engine: { require: () => ({ ready, release }) },
+		} as unknown as SaleContext['runtime'];
+		mockReconcile.mockImplementationOnce(reconcileCompletedOrder);
+		const outcome = { source: 'replay' as const };
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
+		const result = await completeSale({ ...ctx, runtime }, order, outcome, { host: 'background' });
+		await expect(mockReconcile.mock.results[0].value).resolves.toBe(
+			appliedRecordIds.length ? 'refreshed' : 'failed'
+		);
+		if (appliedRecordIds.length > 0) {
+			expect(result).toBe('completed');
+			expect(mockReceipt).toHaveBeenCalled();
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} else {
+			expect(result).toBe('not-completed');
+			expect(mockReceipt).not.toHaveBeenCalled();
+			expect(mockActionLog).not.toHaveBeenCalled();
+			expect((await pendingCompletions(ctx.storeDB)).order).toBeDefined();
+		}
+		expect(release).toHaveBeenCalledTimes(1);
+	}
+);

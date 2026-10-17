@@ -3,6 +3,7 @@
  */
 
 import {
+	isLivePaymentStatus,
 	mintDevicePayment,
 	mintManualPayment,
 	mintServerPayment,
@@ -319,4 +320,12 @@ it.each(['manual', 'server', 'device'] as const)('mints %s provenance fields', (
 	expect(mint({ ...input, registerId: null, sessionId: undefined })).toMatchObject({
 		row: { register_id: null, session_id: null },
 	});
+});
+
+it('recognizes only pending, authorized, and captured as live payment statuses', () => {
+	expect(
+		['pending', 'authorized', 'captured', 'voided', 'failed', 'refunded', ''].map(
+			isLivePaymentStatus
+		)
+	).toEqual([true, true, true, false, false, false, false]);
 });
