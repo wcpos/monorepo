@@ -153,6 +153,7 @@ export function RefundOrderForm({ order }: Props) {
 	});
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
 	const isPosCash = orderData.payment_method === 'pos_cash';
+	const awaitingGateway = gatewaysLoading && !isPosCash;
 	const defaultDestination: RefundDestination = isPosCash
 		? 'cash'
 		: refundOptions[0]?.enabled
@@ -318,8 +319,9 @@ export function RefundOrderForm({ order }: Props) {
 
 	const handleSubmit = React.useCallback(async () => {
 		// Gateways still loading: the destination is not known yet (it must not default
-		// to cash and refund the wrong way), so nothing is submitted.
-		if (loading || refundDetailsLoading || gatewaysLoading) return;
+		// to cash and refund the wrong way), so nothing is submitted. A POS cash order
+		// needs no gateway contract — its refund is always cash.
+		if (loading || refundDetailsLoading || awaitingGateway) return;
 		if (!orderData.id) return;
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
@@ -420,7 +422,7 @@ export function RefundOrderForm({ order }: Props) {
 	}, [
 		blockIfDegraded,
 		loading,
-		gatewaysLoading,
+		awaitingGateway,
 		refundDetailsLoading,
 		form,
 		order,
@@ -575,8 +577,8 @@ export function RefundOrderForm({ order }: Props) {
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction
 						testID="process-refund-button"
-						loading={loading || gatewaysLoading}
-						disabled={!isValid || storageDegraded || gatewaysLoading}
+						loading={loading || awaitingGateway}
+						disabled={!isValid || storageDegraded || awaitingGateway}
 						onPress={() => setConfirmOpen(true)}
 					>
 						{t('orders.process_refund')}
@@ -601,7 +603,7 @@ export function RefundOrderForm({ order }: Props) {
 							variant="destructive"
 							testID="confirm-process-refund-button"
 							onPress={handleSubmit}
-							disabled={loading || storageDegraded || gatewaysLoading}
+							disabled={loading || storageDegraded || awaitingGateway}
 						>
 							{t('orders.process_refund')}
 						</AlertDialogAction>

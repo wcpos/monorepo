@@ -3,7 +3,6 @@ import * as React from 'react';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { PaymentGatewayContract } from './payment-gateway-contract';
 import { useRestHttpClient } from './use-rest-http-client';
@@ -19,13 +18,6 @@ const gatewaysLogger = getLogger(['wcpos', 'pos', 'checkout', 'gateways']);
  * pending state is barely noticed.
  */
 const RETRY_AFTER_CANCEL_MS = 1_000;
-/**
- * Retries after cancels, per mount, before the load is reported as failed. Ten seconds
- * of back-to-back cancels means the session is not coming back on its own: consumers
- * must get a settled (failed) state instead of pending forever.
- */
-const MAX_CANCEL_RETRIES = 10;
-
 function isCancellation(error: unknown): boolean {
 	return (
 		(error as { code?: unknown } | null)?.code === 'ERR_CANCELED' ||
@@ -43,7 +35,6 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	const [error, setError] = React.useState<string | null>(null);
 	const gatewaysRef = React.useRef<PaymentGatewayContract[]>([]);
 	const awaitingRetryRef = React.useRef(false);
-	const cancelRetriesRef = React.useRef(0);
 	const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 	const mountedRef = React.useRef(true);
 	const fetchGatewaysRef = React.useRef<(() => Promise<PaymentGatewayContract[]>) | null>(null);
@@ -69,9 +60,10 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			return next;
 		} catch (err) {
 			if (!mountedRef.current) return gatewaysRef.current;
-			if (isCancellation(err) && cancelRetriesRef.current < MAX_CANCEL_RETRIES) {
-				// Not a failure (no row) and not a result: stay pending and try again.
-				cancelRetriesRef.current += 1;
+			if (isCancellation(err)) {
+				// Not a failure (no row) and not a result: stay pending and try again, for as
+				// long as it takes — a sign-in can take minutes, and settling to an empty
+				// catalogue would send checkout to the legacy webview and refunds to cash.
 				awaitingRetryRef.current = true;
 				retryTimerRef.current = setTimeout(() => {
 					retryTimerRef.current = null;
@@ -81,16 +73,13 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			}
 			// The one row for this failure (the HTTP transport row is forensic). The
 			// checkout screen's inline error is the instruction, so no toast; offline is
-			// forensic too, since nothing was attempted. Cancels that never stopped are
-			// the session not coming back: AUTH101 (sign in again).
-			const code = isCancellation(err) ? ERROR_CODES.SESSION_EXPIRED : storeRequestFailureCode(err);
+			// forensic too, since nothing was attempted.
+			const code = storeRequestFailureCode(err);
 			gatewaysLogger[isExpectedPreflightBlock(err) ? 'debug' : 'warn'](
 				'Payment gateways could not be loaded',
 				{ code, context: { error: getErrorMessage(err) } }
 			);
-			setError(
-				err instanceof Error && !isCancellation(err) ? err.message : 'payment_gateways_fetch_failed'
-			);
+			setError(err instanceof Error ? err.message : 'payment_gateways_fetch_failed');
 			setLoading(false);
 			return gatewaysRef.current;
 		}

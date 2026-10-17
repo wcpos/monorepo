@@ -564,6 +564,36 @@ describe('classifyCheckoutFailure', () => {
 		});
 	});
 
+	it('says nothing was charged when sign-in cancelled a refused start (never CHECKOUT201)', () => {
+		const cancelled = Object.assign(new Error('canceled'), {
+			name: 'CanceledError',
+			code: 'ERR_CANCELED',
+		});
+		expect(classifyCheckoutFailure(cancelled, 'start', t)).toEqual({
+			level: 'warn',
+			code: 'AUTH101',
+			title: 'pos_checkout.sign_in_nothing_charged',
+		});
+	});
+
+	it('keeps a refused start’s mapped WordPress code at its own severity', () => {
+		const forbidden = Object.assign(new Error('403'), {
+			response: { status: 403 },
+			wpCode: 'AUTH201',
+			wpMessage: 'Sorry, you are not allowed to create orders.',
+		});
+		expect(classifyCheckoutFailure(forbidden, 'start', t)).toEqual({
+			level: 'error',
+			code: 'AUTH201',
+			title: 'Sorry, you are not allowed to create orders.',
+		});
+		const noRoute = Object.assign(new Error('404'), {
+			response: { status: 404 },
+			wpCode: 'AUTH311',
+		});
+		expect(classifyCheckoutFailure(noRoute, 'start', t).code).toBe('AUTH311');
+	});
+
 	it('keeps a lost reply or a server error on the start as outcome-unknown', () => {
 		const lost = new Error('Network Error');
 		const crashed = Object.assign(new Error('500'), { response: { status: 500 } });

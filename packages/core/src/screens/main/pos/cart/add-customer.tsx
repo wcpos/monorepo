@@ -92,7 +92,11 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 				cartLogger.error('Customer created but not added to the cart', {
 					showToast: true,
 					code: ERROR_CODES.CART_UPDATE_FAILED,
-					toast: { title: t('pos_cart.customer_saved_not_attached') },
+					// CHECKOUT111's hint is about an item; the customer sentence says what to do.
+					toast: {
+						title: t('pos_cart.customer_saved_not_attached'),
+						text2: t('pos_cart.customer_saved_not_attached_hint'),
+					},
 					context: {
 						error: errorMessage,
 					},

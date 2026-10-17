@@ -260,6 +260,19 @@ describe('RefundOrderForm', () => {
 		expect(screen.getByRole('radiogroup')).toHaveAttribute('data-value', 'original_method');
 	});
 
+	it('does not hold a POS cash refund on the gateway catalog', async () => {
+		mockGet.mockImplementation((url: string) =>
+			url === 'payment-gateways'
+				? new Promise(() => undefined)
+				: Promise.resolve({ data: order.refunds, headers: { 'x-wp-totalpages': '1' } })
+		);
+
+		render(<RefundOrderForm order={{ ...order, payment_method: 'pos_cash' }} />);
+
+		// Cash needs no gateway contract: the confirm action is available while gateways load.
+		await waitFor(() => expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled());
+	});
+
 	it('forces cash-only mode and shows a warning when the gateway lookup fails', async () => {
 		mockGet.mockRejectedValue(new Error('boom'));
 

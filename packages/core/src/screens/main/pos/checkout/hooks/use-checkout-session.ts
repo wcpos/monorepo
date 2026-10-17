@@ -6,7 +6,11 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import {
@@ -102,6 +106,18 @@ export function classifyCheckoutFailure(
 			text2: t('common.reconnect_then_retry'),
 		};
 	}
+	// The auth handler turns a refused (401) bootstrap/start into a CanceledError while
+	// it launches sign-in: the store refused it, so nothing was charged.
+	const cancelled =
+		(error as { code?: unknown } | null)?.code === 'ERR_CANCELED' ||
+		(error as { name?: unknown } | null)?.name === 'CanceledError';
+	if (cancelled && (phase === 'bootstrap' || phase === 'start')) {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.SESSION_EXPIRED,
+			title: t('pos_checkout.sign_in_nothing_charged'),
+		};
+	}
 	if (phase === 'settled') {
 		return {
 			level: 'warn',
@@ -120,9 +136,14 @@ export function classifyCheckoutFailure(
 		status !== 409 &&
 		status !== 429;
 	if (phase === 'bootstrap' || (phase === 'start' && refused)) {
+		// A refusal the HTTP client mapped to a WordPress code (403 rest_cannot_create →
+		// AUTH201, a missing route → its own code) keeps that code at its severity; the
+		// generic "cart is safe, retry" only when there is none.
+		const wpCode = refused ? (error as { wpCode?: ErrorCode } | null)?.wpCode : undefined;
+		const code = wpCode ?? ERROR_CODES.CHECKOUT_FAILED_CART_SAFE;
 		return {
-			level: 'error',
-			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+			level: ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn',
+			code,
 			title: serverSentence(error),
 		};
 	}

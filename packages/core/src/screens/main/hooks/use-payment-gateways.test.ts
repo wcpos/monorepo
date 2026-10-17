@@ -189,22 +189,44 @@ describe('usePaymentGateways', () => {
 			expect(result.current.gateway?.id).toBe('stripe');
 		});
 
-		it('stops after ten cancel retries and settles as a failure, never pending forever', async () => {
-			mockGet.mockRejectedValue(cancelled());
+		it('keeps retrying through a long sign-in: 30 cancels, then success, resolves', async () => {
+			for (let index = 0; index < 30; index += 1) mockGet.mockRejectedValueOnce(cancelled());
+			mockGet.mockResolvedValueOnce(catalog);
 
 			const { result } = renderHook(() => usePaymentGateways('stripe'));
 			await act(async () => {
-				await jest.advanceTimersByTimeAsync(15_000);
+				await jest.advanceTimersByTimeAsync(29_000);
+			});
+			// Still pending after 29 s of cancels — never an empty "resolved" catalogue.
+			expect(result.current.loading).toBe(true);
+			expect(result.current.error).toBeNull();
+
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(2_000);
+			});
+			expect(mockGet).toHaveBeenCalledTimes(31);
+			expect(result.current.loading).toBe(false);
+			expect(result.current.gateway?.id).toBe('stripe');
+		});
+
+		it('stops retrying on unmount', async () => {
+			mockGet.mockRejectedValue(cancelled());
+			const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+			const { unmount } = renderHook(() => usePaymentGateways('stripe'));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			const callsAtUnmount = mockGet.mock.calls.length;
+			unmount();
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(10_000);
 			});
 
-			// The first load plus ten retries, then no more.
-			expect(mockGet).toHaveBeenCalledTimes(11);
-			expect(result.current.loading).toBe(false);
-			expect(result.current.error).toBe('payment_gateways_fetch_failed');
-			expect(getLogger([]).warn).toHaveBeenCalledWith(
-				'Payment gateways could not be loaded',
-				expect.objectContaining({ code: 'AUTH101' })
-			);
+			expect(mockGet).toHaveBeenCalledTimes(callsAtUnmount);
+			// No state update after unmount (React would warn through console.error).
+			expect(errorSpy).not.toHaveBeenCalled();
+			errorSpy.mockRestore();
 		});
 	});
 });
