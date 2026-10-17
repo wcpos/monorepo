@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
-import { Text } from '@wcpos/components/text';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 
 import { useT } from '../../../../../../contexts/translations';
 
@@ -41,8 +40,21 @@ export function ConnectionTypeSegmented({
 	];
 	const options = allOptions.filter((option) => enabledTypes.includes(option.value));
 
+	// One way is no choice: with a single supported type (a browser without WebUSB or Web
+	// Bluetooth) there is nothing to switch, so no control is drawn.
+	if (options.length < 2) return null;
+	const segments = options.map((option): Segment => ({
+		value: option.value,
+		label: option.label,
+		testID: `add-printer-connection-type-${option.value}`,
+	})) as unknown as React.ComponentProps<typeof SegmentedControl>['segments']; // 2 or 3, checked above
+
+	// A few-way switch is a SegmentedControl; Tabs are for sections with panels (decision 10).
 	return (
-		<Tabs
+		<SegmentedControl
+			testID="add-printer-connection-type-segmented"
+			className="w-full"
+			segments={segments}
 			value={value === 'system' ? 'usb' : value}
 			onValueChange={(next) => {
 				if (isConnectionType(next)) {
@@ -50,19 +62,6 @@ export function ConnectionTypeSegmented({
 					form.clearErrors('address');
 				}
 			}}
-		>
-			<TabsList testID="add-printer-connection-type-segmented" className="w-full flex-row">
-				{options.map((option) => (
-					<TabsTrigger
-						key={option.value}
-						value={option.value}
-						testID={`add-printer-connection-type-${option.value}`}
-						className="flex-1"
-					>
-						<Text>{option.label}</Text>
-					</TabsTrigger>
-				))}
-			</TabsList>
-		</Tabs>
+		/>
 	);
 }
