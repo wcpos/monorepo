@@ -81,6 +81,12 @@ jest.mock('@wcpos/components/vstack', () => ({
 // Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
 // panel that forgets the prop renders the raw entity here exactly as it would on
 // a till. A mock that swallowed the prop would make the entity test unfailable.
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => {
 	const { decode } = jest.requireActual('html-entities');
 	return {

@@ -9,8 +9,9 @@ import { useFormField } from './context';
  * `FormMessage` only when the field has an error — so the unconditional
  * `aria-describedby={`${formDescriptionNativeID} ${formMessageNativeID}`}` that eight
  * of these wrappers hand-rolled points at elements that are not in the tree for most
- * fields. `FormToggleGroup` already computed it conditionally; that is the shape the
- * others converge on here, and `toggle-group.test.tsx` is what pins it.
+ * fields. `FormToggleGroup` (now `FormSegmentedControl`) already computed it
+ * conditionally; that is the shape the others converge on here, and
+ * `segmented-control.test.tsx` is what pins it.
  *
  * The wiring lives in one place so the wrappers cannot drift apart again.
  */

@@ -126,7 +126,6 @@ jest.mock('../health/components', () => ({
 	HairlineHeaderCell: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	HairlineHeaderRow: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	LevelIndicator: () => <span />,
-	RepeatChip: () => <span />,
 }));
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

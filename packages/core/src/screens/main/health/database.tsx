@@ -12,6 +12,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
@@ -53,7 +54,6 @@ import {
 	CoverageBar,
 	HairlineHeaderCell,
 	HairlineHeaderRow,
-	Pill,
 	Stat,
 	StatHeader,
 } from './components';
@@ -378,9 +378,9 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					{isVariations ? (
@@ -421,9 +421,9 @@ function CollectionRowView({
 							{isVariations ? `↳ ${label}` : label}
 						</Text>
 						{stuckCount > 0 ? (
-							<Pill testID={`db-stuck-sm-${row.key}`}>
+							<Badge variant="destructive" testID={`db-stuck-sm-${row.key}`}>
 								{t('health.database.n_stuck', { n: stuckCount })}
-							</Pill>
+							</Badge>
 						) : null}
 					</HStack>
 					<Text

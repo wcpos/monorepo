@@ -74,7 +74,6 @@
     "./text": "./src/text/index.tsx",
     "./textarea": "./src/textarea/index.tsx",
     "./toast": "./src/toast/index.ts",
-    "./toggle-group": "./src/toggle-group/index.tsx",
     "./tooltip": "./src/tooltip/index.tsx",
     "./tree": "./src/tree/index.tsx",
     "./tree-combobox": "./src/tree-combobox/index.ts",

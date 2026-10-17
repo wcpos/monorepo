@@ -4,6 +4,7 @@ import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns';
 
+import { Badge } from '@wcpos/components/badge';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
@@ -23,7 +24,6 @@ import {
 	HairlineHeaderRow,
 	LevelIndicator,
 	type LevelKind,
-	RepeatChip,
 } from '../health/components';
 import { useEventTitle } from './event-title';
 import {
@@ -96,7 +96,7 @@ function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boole
 	}
 
 	if ((row.count ?? 1) > 1) {
-		parts.push(<RepeatChip key="rep" count={row.count ?? 1} />);
+		parts.push(<Badge key="rep" variant="muted">{`×${(row.count ?? 1).toLocaleString()}`}</Badge>);
 	}
 
 	if (parts.length === 0) return null;

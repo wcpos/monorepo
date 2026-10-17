@@ -14,10 +14,6 @@
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 2
   },
-  "packages/components/src/toggle-group/index.tsx": {
-    "focus-visible:": 4,
-    "group-*": 3
-  },
   "packages/core/src/screens/auth/connect.tsx": {
     "arbitrary-px": 1
   },
@@ -46,12 +42,6 @@
     "arbitrary-px": 1
   },
   "packages/core/src/screens/main/health/components/code-chip.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/health/components/pill.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/health/components/repeat-chip.tsx": {
     "arbitrary-px": 1
   },
   "packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
