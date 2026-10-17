@@ -109,6 +109,7 @@
   --duration-count-fade: 170ms;
   --duration-overlay-fade: 150ms;
   --duration-crossfade: 200ms;
+  --duration-image-fade: 250ms;
   --duration-popover-fade: 200ms;
   --duration-sheet-rise: 200ms;
   --duration-beat: 220ms;
