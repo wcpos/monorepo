@@ -21,6 +21,14 @@ const quietRow = {
 	message: 'Background sync finished a batch',
 	category: 'wcpos.sync.engine',
 };
+const recordRow = {
+	logId: 'log-3',
+	timestamp: 3_000,
+	level: 'warn',
+	message: 'orders ae263330 — conflict transition failed',
+	code: 'SYNC221',
+	context: { collection: 'orders', recordId: 'ae263330-fbff-4834-8798-3f52ff650c79' },
+};
 
 jest.mock('react-native', () => ({
 	Pressable: ({
@@ -47,7 +55,11 @@ jest.mock('react-native', () => ({
 jest.mock('observable-hooks', () => ({
 	useObservableState: () => 2,
 	useObservableSuspense: () => ({
-		hits: [{ record: { toJSON: () => row } }, { record: { toJSON: () => quietRow } }],
+		hits: [
+			{ record: { toJSON: () => row } },
+			{ record: { toJSON: () => quietRow } },
+			{ record: { toJSON: () => recordRow } },
+		],
 	}),
 }));
 jest.mock('@wcpos/components/button', () => ({
@@ -95,6 +107,12 @@ jest.mock('../../../hooks/use-local-date', () => ({
 }));
 jest.mock('./event-title', () => ({
 	useEventTitle: () => () => 'Database error',
+}));
+jest.mock('../health/use-record-label', () => ({
+	useRecordLabel: (collection: string, recordId: string) =>
+		collection === 'orders' && recordId === 'ae263330-fbff-4834-8798-3f52ff650c79'
+			? { kind: 'Order', handle: '#1234 · 45.00', status: 'found', text: 'Order: #1234 · 45.00' }
+			: null,
 }));
 jest.mock('./row-detail', () => ({
 	RowDetail: () => <div data-testid="logs-row-detail" />,
@@ -182,5 +200,14 @@ describe('Ledger (layout B2)', () => {
 		renderLedger();
 
 		expect(screen.queryByTestId('logs-loaded-count')).toBeNull();
+	});
+
+	// demo.wcpos.com, 2026-10-17: a SYNC221 row's subline read
+	// `orders/ae263330-…` and the merchant could not tell which order it was.
+	it('names the record in the subline instead of its collection/uuid', () => {
+		const { container } = renderLedger();
+
+		expect(screen.getAllByTestId('logs-record-log-3')[0].textContent).toBe('Order: #1234 · 45.00');
+		expect(container.textContent).not.toContain('ae263330');
 	});
 });

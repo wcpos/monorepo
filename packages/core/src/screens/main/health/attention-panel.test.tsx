@@ -34,6 +34,7 @@ const mockEngine = {
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
+	engineCollection: jest.requireActual('@wcpos/query').engineCollection,
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('../../../contexts/translations', () => {

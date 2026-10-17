@@ -735,7 +735,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'queue.write.conflict-transition',
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_conflict_transition',
-		label: 'Could not settle a clashing change',
+		label: 'Change held — your store has a newer version',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.discard-repull-deferred': {

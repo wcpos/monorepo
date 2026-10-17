@@ -22,6 +22,7 @@ import {
 	type LevelKind,
 	RepeatChip,
 } from '../health/components';
+import { useRecordLabel } from '../health/use-record-label';
 import { useEventTitle } from './event-title';
 import {
 	chainMarkedIds,
@@ -29,6 +30,7 @@ import {
 	displayKind,
 	formatDurationMs,
 	type LogRow,
+	recordRefOf,
 } from './logs-logic';
 import { RowDetail } from './row-detail';
 
@@ -61,12 +63,34 @@ export function useLevelLabel(): (kind: LevelKind) => string {
 }
 
 /**
+ * The record the row is about, by name ("Order: #1234 · 45.00"), never its
+ * uuid — a merchant cannot act on `orders/ae263330-…` (2026-10-17). Own
+ * component so only rows that name a record read one.
+ */
+function RecordName({
+	logId,
+	collection,
+	recordId,
+}: {
+	logId: string;
+	collection: string;
+	recordId: string;
+}) {
+	const label = useRecordLabel(collection, recordId);
+	if (!label) return null;
+	return (
+		<Text testID={`logs-record-${logId}`} className="text-muted-foreground/80 text-xs" decodeHtml>
+			{label.text}
+		</Text>
+	);
+}
+
+/**
  * No actor part on purpose (A1.4): the log DB is per-(site, store, cashier),
  * so the ledger is always the viewing cashier's own — a name here is noise.
  * Attribution stays in the data for export and support.
  */
 function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boolean }) {
-	const context = row.context ?? {};
 	const parts: React.ReactNode[] = [];
 	const category = displayCategory(row.category);
 	if (category)
@@ -76,14 +100,9 @@ function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boole
 			</Text>
 		);
 
-	const recordId = context.recordId;
-	const collection = typeof context.collection === 'string' ? context.collection : null;
-	if (collection && recordId !== undefined && recordId !== null) {
-		parts.push(
-			<Text key="rec" className="text-muted-foreground/80 font-mono text-xs">
-				{`${collection}/${String(recordId)}`}
-			</Text>
-		);
+	const record = recordRefOf(row);
+	if (record) {
+		parts.push(<RecordName key="rec" logId={row.logId} {...record} />);
 	}
 
 	if (includeDuration) {
