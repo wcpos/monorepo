@@ -111,7 +111,7 @@ function EventCode({ row, eventType, logId }: { row: LogRow; eventType: string; 
 			{canShare || canCopy ? (
 				<Button
 					variant="ghost"
-					size="xs"
+					size="sm"
 					testID={`logs-copy-event-${logId}`}
 					onPress={() => void handleCopy()}
 				>

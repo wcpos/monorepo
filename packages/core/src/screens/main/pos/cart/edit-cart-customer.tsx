@@ -202,7 +202,7 @@ export function EditCartCustomerForm() {
 						</HStack>
 						<CollapsibleContent>
 							<VStack className="gap-4">
-								<Button variant="muted" onPress={handleCopyBillingToShipping}>
+								<Button variant="outline" onPress={handleCopyBillingToShipping}>
 									<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
 								</Button>
 								<ShippingAddressForm />

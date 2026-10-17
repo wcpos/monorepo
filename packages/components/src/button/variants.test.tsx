@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
-
-import { ButtonPill, buttonTextVariants, buttonVariants } from './index';
+import { buttonTextVariants, buttonVariants } from './index';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
@@ -52,53 +50,6 @@ jest.mock('../text', () => {
 	};
 });
 
-describe('ButtonPill', () => {
-	it('does not bubble remove clicks to a surrounding trigger', () => {
-		const onParentClick = jest.fn();
-		const onRemove = jest.fn();
-
-		render(
-			<div onClick={onParentClick}>
-				<ButtonPill removable onRemove={onRemove}>
-					Cashier
-				</ButtonPill>
-			</div>
-		);
-
-		fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-
-		expect(onRemove).toHaveBeenCalledTimes(1);
-		expect(onParentClick).not.toHaveBeenCalled();
-	});
-
-	// The filter pills carry their testID on the ButtonPill itself, and E2E clicks
-	// them there. Both branches must forward it: a pill grows its remove control the
-	// moment a filter is set, and a testID that survives only one branch makes the
-	// selector work until the first click and then vanish.
-	it.each([
-		['inactive', false],
-		['active', true],
-	])('forwards its own testID to the label button when %s', (_label, removable) => {
-		render(
-			<ButtonPill testID="filter-pill-categories" removable={removable}>
-				Category
-			</ButtonPill>
-		);
-
-		expect(screen.getByTestId('filter-pill-categories')).toBeInTheDocument();
-	});
-
-	it('passes a testID to the remove control', () => {
-		render(
-			<ButtonPill removable removeTestID="filter-pill-remove-stock_status">
-				Stock status
-			</ButtonPill>
-		);
-
-		expect(screen.getByTestId('filter-pill-remove-stock_status')).toBeInTheDocument();
-	});
-});
-
 describe('Button variants', () => {
 	// Three sizes by role (ruled 2026-10-16). The default rides the floored
 	// control token (roadmap#357), so Compact on a finger still gets 44; sm and
@@ -109,6 +60,15 @@ describe('Button variants', () => {
 		expect(buttonVariants({ size: 'sm' })).toContain('h-9');
 		expect(buttonVariants({ size: 'lg' })).toContain('h-14');
 		expect(buttonVariants({})).toContain('rounded-lg');
+	});
+
+	// A small pill is a Chip (ruled 2026-10-16, decision 10): the `xs` size and the tinted
+	// `muted`/`ghost-primary`/`ghost-secondary` variants went with ButtonPill.
+	it('has no pill size or tinted pill variants left', () => {
+		const source = jest
+			.requireActual<typeof import('node:fs')>('node:fs')
+			.readFileSync(`${__dirname}/index.tsx`, 'utf8');
+		expect(source).not.toMatch(/\bxs:|'ghost-primary'|'ghost-secondary'|\bmuted:|ButtonPill/);
 	});
 
 	it('gives ghost a muted label at rest that turns to the foreground on hover and press', () => {

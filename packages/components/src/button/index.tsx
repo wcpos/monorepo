@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, View, ViewProps } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 import type { PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';
@@ -38,7 +38,6 @@ const buttonVariants = cva(
 				 */
 				default: 'bg-primary web:hover:opacity-90 active:opacity-90',
 				destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-				muted: 'bg-muted web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
@@ -54,8 +53,6 @@ const buttonVariants = cva(
 				 * surface — navigation, escapes and "more" sitting after the primary.
 				 */
 				ghost: 'web:hover:bg-muted active:bg-muted',
-				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
-				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
 				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**
@@ -69,12 +66,11 @@ const buttonVariants = cva(
 			 * Three sizes, by role (ruled 2026-10-16): `sm` (36) in rows and toolbars,
 			 * `default` (44, the control token) everywhere else, `lg` (56) for the
 			 * pane's one sale/commit button — Pay, Take payment, Open/Close register,
-			 * New sale. A Button never carries its own height class. `xs` stays only
-			 * for ButtonPill until ButtonPill is folded into Chip.
+			 * New sale. A Button never carries its own height class. A small pill is a
+			 * `Chip size="sm"`, never a Button.
 			 */
 			size: {
 				default: 'h-ctl px-4 py-2',
-				xs: 'h-6 px-2',
 				sm: 'h-9 px-3',
 				lg: 'h-14 px-6',
 			},
@@ -97,7 +93,6 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			 */
 			default: 'text-primary-foreground font-semibold',
 			destructive: 'text-destructive-foreground',
-			muted: 'text-muted-foreground',
 
 			/**
 			 * Outline buttons
@@ -112,14 +107,11 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 			 * Ghost buttons
 			 */
 			ghost: 'text-muted-foreground',
-			'ghost-primary': 'text-primary',
-			'ghost-secondary': 'text-secondary',
 			'ghost-destructive': 'text-destructive',
 			link: 'text-primary web:hover:underline',
 		},
 		size: {
 			default: '',
-			xs: 'text-xs',
 			sm: 'text-sm',
 			lg: 'text-lg font-semibold',
 		},
@@ -129,16 +121,10 @@ const buttonTextVariants = cva('text-foreground web:transition-colors text-base 
 		{ variant: 'outline', hovered: true, class: 'text-foreground' },
 		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
 		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
-		{ variant: 'muted', pressed: true, class: 'text-muted-foreground' },
-		{ variant: 'muted', hovered: true, class: 'text-muted-foreground' },
 		{ variant: 'outline-primary', pressed: true, class: 'text-primary-foreground' },
 		{ variant: 'outline-primary', hovered: true, class: 'text-primary-foreground' },
 		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
-		{ variant: 'ghost-primary', pressed: true, class: 'text-primary-foreground' },
-		{ variant: 'ghost-primary', hovered: true, class: 'text-primary-foreground' },
-		{ variant: 'ghost-secondary', pressed: true, class: 'text-secondary-foreground' },
-		{ variant: 'ghost-secondary', hovered: true, class: 'text-secondary-foreground' },
 		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },
 		{ variant: 'ghost-destructive', hovered: true, class: 'text-destructive-foreground' },
 	],
@@ -273,133 +259,5 @@ function Button({
 	);
 }
 
-/**
- *
- */
-const separatorVariants = cva('w-px self-stretch opacity-80', {
-	variants: {
-		variant: {
-			default: 'bg-primary',
-			destructive: 'bg-destructive',
-			outline: 'bg-background',
-			muted: 'bg-muted',
-			ghost: 'bg-accent',
-		},
-	},
-	defaultVariants: {
-		variant: 'default',
-	},
-});
-
-type ButtonSeparatorProps = ViewProps & VariantProps<typeof separatorVariants>;
-
-function ButtonGroupSeparator({ variant, className, ...props }: ButtonSeparatorProps) {
-	return <View className={cn(separatorVariants({ variant }), className)} {...props} />;
-}
-
-/**
- *
- */
-type ButtonGroupProps = {
-	children: React.ReactElement<ButtonProps>[];
-};
-
-function ButtonGroup({ children }: ButtonGroupProps) {
-	const buttons = React.Children.toArray(children).filter(
-		(child): child is React.ReactElement<ButtonProps> => React.isValidElement(child)
-	);
-
-	return (
-		<HStack className="gap-0">
-			{buttons.map((button, index) => {
-				let classNames = button.props.className || '';
-
-				if (index === 0) {
-					// first
-					classNames = cn(classNames, 'rounded-r-none pr-2');
-				} else if (index === buttons.length - 1) {
-					// last
-					classNames = cn(classNames, 'rounded-l-none pl-2');
-				} else {
-					// middle
-					classNames = cn(classNames, 'rounded-none px-2');
-				}
-
-				return (
-					<React.Fragment key={index}>
-						{index > 0 && (
-							<ButtonGroupSeparator
-								variant={button.props.variant as ButtonSeparatorProps['variant']}
-							/>
-						)}
-						{React.cloneElement(button, {
-							className: classNames,
-						})}
-					</React.Fragment>
-				);
-			})}
-		</HStack>
-	);
-}
-
-/**
- *
- */
-type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
-	VariantProps<typeof buttonVariants> & {
-		leftIcon?: IconName;
-		rightIcon?: IconName;
-		removable?: boolean;
-		onRemove?: () => void;
-		removeAccessibilityLabel?: string;
-		removeTestID?: string;
-	};
-
-function ButtonPill({
-	className,
-	removable,
-	onRemove,
-	removeAccessibilityLabel,
-	removeTestID,
-	...props
-}: ButtonPillProps) {
-	const handleRemovePress = React.useCallback(
-		(event: any) => {
-			event?.preventDefault?.();
-			event?.stopPropagation?.();
-			onRemove?.();
-		},
-		[onRemove]
-	);
-
-	// NOTE: props (including onPress) must be spread onto the label Button.
-	// Slot-based wrappers like DialogTrigger asChild inject onPress to control
-	// open/close state — stripping it breaks that composition pattern.
-	return removable ? (
-		<ButtonGroup>
-			<Button className={cn('rounded-full', className)} {...props} />
-			<Button
-				className={cn('rounded-full', className)}
-				variant={props.variant}
-				size={props.size}
-				leftIcon="xmark"
-				onPress={handleRemovePress}
-				accessibilityLabel={removeAccessibilityLabel ?? 'Remove'}
-				testID={removeTestID}
-			/>
-		</ButtonGroup>
-	) : (
-		<Button className={cn('rounded-full', className)} {...props} />
-	);
-}
-
-export {
-	Button,
-	ButtonText,
-	ButtonGroup,
-	ButtonPill,
-	ButtonGroupSeparator,
-	buttonTextVariants,
-	buttonVariants,
-};
+export { Button, ButtonText, buttonTextVariants, buttonVariants };
 export type { ButtonProps };
