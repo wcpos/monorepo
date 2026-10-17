@@ -167,6 +167,7 @@
 	"common.failed_to_save_customer": "Failed to save customer",
 	"common.failed_to_save_order": "Failed to save order",
 	"common.order_still_sending": "This order is still on its way to your store. It updates when the store confirms — don't enter it again.",
+	"common.refresh_failed": "Couldn't refresh. The copy on this device is unchanged — check your connection and try again.",
 	"common.still_sending": "{title} still on its way to your store. It appears when the store confirms — don't enter it again.",
 	"common.reconnect_then_retry": "Reconnect to the internet, then try again.",
 	"common.failed_to_save_to_local_database": "Failed to save to local database: {error}",

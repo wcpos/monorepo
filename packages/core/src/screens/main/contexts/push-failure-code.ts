@@ -52,8 +52,9 @@ interface PushFailureReport {
 	 * Already-translated title for a write that is still queued when the wait gave
 	 * up. The store may yet accept it, so it must never read as "failed, enter it
 	 * again" — that is how a slow store gets a duplicate customer or order.
+	 * Callers whose write never awaits the store omit it (SYNC121's summary then).
 	 */
-	stillSendingTitle: string;
+	stillSendingTitle?: string;
 	context?: Record<string, unknown>;
 }
 
@@ -106,7 +107,7 @@ export function reportPushFailure(
 		logger.warn(message, {
 			showToast: true,
 			code: ERROR_CODES.SYNC_UNREACHABLE,
-			toast: { title: stillSendingTitle },
+			...(stillSendingTitle !== undefined ? { toast: { title: stillSendingTitle } } : {}),
 			context: { ...fullContext, pushState: error.diagnostics, outcome: 'still-queued' },
 		});
 		return;
