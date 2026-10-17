@@ -1,6 +1,7 @@
 import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
+import { useMinTargetSlop } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
@@ -57,6 +58,9 @@ export function Chip({
 	const inactive = !!(disabled || dimmed);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const sm = size === 'sm';
+	// `sm` is drawn under 44 for a dense cell; the press target still gets 44 (§ Design 2), on the
+	// label half when a clear control splits the chip (the root then takes no press).
+	const target = useMinTargetSlop(sm, props.onLayout);
 	const content = (
 		<>
 			{icon && <Icon name={icon} className="text-foreground" />}
@@ -85,7 +89,9 @@ export function Chip({
 	);
 	return (
 		<Pressable
+			hitSlop={onClear ? undefined : target.hitSlop}
 			{...props}
+			onLayout={target.onLayout}
 			testID={testID}
 			disabled={inactive}
 			// With a clear control the chip is a container: the label half takes the press, so
@@ -111,6 +117,7 @@ export function Chip({
 				<>
 					<Pressable
 						testID={id('label')}
+						hitSlop={target.hitSlop}
 						role="button"
 						{...selectedState(on)}
 						disabled={inactive}

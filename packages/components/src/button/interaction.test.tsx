@@ -86,3 +86,29 @@ it('sizes icon roots separately from their glyphs and supports on', () => {
 	rerender(<IconButton name="plus" />);
 	expect(pressable.className).toContain('size-ctl');
 });
+it('grows a sm button to a 44 pt target on native, measured, and keeps a caller slop', () => {
+	const platform = jest.requireMock<{ Platform: { OS: string } }>('react-native').Platform;
+	platform.OS = 'ios';
+	try {
+		const onLayout = jest.fn();
+		const { rerender } = render(
+			<Button size="sm" onLayout={onLayout}>
+				Retry
+			</Button>
+		);
+		const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 80, height: 36 } } };
+		act(() => (pressable.onLayout as (event: object) => void)(layout));
+		expect(onLayout).toHaveBeenCalledWith(layout);
+		expect(pressable.hitSlop).toEqual({ top: 4, bottom: 4 });
+		rerender(
+			<Button size="sm" hitSlop={0}>
+				Retry
+			</Button>
+		);
+		expect(pressable.hitSlop).toBe(0);
+		rerender(<Button>Retry</Button>);
+		expect(pressable.hitSlop).toBeUndefined();
+	} finally {
+		platform.OS = 'web';
+	}
+});
