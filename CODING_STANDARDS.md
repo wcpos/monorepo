@@ -249,13 +249,23 @@ then built only if the owner confirms the exception.
 |---|---|---|---|
 | Primary: the action the screen exists for | `default` (filled) | one per screen, full width on a phone, 56 pt when it is the sale's button | *Take 18,00 € in Cash*, *Try again* after a refusal, *Set up Tap to Pay*, *Connect a reader* when nothing is connected |
 | Secondary: the reversible alternative beside the primary | `outline` | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Help* |
-| Quiet: navigation, escapes, more | `ghost-quiet` / `link` | after the buttons, on its own line | *Reader guide*, *Details*, *Cancel* on a scan |
-| Destructive: what loses something | `outline-error` (red outline, never filled) or the last red row of a ⋮ sheet | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel on terminal* |
+| Quiet: navigation, escapes, more | `ghost` (muted label at rest) / `link` | after the buttons, on its own line | *Reader guide*, *Details*, *Cancel* on a scan |
+| Destructive: what loses something | `outline-destructive` (red outline, never filled); `ghost-destructive` in a dense row; or the last red row of a ⋮ menu | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
 | Unavailable | the same button, `disabled`, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
+
+Sizes: `sm` (36) in rows and toolbars, `default` (44) everywhere else, `lg` (56) for the sale
+button (Pay, Take payment, Open/Close register, New sale); no height or radius class on a Button
+(lint enforces it). Solid `destructive` is only the alert's confirm and the swipe Remove block;
+a selected choice is a `Chip`, never a Button that toggles its variant.
 
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
 never shares a colour with Void (§7).
+
+#### Chips, badges and switches
+- A selectable choice is a Chip; a static count or state is a Badge; a Button is never a toggle.
+  `Chip size="sm"` (32) only in a dense table cell or a row's filter strip; the default (44)
+  everywhere else.
 
 #### Rows and cards
 A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),

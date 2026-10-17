@@ -14,6 +14,12 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	onClear?: () => void;
 	clearLabel?: string;
 	clearTestID?: string;
+	/**
+	 * `sm` (32) is for a dense table cell or a row's filter strip, the smallest a tap target
+	 * may be there; `default` (44, the control token) everywhere else. Same radius, border and
+	 * on-state at both sizes (ruled 2026-10-16, decision 10).
+	 */
+	size?: 'default' | 'sm';
 };
 
 // Every variant carries the same root classes; a cell that renders full-width is a stale
@@ -28,6 +34,7 @@ export function Chip({
 	onClear,
 	clearLabel,
 	clearTestID,
+	size = 'default',
 	disabled,
 	testID,
 	className,
@@ -38,6 +45,7 @@ export function Chip({
 	// state key is absent, which is what `button` ledger line 1 records.
 	const inactive = !!(disabled || dimmed);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
+	const sm = size === 'sm';
 	const content = (
 		<>
 			{icon && <Icon name={icon} className="text-foreground" />}
@@ -47,7 +55,8 @@ export function Chip({
 				// instead of pushing the pill over the controls beside it.
 				numberOfLines={1}
 				className={cn(
-					'shrink text-base font-medium',
+					'shrink font-medium',
+					sm ? 'text-sm' : 'text-base',
 					add ? 'text-muted-foreground' : 'text-foreground',
 					on && 'text-primary font-semibold'
 				)}
@@ -78,7 +87,8 @@ export function Chip({
 				// `self-start`: a pill hugs its label. A View stretches across a column parent by
 				// default, which turned the chip into a full-width bar outside a filter row; the
 				// drawn chip is inline-flex.
-				'h-ctl bg-card active:bg-muted web:hover:bg-muted max-w-full flex-row items-center gap-1.5 self-start rounded-full border px-3',
+				'bg-card active:bg-muted web:hover:bg-muted max-w-full flex-row items-center gap-1.5 self-start rounded-full border',
+				sm ? 'h-8 px-2.5' : 'h-ctl px-3',
 				on ? 'border-primary' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',
@@ -108,7 +118,13 @@ export function Chip({
 						testID={clearTestID ?? id('clear')}
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
-						className="min-w-ctl -mr-3 items-center justify-center self-stretch active:opacity-70"
+						className={cn(
+							'items-center justify-center self-stretch active:opacity-70',
+							// The clear control spans the chip's height and as much width, so it is never
+							// smaller than the chip's own target (line 8); the negative margin cancels the
+							// chip's end padding.
+							sm ? '-mr-2.5 min-w-8' : 'min-w-ctl -mr-3'
+						)}
 						onPress={(event) => {
 							event?.stopPropagation?.();
 							onClear();

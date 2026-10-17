@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -41,9 +41,7 @@ export function VariationsFilterBar({ row }: Props) {
 		<HStack className="bg-card-header p-2">
 			<HStack className="flex-1">
 				{!!searchTerm && (
-					<ButtonPill leftIcon="magnifyingGlass" size="xs" removable onRemove={actions.clearSearch}>
-						{searchTerm}
-					</ButtonPill>
+					<Chip size="sm" icon="magnifyingGlass" label={searchTerm} onClear={actions.clearSearch} />
 				)}
 				{(attributes || [])
 					.filter((attribute) => attribute.variation)

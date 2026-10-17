@@ -27,9 +27,10 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePanelSide } from '../contexts/overlay-side';
+import { ClearLocalData } from './clear-local-data';
+import { SwitchStoreSheet } from './switch-store-sheet';
 import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
-import { ClearLocalData } from './clear-local-data';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -117,7 +118,7 @@ function UserRows() {
 						<Button
 							testID={`user-sheet-user-${credential.uuid}`}
 							variant="ghost"
-							className="min-h-row flex-row justify-start gap-2"
+							className="flex-row justify-start gap-2"
 							onPress={() => void switchUser(credential)}
 						>
 							<Avatar fallback={getInitials(credential.display_name)} size="md" />
@@ -142,6 +143,9 @@ export function UserSheet({
 }) {
 	const { site, wpCredentials, logout } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
+	// The register bar's condition for its store switch: more than one store on this login.
+	const stores = useDocField(wpCredentials, (value) => value.stores) as string[] | undefined;
+	const [storeOpen, setStoreOpen] = React.useState(false);
 	const side = usePanelSide('shell');
 	const { registers } = useRegisterBinding();
 	const currentOrder = useCurrentOrderOptional();
@@ -150,128 +154,148 @@ export function UserSheet({
 	const t = useT();
 	const router = useRouter();
 	return (
-		<ClearLocalData
-			trigger={(handleResetPress) => (
-				<Dialog open={open} onOpenChange={onOpenChange}>
-					<DialogContent
-						side={side}
-						size="lg"
-						portalHost={portalHost ?? undefined}
-						testID="user-sheet"
-					>
-						<DialogHeader>
-							<DialogTitle>{displayName}</DialogTitle>
-						</DialogHeader>
-						{open && (
-							<ScrollView contentContainerClassName="grow px-4 pb-4">
-								<SalesToday />
-								<View testID="user-sheet-switch-user">
-									<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
-									<Suspense>
-										<UserRows />
-									</Suspense>
-									<AddUserButton site={site} hasExistingUsers compact />
-								</View>
-								{registers.length > 1 && onSwitchRegister && (
-									<View className="border-border border-b">
+		<>
+			<ClearLocalData
+				trigger={(handleResetPress) => (
+					<Dialog open={open} onOpenChange={onOpenChange}>
+						<DialogContent
+							side={side}
+							size="lg"
+							portalHost={portalHost ?? undefined}
+							testID="user-sheet"
+						>
+							<DialogHeader>
+								<DialogTitle>{displayName}</DialogTitle>
+							</DialogHeader>
+							{open && (
+								<ScrollView contentContainerClassName="grow px-4 pb-4">
+									<SalesToday />
+									<View testID="user-sheet-switch-user">
+										<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
+										<Suspense>
+											<UserRows />
+										</Suspense>
+										<AddUserButton site={site} hasExistingUsers compact />
+									</View>
+									{registers.length > 1 && onSwitchRegister && (
+										<View className="border-border border-b">
+											<Button
+												testID="user-sheet-switch-register"
+												disabled={attributed}
+												aria-disabled={attributed}
+												variant="ghost"
+												className="flex-row justify-start gap-2"
+												onPress={() => {
+													onOpenChange(false);
+													onSwitchRegister();
+												}}
+											>
+												{t('register.switch_register')}
+											</Button>
+											{attributed && (
+												<Text className="text-muted-foreground px-3 pb-3">
+													{currentOrder
+														? t('register.switch_register_blocked_cart')
+														: t('register.switch_register_unavailable_here')}
+												</Text>
+											)}
+										</View>
+									)}
+									{(stores?.length ?? 0) > 1 && (
+										<View className="border-border border-b">
+											<Button
+												testID="user-sheet-switch-store"
+												variant="ghost"
+												className="flex-row justify-start gap-2"
+												onPress={() => {
+													onOpenChange(false);
+													setStoreOpen(true);
+												}}
+											>
+												{t('register.switch_store')}
+											</Button>
+										</View>
+									)}
+									<View className="border-border mt-auto border-t pt-4">
 										<Button
-											testID="user-sheet-switch-register"
-											disabled={attributed}
-											aria-disabled={attributed}
+											testID="user-sheet-sign-out"
+											variant="outline-destructive"
+											onPress={logout}
+										>
+											{/* The variant owns the label colour: a red Text here went red-on-red when pressed. */}
+											{t('register.sign_out')}
+										</Button>
+									</View>
+									<View className="border-border mt-4 gap-2 border-t pt-4">
+										<Button
+											testID="user-sheet-settings"
 											variant="ghost"
-											className="min-h-row flex-row justify-start gap-2"
+											className="flex-row justify-start gap-2"
 											onPress={() => {
 												onOpenChange(false);
-												onSwitchRegister();
+												router.push('/settings');
 											}}
 										>
-											{t('register.switch_register')}
+											<Icon name="gear" className="text-muted-foreground" />
+											<Text>{t('common.settings')}</Text>
 										</Button>
-										{attributed && (
-											<Text className="text-muted-foreground">
-												{currentOrder
-													? t('register.switch_register_blocked_cart')
-													: t('register.switch_register_unavailable_here')}
-											</Text>
+										<Button
+											testID="user-sheet-support"
+											variant="ghost"
+											className="flex-row justify-start gap-2"
+											onPress={() => {
+												onOpenChange(false);
+												router.push('/support');
+											}}
+										>
+											<Icon name="commentQuestion" className="text-muted-foreground" />
+											<Text>{t('common.support')}</Text>
+										</Button>
+										{/* Web only, as the header's menu had them: a browser is where these two go. */}
+										{Platform.isWeb && (
+											<Button
+												testID="user-sheet-wp-admin"
+												variant="ghost"
+												className="flex-row justify-start gap-2"
+												onPress={() => openExternalURL(`${site.home}/wp-admin`)}
+											>
+												<Icon name="wordpress" className="text-muted-foreground" />
+												<Text>{t('common.wordpress_admin')}</Text>
+											</Button>
 										)}
+										{Platform.isWeb && (
+											<Button
+												testID="user-sheet-desktop-app"
+												variant="ghost"
+												className="flex-row justify-start gap-2"
+												onPress={() =>
+													openExternalURL('https://github.com/wcpos/electron/releases')
+												}
+											>
+												<Icon name="download" className="text-muted-foreground" />
+												<Text>{t('common.desktop_app')}</Text>
+											</Button>
+										)}
+										<Button
+											testID="user-sheet-clear-local-data"
+											variant="ghost"
+											className="flex-row justify-start gap-2"
+											onPress={() => {
+												onOpenChange(false);
+												handleResetPress();
+											}}
+										>
+											<Icon name="trash" className="text-destructive" />
+											<Text className="text-destructive">{t('common.clear_all_local_data')}</Text>
+										</Button>
 									</View>
-								)}
-								<View className="border-border mt-auto border-t pt-4">
-									<Button
-										testID="user-sheet-sign-out"
-										className="min-h-row"
-										variant="outline-destructive"
-										onPress={logout}
-									>
-										<Text className="text-destructive">{t('register.sign_out')}</Text>
-									</Button>
-								</View>
-								<View className="border-border mt-4 gap-2 border-t pt-4">
-									<Button
-										testID="user-sheet-settings"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
-										onPress={() => {
-											onOpenChange(false);
-											router.push('/settings');
-										}}
-									>
-										<Icon name="gear" className="text-muted-foreground" />
-										<Text>{t('common.settings')}</Text>
-									</Button>
-									<Button
-										testID="user-sheet-support"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
-										onPress={() => {
-											onOpenChange(false);
-											router.push('/support');
-										}}
-									>
-										<Icon name="commentQuestion" className="text-muted-foreground" />
-										<Text>{t('common.support')}</Text>
-									</Button>
-									{/* Web only, as the header's menu had them: a browser is where these two go. */}
-									{Platform.isWeb && (
-										<Button
-											testID="user-sheet-wp-admin"
-											variant="ghost-quiet"
-											className="min-h-row flex-row justify-start gap-2"
-											onPress={() => openExternalURL(`${site.home}/wp-admin`)}
-										>
-											<Icon name="wordpress" className="text-muted-foreground" />
-											<Text>{t('common.wordpress_admin')}</Text>
-										</Button>
-									)}
-									{Platform.isWeb && (
-										<Button
-											testID="user-sheet-desktop-app"
-											variant="ghost-quiet"
-											className="min-h-row flex-row justify-start gap-2"
-											onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
-										>
-											<Icon name="download" className="text-muted-foreground" />
-											<Text>{t('common.desktop_app')}</Text>
-										</Button>
-									)}
-									<Button
-										testID="user-sheet-clear-local-data"
-										variant="ghost-quiet"
-										className="min-h-row flex-row justify-start gap-2"
-										onPress={() => {
-											onOpenChange(false);
-											handleResetPress();
-										}}
-									>
-										<Icon name="trash" className="text-destructive" />
-										<Text className="text-destructive">{t('common.clear_all_local_data')}</Text>
-									</Button>
-								</View>
-							</ScrollView>
-						)}
-					</DialogContent>
-				</Dialog>
-			)}
-		/>
+								</ScrollView>
+							)}
+						</DialogContent>
+					</Dialog>
+				)}
+			/>
+			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} portalHost={portalHost} />
+		</>
 	);
 }

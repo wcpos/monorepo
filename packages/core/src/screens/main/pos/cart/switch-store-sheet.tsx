@@ -6,8 +6,11 @@ import { useObservableSuspense } from 'observable-hooks';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Loader } from '@wcpos/components/loader';
+import { Portal } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import type { StoreDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -18,30 +21,70 @@ import { usePanelSide } from '../contexts/overlay-side';
 export function SwitchStoreSheet({
 	open,
 	onOpenChange,
+	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	/** `null` off the POS: the root host, as the user sheet it opens from. */
+	portalHost?: string | null;
 }) {
 	const side = usePanelSide('cart');
 	const t = useT();
+	// One switch per sheet: the sheet cannot be dismissed mid-switch (a hydrating store must not
+	// leave the old screen operable underneath), and the overlay blocks the app until it lands
+	// or fails, as the header's store menu did (`pos/cart/LEDGER.md` line 68).
+	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="switch-store-sheet">
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (!next && isSwitching) return;
+				onOpenChange(next);
+			}}
+		>
+			<DialogContent
+				side={side}
+				size="lg"
+				portalHost={portalHost ?? undefined}
+				testID="switch-store-sheet"
+			>
 				<DialogHeader>
 					<DialogTitle>{t('register.switch_store')}</DialogTitle>
 				</DialogHeader>
 				<Suspense>
-					<StoreRows onSwitched={() => onOpenChange(false)} />
+					<StoreRows
+						isSwitching={isSwitching}
+						onSwitch={async (next) => {
+							await handleSwitchStore(next);
+							onOpenChange(false);
+						}}
+					/>
 				</Suspense>
 			</DialogContent>
+			{isSwitching ? (
+				<Portal name="store-switch-overlay">
+					<View
+						testID="store-switch-overlay"
+						className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3"
+					>
+						<Loader size="xl" />
+						<Text>{t('common.switching_store')}</Text>
+					</View>
+				</Portal>
+			) : null}
 		</Dialog>
 	);
 }
 
-function StoreRows({ onSwitched }: { onSwitched: () => void }) {
+function StoreRows({
+	isSwitching,
+	onSwitch,
+}: {
+	isSwitching: boolean;
+	onSwitch: (store: StoreDocument) => Promise<void>;
+}) {
 	const { wpCredentials, store } = useStoreSession();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
-	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	const t = useT();
 	return (
 		<ScrollView contentContainerClassName="px-4 pb-4">
@@ -50,12 +93,9 @@ function StoreRows({ onSwitched }: { onSwitched: () => void }) {
 					<Button
 						testID={`switch-store-row-${next.localID}`}
 						variant="ghost"
-						className="min-h-row flex-row justify-between"
+						className="flex-row justify-between"
 						disabled={isSwitching || next.localID === store.localID}
-						onPress={async () => {
-							await handleSwitchStore(next);
-							onSwitched();
-						}}
+						onPress={() => void onSwitch(next)}
 					>
 						<Text numberOfLines={1} className="min-w-0 flex-1">
 							{next.name}

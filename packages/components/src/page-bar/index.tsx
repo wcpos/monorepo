@@ -14,6 +14,11 @@ import { Text } from '../text';
 export type PageBarProps = ViewProps & {
 	/** Absent on a phone leaf page that carries its own heading (one title, not two). */
 	title?: string;
+	/**
+	 * A scoped room's scope control, in the title's place when there is no `title`: still
+	 * left, still one bar.
+	 */
+	titleSlot?: React.ReactNode;
 	subtitle?: string;
 	status?: { label: string; variant?: StatusBadgeProps['variant']; testID?: string };
 	// A label, not a bare handler: an icon-only control carries no accessible name of
@@ -26,6 +31,7 @@ export type PageBarProps = ViewProps & {
 
 export function PageBar({
 	title,
+	titleSlot,
 	subtitle,
 	status,
 	onMenu,
@@ -68,7 +74,7 @@ export function PageBar({
 							className="h-ctl w-ctl -ml-2 items-center justify-center"
 						/>
 					) : null)}
-				{title !== undefined && (
+				{title !== undefined ? (
 					<View className="min-w-0 shrink">
 						<Text
 							testID={id('title')}
@@ -79,7 +85,11 @@ export function PageBar({
 							{title}
 						</Text>
 					</View>
-				)}
+				) : titleSlot != null ? (
+					<View testID={id('title-slot')} className="min-w-0 shrink flex-row items-center">
+						{titleSlot}
+					</View>
+				) : null}
 				{subtitle !== undefined && (
 					<Text
 						testID={id('subtitle')}

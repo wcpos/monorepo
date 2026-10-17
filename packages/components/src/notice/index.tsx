@@ -72,7 +72,7 @@ export function Notice({
 					{actions?.map((action, index) => (
 						<Button
 							key={index}
-							variant="ghost-quiet"
+							variant="ghost"
 							size="sm"
 							className="h-auto min-h-9 py-1"
 							testID={action.testID ?? id(`action-${index}`)}

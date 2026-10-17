@@ -139,7 +139,7 @@ function SessionCardContent({
 				<Button
 					testID="reports-session-print"
 					variant="outline"
-					className="min-h-12 self-start"
+					className="self-start"
 					disabled={busy || unavailable || !!unavailableReason}
 					onPress={dispatch}
 				>
@@ -229,7 +229,6 @@ export function RemoteSessionCard({
 				<Button
 					testID={`session-retry-${register.id}`}
 					variant="outline"
-					className="min-h-12"
 					// The press event must not reach `load` as its options.
 					onPress={() => void (reload ?? load)()}
 				>

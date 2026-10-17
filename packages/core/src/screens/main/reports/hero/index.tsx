@@ -83,7 +83,7 @@ function MenuChip({
 							key={row.value}
 							testID={`hero-${name}-${row.value}`}
 							variant="ghost"
-							className="min-h-12 flex-row justify-start gap-2 px-3"
+							className="flex-row justify-start gap-2 px-3"
 							onPress={() => choose(row.value)}
 						>
 							<View className="w-5 items-center">

@@ -12,7 +12,14 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -85,12 +92,26 @@ export function Site({ user, site }: Props) {
 				{/* Site Header */}
 				<HStack space="md" className="items-center">
 					<SiteHeader site={site} />
-					<IconButton
-						name="xmark"
-						size="lg"
-						variant="destructive"
-						onPress={() => setDeleteDialogOpened(true)}
-					/>
+					{/* Removing a site loses its users on this device: the last, red row of a ⋮ menu. */}
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								name="ellipsisVertical"
+								testID={`auth-site-menu-${site.uuid}`}
+								accessibilityLabel={t('common.actions')}
+							/>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								variant="destructive"
+								testID={`auth-site-remove-${site.uuid}`}
+								onPress={() => setDeleteDialogOpened(true)}
+							>
+								<Icon name="trash" className="fill-destructive" />
+								<Text>{t('auth.remove_site')}</Text>
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</HStack>
 
 				{/* Site Content */}

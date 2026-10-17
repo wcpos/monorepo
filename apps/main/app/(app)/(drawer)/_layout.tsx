@@ -16,9 +16,9 @@ import {
 	DrawerPanelVisibilityProvider,
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
-import { Header } from '@wcpos/core/screens/main/components/header';
+import { SessionHoldProvider } from '@wcpos/core/screens/main/components/session-hold-banner';
 import { RestartLockOverlay } from '@wcpos/core/screens/main/pos/cart/clear-local-data';
-import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/upgrade-notice/context';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
@@ -37,14 +37,10 @@ export const unstable_settings = {
 function ThemedDrawer({
 	screenSize,
 	t,
-	showUpgrade,
-	setShowUpgrade,
 	unreadErrorCount,
 }: {
 	screenSize: string;
 	t: ReturnType<typeof useT>;
-	showUpgrade: boolean;
-	setShowUpgrade: () => void;
 	unreadErrorCount: number;
 }) {
 	const screenBackgroundColor = useNavigationBackground();
@@ -71,9 +67,9 @@ function ThemedDrawer({
 	return (
 		<Drawer
 			screenOptions={{
-				header: (props) => {
-					return <Header {...props} showUpgrade={showUpgrade} setShowUpgrade={setShowUpgrade} />;
-				},
+				// Every screen carries its own bar (the register bar, or the page bar), so the
+				// navigator draws none.
+				headerShown: false,
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
 					// Only ever ADDED, never set to 'flex': the library drives `display` itself
@@ -104,7 +100,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="(pos)"
 				options={{
-					headerShown: false,
 					title: t('common.pos'),
 					drawerLabel: t('common.pos'),
 					drawerIcon: ({ focused }) => (
@@ -119,7 +114,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="products"
 				options={{
-					headerShown: false,
 					title: t('common.products'),
 					drawerLabel: t('common.products'),
 					drawerIcon: ({ focused }) => (
@@ -134,7 +128,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="orders"
 				options={{
-					headerShown: false,
 					title: t('common.orders'),
 					drawerLabel: t('common.orders'),
 					drawerIcon: ({ focused }) => (
@@ -149,7 +142,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="coupons"
 				options={{
-					headerShown: false,
 					title: t('common.coupons'),
 					drawerLabel: t('common.coupons'),
 					drawerIcon: ({ focused }) => (
@@ -164,7 +156,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="customers"
 				options={{
-					headerShown: false,
 					title: t('common.customers'),
 					drawerLabel: t('common.customers'),
 					drawerIcon: ({ focused }) => (
@@ -180,7 +171,6 @@ function ThemedDrawer({
 				name="reports"
 				options={{
 					title: t('common.reports'),
-					headerShown: false,
 					drawerLabel: t('common.reports'),
 					drawerIcon: ({ focused }) => (
 						<Icon
@@ -212,7 +202,6 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="settings"
 				options={{
-					headerShown: false,
 					title: t('common.settings'),
 					drawerLabel: t('common.settings'),
 					drawerIcon: ({ focused }) => (
@@ -252,7 +241,7 @@ function DrawerLayoutContent() {
 	const t = useT();
 
 	const { license } = useAppInfo();
-	// `showUpgrade` is dismissable local state (the header can hide the banner), but it
+	// `showUpgrade` is dismissable local state (the notice closes itself), but it
 	// must re-sync whenever the license's Pro status changes. We track the previous
 	// `isPro` value and reset during render (React's "adjusting state during render"
 	// pattern) instead of in an effect, avoiding a cascading re-render.
@@ -267,17 +256,14 @@ function DrawerLayoutContent() {
 
 	return (
 		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
-			<View className="bg-background flex-1">
-				<ThemedSystemBars />
-				<RestartLockOverlay />
-				<ThemedDrawer
-					screenSize={screenSize}
-					t={t}
-					showUpgrade={showUpgrade}
-					setShowUpgrade={() => setShowUpgrade(false)}
-					unreadErrorCount={unreadErrorCount}
-				/>
-			</View>
+			{/* One owner for the held-session state; each bar renders its own banner. */}
+			<SessionHoldProvider>
+				<View className="bg-background flex-1">
+					<ThemedSystemBars />
+					<RestartLockOverlay />
+					<ThemedDrawer screenSize={screenSize} t={t} unreadErrorCount={unreadErrorCount} />
+				</View>
+			</SessionHoldProvider>
 		</UpgradeNoticeContext.Provider>
 	);
 }

@@ -14,10 +14,10 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => (
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({ label, onPress }: { label: string; onPress?: () => void }) => (
 		<button data-testid="filter-cell" onClick={onPress}>
-			{children}
+			{label}
 		</button>
 	),
 }));

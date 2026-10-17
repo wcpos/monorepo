@@ -86,7 +86,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			)}
 			<Button
 				testID="open-register-button"
-				size="xl"
+				size="lg"
 				className="w-full"
 				loading={busy}
 				disabled={!amount || !Number.isFinite(Number(amount)) || Number(amount) < 0}

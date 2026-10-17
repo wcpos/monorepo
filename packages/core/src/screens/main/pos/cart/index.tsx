@@ -33,6 +33,7 @@ import { RegisterCount } from './register-count';
 import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
+import { SessionHoldBanner } from '../../components/session-hold-banner';
 import { useTitleBarStrip } from '../../../../contexts/title-bar-strip';
 import { TitleBarStripPortal } from '../../../../contexts/title-bar-strip/portal';
 import { RegisterPicker } from './register-picker';
@@ -172,6 +173,7 @@ function CartColumn({
 	return (
 		<VStack className={isColumn ? 'bg-card h-full gap-0' : 'h-full gap-1 p-2'}>
 			{barInStrip ? <TitleBarStripPortal>{registerBar}</TitleBarStripPortal> : registerBar}
+			<SessionHoldBanner />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
@@ -216,7 +218,7 @@ function CartColumn({
 							{overdue && (
 								<Button
 									testID="checkout-close-register"
-									className="min-h-14"
+									size="lg"
 									onPress={() => setPanelOpen(true)}
 								>
 									{t('register.close_register')}

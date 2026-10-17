@@ -110,6 +110,29 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({
+		name,
+		testID,
+		onPress,
+		disabled,
+		loading,
+	}: {
+		name: string;
+		testID?: string;
+		onPress?: () => void;
+		disabled?: boolean;
+		loading?: boolean;
+	}) => (
+		<button
+			data-testid={testID}
+			data-icon={name}
+			onClick={onPress}
+			disabled={disabled || loading}
+			data-loading={loading ? 'true' : 'false'}
+		/>
+	),
+}));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/dropdown-menu', () => {
 	function Component({ children }: { children: React.ReactNode }) {
@@ -122,15 +145,18 @@ jest.mock('@wcpos/components/dropdown-menu', () => {
 			children,
 			testID,
 			onPress,
+			variant,
 		}: {
 			children: React.ReactNode;
 			testID?: string;
 			onPress?: () => void;
+			variant?: string;
 		}) => (
-			<button data-testid={testID} onClick={onPress}>
+			<button data-testid={testID} data-variant={variant ?? 'default'} onClick={onPress}>
 				{children}
 			</button>
 		),
+		DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 		DropdownMenuTrigger: Component,
 	};
 });
@@ -299,6 +325,21 @@ describe('DatabaseScreen coverage', () => {
 		expect(getAllByTestId('db-row-products')[0].textContent).toContain('server busy…');
 		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('server busy…');
 		expect(getByText(/Server totals updated/).textContent).toContain('server is busy');
+	});
+
+	it('builds the row menu like every other row menu: a ⋮ icon button, the destructive row last', () => {
+		const { getAllByTestId } = render(<DatabaseScreen />);
+		expect(getAllByTestId('db-row-menu-products')[0].getAttribute('data-icon')).toBe(
+			'ellipsisVertical'
+		);
+		const sync = getAllByTestId('db-row-sync-now-products')[0];
+		const clear = getAllByTestId('db-row-clear-products')[0];
+		expect(sync.getAttribute('data-variant')).toBe('default');
+		// Red by the item's variant, never by a className on its label.
+		expect(clear.getAttribute('data-variant')).toBe('destructive');
+		const separator = clear.previousElementSibling;
+		expect(separator?.getAttribute('data-testid')).toBe('menu-separator');
+		expect(separator?.previousElementSibling).toBe(sync);
 	});
 
 	it('spins only the checked row and disables manual controls while its check runs', async () => {
