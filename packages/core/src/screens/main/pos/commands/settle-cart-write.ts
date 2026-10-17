@@ -25,6 +25,14 @@ export function settleCartWrite<T>(
 			const intent = Object.fromEntries(
 				Object.entries(input.data).filter(([, value]) => value !== undefined)
 			);
+			const owner = payload.meta_data?.find((entry) => entry.key === '_wcpos_money_owner');
+			if (
+				owner &&
+				Array.isArray(intent.meta_data) &&
+				!intent.meta_data.some((entry) => entry.key === '_wcpos_money_owner')
+			) {
+				intent.meta_data = [...intent.meta_data, owner];
+			}
 			const after = { ...payload, ...intent };
 			const owned =
 				payload.meta_data?.some(
@@ -33,7 +41,7 @@ export function settleCartWrite<T>(
 			const result = owned
 				? undefined
 				: settleAggregate(snapshotFromOrderJSON(after), deps.configForOrder(after));
-			return { ...input.data, ...(result?.changed ? settlementPatch(result) : {}) };
+			return { ...input.data, ...intent, ...(result?.changed ? settlementPatch(result) : {}) };
 		},
 	});
 }

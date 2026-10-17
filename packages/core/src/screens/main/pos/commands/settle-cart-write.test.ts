@@ -78,6 +78,26 @@ it.each(['meta', 'memory'])(
 	}
 );
 
+it('preserves current server ownership when intent carries stale full metadata', async () => {
+	const order = record();
+	const owner = { id: 42, key: '_wcpos_money_owner', value: 'server' };
+	order.payload.meta_data = [owner];
+	const data = { line_items: [line], meta_data: [{ key: '_wcpos_cart', value: 'restarted' }] };
+	const localPatch = jest.fn();
+	await settleCartWrite(
+		{ document: order, data },
+		{
+			localPatch: resolveCartWrite(localPatch),
+			configForOrder: () => config,
+			serverOwnsMoney: () => false,
+		}
+	);
+	expect(localPatch).toHaveBeenCalledWith({
+		document: order,
+		data: { ...data, meta_data: [...data.meta_data, owner] },
+	});
+});
+
 it('writes only intent when persisted money already matches', async () => {
 	const settled = settleAggregate(snapshotFromOrderJSON(payload), config).patch;
 	const order = record({ ...payload, ...settled });
