@@ -103,10 +103,15 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		cash: amount,
 		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
 	};
+	// A manager who already approved exactly this count is not asked again (a failed close or
+	// a restart keeps the approval); a changed count or an unapproved over-threshold variance is.
+	const approvedThisCount =
+		!!session?.approved_counted && isSameCount(session.approved_counted, counted);
 	const needsManager =
-		!!session?.approval_required ||
-		(!!session?.approved_counted && !isSameCount(session.approved_counted, counted)) ||
-		(!blind && valid && overThreshold(variance, varianceThreshold));
+		!approvedThisCount &&
+		(!!session?.approval_required ||
+			!!session?.approved_counted ||
+			(!blind && valid && overThreshold(variance, varianceThreshold)));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {

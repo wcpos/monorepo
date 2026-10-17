@@ -234,6 +234,16 @@ it.each([
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
 
+it('closes without a second approval when the approved count is entered again', () => {
+	// A failed close or a restart keeps the approval; the same count is not re-approved.
+	approved_counted = { cash: '480.80' };
+	render(<RegisterCount onClosed={jest.fn()} />);
+	enter('480.80');
+	fireEvent.click(screen.getByTestId('count-close'));
+	expect(screen.queryByTestId('approve-sheet')).toBeNull();
+	expect(closeSession).toHaveBeenCalled();
+});
+
 it('requests approval again when the count changes after approval', () => {
 	approved_counted = { cash: '463.30' };
 	render(<RegisterCount onClosed={jest.fn()} />);
