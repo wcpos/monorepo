@@ -1,4 +1,6 @@
-import { format, parseISO, subDays } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
+import { subDays } from 'date-fns/subDays';
 
 import { useT } from '../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from './use-local-date';

@@ -1,5 +1,6 @@
 import { tz } from '@date-fns/tz';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
 
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';

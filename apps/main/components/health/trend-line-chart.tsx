@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { Circle, Line as SkiaLine, useFont, vec } from '@shopify/react-native-skia';
 import {
 	type ComposedGesture,
 	Gesture,
@@ -9,14 +8,9 @@ import {
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';
-import {
-	Area,
-	type CartesianActionsHandle,
-	CartesianChart,
-	Line,
-	useChartPressState,
-} from 'victory-native';
 
+import { loadCharts } from '@wcpos/components/charts/lazy';
+import type { CartesianActionsHandle } from '@wcpos/components/charts/charts-impl';
 import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
 
 import { TrendFrame, type TrendPoint } from './trend-frame';
@@ -46,7 +40,7 @@ export type { TrendPoint };
  * put in it, so a fresh till sees the chart's footprint and a quiet "not
  * enough data yet" line instead of a collapsed header row.
  */
-export function TrendLineChart({
+function TrendLineChartImpl({
 	points,
 	label,
 	tone,
@@ -59,7 +53,8 @@ export function TrendLineChart({
 	testID: string;
 	formatValue?: (value: number) => string;
 }) {
-	const font = useFont(require('../../assets/fonts/Inter-Medium.ttf'), 11);
+	const { Circle, SkiaLine, vec, Area, CartesianChart, Line } = charts;
+	const font = charts.useFont(require('../../assets/fonts/Inter-Medium.ttf'), 11);
 	const { formatDate } = useLocalDate();
 	const [accent, neutral, border, mutedForeground, surface] = useCSSVariable([
 		'--color-primary',
@@ -75,7 +70,7 @@ export function TrendLineChart({
 	const domainTop = niceCeil(Math.max(...points.map((point) => point.y)));
 	const xTicks = xTickValues(points);
 
-	const { state: press, isActive: pressing } = useChartPressState({ x: 0, y: { y: 0 } });
+	const { state: press, isActive: pressing } = charts.useChartPressState({ x: 0, y: { y: 0 } });
 	// The SharedValue flavour of the actions ref, because the gesture callbacks
 	// below are worklets — `handleTouch` has to be readable on the UI thread.
 	const actions = useSharedValue<CartesianActionsHandle<typeof press> | null>(null);
@@ -197,5 +192,19 @@ export function TrendLineChart({
 				}}
 			</CartesianChart>
 		</TrendFrame>
+	);
+}
+
+let charts: Awaited<ReturnType<typeof loadCharts>>;
+const LazyChart = React.lazy(async () => {
+	charts = await loadCharts();
+	return { default: TrendLineChartImpl };
+});
+
+export function TrendLineChart(props: React.ComponentProps<typeof LazyChart>) {
+	return (
+		<React.Suspense fallback={null}>
+			<LazyChart {...props} />
+		</React.Suspense>
 	);
 }

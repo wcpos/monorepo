@@ -16,6 +16,12 @@
 			"browser": "./dist/render-template.js",
 			"import": "./dist/render-template.js",
 			"default": "./dist/render-template.js"
+		},
+		"./barcode-library": {
+			"types": "./dist/barcode-library.d.ts",
+			"browser": "./dist/barcode-library.js",
+			"import": "./dist/barcode-library.js",
+			"default": "./dist/barcode-library.js"
 		}
 	},
 	"files": [

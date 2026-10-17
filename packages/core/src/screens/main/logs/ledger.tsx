@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { ScrollViewProps } from 'react-native';
 
-import { isToday } from 'date-fns';
+import { isToday } from 'date-fns/isToday';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn } from '@wcpos/components/lib/utils';

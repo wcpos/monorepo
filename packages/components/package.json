@@ -9,6 +9,7 @@
     "./button": "./src/button/index.tsx",
     "./calendar": "./src/calendar/index.tsx",
     "./card": "./src/card/index.tsx",
+    "./charts/lazy": "./src/charts/lazy.ts",
     "./checkbox": "./src/checkbox/index.tsx",
     "./chip": "./src/chip/index.tsx",
     "./collapsible": "./src/collapsible/index.tsx",

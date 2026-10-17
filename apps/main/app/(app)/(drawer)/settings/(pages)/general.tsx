@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { GeneralSettings, SettingsPage } from '@wcpos/core/screens/main/settings';
+import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+
+const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.GeneralSettingsPage })));
 
 export default function GeneralSettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage title={t('settings.general')} testID="screen-settings-general">
-			<GeneralSettings />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

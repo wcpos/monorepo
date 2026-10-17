@@ -1,21 +1,22 @@
-import * as dateFns from 'date-fns';
-import {
-	addDays,
-	addMinutes,
-	differenceInDays,
-	differenceInMinutes,
-	eachDayOfInterval,
-	eachMonthOfInterval,
-	format,
-	isSameDay,
-	subMonths,
-} from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
+import { addDays } from 'date-fns/addDays';
+import { addMinutes } from 'date-fns/addMinutes';
+import { differenceInDays } from 'date-fns/differenceInDays';
+import { differenceInMinutes } from 'date-fns/differenceInMinutes';
+import { eachDayOfInterval } from 'date-fns/eachDayOfInterval';
+import { eachMonthOfInterval } from 'date-fns/eachMonthOfInterval';
+import { format } from 'date-fns/format';
+import { isSameDay } from 'date-fns/isSameDay';
+import { subMonths } from 'date-fns/subMonths';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
 
 import type { Locale } from 'date-fns/locale';
 import type { DateRange, OrderPayload } from '../context';
+
+const dateFns = { endOfDay, startOfDay };
 
 export type Interval = 'months' | 'days' | 'minutes';
 

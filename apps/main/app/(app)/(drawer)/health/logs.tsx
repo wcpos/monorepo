@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import { useFocusEffect } from 'expo-router';
 
-import { LogsScreen } from '@wcpos/core/screens/main/logs';
+import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
 
 import { useMarkLogsAsRead } from '../../../../components/unread-logs';
+
+const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.LogsScreen })));
 
 /**
  * The unread-error badge clears only when the logs themselves are viewed —
@@ -19,5 +21,9 @@ export default function HealthLogsRoute() {
 		}, [markAsRead])
 	);
 
-	return <LogsScreen />;
+	return (
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
+	);
 }

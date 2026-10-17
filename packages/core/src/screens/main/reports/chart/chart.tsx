@@ -1,18 +1,11 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
-import {
-	Circle,
-	DashPathEffect,
-	RoundedRect,
-	Line as SkiaLine,
-	Text as SkiaText,
-	useFont,
-} from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useCSSVariable } from 'uniwind';
-import { Area, CartesianChart, type ChartBounds, Line, type PointsArray } from 'victory-native';
 
+import { loadCharts } from '@wcpos/components/charts/lazy';
+import type { ChartBounds, PointsArray } from '@wcpos/components/charts/charts-impl';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
@@ -32,7 +25,22 @@ function findClosestPointIndex(points: PointsArray, touchX: number): number {
 	);
 }
 
-export default function Chart({ comparison = false }: { comparison?: boolean }) {
+let charts: Awaited<ReturnType<typeof loadCharts>>;
+const LazyChart = React.lazy(async () => {
+	charts = await loadCharts();
+	return { default: Chart };
+});
+
+export default function LazyReportsChart(props: { comparison?: boolean }) {
+	return (
+		<React.Suspense fallback={null}>
+			<LazyChart {...props} />
+		</React.Suspense>
+	);
+}
+
+function Chart({ comparison = false }: { comparison?: boolean }) {
+	const { DashPathEffect, RoundedRect, SkiaLine, Area, CartesianChart, Line } = charts;
 	const {
 		selectedOrders,
 		dateRange,
@@ -57,7 +65,7 @@ export default function Chart({ comparison = false }: { comparison?: boolean }) 
 	});
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const t = useT();
-	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
+	const font = charts.useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
 	const [popoverColor, textColor, primaryColor, mutedForegroundColor, borderColor, mutedColor] =
 		useCSSVariable([
 			'--color-popover',
@@ -403,11 +411,12 @@ function ToolTip({
 	x: number;
 	y: number;
 	chartBounds: ChartBounds;
-	font: ReturnType<typeof useFont>;
+	font: ReturnType<typeof charts.useFont>;
 	bgColor: string;
 	textColor: string;
 	accentColor: string;
 }) {
+	const { Circle, RoundedRect, SkiaText } = charts;
 	const width = Math.min(
 		chartBounds.right - chartBounds.left,
 		Math.max(160, ...lines.map((line) => (font?.measureText(line).width ?? 0) + 20))

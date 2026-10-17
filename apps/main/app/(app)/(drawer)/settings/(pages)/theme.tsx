@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { SettingsPage, ThemeSettings } from '@wcpos/core/screens/main/settings';
+import { loadRest } from '@wcpos/core/screens/main/rest/lazy';
+
+const Screen = React.lazy(() => loadRest().then((m) => ({ default: m.ThemeSettingsPage })));
 
 export default function ThemeSettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage title={t('settings.theme')} testID="screen-settings-theme">
-			<ThemeSettings />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

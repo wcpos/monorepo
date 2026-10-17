@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
 import { Calendar } from './index';
 
@@ -28,8 +28,8 @@ jest.mock('uniwind', () => ({
 }));
 jest.mock('../icon', () => ({ Icon: () => null }));
 jest.mock('./locales', () => ({ updateLocaleConfig: jest.fn() }));
-it('feeds token numbers to the library and keeps caller theme last', () => {
-	const { rerender } = render(<Calendar />);
+it('feeds token numbers to the library and keeps caller theme last', async () => {
+	const { rerender } = await act(async () => render(<Calendar />));
 	expect(calendar.theme).toMatchObject({
 		textDayFontSize: 18,
 		textMonthFontSize: 18,
@@ -42,9 +42,11 @@ it('feeds token numbers to the library and keeps caller theme last', () => {
 	expect(calendar.theme).toMatchObject({ textDayFontSize: 24 });
 });
 
-it('resolves the calculated web xs token before handing it to the calendar', () => {
+it('resolves the calculated web xs token before handing it to the calendar', async () => {
 	header = 'calc(18px * 0.857)';
-	render(<Calendar />);
+	await act(async () => {
+		render(<Calendar />);
+	});
 	expect(calendar.theme).toMatchObject({ textDayHeaderFontSize: 18 * 0.857 });
 	header = '13px';
 });

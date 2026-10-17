@@ -1,5 +1,5 @@
 import { tz } from '@date-fns/tz';
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 
 import type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';

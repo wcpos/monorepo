@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { renderPreview } from '../encoder/render-preview';
-import { encodeThermalTemplate } from '../renderer';
+import { encodeThermalTemplate, loadBarcodeLibrary } from '../renderer';
 import { rasterizeReceiptElement, stripThermalControlNodesForRaster } from './rasterize-element';
 
 import type { DOMProps } from 'expo/dom';
@@ -104,6 +104,7 @@ export default function ReceiptRasterizer({
 
 				// 1. Render the template (control nodes stripped) to HTML.
 				const strippedXml = stripThermalControlNodesForRaster(templateXml);
+				await loadBarcodeLibrary();
 				const { html } = renderPreview({
 					template: strippedXml,
 					engine: 'thermal',

@@ -4,7 +4,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
+import { loadBarcodeLibrary } from '@wcpos/receipt-renderer/barcode-library';
+
 import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-template-renderer';
+
+beforeAll(() => loadBarcodeLibrary());
 
 const mockUseReceiptData = jest.fn();
 const mockUseActiveTemplates = jest.fn((..._args: unknown[]) => []);

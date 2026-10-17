@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import { format, parseISO, subDays } from 'date-fns';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
+import { subDays } from 'date-fns/subDays';
 import { useObservableState } from 'observable-hooks';
 import { map, of } from 'rxjs';
 import get from 'lodash/get';
