@@ -177,32 +177,7 @@ describe('NavigationAreaLayout', () => {
 		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 	});
 
-	it('lifts the selected row onto bg-card only on the opted-in (background) rail; the legacy rail keeps its tint', () => {
-		const layout = (barTestID?: string) => (
-			<NavigationAreaLayout
-				items={items}
-				indexHref="/settings"
-				areaLabel="Settings"
-				testID="settings-navigation"
-				screenTestID="settings-screen"
-				barTestID={barTestID}
-			>
-				<div />
-			</NavigationAreaLayout>
-		);
-		// Uniwind compiles the classes away, so the row exposes the surface it styles for.
-		const lifted = render(layout('settings-bar'));
-		expect(lifted.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('background');
-		lifted.unmount();
-
-		// A layout without a bar sits on bg-card, where a bg-card row is invisible.
-		const legacy = render(layout());
-		expect(legacy.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('card');
-	});
-
-	it('keeps the legacy back bar when the layout has not opted in', () => {
-		mockScreenSize = 'sm';
-
+	it('marks the current page selected in the rail (the shared nav row lifts it onto the card)', () => {
 		render(
 			<NavigationAreaLayout
 				items={items}
@@ -210,18 +185,13 @@ describe('NavigationAreaLayout', () => {
 				areaLabel="Settings"
 				testID="settings-navigation"
 				screenTestID="settings-screen"
+				barTestID="settings-bar"
 			>
-				<div data-testid="settings-content" />
+				<div />
 			</NavigationAreaLayout>
 		);
-
-		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
-		expect(screen.getByTestId('settings-content')).toBeTruthy();
-		expect(screen.getByTestId('settings-navigation-back')).toBeTruthy();
-		expect(screen.queryByTestId('settings-bar')).toBeNull();
-		fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-		expect(mockNavigate).toHaveBeenCalledWith('/settings');
-		expect(screen.getByTestId('settings-screen')).toBeTruthy();
+		expect(screen.getByTestId('settings-nav-tax').getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByTestId('settings-nav-general').getAttribute('aria-selected')).toBe('false');
 	});
 });
 

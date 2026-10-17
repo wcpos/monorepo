@@ -10,21 +10,9 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
  * Component that renders the navigation list in the drawer.
  */
 export function DrawerItemList({ state, navigation, descriptors }: DrawerContentComponentProps) {
-	const focusedRoute = state.routes[state.index];
-	const focusedDescriptor = descriptors[focusedRoute.key];
-	const focusedOptions = focusedDescriptor.options;
-
-	const {
-		drawerActiveTintColor,
-		drawerInactiveTintColor,
-		drawerActiveBackgroundColor,
-		drawerInactiveBackgroundColor,
-	} = focusedOptions;
-
 	return state.routes.map((route, i) => {
 		const focused = i === state.index;
-		const { title, drawerLabel, drawerIcon, drawerLabelStyle, drawerItemStyle, drawerType } =
-			descriptors[route.key].options;
+		const { title, drawerLabel, drawerIcon, drawerItemStyle } = descriptors[route.key].options;
 
 		return (
 			<DrawerItem
@@ -40,11 +28,6 @@ export function DrawerItemList({ state, navigation, descriptors }: DrawerContent
 						| undefined
 				}
 				focused={focused}
-				activeTintColor={drawerActiveTintColor}
-				inactiveTintColor={drawerInactiveTintColor}
-				activeBackgroundColor={drawerActiveBackgroundColor}
-				inactiveBackgroundColor={drawerInactiveBackgroundColor}
-				labelStyle={drawerLabelStyle}
 				style={drawerItemStyle}
 				onPress={() => {
 					navigation.dispatch({
@@ -54,7 +37,6 @@ export function DrawerItemList({ state, navigation, descriptors }: DrawerContent
 						target: state.key,
 					});
 				}}
-				drawerType={drawerType}
 			/>
 		);
 	}) as React.ReactNode as React.ReactElement;
