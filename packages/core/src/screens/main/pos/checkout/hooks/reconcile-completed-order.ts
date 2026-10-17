@@ -32,7 +32,9 @@ export function refreshOrderRecord(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	return Promise.race([
 		handle.ready.then((result): 'refreshed' | 'failed' =>
-			result.action === 'fetched' ? 'refreshed' : 'failed'
+			result.action === 'fetched' && result.appliedRecordIds?.includes(String(orderId))
+				? 'refreshed'
+				: 'failed'
 		),
 		new Promise<'timed-out'>((resolve) => {
 			timer = setTimeout(() => resolve('timed-out'), ORDER_REFRESH_TIMEOUT_MS);

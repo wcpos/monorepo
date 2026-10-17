@@ -25,7 +25,10 @@ function setup(id: number | null = 42) {
 	const requireRefresh = jest
 		.fn()
 		.mockReturnValue({ ready: Promise.resolve(), release: stockRelease });
-	const orderHandle = { ready: Promise.resolve({ action: 'fetched' }), release };
+	const orderHandle = {
+		ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+		release,
+	};
 	requireRefresh.mockReturnValueOnce(orderHandle);
 	const runtime = { engine: { require: requireRefresh } } as unknown as QueryRuntime;
 	const order = {
@@ -61,7 +64,7 @@ it('force-refreshes and releases the order before refreshing only reduced produc
 	const c = setup();
 	let ready!: () => void;
 	c.orderHandle.ready = new Promise((resolve) => {
-		ready = () => resolve({ action: 'fetched' });
+		ready = () => resolve({ action: 'fetched', appliedRecordIds: ['42'] });
 	});
 	const completion = reconcileCompletedOrder(c.runtime, c.order);
 	expect(c.requireRefresh.mock.calls).toEqual([

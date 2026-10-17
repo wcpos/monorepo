@@ -993,12 +993,18 @@ it.each(['timed-out', 'failed', 'skipped', 'refreshed'])(
 		resolve.mockRestore();
 	}
 );
-it.each(['released', 'serve-local', 'fetched'])(
-	'replay completes only after a delivering requirement (%s)',
-	async (action) => {
+it.each([
+	['released', [], []],
+	['serve-local', [], []],
+	['fetched', ['42'], []],
+	['fetched', [], ['42']],
+	['fetched', [], []],
+] as const)(
+	'replay completes only after a delivering requirement (%s, applied %j, pruned %j)',
+	async (action, appliedRecordIds, prunedRecordIds) => {
 		const { reconcileCompletedOrder } = jest.requireActual('./hooks/reconcile-completed-order');
 		const release = jest.fn();
-		const ready = Promise.resolve({ action, missingRecordIds: ['42'], reason: 'test readiness' });
+		const ready = Promise.resolve({ action, appliedRecordIds, prunedRecordIds });
 		const runtime = {
 			engine: { require: () => ({ ready, release }) },
 		} as unknown as SaleContext['runtime'];
@@ -1006,7 +1012,10 @@ it.each(['released', 'serve-local', 'fetched'])(
 		const outcome = { source: 'replay' as const };
 		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', ...outcome });
 		const result = await completeSale({ ...ctx, runtime }, order, outcome, { host: 'background' });
-		if (action === 'fetched') {
+		await expect(mockReconcile.mock.results[0].value).resolves.toBe(
+			appliedRecordIds.length ? 'refreshed' : 'failed'
+		);
+		if (appliedRecordIds.length > 0) {
 			expect(result).toBe('completed');
 			expect(mockReceipt).toHaveBeenCalled();
 			expect(await pendingCompletions(ctx.storeDB)).toEqual({});

@@ -686,6 +686,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		]);
 		expect(result).toEqual({
 			taskId: 'orders:ids:123,456:on-demand',
+			appliedRecordIds: ['123', '456'],
 			documentCount: 2,
 			requestCount: 1,
 			completed: true,
@@ -1265,6 +1266,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(repository.upsertMany.mock.calls[1][0]).toHaveLength(1);
 		expect(result).toEqual({
 			taskId: 'orders:ids:bulk:on-demand',
+			appliedRecordIds: Array.from({ length: 101 }, (_, i) => String(i + 1)),
 			documentCount: 101,
 			requestCount: 2,
 			completed: true,
@@ -1343,6 +1345,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		]);
 		expect(result).toEqual({
 			taskId: 'orders:ids:limit-two:on-demand',
+			appliedRecordIds: ['1', '2', '3', '4', '5'],
 			documentCount: 5,
 			requestCount: 3,
 			completed: true,
