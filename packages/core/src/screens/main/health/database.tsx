@@ -18,10 +18,12 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -329,22 +331,26 @@ function CollectionRowView({
 	const menu = (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
+				<IconButton
+					name="ellipsisVertical"
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
 					loading={syncing || checking === row.key}
-				>
-					<Icon name="ellipsisVertical" className="text-muted-foreground" />
-				</Button>
+				/>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent align="end">
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
+					<Icon name="arrowRotateRight" />
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem testID={`db-row-clear-${row.key}`} onPress={() => setConfirming(true)}>
-					<Text className="text-destructive">{t('health.database.clear_redownload')}</Text>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					testID={`db-row-clear-${row.key}`}
+					variant="destructive"
+					onPress={() => setConfirming(true)}
+				>
+					<Icon name="trash" className="text-destructive" />
+					<Text>{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

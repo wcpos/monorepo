@@ -8,7 +8,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
-import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { PortalHost } from '@wcpos/components/portal';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
@@ -79,14 +79,12 @@ export function Closures({
 			<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button
+						<IconButton
+							name="ellipsisVertical"
 							testID="closures-overflow"
 							accessibilityLabel={t('reports.more')}
-							variant="ghost"
-							className="h-12 w-12 self-end p-0"
-						>
-							<Icon name="ellipsisVertical" />
-						</Button>
+							className="self-end"
+						/>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem
@@ -161,7 +159,6 @@ export function Closures({
 					<Button
 						testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
 						variant="outline"
-						className="min-h-12"
 						onPress={loadMore}
 					>
 						{t(status === 'error' ? 'common.retry' : 'reports.load_more')}

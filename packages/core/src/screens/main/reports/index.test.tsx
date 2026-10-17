@@ -527,7 +527,12 @@ jest.mock('@wcpos/components/popover', () => ({
 	PopoverTrigger: ({ children }: React.PropsWithChildren) => children,
 	PopoverContent: () => null,
 }));
-jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+// The page bar (menu, safe area, held-session banner) has its own suite.
+jest.mock('../components/management-bar', () => ({
+	ManagementBar: ({ testID, title }: { testID: string; title?: string }) => (
+		<div data-testid={testID}>{title}</div>
+	),
+}));
 // Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
 it('opens the requested closure room and business day for Pro', () => {
 	mockPro = true;
@@ -563,28 +568,18 @@ it('opens an unstamped last closure on the day used by the local list', () => {
 	mockRoute = {};
 });
 
-// Revert: return bare denial text without the phone drawer control.
-it('lets a denied cashier return to the drawer without mounting report readers', () => {
+// Revert: return bare denial text without the page bar (the drawer, the safe area, the
+// held-session banner: Codex review on #2611).
+it('gives a denied cashier the page bar above the denial without mounting report readers', () => {
 	mockCapabilities = [];
 	mockUseCollectionQueryHandle.mockClear();
 	mockClosureScope.mockClear();
 	render(<ReportsScreen />);
-	fireEvent.click(screen.getByTestId('drawer-open-button'));
-	expect(mockOpenDrawer).toHaveBeenCalledTimes(1);
+	const bar = screen.getByTestId('reports-bar');
+	expect(bar.textContent).toBe('common.reports');
+	expect(bar.nextElementSibling).toBe(screen.getByTestId('reports-denied'));
 	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
-});
-
-// Revert: render denied navigation without PageBar's top safe-area padding.
-it('places denied navigation below the phone safe area', () => {
-	mockCapabilities = [];
-	render(<ReportsScreen />);
-	expect(screen.getByTestId('reports-denied').parentElement?.style.paddingTop).toBe('52px');
-	expect(
-		screen
-			.getByTestId('reports-denied')
-			.parentElement?.contains(screen.getByTestId('drawer-open-button'))
-	).toBe(true);
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 

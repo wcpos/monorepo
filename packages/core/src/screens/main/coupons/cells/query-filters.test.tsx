@@ -15,11 +15,10 @@ jest.mock('@wcpos/query', () => ({
 		select: (value: Record<string, unknown>) => unknown
 	) => select(record),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
-		<button onClick={onPress}>{children}</button>
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({ label, onPress }: { label: string; onPress?: () => void }) => (
+		<button onClick={onPress}>{label}</button>
 	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

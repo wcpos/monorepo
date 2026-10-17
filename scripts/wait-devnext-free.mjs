@@ -108,6 +108,13 @@ export async function waitForDevNext({
 }
 
 async function main() {
+	// A refused build (monthly ceiling, undeclared native input) has nothing to run
+	// on dev-next; holding a busy store for up to 250 minutes and then failing would
+	// turn a clean skip into a red check.
+	if (process.env.REFUSED === 'true') {
+		console.log('Build refused; nothing will run on dev-next, so the queue is skipped.');
+		return;
+	}
 	const GITHUB_RUN_ID = process.env.GITHUB_RUN_ID;
 	const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY;
 	const GH_TOKEN = process.env.GH_TOKEN;

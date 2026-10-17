@@ -179,8 +179,7 @@ export function SplitView({
 							})}
 						</View>
 						<Button
-							variant="default"
-							className="h-14"
+							size="lg"
 							testID="checkout-split-items-go"
 							disabled={sum <= 0 || flow.busy}
 							onPress={() => items(1)}
@@ -200,7 +199,6 @@ export function SplitView({
 									<Button
 										key={ways}
 										variant="outline"
-										className="rounded-full"
 										size="sm"
 										testID={`checkout-split-share-${ways}`}
 										disabled={flow.busy}
@@ -268,7 +266,9 @@ export function SplitView({
 							<>
 								<Button
 									variant="outline"
-									className="h-tile grow basis-1/3 flex-col gap-1 rounded-lg"
+									// A labelled tile, not a button; it moves onto the shared Tile when that lands (Phase F2).
+									// eslint-disable-next-line no-restricted-syntax
+									className="h-tile grow basis-1/3 flex-col gap-1"
 									testID="checkout-split-option-half"
 									onPress={() => fixed(evenSplitShareMinor(balance, 2))}
 								>
@@ -279,7 +279,9 @@ export function SplitView({
 								</Button>
 								<Button
 									variant="outline"
-									className="h-tile w-full flex-col gap-1 rounded-lg"
+									// A labelled tile, not a button; it moves onto the shared Tile when that lands (Phase F2).
+									// eslint-disable-next-line no-restricted-syntax
+									className="h-tile w-full flex-col gap-1"
 									testID="checkout-split-option-custom"
 									onPress={() => flow.dispatch({ type: 'arm-custom' })}
 								>

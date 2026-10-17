@@ -8,7 +8,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { StockStatus } from './stock-status';
 
 jest.mock('expo-haptics', () => ({}));
-jest.mock('@wcpos/components/button', () => ({ ButtonPill: () => null }));
 
 const mockStatusBadge = jest.fn();
 

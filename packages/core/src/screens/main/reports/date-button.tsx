@@ -182,10 +182,13 @@ export function DateButton({
 				<Button
 					testID="reports-period"
 					variant="ghost"
-					className="min-h-12 min-w-0 shrink flex-row items-center gap-1 px-1"
+					className="min-w-0 shrink flex-row items-center gap-1 px-1"
 				>
 					<ButtonText numberOfLines={1} className="min-w-0 shrink">
-						{selected && <Text className="font-semibold">{labels[selected]} · </Text>}
+						{/* The period is the bar's title: foreground over the ghost's muted label; the dates stay muted. */}
+						{selected && (
+							<Text className="text-foreground font-semibold">{labels[selected]} · </Text>
+						)}
 						<Text className="text-muted-foreground font-normal">{dates}</Text>
 					</ButtonText>
 					{!license?.isPro && <Icon name="lock" className="text-muted-foreground" />}
@@ -206,7 +209,7 @@ export function DateButton({
 								key={key}
 								testID={`reports-period-${key}`}
 								variant="ghost"
-								className={`min-h-12 flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
+								className={`flex-row justify-start gap-2 px-3 ${phone ? 'grow rounded-full' : ''} ${selected === key ? 'bg-muted' : ''} ${!license?.isPro && key !== 'today' ? 'opacity-50' : ''}`}
 								onPress={() => period(day(range.from), day(range.to), lockedScopeName)}
 							>
 								<View className="w-5 items-center">
@@ -280,7 +283,6 @@ export function DateButton({
 					<Text className="text-muted-foreground flex-1">{t('reports.tap_a_day')}</Text>
 					<Button
 						testID="reports-period-apply"
-						className="min-h-12"
 						onPress={() => {
 							if (
 								period(

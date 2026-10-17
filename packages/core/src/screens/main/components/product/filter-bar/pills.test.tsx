@@ -46,7 +46,6 @@ jest.mock('@wcpos/components/chip', () => ({
 		</div>
 	),
 }));
-jest.mock('@wcpos/components/button', () => ({ ButtonPill: () => null, ButtonText: () => null }));
 jest.mock('@wcpos/components/combobox', () => ({
 	Combobox: ({
 		children,

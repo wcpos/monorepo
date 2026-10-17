@@ -108,7 +108,7 @@ export function TenderCheckout({ order }: Props) {
 			return (
 				<View className="p-4">
 					<Button
-						variant="success"
+						// The sale button: primary, never green (green is a status colour, not an action).
 						size="lg"
 						testID="checkout-complete-order"
 						loading={flow.busy}
@@ -174,7 +174,7 @@ export function TenderCheckout({ order }: Props) {
 	const cancelPayment =
 		flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 			<Button
-				variant="ghost-destructive"
+				variant="outline-destructive"
 				size={compact ? undefined : 'sm'}
 				testID="checkout-cancel-payment"
 				onPress={() => flow.dispatch({ type: 'request-cancel' })}

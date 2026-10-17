@@ -43,7 +43,9 @@ export function CartFoot({
 					{sessionsOn && !session ? (
 						<Button
 							testID="checkout-open-register"
-							className="min-h-14 flex-1"
+							size="lg"
+							// `w-full`, not `flex-1`, as the Pay button it stands in for: the wrapper is a column.
+							className="w-full"
 							onPress={onOpenRegister}
 						>
 							{t('register.open_register')}
@@ -51,7 +53,8 @@ export function CartFoot({
 					) : overdue && !currentOrderRecord.payload.line_items?.length ? (
 						<Button
 							testID="checkout-close-register"
-							className="min-h-14 flex-1"
+							size="lg"
+							className="w-full"
 							onPress={onCloseRegister}
 						>
 							{t('register.close_register')}

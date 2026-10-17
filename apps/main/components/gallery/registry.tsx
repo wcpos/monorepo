@@ -34,6 +34,7 @@ import { stories as notice } from '@wcpos/components/notice/gallery';
 import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
+import { stories as navItem } from '@wcpos/components/nav-item/gallery';
 import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
 import { PortalHost } from '@wcpos/components/portal';
@@ -105,6 +106,7 @@ const registry: Record<string, Story[]> = {
 	notice,
 	breadcrumb,
 	'browse-tiles': browseTiles,
+	'nav-item': navItem,
 	'page-bar': pageBar,
 	'pane-stack': paneStack,
 	'slide-over': slideOver,

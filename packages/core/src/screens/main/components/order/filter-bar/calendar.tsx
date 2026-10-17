@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import { format, parseISO } from 'date-fns';
 
-import { Button, ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Calendar, DateRange } from '@wcpos/components/calendar';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
@@ -67,14 +68,7 @@ export function DateRangeCalendar({ onSelect }: Props) {
 			<HStack className="items-start">
 				<VStack>
 					{dateRanges.map(({ label, range, action }) => (
-						<ButtonPill
-							key={label}
-							onPress={action}
-							size="xs"
-							variant={isDateRangeEqual(date, range) ? undefined : 'ghost-primary'}
-						>
-							<ButtonText>{label}</ButtonText>
-						</ButtonPill>
+						<Chip key={label} label={label} on={isDateRangeEqual(date, range)} onPress={action} />
 					))}
 				</VStack>
 				<Calendar

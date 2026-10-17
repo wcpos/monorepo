@@ -161,7 +161,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 					) : null}
 					{first.retryable ? (
 						<Button
-							variant="ghost"
+							// Retry is the one constructive action of the row: default, sm.
 							size="sm"
 							testID="db-attention-retry"
 							loading={syncing}
@@ -172,7 +172,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 						</Button>
 					) : null}
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						size="sm"
 						testID="db-attention-view-log"
 						onPress={() => router.push('/health/logs')}

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -35,17 +35,15 @@ export function Customer({
 
 	return (
 		<VStack className="max-w-full">
-			<ButtonPill
-				variant="ghost-primary"
-				size="xs"
-				onPress={() => actions?.setFilter('customer_id', customerID)}
-			>
-				{format({
+			<Chip
+				size="sm"
+				label={format({
 					billing,
 					shipping,
 					id: customerID,
 				} as unknown as CustomerDocument)}
-			</ButtonPill>
+				onPress={() => actions?.setFilter('customer_id', customerID)}
+			/>
 			{show?.('billing') && (
 				<FormatAddress
 					address={billing as React.ComponentProps<typeof FormatAddress>['address']}
