@@ -180,10 +180,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint:
-			'Nothing to do. If prices or stock still look out of date later, tap Check everything now in Store health → Database.',
+			'Nothing to do. If prices or stock still look out of date, tap Check everything now in Store health → Database.',
 		dataSafety: 'no-impact',
 		summary:
-			"WCPOS fell behind your store's changes and is catching up by itself. Nothing is lost.",
+			"Your store's list of changes moved unexpectedly, so WCPOS is re-checking it by itself. Nothing is lost.",
 	},
 	SYNC311: {
 		code: 'SYNC311',
@@ -786,8 +786,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Free up device storage, then restart WCPOS. Contact support if it keeps failing.',
-		dataSafety: 'local-only',
-		summary: "WCPOS couldn't set up storage on this device.",
+		dataSafety: 'no-impact',
+		summary: "WCPOS couldn't set up or remove storage on this device.",
 	},
 	SYNC181: {
 		code: 'SYNC181',
