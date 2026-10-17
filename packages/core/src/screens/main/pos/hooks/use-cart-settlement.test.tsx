@@ -298,9 +298,20 @@ type LocalPatchArgs = {
 	data: Record<string, unknown>;
 };
 const localPatch = jest.fn(async (_args: LocalPatchArgs) => undefined);
+type ResolverPatchArgs = Omit<LocalPatchArgs, 'data'> & {
+	data?: Record<string, unknown>;
+	changes?: (payload: Record<string, unknown>) => Record<string, unknown>;
+};
+// Existing assertions observe actual writes, not resolver calls that abort without a write.
+const applyLocalPatch = async (args: ResolverPatchArgs) => {
+	const data = args.changes ? args.changes(currentPayload()) : args.data!;
+	if (Object.keys(data).length) return localPatch({ document: args.document, data });
+};
+const resolveLocalPatch = jest.fn(applyLocalPatch);
+beforeEach(() => resolveLocalPatch.mockReset().mockImplementation(applyLocalPatch));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({ localPatch: resolveLocalPatch }),
 }));
 
 /** A deferred `whenSettledInBackground` the test resolves by hand. */
@@ -383,6 +394,48 @@ describe('useCartSettlement reference demand (#952)', () => {
 		revision = buildRevision();
 		currentOrderRecord = buildCurrentOrderRecord();
 	});
+
+	it.each(['divergence', 'command', 'replay-owner', 'replay-edit'])(
+		'stands down when %s arrives during the resident await',
+		async (scenario) => {
+			const replay = scenario.startsWith('replay');
+			if (replay) {
+				couponLines$.next([{ code: 'SAVE' }]);
+				settleAggregate.mockReturnValue({ ...successfulAggregate(), changed: false });
+			} else if (scenario === 'command') {
+				settleAggregate.mockImplementation(jest.requireActual('@wcpos/order-math').settleAggregate);
+				lineItems$.next([{ total: '10', total_tax: '0', product_id: 1 }]);
+			}
+			let release!: () => void;
+			let written: Record<string, unknown> | undefined;
+			resolveLocalPatch.mockImplementation(async (args: ResolverPatchArgs) => {
+				if (replay && resolveLocalPatch.mock.calls.length === 1) return applyLocalPatch(args);
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				written = args.changes ? args.changes(currentPayload()) : args.data;
+			});
+			renderHook(() => useCartSettlement());
+			await act(async () => {});
+			if (scenario === 'divergence') ownedOrderIds.add(currentOrderRecord.uuid);
+			if (scenario === 'replay-owner')
+				revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+			if (scenario === 'command' || scenario === 'replay-edit') {
+				lineItems$.value.splice(0, lineItems$.value.length, {
+					product_id: 1,
+					total: '20',
+					total_tax: '0',
+				});
+				revision = buildRevision({ total: '20' });
+			}
+			await act(async () => {
+				release();
+			});
+			expect(written).toEqual(
+				scenario === 'command' ? expect.objectContaining({ total: '20' }) : {}
+			);
+		}
+	);
 
 	it('does not write after a command has persisted the same settled aggregate', async () => {
 		allRates = [{ id: 2, country: 'NZ', rate: '20', class: 'standard', shipping: true }];
@@ -1570,6 +1623,27 @@ describe('the settle path reports engine warnings', () => {
 		expect(codedWarnings()[0][1]).toMatchObject({
 			context: { site: 'settleAggregate', orderId: 'order-uuid-1', rateId: 42 },
 		});
+	});
+
+	it('reports only the authoritative warnings after a nonempty pre-flight', async () => {
+		settleAggregate
+			.mockReturnValueOnce({
+				...successfulAggregate(),
+				warnings: [{ code: 'unknown_tax_rate_id', rateId: 41 }],
+			})
+			.mockReturnValue({
+				...successfulAggregate(),
+				warnings: [{ code: 'unknown_tax_rate_id', rateId: 42 }],
+			});
+		resolveLocalPatch.mockImplementation(async (args: ResolverPatchArgs) => {
+			args.changes!(currentPayload()); // Pure pre-flight; no warning may escape.
+			expect(codedWarnings()).toHaveLength(0);
+			return applyLocalPatch(args);
+		});
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+		expect(codedWarnings()).toHaveLength(1);
+		expect(codedWarnings()[0][1]).toMatchObject({ context: { rateId: 42 } });
 	});
 
 	it('reports the coupon pass on its FAILED branch, where the warnings matter most', async () => {

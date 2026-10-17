@@ -64,6 +64,7 @@ class ActiveScopeChangedTwiceError extends Error {
 	}
 }
 
+// Resolvers may run for pre-flight and each conflict retry; keep them free of external side effects.
 export type PayloadChanges = (currentPayload: Record<string, unknown>) => Record<string, unknown>;
 
 type LocalPatchProps<TDocument extends MutationDocument, TData extends object> = {
@@ -239,6 +240,11 @@ async function applyEngineResidentChanges(
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
 		const resolved = typeof changes === 'function' ? changes(priorPayload) : changes;
+		if (typeof changes === 'function' && Object.keys(resolved).length === 0) {
+			// A race after a nonempty pre-flight may now yield nothing. Deliberately
+			// accept RxDB's identical-content revision bump, without stamping or enqueueing.
+			return old;
+		}
 		let payload = cloneDeep(priorPayload);
 		for (const [field, value] of Object.entries(syncableChanges(collection, resolved))) {
 			set(payload, field, value);
@@ -309,6 +315,12 @@ export async function patchAndEnqueueEngineResident(input: {
 		if (!resident) {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
+		if (typeof input.changes === 'function') {
+			const latest = resident.getLatest();
+			// Avoid even a revision bump for an already-empty resolver. The modifier
+			// below remains authoritative if the payload changes after this pure check.
+			if (Object.keys(input.changes(residentPayload(latest))).length === 0) return latest;
+		}
 		const previousResident = cloneDeep(resident.toJSON());
 		let changes: Record<string, unknown> = {};
 		let shouldEnqueue = true;
@@ -320,7 +332,8 @@ export async function patchAndEnqueueEngineResident(input: {
 					typeof input.changes === 'function' ? input.changes(currentPayload) : input.changes;
 				const collection = input.collection;
 				shouldEnqueue =
-					typeof input.changes !== 'function' || assertsSomething(collection, changes);
+					typeof input.changes !== 'function' ||
+					(Object.keys(changes).length > 0 && assertsSomething(collection, changes));
 				const identities = [
 					['_wcpos_register', input.registerId],
 					['_wcpos_till', input.tillId ?? getRegisterId()],
@@ -455,9 +468,18 @@ export const useLocalMutation = () => {
 								Object.entries(resolveChanges(payload)).filter(([, value]) => value !== undefined)
 							)
 						);
+						if (Object.keys(changes).length === 0) return changes;
 						changes.date_modified_gmt = convertLocalDateToUTCString(new Date());
 						return syncableChanges(collection, changes);
 					};
+					if (collection === 'orders' && (document as { isNew?: boolean }).isNew) {
+						const latest = (await getTemporaryOrder(recordId))?.getLatest();
+						if (
+							latest &&
+							Object.keys(resolve(latest.payload as Record<string, unknown>)).length === 0
+						)
+							return { changes, document: latest as TDocument };
+					}
 					const patched =
 						collection === 'orders' && (document as { isNew?: boolean }).isNew
 							? await patchTemporaryOrderPayload(recordId, resolve)

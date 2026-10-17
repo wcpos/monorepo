@@ -17,7 +17,7 @@ import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { useCartConfig, useCartConfigForOrder } from './use-cart-config';
 import { readQuickDiscountIntent } from './quick-discount';
 import { useCouponContext } from './use-coupon-context';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { type PayloadChanges, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import {
@@ -61,7 +61,7 @@ function replayStateKey(order: CurrentOrderRecord): string {
  * still current writes through the FRESH handle rather than throwing its work
  * away.
  */
-function replayContentKey(order: CurrentOrderRecord): string {
+function replayContentKey(order: { uuid: string; payload: Record<string, unknown> }): string {
 	return JSON.stringify([
 		order.uuid ?? null,
 		order.payload.id ?? null,
@@ -268,14 +268,14 @@ export const useCartSettlement = () => {
 	const moneyWriteChain = React.useRef<Promise<unknown>>(Promise.resolve());
 
 	const writeSettledMoney = React.useCallback(
-		(latestOrder: CurrentOrderRecord, data: Partial<OrderDocument>) =>
-			localPatch({ document: latestOrder, data }),
+		(latestOrder: CurrentOrderRecord, changes: PayloadChanges) =>
+			localPatch({ document: latestOrder, changes }),
 		[localPatch]
 	);
 
 	const settleMoney = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
-			const write = moneyWriteChain.current.then(() => {
+			const write = moneyWriteChain.current.then(async () => {
 				const latestOrder = currentOrderRecord.getLatest();
 				if (
 					readServerOwnsMoney(latestOrder.uuid) ||
@@ -284,17 +284,24 @@ export const useCartSettlement = () => {
 					)
 				)
 					return;
-				const result = settleAggregate(
-					snapshotFromOrderJSON(latestOrder.payload),
-					configForOrder(latestOrder.payload)
-				);
-				// Report warnings even when the persisted money already matches.
-				reportEngineWarnings(result.warnings, {
-					orderId: freshOrder.uuid,
-					site: 'settleAggregate',
+				let warnings: ReturnType<typeof settleAggregate>['warnings'] = [];
+				const written = await writeSettledMoney(latestOrder, (payload) => {
+					warnings = [];
+					const order = payload as Partial<OrderDocument>;
+					if (
+						readServerOwnsMoney(latestOrder.uuid) ||
+						order.meta_data?.some(
+							(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
+						)
+					)
+						return {};
+					const result = settleAggregate(snapshotFromOrderJSON(payload), configForOrder(payload));
+					warnings = result.warnings;
+					return result.changed ? settlementPatch(result) : {};
 				});
-				if (!result.changed) return;
-				return writeSettledMoney(latestOrder, settlementPatch(result) as Partial<OrderDocument>);
+				// Report once, outside the resolver: the final run wins (including a no-op).
+				reportEngineWarnings(warnings, { orderId: freshOrder.uuid, site: 'settleAggregate' });
+				return written;
 			});
 			// The chain must survive a failed write, or one rejection would strand every
 			// later settlement behind it. The caller still sees the rejection.
@@ -323,6 +330,7 @@ export const useCartSettlement = () => {
 	const replayCoupons = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
 			const stateKey = replayStateKey(freshOrder);
+			const contentKey = replayContentKey(freshOrder);
 			/**
 			 * replayStateKey covers only the ORDER, which is right for the "did the order
 			 * move under us" bail below. It is wrong on its own for single-flight: a tax
@@ -385,7 +393,7 @@ export const useCartSettlement = () => {
 				 * status) still hold, the patch it computed is still the right patch.
 				 */
 				const latestOrder = currentOrderRecord.getLatest();
-				if (replayContentKey(latestOrder) !== replayContentKey(freshOrder)) return;
+				if (replayContentKey(latestOrder) !== contentKey) return;
 
 				// Read ownership for this order, even if the cashier has switched tabs.
 				if (
@@ -400,7 +408,19 @@ export const useCartSettlement = () => {
 				// metadata write may have replaced the resident while the coupon
 				// context was in flight, and the content key above proved the two are
 				// equal in everything this patch depends on.
-				await writeSettledMoney(latestOrder, settlementPatch(result) as Partial<OrderDocument>);
+				await writeSettledMoney(latestOrder, (payload) => {
+					const order = payload as Partial<OrderDocument>;
+					if (
+						readServerOwnsMoney(latestOrder.uuid) ||
+						order.meta_data?.some(
+							(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
+						) ||
+						replayingRef.current !== flightKey ||
+						replayContentKey({ uuid: latestOrder.uuid, payload }) !== contentKey
+					)
+						return {};
+					return settlementPatch(result);
+				});
 			} finally {
 				if (replayingRef.current === flightKey) replayingRef.current = null;
 			}
