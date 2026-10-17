@@ -6,38 +6,26 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { WebVendorSegmented } from './web-vendor-segmented';
 
-jest.mock('@wcpos/components/tabs', () => {
-	const React = require('react');
-	const TabsContext = React.createContext({
-		value: '',
-		onValueChange: (_value: string) => undefined,
-	});
-	return {
-		Tabs: ({ children, value, onValueChange }: any) => (
-			<TabsContext.Provider value={{ value, onValueChange }}>{children}</TabsContext.Provider>
-		),
-		TabsList: ({ children, testID }: any) => (
-			<div data-testid={testID} role="tablist">
-				{children}
-			</div>
-		),
-		TabsTrigger: ({ children, value, testID }: any) => {
-			const context = React.useContext(TabsContext);
-			const selected = context.value === value;
-			return (
+jest.mock('@wcpos/components/segmented-control', () => ({
+	SegmentedControl: ({ segments, value, onValueChange, testID }: any) => (
+		<div data-testid={testID} role="radiogroup">
+			{segments.map((segment: any) => (
 				<button
+					key={segment.value}
 					type="button"
-					data-testid={testID}
-					role="tab"
-					aria-selected={selected ? 'true' : 'false'}
-					onClick={() => context.onValueChange(value)}
+					data-testid={segment.testID}
+					role="radio"
+					aria-checked={segment.value === value ? 'true' : 'false'}
+					disabled={segment.disabled}
+					// As the real control: choosing the selected segment again is a no-op.
+					onClick={() => segment.value !== value && onValueChange(segment.value)}
 				>
-					{children}
+					{segment.label}
 				</button>
-			);
-		},
-	};
-});
+			))}
+		</div>
+	),
+}));
 
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, className }: any) => <span className={className}>{children}</span>,
@@ -64,10 +52,10 @@ describe('WebVendorSegmented', () => {
 		const epson = screen.getByTestId('add-printer-vendor-epson');
 		const star = screen.getByTestId('add-printer-vendor-star');
 
-		expect(segmented).toHaveAttribute('role', 'tablist');
+		expect(segmented).toHaveAttribute('role', 'radiogroup');
 
-		expect(star).toHaveAttribute('aria-selected', 'true');
-		expect(epson).toHaveAttribute('aria-selected', 'false');
+		expect(star).toHaveAttribute('aria-checked', 'true');
+		expect(epson).toHaveAttribute('aria-checked', 'false');
 	});
 	it('moves the active state when the controlled vendor value changes', () => {
 		const onSelect = jest.fn();
@@ -79,20 +67,14 @@ describe('WebVendorSegmented', () => {
 
 		rerender(<WebVendorSegmented vendor="star" onSelect={onSelect} />);
 
-		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'true');
-		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
-			'aria-selected',
-			'false'
-		);
+		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-checked', 'true');
+		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute('aria-checked', 'false');
 	});
 
 	it('does not show a supported web vendor as selected for unsupported values', () => {
 		render(<WebVendorSegmented vendor="generic" onSelect={jest.fn()} />);
 
-		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
-			'aria-selected',
-			'false'
-		);
-		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'false');
+		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute('aria-checked', 'false');
+		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-checked', 'false');
 	});
 });
