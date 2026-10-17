@@ -52,6 +52,13 @@ export function cartConfigForOrder({
 	order,
 }: CartConfigInputs & { order?: OrderPayload }) {
 	const { location } = orderTaxLocation(baseLocation, settings.taxBasedOn, order);
+	return cartConfigFromLocation(settings, rates, location);
+}
+export function cartConfigFromLocation(
+	settings: CartConfigInputs['settings'],
+	rates: TaxRateData[],
+	location: TaxLocation
+) {
 	return createCartConfig({
 		rates: filterTaxRates(
 			rates,

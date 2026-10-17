@@ -9,6 +9,7 @@ import { BehaviorSubject, map } from 'rxjs';
 import type { EngineRecord } from '@wcpos/query';
 
 import { TaxRatesProvider, useTaxLocation, useTaxSettings } from './provider';
+import { useCartConfig } from '../../pos/hooks/use-cart-config';
 import { useTaxRates } from './use-tax-rates';
 import {
 	CurrentOrderContext,
@@ -596,4 +597,34 @@ describe('current-order subscription', () => {
 
 		expect(screen.getByTestId('based-on').textContent).toBe('billing');
 	});
+});
+
+// The config reader used by product tiles must not subscribe to cart writes.
+jest.mock('../extra-data/use-extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
+it('keeps cart-config consumers idle for line writes but updates for billing changes', () => {
+	storeSubjects.tax_based_on$.next('billing');
+	const order = makeOrder();
+	const configs: ReturnType<typeof useCartConfig>[] = [];
+	const Probe = React.memo(function Probe() {
+		configs.push(useCartConfig());
+		return null;
+	});
+	const tree = () => (
+		<CurrentOrderContext.Provider
+			value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
+		>
+			<TaxRatesProvider>
+				<Probe />
+			</TaxRatesProvider>
+		</CurrentOrderContext.Provider>
+	);
+	const { rerender } = render(tree());
+	const first = configs.at(-1);
+	const count = configs.length;
+	act(() => order.patchPayload({ line_items: [{ total: '10' }] }));
+	rerender(tree());
+	expect(configs).toHaveLength(count);
+	expect(configs.at(-1)).toBe(first);
+	act(() => order.patchPayload({ billing: { country: 'GB' } }));
+	expect(configs.at(-1)).not.toBe(first);
 });

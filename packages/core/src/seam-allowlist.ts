@@ -932,18 +932,10 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/pos/hooks/use-split-line-item.ts :: resident helper write :: useSplitLineItem :: useLocalMutation :: 1',
 	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write ::  :: useLocalMutation :: 1',
 	'screens/main/pos/hooks/use-update-cart-line.ts :: resident helper write :: useUpdateCartLine :: useLocalMutation :: 1',
-	// Scanner false positives: non-record data/method reads, not RxDB mutators.
-	'screens/main/components/customer/tax-ids-form.tsx :: record mutator :: TaxIdsForm :: remove :: 1',
-	'screens/main/components/meta-data-form.tsx :: record mutator :: MetaDataForm :: remove :: 1',
-	'screens/main/contexts/ui-settings/use-ui-settings.ts :: record mutator :: useUISettings :: patch :: 1',
-	'screens/main/coupons/index.tsx :: record mutator :: CouponsList :: patch :: 1',
-	'screens/main/pos/cart/edit-cart-customer.tsx :: record mutator :: EditCartCustomerForm :: patch :: 1',
+	// Settlement result reads now go through the order-math accessor.
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 1',
 	'screens/main/pos/hooks/use-cart-settlement.ts :: record mutator :: useCartSettlement :: result.patch :: 2',
-	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: productsPatch :: 1',
-	'screens/main/products/products.tsx :: record mutator :: ProductsList :: patch: variationsPatch :: 1',
-	'screens/main/settings/barcode-scanning/test-panel.tsx :: record mutator :: TestPanel :: suggestion.patch :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 38;
+export const SEAM_RETIRED_FLOOR = 30;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'2f3048320479195972156ab8da7a5c6fe8e80d884a10d8bf1e2326149f42c184';
+	'f07dfd64d37ba293d1b8ebdb0239232a7ec6d9c1f3dd2ea610bd03365681791c';

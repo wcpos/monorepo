@@ -1,14 +1,17 @@
 import * as React from 'react';
 
-import { useDocField, useRecordField } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 import type { CartConfig } from '@wcpos/order-math';
 
-import { cartConfigForOrder, type OrderPayload } from '../commands/cart-config-for-order';
+import {
+	cartConfigForOrder,
+	cartConfigFromLocation,
+	type OrderPayload,
+} from '../commands/cart-config-for-order';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
-import { useCurrentOrderOptional } from '../contexts/current-order/context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useExtraData } from '../../contexts/extra-data/use-extra-data';
-import { useTaxSettings } from '../../contexts/tax-rates';
+import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
 
 /**
  * The single assembly point for `@wcpos/order-math`'s `CartConfig`.
@@ -23,7 +26,7 @@ import { useTaxSettings } from '../../contexts/tax-rates';
  * is a dependency of the settlement subscription: a fresh object every render would
  * re-arm it on every render.
  */
-export const useCartConfigForOrder = () => {
+const useCartConfigInputs = () => {
 	const baseLocation = useBaseTaxLocation();
 	const { country, state, city, postcode } = baseLocation;
 	const {
@@ -59,23 +62,21 @@ export const useCartConfigForOrder = () => {
 	const legacySequential = useDocField(store, (value) => value.calc_discounts_sequentially);
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
-	return React.useCallback(
-		(order?: OrderPayload): CartConfig =>
-			cartConfigForOrder({
-				settings: {
-					shippingTaxClass,
-					calcTaxes,
-					pricesIncludeTax,
-					taxRoundAtSubtotal,
-					priceNumDecimals,
-					taxClassSlugs,
-					calcDiscountsSequentially,
-					taxBasedOn,
-				},
-				rates: allRates,
-				baseLocation: { country, state, city, postcode },
-				order,
-			}),
+	return React.useMemo(
+		() => ({
+			settings: {
+				shippingTaxClass,
+				calcTaxes,
+				pricesIncludeTax,
+				taxRoundAtSubtotal,
+				priceNumDecimals,
+				taxClassSlugs,
+				calcDiscountsSequentially,
+				taxBasedOn,
+			},
+			rates: allRates,
+			baseLocation: { country, state, city, postcode },
+		}),
 		[
 			allRates,
 			shippingTaxClass,
@@ -94,16 +95,20 @@ export const useCartConfigForOrder = () => {
 	);
 };
 
-/** Memoised on settlement inputs, not unrelated writes to the current order. */
+export const useCartConfigForOrder = () => {
+	const inputs = useCartConfigInputs();
+	return React.useCallback(
+		(order?: OrderPayload): CartConfig => cartConfigForOrder({ ...inputs, order }),
+		[inputs]
+	);
+};
+
+/** The location provider dedupes cart writes before they reach product tiles. */
 export const useCartConfig = (): CartConfig => {
-	const configForOrder = useCartConfigForOrder();
-	const order = useCurrentOrderOptional();
-	const billing = useRecordField(order, (record) => record.payload.billing);
-	const shipping = useRecordField(order, (record) => record.payload.shipping);
-	const meta_data = useRecordField(order, (record) => record.payload.meta_data);
-	const hasOrder = Boolean(order);
+	const { settings, rates } = useCartConfigInputs();
+	const { location } = useTaxLocation();
 	return React.useMemo(
-		() => configForOrder(hasOrder ? { billing, shipping, meta_data } : undefined),
-		[configForOrder, hasOrder, billing, shipping, meta_data]
+		() => cartConfigFromLocation(settings, rates, location),
+		[settings, rates, location]
 	);
 };

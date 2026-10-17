@@ -3,7 +3,12 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { settleAggregate, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
+import {
+	settleAggregate,
+	settleCart,
+	settlementPatch,
+	snapshotFromOrderJSON,
+} from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useRecordField } from '@wcpos/query';
@@ -278,18 +283,26 @@ export const useCartSettlement = () => {
 				site: 'settleAggregate',
 			});
 			if (!result.changed) return;
-			const write = moneyWriteChain.current.then(() =>
-				localPatch({
-					document: freshOrder,
-					data: result.patch as Partial<OrderDocument>,
-				})
-			);
+			const write = moneyWriteChain.current.then(() => {
+				const latest = currentOrderRecord.getLatest();
+				if (
+					serverOwnsMoneyRef.current ||
+					latest.payload.meta_data?.some(
+						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
+					)
+				)
+					return;
+				return localPatch({
+					document: latest,
+					data: settlementPatch(result) as Partial<OrderDocument>,
+				});
+			});
 			// The chain must survive a failed write, or one rejection would strand every
 			// later settlement behind it. The caller still sees the rejection.
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[configForOrder, localPatch, reportEngineWarnings]
+		[configForOrder, currentOrderRecord, localPatch, reportEngineWarnings]
 	);
 
 	/**
@@ -377,7 +390,13 @@ export const useCartSettlement = () => {
 				 * the check sees the divergence that landed a moment ago — this is the
 				 * hole the deleted flight-key divergence input used to paper over.
 				 */
-				if (serverOwnsMoneyRef.current) return;
+				if (
+					serverOwnsMoneyRef.current ||
+					latest.payload.meta_data?.some(
+						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
+					)
+				)
+					return;
 
 				await localPatch({
 					// Through the handle just read, not the one this pass started with: a
@@ -387,7 +406,7 @@ export const useCartSettlement = () => {
 					document: latest,
 					// settle outputs structural line types; this boundary writes them back to
 					// the DB document they came from.
-					data: result.patch as Partial<OrderDocument>,
+					data: settlementPatch(result) as Partial<OrderDocument>,
 				});
 			} finally {
 				if (replayingRef.current === flightKey) replayingRef.current = null;

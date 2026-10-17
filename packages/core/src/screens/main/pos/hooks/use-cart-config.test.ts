@@ -4,7 +4,7 @@
 import { renderHook } from '@testing-library/react';
 
 import { useCartConfig } from './use-cart-config';
-import { cartConfigForOrder } from '../commands/cart-config-for-order';
+import { cartConfigForOrder, orderTaxLocation } from '../commands/cart-config-for-order';
 let mockOrder: { payload: Record<string, unknown> } | undefined;
 let mockTaxBasedOn = 'billing';
 jest.mock('../contexts/current-order/context', () => ({
@@ -50,13 +50,19 @@ jest.mock('../../contexts/tax-rates', () => {
 	// Held in the factory closure so the arrays keep their identity across renders,
 	// as the real provider's memos do. Rebuilding them here would make this suite
 	// unable to tell a stable memo from a broken one.
-	const rates: unknown[] = [];
+	const location = { country: 'AU', state: '', city: '', postcode: '' };
 	const allRates = [
 		{ id: 1, country: 'AU', rate: '10', class: 'standard' },
 		{ id: 2, country: 'NZ', rate: '15', class: 'standard' },
 	];
 	return {
-		useTaxLocation: () => ({ rates }),
+		useTaxLocation: () => {
+			Object.assign(
+				location,
+				orderTaxLocation({ country: 'AU' }, mockTaxBasedOn, mockOrder?.payload).location
+			);
+			return { location };
+		},
 		useTaxSettings: () => ({
 			allRates,
 			shippingTaxClass: mockShippingTaxClass,

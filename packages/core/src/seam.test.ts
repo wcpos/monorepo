@@ -321,20 +321,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		)
 			report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
-		let access = node;
-		while (access.parent && unwrap(access.parent) === node) access = access.parent;
-		if (
-			['bind', 'call', 'apply'].some((method) => memberReceiver(access.parent, method) === access)
-		)
-			access = access.parent;
-		const called = ts.isCallExpression(access.parent) && access.parent.expression === access;
-		const owner = unwrap(receiver);
-		const recordReceiver =
-			owner &&
-			(isChangeStreamReceiver(owner) ||
-				(ts.isIdentifier(owner) && (owner.text === 'doc' || owner.text === 'record')));
-		// A result's data field (e.g. settleAggregate().patch) is not a record mutation.
-		if (mutatorNames.has(name) && (called || recordReceiver)) report('record mutator', node);
+		if (mutatorNames.has(name)) report('record mutator', node);
 		if (rawQueryNames.has(name)) report('raw query construction', node);
 		if ((name === '$' || name === 'eventBulks$') && receiver && isChangeStreamReceiver(receiver))
 			report('raw change stream', node);
@@ -746,21 +733,19 @@ it.each([
 	expect(violations(source)).toEqual([]);
 });
 
-it.each([
-	'result.patch;',
-	'result["patch"];',
-	'const { patch } = settleAggregate(snapshot, config);',
-	'({ patch } = result);',
-])('allows a non-record mutator-named data read: %s', (source) => {
-	expect(violations(source)).toEqual([]);
-});
-
 it.each(['doc.patch({});', 'doc.incrementalPatch({});', 'result.patch({});'])(
 	'fences a mutator call: %s',
 	(source) => {
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
 	}
 );
+
+it.each([
+	'const mutate = order.incrementalPatch; mutate({});',
+	'const { patch } = order; patch({});',
+])('fences an extracted mutator: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+});
 
 it('fences a mutator bound for a later call', () => {
 	expect(violations('wpUser.incrementalPatch.bind(wpUser);').map(({ rule }) => rule)).toEqual([

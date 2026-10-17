@@ -1,6 +1,6 @@
 import cloneDeep from 'lodash/cloneDeep';
 
-import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
+import { settleAggregate, settlementPatch, snapshotFromOrderJSON } from '@wcpos/order-math';
 import type { CartConfig } from '@wcpos/order-math';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
@@ -26,11 +26,11 @@ export function settleCartWrite<T>(
 		payload.meta_data?.some(
 			(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
 		) || deps.serverOwnsMoney(document.uuid);
-	const { changed, patch: aggregatePatch } = owned
-		? { changed: false, patch: {} }
+	const result = owned
+		? undefined
 		: settleAggregate(snapshotFromOrderJSON(after), deps.configForOrder(after));
 	return deps.localPatch({
 		document,
-		data: { ...input.data, ...(changed ? aggregatePatch : {}) },
+		data: { ...input.data, ...(result?.changed ? settlementPatch(result) : {}) },
 	});
 }

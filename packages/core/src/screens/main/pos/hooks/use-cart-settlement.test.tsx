@@ -70,6 +70,7 @@ const moneyWrites = () => localPatch.mock.calls.filter(([args]) => !('coupon_lin
 const createCartConfig = jest.fn((config: Record<string, unknown>) => config);
 
 jest.mock('@wcpos/order-math', () => ({
+	settlementPatch: jest.requireActual('@wcpos/order-math').settlementPatch,
 	createCartConfig: (config: Record<string, unknown>) => createCartConfig(config),
 	settleCart: (snapshot: unknown, config: unknown, options?: unknown) =>
 		settleCart(snapshot, config, options),
@@ -266,6 +267,7 @@ jest.mock('./use-coupon-context', () => ({
 	useCouponContext: () => ({ getCouponContext }),
 }));
 
+const mockLocation = { country: '', state: '', city: '', postcode: '' };
 let allRates: unknown[] = [];
 let taxRoundAtSubtotal = false;
 let priceNumDecimals = 2;
@@ -276,7 +278,7 @@ jest.mock('../../contexts/extra-data/use-extra-data', () => ({
 }));
 
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxLocation: () => ({ rates: [] }),
+	useTaxLocation: () => ({ rates: [], location: mockLocation }),
 	useTaxSettings: () => ({
 		allRates,
 		shippingTaxClass: '',
@@ -422,6 +424,14 @@ describe('useCartSettlement reference demand (#952)', () => {
 		renderHook(() => useCartSettlement());
 		await act(async () => {});
 		expect(settleAggregate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('stands down when ownership arrives before the queued aggregate write', async () => {
+		renderHook(() => useCartSettlement());
+		expect(settleAggregate).toHaveBeenCalled();
+		revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
+		await act(async () => {});
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
@@ -1052,6 +1062,23 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		});
 
 		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('stands down when ownership arrives after arming the coupon replay', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(background.signals).toHaveLength(1);
+		localPatch.mockClear();
+		revision = buildRevision({
+			...revision,
+			meta_data: [{ key: '_wcpos_money_owner', value: 'server' }],
+		});
+		await act(async () => background.settle());
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
