@@ -110,9 +110,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			'Write the change down and free up device storage, then enter it again. Contact support if it repeats.',
+			"Free up device storage, then check the change shows up. If it's missing, enter it again. Contact support if it repeats.",
 		dataSafety: 'data-at-risk',
-		summary: "A change couldn't be saved on this device and may be lost if WCPOS closes.",
+		summary: "WCPOS couldn't write a change to this device's storage.",
 	},
 	SYNC111: {
 		code: 'SYNC111',
@@ -160,7 +160,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			"Read the store's reason. In Store health → Database, fix the record and tap Send again, or tap Discard to drop the change.",
+			"Read the store's reason. If Store health → Database lists the change, fix the record and tap Send again, or Discard it. If not, the store's version was restored — make the change again if it's still needed.",
 		dataSafety: 'local-only',
 		summary: "Your store refused this change, so it hasn't reached the store.",
 	},
@@ -473,7 +473,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'NATIVE_CRASH',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Restart WCPOS and check your last sale saved. Install any app or system updates.',
+		actionHint:
+			'Restart WCPOS and check your last sale or change saved. Install any app or system updates.',
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS stopped because of a device-level crash.',
 	},
@@ -492,7 +493,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint:
-			"Check your last change shows up, for example in Orders. If it's missing, save it again. If this repeats, tap Copy debug info and send it to support.",
+			"Check the action named in this entry finished; if it didn't, repeat it. If this repeats, tap Copy debug info and send it to support.",
 		dataSafety: 'local-only',
 		summary: 'Syncing hit an unexpected problem.',
 	},
@@ -539,7 +540,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'error',
 		actionHint:
-			'Nothing was lost. Repeat what you were doing; if products still look wrong, tap Copy debug info and send it to support.',
+			'Repeat what you were doing and check it saved. If products still look wrong, tap Copy debug info and send it to support.',
 		dataSafety: 'no-impact',
 		summary: 'Loading or updating products hit an unexpected problem.',
 	},

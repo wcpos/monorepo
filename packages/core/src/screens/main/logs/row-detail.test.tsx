@@ -369,7 +369,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear this device's data — it may hold sales that haven't reached your store. Write the change down and free up device storage, then enter it again. Contact support if it repeats."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Free up device storage, then check the change shows up. If it's missing, enter it again. Contact support if it repeats."
 			)
 		).not.toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
