@@ -129,7 +129,11 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 		completeEngineRecord(await mockInsertEngineResident(...args)),
 	patchEngineResident: async (...args: unknown[]) =>
 		completeEngineRecord(await mockPatchEngineResident(...args)),
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({

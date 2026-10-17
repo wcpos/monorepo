@@ -68,7 +68,11 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
+	}),
 }));
 
 jest.mock('../contexts/current-order', () => ({

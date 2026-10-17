@@ -49,7 +49,9 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: mockPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(mockPatch),
+	}),
 	documentRecordId: (value: CurrentOrderRecord) => value.uuid,
 }));
 jest.mock('../contexts/current-order', () => ({

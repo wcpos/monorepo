@@ -6,6 +6,20 @@ import { serialize as structuredSerialize } from 'node:v8';
 import { act, renderHook } from '@testing-library/react';
 
 import { useLocalMutation } from './use-local-mutation';
+import { useCartWrite } from '../../pos/commands/use-cart-write';
+import { config } from '../../../../../jest/cart-write';
+
+let cartConfig = config;
+let moneyOwned = false;
+jest.mock('../../pos/hooks/use-cart-config', () => ({
+	useCartConfigForOrder: () => {
+		const captured = cartConfig;
+		return () => captured;
+	},
+}));
+jest.mock('../../pos/contexts/order-money-divergence', () => ({
+	useServerOwnsMoneyReader: () => () => moneyOwned,
+}));
 
 const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
@@ -1101,3 +1115,85 @@ it.each([undefined, 17])(
 		);
 	}
 );
+
+describe('cart changes at the resident modifier', () => {
+	it.each(['meta', 'memory', 'config', 'retry', 'money-only', 'lines-and-money'])(
+		'resolves %s against the row and config at write time',
+		async (scenario) => {
+			cartConfig = config;
+			moneyOwned = false;
+			mockWrite.mockClear();
+			mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
+			activeScopeId = 'scope-1';
+			const stored = {
+				uuid: 'order-uuid',
+				payload: {
+					line_items: [{ subtotal: '10', total: '10' }],
+					total: '99',
+					meta_data: [],
+				} as Record<string, unknown>,
+			};
+			let execute!: () => void;
+			const resident = {
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+				incrementalModify: (modify: (old: typeof stored) => typeof stored) =>
+					new Promise((resolve) => {
+						execute = () => {
+							if (scenario === 'retry') {
+								modify(stored);
+								stored.payload.line_items = [{ subtotal: '20', total: '20' }];
+							}
+							Object.assign(stored, modify(stored));
+							resolve(resident);
+						};
+					}),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const document = { ...stored, collection: { name: 'orders' }, getLatest: () => document };
+			const { result, rerender } = renderHook(() => ({
+				...useLocalMutation(),
+				cart: useCartWrite(),
+			}));
+			let pending: Promise<unknown>;
+			await act(async () => {
+				pending =
+					scenario === 'money-only' || scenario === 'lines-and-money'
+						? result.current.localPatch({
+								document: document as never,
+								changes: () => ({
+									total: '10',
+									...(scenario === 'lines-and-money' ? { line_items: [] } : {}),
+								}),
+							} as never)
+						: result.current.cart.localPatch({
+								document: document as never,
+								data: { billing: { country: 'NZ' } },
+							});
+			});
+			if (scenario === 'meta')
+				stored.payload.meta_data = [{ key: '_wcpos_money_owner', value: 'server' }];
+			if (scenario === 'memory') moneyOwned = true;
+			if (scenario === 'config') {
+				cartConfig = { ...config, dp: 3 };
+				stored.payload.line_items = [{ subtotal: '10.123', total: '10.123' }];
+				rerender();
+			}
+			await act(async () => {
+				execute?.();
+				await pending;
+			});
+			expect(stored.payload.total).toBe(
+				['meta', 'memory'].includes(scenario)
+					? '99'
+					: scenario === 'config'
+						? '10.123'
+						: scenario === 'retry'
+							? '20'
+							: '10'
+			);
+			if (['meta', 'memory'].includes(scenario))
+				expect(stored.payload.billing).toEqual({ country: 'NZ' });
+			expect(mockWrite).toHaveBeenCalledTimes(scenario === 'money-only' ? 0 : 1);
+		}
+	);
+});

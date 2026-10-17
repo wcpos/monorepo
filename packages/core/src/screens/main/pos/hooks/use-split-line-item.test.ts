@@ -166,7 +166,9 @@ jest.mock('../contexts/current-order', () => ({
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	documentRecordId: () => 'order-uuid',
 	useLocalMutation: () => ({
-		localPatch: mockLocalPatch,
+		localPatch: jest
+			.requireActual('../../../../../jest/cart-write')
+			.resolveCartWrite(mockLocalPatch),
 	}),
 }));
 

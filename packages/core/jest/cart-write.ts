@@ -1,5 +1,7 @@
 import { createCartConfig } from '@wcpos/order-math';
 
+import type { settleCartWrite } from '../src/screens/main/pos/commands/settle-cart-write';
+
 export const config = createCartConfig({
 	rates: [],
 	allRates: [],
@@ -27,3 +29,8 @@ export function expectSettledWrites(patch: jest.Mock) {
 		);
 	}
 }
+
+export const resolveCartWrite =
+	(mock: jest.Mock): Parameters<typeof settleCartWrite>[1]['localPatch'] =>
+	({ document, changes }) =>
+		mock({ document, data: changes(document.payload) });

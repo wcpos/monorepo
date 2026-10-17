@@ -12,10 +12,19 @@ export function useCartWrite() {
 	const { localPatch } = useLocalMutation();
 	const configForOrder = useCartConfigForOrder();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
+	const configRef = React.useRef(configForOrder);
+	// Queued writes read the latest committed config, not their enqueue-time closure.
+	React.useLayoutEffect(() => {
+		configRef.current = configForOrder;
+	});
 	const write = React.useCallback(
 		(input: { document: CurrentOrderRecord; data: object }) =>
-			settleCartWrite(input, { localPatch, configForOrder, serverOwnsMoney }),
-		[localPatch, configForOrder, serverOwnsMoney]
+			settleCartWrite(input, {
+				localPatch,
+				configForOrder: (order) => configRef.current(order),
+				serverOwnsMoney,
+			}),
+		[localPatch, serverOwnsMoney]
 	);
 	// Birth writes use the same settlement/ownership guard before inserting their resident.
 	const settleIntent = React.useCallback(
@@ -23,7 +32,7 @@ export function useCartWrite() {
 			settleCartWrite(
 				{ document, data },
 				{
-					localPatch: ({ data }) => data,
+					localPatch: ({ changes }) => changes(document.getLatest().payload),
 					configForOrder,
 					serverOwnsMoney,
 				}

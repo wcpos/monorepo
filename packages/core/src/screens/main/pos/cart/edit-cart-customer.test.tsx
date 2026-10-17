@@ -124,7 +124,9 @@ jest.mock('../../components/shipping-address-form', () => {
 	};
 });
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('../../hooks/mutations/use-mutation', () => ({
 	useMutation: (props: unknown) => {

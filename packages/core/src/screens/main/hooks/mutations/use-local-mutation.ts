@@ -64,10 +64,11 @@ class ActiveScopeChangedTwiceError extends Error {
 	}
 }
 
-interface LocalPatchProps<TDocument extends MutationDocument, TData extends object> {
+export type PayloadChanges = (currentPayload: Record<string, unknown>) => Record<string, unknown>;
+
+type LocalPatchProps<TDocument extends MutationDocument, TData extends object> = {
 	document: TDocument;
-	data: TData;
-}
+} & ({ data: TData; changes?: never } | { data?: never; changes: PayloadChanges });
 
 function writeableCollection(name: string | undefined): WriteableCollection | null {
 	return name && WRITEABLE_COLLECTIONS.has(name as WriteableCollection)
@@ -232,18 +233,19 @@ export async function patchEngineResident(input: {
 async function applyEngineResidentChanges(
 	resident: EngineResident,
 	collection: WriteableCollection,
-	changes: Record<string, unknown>,
+	changes: Record<string, unknown> | PayloadChanges,
 	selectors: readonly string[]
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
+		const resolved = typeof changes === 'function' ? changes(priorPayload) : changes;
 		let payload = cloneDeep(priorPayload);
-		for (const [field, value] of Object.entries(syncableChanges(collection, changes))) {
+		for (const [field, value] of Object.entries(syncableChanges(collection, resolved))) {
 			set(payload, field, value);
 		}
 		if (collection === 'products' || collection === 'variations') {
 			const prior = typeof priorPayload.barcode === 'string' ? priorPayload.barcode.trim() : '';
-			const edited = typeof changes.barcode === 'string' ? changes.barcode.trim() : undefined;
+			const edited = typeof resolved.barcode === 'string' ? resolved.barcode.trim() : undefined;
 			if (edited !== undefined && edited !== prior) {
 				// An intentional barcode edit: write the real carrier and keep the
 				// materialized field in step.
@@ -287,7 +289,7 @@ export async function patchAndEnqueueEngineResident(input: {
 	manager: QueryManager;
 	collection: WriteableCollection;
 	recordId: string;
-	changes: Record<string, unknown>;
+	changes: Record<string, unknown> | PayloadChanges;
 	initial?: ScopedEngineResident;
 	registerId?: string;
 	tillId?: string;
@@ -308,31 +310,42 @@ export async function patchAndEnqueueEngineResident(input: {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
-		let changes = input.changes;
-		const identities = [
-			['_wcpos_register', input.registerId],
-			['_wcpos_till', input.tillId ?? getRegisterId()],
-		] as const;
-		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
-		if (input.collection === 'orders') {
-			for (const [key, value] of identities) {
-				const existing = meta.find((entry) => entry.key === key);
-				const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
-				if (
-					Array.isArray(incoming) &&
-					!incoming.some((entry) => entry.key === key) &&
-					(existing || value)
-				) {
-					changes = { ...changes, meta_data: [...incoming, existing ?? { key, value }] };
-				}
-			}
-		}
-		await applyEngineResidentChanges(
+		let changes: Record<string, unknown> = {};
+		let shouldEnqueue = true;
+		const patched = await applyEngineResidentChanges(
 			resident,
 			input.collection,
-			changes,
+			(currentPayload) => {
+				changes =
+					typeof input.changes === 'function' ? input.changes(currentPayload) : input.changes;
+				const collection = input.collection;
+				shouldEnqueue =
+					typeof input.changes !== 'function' || assertsSomething(collection, changes);
+				const identities = [
+					['_wcpos_register', input.registerId],
+					['_wcpos_till', input.tillId ?? getRegisterId()],
+				] as const;
+				const meta = (currentPayload.meta_data ?? []) as { key?: string; value?: unknown }[];
+				if (shouldEnqueue && collection === 'orders') {
+					for (const [key, value] of identities) {
+						const existing = meta.find((entry) => entry.key === key);
+						const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
+						if (
+							Array.isArray(incoming) &&
+							!incoming.some((entry) => entry.key === key) &&
+							(existing || value)
+						) {
+							changes = { ...changes, meta_data: [...incoming, existing ?? { key, value }] };
+						}
+					}
+				}
+				return changes;
+			},
 			scopeBarcodeSelectors(scope, input.collection)
 		);
+		if (!shouldEnqueue) {
+			return patched;
+		}
 
 		let writeError: unknown;
 		try {
@@ -365,7 +378,7 @@ export async function patchAndEnqueueEngineResident(input: {
 			await resident.incrementalModify(() => previousResident);
 			throw writeError;
 		}
-		return resident;
+		return patched;
 	}
 	throw new Error(`Unable to patch engine resident "${input.recordId}"`);
 }
@@ -427,8 +440,37 @@ export const useLocalMutation = () => {
 		async <TDocument extends MutationDocument, TData extends object>({
 			document,
 			data,
+			changes: resolveChanges,
 		}: LocalPatchProps<TDocument, TData>) => {
 			try {
+				const collectionName = document.collection?.name;
+				if (resolveChanges) {
+					const collection = writeableCollection(collectionName);
+					const recordId = documentRecordId(document);
+					if (!collection || !recordId) throw new Error('Payload changes require an engine record');
+					let changes: Record<string, unknown> = {};
+					const resolve: PayloadChanges = (payload) => {
+						changes = cloneDeep(
+							Object.fromEntries(
+								Object.entries(resolveChanges(payload)).filter(([, value]) => value !== undefined)
+							)
+						);
+						changes.date_modified_gmt = convertLocalDateToUTCString(new Date());
+						return syncableChanges(collection, changes);
+					};
+					const patched =
+						collection === 'orders' && (document as { isNew?: boolean }).isNew
+							? await patchTemporaryOrderPayload(recordId, resolve)
+							: await patchAndEnqueueEngineResident({
+									manager,
+									collection,
+									recordId,
+									changes: resolve,
+									registerId: getCurrentBoundRegisterId() ?? undefined,
+								});
+					if (!patched) throw new Error('Temporary order is missing from the temporary DB');
+					return { changes, document: patched as TDocument };
+				}
 				// `cloneDeep`, not a spread: RxDB serves object-valued document fields as
 				// **Proxies** (`getDocumentProperty`), nested ones included, and a Proxy
 				// cannot be structured-cloned — which is how every optimistic write ends
@@ -437,7 +479,6 @@ export const useLocalMutation = () => {
 				// the patch with "#<Object> could not be cloned". Callers pass plain
 				// snapshots; this makes a slip a wasted copy instead of a dead write.
 				const patchData = cloneDeep(data as Record<string, unknown>);
-				const collectionName = document.collection?.name;
 				const engineCollection = writeableCollection(collectionName);
 				const isTemporaryOrder =
 					engineCollection === 'orders' &&

@@ -33,7 +33,9 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 
 jest.mock('./use-recalculate-coupons', () => ({

@@ -15,7 +15,9 @@ import { useSetCartCustomer } from './use-set-cart-customer';
 const localPatch = jest.fn();
 const mockActionLog = jest.fn();
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('./use-action-context', () => ({
 	useActionContext: () => ({

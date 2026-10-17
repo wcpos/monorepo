@@ -20,7 +20,10 @@ import { useCouponContext } from './use-coupon-context';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
-import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
+import {
+	useOrderMoneyDivergence,
+	useServerOwnsMoneyReader,
+} from '../contexts/order-money-divergence';
 import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -170,12 +173,7 @@ export const useCartSettlement = () => {
 	const continuationRef = React.useRef<ReplayContinuation | null>(null);
 	const replayingRef = React.useRef<string | null>(null);
 
-	// Read by an in-flight replay that started before the divergence arrived. See the
-	// check in replayCoupons for why the closure's own copy is not good enough.
-	const serverOwnsMoneyRef = React.useRef(serverOwnsMoney);
-	React.useEffect(() => {
-		serverOwnsMoneyRef.current = serverOwnsMoney;
-	}, [serverOwnsMoney]);
+	const readServerOwnsMoney = useServerOwnsMoneyReader();
 
 	/**
 	 * Settle every cart-line edit, plus every store setting the cart config is built from.
@@ -280,7 +278,7 @@ export const useCartSettlement = () => {
 			const write = moneyWriteChain.current.then(() => {
 				const latestOrder = currentOrderRecord.getLatest();
 				if (
-					serverOwnsMoneyRef.current ||
+					readServerOwnsMoney(latestOrder.uuid) ||
 					latestOrder.payload.meta_data?.some(
 						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
 					)
@@ -303,7 +301,13 @@ export const useCartSettlement = () => {
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[configForOrder, currentOrderRecord, reportEngineWarnings, writeSettledMoney]
+		[
+			configForOrder,
+			currentOrderRecord,
+			readServerOwnsMoney,
+			reportEngineWarnings,
+			writeSettledMoney,
+		]
 	);
 
 	/**
@@ -383,16 +387,9 @@ export const useCartSettlement = () => {
 				const latestOrder = currentOrderRecord.getLatest();
 				if (replayContentKey(latestOrder) !== replayContentKey(freshOrder)) return;
 
-				/**
-				 * A divergence that arrived WHILE this pass was awaiting its coupon
-				 * context. `serverOwnsMoney` is a render value captured in this closure,
-				 * so the pass that started before the divergence would otherwise carry on
-				 * and assert money the server has just overruled. Read through a ref so
-				 * the check sees the divergence that landed a moment ago — this is the
-				 * hole the deleted flight-key divergence input used to paper over.
-				 */
+				// Read ownership for this order, even if the cashier has switched tabs.
 				if (
-					serverOwnsMoneyRef.current ||
+					readServerOwnsMoney(latestOrder.uuid) ||
 					latestOrder.payload.meta_data?.some(
 						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
 					)
@@ -414,6 +411,7 @@ export const useCartSettlement = () => {
 			currentOrderRecord,
 			getCouponContext,
 			reportEngineWarnings,
+			readServerOwnsMoney,
 			t,
 			writeSettledMoney,
 		]

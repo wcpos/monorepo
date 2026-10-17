@@ -253,9 +253,12 @@ const getCouponContext: jest.MockedFunction<
 	(lineItems: LineItem[]) => Promise<ReturnType<typeof emptyCouponContext>>
 > = jest.fn(async (_lineItems: LineItem[]) => emptyCouponContext());
 
+const ownedOrderIds = new Set<string>();
 let divergenceValue: { serverTotal: string } | null = null;
 
 jest.mock('../contexts/order-money-divergence', () => ({
+	useServerOwnsMoneyReader: () => (uuid: string) =>
+		ownedOrderIds.has(uuid) || (uuid === currentOrderRecord.uuid && divergenceValue !== null),
 	useOrderMoneyDivergence: () => ({
 		divergence: divergenceValue,
 		serverOwnsMoney: divergenceValue !== null,
@@ -365,6 +368,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 		getCouponContext.mockClear();
 		feeLineIsPercent = false;
 		divergenceValue = null;
+		ownedOrderIds.clear();
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -390,7 +394,8 @@ describe('useCartSettlement reference demand (#952)', () => {
 		await settleCartWrite(
 			{ document: currentOrderRecord, data: { billing: { country: 'NZ' } } },
 			{
-				localPatch: ({ data }: LocalPatchArgs) => {
+				localPatch: ({ changes }: { changes: (payload: object) => LocalPatchArgs['data'] }) => {
+					const data = changes(currentOrderRecord.payload);
 					revision = { ...revision, ...data };
 					shippingLines$.next(data.shipping_lines as unknown[]);
 				},
@@ -454,6 +459,33 @@ describe('useCartSettlement reference demand (#952)', () => {
 		});
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(currentPayload()).toMatchObject({ total: '20' });
+	});
+
+	it('keeps queued order A ownership after switching to unowned order B', async () => {
+		let release!: () => void;
+		localPatch.mockImplementationOnce(async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		});
+		const orderA = getLatest();
+		currentOrderRecord = { ...currentOrderRecord, getLatest: () => orderA };
+		const { rerender } = renderHook(() => useCartSettlement());
+		await act(async () => {});
+		await act(async () => {
+			editCart([{ total: '10', total_tax: '0', product_id: 1 }]);
+		});
+		ownedOrderIds.add(orderA.uuid);
+		revision = buildRevision({ uuid: 'order-B' });
+		currentOrderRecord = buildCurrentOrderRecord('order-B');
+		rerender();
+		await act(async () => {
+			release();
+		});
+		expect(
+			localPatch.mock.calls.filter(([args]) => args.document.uuid === orderA.uuid)
+		).toHaveLength(1);
+		ownedOrderIds.clear();
 	});
 
 	it('stands down when ownership arrives before the queued aggregate write', async () => {
@@ -1510,6 +1542,7 @@ describe('the settle path reports engine warnings', () => {
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		divergenceValue = null;
+		ownedOrderIds.clear();
 		couponLines$.next([]);
 		lineItems$.next([]);
 		feeLines$.next([]);

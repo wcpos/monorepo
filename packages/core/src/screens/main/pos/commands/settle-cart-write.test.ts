@@ -1,7 +1,7 @@
 import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
 
-import { config } from '../../../../../jest/cart-write';
+import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
 import { settleCartWrite } from './settle-cart-write';
 
@@ -30,7 +30,7 @@ it('settles the latest post-intent payload in one write, without changing outbou
 	const data = { billing: { country: 'NZ' }, line_items: [{ ...line, total: '6' }] };
 	await settleCartWrite(
 		{ document: stale, data },
-		{ localPatch, configForOrder, serverOwnsMoney: () => false }
+		{ localPatch: resolveCartWrite(localPatch), configForOrder, serverOwnsMoney: () => false }
 	);
 	expect(configForOrder).toHaveBeenCalledWith({ ...payload, ...data });
 	expect(localPatch).toHaveBeenCalledTimes(1);
@@ -69,7 +69,7 @@ it.each(['meta', 'memory'])(
 		await settleCartWrite(
 			{ document: order, data },
 			{
-				localPatch,
+				localPatch: resolveCartWrite(localPatch),
 				configForOrder: () => config,
 				serverOwnsMoney: (uuid: string) => source === 'memory' && uuid === 'target',
 			}
@@ -86,7 +86,7 @@ it('writes only intent when persisted money already matches', async () => {
 	const configForOrder = jest.fn(() => config);
 	await settleCartWrite(
 		{ document: order, data },
-		{ localPatch, configForOrder, serverOwnsMoney: () => false }
+		{ localPatch: resolveCartWrite(localPatch), configForOrder, serverOwnsMoney: () => false }
 	);
 	expect(localPatch).toHaveBeenCalledWith({ document: order, data });
 	expect(configForOrder).toHaveBeenCalledWith(

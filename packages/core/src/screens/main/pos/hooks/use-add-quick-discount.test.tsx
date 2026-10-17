@@ -28,7 +28,9 @@ jest.mock('./cart-failure', () => ({
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch }),
+	useLocalMutation: () => ({
+		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
+	}),
 }));
 jest.mock('./use-recalculate-coupons', () => ({ useRecalculateCoupons: () => ({ recalculate }) }));
 const mockActionLog = jest.fn();
