@@ -602,7 +602,7 @@ describe('RowDetail', () => {
 		expect(
 			screen.getByText('Payment succeeded, but WCPOS could not refresh its status afterward.')
 		).not.toBeNull();
-		expect(screen.getByText(/No action needed — the payment succeeded/)).not.toBeNull();
+		expect(screen.getByText(/Reopen the order to update its status\./)).not.toBeNull();
 		expect(screen.getByTestId('logs-help-PAYMENT101')).not.toBeNull();
 	});
 
