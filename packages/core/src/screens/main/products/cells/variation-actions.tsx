@@ -20,6 +20,7 @@ import {
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
@@ -99,8 +100,14 @@ export function VariationActions({
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger testID="variation-actions-menu">
-					<Icon name="ellipsisVertical" />
+				{/* Row actions are a menu on an IconButton ⋮ (CODING_STANDARDS, Situation → overlay),
+				    as the product row's own menu is: a bare Icon had no press state or target. */}
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						name="ellipsisVertical"
+						accessibilityLabel={t('common.actions')}
+						testID="variation-actions-menu"
+					/>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<CapabilityTooltip show={!caps.canEditVariations} hint="editProducts">
