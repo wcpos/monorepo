@@ -16,6 +16,7 @@ jest.mock('react-native', () => ({
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));
+jest.mock('@wcpos/components/badge', () => ({ Badge: 'Badge' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
@@ -149,7 +150,8 @@ it('shows source labels on result cards', async () => {
 		['usb:1:2:3:4', 'USB'],
 	]) {
 		const card = renderer.root.findByProps({ testID: `printer-setup-result-${address}` });
-		expect(card.findAllByType('Text' as React.ElementType).map((n) => n.props.children)).toContain(
+		// The source tag is a muted Badge beside the address line.
+		expect(card.findAllByType('Badge' as React.ElementType).map((n) => n.props.children)).toContain(
 			label
 		);
 	}

@@ -24,10 +24,28 @@ const badgeVariants = cva('items-center justify-center rounded-full', {
 			sm: 'h-4 min-w-4 px-1',
 			lg: 'h-6 min-w-6 px-2',
 		},
+		/**
+		 * The quiet form of a state label (a printer scan's "Ready", a scan test's "Typing"): a wash
+		 * of the tone behind words in the foreground, at the solid badge's height. The words are not
+		 * in the tone: amber and green text on their own wash read 2.7:1 and 3.9:1 in the light
+		 * theme, under the 4.5:1 text floor (§ Design 7), and one colour rule for every tone beats
+		 * a per-tone exception. The solid badge is for counts and states that must be seen at a
+		 * glance; the tinted one sits in a row beside the row's own text. Muted has no wash to
+		 * lighten, so it stays as the solid muted.
+		 */
+		tinted: { true: '', false: '' },
 	},
+	compoundVariants: [
+		{ tinted: true, variant: 'default', class: 'bg-primary/15' },
+		{ tinted: true, variant: 'destructive', class: 'bg-destructive/15' },
+		{ tinted: true, variant: 'secondary', class: 'bg-secondary/15' },
+		{ tinted: true, variant: 'success', class: 'bg-success/15' },
+		{ tinted: true, variant: 'warning', class: 'bg-warning/15' },
+	],
 	defaultVariants: {
 		variant: 'default',
 		size: 'default',
+		tinted: false,
 	},
 });
 
@@ -46,10 +64,19 @@ const badgeTextVariants = cva('font-bold tabular-nums', {
 			sm: 'text-2xs',
 			lg: 'text-sm',
 		},
+		tinted: { true: '', false: '' },
 	},
+	compoundVariants: [
+		{ tinted: true, variant: 'default', class: 'text-foreground' },
+		{ tinted: true, variant: 'destructive', class: 'text-foreground' },
+		{ tinted: true, variant: 'secondary', class: 'text-foreground' },
+		{ tinted: true, variant: 'success', class: 'text-foreground' },
+		{ tinted: true, variant: 'warning', class: 'text-foreground' },
+	],
 	defaultVariants: {
 		variant: 'default',
 		size: 'default',
+		tinted: false,
 	},
 });
 
@@ -94,6 +121,7 @@ export function Badge({
 	identity,
 	variant,
 	size,
+	tinted,
 	className,
 	...props
 }: BadgeProps) {
@@ -113,11 +141,11 @@ export function Badge({
 	// unprefixed colour and wins on hover instead — a red badge with dark blue digits (#1369).
 	if (children) {
 		return (
-			<View className={cn(badgeVariants({ variant, size }), className)} {...props}>
+			<View className={cn(badgeVariants({ variant, size, tinted }), className)} {...props}>
 				<TextClassContext.Provider value={undefined}>
 					{/* One line: a long label (a customer's name in the stilled cart head) truncates
 					    inside the badge instead of wrapping out of its fixed height. */}
-					<Text className={badgeTextVariants({ variant, size })} numberOfLines={1}>
+					<Text className={badgeTextVariants({ variant, size, tinted })} numberOfLines={1}>
 						{children}
 					</Text>
 				</TextClassContext.Provider>
@@ -133,8 +161,8 @@ export function Badge({
 			<BeatingCount
 				beat={beat}
 				text={text}
-				className={cn(badgeVariants({ variant, size }), className)}
-				textClassName={badgeTextVariants({ variant, size })}
+				className={cn(badgeVariants({ variant, size, tinted }), className)}
+				textClassName={badgeTextVariants({ variant, size, tinted })}
 				{...props}
 			/>
 		</TextClassContext.Provider>

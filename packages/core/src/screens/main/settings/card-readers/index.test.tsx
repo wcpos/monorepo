@@ -152,6 +152,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</button>
 	),
 }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
