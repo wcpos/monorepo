@@ -996,7 +996,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+	it('dispose cancels an in-flight maintenance probe before closing the scope database', async () => {
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'orders:total:guarded-dispose'
@@ -1040,12 +1040,12 @@ describe('maintenance lanes through the public handle', () => {
 		);
 		const disposing = engine.dispose();
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
+		const closeStartedBeforeFetchFinished = close.mock.calls.length > 0;
 
 		releaseFetch(42);
 		const report = await tick;
 		await disposing;
-		expect(closeStartedBeforeTickFinished).toBe(false);
+		expect(closeStartedBeforeFetchFinished).toBe(true);
 		expect(report.status).toBe('ran');
 	});
 

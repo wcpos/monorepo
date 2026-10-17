@@ -835,19 +835,20 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const transportFetcher = async (
-		url: string,
-		init: Parameters<EngineFetcher>[1],
-		deadlineObservation: { observe?: () => void }
-	) => {
-		if (updateRequiredRefusal !== null) {
-			return new Response(updateRequiredRefusal.body, {
-				status: updateRequiredRefusal.status,
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
-		const startedAtMs = nowMs();
+	const createRequestObservation = (startedAtMs: number, callerSignal?: AbortSignal | null) => {
 		let observed = false;
+		// The age that decides whether an abort was a timeout is measured at the ABORT, not at
+		// the moment a transport that ignored the signal finally rejects (which can be at the
+		// deadline, long after a young cancellation).
+		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
+		callerSignal?.addEventListener(
+			'abort',
+			() => {
+				abortedAtMs ??= nowMs();
+			},
+			{ once: true }
+		);
+		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
 		const observe = (
 			status: number,
 			retryAfter?: string | null,
@@ -880,7 +881,19 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
-		deadlineObservation.observe = () => observe(0);
+		return { observe, abortAgeMs };
+	};
+	const transportFetcher = async (
+		url: string,
+		init: Parameters<EngineFetcher>[1],
+		{ observe, abortAgeMs }: ReturnType<typeof createRequestObservation>
+	) => {
+		if (updateRequiredRefusal !== null) {
+			return new Response(updateRequiredRefusal.body, {
+				status: updateRequiredRefusal.status,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -907,7 +920,7 @@ export function createRxdbSyncEngine(
 			const aborted =
 				(error as { name?: unknown } | null)?.name === 'AbortError' ||
 				init?.signal?.aborted === true;
-			const abortedYoung = aborted && nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
@@ -990,9 +1003,9 @@ export function createRxdbSyncEngine(
 	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
-		const deadlineObservation: { observe?: () => void } = {};
+		const observation = createRequestObservation(startedAtMs, init?.signal);
 		const deadlineFetcher = withRequestTimeout(
-			(url, init) => transportFetcher(url, init, deadlineObservation),
+			(url, init) => transportFetcher(url, init, observation),
 			ENGINE_REQUEST_DEADLINE_MS,
 			timers
 		);
@@ -1000,7 +1013,7 @@ export function createRxdbSyncEngine(
 			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
-				deadlineObservation.observe?.();
+				observation.observe(0);
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
@@ -1020,6 +1033,7 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
+						const { observe } = createRequestObservation(startedAtMs, input.signal);
 						try {
 							return await withRequestTimeout(
 								(_url, init) =>
@@ -1028,12 +1042,14 @@ export function createRxdbSyncEngine(
 								timers
 							)(input.request.endpoint, { signal: input.signal });
 						} catch (error) {
-							if (error instanceof RequestTimeoutError)
+							if (error instanceof RequestTimeoutError) {
+								observe(0);
 								diagnostics({
 									type: 'engine.request.deadline',
 									level: 'warn',
 									fields: { lane: 'query-total-retry', elapsedMs: nowMs() - startedAtMs },
 								});
+							}
 							throw error;
 						}
 					},

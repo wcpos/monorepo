@@ -69,15 +69,20 @@ it.each(['headers', 'body'])(
 	}
 );
 
-it('releases a black-holed query-total lane before its lease expires so the next run starts', async () => {
+it('releases a black-holed query-total lane and counts its deadline as pressure exactly once', async () => {
 	await harness.dispose();
 	const fetchWooQueryTotal = vi.fn().mockResolvedValue(7);
 	harness = await createEngineHarness({
 		mode: 'manual',
 		queryTotal: { fetchWooQueryTotal },
 		now: () => Date.now(),
+		fetch,
 	});
-	fetchWooQueryTotal.mockImplementationOnce(() => new Promise(() => {}));
+	let rejectLate!: (error: Error) => void;
+	const pending = new Promise<number>((_, reject) => {
+		rejectLate = reject;
+	});
+	fetchWooQueryTotal.mockReturnValueOnce(pending);
 	vi.useFakeTimers();
 	const recordTick = vi.fn();
 	const gate = createAutomaticTickGate({
@@ -102,6 +107,20 @@ it('releases a black-holed query-total lane before its lease expires so the next
 			fields: { lane: 'query-total-retry', elapsedMs: 25_000 },
 		})
 	);
+	fetch.mockRejectedValue(new Error('offline'));
+	const { fetcher } = harness.engine.hostTransport();
+	const failTransport = () => fetcher('https://example.test/probe').catch(() => {});
+	await failTransport();
+	await failTransport();
+	expect(harness.engine.status().serverPressure).toMatchObject({
+		multiplier: 2,
+		signal: 'timeout',
+	});
+	rejectLate(Object.assign(new Error('late abort'), { name: 'AbortError' }));
+	await vi.advanceTimersByTimeAsync(0);
+	await failTransport();
+	await failTransport();
+	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
 	const second = gate.runLane('query-total-retry');
 	expect(second).not.toBe(first);
 	await second;
@@ -128,4 +147,33 @@ it('counts black-holed deadlines as pressure once even when abort rejects later'
 	rejectLate(Object.assign(new Error('late abort'), { name: 'AbortError' }));
 	await vi.advanceTimersByTimeAsync(0);
 	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
+});
+
+it('settles caller cancellation immediately without deadline events or pressure', async () => {
+	let rejectLate!: (error: Error) => void;
+	fetch.mockReturnValue(
+		new Promise((_, reject) => {
+			rejectLate = reject;
+		})
+	);
+	vi.useFakeTimers();
+	const caller = new AbortController();
+	const settled = vi.fn();
+	const { fetcher } = harness.engine.hostTransport();
+	const requests = Promise.all(
+		Array.from({ length: 3 }, () =>
+			fetcher('https://example.test/probe', { signal: caller.signal }).catch(settled)
+		)
+	);
+	await vi.advanceTimersByTimeAsync(1_000);
+	caller.abort();
+	await vi.advanceTimersByTimeAsync(0);
+	expect(settled).toHaveBeenCalledTimes(3);
+	expect(settled).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+	await requests;
+	await vi.advanceTimersByTimeAsync(60_000);
+	rejectLate(Object.assign(new Error('late abort'), { name: 'AbortError' }));
+	await vi.advanceTimersByTimeAsync(0);
+	expect(harness.diagnostics.some((e) => e.type === 'engine.request.deadline')).toBe(false);
+	expect(harness.engine.status().serverPressure.multiplier).toBe(1);
 });
