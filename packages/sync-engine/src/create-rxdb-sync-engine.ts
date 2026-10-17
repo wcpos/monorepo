@@ -842,13 +842,12 @@ export function createRxdbSyncEngine(
 		// the moment a transport that ignored the signal finally rejects (which can be at the
 		// deadline, long after a young cancellation).
 		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
-		callerSignal?.addEventListener(
-			'abort',
-			() => {
-				abortedAtMs ??= nowMs();
-			},
-			{ once: true }
-		);
+		const onAbort = () => {
+			abortedAtMs ??= nowMs();
+		};
+		callerSignal?.addEventListener('abort', onAbort, { once: true });
+		// A lane signal is reused across many requests; drop the listener when this one ends.
+		const release = () => callerSignal?.removeEventListener('abort', onAbort);
 		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
 		const observe = (
 			status: number,
@@ -882,7 +881,7 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
-		return { observe, abortAgeMs };
+		return { observe, abortAgeMs, release };
 	};
 	const transportFetcher = async (
 		url: string,
@@ -896,10 +895,12 @@ export function createRxdbSyncEngine(
 			});
 		}
 		const headers = new Headers(init?.headers);
-		headers.delete('X-WCPOS-Instance');
 		const installId = await ports.getInstanceId?.();
-		if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
-		init = { ...init, headers };
+		if (installId !== undefined || headers.has('X-WCPOS-Instance')) {
+			headers.delete('X-WCPOS-Instance');
+			if (installId !== undefined) headers.set('X-WCPOS-Instance', installId);
+			init = { ...init, headers };
+		}
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -1027,6 +1028,8 @@ export function createRxdbSyncEngine(
 				});
 			}
 			throw error;
+		} finally {
+			observation.release();
 		}
 	};
 	const rawQueryTotal = ports.queryTotal;
@@ -1039,7 +1042,7 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
-						const { observe } = createRequestObservation(startedAtMs, input.signal);
+						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
 							return await withRequestTimeout(
 								(_url, init) =>
@@ -1057,6 +1060,8 @@ export function createRxdbSyncEngine(
 								});
 							}
 							throw error;
+						} finally {
+							release();
 						}
 					},
 				};

@@ -1,4 +1,5 @@
 /** @jest-environment jsdom */
+import { BroadcastChannel } from 'node:worker_threads';
 type GetInstanceId = typeof import('./get-instance-id.web').getInstanceId;
 
 describe('getInstanceId (web)', () => {
@@ -46,6 +47,37 @@ describe('getInstanceId (web)', () => {
 		expect(await getInstanceId()).toBe('winner');
 		write.mockRestore();
 		read.mockRestore();
+	});
+
+	it('converges two unlocked tabs that each read back their own candidate', async () => {
+		const second = jest.requireActual<{ getInstanceId: GetInstanceId }>(
+			'./get-instance-id.web'
+		).getInstanceId;
+		Object.defineProperty(globalThis, 'BroadcastChannel', {
+			configurable: true,
+			value: BroadcastChannel,
+		});
+		const a = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+		const b = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
+		const candidates: ReturnType<Crypto['randomUUID']>[] = [b, a];
+		const mint = jest
+			.spyOn(window.crypto, 'randomUUID')
+			.mockImplementation(() => candidates.shift()!);
+		const read = jest
+			.spyOn(Storage.prototype, 'getItem')
+			.mockReturnValueOnce(null)
+			.mockReturnValueOnce(b)
+			.mockReturnValueOnce(null);
+		try {
+			const ids = await Promise.all([getInstanceId(), second()]);
+			expect(ids).toEqual([a, a]);
+			expect(window.localStorage.getItem('wcpos_instance_id')).toBe(a);
+		} finally {
+			read.mockRestore();
+			mint.mockRestore();
+			jest.resetModules();
+			Reflect.deleteProperty(globalThis, 'BroadcastChannel');
+		}
 	});
 
 	it('returns undefined when storage throws', async () => {

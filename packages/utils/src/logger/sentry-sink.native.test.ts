@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import * as Application from 'expo-application';
 import * as Sentry from '@sentry/react-native';
 import { File } from 'expo-file-system';
 
@@ -7,7 +8,7 @@ import { getInstanceId } from '../get-instance-id';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-application', () => ({
-	getIosIdForVendorAsync: async () => 'device-ios',
+	getIosIdForVendorAsync: jest.fn(async () => 'device-ios'),
 	getAndroidId: () => 'device-android',
 }));
 
@@ -94,6 +95,36 @@ describe('sentry-sink.native', () => {
 		});
 		Platform.OS = 'ios';
 	});
+
+	it('rechecks a locked device identity before accepting a restored id', async () => {
+		const path = 'file:///documents/wcpos_instance_id';
+		const raw = JSON.stringify({ id: 'restored', device: 'other-device' });
+		files.set(path, raw);
+		jest.mocked(Application.getIosIdForVendorAsync).mockResolvedValueOnce(null);
+		await jest.isolateModulesAsync(async () => {
+			const { getInstanceId } =
+				jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(await getInstanceId()).toBe('restored');
+			expect(files.get(path)).toBe(raw);
+			expect(await getInstanceId()).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+			expect(JSON.parse(files.get(path)!).device).toBe('device-ios');
+		});
+	});
+
+	it.each(['{"id":', '{"id":42}', '{"id":"old","device":42}'])(
+		'replaces corrupt instance record %s',
+		async (raw) => {
+			const path = 'file:///documents/wcpos_instance_id';
+			files.set(path, raw);
+			await jest.isolateModulesAsync(async () => {
+				const { getInstanceId } =
+					jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+				const id = await getInstanceId();
+				expect(id).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+				expect(JSON.parse(files.get(path)!)).toEqual({ id, device: 'device-ios' });
+			});
+		}
+	);
 
 	it('does not initialize or capture before consent', () => {
 		expect(initCallsOnImport).toBe(0);
