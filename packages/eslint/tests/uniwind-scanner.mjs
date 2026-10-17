@@ -73,6 +73,7 @@ export function scanSource(text, path, tokens = new Set()) {
 	const checker = ts.createProgram([path], { noLib: true, noResolve: true }, host).getTypeChecker();
 	const followed = new Set();
 	const sites = new Set();
+	const namespaces = new Set();
 	// The class rules are the packages' contract; the app rules cover every app tree.
 	const classRules = !path.startsWith('apps/');
 	const appRules = !path.startsWith('packages/components/');
@@ -133,13 +134,29 @@ export function scanSource(text, path, tokens = new Set()) {
 			ts.isImportDeclaration(node) &&
 			node.moduleSpecifier.text === 'react-native' &&
 			node.importClause?.namedBindings &&
-			ts.isNamedImports(node.importClause.namedBindings)
+			!node.importClause.isTypeOnly
 		) {
-			for (const element of node.importClause.namedBindings.elements)
-				if (!element.isTypeOnly && !node.importClause.isTypeOnly)
-					if (RAW_PRESSABLES.has((element.propertyName ?? element.name).text))
+			const bindings = node.importClause.namedBindings;
+			if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+			else
+				for (const element of bindings.elements)
+					if (
+						!element.isTypeOnly &&
+						RAW_PRESSABLES.has((element.propertyName ?? element.name).text)
+					)
 						report(element.getStart(source), 'raw-pressable');
 		}
+		// `import * as RN from 'react-native'` then `RN.Pressable`: each use is a site, its
+		// closing JSX tag aside.
+		if (
+			appRules &&
+			ts.isPropertyAccessExpression(node) &&
+			ts.isIdentifier(node.expression) &&
+			namespaces.has(node.expression.text) &&
+			RAW_PRESSABLES.has(node.name.text) &&
+			!ts.isJsxClosingElement(node.parent)
+		)
+			report(node.getStart(source), 'raw-pressable');
 		if (classRules && !path.endsWith('/lib/motion.ts')) {
 			if (
 				ts.isPropertyAssignment(node) &&

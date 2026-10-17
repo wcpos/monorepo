@@ -85,23 +85,26 @@ export function ProductRow({
 			testID={`products-row-${record.uuid}`}
 			// `aria-*`, not `accessibilityState`: react-native-web drops the latter, so the web build
 			// lost the expanded state of a variable product.
-			aria-disabled={!variable && !editable}
 			aria-expanded={variable ? !!expanded : undefined}
-			onPress={() => {
-				if (variable) onToggle?.();
-				else if (editable)
-					router.push(
-						variation
-							? {
-									pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-									params: { variationId: record.uuid },
-								}
-							: {
-									pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-									params: { productId: record.uuid },
-								}
-					);
-			}}
+			// A row the cashier cannot open is inert, as the customers and coupons rows are.
+			onPress={
+				variable
+					? onToggle
+					: editable
+						? () =>
+								router.push(
+									variation
+										? {
+												pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+												params: { variationId: record.uuid },
+											}
+										: {
+												pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+												params: { productId: record.uuid },
+											}
+								)
+						: undefined
+			}
 			leading={
 				<Image
 					source={{ uri: error || !uri ? PRODUCT_IMAGE_PLACEHOLDER : uri }}

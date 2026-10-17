@@ -64,12 +64,18 @@ it('paints the selected row with the primary bar, and keeps the bar room on the 
 	expect(screen.getByTestId('plain')).not.toHaveAttribute('aria-selected');
 });
 
-it('leaves a radio its checked state rather than a selected one', () => {
-	render(<ListRow testID="radio" role="radio" aria-checked selected onPress={() => {}} />);
+it('leaves a radio its checked state rather than a selected one, by either role prop', () => {
+	render(
+		<>
+			<ListRow testID="radio" role="radio" aria-checked selected onPress={() => {}} />
+			<ListRow testID="legacy" accessibilityRole="radio" selected onPress={() => {}} />
+		</>
+	);
 	const row = screen.getByTestId('radio');
 	expect(row).toHaveAttribute('role', 'radio');
 	expect(row).toHaveAttribute('aria-checked', 'true');
 	expect(row).not.toHaveAttribute('aria-selected');
+	expect(screen.getByTestId('legacy')).not.toHaveAttribute('aria-selected');
 });
 
 it('puts leading, body and trailing in order, the body taking the room', () => {
@@ -105,7 +111,14 @@ it('presses, and a disabled row neither presses nor hides that it is unavailable
 	expect(classes('row')).toContain('opacity-50');
 });
 
-it('is no button without an action', () => {
-	render(<ListRow testID="row" />);
+it('is no button and no tab stop without an action', () => {
+	render(
+		<>
+			<ListRow testID="row" />
+			<ListRow testID="action" onPress={() => {}} />
+		</>
+	);
 	expect(screen.getByTestId('row')).not.toHaveAttribute('role');
+	expect(screen.getByTestId('row')).not.toHaveAttribute('tabindex', '0');
+	expect(screen.getByTestId('action')).toHaveAttribute('tabindex', '0');
 });

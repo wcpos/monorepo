@@ -54,12 +54,18 @@ export function ListRow({
 }: ListRowProps) {
 	const pointer = usePointer();
 	const selectable = selected !== undefined;
+	const radio = (role ?? accessibilityRole) === 'radio';
 	return (
 		<Pressable
 			role={role}
 			// A row that does something is a button unless the caller names it otherwise (a radio).
 			accessibilityRole={accessibilityRole ?? (role || !onPress ? undefined : 'button')}
-			aria-selected={selectable && role !== 'radio' ? selected : undefined}
+			// A row without an action is no tab stop either (react-native-web's Pressable sets its
+			// own tabIndex and ignores `focusable`).
+			tabIndex={onPress ? undefined : -1}
+			// Native announces it as the selected one (RN maps it onto the selected state); a radio
+			// carries `aria-checked` instead.
+			aria-selected={selectable && !radio ? selected : undefined}
 			disabled={disabled}
 			onPress={onPress}
 			className={cn(

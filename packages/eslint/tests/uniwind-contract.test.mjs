@@ -275,6 +275,19 @@ test('a raw React Native pressable outside the design system is a site; a type i
 	assert.deepEqual(scanSource(source, 'packages/components/src/button/index.tsx'), []);
 });
 
+test('a raw pressable reached through a react-native namespace import is a site per use', () => {
+	const source = `
+		import * as RN from 'react-native';
+		import * as Other from 'somewhere';
+		<RN.Pressable onPress={go}><RN.View /></RN.Pressable>;
+		const Touch = RN.TouchableOpacity;
+		<Other.Pressable />;
+	`;
+	assert.deepEqual(countSites(scanSource(source, 'packages/core/src/a.tsx')), {
+		'packages/core/src/a.tsx': { 'raw-pressable': 2 },
+	});
+});
+
 test('a hex colour in any string is a site, outside the design system and the named exemptions', () => {
 	const source = `
 		// #ffffff in a comment is prose
