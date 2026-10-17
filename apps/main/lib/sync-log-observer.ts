@@ -744,12 +744,15 @@ export const CONFORMANCE_TABLE = {
 	// where a started line with no outcome names a wedged requirement.
 	'coverage.require.started': INVISIBLE,
 	// decided: visible — a data request stopped making progress and was abandoned so
-	// the rest of the queue could keep loading; the screen that asked retries on its
-	// own, but the cashier's records did not load, which is what SYNC_PARTIAL means.
+	// the rest of the queue could keep loading. Info: the screen that asked
+	// re-declares it on its own, and a slow store's requests carry their own
+	// deadline rows — SYNC321's "retry only the records that failed" named a
+	// retry the cashier has no button for.
 	'coverage.require.stalled': {
 		operationType: 'sync.coverage',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_PARTIAL,
+		code: null,
+		level: 'info',
 	},
 	// decided: invisible — the breadcrumb recording that an abandoned request
 	// eventually settled; pure diagnostics narration.

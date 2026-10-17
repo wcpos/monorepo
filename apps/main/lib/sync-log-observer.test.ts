@@ -956,6 +956,7 @@ describe('createSyncLogObserver', () => {
 		['queue.write.reschedule-failed', 'warn'],
 		['product.browse-window.approximate', 'warn'],
 		['product.browse-window.brand-filter-ignored', 'warn'],
+		['coverage.require.stalled', 'warn'],
 	] as const)('keeps self-settling %s as an uncoded info row', (type, level) => {
 		observer.observe(event({ type, level, fields: { recordId: 'r-1' } }));
 
