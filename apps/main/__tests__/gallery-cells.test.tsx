@@ -22,15 +22,15 @@ it('renders every text story in six scoped cells with floored scale values', () 
 	const scopes = renderer!.root.findAllByType(ScopedVariables);
 	expect(scopes).toHaveLength(24);
 	const cases = [
-		['compact-coarse', 3.5, 13, 44, 44, 56, 6, 34],
-		['compact-fine', 3.5, 13, 40, 36, 56, 6, 34],
-		['regular-coarse', 4, 14, 44, 44, 64, 8, 40],
-		['regular-fine', 4, 14, 44, 44, 64, 8, 40],
-		['spacious-coarse', 5, 16, 52, 52, 80, 10, 48],
-		['spacious-fine', 5, 16, 52, 52, 80, 10, 48],
+		['compact-coarse', 3.5, 13, 44, 44, 56, 6, 34, 12, 11],
+		['compact-fine', 3.5, 13, 40, 36, 56, 6, 34, 12, 11],
+		['regular-coarse', 4, 14, 44, 44, 64, 8, 40, 12, 11],
+		['regular-fine', 4, 14, 44, 44, 64, 8, 40, 12, 11],
+		['spacious-coarse', 5, 16, 52, 52, 80, 10, 48, 14, 13],
+		['spacious-fine', 5, 16, 52, 52, 80, 10, 48, 14, 13],
 	];
 	['default', 'link', 'muted', 'small'].forEach((story, storyIndex) => {
-		cases.forEach(([suffix, spacing, base, ctl, row, tile, radius, amt], cellIndex) => {
+		cases.forEach(([suffix, spacing, base, ctl, row, tile, radius, amt, xs, xxs], cellIndex) => {
 			const index = storyIndex * 6 + cellIndex;
 			expect(scopes[index].props.variables).toEqual({
 				'--spacing': spacing,
@@ -40,6 +40,8 @@ it('renders every text story in six scoped cells with floored scale values', () 
 				'--spacing-tile': tile,
 				'--radius': radius,
 				'--text-amt': amt,
+				'--text-xs': xs,
+				'--text-2xs': xxs,
 			});
 			expect(scopes[index].props.children.props.testID).toBe(`text--${story}--${suffix}`);
 			expect(scopes[index].props.children.props.dataSet).toEqual({
