@@ -568,7 +568,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
 			},
 			storage: defaultConfig.storage,
-			installId: getInstanceId(),
+			getInstanceId,
 			fetcher,
 			onUpdateRequired: (details) => {
 				reportUpdateRequired(options.scope.site, details);

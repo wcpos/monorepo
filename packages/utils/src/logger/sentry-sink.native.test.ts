@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/react-native';
 import { File } from 'expo-file-system';
 
+import { getInstanceId } from '../get-instance-id';
+
 jest.mock('@sentry/react-native', () => ({
 	init: jest.fn(),
 	close: jest.fn().mockResolvedValue(true),
@@ -43,6 +45,25 @@ describe('sentry-sink.native', () => {
 		setTelemetryConsent('undecided');
 		files.clear();
 		jest.clearAllMocks();
+	});
+
+	it('keeps the instance id stable in its own file across consent denial', () => {
+		const id = getInstanceId();
+		expect(id).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
+		setTelemetryConsent('denied');
+		expect(getInstanceId()).toBe(id);
+		expect(files.get('file:///documents/wcpos_instance_id')).toBe(id);
+	});
+
+	it('omits the instance id when native storage is unavailable', () => {
+		jest.mocked(File).mockImplementationOnce(() => {
+			throw new Error('unavailable');
+		});
+		// A fresh module: the id above is memoised for the life of the process.
+		jest.isolateModules(() => {
+			const fresh = jest.requireActual<typeof import('../get-instance-id')>('../get-instance-id');
+			expect(fresh.getInstanceId()).toBeUndefined();
+		});
 	});
 
 	it('does not initialize or capture before consent', () => {

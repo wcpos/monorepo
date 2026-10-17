@@ -252,10 +252,9 @@ export const useRestHttpClient = (endpoint = '') => {
 			// joining so the composed path never carries `//`. Pretty routing
 			// tolerated the double slash, but rest_route matching is strict.
 			const pathFormBaseURL = apiURL.replace(/\/+$/, '') + '/' + endpoint;
-			const installId = getInstanceId();
 			const defaultConfig: RequestConfig = {
 				baseURL: pathFormBaseURL,
-				headers: installId === undefined ? {} : { 'X-WCPOS-Instance': installId },
+				headers: {},
 				params: {},
 				wcposPreamble: {
 					purpose: 'rest',
@@ -274,6 +273,13 @@ export const useRestHttpClient = (endpoint = '') => {
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
+			config.headers = Object.fromEntries(
+				Object.entries(config.headers ?? {}).filter(
+					([key]) => key.toLowerCase() !== 'x-wcpos-instance'
+				)
+			);
+			const installId = await getInstanceId();
+			if (installId !== undefined) config.headers['X-WCPOS-Instance'] = installId;
 
 			try {
 				const response = await httpClient.request(config);

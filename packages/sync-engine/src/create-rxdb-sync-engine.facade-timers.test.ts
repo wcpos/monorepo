@@ -102,8 +102,10 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		'sends the instance header only when provided: %s',
 		async (installId) => {
 			const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response('{}'));
-			const engine = engineWith({ installId, fetcher });
+			let currentId: string | undefined = 'before-ready';
+			const engine = engineWith({ getInstanceId: async () => currentId, fetcher });
 			await engine.ready;
+			currentId = installId;
 			fetcher.mockClear();
 			try {
 				await engine.sync('change-signal');
