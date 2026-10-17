@@ -171,7 +171,11 @@ export function AddNewCustomer() {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpen(true)}>
-						<IconButton testID="add-customer-button" name="userPlus" />
+						<IconButton
+							testID="add-customer-button"
+							name="userPlus"
+							accessibilityLabel={t('common.add_new_customer')}
+						/>
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{t('common.add_new_customer')}</Text>

@@ -54,7 +54,9 @@ it('preserves explicit variant priority over selected', () => {
 it('removes without activating the row', () => {
 	const onPress = jest.fn();
 	const onRemove = jest.fn();
-	const { getByRole } = render(<ListItem removable onPress={onPress} onRemove={onRemove} />);
+	const { getByRole } = render(
+		<ListItem removable removeLabel="Remove" onPress={onPress} onRemove={onRemove} />
+	);
 	fireEvent.click(getByRole('button'));
 	expect(onRemove).toHaveBeenCalledTimes(1);
 	expect(onPress).not.toHaveBeenCalled();
@@ -66,7 +68,9 @@ it('retires the background surface and tiny subtitle', () => {
 
 it('cannot remove a disabled row', () => {
 	const onRemove = jest.fn();
-	const { getByRole } = render(<ListItem removable disabled onRemove={onRemove} />);
+	const { getByRole } = render(
+		<ListItem removable removeLabel="Remove" disabled onRemove={onRemove} />
+	);
 	expect(getByRole('button')).toBeDisabled();
 	fireEvent.click(getByRole('button'));
 	expect(onRemove).not.toHaveBeenCalled();

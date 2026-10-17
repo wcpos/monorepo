@@ -83,7 +83,12 @@ export function VariationsFilterBar({ row }: Props) {
 						);
 					})}
 			</HStack>
-			<IconButton size="sm" name="chevronUp" onPress={() => setRowExpanded?.(rowId, false)} />
+			<IconButton
+				size="sm"
+				name="chevronUp"
+				accessibilityLabel={t('common.collapse')}
+				onPress={() => setRowExpanded?.(rowId, false)}
+			/>
 		</HStack>
 	);
 }

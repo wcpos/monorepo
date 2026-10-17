@@ -50,7 +50,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		claimKey: `reauth:${wpUser.uuid}`,
 	});
 
-	const displayName = wpUser.display_name || 'Unknown User';
+	const displayName = wpUser.display_name || t('auth.unknown_user');
 	const initials = getInitials(displayName);
 	const showReauth = !isLoading && !isValid;
 	const roleLabel = React.useMemo(() => {
@@ -167,6 +167,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				}
 				trailing={trailing}
 				removable
+				removeLabel={t('auth.remove_2', { name: displayName })}
 				onRemove={() => setDeleteDialogOpened(true)}
 			>
 				<Text className="text-base font-medium">{displayName}</Text>

@@ -70,12 +70,14 @@ export function FilterBarList({
 					</VStack>
 					<IconButton
 						name="penToSquare"
+						accessibilityLabel={t('common.edit')}
 						testID={`filter-bar-edit-${item.id}`}
 						onPress={() => onEdit(item)}
 					/>
 					<IconButton
 						name="trash"
 						variant="destructive"
+						accessibilityLabel={t('common.delete')}
 						testID={`filter-bar-delete-${item.id}`}
 						onPress={() => setDeleting(item)}
 					/>

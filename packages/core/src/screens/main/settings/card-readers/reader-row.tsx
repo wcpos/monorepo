@@ -373,6 +373,7 @@ export function ReaderRow({
 							<IconButton
 								name="ellipsisVertical"
 								variant="outline"
+								accessibilityLabel={t('common.more_actions')}
 								// The menu stays in place; with nothing to release or forget it is disabled.
 								disabled={!connected && !status.reader && !remembered}
 								testID={`reader-row-${method.id}-menu`}

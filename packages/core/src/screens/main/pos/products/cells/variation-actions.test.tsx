@@ -15,6 +15,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ onPress }: { onPress: () => void }) => <button onClick={onPress}>add</button>,
 }));
+jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/use-add-variation', () => ({
 	useAddVariation: () => ({ addVariation: mockAddVariation }),
 }));

@@ -113,11 +113,11 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({
 		onPress,
 		testID,
-		'aria-label': label,
+		accessibilityLabel: label,
 	}: {
 		onPress?: () => void;
 		testID?: string;
-		'aria-label'?: string;
+		accessibilityLabel?: string;
 	}) => <button aria-label={label} data-testid={testID} onClick={onPress} />,
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: mockView }));

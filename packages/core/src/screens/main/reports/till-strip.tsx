@@ -350,7 +350,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 			<IconButton
 				name="chevronRight"
 				testID="till-closures"
-				aria-label={t('reports.closures')}
+				accessibilityLabel={t('reports.closures')}
 				onPress={onOpenClosures}
 			/>
 		</View>

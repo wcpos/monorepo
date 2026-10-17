@@ -22,6 +22,9 @@ export function CameraScanButton({ open, onToggle }: CameraScanButtonProps) {
 					name="barcodeRead"
 					variant={open ? 'primary' : 'default'}
 					iconClassName={open ? 'text-primary' : undefined}
+					accessibilityLabel={
+						open ? t('pos_products.camera_scan_close') : t('pos_products.camera_scan_open')
+					}
 					onPress={onToggle}
 					testID="camera-scan-button"
 				/>

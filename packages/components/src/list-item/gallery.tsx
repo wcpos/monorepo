@@ -15,5 +15,10 @@ export const stories = [
 		render: () => <ListItem {...person} variant="warning" trailing={<Text>Expired</Text>} />,
 	},
 	{ id: 'dashed', render: () => <ListItem variant="dashed" title="Add another store" /> },
-	{ id: 'removable', render: () => <ListItem {...person} removable onRemove={() => {}} /> },
+	{
+		id: 'removable',
+		render: () => (
+			<ListItem {...person} removable removeLabel="Remove Paul Kilmurray" onRemove={() => {}} />
+		),
+	},
 ];

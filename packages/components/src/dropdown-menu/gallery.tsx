@@ -21,7 +21,7 @@ function Panel({ sheet = false }: { sheet?: boolean }) {
 			)}
 		>
 			<C.DropdownMenuTrigger asChild>
-				<IconButton name="ellipsisVertical" aria-label="⋯" testID="order-menu" />
+				<IconButton name="ellipsisVertical" accessibilityLabel="More actions" testID="order-menu" />
 			</C.DropdownMenuTrigger>
 			<C.DropdownMenuContent inline align="start" avoidCollisions={false} testID="gallery-menu">
 				<C.DropdownMenuLabel>Order</C.DropdownMenuLabel>

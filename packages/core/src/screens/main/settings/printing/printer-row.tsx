@@ -127,7 +127,11 @@ export function PrinterRow({
 				{showMenu && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
+							<IconButton
+								name="ellipsisVertical"
+								accessibilityLabel={t('common.more_actions')}
+								testID={`printer-row-${profile.id}-menu`}
+							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem

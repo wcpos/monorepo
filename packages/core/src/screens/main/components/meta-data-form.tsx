@@ -103,6 +103,7 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 											<IconButton
 												variant="destructive"
 												name="circleMinus"
+												accessibilityLabel={t('common.remove_item')}
 												onPress={() => {
 													const metaData = getValues(name);
 													const item = metaData[index];

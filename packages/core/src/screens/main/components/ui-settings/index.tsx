@@ -128,7 +128,11 @@ function UISettingsDialog({
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" testID={triggerTestID} aria-label={triggerLabel ?? title} />
+						<IconButton
+							name="sliders"
+							testID={triggerTestID}
+							accessibilityLabel={triggerLabel ?? title}
+						/>
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{title}</Text>

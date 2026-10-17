@@ -75,15 +75,17 @@ it('keeps a single-line label and the disabled pointer treatment', () => {
 	expect(pressable.className).toContain('web:pointer-events-none');
 });
 it('sizes icon roots separately from their glyphs and supports on', () => {
-	const { rerender } = render(<IconButton name="plus" className="h-ctl w-ctl" />);
+	const { rerender } = render(
+		<IconButton name="plus" accessibilityLabel="Add" className="h-ctl w-ctl" />
+	);
 	expect(pressable.className).toContain('rounded-lg');
 	expect(pressable.className).toContain('active:bg-muted');
 	expect(icon.className).toBe('text-muted-foreground');
-	rerender(<IconButton name="plus" on size="sm" />);
+	rerender(<IconButton name="plus" accessibilityLabel="Add" on size="sm" />);
 	expect(icon.className).toBe('text-primary');
 	expect(pressable.className).toContain('size-8');
 	expect(pressable.hitSlop).toBe(8);
-	rerender(<IconButton name="plus" />);
+	rerender(<IconButton name="plus" accessibilityLabel="Add" />);
 	expect(pressable.className).toContain('size-ctl');
 });
 it('grows a sm button to a 44 pt target on native, measured, and keeps a caller slop', () => {
