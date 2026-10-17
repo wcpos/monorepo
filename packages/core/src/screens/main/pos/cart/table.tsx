@@ -238,10 +238,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 				return {
 					id: col.key,
 					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
-						<Text
-							className={'text-muted-foreground text-xs tracking-wide uppercase'}
-							numberOfLines={1}
-						>
+						<Text numberOfLines={1}>
 							{{
 								quantity: t('pos_cart.col_qty'),
 								name: t('pos_cart.col_item'),

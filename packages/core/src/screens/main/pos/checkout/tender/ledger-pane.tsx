@@ -103,7 +103,7 @@ export function BalanceHeadline({
 
 	return (
 		<VStack space="xs">
-			<Text className="text-muted-foreground text-xs tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs tracking-wide uppercase">
 				{partPaid ? t('pos_checkout.remaining') : t('common.total')}
 			</Text>
 			<Text

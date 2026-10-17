@@ -2,11 +2,13 @@ import * as React from 'react';
 
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
+import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
 /**
  * Hairline-table primitives shared by the Store health tabs: uppercase muted
- * column headings over rows separated by hairlines — no boxed cards.
+ * column headings over rows separated by hairlines — no boxed cards. The heading
+ * text is the shared table-header recipe (`TABLE_HEAD_TEXT`), never its own.
  */
 export function HairlineHeaderRow({
 	children,
@@ -37,7 +39,7 @@ export function HairlineHeaderCell({
 	testID?: string;
 }) {
 	return (
-		<Text testID={testID} className={cn('text-muted-foreground text-xs uppercase', className)}>
+		<Text testID={testID} className={cn(TABLE_HEAD_TEXT, className)}>
 			{children}
 		</Text>
 	);

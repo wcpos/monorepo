@@ -82,7 +82,7 @@ export function SplitView({
 				);
 	return (
 		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
-			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
 				{t(flow.paidMinor > 0 ? 'pos_checkout.split_the_remaining' : 'pos_checkout.split')}
 			</Text>
 			<View className="size-48 items-center justify-center">

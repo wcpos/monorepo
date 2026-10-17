@@ -304,7 +304,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				<Text
 					testID="checkout-label"
 					decodeHtml
-					className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
+					className="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
 				>
 					{plan
 						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
