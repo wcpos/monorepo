@@ -10,3 +10,4 @@ Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.m
 
 1. Passes `className` directly to ExpoImage on web instead of using the native styling wrapper — evidence: `f8831e2527 2025-09-29 fix images on web`, code: "Web-specific Image component that passes className directly to ExpoImage" in `packages/components/src/image/index.web.tsx:13`.
 2. Converts native `className` styling through Uniwind’s wrapper — evidence: code: "withUniwind automatically maps className → style prop." in `packages/components/src/image/index.tsx:8`.
+3. The native wrapper's default fade skips memory-cache hits (`skipOnCacheHit: 'memory'`), so a recycled cell scrolled back does not re-fade, while first loads and source changes still fade — evidence: code: "const FADE = { duration: 250, skipOnCacheHit: 'memory' } as const;" in `packages/components/src/image/index.tsx:22`, wcpos/roadmap#441; test: `packages/components/src/image/image.test.tsx`.

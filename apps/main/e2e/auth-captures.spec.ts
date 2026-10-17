@@ -14,7 +14,7 @@ import type { Page, TestInfo } from '@playwright/test';
 test.skip(process.env.CAPTURES !== '1', 'Connect captures run only with CAPTURES=1');
 
 async function capture(page: Page, info: TestInfo, state: string, step: ScaleStep) {
-	// Auth has no store scale override. Scope the same seven production tokens
+	// Auth has no store scale override. Scope the same nine production tokens
 	// to the existing provider (and portals), rather than approximating with zoom.
 	const tokens = Object.entries(scaleVariables(step, 'coarse'))
 		.map(([name, value]) => `${name}: ${value}px !important;`)

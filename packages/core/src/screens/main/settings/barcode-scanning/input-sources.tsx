@@ -123,7 +123,7 @@ function ScannerProfileRow({
 				</Text>
 				<Text className="text-muted-foreground font-mono text-xs">{identity}</Text>
 			</VStack>
-			<Text className={`text-2xs font-medium ${tone}`} testID="scanner-profile-status">
+			<Text className={`text-xs font-medium ${tone}`} testID="scanner-profile-status">
 				{statusLabel[status]}
 			</Text>
 			{/* Removing a scanner is the row's only action and it loses the pairing: the last,

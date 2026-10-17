@@ -8,7 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
-import { parseLinkHeader } from '../../../lib/url';
+import { normalizeStoreUrl, parseLinkHeader, withAsciiHost } from '../../../lib/url';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
@@ -54,7 +54,8 @@ interface UseUrlDiscoveryReturn {
 const extractWpApiUrlFromLink = (link: string | undefined): string | null => {
 	if (!link) return null;
 	const parsed = parseLinkHeader(link);
-	return get(parsed, ['https://api.w.org/', 'url']) || null;
+	const url = get(parsed, ['https://api.w.org/', 'url']);
+	return url ? withAsciiHost(url) : null;
 };
 
 /**
@@ -81,15 +82,6 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const [wpApiUrl, setWpApiUrl] = React.useState<string | null>(null);
 	const http = useHttpClient();
 	const t = useT();
-
-	/**
-	 * Clean and normalize the input URL
-	 */
-	const normalizeUrl = React.useCallback((url: string): string => {
-		const protocol = 'https'; // Always use HTTPS for security
-		const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
-		return `${protocol}://${urlWithoutProtocol}`;
-	}, []);
 
 	/**
 	 * Try to discover wp-json URL from Link header
@@ -200,7 +192,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 			setWpApiUrl(null);
 
 			try {
-				const normalizedUrl = normalizeUrl(url);
+				const normalizedUrl = normalizeStoreUrl(url);
 
 				// Step 1: Try Link header discovery
 				const linkProbe = await tryLinkHeaderDiscovery(normalizedUrl);
@@ -243,7 +235,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				throw err;
 			}
 		},
-		[normalizeUrl, tryLinkHeaderDiscovery, tryFallbackDiscovery, t]
+		[tryLinkHeaderDiscovery, tryFallbackDiscovery, t]
 	);
 
 	return {

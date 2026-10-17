@@ -21,6 +21,10 @@
   --spacing-tile: 64px;
   --radius: 8px;
   --text-amt: 40px;
+  /* The small end is explicit per step, never a ratio of base: 12 px is the floor
+     for text a cashier reads (scale.ts SCALE_STEPS has the sources). */
+  --text-xs: 12px;
+  --text-2xs: 11px;
 
   /* Container widths preserve their 14px-root web sizes. */
   --width-128: 448px;
@@ -109,6 +113,7 @@
   --duration-count-fade: 170ms;
   --duration-overlay-fade: 150ms;
   --duration-crossfade: 200ms;
+  --duration-image-fade: 250ms;
   --duration-popover-fade: 200ms;
   --duration-sheet-rise: 200ms;
   --duration-beat: 220ms;
@@ -140,13 +145,9 @@
 
 /* Resolve derived values where utilities are used, including inside a scale scope. */
 @theme inline {
-  /* Type ramp from base, with a shared 1.35 line height. */
-  --text-3xs: calc(var(--text-base) * 0.714);
-  --text-3xs--line-height: calc(var(--text-base) * 0.714 * 1.35);
-  --text-2xs: calc(var(--text-base) * 0.786);
-  --text-2xs--line-height: calc(var(--text-base) * 0.786 * 1.35);
-  --text-xs: calc(var(--text-base) * 0.857);
-  --text-xs--line-height: calc(var(--text-base) * 0.857 * 1.35);
+  /* Type ramp from base (xs and 2xs are their own tokens), with a shared 1.35 line height. */
+  --text-2xs--line-height: calc(var(--text-2xs) * 1.35);
+  --text-xs--line-height: calc(var(--text-xs) * 1.35);
   --text-sm: calc(var(--text-base) * 0.929);
   --text-sm--line-height: calc(var(--text-base) * 0.929 * 1.35);
   --text-base--line-height: calc(var(--text-base) * 1.35);

@@ -23,7 +23,7 @@ test.skip(process.env.CAPTURES !== '1', 'Register captures run only with CAPTURE
 const SETTLE_MS = 350;
 
 /**
- * The store has no scale override, so the step's seven production tokens are scoped to the
+ * The store has no scale override, so the step's nine production tokens are scoped to the
  * existing provider (and portals). Applied BEFORE a state is entered: layout the state measures
  * on entry (the strip's width, a sheet's box) must be the scaled layout, not a rescale of it.
  */

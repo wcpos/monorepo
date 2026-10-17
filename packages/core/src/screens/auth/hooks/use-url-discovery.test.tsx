@@ -53,6 +53,34 @@ describe('useUrlDiscovery', () => {
 		});
 	});
 
+	it('probes an IDN store using its punycode hostname', async () => {
+		mockHead.mockResolvedValue({
+			status: 200,
+			headers: { link: '<https://xn--mnchen-laden-dlb.de/wp-json/>; rel="https://api.w.org/"' },
+		});
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('münchen-laden.de')).resolves.toBe(
+			'https://xn--mnchen-laden-dlb.de/wp-json/'
+		);
+		expect(mockHead).toHaveBeenNthCalledWith(1, 'https://xn--mnchen-laden-dlb.de', {
+			timeout: 10_000,
+			quietErrors: true,
+		});
+	});
+
+	it('converts a Unicode hostname in the Link header API URL to punycode', async () => {
+		mockHead.mockResolvedValue({
+			status: 200,
+			headers: { link: '<https://münchen-laden.de/wp-json/>; rel="https://api.w.org/"' },
+		});
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('münchen-laden.de')).resolves.toBe(
+			'https://xn--mnchen-laden-dlb.de/wp-json/'
+		);
+	});
+
 	it('falls back to /wp-json/ when the front-page probe hangs past its timeout', async () => {
 		// The monorepo#1155 failure shape: the site root never responds while the
 		// REST API still answers. Without the timeout this hung forever.

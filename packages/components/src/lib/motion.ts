@@ -7,6 +7,8 @@ export const COUNT_SWELL = 90;
 export const COUNT_FADE = 170;
 export const OVERLAY_FADE = 150;
 export const CROSSFADE = 200;
+// expo-image's fade-in for a freshly loaded picture.
+export const IMAGE_FADE = 250;
 export const POPOVER_FADE = 200;
 export const SHEET_RISE = 200;
 export const BEAT = 220;

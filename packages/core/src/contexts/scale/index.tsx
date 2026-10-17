@@ -10,7 +10,7 @@ import { useDocField } from '@wcpos/query';
 import { useAppState } from '../app-state';
 
 /**
- * Web only: mirror the seven scale tokens onto the document root.
+ * Web only: mirror the nine scale tokens onto the document root.
  *
  * Uniwind's web `ScopedVariables` is a `display: contents` div carrying the
  * variables as inline custom properties, so anything portalled to
@@ -19,7 +19,7 @@ import { useAppState } from '../app-state';
  * values onto `documentElement` puts the step above every portal. Native needs
  * nothing: there the Uniwind context IS the mechanism.
  *
- * External mutation belongs in a pre-paint effect, and only the seven names this
+ * External mutation belongs in a pre-paint effect, and only the nine names this
  * provider owns are removed on unmount.
  */
 function useRootScaleMirror(variables: ScaleVariables): void {

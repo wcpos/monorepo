@@ -47,6 +47,8 @@ describe('scaleVariables', () => {
 			'--spacing-tile': 64,
 			'--radius': 8,
 			'--text-amt': 40,
+			'--text-xs': 12,
+			'--text-2xs': 11,
 		});
 	});
 
@@ -61,6 +63,8 @@ describe('scaleVariables', () => {
 			'--spacing-tile': 56,
 			'--radius': 6,
 			'--text-amt': 34,
+			'--text-xs': 12,
+			'--text-2xs': 11,
 		});
 	});
 
@@ -92,7 +96,20 @@ describe('the constants the sheet and the cap depend on', () => {
 		expect(MAX_FONT_SCALE).toBe(1.3);
 	});
 
-	it('declares exactly seven values per step', () => {
-		Object.values(SCALE_STEPS).forEach((values) => expect(values).toHaveLength(7));
+	it('declares exactly nine values per step', () => {
+		Object.values(SCALE_STEPS).forEach((values) => expect(values).toHaveLength(9));
+	});
+
+	// The small end is explicit, not a ratio of base: a ratio took Compact's xs to
+	// 11.1 and 2xs to 10.2. Text a cashier reads stays at 12 or above in every step;
+	// 2xs (glyph-like text only) stays at 11 or above.
+	it.each(['compact', 'regular', 'spacious'] as const)('holds the type floor at %p', (step) => {
+		const variables = scaleVariables(step, 'coarse');
+		expect(variables['--text-xs']).toBeGreaterThanOrEqual(12);
+		expect(variables['--text-2xs']).toBeGreaterThanOrEqual(11);
+	});
+
+	it('grows the small end only at Spacious', () => {
+		expect(scaleVariables('spacious', 'fine')).toMatchObject({ '--text-xs': 14, '--text-2xs': 13 });
 	});
 });
