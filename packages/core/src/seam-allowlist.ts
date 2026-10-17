@@ -1,6 +1,7 @@
 /**
  * ADR 0033 item 7. Re-frozen 2026-10-17 using the parse-only AST scanner:
  * 279 files, 890 violation fingerprints. seam.test.ts pins the sorted set's length and digest.
+ * Round 6 receiver/import refinements leave this set unchanged (all per-rule deltas are zero).
  *
  * Fingerprints are path :: rule :: declaration chain :: normalised node text :: occurrence (1-based).
  * Declaration names run outermost first, joined by >; module-level accesses have an empty chain.
@@ -12,7 +13,9 @@
  * Known conservative false positives: .collection string fields on log events, descriptors
  * and telemetry rows; remove/update/save/set-like names on non-RxDB receivers (including
  * subscriptions, DOM elements, form helpers and UI settings). The mutator list is explicit;
- * raw query members (especially count fields) likewise include non-RxDB receivers. Engine
+ * raw query members (especially count fields) likewise include non-RxDB receivers. A find
+ * identifier/member argument on a collection-named receiver is treated as a query, not a typed
+ * callback. Engine
  * alias checks match names, not types. Resident helper imports/calls are exempt only in their
  * two defining modules and commands/ modules. No alias propagation or deliberate-evasion
  * modelling is performed. Raw change streams match database/collection receiver names, not

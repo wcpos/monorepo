@@ -5,7 +5,8 @@
  * Declaration chains distinguish identical accesses in different functions, methods and classes.
  * Raw queries, resident helper writes, engine aliases, cross-package relative imports and raw
  * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
- * evasion. A record's own change stream remains allowed (ADR 0028).
+ * evasion. Transparent receiver wrappers and baseUrl-rooted package imports do not bypass
+ * these checks. A record's own change stream remains allowed (ADR 0028).
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -91,6 +92,7 @@ const mutatorNames = new Set([
 	'addCollections',
 	'importJSON',
 	'addState',
+	'bulkWrite',
 	'bulkInsert',
 	'bulkUpsert',
 	'bulkRemove',
@@ -129,7 +131,21 @@ function staticName(node: ts.Node | undefined): string | undefined {
 	return undefined;
 }
 
+function unwrap(node: ts.Node | undefined): ts.Node | undefined {
+	while (
+		node &&
+		(ts.isAsExpression(node) ||
+			ts.isNonNullExpression(node) ||
+			ts.isParenthesizedExpression(node) ||
+			ts.isSatisfiesExpression(node) ||
+			ts.isTypeAssertionExpression(node))
+	)
+		node = node.expression;
+	return node;
+}
+
 function memberReceiver(node: ts.Node | undefined, name: string): ts.Expression | undefined {
+	node = unwrap(node);
 	if (node && ts.isPropertyAccessExpression(node) && node.name.text === name)
 		return node.expression;
 	if (
@@ -141,14 +157,15 @@ function memberReceiver(node: ts.Node | undefined, name: string): ts.Expression 
 		return node.expression;
 }
 
-function isChangeStreamReceiver(node: ts.Expression): boolean {
-	if (ts.isIdentifier(node))
-		return ['db', 'database', 'collection'].includes(node.text) || node.text.endsWith('Collection');
+function isCollectionReceiver(node: ts.Node | undefined): boolean {
+	node = unwrap(node);
+	if (!node) return false;
+	if (ts.isIdentifier(node)) return node.text === 'collection' || node.text.endsWith('Collection');
 	if (
 		ts.isPropertyAccessExpression(node) ||
 		(ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
 	) {
-		const owner = node.expression;
+		const owner = unwrap(node.expression)!;
 		return (
 			(ts.isIdentifier(owner) && owner.text === 'collections') ||
 			!!memberReceiver(owner, 'collections')
@@ -157,7 +174,16 @@ function isChangeStreamReceiver(node: ts.Expression): boolean {
 	return false;
 }
 
+function isChangeStreamReceiver(node: ts.Expression): boolean {
+	const receiver = unwrap(node)!;
+	return (
+		isCollectionReceiver(receiver) ||
+		(ts.isIdentifier(receiver) && ['db', 'database'].includes(receiver.text))
+	);
+}
+
 function isEngineReceiver(node: ts.Node | undefined): boolean {
+	node = unwrap(node);
 	return (
 		!!node &&
 		((ts.isIdentifier(node) && node.text === 'engine') || !!memberReceiver(node, 'engine'))
@@ -202,9 +228,11 @@ function declarationChain(node: ts.Node): string {
 
 function violations(source: string, path = 'seam-fixture.tsx') {
 	// Accept scan paths (absolute) and fixtures relative to either the repo or core/src.
-	const normalizedPath = path.split(sep).join('/');
-	const filePath = posix.isAbsolute(normalizedPath)
-		? posix.relative(posix.join(__dirname.split(sep).join('/'), '../../..'), normalizedPath)
+	const normalizedPath = path.replace(/\\/g, '/');
+	const absolute = posix.isAbsolute(normalizedPath) || /^[A-Za-z]:\//.test(normalizedPath);
+	// Absolute scan paths are inside core; keep their repo suffix even for foreign drive fixtures.
+	const filePath = absolute
+		? normalizedPath.slice(normalizedPath.lastIndexOf('/packages/core/') + 1)
 		: normalizedPath.startsWith('packages/')
 			? normalizedPath
 			: posix.join('packages/core/src', normalizedPath);
@@ -236,7 +264,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		wholeModule = false
 	) => {
 		if (!specifier || !ts.isStringLiteralLike(specifier)) return;
-		const module = specifier.text;
+		const rootedPackage = specifier.text.startsWith('packages/');
+		if (rootedPackage) report('cross-package relative import', node);
+		const module = rootedPackage
+			? specifier.text.replace(/^packages\/([^/]+)(?:\/src(?=\/|$))?/, '@wcpos/$1')
+			: specifier.text;
 		if (module.startsWith('.')) {
 			const target = posix.normalize(posix.join(posix.dirname(filePath), module));
 			if (target !== 'packages/core' && !target.startsWith('packages/core/'))
@@ -338,9 +370,16 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					: staticName(callee);
 			if (!allowsResidentHelpers && name && residentHelperNames.has(name))
 				report('resident helper write', node);
+			const findReceiver = memberReceiver(callee, 'find');
+			const argument = node.arguments[0];
 			if (
-				memberReceiver(callee, 'find') &&
-				(node.arguments.length === 0 || ts.isObjectLiteralExpression(node.arguments[0]))
+				findReceiver &&
+				(!argument ||
+					ts.isObjectLiteralExpression(argument) ||
+					(isCollectionReceiver(findReceiver) &&
+						(ts.isIdentifier(argument) ||
+							ts.isPropertyAccessExpression(argument) ||
+							ts.isElementAccessExpression(argument))))
 			)
 				report('raw query construction', node);
 			if (
@@ -356,7 +395,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					ts.isStringLiteralLike(callee.argumentExpression) &&
 					callee.argumentExpression.text === 'close')
 			) {
-				const receiver = callee.expression;
+				const receiver = unwrap(callee.expression)!;
 				const named = ts.isIdentifier(receiver)
 					? receiver.text
 					: ts.isPropertyAccessExpression(receiver)
@@ -598,7 +637,7 @@ it.each(
 		'incrementalPatch incrementalModify incrementalRemove incrementalUpsert incrementalUpdate ' +
 		'modify update patch remove insert upsert insertIfNotExists putAttachment putAttachments ' +
 		'putAttachmentBase64 save updateCRDT insertCRDT addState bulkInsert bulkUpsert bulkRemove ' +
-		'insertLocal upsertLocal getLocal getLocal$ atomicUpdate atomicPatch'
+		'bulkWrite insertLocal upsertLocal getLocal getLocal$ atomicUpdate atomicPatch'
 	).split(' ')
 )('fences all accesses of %s', (name) => {
 	for (const source of [
@@ -920,3 +959,98 @@ it.each(['order.$;', 'doc.$;', 'record.$;', 'this.$;'])(
 		expect(violations(source)).toEqual([]);
 	}
 );
+
+// Round 6: transparent syntax must not hide receiver-aware fences.
+it.each(
+	[
+		'(runtime.engine as X)',
+		'runtime.engine!',
+		'(runtime.engine)',
+		'(runtime.engine satisfies X)',
+		'(<X>runtime.engine)',
+	].flatMap((receiver) => [
+		[`${receiver}.write();`, 'write plane outside a command module'],
+		[`${receiver}.require();`, 'require plane outside a named read'],
+	])
+)('fences engine methods through transparent wrappers: %s', (source, rule) => {
+	expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([rule]);
+});
+
+it.each(
+	[
+		'(collection as X)',
+		'collection!',
+		'(collection)',
+		'(collection satisfies X)',
+		'(<X>collection)',
+	].flatMap((receiver) => [
+		[`${receiver}.$;`, 'raw change stream'],
+		[`${receiver}.close();`, 'database or collection lifecycle (close) outside the data layer'],
+	])
+)('fences collection receivers through transparent wrappers: %s', (source, rule) => {
+	expect(violations(source, 'fixture.ts').map(({ rule }) => rule)).toEqual([rule]);
+});
+
+it('unwraps nested engine scope receivers', () => {
+	expect(
+		violations('((runtime.engine!).scope as Scope).resetCollection();').map(({ rule }) => rule)
+	).toEqual(['collection reset outside the reset command']);
+});
+
+it.each([
+	'collection.find(query);',
+	'collections.orders.find(q);',
+	"collections['orders']['find'](options.query);",
+	'ordersCollection.find(options.query);',
+	"ordersCollection?.['find']?.(options['query']);",
+	'(collection as X).find(query);',
+])('fences collection-named find with a query variable: %s', (source) => {
+	expect(violations(source).filter(({ rule }) => rule === 'raw query construction')).toHaveLength(
+		1
+	);
+});
+
+it.each([
+	'collection.find((x) => x.id);',
+	'collection.find(function predicate(x) { return x.id; });',
+	'items.find(pred);',
+	'items.find(options.predicate);',
+	'(record as X).$;',
+	'(dialog as X).close();',
+	'(other as X).write();',
+])('keeps unrelated/callback receiver syntax allowed: %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+it.each(['C:/repo/packages/core/src/x.ts', 'C:\\repo\\packages\\core\\src\\x.ts'])(
+	'resolves Windows absolute scan paths before checking relative imports: %s',
+	(path) => {
+		expect(violations("import '../../database/src';", path).map(({ rule }) => rule)).toEqual([
+			'cross-package relative import',
+		]);
+		expect(violations("import './helpers';", path)).toEqual([]);
+	}
+);
+
+it.each([
+	[
+		"import { Database } from 'packages/database/src';",
+		['cross-package relative import', 'storage import'],
+	],
+	["export * from 'packages/query/src';", ['cross-package relative import', 'query escape hatch']],
+	[
+		"import { EngineCollection } from 'packages/query';",
+		['cross-package relative import', 'query escape hatch'],
+	],
+	[
+		"import { MUTATION_QUEUE_RXDB_COLLECTION } from 'packages/sync-engine/src';",
+		['cross-package relative import', 'mutation queue'],
+	],
+	[
+		"const module = import('packages/database/src');",
+		['cross-package relative import', 'storage import'],
+	],
+	["import { helper } from 'packages/utils/src';", ['cross-package relative import']],
+])('fences baseUrl-rooted package imports: %s', (source, rules) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(rules);
+});
