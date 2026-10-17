@@ -8,6 +8,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
@@ -391,6 +392,10 @@ export function ReaderRow({
 									<Icon name="circleInfo" />
 									<Text>{t('settings.card_readers.release_reader')}</Text>
 								</DropdownMenuItem>
+							) : null}
+							{remembered && !connected && !sdkUi && status.reader ? (
+								// The red row is last and set apart when another action sits above it.
+								<DropdownMenuSeparator />
 							) : null}
 							{remembered || connected ? (
 								<DropdownMenuItem
