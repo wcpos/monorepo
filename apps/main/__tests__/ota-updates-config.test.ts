@@ -69,12 +69,30 @@ describe('mobile OTA configuration', () => {
 		expect(appConfig.runtimeVersion).toEqual({ policy: 'fingerprint' });
 	});
 
-	it('excludes only version fields from the native fingerprint', () => {
+	it('names the balanced preset and excludes only version fields from the native fingerprint', () => {
 		const configPath = resolve(__dirname, '../fingerprint.config.js');
 		expect(existsSync(configPath)).toBe(true);
 		const fingerprintConfig = require(configPath);
 		expect(fingerprintConfig).toHaveProperty('sourceSkips');
-		expect(normalizeSourceSkips(fingerprintConfig.sourceSkips)).toBe(SourceSkips.ExpoConfigVersions);
+		expect(normalizeSourceSkips(fingerprintConfig.sourceSkips)).toBe(
+			SourceSkips.ExpoConfigVersions
+		);
+		expect(fingerprintConfig.preset).toBe('balanced');
+	});
+
+	it('hashes every pnpm patch that edits native code, and no JS-only patch', () => {
+		const fingerprintConfig = require(resolve(__dirname, '../fingerprint.config.js'));
+		const listed = fingerprintConfig.extraSources.map(
+			(source: { type: string; filePath: string }) => {
+				expect(source.type).toBe('file');
+				expect(existsSync(resolve(__dirname, '..', source.filePath))).toBe(true);
+				return source.filePath;
+			}
+		);
+		expect(listed).toEqual([
+			'../../patches/expo-modules-core@58.0.22.patch',
+			'../../patches/react-native-esc-pos-printer@4.5.0.patch',
+		]);
 	});
 
 	it('reuses the resolved runtime only in the E2E Metro process', () => {
@@ -112,6 +130,7 @@ describe('mobile OTA configuration', () => {
 	it('checks on load without delaying POS startup', () => {
 		expect(appConfig.updates?.checkAutomatically).toBe('ON_LOAD');
 		expect(appConfig.updates?.fallbackToCacheTimeout).toBe(0);
+		expect(appConfig.updates?.maxUpdatesToKeep).toBe(2);
 	});
 
 	it('routes release builds to their channels but leaves dev clients on Metro', () => {

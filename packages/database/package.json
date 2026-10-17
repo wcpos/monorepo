@@ -30,7 +30,7 @@
     "@wcpos/sync-core": "workspace:*",
     "@wcpos/utils": "workspace:*",
     "ajv": "^8.20.0",
-    "expo-sqlite": "~58.0.12",
+    "expo-sqlite": "~58.0.13",
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
     "rxdb": "17.6.0",
