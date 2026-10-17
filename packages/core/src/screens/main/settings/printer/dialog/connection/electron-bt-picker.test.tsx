@@ -6,6 +6,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { ElectronBtPicker } from './electron-bt-picker';
 
+// ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,

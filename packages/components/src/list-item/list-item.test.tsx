@@ -38,7 +38,7 @@ jest.mock('../text', () => ({
 
 it('uses the card surface, row height and muted press with disabled opacity', () => {
 	const { getByTestId } = render(<ListItem testID="row" title="Paul" disabled />);
-	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted', 'opacity-45');
+	expect(getByTestId('row')).toHaveClass('min-h-row', 'bg-card', 'active:bg-muted', 'opacity-50');
 });
 
 it('preserves explicit variant priority over selected', () => {

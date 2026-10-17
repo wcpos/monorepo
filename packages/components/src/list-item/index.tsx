@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { TILE_SURFACE } from '../lib/tile-surface';
 
 /**
  * ListItem — a selectable row with leading content, title, and trailing content.
@@ -30,15 +31,16 @@ import { Text } from '../text';
  *   <Text>Custom content here</Text>
  * </ListItem>
  */
+// A tile laid out as a row: the tile's surface and its picked state (`lib/tile-surface.ts`).
 const listItemVariants = cva(
-	'min-h-row active:bg-muted flex-row items-center gap-3 rounded-lg border px-3 py-2',
+	`min-h-row flex-row items-center gap-3 px-3 py-2 ${TILE_SURFACE.base}`,
 	{
 		variants: {
 			variant: {
-				default: 'border-border bg-card',
-				selected: 'border-primary bg-primary/10',
+				default: TILE_SURFACE.rest,
+				selected: TILE_SURFACE.selected,
 				warning: 'border-warning/40 bg-warning/10',
-				dashed: 'border-border border-dashed',
+				dashed: TILE_SURFACE.dashed,
 			},
 		},
 		defaultVariants: {
@@ -88,7 +90,7 @@ export function ListItem({
 		<Pressable
 			className={cn(
 				listItemVariants({ variant: resolvedVariant }),
-				pressableProps.disabled && 'opacity-45',
+				pressableProps.disabled && TILE_SURFACE.disabled,
 				className
 			)}
 			{...pressableProps}

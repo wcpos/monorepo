@@ -5,6 +5,7 @@ import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Dialog,
@@ -309,40 +310,36 @@ export function PrinterSetupDialog({
 	const cards = found.map((p) => {
 		const status = classifyPrinter(p, platform);
 		return (
-			<Button
+			<ListItem
 				key={p.address}
 				testID={`printer-setup-result-${p.address}`}
-				variant="outline"
-				className={`h-auto w-full justify-between px-4 py-3 ${
-					selected?.address === p.address ? 'border-primary bg-primary/5' : ''
-				}`}
+				className="w-full px-4 py-3"
+				selected={selected?.address === p.address}
 				disabled={!['ready', 'unsure'].includes(status)}
 				onPress={() => flow.select(p)}
-			>
-				<View className="w-full flex-row items-center justify-between gap-3">
-					<View className="shrink gap-0.5">
-						<Text className="text-base font-semibold">{p.name}</Text>
-						<View className="flex-row items-center gap-2">
-							<Text className="text-muted-foreground text-sm">
-								{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
-								{p.identity?.model
-									? ` · ${p.identity.model}`
-									: p.identity?.vendor
-										? ` · ${vendorLabel(p.identity.vendor)}`
-										: ''}
-							</Text>
-							<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
-								{native && secureTargetFor(p)
-									? t('settings.setup_source_network_secure')
-									: t(`settings.setup_source_${p.source}`)}
-							</Text>
-						</View>
-					</View>
+				trailing={
 					<Text className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pill[status]}`}>
 						{t(`settings.setup_${status}`)}
 					</Text>
+				}
+			>
+				<Text className="text-base font-semibold">{p.name}</Text>
+				<View className="flex-row items-center gap-2">
+					<Text className="text-muted-foreground text-sm">
+						{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
+						{p.identity?.model
+							? ` · ${p.identity.model}`
+							: p.identity?.vendor
+								? ` · ${vendorLabel(p.identity.vendor)}`
+								: ''}
+					</Text>
+					<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
+						{native && secureTargetFor(p)
+							? t('settings.setup_source_network_secure')
+							: t(`settings.setup_source_${p.source}`)}
+					</Text>
 				</View>
-			</Button>
+			</ListItem>
 		);
 	});
 	const headline = (

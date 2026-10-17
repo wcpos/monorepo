@@ -11,6 +11,8 @@ import { OsPrintersSection } from './os-printers-section';
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
 
+// ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,

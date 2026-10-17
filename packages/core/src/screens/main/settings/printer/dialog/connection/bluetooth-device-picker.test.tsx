@@ -15,6 +15,8 @@ import { UsbDevicePicker } from './usb-device-picker';
 import type { PrinterFormValues } from '../../schema';
 import type { Resolver } from 'react-hook-form';
 
+// ListItem's remove button loads the Icon (Uniwind, ESM); no row here is removable.
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: jest.fn(async () => ({ columns: 48, source: 'printer' })),
 	usePrinterDiscovery: () => ({

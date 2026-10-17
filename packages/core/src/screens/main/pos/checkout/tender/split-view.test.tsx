@@ -127,7 +127,7 @@ it('disables paid lines and empty selection, then pays or shares the selected gr
 	render(<Harness />);
 	fireEvent.click(screen.getByTestId('checkout-split-tab-item'));
 	expect(screen.getByTestId('checkout-split-item-1').getAttribute('aria-disabled')).toBe('true');
-	expect(screen.getByTestId('checkout-split-item-1').className).toContain('opacity-40');
+	expect(screen.getByTestId('checkout-split-item-1').className).toContain('opacity-50');
 	expect(screen.getByText('paid · Card + SumUp')).toBeTruthy();
 	expect(screen.getByTestId('checkout-split-items-go').hasAttribute('disabled')).toBe(true);
 	for (const ways of [1, 2, 3, 4]) {
