@@ -221,6 +221,8 @@ export type SyncEventFieldsByType = {
 		readonly changed: number;
 		readonly skippedDirty?: number;
 		readonly durationMs?: number;
+		/** Stamped when the audit ran but its cursor could not be saved. */
+		readonly outcome?: 'failed';
 	};
 	'coverage.compacted': { readonly removed: number };
 	'transport.request': {

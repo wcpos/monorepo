@@ -88,7 +88,7 @@ export type ErrorCode =
 	| 'CHECKOUT411'
 	| 'CHECKOUT421'
 	| 'CLIENT151'
-	| 'CLIENT161'
+	| 'CLIENT171'
 	| 'AUTH131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
@@ -908,8 +908,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'Part of the screen failed to load and was replaced by an error message.',
 	},
-	CLIENT161: {
-		code: 'CLIENT161',
+	CLIENT171: {
+		code: 'CLIENT171',
 		symbol: 'CLOCK_OUT_OF_SYNC',
 		domain: 'CLIENT',
 		severity: 'warn',
@@ -1018,6 +1018,6 @@ export const ERROR_CODES = {
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
-	CLOCK_OUT_OF_SYNC: 'CLIENT161',
+	CLOCK_OUT_OF_SYNC: 'CLIENT171',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;

@@ -572,6 +572,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 					level: 'warn',
 					message: `Existence reconcile cursor write failed: ${error instanceof Error ? error.message : String(error)}`,
 					fields: {
+						outcome: 'failed',
 						buckets: summary.buckets,
 						emptyBuckets: summary.emptyBuckets,
 						pruned: summary.pruned,

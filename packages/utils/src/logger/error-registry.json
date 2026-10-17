@@ -1931,7 +1931,7 @@
 		"introducedIn": "1.10.21"
 	},
 	{
-		"code": "CLIENT161",
+		"code": "CLIENT171",
 		"symbol": "CLOCK_OUT_OF_SYNC",
 		"domain": "CLIENT",
 		"severity": "warn",

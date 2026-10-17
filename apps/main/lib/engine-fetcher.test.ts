@@ -600,7 +600,7 @@ describe('createEngineFetcher', () => {
 
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('Server clock is 120s ahead of the device clock', {
-			code: 'CLIENT161',
+			code: 'CLIENT171',
 			context: {
 				skewSeconds: 120,
 				serverDate: '1970-01-01T00:02:00.000Z',

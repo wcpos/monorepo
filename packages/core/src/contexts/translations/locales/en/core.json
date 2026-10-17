@@ -1597,7 +1597,7 @@
 	"health.logs.error_summary.CHECKOUT411": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
 	"health.logs.error_summary.CHECKOUT421": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
 	"health.logs.error_summary.CLIENT151": "Part of the screen failed to load and was replaced by an error message.",
-	"health.logs.error_summary.CLIENT161": "This device's clock and your store's clock are more than a minute apart.",
+	"health.logs.error_summary.CLIENT171": "This device's clock and your store's clock are more than a minute apart.",
 	"health.logs.error_summary.AUTH131": "The saved store session was incomplete, so WCPOS returned to the store list.",
 	"health.logs.error_action.SYNC101": "Note the unsaved change and check device storage, then restart. Do not clear local data.",
 	"health.logs.error_action.SYNC111": "Repair from Store health → Database.",
@@ -1686,6 +1686,6 @@
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
 	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted.",
 	"health.logs.error_action.CLIENT151": "Close the error message to retry; if it comes back, reload the app.",
-	"health.logs.error_action.CLIENT161": "Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
+	"health.logs.error_action.CLIENT171": "Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
 	"health.logs.error_action.AUTH131": "Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 }

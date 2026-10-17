@@ -957,10 +957,29 @@ describe('createSyncLogObserver', () => {
 		['product.browse-window.approximate', 'warn'],
 		['product.browse-window.brand-filter-ignored', 'warn'],
 		['coverage.require.stalled', 'warn'],
+		['browse-window.backstop-reached', 'warn'],
+		['engine.reset-needs-confirmation', 'warn'],
+		['apply.barcode-rederive', 'warn'],
 	] as const)('keeps self-settling %s as an uncoded info row', (type, level) => {
 		observer.observe(event({ type, level, fields: { recordId: 'r-1' } }));
 
 		expect(rows[0]).toMatchObject({ level: 'info', code: undefined });
+	});
+
+	it('keeps a failed existence-audit cursor write as a failed info row', () => {
+		observer.observe(
+			event({
+				type: 'coverage.existence-reconcile',
+				level: 'warn',
+				fields: { pruned: 0, missing: 0, changed: 0, outcome: 'failed' },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			code: undefined,
+			terminal: { outcome: 'failed' },
+		});
 	});
 
 	it('streak-gates a write drain crash and keeps the claim-release failure quiet', () => {
@@ -1047,11 +1066,12 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('renders single-tab write leadership as a visible lifecycle warning', () => {
+	it('records degraded write leadership as a visible info row, not CLIENT121', () => {
 		observer.observe(event({ type: 'engine.write-leader.degraded', level: 'warn' }));
 
 		expect(rows[0]).toMatchObject({
-			level: 'warn',
+			level: 'info',
+			code: undefined,
 			terminal: { operationType: 'sync.lifecycle', outcome: 'unknown' },
 		});
 	});

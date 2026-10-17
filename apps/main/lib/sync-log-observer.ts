@@ -308,10 +308,14 @@ export const CONFORMANCE_TABLE = {
 	},
 	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok', code: null },
 	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok', code: null },
+	// The reset was REFUSED, so nothing changed: the queued changes it would have
+	// destroyed are still there and still send. The merchant's only reset path
+	// (Store health → Database) confirms in its own dialog and never lands here.
 	'engine.reset-needs-confirmation': {
 		operationType: 'sync.reset',
 		outcome: 'cancelled',
 		code: null,
+		level: 'info',
 	},
 	'engine.disposed': { operationType: 'sync.lifecycle', outcome: 'ok', code: null },
 	'engine.connectivity-error': {
@@ -354,7 +358,16 @@ export const CONFORMANCE_TABLE = {
 		didWork: (f) => num(f.refetched) > 0,
 	},
 	'apply.refresh': { operationType: 'sync.apply', outcome: 'ok', code: null },
-	'apply.barcode-rederive': { operationType: 'sync.apply', outcome: 'ok', code: null },
+	// Info even when the rebuilt index was declined (`applied: false`, stamped
+	// outcome failed): only a mid-tick scope switch declines it, which drops the
+	// tick's other guarded writes too — the config baseline among them — so the
+	// scope re-derives on its next tick. Nothing for the merchant to do.
+	'apply.barcode-rederive': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		code: null,
+		level: 'info',
+	},
 	// The designed tombstone path: local copies of ids the store no longer
 	// serves are removed (pending local edits protected). Nothing to do.
 	'targeted.pull.shortfall-prune': {
@@ -407,14 +420,19 @@ export const CONFORMANCE_TABLE = {
 		level: (_event, fields) => (requestReported(fields) ? 'info' : 'warn'),
 	},
 	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok', code: null },
+	// Info even when the audit's cursor write fails (stamped outcome failed): the
+	// reconcile is a periodic convergence pass, and the next one simply resumes
+	// from the last cursor it did save.
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
 		code: null,
+		level: 'info',
 		// Prune is the audit's only executed action. `missing`/`changed` are
 		// observations, and windowed stores keep `missing` > 0 by design — counting
 		// them as work would persist a steady-state row every audit cycle.
-		didWork: (f) => num(f.pruned) > 0,
+		// A failed cursor write is kept too: it is the evidence of a stuck audit.
+		didWork: (f) => num(f.pruned) > 0 || f.outcome === 'failed',
 	},
 	'coverage.compacted': {
 		// Emitted on every retention pass, including the common no-op one; without
@@ -720,10 +738,14 @@ export const CONFORMANCE_TABLE = {
 	// the runtime default. Invisible rows remain available to diagnostics only.
 	// ————————————————————————————————————————————————————————————————————————
 	// decided: visible — reaching the hard cap leaves the cashier's list incomplete.
+	// Info: the 100,000-row ceiling takes ten thousand scroll ticks to reach, so
+	// hitting it means a corrupted limit (support evidence), and the window
+	// simply stops growing — there is nothing for the merchant to do or lose.
 	'browse-window.backstop-reached': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
 		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: invisible — a racing reset only changes internal lane bookkeeping.
@@ -794,11 +816,16 @@ export const CONFORMANCE_TABLE = {
 	},
 	// decided: invisible — scheduling a catch-up tick after reconnect is internal narration.
 	'engine.reconnect.retick': INVISIBLE,
-	// decided: visible — single-tab-only syncing explains multi-tab degradation.
+	// decided: visible — explains multi-tab degradation to support.
+	// Info, and not CLIENT121: without Web Locks this tab becomes a writer of its
+	// own (web-write-leader.ts), the opposite of "one tab syncs for all". Its
+	// sales still send, and a second such tab is fenced by the drain's claim
+	// lease and the server's mutationId dedupe — nothing for the merchant to do.
 	'engine.write-leader.degraded': {
 		operationType: 'sync.lifecycle',
 		outcome: 'unknown',
-		code: ERROR_CODES.MULTI_TAB_LIMITED,
+		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
