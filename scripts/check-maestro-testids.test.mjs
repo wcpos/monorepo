@@ -45,6 +45,50 @@ test('checks every literal alternative and reports only the missing one', (t) =>
 	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - y\n');
 });
 
+test('collects ternary results assigned to a testID variable, not its condition', (t) => {
+	// pos/products/tiles/product-tile.tsx names its testID this way; flow 10 waits on it.
+	const source = `const testID = onDrill === 'yes' ? 'variable-product-tile' : 'product-tile';
+return <Pressable testID={testID} />;`;
+	const present = check(t, "id: 'product-tile'\nid: 'variable-product-tile'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'yes'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(missing.stderr, '✖ Maestro flows reference testIDs missing from source:\n  - yes\n');
+});
+
+test('counts an arm only when the arm is the literal, not a quoted call argument', (t) => {
+	const source = `const testID = drill ? makeID('suffix') : nested ? 'arm-b' : 'arm-c';`;
+	const present = check(t, "id: 'arm-b'\nid: 'arm-c'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'suffix'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(
+		missing.stderr,
+		'✖ Maestro flows reference testIDs missing from source:\n  - suffix\n'
+	);
+});
+
+test('counts parenthesised and template-literal arms of a testID variable', (t) => {
+	const source =
+		"const testID = on ? ('active-id') : 'inactive-id';\n" +
+		'const rowTestID = left ? `left-${l}` : `right-${r}`;';
+	const present = check(t, "id: 'active-id'\nid: 'inactive-id'\nid: 'right-456'", source);
+	assert.equal(present.status, 0, present.stderr);
+});
+
+test('reads a typed testID variable and starts the arms at the conditional, not at ?. or ??', (t) => {
+	const source = `const testID: string = product?.kind === 'cond-a' ? 'typed-a' : 'typed-b';
+const otherTestID = (mode ?? 'cond-b') === 'x' ? 'typed-c' : 'typed-d';`;
+	const present = check(t, "id: 'typed-a'\nid: 'typed-b'\nid: 'typed-c'\nid: 'typed-d'", source);
+	assert.equal(present.status, 0, present.stderr);
+	const missing = check(t, "id: 'cond-a'\nid: 'cond-b'", source);
+	assert.equal(missing.status, 1);
+	assert.equal(
+		missing.stderr,
+		'✖ Maestro flows reference testIDs missing from source:\n  - cond-a\n  - cond-b\n'
+	);
+});
+
 test('collects both ternary results without the condition or neighboring expressions', (t) => {
 	const source = `<View testID={c === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'} label={'outside'} />
 <View testID={value} label={c ? 'neighbor' : 'other'} />`;

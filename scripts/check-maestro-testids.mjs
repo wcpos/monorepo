@@ -88,6 +88,31 @@ for (const dir of isMain ? sourceDirs : []) {
 		for (const m of text.matchAll(/\w*[tT]estID\s*=\s*\{[^}\n]*?\?([^}\n]*)\}/g)) {
 			for (const value of m[1].matchAll(/["']([^"']+)["']/g)) literals.add(value[1]);
 		}
+		// A ternary assigned to a *TestID variable (`const testID: string = drill ? 'a' : 'b';`,
+		// then `testID={testID}`): its results only, bounded to the statement on this line. The
+		// arms start at the conditional `?`, never at optional chaining (`?.`) or `??` in the
+		// condition, whose literals are not testIDs.
+		for (const m of text.matchAll(
+			/\b(?:const|let)\s+\w*[tT]estID\s*(?::[^=;\n]+)?=\s*([^;\n]*)/g
+		)) {
+			const conditional = /(?<!\?)\?(?![.?])/.exec(m[1]);
+			if (!conditional) continue;
+			// An arm counts only when it IS a literal (after `?` or `:`, before `:` or the end),
+			// never a string nested in a call such as `makeID('suffix')`.
+			const arms = m[1].slice(conditional.index);
+			// A parenthesised arm, `? ('a') :`, is still the literal; a template arm adds its
+			// static prefix (or the whole template when it interpolates nothing).
+			for (const value of arms.matchAll(
+				/[?:]\s*\(?\s*(?:["']([^"']+)["']|`([^`]*)`)\s*\)?\s*(?=:|$|[;)\]}])/g
+			)) {
+				if (value[1] !== undefined) literals.add(value[1]);
+				else {
+					const dynamicStart = value[2].indexOf('${');
+					if (dynamicStart === -1) literals.add(value[2]);
+					else if (dynamicStart > 0) prefixes.add(value[2].slice(0, dynamicStart));
+				}
+			}
+		}
 		// Template-literal values, including inside short expressions (ternaries).
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:][^`\n]{0,80}`([^`]+)`/g)) {
 			const template = m[1];
