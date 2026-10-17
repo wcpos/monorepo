@@ -13,6 +13,7 @@ import {
 	type UnsentChanges,
 } from '@wcpos/utils/unsent-changes';
 
+import { PRE_THEME_COLOURS, PRE_THEME_RADIUS } from './pre-theme-colours';
 import { resetConfirmBody } from './root-error-copy';
 
 import type { FallbackProps } from 'react-error-boundary';
@@ -20,11 +21,12 @@ import type { FallbackProps } from 'react-error-boundary';
 const appLogger = getLogger(['wcpos', 'app', 'error']);
 
 /**
- * NOTE: we don't have access to the theme here, so we can't use tailwind
+ * No theme here (this renders above every provider), so no className resolves: the colours and
+ * the radius are the light theme's, from `pre-theme-colours.ts`.
  */
 const styles: any = StyleSheet.create({
 	container: {
-		backgroundColor: '#fafafa',
+		backgroundColor: PRE_THEME_COLOURS.background,
 		flex: 1,
 		justifyContent: 'center',
 	},
@@ -35,23 +37,23 @@ const styles: any = StyleSheet.create({
 		fontSize: 48,
 		fontWeight: '300',
 		paddingBottom: 16,
-		color: '#000',
+		color: PRE_THEME_COLOURS.foreground,
 	},
 	subtitle: {
 		fontSize: 32,
 		fontWeight: '800',
-		color: '#000',
+		color: PRE_THEME_COLOURS.foreground,
 	},
 	error: {
 		paddingVertical: 16,
 	},
 	button: {
-		backgroundColor: '#2196f3',
-		borderRadius: 50,
+		backgroundColor: PRE_THEME_COLOURS.primary,
+		borderRadius: PRE_THEME_RADIUS,
 		padding: 16,
 	},
 	buttonText: {
-		color: '#fff',
+		color: PRE_THEME_COLOURS.primaryForeground,
 		fontWeight: '600',
 		textAlign: 'center',
 	},
@@ -60,26 +62,26 @@ const styles: any = StyleSheet.create({
 		padding: 16,
 	},
 	resetButtonText: {
-		color: '#b3261e',
+		color: PRE_THEME_COLOURS.destructive,
 		fontWeight: '600',
 		textAlign: 'center',
 	},
 	confirm: {
 		marginTop: 8,
-		backgroundColor: '#fff',
-		borderColor: '#b3261e',
-		borderRadius: 8,
+		backgroundColor: PRE_THEME_COLOURS.card,
+		borderColor: PRE_THEME_COLOURS.destructive,
+		borderRadius: PRE_THEME_RADIUS,
 		borderWidth: 1,
 		padding: 16,
 	},
 	confirmTitle: {
-		color: '#b3261e',
+		color: PRE_THEME_COLOURS.destructive,
 		fontSize: 16,
 		fontWeight: '700',
 		paddingBottom: 8,
 	},
 	confirmBody: {
-		color: '#000',
+		color: PRE_THEME_COLOURS.foreground,
 		paddingBottom: 16,
 	},
 	confirmActions: {
@@ -91,21 +93,21 @@ const styles: any = StyleSheet.create({
 		padding: 12,
 	},
 	confirmCancelText: {
-		color: '#000',
+		color: PRE_THEME_COLOURS.foreground,
 		fontWeight: '600',
 	},
 	confirmAction: {
-		backgroundColor: '#b3261e',
-		borderRadius: 50,
+		backgroundColor: PRE_THEME_COLOURS.destructive,
+		borderRadius: PRE_THEME_RADIUS,
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 	},
 	confirmActionText: {
-		color: '#fff',
+		color: PRE_THEME_COLOURS.destructiveForeground,
 		fontWeight: '600',
 	},
 	resetFailedText: {
-		color: '#b3261e',
+		color: PRE_THEME_COLOURS.destructive,
 		paddingTop: 16,
 	},
 });

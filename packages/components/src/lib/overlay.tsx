@@ -169,7 +169,7 @@ const OUTSIDE_PRESS_LAYER: StyleProp<ViewStyle> = [
 	{ pointerEvents: 'auto' },
 ];
 export const OVERLAY_PANEL = {
-	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
+	anchored: 'bg-card border-border rounded-lg border p-2',
 	// `max-w-full`: the phone sheet is the phone's width, whatever cap an anchored caller set
 	// (`max-w-80` on the variations popover left a 280 dp sheet, Pixel 2026-10-06).
 	// Native caps the sheet on the shell's wrappers (a percentage on the panel resolved against

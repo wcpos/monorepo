@@ -152,7 +152,7 @@ export function SplitView({
 										accessibilityState={{ checked, disabled: Boolean(paid) || flow.busy }}
 										disabled={Boolean(paid) || flow.busy}
 										onPress={() => flow.dispatch({ type: 'toggle-split-line', lineId: line.id })}
-										className={`bg-muted min-h-14 flex-row items-center gap-3 rounded-xl p-3 ${paid ? 'opacity-40' : ''}`}
+										className={`bg-muted min-h-14 flex-row items-center gap-3 rounded-lg p-3 ${paid ? 'opacity-40' : ''}`}
 									>
 										<View
 											className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-border'}`}

@@ -208,7 +208,7 @@ export function PrinterSetupDialog({
 			variant={variant}
 			size={full ? 'default' : 'sm'}
 			leftIcon={icon}
-			className={full ? 'h-auto w-full justify-start rounded-xl px-4 py-3' : 'rounded-lg'}
+			className={full ? 'h-auto w-full justify-start px-4 py-3' : undefined}
 			disabled={disabled}
 			onPress={onPress}
 		>
@@ -313,7 +313,7 @@ export function PrinterSetupDialog({
 				key={p.address}
 				testID={`printer-setup-result-${p.address}`}
 				variant="outline"
-				className={`h-auto w-full justify-between rounded-xl px-4 py-3 ${
+				className={`h-auto w-full justify-between px-4 py-3 ${
 					selected?.address === p.address ? 'border-primary bg-primary/5' : ''
 				}`}
 				disabled={!['ready', 'unsure'].includes(status)}
@@ -412,7 +412,7 @@ export function PrinterSetupDialog({
 			{heading('address_heading')}
 			<View
 				testID="printer-setup-address-form"
-				className="border-border gap-3 rounded-xl border p-3"
+				className="border-border gap-3 rounded-lg border p-3"
 			>
 				<View className="flex-row gap-3">
 					<View className="flex-1">
@@ -490,7 +490,7 @@ export function PrinterSetupDialog({
 		</>
 	);
 	const moreOptions = optionsOpen && (
-		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-xl border p-3">
+		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-lg border p-3">
 			<FormField
 				control={form.control}
 				name="name"
