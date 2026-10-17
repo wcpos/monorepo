@@ -46,6 +46,7 @@ const input = {
 	order,
 	source: 'gateway-contract' as const,
 	methodId: 'stripe',
+	settledOrderStatus: 'pending',
 	bindingStatus: 'bound' as const,
 	online: true,
 };
@@ -67,6 +68,8 @@ it('journals and stamps the provenance on the gate-approved session, then return
 		order,
 		completing: true,
 		source: 'gateway-contract',
+		settledOrderStatus: 'pending',
+		settledOrderGateway: 'stripe',
 	});
 	expect(persistSaleProvenance).toHaveBeenCalledWith(ctx, {
 		order,

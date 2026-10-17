@@ -1827,6 +1827,7 @@
 	"settings.scanner_type_bluetooth_spp": "Bluetooth serial",
 	"settings.scanner_type_bluetooth_le": "Bluetooth",
 	"settings.scanner_type_hid_pos": "HID POS",
+	"pos_checkout.gateway_catalog_unavailable": "Payment methods could not load. Try again.",
 	"pos_checkout.payment_form_unavailable": "The payment form can't load — this order has no payment link from the server yet. Close checkout and try again.",
 	"pos_checkout.payment_form_load_failed": "The payment form didn't load — check the connection to your store, then close checkout and try again.",
 	"pos_checkout.customer_display_payment_declined": "Payment declined — please try another payment method.",

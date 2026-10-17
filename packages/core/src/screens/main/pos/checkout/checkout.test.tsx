@@ -22,6 +22,7 @@ jest.mock('../../hooks/use-storage-health', () => ({
 const mockUseObservableSuspense = jest.fn();
 const mockUseObservableEagerState = jest.fn();
 const mockPostMessage = jest.fn();
+const mockPaymentWebview = jest.fn();
 
 interface MockPaymentWebviewProps {
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -70,6 +71,7 @@ jest.mock('./hooks/use-checkout-session', () => ({
 
 jest.mock('./components/payment-webview', () => ({
 	PaymentWebview: (props: MockPaymentWebviewProps) => {
+		mockPaymentWebview(props);
 		paymentWebviewProps = props;
 		// The real component forwards the ref through to the WebView, which exposes
 		// `postMessage`. Stand that in so the test can observe (or not observe) the
@@ -329,6 +331,24 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		mockStorageDegraded = false;
 		paymentWebviewProps = { setFrameStatus: notRendered('PaymentWebview') };
 		processPaymentProps = { onPress: notRendered('process-payment-button') };
+	});
+	it('blocks the older-store frame on a catalog error and retries the catalog fetch', () => {
+		const refetch = jest.fn();
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
+		mockUseObservableEagerState.mockReturnValue(null);
+		mockUseCheckoutSession.mockReturnValue({
+			mode: 'webview',
+			loading: false,
+			gatewayError: 'fetch failed',
+			error: 'payment_gateways_fetch_failed',
+			settledOrderStatuses: {},
+			refetch,
+		});
+		render(<Checkout resource={{} as never} />);
+		expect(mockPaymentWebview).not.toHaveBeenCalled();
+		expect(screen.getByText('pos_checkout.gateway_catalog_unavailable')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('checkout-gateway-catalog-retry'));
+		expect(refetch).toHaveBeenCalledTimes(1);
 	});
 
 	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {

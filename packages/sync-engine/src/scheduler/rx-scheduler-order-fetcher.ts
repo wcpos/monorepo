@@ -1089,6 +1089,7 @@ async function fetchTargetedOrders(
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
+	const appliedRecordIds: string[] = [];
 
 	for (const idsBatch of chunk(ids, batchSize)) {
 		// No `dp` — see the monetary-precision note above fetchBrowserOrderQuery (#946).
@@ -1119,6 +1120,7 @@ async function fetchTargetedOrders(
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
 		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
 		await recordOrderManifestRows(input, materialized, applied);
+		appliedRecordIds.push(...applied.map((document) => String(document.remoteId)));
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -1131,6 +1133,7 @@ async function fetchTargetedOrders(
 		documentCount,
 		requestCount,
 		completed: true,
+		appliedRecordIds,
 	};
 }
 
