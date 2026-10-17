@@ -107,7 +107,11 @@ function TaxRatesContent({ handle }: { handle: QueryHandle }) {
 						onValueChange={setValue}
 						orientation="horizontal"
 					>
-						<ScrollableTabsList className="mx-4 flex-row">
+						<ScrollableTabsList
+							className="mx-4 flex-row"
+							previousLabel={t('common.previous_tab')}
+							nextLabel={t('common.next_tab')}
+						>
 							{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 								<TabsTrigger key={group.slug} value={group.slug}>
 									<Text>{group.name}</Text>
