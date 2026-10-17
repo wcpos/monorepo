@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
 // had drifted by 0.05–0.2 unseen. Zero flaked: Chromium shaded a rounded corner's antialiased
 // edge one level apart between two shots in one job (`dropdown-menu--sheet--spacious-coarse`,
 // 6 pixels, about 0.004). 0.05 is the smallest of the steps tried (0, 0.05, 0.1) that holds,
-// about 13 levels of luma, well under any drawn change.
+// about 13 levels of luma, well under any drawn change; two runs on unchanged baselines held it.
 const PIXEL_COLOUR_THRESHOLD = 0.05;
 
 // CI prebuilds once; local runs always export fresh. Smoke without baselines: npx playwright test -c playwright.gallery.config.ts --ignore-snapshots
