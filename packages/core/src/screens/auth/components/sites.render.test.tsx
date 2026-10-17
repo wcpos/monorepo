@@ -8,6 +8,27 @@ import { createTestT as mockCreateTestT } from '../../../../jest/translate';
 
 let mockSites: unknown[] = [];
 let mockCompatible = true;
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
 jest.mock('observable-hooks', () => ({ useObservableSuspense: () => mockSites }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
