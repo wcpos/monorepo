@@ -9,6 +9,11 @@ import {
 	syncCustomPullBatchIntoRepository,
 } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
+import {
+	InMemoryRecordMutationStorage,
+	pendingRecordIds,
+	RecordMutationQueue,
+} from './recordMutationQueue';
 import { mintRemoteId } from './woo/remoteIdCodec';
 
 // Pull fixtures come from the contract-faithful fake server (fakePullServer.ts, pinned against the
@@ -719,6 +724,75 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 		sequence: 12,
 	};
 
+	it('a live admission protects a delayed pull until the write is acknowledged', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const queue = new RecordMutationQueue(storage);
+		const id = fakeUuid(11);
+		await queue.admitWriter('orders', id, 'writer', Date.now());
+		const protectedIds = pendingRecordIds(await storage.list());
+		await queue.enqueue({
+			mutationId: 'edit',
+			collectionName: 'orders',
+			recordId: id,
+			operation: 'update',
+			origin: 'existing',
+			payload: {},
+			baseRevision: null,
+			queuedAt: new Date().toISOString(),
+		});
+		let dirty = true;
+		const input = {
+			baseUrl: BASE_URL,
+			limit: 50,
+			fetcher: seededServer().fetch,
+			repository: {
+				upsertMany: async (documents: PullResponse['documents']) => {
+					if (documents.some((document) => document.uuid === id)) dirty = false;
+				},
+			},
+		};
+		await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+		expect(dirty).toBe(true);
+		await queue.releaseWriter('orders', id, 'writer');
+		await queue.removePending('edit');
+		await syncCustomPullBatchIntoRepository({
+			...input,
+			pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+		});
+		expect(dirty).toBe(false);
+	});
+	it.each(['preparing', 'committed'] as const)(
+		'a %s void fence protects a delayed pull through removal',
+		async (phase) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const queue = new RecordMutationQueue(storage);
+			const id = fakeUuid(11);
+			const residents = new Set([id]);
+			await queue.fenceForVoid('orders', id, 'void', Date.now());
+			await queue.setVoidPhase('orders', id, 'void', phase);
+			const protectedIds = pendingRecordIds(await storage.list());
+			await queue.setVoidPhase('orders', id, 'void', 'committed');
+			residents.delete(id); // The pull resumes only after the void removed the resident.
+			const input = {
+				baseUrl: BASE_URL,
+				limit: 50,
+				fetcher: seededServer().fetch,
+				repository: {
+					upsertMany: async (documents: PullResponse['documents']) => {
+						for (const document of documents) residents.add(document.uuid);
+					},
+				},
+			};
+			await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+			expect(residents.has(id)).toBe(false);
+			await queue.releaseVoidFence('orders', id, 'void');
+			await syncCustomPullBatchIntoRepository({
+				...input,
+				pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+			});
+			expect(residents.has(id)).toBe(true);
+		}
+	);
 	it('filters pending documents out of the upsert but still advances the checkpoint', async () => {
 		const server = seededServer();
 		const repository = {

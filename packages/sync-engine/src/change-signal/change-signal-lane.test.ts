@@ -37,7 +37,7 @@ function stubDatabase(): ScopeDatabase {
 	return {
 		listCollections: () => [],
 		resetCollection: async () => {},
-		pendingMutationCount: async () => 0,
+		pendingMutationIds: async () => [],
 		close: async () => {},
 	};
 }

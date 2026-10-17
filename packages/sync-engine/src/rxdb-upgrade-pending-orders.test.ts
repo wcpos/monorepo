@@ -15,6 +15,7 @@
  * update against a server revision, a held open cart, a dead letter and a
  * parked conflict. Each run opens a fresh COPY, never the committed files.
  */
+
 import { DatabaseSync } from 'node:sqlite';
 import {
 	copyFileSync,
@@ -43,6 +44,7 @@ import {
 	type StoreScopeIdentity,
 } from '@wcpos/sync-core';
 
+import { drainableGenerationCollectionCreators } from './collections/drainable-generation';
 import { engineCollectionCreators } from './collections/engine-collections';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { createEngineHarness, type EngineHarness, memoryEngineStorage, remoteId } from './testing';
@@ -1750,7 +1752,7 @@ describe('drainLegacyScopeDatabase — failures and file access', () => {
 		const storage = sqliteIn(work);
 		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
 		await db.addCollections({
-			recordMutations: engineCollectionCreators().recordMutations as never,
+			recordMutations: drainableGenerationCollectionCreators().recordMutations as never,
 		});
 		await db.close();
 		expect(existsSync(join(work, `${legacyName}.sqlite`))).toBe(true);
@@ -1772,7 +1774,7 @@ describe('drainLegacyScopeDatabase — failures and file access', () => {
 		const storage = sqliteIn(work);
 		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
 		await db.addCollections({
-			recordMutations: engineCollectionCreators().recordMutations as never,
+			recordMutations: drainableGenerationCollectionCreators().recordMutations as never,
 		});
 		await db.collections.recordMutations!.insert({
 			mutationId: 'dead-letter-1',
@@ -1810,7 +1812,10 @@ describe('drainLegacyScopeDatabase — failures and file access', () => {
 		// Written with TODAY's schemas under the drainable name: products differ, so opening it as
 		// the drainable generation throws DB6.
 		const db = await createRxDatabase({ name: legacyName, storage, multiInstance: false });
-		await db.addCollections(engineCollectionCreators() as never);
+		await db.addCollections({
+			...engineCollectionCreators(),
+			recordMutations: drainableGenerationCollectionCreators().recordMutations,
+		} as never);
 		await db.collections.recordMutations!.insert({
 			mutationId: 'drain-failure-1',
 			collectionName: 'orders',

@@ -48,6 +48,7 @@ import {
 import {
 	assertBulkSuccess,
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	isInternalRow,
 	type QueuedMutation,
 	remoteIdOrNull,
 	scopeDatabaseName,
@@ -231,6 +232,7 @@ function queueOf(database: RxDatabase): RxCollection {
 async function classify(database: RxDatabase): Promise<Classified> {
 	const rows = (await findAllUncached(queueOf(database)))
 		.map((doc) => doc.toJSON() as QueueRow)
+		.filter((row) => !isInternalRow(row))
 		.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
 	const orders = database.collections.orders;
 	const residents = new Map<string, Record<string, unknown>>();
@@ -365,9 +367,9 @@ async function carryOverOpenCarts(
 	if (!liveOrders || !liveQueue)
 		return { carried: 0, error: 'the live database has no orders', deadLettered };
 	const liveRowsFor = async (recordId: string): Promise<QueueRow[]> =>
-		(await liveQueue.find({ selector: { recordId } }).exec()).map(
-			(doc) => doc.toJSON() as QueueRow
-		);
+		(await liveQueue.find({ selector: { recordId } }).exec())
+			.map((doc) => doc.toJSON() as QueueRow)
+			.filter((row) => !isInternalRow(row));
 	for (const cart of carts) {
 		try {
 			let resident = await liveOrders.findOne(cart.recordId).exec();

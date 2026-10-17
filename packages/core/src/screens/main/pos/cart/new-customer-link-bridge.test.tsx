@@ -3,6 +3,7 @@
  */
 import { act, render } from '@testing-library/react';
 import cloneDeep from 'lodash/cloneDeep';
+import { Query } from 'mingo';
 import { BehaviorSubject, map, startWith, Subject } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
@@ -67,6 +68,13 @@ let queue: Record<string, unknown>[] = [];
 const mockWrite = jest.fn();
 const mockLoggerError = jest.fn();
 
+// Match SQLite's null-unsafe inequality: an absent status does not satisfy $ne.
+const queryQueue = (selector: Record<string, unknown>) =>
+	queue.filter((row) => {
+		const status = selector.status as { $ne?: unknown } | undefined;
+		return !(status?.$ne && row.status == null) && new Query(selector).test(row);
+	});
+
 const scope = () => ({
 	scopeId: 'scope-1',
 	barcodeSelectors: { products: [], variations: [] },
@@ -91,11 +99,15 @@ const scope = () => ({
 				])
 			),
 			recordMutations: {
-				findOne: ({ selector }: { selector: Record<string, { $eq: unknown }> }) => ({
-					exec: async () =>
-						queue.find((row) =>
-							Object.entries(selector).every(([field, { $eq }]) => row[field] === $eq)
-						) ?? null,
+				findOne: ({
+					selector,
+				}: {
+					selector: Record<string, { $eq?: unknown; $ne?: unknown }>;
+				}) => ({
+					exec: async () => queryQueue(selector)[0] ?? null,
+				}),
+				find: ({ selector }: { selector: Parameters<typeof queryQueue>[0] }) => ({
+					exec: async () => queryQueue(selector),
 				}),
 			},
 		},
@@ -143,6 +155,7 @@ function fakeStoreDB() {
 let mockStoreDB: StoreDatabase;
 
 jest.mock('@wcpos/query', () => ({
+	hasQueuedDelete: jest.requireActual('@wcpos/query').hasQueuedDelete,
 	...(() => {
 		const {
 			COLLECTION_VOCABULARY,
@@ -483,7 +496,27 @@ describe('NewCustomerLinkBridge', () => {
 		expect(mockWrite.mock.calls.length).toBe(callsBefore);
 	});
 
-	it('does not cancel a void made offline before the ack: no write, and the link is dropped', async () => {
+	it('an internal admission is not a queued order delete', async () => {
+		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
+		queue = [
+			{
+				mutationId: 'admission',
+				collectionName: 'orders',
+				recordId: ORDER,
+				operation: 'delete',
+				status: 'internal',
+			},
+		];
+		await linkOrderToCustomer();
+		render(<NewCustomerLinkBridge />);
+		await flush();
+		await acknowledgeCustomer(91);
+		ackCustomerEvent();
+		await flush();
+		expect(orderUpdates()).toHaveLength(1);
+	});
+
+	it.each(['pending', undefined])('keeps an offline void (%s)', async (status) => {
 		// Pushed at checkout, then voided offline: the delete waits, never attempted.
 		// A stamp now would coalesce into it and turn the void into an update.
 		seed({ order: { ...attachedOpenCart, id: 500 }, orderRemoteId: '500' });
@@ -493,7 +526,7 @@ describe('NewCustomerLinkBridge', () => {
 				collectionName: 'orders',
 				recordId: ORDER,
 				operation: 'delete',
-				status: 'pending',
+				...(status ? { status } : {}),
 				attempts: 0,
 			},
 		];

@@ -2,6 +2,21 @@ import { assertBulkSuccess } from './assertBulkSuccess';
 
 import type { RecordMutation } from './recordMutation';
 
+// Two minutes lets a live void finish while making crash-abandoned holds recoverable.
+const ANNIHILATION_TTL_MS = 120_000;
+// Admission covers only a local enqueue; 30 seconds recovers a crashed writer.
+const WRITER_ADMISSION_TTL_MS = 30_000;
+export const NON_INTERNAL_MUTATION_STATUSES = Object.keys({
+	pending: true,
+	claimed: true,
+	conflicted: true,
+	'needs-revision': true,
+	rejected: true,
+} satisfies Record<Exclude<QueuedMutation['status'], 'internal' | undefined>, true>);
+
+export const isInternalRow = (row: QueuedMutation) => row.status === 'internal';
+const fenceId = (collection: string, record: string) => `${collection}/${record}`;
+
 /**
  * The generic durable write queue shared by every collection (#507).
  *
@@ -47,6 +62,14 @@ import type { RecordMutation } from './recordMutation';
  * bookkeeping ⇒ a fresh mutation: 0 attempts, `pending`, ready to push now.
  */
 export type QueuedMutation = RecordMutation & {
+	/** Void/coalesce ownership: held out of drain until unmarked or removed. */
+	readonly supersededBy?: string;
+	readonly markedAt?: number;
+	/** Internal record fence, never exposed as a deliverable mutation. */
+	readonly expiresAt?: number;
+	readonly admittedBy?: string;
+	readonly admittedAt?: number;
+	readonly admissionReleased?: string;
 	/** Queue-local override for cashier-triggered pushes; never serialized to the server. */
 	readonly explicit?: boolean;
 	/** Monotonic, per-scope queue position — minted by `enqueue`, the primary drain order key. */
@@ -63,7 +86,8 @@ export type QueuedMutation = RecordMutation & {
 	 * (428) and no current revision could be determined — parked until an
 	 * explicit resolution refreshes the revision (retry) or discards. Unlike
 	 * 'conflicted' it carries NO server truth: there was no 409 envelope. */
-	readonly status?: 'pending' | 'claimed' | 'conflicted' | 'needs-revision' | 'rejected';
+	readonly status?:
+		'pending' | 'claimed' | 'conflicted' | 'needs-revision' | 'rejected' | 'internal';
 	/** The server's `current` document from the 409 that conflicted this row — server truth for resolution. */
 	readonly conflictDocument?: Record<string, unknown>;
 	/** The server's current revision from that 409 — the base a retry re-stamps to. */
@@ -202,7 +226,16 @@ export class RecordMutationQueue {
 	 * both consume the same prior row.
 	 */
 	private chain: Promise<unknown> = Promise.resolve();
-	public constructor(private readonly storage: RecordMutationStorage) {}
+	private readonly voidRevisions = new Map<string, RevisionToken | undefined>();
+	public constructor(
+		private readonly storage: RecordMutationStorage,
+		private readonly recovery: {
+			enabled?: () => boolean;
+			now?: () => number;
+			removeResident?: (row: QueuedMutation) => Promise<void | boolean>;
+			restoreCoalesced?: (prior: QueuedMutation, replacementId: string) => Promise<void>;
+		} = {}
+	) {}
 
 	private transact<T>(op: () => Promise<T>): Promise<T> {
 		const run = this.chain.then(op, op);
@@ -222,7 +255,7 @@ export class RecordMutationQueue {
 	async enqueue(mutation: RecordMutation): Promise<QueuedMutation> {
 		return this.transact(async () => {
 			for (;;) {
-				const seq = Math.max(0, ...(await this.storage.list()).map((item) => item.seq ?? 0)) + 1;
+				const seq = Math.max(0, ...(await this.all()).map((item) => item.seq ?? 0)) + 1;
 				const queued = { ...mutation, seq, status: 'pending' as const };
 				try {
 					await this.storage.append(queued);
@@ -243,7 +276,7 @@ export class RecordMutationQueue {
 	 * re-reads and re-decides its placement. Without this, a tail-placement
 	 * decision made on a stale read could slot an OLDER snapshot behind a
 	 * concurrent edit and overwrite it server-side (#516 review P1).
-	 * NOTE: `unchanged` receives the RAW storage rows (unsorted, every status).
+	 * NOTE: `unchanged` receives mutation rows only (unsorted, every status).
 	 */
 	async enqueueWhen(
 		mutation: RecordMutation,
@@ -251,7 +284,7 @@ export class RecordMutationQueue {
 	): Promise<QueuedMutation | null> {
 		return this.transact(async () => {
 			for (;;) {
-				const rows = await this.storage.list();
+				const rows = await this.all();
 				if (!unchanged(rows)) return null;
 				const seq = Math.max(0, ...rows.map((item) => item.seq ?? 0)) + 1;
 				const queued = { ...mutation, seq, status: 'pending' as const };
@@ -276,11 +309,13 @@ export class RecordMutationQueue {
 	async claim(next: QueuedMutation, nowMs: number = Date.now()): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === next.mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === next.mutationId
 			);
 			const row = stored?.mutation;
 			if (
 				!row ||
+				(row.admissionReleased !== undefined && row.admissionReleased !== next.admissionReleased) ||
+				row.supersededBy !== undefined ||
 				(row.status !== undefined && row.status !== 'pending' && row.status !== 'claimed')
 			)
 				return false;
@@ -315,10 +350,15 @@ export class RecordMutationQueue {
 	 * drain, or already superseded by a concurrent write) — the caller re-reads
 	 * the queue and retries its coalesce decision.
 	 */
-	async coalesceInto(priorMutationId: string, replacement: QueuedMutation): Promise<boolean> {
+	async coalesceInto(
+		priorMutationId: string,
+		replacement: QueuedMutation,
+		nowMs = (this.recovery.now ?? Date.now)()
+	): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === priorMutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === priorMutationId
 			);
 			const row = stored?.mutation;
 			// Coalescing is valid ONLY into a never-pushed pending row (#516 rule 1).
@@ -329,10 +369,22 @@ export class RecordMutationQueue {
 			// never consume an ever-pushed mutation under a fresh id (adversarial P2).
 			if (
 				!row ||
+				row.supersededBy !== undefined ||
 				(row.status !== undefined && row.status !== 'pending') ||
 				(row.attempts ?? 0) !== 0
 			)
 				return false;
+			if (replacement.admittedBy && replacement.admissionReleased !== replacement.admittedBy) {
+				// Keep the receipted generation until this admission durably releases.
+				if (
+					!(await this.storage.appendIfUnchanged(
+						{ ...row, supersededBy: `coalesce:${replacement.admittedBy}`, markedAt: nowMs },
+						stored.rev
+					))
+				)
+					return false;
+				return this.storage.appendIfUnchanged(replacement, null);
+			}
 			// Insert the replacement under its FRESH id (nobody else holds it), then
 			// remove the prior row CONDITIONALLY on the revision we just read. If the
 			// prior moved between the read and the remove — a concurrent claim,
@@ -354,10 +406,15 @@ export class RecordMutationQueue {
 	/** `removePending` without the transact wrapper — for use INSIDE a transaction. */
 	private async removePendingInternal(mutationId: string): Promise<boolean> {
 		const stored = (await this.storage.listStored()).find(
-			(item) => item.mutation.mutationId === mutationId
+			(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 		);
 		const row = stored?.mutation;
-		if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+		if (
+			!row ||
+			row.supersededBy !== undefined ||
+			(row.status !== undefined && row.status !== 'pending')
+		)
+			return false;
 		return this.storage.removeIfUnchanged(mutationId, stored.rev);
 	}
 
@@ -367,17 +424,521 @@ export class RecordMutationQueue {
 	 * drain-in-flight create must NOT be annihilated (the server may already be
 	 * applying it); the delete queues behind it instead.
 	 */
-	async removePending(mutationId: string): Promise<boolean> {
+	async removePending(
+		mutationId: string,
+		options: { requireNeverPushed?: boolean } = {}
+	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			const row = stored?.mutation;
-			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+			if (
+				!row ||
+				row.supersededBy !== undefined ||
+				(row.status !== undefined && row.status !== 'pending')
+			)
+				return false;
+			// Reassert annihilation's premise on the same revision the CAS removes.
+			if (
+				options.requireNeverPushed &&
+				((row.attempts ?? 0) !== 0 ||
+					row.claimedBy !== undefined ||
+					row.nextAttemptAt !== undefined)
+			)
+				return false;
 			// Revision-checked: a drain-in-flight claim in another process must not be
 			// annihilated. If the row moved to 'claimed' after our read, the remove is
 			// refused and the delete queues behind the in-flight create instead.
 			return this.storage.removeIfUnchanged(mutationId, stored.rev);
+		});
+	}
+
+	/** Reset protects admitted writers and durable instructions to finish a committed void. */
+	async pendingResetCount(nowMs: number): Promise<number> {
+		return (await this.pendingResetIds(nowMs)).length;
+	}
+
+	async pendingResetIds(nowMs: number): Promise<string[]> {
+		return (await this.storage.list())
+			.filter(
+				(row) =>
+					!isInternalRow(row) ||
+					row.payload.phase === 'committed' ||
+					(row.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			)
+			.map((row) =>
+				isInternalRow(row)
+					? JSON.stringify([row.mutationId, row.admittedBy, row.supersededBy])
+					: row.mutationId
+			);
+	}
+
+	async hasVoidFence(collection: string, record: string, nowMs: number): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
+		return (await this.storage.list()).some(
+			(row) =>
+				row.mutationId === fenceId(collection, record) &&
+				((row.expiresAt ?? 0) > nowMs || row.payload.phase === 'committed')
+		);
+	}
+
+	async admitWriter(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		await this.clearExpiredAnnihilation(nowMs);
+		return this.holdRecord(collection, record, token, nowMs, true);
+	}
+
+	/** Expired ownership may renew only for compensation, never to admit new work. */
+	async renewWriter(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number,
+		allowExpiredOwner = false
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === fenceId(collection, record)
+			);
+			if (
+				stored?.mutation.admittedBy !== token ||
+				(!allowExpiredOwner && (stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs)
+			)
+				return false;
+			return this.storage.appendIfUnchanged({ ...stored.mutation, admittedAt: nowMs }, stored.rev);
+		});
+	}
+
+	async admissionState(row: QueuedMutation, nowMs: number): Promise<'released' | 'live' | 'lost'> {
+		if (!row.admittedBy || row.admissionReleased === row.admittedBy) return 'released';
+		const rows = await this.storage.list();
+		if (
+			rows.some(
+				(item) => item.mutationId === row.mutationId && item.admissionReleased === row.admittedBy
+			)
+		)
+			return 'released';
+		const holder = rows.find(
+			(item) => item.mutationId === fenceId(row.collectionName, row.recordId)
+		);
+		return holder?.admittedBy === row.admittedBy &&
+			(holder.payload.phase === 'released' ||
+				(holder.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			? 'live'
+			: 'lost';
+	}
+
+	async releaseWriter(
+		collection: string,
+		record: string,
+		token: string,
+		_nowMs = Date.now()
+	): Promise<void> {
+		await this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === fenceId(collection, record)
+			);
+			if (stored?.mutation.admittedBy !== token)
+				throw new Error('Writer admission was swept or replaced before release');
+			if (stored.mutation.payload.phase !== 'released') {
+				// Elapsed time alone cannot revoke an owner that still wins this CAS.
+				// Durable release proof first: expiry cannot steal this holder while its
+				// receipt is being copied to the appended row (or after a crash here).
+				if (
+					!(await this.storage.appendIfUnchanged(
+						{ ...stored.mutation, payload: { phase: 'released' } },
+						stored.rev
+					))
+				)
+					throw new Error('Writer admission changed before release');
+			}
+			await this.finishWriterRelease(collection, record, token);
+		});
+	}
+
+	/** Durable receipt when holder release failed after the resident write committed. */
+	async recordWriterReceipt(mutationId: string): Promise<void> {
+		const rows = await this.storage.listStored();
+		const stored = rows.find((item) => item.mutation.mutationId === mutationId);
+		if (!stored?.mutation.admittedBy || stored.mutation.supersededBy)
+			throw new Error('Writer receipt no longer owns its mutation');
+		const row = stored.mutation;
+		const id = fenceId(row.collectionName, row.recordId);
+		const holder = rows.find((item) => item.mutation.mutationId === id);
+		// Contend on the fence row itself: a receipt snapshot cannot cross a void commit.
+		if (holder?.mutation.supersededBy || (holder && holder.mutation.admittedBy !== row.admittedBy))
+			throw new Error('Void or another writer owns the record');
+		const receipt = {
+			...row,
+			mutationId: id,
+			status: 'internal' as const,
+			payload: { phase: 'released' },
+		};
+		if (!(await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null)))
+			throw new Error('Writer receipt lost record ownership');
+		if (
+			!stored?.mutation.admittedBy ||
+			!(await this.storage.appendIfUnchanged(
+				{ ...stored.mutation, admissionReleased: stored.mutation.admittedBy },
+				stored.rev
+			))
+		)
+			throw new Error('Could not persist the writer receipt');
+	}
+
+	private async finishWriterRelease(
+		collection: string,
+		record: string,
+		token: string
+	): Promise<void> {
+		const rows = await this.storage.listStored();
+		const holder = rows.find(({ mutation }) => mutation.mutationId === fenceId(collection, record));
+		if (holder?.mutation.admittedBy !== token) return;
+		if (
+			holder.mutation.payload.phase !== 'released' &&
+			!rows.some(
+				({ mutation }) =>
+					!isInternalRow(mutation) &&
+					mutation.admittedBy === token &&
+					mutation.admissionReleased === token
+			)
+		)
+			return;
+		for (const { mutation, rev } of rows) {
+			if (mutation.supersededBy !== `coalesce:${token}`) continue;
+			const replacement = rows.some(
+				({ mutation: row }) => !isInternalRow(row) && row.admittedBy === token
+			);
+			if (
+				!(await (replacement
+					? this.storage.removeIfUnchanged(mutation.mutationId, rev)
+					: this.storage.appendIfUnchanged(
+							{ ...mutation, supersededBy: undefined, markedAt: undefined },
+							rev
+						)))
+			)
+				return;
+		}
+		for (const { mutation, rev } of rows) {
+			if (
+				isInternalRow(mutation) ||
+				mutation.admittedBy !== token ||
+				mutation.collectionName !== collection ||
+				mutation.recordId !== record
+			)
+				continue;
+			if (!(await this.storage.appendIfUnchanged({ ...mutation, admissionReleased: token }, rev)))
+				return;
+		}
+		await this.storage.removeIfUnchanged(holder.mutation.mutationId, holder.rev);
+	}
+
+	get supportsVoidFences(): boolean {
+		return this.recovery.enabled?.() !== false;
+	}
+
+	async fenceForVoid(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number
+	): Promise<boolean> {
+		if (!this.supportsVoidFences) return false; // Frozen v5 cannot persist fences.
+		return this.holdRecord(collection, record, token, nowMs, false);
+	}
+
+	/** Writers and voids contend on ONE revision-checked row, never separate snapshots. */
+	private holdRecord(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs: number,
+		writer: boolean
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const id = fenceId(collection, record);
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === id
+			);
+			const row = stored?.mutation;
+			if (
+				row?.payload.phase === 'committed' ||
+				row?.payload.phase === 'released' ||
+				(row?.expiresAt ?? 0) > nowMs ||
+				(row?.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			)
+				return false;
+			const held = await this.storage.appendIfUnchanged(
+				{
+					mutationId: id,
+					collectionName: collection,
+					recordId: record,
+					operation: 'delete',
+					origin: 'existing',
+					payload: {},
+					baseRevision: null,
+					queuedAt: new Date(nowMs).toISOString(),
+					status: 'internal',
+					// Clear an expired owner's fields on modify; omit them on insert (RxDB validation).
+					...(stored
+						? {
+								supersededBy: undefined,
+								markedAt: undefined,
+								admittedBy: undefined,
+								admittedAt: undefined,
+							}
+						: {}),
+					...(writer
+						? { admittedBy: token, admittedAt: nowMs, expiresAt: 0 }
+						: { supersededBy: token, markedAt: nowMs, expiresAt: nowMs + ANNIHILATION_TTL_MS }),
+				},
+				stored?.rev ?? null
+			);
+			if (held && !writer)
+				this.voidRevisions.set(
+					token,
+					await this.voidRevision(id, token, nowMs + ANNIHILATION_TTL_MS)
+				);
+			return held;
+		});
+	}
+
+	// Read back only our write: recovery always advances expiresAt, so cannot be adopted here.
+	private async voidRevision(id: string, token: string, expiresAt: number, phase?: string) {
+		return (await this.storage.listStored()).find(
+			({ mutation: row }) =>
+				row.mutationId === id &&
+				row.supersededBy === token &&
+				row.expiresAt === expiresAt &&
+				row.payload.phase === phase
+		)?.rev;
+	}
+
+	async releaseVoidFence(
+		collection: string,
+		record: string,
+		token: string,
+		revision = this.voidRevisions.get(token)
+	): Promise<void> {
+		if (!revision || (await this.all()).some((row) => row.supersededBy === token)) return;
+		if (await this.storage.removeIfUnchanged(fenceId(collection, record), revision))
+			this.voidRevisions.delete(token);
+	}
+
+	async setVoidPhase(
+		collection: string,
+		record: string,
+		token: string,
+		phase: 'preparing' | 'committed'
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const rows = await this.storage.listStored();
+			const stored = rows.find((item) => item.mutation.mutationId === fenceId(collection, record));
+			if (
+				phase === 'committed' &&
+				rows.some(
+					({ mutation: row }) =>
+						!isInternalRow(row) &&
+						row.collectionName === collection &&
+						row.recordId === record &&
+						!row.supersededBy &&
+						row.admittedBy &&
+						row.admissionReleased === row.admittedBy
+				)
+			)
+				return false;
+			// No owned fence to roll back: release this void's marks, not the foreign holder.
+			if (!stored || stored.mutation.supersededBy !== token)
+				return !this.voidRevisions.has(token) && phase === 'preparing';
+			const { mutation: row, rev } = stored;
+			if (rev !== this.voidRevisions.get(token)) return false;
+			if (!(await this.storage.appendIfUnchanged({ ...row, payload: { phase } }, rev)))
+				return false;
+			this.voidRevisions.set(
+				token,
+				await this.voidRevision(row.mutationId, token, row.expiresAt!, phase)
+			);
+			return true;
+		});
+	}
+
+	/** Include earlier scope-open/writer sweeps; only the drain consumes their outcomes. */
+	async recoverAnnihilatedMutations(nowMs: number): Promise<QueuedMutation[]> {
+		await this.clearExpiredAnnihilation(nowMs);
+		return (await this.storage.list()).filter(
+			(row) => isInternalRow(row) && row.payload.phase === 'annihilated'
+		);
+	}
+
+	async clearExpiredAnnihilation(
+		nowMs: number,
+		removeResident = this.recovery.removeResident
+	): Promise<void> {
+		if (this.recovery.enabled?.() === false) return;
+		const stored = await this.storage.listStored();
+		for (const { mutation: row } of stored) {
+			if (isInternalRow(row) && row.admittedBy)
+				await this.finishWriterRelease(row.collectionName, row.recordId, row.admittedBy);
+		}
+		const committed = stored.filter(
+			({ mutation: row }) => isInternalRow(row) && row.payload.phase === 'committed'
+		);
+		for (const { mutation: fence, rev } of committed) {
+			if ((fence.expiresAt ?? 0) > nowMs || !removeResident) continue;
+			if (
+				!(await this.storage.appendIfUnchanged(
+					{ ...fence, expiresAt: nowMs + ANNIHILATION_TTL_MS },
+					rev
+				))
+			)
+				continue;
+			const revision = await this.voidRevision(
+				fence.mutationId,
+				fence.supersededBy!,
+				nowMs + ANNIHILATION_TTL_MS,
+				'committed'
+			);
+			if (!revision) continue;
+			const removed = await removeResident(fence);
+			for (const { mutation: row, rev } of stored) {
+				if (isInternalRow(row) || row.supersededBy !== fence.supersededBy) continue;
+				if (removed === false)
+					await this.unmarkForAnnihilation(row.mutationId, fence.supersededBy!);
+				else
+					await this.storage.appendIfUnchanged(
+						{
+							...row,
+							supersededBy: undefined,
+							markedAt: undefined,
+							admittedBy: undefined,
+							admittedAt: undefined,
+							status: 'internal',
+							payload: { phase: 'annihilated' },
+						},
+						rev
+					);
+			}
+			await this.releaseVoidFence(
+				fence.collectionName,
+				fence.recordId,
+				fence.supersededBy!,
+				revision
+			);
+		}
+		for (const { mutation: row, rev } of stored) {
+			if (
+				row.payload.phase === 'released' ||
+				committed.some(({ mutation }) => mutation.supersededBy === row.supersededBy)
+			)
+				continue;
+			if (
+				isInternalRow(row) &&
+				row.supersededBy === undefined &&
+				row.admittedBy !== undefined &&
+				(row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs &&
+				(row.expiresAt ?? 0) <= nowMs
+			) {
+				await this.storage.removeIfUnchanged(row.mutationId, rev);
+				continue;
+			}
+			if (row.supersededBy === undefined || row.supersededBy.startsWith('coalesce:')) continue;
+			if (
+				stored.some(
+					({ mutation: fence }) =>
+						isInternalRow(fence) &&
+						fence.supersededBy === row.supersededBy &&
+						(fence.expiresAt ?? 0) > nowMs
+				)
+			)
+				continue;
+			if ((row.expiresAt ?? (row.markedAt ?? 0) + ANNIHILATION_TTL_MS) > nowMs) continue;
+			if (isInternalRow(row)) await this.storage.removeIfUnchanged(row.mutationId, rev);
+			else
+				await this.storage.appendIfUnchanged(
+					{ ...row, supersededBy: undefined, markedAt: undefined },
+					rev
+				);
+		}
+		for (const row of await this.all()) {
+			if (!row.supersededBy?.startsWith('coalesce:')) continue;
+			const token = row.supersededBy.slice('coalesce:'.length);
+			// Expiry first CAS-removes the holder above; a normal release wins instead.
+			if (
+				(await this.storage.list()).some((item) => item.admittedBy === token && isInternalRow(item))
+			)
+				continue;
+			const replacement = (await this.all()).find((item) => item.admittedBy === token);
+			if (replacement?.admissionReleased === token) {
+				await this.removeMarked(row.mutationId, row.supersededBy);
+				continue;
+			}
+			// Repair before removal so another crash can replay this idempotently.
+			await this.recovery.restoreCoalesced?.(row, replacement?.mutationId ?? token);
+			if (replacement && !(await this.removePending(replacement.mutationId))) continue;
+			await this.unmarkForAnnihilation(row.mutationId, row.supersededBy);
+		}
+	}
+
+	/** Hold a never-pushed successor without removing it; the revision check arbitrates with drain/coalesce. */
+	async markForAnnihilation(
+		mutationId: string,
+		token: string,
+		nowMs = Date.now(),
+		status: 'pending' | 'rejected' = 'pending'
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
+			);
+			const row = stored?.mutation;
+			if (
+				!row ||
+				row.supersededBy !== undefined ||
+				(row.status ?? 'pending') !== status ||
+				(status === 'rejected'
+					? row.resolutionClaimBy !== undefined &&
+						Date.parse(row.resolutionClaimUntil ?? '') > nowMs
+					: (row.attempts ?? 0) !== 0 ||
+						row.claimedBy !== undefined ||
+						row.nextAttemptAt !== undefined)
+			)
+				return false;
+			return this.storage.appendIfUnchanged(
+				{ ...row, supersededBy: token, markedAt: nowMs },
+				stored.rev
+			);
+		});
+	}
+
+	async unmarkForAnnihilation(mutationId: string, token: string): Promise<boolean> {
+		return this.settleAnnihilationMark(mutationId, token, false);
+	}
+
+	async removeMarked(mutationId: string, token: string): Promise<boolean> {
+		return this.settleAnnihilationMark(mutationId, token, true);
+	}
+
+	private settleAnnihilationMark(
+		mutationId: string,
+		token: string,
+		remove: boolean
+	): Promise<boolean> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			if (!stored || stored.mutation.supersededBy !== token) return false;
+			return remove
+				? this.storage.removeIfUnchanged(mutationId, stored.rev)
+				: this.storage.appendIfUnchanged(
+						{ ...stored.mutation, supersededBy: undefined, markedAt: undefined },
+						stored.rev
+					);
 		});
 	}
 
@@ -388,7 +949,7 @@ export class RecordMutationQueue {
 	async restoreAheadOfRecordNewcomers(rows: readonly QueuedMutation[]): Promise<QueuedMutation[]> {
 		return this.transact(async () => {
 			if (rows.length === 0) return [];
-			const existing = await this.storage.list();
+			const existing = await this.all();
 			const head = rows[0];
 			const newcomers = existing.filter(
 				(item) => item.collectionName === head.collectionName && item.recordId === head.recordId
@@ -457,12 +1018,28 @@ export class RecordMutationQueue {
 	 * would enqueue a rebuild and both would remove, leaving two live writes for
 	 * one recovery.
 	 */
-	async removeIfStatus(mutationId: string, status: QueuedMutation['status']): Promise<boolean> {
+	/** `unclaimedAtMs` makes a void also refuse a live resolution claim in this CAS turn. */
+	async removeIfStatus(
+		mutationId: string,
+		status: QueuedMutation['status'],
+		unclaimedAtMs?: number
+	): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
-			if (!stored || stored.mutation.status !== status) return false;
+			if (
+				!stored ||
+				stored.mutation.status !== status ||
+				stored.mutation.supersededBy !== undefined
+			)
+				return false;
+			if (
+				unclaimedAtMs !== undefined &&
+				stored.mutation.resolutionClaimBy !== undefined &&
+				Date.parse(stored.mutation.resolutionClaimUntil ?? '') > unclaimedAtMs
+			)
+				return false;
 			// Revision-checked: two concurrent resolutions of one dead letter (two
 			// windows) both reach here, but only one remove lands — the loser sees the
 			// row already gone and compensates. Cross-process, the resolution claim
@@ -493,9 +1070,10 @@ export class RecordMutationQueue {
 	}): Promise<'claimed' | 'held' | 'gone'> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === input.mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === input.mutationId
 			);
 			if (!stored || stored.mutation.status !== input.expectedStatus) return 'gone';
+			if (stored.mutation.supersededBy !== undefined) return 'held';
 			const heldBy = stored.mutation.resolutionClaimBy;
 			const until = stored.mutation.resolutionClaimUntil
 				? Date.parse(stored.mutation.resolutionClaimUntil)
@@ -528,7 +1106,7 @@ export class RecordMutationQueue {
 	async releaseResolutionClaim(mutationId: string, holder: string): Promise<void> {
 		await this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === mutationId
+				(item) => !isInternalRow(item.mutation) && item.mutation.mutationId === mutationId
 			);
 			if (!stored || stored.mutation.resolutionClaimBy !== holder) return;
 			await this.storage.appendIfUnchanged(
@@ -540,7 +1118,7 @@ export class RecordMutationQueue {
 
 	/** EVERY stored entry, terminal rows included — the engine's `conflicts()` reads this. */
 	async all(): Promise<QueuedMutation[]> {
-		return this.storage.list();
+		return (await this.storage.list()).filter((row) => !isInternalRow(row));
 	}
 
 	/**
@@ -551,7 +1129,7 @@ export class RecordMutationQueue {
 	 * set is what queue-depth and the pull-apply guard key off.
 	 */
 	async pending(limit = Number.POSITIVE_INFINITY): Promise<QueuedMutation[]> {
-		const mutations = await this.storage.list();
+		const mutations = await this.all();
 		return mutations
 			.filter((mutation) => mutation.status !== 'rejected')
 			.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0) || (a.coalesced ?? 0) - (b.coalesced ?? 0))
@@ -578,7 +1156,17 @@ export class RecordMutationQueue {
 export function pendingRecordIds(mutations: readonly QueuedMutation[]): Set<string> {
 	const ids = new Set<string>();
 	for (const mutation of mutations) {
-		if (mutation.status === 'rejected') continue;
+		// A void fence protects even an absent resident until its owner releases it.
+		const liveAdmission =
+			mutation.admittedBy !== undefined &&
+			mutation.payload.phase !== 'released' &&
+			(mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > Date.now();
+		if (
+			isInternalRow(mutation)
+				? !mutation.supersededBy && !liveAdmission
+				: mutation.status === 'rejected'
+		)
+			continue;
 		ids.add(mutation.recordId);
 	}
 	return ids;
@@ -650,7 +1238,7 @@ export class InMemoryRecordMutationStorage implements RecordMutationStorage {
  * sync-core stays platform-neutral. The host passes its real RxCollection; only these members are used.
  *
  * The document members carry the revision-checked write (task 43): `revision` is
- * RxDB's `_rev`, and `patch` / `remove` are the NON-incremental variants that
+ * RxDB's `_rev`, and `modify` / `remove` are the NON-incremental variants that
  * fail closed with a native 409 CONFLICT when the stored `_rev` has moved since
  * the document was fetched — the exact cross-process guard the port needs. (The
  * `incremental*` variants retry through conflicts and would DEFEAT a claim, so
@@ -659,7 +1247,7 @@ export class InMemoryRecordMutationStorage implements RecordMutationStorage {
 export type RxRecordMutationDocument = {
 	toJSON(): QueuedMutation;
 	readonly revision?: string;
-	patch(changes: Partial<QueuedMutation>): Promise<unknown>;
+	modify(change: (row: QueuedMutation) => QueuedMutation): Promise<unknown>;
 	remove(): Promise<unknown>;
 };
 export type RxRecordMutationCollection = {
@@ -708,14 +1296,14 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 		const rows = await this.collection().find().exec();
 		// The real collection returns RxDocuments; a bare-object row (older test
 		// fakes exercising only the unconditional read path) is wrapped so `list()`
-		// still works. Its `patch`/`remove` reject — a conditional write against a
+		// still works. Its `modify`/`remove` reject — a conditional write against a
 		// non-RxDocument is a wiring error, never a runtime path.
 		return rows.map((row) =>
 			'toJSON' in row
 				? (row as RxRecordMutationDocument)
 				: {
 						toJSON: () => row as QueuedMutation,
-						patch: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
+						modify: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
 						remove: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
 					}
 		);
@@ -763,10 +1351,18 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 		// Gone, or already moved since the caller read it: the precondition fails.
 		if (!document || (document.revision ?? '') !== expectedRev) return false;
 		try {
-			// Non-incremental patch: atomic against the `_rev` we just verified, so a
-			// concurrent write landing between the read above and here fails the patch
+			// Non-incremental modify: atomic against the `_rev` we just verified, so a
+			// concurrent write landing between the read above and here fails the modify
 			// with 409 rather than silently overwriting.
-			await document.patch(mutation);
+			await document.modify((data) => {
+				const next = { ...data, ...mutation };
+				// RxDB patch retains undefined keys, which schema validation rejects.
+				if (next.supersededBy === undefined) delete next.supersededBy;
+				if (next.markedAt === undefined) delete next.markedAt;
+				if (next.admittedBy === undefined) delete next.admittedBy;
+				if (next.admittedAt === undefined) delete next.admittedAt;
+				return next;
+			});
 			return true;
 		} catch (error) {
 			if (isRevisionConflict(error)) return false;
@@ -800,11 +1396,11 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 5,
+	version: 7,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
-		mutationId: { type: 'string', maxLength: 64 },
+		mutationId: { type: 'string', maxLength: 129 },
 		recordId: { type: 'string', maxLength: 64 },
 		collectionName: { type: 'string', maxLength: 64 },
 		operation: { type: 'string', enum: ['create', 'update', 'delete'] },
@@ -815,9 +1411,15 @@ export const recordMutationQueueSchema = {
 		explicit: { type: 'boolean' },
 		seq: { type: 'number', minimum: 1, multipleOf: 1 },
 		coalesced: { type: 'number', minimum: 0, multipleOf: 1 },
+		supersededBy: { type: 'string', maxLength: 64 },
+		markedAt: { type: 'number' },
+		expiresAt: { type: 'number' },
+		admittedBy: { type: 'string', maxLength: 64 },
+		admittedAt: { type: 'number' },
+		admissionReleased: { type: 'string', maxLength: 64 },
 		status: {
 			type: 'string',
-			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected'],
+			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected', 'internal'],
 		},
 		conflictDocument: { type: 'object', additionalProperties: true },
 		conflictRevision: { type: ['string', 'null'] },
@@ -890,4 +1492,7 @@ export const recordMutationQueueMigrationStrategies = {
 	3: (doc: QueuedMutation): QueuedMutation => doc,
 	4: (doc: QueuedMutation): QueuedMutation => doc,
 	5: (doc: QueuedMutation): QueuedMutation => doc,
+	// Optional void mark; preserve existing queued work without a schema-hash reset.
+	6: (doc: QueuedMutation): QueuedMutation => doc,
+	7: (doc: QueuedMutation): QueuedMutation => doc,
 };

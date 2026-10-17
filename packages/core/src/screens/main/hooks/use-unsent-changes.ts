@@ -1,11 +1,10 @@
 import * as React from 'react';
 
-import { Observable, of } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
+import { filter, timeout } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { observeUnsentWorkCount, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import {
 	classifyUnsentChanges,
@@ -30,13 +29,13 @@ type Translate = (key: string, options?: { count: number }) => string;
  * value the crash screen falls back on — lives in `@wcpos/utils/unsent-changes`,
  * where the essay explains why the two halves are split.
  *
- * The count is the WHOLE mutation queue, with no status selector — plus every
+ * The count is the WHOLE mutation queue, excluding internal coordination rows — plus every
  * row a kept previous-generation scope database still holds (the drain records
  * those through `rememberLegacyUnsentChanges`; "Clear all local data" deletes
  * that database with the rest). A row leaves
  * the queue only when the server acknowledges it, so every row still there is a
  * change the server has never seen: pending, claimed, conflicted,
- * needs-revision, and the dead letters alike. Selecting on `status` would also
+ * needs-revision, and the dead letters alike. Selecting only named mutation statuses would
  * miss the rows that legitimately carry none — the schema leaves it optional and
  * treats an absent status as pending — and a change that is invisible to the
  * count is a change a cashier is never warned about losing.
@@ -49,38 +48,14 @@ type Translate = (key: string, options?: { count: number }) => string;
  * see `fault-counter-families.test.tsx`, which pins both off one queue.
  */
 
-type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
-type CountCollection = {
-	count(): { $: Observable<number>; exec(): Promise<number> };
-};
-
 const UNSENT_CHANGES_COUNT_TIMEOUT_MS = 1_000;
-
-function queueOf(database: EngineDatabase): CountCollection {
-	return database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as CountCollection;
-}
-
-function unsentCount$(engine: RxdbSyncEngine): Observable<number | null> {
-	return new Observable<EngineDatabase | null>((subscriber) =>
-		engine.db$((database) => subscriber.next(database))
-	).pipe(
-		switchMap((database) => {
-			// No database (disposed, mid-switch, never opened) is NOT an empty queue.
-			// Recording `null` makes the next reader say "may include unsent sales"
-			// instead of inheriting a zero from the previous scope.
-			if (!database) return of(null);
-			return queueOf(database).count().$;
-		}),
-		catchError(() => of(null))
-	);
-}
 
 /**
  * Keep the remembered reading current for surfaces that cannot ask the engine —
  * above all the root error boundary, which renders above every provider.
  */
 export function subscribeToUnsentChanges(engine: RxdbSyncEngine): () => void {
-	const subscription = unsentCount$(engine).subscribe({
+	const subscription = observeUnsentWorkCount(engine).subscribe({
 		// An empty active queue cannot prove that inactive scope databases erased by
 		// clearAllDB are empty, so it is not safe to remember the reassuring state.
 		next: (count) => rememberUnsentChanges(count === 0 ? null : count),
@@ -96,17 +71,14 @@ export function subscribeToUnsentChanges(engine: RxdbSyncEngine): () => void {
  * broken profile removes the only way out of it.
  */
 export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<UnsentChanges> {
-	let deadline: ReturnType<typeof setTimeout> | undefined;
 	try {
-		const database = engine.active()?.database;
-		if (!database) return readUnsentChanges();
-		const count = await Promise.race([
-			queueOf(database).count().exec(),
-			new Promise<null>((resolve) => {
-				deadline = setTimeout(() => resolve(null), UNSENT_CHANGES_COUNT_TIMEOUT_MS);
-			}),
-		]);
-		if (count === null) return readUnsentChanges();
+		if (!engine.active()) return readUnsentChanges();
+		const count = await firstValueFrom(
+			observeUnsentWorkCount(engine, { snapshot: true }).pipe(
+				filter((value): value is number => value !== null),
+				timeout(UNSENT_CHANGES_COUNT_TIMEOUT_MS)
+			)
+		);
 		rememberUnsentChanges(count === 0 ? null : count);
 		// The classified total includes what a KEPT previous-generation database still
 		// holds (the drain records it): a wipe deletes that database too.
@@ -118,8 +90,6 @@ export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<Unsent
 			context: { error: getErrorMessage(error) },
 		});
 		return readUnsentChanges();
-	} finally {
-		if (deadline !== undefined) clearTimeout(deadline);
 	}
 }
 

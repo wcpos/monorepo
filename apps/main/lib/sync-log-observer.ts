@@ -572,6 +572,21 @@ export const CONFORMANCE_TABLE = {
 	},
 	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	// Void-path recovery (monorepo#2607): a crashed sibling's fence or a resident that gained
+	// server identity during the fence; recovered arcs, not failures.
+	'void.recovery.identity-appeared': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	'void.cleanup-failed': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+		message: recordMessage('void cleanup failed; expiry recovery finishes it'),
+	},
+	'write.admission-release-failed': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+		message: recordMessage('writer admission release failed; the sweep clears it'),
+	},
 	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.tick.error': {
 		operationType: 'sync.queue',

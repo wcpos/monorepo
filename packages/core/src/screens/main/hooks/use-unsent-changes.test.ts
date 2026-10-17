@@ -1,4 +1,4 @@
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map } from 'rxjs';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
@@ -17,6 +17,7 @@ import {
 
 type FakeQueue = {
 	count$: BehaviorSubject<number>;
+	internal$?: BehaviorSubject<number>;
 	execError?: Error;
 	exec?: () => Promise<number>;
 };
@@ -28,20 +29,25 @@ function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
 			: {
 					collections: {
 						[MUTATION_QUEUE_RXDB_COLLECTION]: {
-							count: () => ({
-								$: queue.count$,
-								exec: () =>
-									queue.exec
-										? queue.exec()
-										: queue.execError
-											? Promise.reject(queue.execError)
-											: Promise.resolve(queue.count$.value),
-							}),
+							find: () => {
+								const rows = (count: number) =>
+									Array.from({ length: count }, (_, i) =>
+										i < (queue.internal$?.value ?? 0) ? { status: 'internal' } : {}
+									);
+								return {
+									$: queue.count$.pipe(map(rows)),
+									exec: async () => {
+										if (queue.execError) throw queue.execError;
+										return rows(queue.exec ? await queue.exec() : queue.count$.value);
+									},
+								};
+							},
 						},
 					},
 				};
 
 	return {
+		ready: new Promise(() => {}),
 		active: () => (database ? { database } : null),
 		db$: (cb: (db: unknown) => void) => {
 			cb(database);
@@ -55,9 +61,21 @@ beforeEach(() => {
 });
 
 describe('countUnsentChanges', () => {
+	it('excludes internal coordination rows from the unsent mutation count', async () => {
+		// Whole queue minus the internal rows, by EQUALITY: `$ne` is null-unsafe under the
+		// SQLite translator and would hide every status-less (pending) row.
+		const engine = fakeEngine({
+			count$: new BehaviorSubject(5),
+			internal$: new BehaviorSubject(2),
+		});
+		const find = jest.spyOn(engine.active()!.database.collections.recordMutations, 'find');
+		await expect(countUnsentChanges(engine)).resolves.toMatchObject({ count: 3 });
+		expect(find).toHaveBeenCalledWith();
+	});
+
 	it('counts the WHOLE queue — every row is a change the server has never seen', () => {
-		// No status selector on purpose: `status` is optional in the queue schema
-		// (an absent status means pending), so selecting on it would hide rows, and
+		// Only internal rows are excluded: `status` is optional in the queue schema
+		// (an absent status means pending), so a positive status allowlist would hide rows, and
 		// a hidden row is a sale nobody is warned about losing.
 		const engine = fakeEngine({ count$: new BehaviorSubject(3) });
 

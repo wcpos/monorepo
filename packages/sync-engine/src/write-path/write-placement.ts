@@ -33,6 +33,7 @@ export function decideWritePlacement(input: {
 	const canUseCandidate =
 		canCoalesce &&
 		candidate !== undefined &&
+		candidate.supersededBy === undefined &&
 		(isRecovery || candidate.explicit !== true) &&
 		(candidate.attempts ?? 0) === 0;
 	if (

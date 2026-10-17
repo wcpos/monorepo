@@ -904,11 +904,19 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	// 2026-10-17: RepeatChip's `count` member access was removed on next (not a raw query; the
 	// rule matched a `.count(` on a non-collection receiver). Retired, never re-added.
 	'screens/main/health/components/repeat-chip.tsx :: raw query construction :: RepeatChip :: count :: 1',
+	"screens/main/hooks/use-unsent-changes.ts :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
+	'screens/main/hooks/use-unsent-changes.ts :: raw query construction :: countUnsentChanges :: queueOf(database).count :: 1',
+	'screens/main/hooks/use-unsent-changes.ts :: raw query construction :: unsentCount$ :: queueOf(database).count :: 1',
+	'screens/main/hooks/use-unsent-changes.ts :: storage token :: queueOf :: database.collections :: 1',
+	'screens/main/hooks/use-unsent-changes.ts :: storage token :: unsentCount$ :: engine.db$ :: 1',
 	// #2609: retain server baselines on movement drain, pre-action guards and refund changes.
 	'services/register-session/queue.ts :: record mutator :: drain :: session.incrementalPatch :: 1',
 	'services/register-session/session-store.ts :: record mutator :: requireOpenSession :: session.incrementalPatch :: 1',
 	'services/register-session/use-register-session.ts :: record mutator :: useRegisterSession :: current.getLatest().incrementalPatch :: 1',
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: queue .findOne :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: database.collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 4;
+export const SEAM_RETIRED_FLOOR = 12;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'e7768c27e74a714f1305871d9129bfecfc56292f1792a3fa495ec4ee6094d922';
+	'c966adf1491d7ee255a21b695a115289b356aa60fb85d50983fecccb78dad95f';

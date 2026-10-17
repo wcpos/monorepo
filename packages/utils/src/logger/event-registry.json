@@ -954,5 +954,26 @@
 		"label": "Request to your store",
 		"description": "The POS made a web request to your store.",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "void.cleanup-failed",
+		"domain": "SYNC",
+		"label": "An order was cancelled but its tidy-up did not finish",
+		"description": "The cancellation itself went through; a leftover bookkeeping row could not be removed right away and is cleared automatically later.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "void.recovery.identity-appeared",
+		"domain": "SYNC",
+		"label": "A cancelled order turned out to exist on your store and was kept",
+		"description": "While an order was being cancelled on this device, your store reported it as a real order, so the device kept it instead of removing it; cancel it again from Orders if it should go.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "write.admission-release-failed",
+		"domain": "SYNC",
+		"label": "A change was saved but its bookkeeping could not be released",
+		"description": "The change is queued for your store; a leftover bookkeeping row could not be released right away and is cleared automatically later.",
+		"introducedIn": "2.0.0"
 	}
 ]

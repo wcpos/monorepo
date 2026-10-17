@@ -483,6 +483,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								const row = doc?.toJSON() as { status?: unknown } | undefined;
 								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
+							hasServerIdentity: async (mutation) => {
+								const facet = facetFor(mutation.collectionName);
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								return !!facet && remoteIdOrNull(doc?.toJSON()[facet.remoteIdField]) !== null;
+							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
@@ -501,7 +508,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								await facet.onDeleteAck(
 									database,
 									{ mutationId: mutation.mutationId, recordId: mutation.recordId },
-									signal
+									signal,
+									(error) =>
+										deps.diagnostics({
+											type: 'void.cleanup-failed',
+											level: 'error',
+											collection: mutation.collectionName,
+											message: String(error instanceof Error ? error.message : error),
+											fields: { recordId: mutation.recordId, step: 'refunds' },
+										})
 								);
 							},
 							// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the
@@ -796,6 +811,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								recordId: cancelled.recordId,
 								mutationId: cancelled.mutationId,
 							});
+							if (cancelled.status === 'internal') await queue.acknowledge([cancelled.mutationId]);
 						}
 						for (const conflict of result.conflicts) {
 							deps.emitWriteEvent({
