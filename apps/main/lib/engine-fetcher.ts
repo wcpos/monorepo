@@ -138,6 +138,13 @@ export function createEngineFetcher(input: {
 		) => void;
 	};
 
+	/**
+	 * Plain permalinks carry the REST route in ?rest_route= with pathname '/', so a
+	 * push is classified from the route, not the path.
+	 */
+	const isPushRoute = (parsedUrl: URL): boolean =>
+		(parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname).split('/').includes('push');
+
 	/** Execute one logical request arc, including any authentication retry. */
 	const fetcher: EngineFetcher = async (url, init) => {
 		const clockSkewGeneration = input.clockSkew.generation;
@@ -146,6 +153,12 @@ export function createEngineFetcher(input: {
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
+		let isPushRequest = false;
+		try {
+			isPushRequest = isPushRoute(new URL(url));
+		} catch {
+			// An unparseable URL fails in the attempt below; it is not a push.
+		}
 
 		/**
 		 * Perform one attempt, deferring both its log row and its transport verdict
@@ -187,10 +200,7 @@ export function createEngineFetcher(input: {
 				headers.delete(INSTANCE_HEADER);
 			}
 			const parsedUrl = new URL(prepared.url);
-			// Plain permalinks carry the REST route in ?rest_route= with pathname
-			// '/', so the push exemption must classify from the route, not the path.
-			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
-			const envelopeRequested = !restRoutePath.split('/').includes('push');
+			const envelopeRequested = !isPushRoute(parsedUrl);
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 			}
@@ -375,7 +385,7 @@ export function createEngineFetcher(input: {
 		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
 		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
 		 *    it needs attention, not a refresh loop.
-		 *  - 409 → info, still a failed request in the metrics: the server answered
+		 *  - push 409 → info, still a failed request in the metrics: the server answered
 		 *    a push with a clash the record-level events narrate and settle (an
 		 *    order re-pushes once; a parked clash is the SYNC221 row). A warn here
 		 *    put a second SYNC221 action on a push that went on to save.
@@ -386,7 +396,8 @@ export function createEngineFetcher(input: {
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 409) attempt.settle('info', extraFields, { failed: true });
+			else if (status === 409 && isPushRequest)
+				attempt.settle('info', extraFields, { failed: true });
 			else if (status === 403) {
 				if (forbiddenPathsOwner !== input.auth.credentials) {
 					forbiddenPaths.clear();
