@@ -42,6 +42,8 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 			const response = await http.get('payment-gateways');
 			const next = Array.isArray(response?.data) ? response.data : [];
 			gatewaysRef.current = next;
+			// A settled load ends the cancellation episode: a later cancel gets its own retry.
+			unlatchedRetriedRef.current = false;
 			setGateways(next);
 			return next;
 		} catch (err) {
@@ -62,6 +64,7 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 				}
 				return gatewaysRef.current;
 			}
+			unlatchedRetriedRef.current = false;
 			// The one row for this failure (the HTTP transport row is forensic). The
 			// checkout screen's inline error is the instruction, so no toast; offline is
 			// forensic too, since nothing was attempted.

@@ -119,4 +119,41 @@ describe('usePaymentGateways', () => {
 		expect(mockGet).toHaveBeenCalledTimes(2);
 		expect(result.current.gateway?.id).toBe('stripe');
 	});
+
+	it('gives every cancellation episode its own retry when no auth hold is latched', async () => {
+		jest.useFakeTimers();
+		try {
+			const cancelled = () =>
+				Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' });
+			const catalog = { data: [{ id: 'stripe', capabilities: { supports_checkout: true } }] };
+			mockGet
+				.mockRejectedValueOnce(cancelled())
+				.mockResolvedValueOnce(catalog)
+				.mockRejectedValueOnce(cancelled())
+				.mockResolvedValueOnce(catalog);
+
+			const { result } = renderHook(() => usePaymentGateways('stripe'));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(1_000);
+			});
+			expect(mockGet).toHaveBeenCalledTimes(2);
+			expect(result.current.loading).toBe(false);
+
+			// A later refetch is cancelled again (a token refresh, no hold latched).
+			await act(async () => {
+				void result.current.refetch();
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			expect(result.current.loading).toBe(true);
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(1_000);
+			});
+
+			expect(mockGet).toHaveBeenCalledTimes(4);
+			expect(result.current.loading).toBe(false);
+			expect(result.current.gateway?.id).toBe('stripe');
+		} finally {
+			jest.useRealTimers();
+		}
+	});
 });
