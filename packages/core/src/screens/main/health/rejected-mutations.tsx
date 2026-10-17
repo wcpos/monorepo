@@ -11,6 +11,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -29,7 +30,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
-import { Callout, Pill } from './components';
+import { Callout } from './components';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type RejectedMutation, useRejectedMutations } from './use-rejected-mutations';
 
@@ -169,16 +170,16 @@ export function RejectedMutationsPanel() {
 								{/* A rejected DELETE must never look like a rejected edit: requeuing
 								    it destroys the record on the server (#1093 audit, Q2). */}
 								{row.operation === 'delete' ? (
-									<Pill tone="destructive" testID={`db-rejected-delete-${row.mutationId}`}>
+									<Badge variant="destructive" testID={`db-rejected-delete-${row.mutationId}`}>
 										{t('health.database.rejected.delete_pill')}
-									</Pill>
+									</Badge>
 								) : null}
 								{row.requeueCount > 0 ? (
-									<Pill tone="warning" testID={`db-rejected-tries-${row.mutationId}`}>
+									<Badge variant="warning" testID={`db-rejected-tries-${row.mutationId}`}>
 										{t('health.database.rejected.tries', {
 											count: row.requeueCount,
 										})}
-									</Pill>
+									</Badge>
 								) : null}
 							</HStack>
 							{/* The server's own sentence arrives HTML-encoded — WordPress ships

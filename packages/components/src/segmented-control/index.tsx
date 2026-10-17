@@ -20,6 +20,11 @@ export type Segment = {
 	testID?: string;
 };
 type SegmentedControlProps = ViewProps & {
+	/**
+	 * `focus()` moves focus to the group's tab stop (the selected segment, or the first enabled
+	 * one), which is what a form field's focus-on-error needs; the root view is not focusable.
+	 */
+	ref?: React.Ref<SegmentedControlHandle>;
 	segments:
 		| readonly [Segment, Segment]
 		| readonly [Segment, Segment, Segment]
@@ -28,15 +33,27 @@ type SegmentedControlProps = ViewProps & {
 	onValueChange: (value: string) => void;
 };
 
+export type SegmentedControlHandle = { focus: () => void };
+
 export function SegmentedControl({
 	segments,
 	value,
 	onValueChange,
 	testID,
 	className,
+	ref,
 	...props
 }: SegmentedControlProps) {
 	const refs = React.useRef<Record<string, ViewInstance | null>>({});
+	// One tab stop, and never on a disabled segment: the selected one when it is enabled,
+	// otherwise the first enabled one; a fully disabled group leaves the tab order.
+	const selected = segments.find((segment) => segment.value === value && !segment.disabled);
+	const tabStop = (selected ?? segments.find((segment) => !segment.disabled))?.value;
+	React.useImperativeHandle(ref, () => ({
+		focus: () => {
+			if (tabStop !== undefined) refs.current[tabStop]?.focus();
+		},
+	}));
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const choose = (next: string) => {
 		if (next && next !== value) onValueChange(next);
@@ -65,8 +82,10 @@ export function SegmentedControl({
 			{...props}
 			testID={testID}
 			role="radiogroup"
+			// `min-h`, not `h`: a label that wraps (German, a phone-width form) grows the control
+			// instead of being clipped by `overflow-hidden`; one-line labels keep it at 44.
 			className={cn(
-				'h-ctl border-border bg-card flex-row overflow-hidden rounded-lg border',
+				'min-h-ctl border-border bg-card flex-row overflow-hidden rounded-lg border',
 				className
 			)}
 		>
@@ -79,7 +98,7 @@ export function SegmentedControl({
 					role="radio"
 					aria-checked={segment.value === value}
 					disabled={!!segment.disabled}
-					tabIndex={segment.value === value ? 0 : -1}
+					tabIndex={segment.value === tabStop ? 0 : -1}
 					testID={segment.testID ?? id(`segment-${segment.value}`)}
 					onPress={() => choose(segment.value)}
 					{...{
@@ -87,7 +106,7 @@ export function SegmentedControl({
 							onKeyDown(event, segment.value),
 					}}
 					className={cn(
-						'min-w-ctl web:hover:bg-muted flex-1 flex-row items-center justify-center gap-1.5 px-3 active:opacity-70',
+						'min-w-ctl web:hover:bg-muted flex-1 flex-row items-center justify-center gap-1.5 px-3 py-1.5 active:opacity-70',
 						index > 0 && 'border-border border-l',
 						segment.value === value && 'bg-muted',
 						segment.disabled && 'opacity-45'
@@ -96,7 +115,7 @@ export function SegmentedControl({
 					{segment.icon && <Icon name={segment.icon} className="text-foreground" />}
 					<Text
 						className={cn(
-							'text-base',
+							'shrink text-center text-base',
 							segment.value === value
 								? 'text-foreground font-semibold'
 								: 'text-muted-foreground font-medium'

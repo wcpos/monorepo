@@ -1,4 +1,4 @@
-import { Pressable, type PressableProps, View } from 'react-native';
+import { Platform, Pressable, type PressableProps, View } from 'react-native';
 
 import { Icon, type IconName } from '../icon';
 import { cn } from '../lib/utils';
@@ -21,6 +21,17 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	 */
 	size?: 'default' | 'sm';
 };
+
+/**
+ * The selected state is announced, not only drawn: `on` is a choice, so assistive tech hears
+ * which preset is picked (the health chip this replaced carried it). A chip is a button, and
+ * on the web a button's toggle state is `aria-pressed` (`aria-selected` is not allowed on the
+ * button role); native platforms announce it as `selected`.
+ */
+function selectedState(on: boolean | undefined) {
+	if (on === undefined) return {};
+	return Platform.OS === 'web' ? { 'aria-pressed': on } : { 'aria-selected': on };
+}
 
 // Every variant carries the same root classes; a cell that renders full-width is a stale
 // baseline, not a prop-dependent layout (measured on wcpos/monorepo#2189).
@@ -81,6 +92,7 @@ export function Chip({
 			// the handler and the focus live there and never fire twice from one tap.
 			onPress={onClear ? undefined : onPress}
 			role={onClear ? undefined : 'button'}
+			{...(onClear ? {} : selectedState(on))}
 			tabIndex={onClear ? -1 : 0}
 			accessible={onClear ? false : undefined}
 			className={cn(
@@ -100,6 +112,7 @@ export function Chip({
 					<Pressable
 						testID={id('label')}
 						role="button"
+						{...selectedState(on)}
 						disabled={inactive}
 						className="flex-1 flex-row items-center gap-1.5 self-stretch active:opacity-70"
 						// The label's press bubbles: with a clear control the root has no handler, so

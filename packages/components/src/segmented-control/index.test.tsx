@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { type Segment, SegmentedControl } from './index';
 
@@ -109,4 +109,30 @@ it('honors a segment identifier and icon', () => {
 	);
 	expect(screen.getByTestId('first')).toBeInTheDocument();
 	expect(container.querySelector('[data-icon="plus"]')).not.toBeNull();
+});
+
+it('keeps the one tab stop on an enabled segment and focuses it through the handle', () => {
+	const ref = React.createRef<import('./index').SegmentedControlHandle>();
+	// The selected segment is disabled: the stop moves to the first enabled one.
+	render(
+		<SegmentedControl
+			ref={ref}
+			segments={segments}
+			value="c"
+			onValueChange={jest.fn()}
+			testID="picker"
+		/>
+	);
+	const stops = screen.getAllByRole('radio').filter((node) => node.tabIndex === 0);
+	expect(stops).toEqual([screen.getByTestId('picker-segment-a')]);
+	act(() => ref.current?.focus());
+	expect(screen.getByTestId('picker-segment-a')).toHaveFocus();
+});
+it('grows for a wrapped label instead of clipping it', () => {
+	render(
+		<SegmentedControl segments={segments} value="a" onValueChange={jest.fn()} testID="picker" />
+	);
+	const root = screen.getByRole('radiogroup').getAttribute('class')?.split(' ') ?? [];
+	expect(root).toContain('min-h-ctl');
+	expect(root).not.toContain('h-ctl');
 });

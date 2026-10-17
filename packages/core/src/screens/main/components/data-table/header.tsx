@@ -37,11 +37,7 @@ export function DataTableHeader({
 		align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start';
 
 	if (disableSort) {
-		return (
-			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-				{header}
-			</Text>
-		);
+		return <Text numberOfLines={1}>{header}</Text>;
 	}
 
 	return (
@@ -75,11 +71,7 @@ export function DataTableHeader({
 						// specs steering the sort need a DOM signal, not a network one.
 						testID={isSorted ? `data-table-sort-${columnId}-${sortDirection}` : undefined}
 					>
-						<Text
-							className={'text-muted-foreground font-medium'}
-							style={{ flexShrink: 1 }}
-							numberOfLines={1}
-						>
+						<Text style={{ flexShrink: 1 }} numberOfLines={1}>
 							{header}
 						</Text>
 						{showIcon && (

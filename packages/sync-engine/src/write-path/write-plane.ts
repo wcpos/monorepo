@@ -40,6 +40,7 @@ export type WriteOptions = {
 	payloadFromResident?: boolean;
 };
 export type WritePlane = {
+	sessionRestored(): void;
 	write(intent: WriteIntent, options?: WriteOptions): Promise<WriteReceipt>;
 	conflicts(): Promise<QueuedMutation[]>;
 	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
@@ -235,6 +236,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		},
 		lastError: () => lastError,
 		queueDepth: () => queueDepth,
+		sessionRestored: drainLane.sessionRestored,
 		sessionHeld: () => sessionHeldScope !== null && sessionHeldScope === deps.manager.activeScope,
 	};
 }

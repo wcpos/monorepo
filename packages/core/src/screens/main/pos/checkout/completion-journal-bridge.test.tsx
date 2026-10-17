@@ -80,6 +80,7 @@ const drain = () =>
 addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
+	mockRefresh.mockResolvedValue('refreshed');
 	mockStartVersion = 0;
 	mockManager = {};
 	mockContext = {
@@ -577,8 +578,8 @@ it('stays sequential across context changes and StrictMode effect restarts, with
 	let release!: () => void;
 	mockRefresh.mockImplementationOnce(
 		() =>
-			new Promise<void>((resolve) => {
-				release = resolve;
+			new Promise<string>((resolve) => {
+				release = () => resolve('refreshed');
 			})
 	);
 	const view = render(
@@ -670,12 +671,15 @@ it('catches up an open resident before replay and never requests a second refres
 	expect(mockInfo).toHaveBeenCalledTimes(1);
 });
 
-it.each(['timed-out', 'rejected', 'synchronously thrown'] as const)(
+it.each(['timed-out', 'failed', 'rejected', 'synchronously thrown'] as const)(
 	'retains an open resident when catch-up is %s',
 	async (failure) => {
 		await record();
 		mockFind.mockResolvedValue(resident('order', 'pos-open'));
-		if (failure === 'timed-out') mockCatchUp.mockResolvedValueOnce('timed-out');
+		// 'failed' is a fetched pull that did not deliver this order (pruned, or the
+		// local-work guard refused the row): the cached copy is still suspect and must
+		// not count as an unpaid start.
+		if (failure === 'timed-out' || failure === 'failed') mockCatchUp.mockResolvedValueOnce(failure);
 		else if (failure === 'synchronously thrown')
 			mockCatchUp.mockImplementationOnce(() => {
 				throw new Error('refresh rejected');
@@ -685,7 +689,10 @@ it.each(['timed-out', 'rejected', 'synchronously thrown'] as const)(
 		await waitFor(async () =>
 			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 				attempts: 1,
-				lastError: failure === 'timed-out' ? 'completion_refresh_timed_out' : 'refresh rejected',
+				lastError:
+					failure === 'timed-out' || failure === 'failed'
+						? `completion_refresh_${failure}`
+						: 'refresh rejected',
 			})
 		);
 		expect(owner.completeSale).not.toHaveBeenCalled();
@@ -752,6 +759,7 @@ it.each([
 			completing: true,
 			source: 'gateway',
 			settledOrderStatus,
+			settledOrderGateway: 'a',
 		});
 		mockFind.mockResolvedValue({
 			uuid: 'order',
@@ -759,6 +767,7 @@ it.each([
 				payload: {
 					id: 42,
 					status: 'pending',
+					payment_method: 'a',
 					meta_data: stamps.map((value) => ({ key: '_wcpos_awaiting_customer', value })),
 					line_items: [],
 				},
@@ -770,7 +779,7 @@ it.each([
 			expect(owner.completeSale).toHaveBeenCalledWith(
 				mockContext,
 				expect.objectContaining({ uuid: 'order' }),
-				{ source: 'replay', settledOrderStatus: 'pending' },
+				{ source: 'replay', settledOrderStatus: 'pending', settledOrderGateway: 'a' },
 				{ host: 'background' }
 			);
 			// Judged settled before any catch-up: the finish refreshes once, from the store.

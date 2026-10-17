@@ -340,6 +340,7 @@ export type WriteDrainLaneDeps = {
 };
 
 export type WriteDrainLane = {
+	sessionRestored(): void;
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
 };
 
@@ -350,6 +351,7 @@ export type WriteDrainLane = {
  */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	const facetFor = deps.writeFacetFor ?? writeFacetFor;
+	let restoredScope: string | null = null;
 	let sessionHold: { scopeId: string; probeAt: number; delayMs: number } | null = null;
 
 	/** Drain one guarded tick for the active store scope. */
@@ -457,7 +459,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				const wrote = await bound
 					.guardWrite(async () => {
 						const now = deps.now !== undefined ? deps.now() : Date.now();
+						const retryImmediately = restoredScope === bound.scopeId;
+						if (retryImmediately) restoredScope = null;
 						const result = await drainMutationQueue({
+							retryImmediately,
 							queue,
 							signal: tickAbort.signal,
 							...(sessionHold?.scopeId === bound.scopeId && now < sessionHold.probeAt
@@ -722,7 +727,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
-						if (result.sessionExpired) {
+						if (result.sessionExpired && restoredScope !== bound.scopeId) {
 							const previous = sessionHold?.scopeId === bound.scopeId ? sessionHold : null;
 							const delayMs = previous
 								? Math.min(SESSION_PROBE_MAX_MS, previous.delayMs * 2)
@@ -892,5 +897,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 	}
 
-	return { tick: runTick };
+	return {
+		tick: runTick,
+		sessionRestored: () => {
+			restoredScope = deps.manager.activeScope;
+			sessionHold = null;
+			deps.setSessionHeld?.(null);
+		},
+	};
 }

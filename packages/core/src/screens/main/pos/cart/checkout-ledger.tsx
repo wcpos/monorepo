@@ -3,7 +3,9 @@ import { ScrollView, View } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
+import { cn } from '@wcpos/components/lib/utils';
 import { StatusBadge } from '@wcpos/components/status-badge';
+import { TABLE_HEAD_TEXT } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
@@ -74,10 +76,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 			<View className="flex-1">
 				<HStack className="border-border min-h-row items-center gap-2 border-b px-4">
 					{(['qty', 'item', 'price', 'total'] as const).map((column) => (
-						<Text
-							key={column}
-							className={`text-muted-foreground text-xs tracking-wide uppercase ${LEDGER_COLUMNS[column]}`}
-						>
+						<Text key={column} className={cn(TABLE_HEAD_TEXT, LEDGER_COLUMNS[column])}>
 							{t(`pos_cart.col_${column}`)}
 						</Text>
 					))}
@@ -123,9 +122,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 						))}
 					</View>
 					<View className="gap-2">
-						<Text className="text-muted-foreground text-xs tracking-wider uppercase">
-							{t('pos_checkout.payments_tab')}
-						</Text>
+						<Text className={TABLE_HEAD_TEXT}>{t('pos_checkout.payments_tab')}</Text>
 						<LedgerLegs view={view} format={format} />
 					</View>
 				</ScrollView>

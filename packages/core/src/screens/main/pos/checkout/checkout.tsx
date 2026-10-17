@@ -114,8 +114,16 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// Each Retry press hands the frame a new token; the frame remounts on it.
 	const [frameRetryToken, setFrameRetryToken] = React.useState(0);
 	const retryPaymentFrame = React.useCallback(() => setFrameRetryToken((n) => n + 1), []);
-	const { loading, mode, error, startCheckout, handleStockRejection, settledOrderStatuses } =
-		useCheckoutSession(order);
+	const {
+		loading,
+		mode,
+		error,
+		startCheckout,
+		handleStockRejection,
+		settledOrderStatuses,
+		gatewayError,
+		refetch,
+	} = useCheckoutSession(order);
 	// #163 ruling R5. This modal is where a checkout already in progress is caught:
 	// it was opened while storage was healthy, and the worker can die at any point
 	// before the cashier presses Process Payment.
@@ -128,7 +136,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// Scoped to the legacy webview path — contract checkout posts nothing into a
 	// frame, so it has nothing to wait for. When the link is missing no frame is
 	// rendered at all, and `paymentLinkMissing` is already the reason shown.
-	const frameGateApplies = mode === 'webview' && !paymentLinkMissing;
+	const frameGateApplies = mode === 'webview' && !paymentLinkMissing && !gatewayError;
 	const paymentFrameLoading = frameGateApplies && frameStatus === 'loading';
 	// Stalled = the first document never came; retrying its navigation is safe.
 	// Failed = a later navigation broke; a retry would reload the pay page under
@@ -209,6 +217,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 							</VStack>
 						) : null}
 						{(paymentLinkMissing || paymentFrameStalled || paymentFrameFailed) &&
+						!gatewayError &&
 						!showStockRejection ? (
 							<VStack
 								space="xs"
@@ -233,7 +242,20 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								) : null}
 							</VStack>
 						) : null}
-						{mode === 'webview' && !showStockRejection ? (
+						{gatewayError ? (
+							<VStack className="border-destructive bg-destructive/10 rounded-md border p-3">
+								<Text className="text-destructive">
+									{t('pos_checkout.gateway_catalog_unavailable')}
+								</Text>
+								<Button
+									testID="checkout-gateway-catalog-retry"
+									size="lg"
+									onPress={() => void refetch()}
+								>
+									<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
+								</Button>
+							</VStack>
+						) : mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
 								order={order}
 								ref={webViewRef}

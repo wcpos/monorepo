@@ -769,6 +769,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								: 'terminal',
 				completing: amountMinor === balanceMinor,
 				settledOrderStatus,
+				settledOrderGateway: method?.id,
 			});
 			const saveProvenance = async () => {
 				if (amountMinor !== balanceMinor) return;

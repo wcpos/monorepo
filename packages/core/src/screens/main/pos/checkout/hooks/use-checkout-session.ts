@@ -408,6 +408,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		error,
 		gateway,
 		gatewayResolved,
+		gatewayError,
+		refetch,
 		gatewayId,
 		settledOrderStatuses,
 		mode,

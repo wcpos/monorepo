@@ -58,7 +58,7 @@ function LineItemRow({
 				<View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
 					{item.sku ? (
 						<View className="bg-primary/10 rounded px-1.5 py-0.5">
-							<Text className="text-primary text-[10px] font-medium tabular-nums">{item.sku}</Text>
+							<Text className="text-primary text-xs font-medium tabular-nums">{item.sku}</Text>
 						</View>
 					) : null}
 					{variations.map((entry, index) => (

@@ -4,7 +4,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Resolve attribute choices to published variations, stock feedback and an add-to-cart action.
 
-**Composes:** `@wcpos/components/{button,combobox,error-boundary,hstack,icon,select,status-badge,suspense,text,toggle-group,vstack}`.
+**Composes:** `@wcpos/components/{button,chip,combobox,error-boundary,hstack,icon,select,status-badge,suspense,text,vstack}`.
 
 ## Lines
 

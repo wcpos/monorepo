@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
-import { useDocField } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -34,6 +34,7 @@ const SessionHoldContext = React.createContext<SessionHold | null>(null);
  * renewal while the banner on screen kept showing the hold (Codex review, #2611).
  */
 export function SessionHoldProvider({ children }: { children: React.ReactNode }) {
+	const runtime = useQueryRuntime();
 	const status = useEngineStatus();
 	const { syncBacklogSales } = useMutationCounts();
 	const { site, wpCredentials, logout } = useStoreSession();
@@ -63,6 +64,7 @@ export function SessionHoldProvider({ children }: { children: React.ReactNode })
 		previousAccessToken.current = accessToken;
 		if (changed && requestStateManager.isAuthFailed()) {
 			requestStateManager.clearAuthFailure();
+			runtime.engine.sessionRestored();
 			setRecovered(true);
 			logger.info('Session renewed by another tab', {
 				showToast: true,
@@ -70,7 +72,7 @@ export function SessionHoldProvider({ children }: { children: React.ReactNode })
 				context: { siteName: site.name },
 			});
 		}
-	}, [accessToken, site.name, t]);
+	}, [accessToken, runtime, site.name, t]);
 
 	// The toast marks an external engine state transition, once per hold.
 	React.useEffect(() => {

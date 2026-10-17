@@ -6,6 +6,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { getLogger } from '@wcpos/utils/logger';
 
 const mockHandleLoginSuccess = jest.fn(async () => undefined);
+const mockSessionRestored = jest.fn();
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: { sessionRestored: mockSessionRestored } }),
+}));
 let mockAuthResponse: Record<string, unknown> | null = null;
 
 jest.mock('../../../../contexts/translations', () => ({
@@ -68,6 +72,7 @@ describe('useAuthErrorHandler interactive re-authentication toasts', () => {
 		// one story.
 		expect(options.toast.title).toBe('Session renewed');
 		expect(options.code).toBeUndefined();
+		expect(mockSessionRestored).toHaveBeenCalledTimes(1);
 	});
 
 	it.each(['dismiss', 'cancel', 'locked'])(

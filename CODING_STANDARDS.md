@@ -266,6 +266,7 @@ never shares a colour with Void (§7).
 - A selectable choice is a Chip; a static count or state is a Badge; a Button is never a toggle.
   `Chip size="sm"` (32) only in a dense table cell or a row's filter strip; the default (44)
   everywhere else.
+- Few-way view switch = SegmentedControl; sections = Tabs.
 
 #### Rows and cards
 A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),

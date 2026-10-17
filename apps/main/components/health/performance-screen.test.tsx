@@ -174,7 +174,7 @@ describe('PerformanceScreen · server over time', () => {
 
 	it('renders quiet-server defaults, layout and controls', () => {
 		const renderer = renderScreen([]);
-		expect(paceText(renderer)).toBe('✓ Normal pace');
+		expect(paceText(renderer)).toBe('Normal pace');
 
 		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
 
@@ -204,7 +204,7 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), reported: 'high' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'✓ Normal pace — your server reports high load; the till only slows down if its answers do'
+			'Normal pace — your server reports high load; the till only slows down if its answers do'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
 			'text-muted-foreground'
@@ -215,7 +215,7 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), multiplier: 4, signal: 'rate-limited' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'⚠ Easing off — checking 4× less often: your server asked the POS to slow down'
+			'Easing off — checking 4× less often: your server asked the POS to slow down'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
 			'text-warning'
