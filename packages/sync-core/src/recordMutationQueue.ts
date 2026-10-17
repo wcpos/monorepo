@@ -226,7 +226,6 @@ export class RecordMutationQueue {
 	 * both consume the same prior row.
 	 */
 	private chain: Promise<unknown> = Promise.resolve();
-	private readonly recoveredAnnihilations: QueuedMutation[] = [];
 	private readonly voidRevisions = new Map<string, RevisionToken | undefined>();
 	public constructor(
 		private readonly storage: RecordMutationStorage,
@@ -315,6 +314,7 @@ export class RecordMutationQueue {
 			const row = stored?.mutation;
 			if (
 				!row ||
+				(row.admissionReleased !== undefined && row.admissionReleased !== next.admissionReleased) ||
 				row.supersededBy !== undefined ||
 				(row.status !== undefined && row.status !== 'pending' && row.status !== 'claimed')
 			)
@@ -563,9 +563,24 @@ export class RecordMutationQueue {
 
 	/** Durable receipt when holder release failed after the resident write committed. */
 	async recordWriterReceipt(mutationId: string): Promise<void> {
-		const stored = (await this.storage.listStored()).find(
-			(item) => item.mutation.mutationId === mutationId
-		);
+		const rows = await this.storage.listStored();
+		const stored = rows.find((item) => item.mutation.mutationId === mutationId);
+		if (!stored?.mutation.admittedBy || stored.mutation.supersededBy)
+			throw new Error('Writer receipt no longer owns its mutation');
+		const row = stored.mutation;
+		const id = fenceId(row.collectionName, row.recordId);
+		const holder = rows.find((item) => item.mutation.mutationId === id);
+		// Contend on the fence row itself: a receipt snapshot cannot cross a void commit.
+		if (holder?.mutation.supersededBy || (holder && holder.mutation.admittedBy !== row.admittedBy))
+			throw new Error('Void or another writer owns the record');
+		const receipt = {
+			...row,
+			mutationId: id,
+			status: 'internal' as const,
+			payload: { phase: 'released' },
+		};
+		if (!(await this.storage.appendIfUnchanged(receipt, holder?.rev ?? null)))
+			throw new Error('Writer receipt lost record ownership');
 		if (
 			!stored?.mutation.admittedBy ||
 			!(await this.storage.appendIfUnchanged(
@@ -722,9 +737,21 @@ export class RecordMutationQueue {
 		phase: 'preparing' | 'committed'
 	): Promise<boolean> {
 		return this.transact(async () => {
-			const stored = (await this.storage.listStored()).find(
-				(item) => item.mutation.mutationId === fenceId(collection, record)
-			);
+			const rows = await this.storage.listStored();
+			const stored = rows.find((item) => item.mutation.mutationId === fenceId(collection, record));
+			if (
+				phase === 'committed' &&
+				rows.some(
+					({ mutation: row }) =>
+						!isInternalRow(row) &&
+						row.collectionName === collection &&
+						row.recordId === record &&
+						!row.supersededBy &&
+						row.admittedBy &&
+						row.admissionReleased === row.admittedBy
+				)
+			)
+				return false;
 			// No owned fence to roll back: release this void's marks, not the foreign holder.
 			if (!stored || stored.mutation.supersededBy !== token)
 				return !this.voidRevisions.has(token) && phase === 'preparing';
@@ -743,7 +770,9 @@ export class RecordMutationQueue {
 	/** Include earlier scope-open/writer sweeps; only the drain consumes their outcomes. */
 	async recoverAnnihilatedMutations(nowMs: number): Promise<QueuedMutation[]> {
 		await this.clearExpiredAnnihilation(nowMs);
-		return this.recoveredAnnihilations.splice(0);
+		return (await this.storage.list()).filter(
+			(row) => isInternalRow(row) && row.payload.phase === 'annihilated'
+		);
 	}
 
 	async clearExpiredAnnihilation(
@@ -776,12 +805,23 @@ export class RecordMutationQueue {
 			);
 			if (!revision) continue;
 			const removed = await removeResident(fence);
-			for (const { mutation: row } of stored) {
+			for (const { mutation: row, rev } of stored) {
 				if (isInternalRow(row) || row.supersededBy !== fence.supersededBy) continue;
 				if (removed === false)
 					await this.unmarkForAnnihilation(row.mutationId, fence.supersededBy!);
-				else if (await this.removeMarked(row.mutationId, fence.supersededBy!))
-					this.recoveredAnnihilations.push(row);
+				else
+					await this.storage.appendIfUnchanged(
+						{
+							...row,
+							supersededBy: undefined,
+							markedAt: undefined,
+							admittedBy: undefined,
+							admittedAt: undefined,
+							status: 'internal',
+							payload: { phase: 'annihilated' },
+						},
+						rev
+					);
 			}
 			await this.releaseVoidFence(
 				fence.collectionName,

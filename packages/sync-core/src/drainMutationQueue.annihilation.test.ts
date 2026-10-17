@@ -77,6 +77,33 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it('a receipt landing between admission read and claim is delivered, not rejected', async () => {
+		const q = await queueWith(update(), del());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'writer' });
+		const claim = q.claim.bind(q);
+		vi.spyOn(q, 'claim').mockImplementationOnce(async (row, now) => {
+			await q.recordWriterReceipt(row.mutationId);
+			return claim(row, now);
+		});
+		const results = [];
+		for (let pass = 0; pass < 2; pass++)
+			results.push(await drainMutationQueue({ queue: q, push: async (m) => ok(m) }));
+		expect(results.flatMap((result) => result.rejected)).toEqual([]);
+		expect(results[0].pushed).toBe(0);
+		expect(results.reduce((n, result) => n + result.pushed, 0)).toBe(2);
+	});
+
+	it('a void refuses late writer receipts and leaves no deliverable work', async () => {
+		const q = await queueWith(create(), del());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'lost-writer' });
+		await q.fenceForVoid('orders', 'order-A', 'void', 0);
+		await expect(q.recordWriterReceipt('m-create')).rejects.toThrow();
+		for (const id of ['m-create', 'm-delete']) await q.markForAnnihilation(id, 'void', 0);
+		expect(await q.setVoidPhase('orders', 'order-A', 'void', 'committed')).toBe(true);
+		await q.clearExpiredAnnihilation(120_001, async () => {});
+		expect(await q.pending()).toEqual([]);
+	});
+
 	it('a recovery renewal refuses the stalled original rollback and keeps the chain marked', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		const q = new RecordMutationQueue(storage);
@@ -114,6 +141,19 @@ describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
 		expect(marked).toHaveLength(2);
 		expect(marked.every((row) => row.supersededBy)).toBe(true);
 		expect(resident).toBe(false);
+		expect((await storage.list()).map((row) => [row.mutationId, row.status, row.payload])).toEqual([
+			['m-create', 'internal', { phase: 'annihilated' }],
+			['m-delete', 'internal', { phase: 'annihilated' }],
+		]);
+		const recovered = await drainMutationQueue({
+			queue: new RecordMutationQueue(storage),
+			push: async (m) => ok(m),
+		});
+		expect(recovered.annihilatedMutations.map((row) => row.mutationId)).toEqual([
+			'm-create',
+			'm-delete',
+		]);
+		await q.acknowledge(recovered.annihilatedMutations.map((row) => row.mutationId));
 		expect(await storage.list()).toEqual([]);
 	});
 

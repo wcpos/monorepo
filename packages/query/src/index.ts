@@ -107,3 +107,4 @@ export {
 } from './reads/payment-method-history';
 export { observeProductMetaKeys } from './reads/product-meta-keys';
 export { observeUnsentWorkCount } from './reads/unsent-work-count';
+export { hasQueuedDelete } from './reads/queued-delete';

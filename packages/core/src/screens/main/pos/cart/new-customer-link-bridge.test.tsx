@@ -155,6 +155,7 @@ function fakeStoreDB() {
 let mockStoreDB: StoreDatabase;
 
 jest.mock('@wcpos/query', () => ({
+	hasQueuedDelete: jest.requireActual('@wcpos/query').hasQueuedDelete,
 	...(() => {
 		const {
 			COLLECTION_VOCABULARY,

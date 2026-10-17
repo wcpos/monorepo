@@ -913,7 +913,10 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'services/register-session/queue.ts :: record mutator :: drain :: session.incrementalPatch :: 1',
 	'services/register-session/session-store.ts :: record mutator :: requireOpenSession :: session.incrementalPatch :: 1',
 	'services/register-session/use-register-session.ts :: record mutator :: useRegisterSession :: current.getLatest().incrementalPatch :: 1',
+	"screens/main/pos/cart/new-customer-link-bridge.tsx :: mutation queue ::  :: from '@wcpos/sync-engine' :: 1",
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: raw query construction :: NewCustomerLinkBridge :: queue .findOne :: 1',
+	'screens/main/pos/cart/new-customer-link-bridge.tsx :: storage token :: NewCustomerLinkBridge :: database.collections :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 9;
+export const SEAM_RETIRED_FLOOR = 12;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'3428daa54b84b9068f6dbf3dc6c0fa8995fbe300991d7c7b2c20cdd5da8c5074';
+	'c966adf1491d7ee255a21b695a115289b356aa60fb85d50983fecccb78dad95f';

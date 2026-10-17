@@ -782,6 +782,7 @@ export async function drainMutationQueue(input: {
 				(item) => item.mutationId === mutation.mutationId
 			);
 			if (
+				current?.admissionReleased !== mutation.admissionReleased ||
 				current?.supersededBy !== undefined ||
 				(current?.status === 'claimed' &&
 					current.claimedBy !== undefined &&

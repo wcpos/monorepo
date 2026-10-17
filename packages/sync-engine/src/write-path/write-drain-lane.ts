@@ -811,6 +811,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								recordId: cancelled.recordId,
 								mutationId: cancelled.mutationId,
 							});
+							if (cancelled.status === 'internal') await queue.acknowledge([cancelled.mutationId]);
 						}
 						for (const conflict of result.conflicts) {
 							deps.emitWriteEvent({
