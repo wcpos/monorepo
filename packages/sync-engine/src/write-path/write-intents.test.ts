@@ -117,6 +117,46 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it('a slow dirty mark releases its unchanged admission and the receipted row delivers', async () => {
+		const storage = createFakeMutationCollection();
+		let now = Date.now();
+		let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+		const resident = {
+			toJSON: () => data,
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				now += 30_001;
+				data = modify(data);
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: storage,
+			},
+		} as unknown as RxDatabase;
+		const receipt = await enqueueWriteIntent({
+			db,
+			mintUuid: () => 'slow',
+			now: () => new Date(now).toISOString(),
+			intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: { id: 0 } },
+		});
+		expect(receipt).toMatchObject({ mutationId: 'slow', recordId: 'order' });
+		expect(data.local).toMatchObject({ dirty: true, pendingMutationIds: ['slow'] });
+		const queue = queueFor(db);
+		const push = vi.fn(async (mutation) => ({
+			outcome: 'created' as const,
+			mutation,
+			document: { id: 1 },
+			currentRevision: 'r1',
+		}));
+		expect(await drainMutationQueue({ queue, push, now: () => now })).toMatchObject({
+			pushed: 1,
+			rejected: [],
+		});
+		expect(push).toHaveBeenCalledTimes(1);
+		expect(await queue.all()).toEqual([]);
+	});
+
 	it('a late append after admission loss survives as a dead letter, not a resurrected sale', async () => {
 		const storage = createFakeMutationCollection();
 		let present = true;

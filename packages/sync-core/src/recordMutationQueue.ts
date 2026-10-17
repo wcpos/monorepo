@@ -518,7 +518,7 @@ export class RecordMutationQueue {
 		collection: string,
 		record: string,
 		token: string,
-		nowMs = Date.now()
+		_nowMs = Date.now()
 	): Promise<void> {
 		await this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
@@ -526,7 +526,7 @@ export class RecordMutationQueue {
 			);
 			if (stored?.mutation.admittedBy !== token) return;
 			if (stored.mutation.payload.phase !== 'released') {
-				if ((stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs) return;
+				// Elapsed time alone cannot revoke an owner that still wins this CAS.
 				// Durable release proof first: expiry cannot steal this holder while its
 				// receipt is being copied to the appended row (or after a crash here).
 				if (
@@ -564,13 +564,17 @@ export class RecordMutationQueue {
 		await this.storage.removeIfUnchanged(holder.mutation.mutationId, holder.rev);
 	}
 
+	get supportsVoidFences(): boolean {
+		return this.recovery.enabled?.() !== false;
+	}
+
 	async fenceForVoid(
 		collection: string,
 		record: string,
 		token: string,
 		nowMs: number
 	): Promise<boolean> {
-		if (this.recovery.enabled?.() === false) return false; // Frozen v5 cannot persist fences.
+		if (!this.supportsVoidFences) return false; // Frozen v5 cannot persist fences.
 		return this.holdRecord(collection, record, token, nowMs, false);
 	}
 

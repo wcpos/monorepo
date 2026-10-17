@@ -77,6 +77,34 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it.each(['removeMarked', 'releaseVoidFence'] as const)(
+		'reports success after %s fails',
+		async (step) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const q = new RecordMutationQueue(storage);
+			await q.enqueue(create());
+			await q.enqueue(del());
+			vi.spyOn(q, step).mockRejectedValueOnce(new Error('disk'));
+			const observe = vi.fn();
+			const result = await drainMutationQueue({
+				queue: q,
+				push: async (m) => ok(m),
+				observe,
+			});
+			expect(result.annihilatedMutations.map((row) => row.mutationId)).toEqual([
+				'm-create',
+				'm-delete',
+			]);
+			expect(result).toMatchObject({ annihilated: 1, pushed: 0 });
+			expect(observe).toHaveBeenCalledWith(
+				expect.objectContaining({ type: 'void.cleanup-failed' })
+			);
+			expect((await storage.list()).find((row) => row.status === 'internal')?.payload.phase).toBe(
+				'committed'
+			);
+		}
+	);
+
 	it.each(['first successor', 'before commit', 'after resident removal'])(
 		'recovers a crash at %s without losing the chain',
 		async (stage) => {

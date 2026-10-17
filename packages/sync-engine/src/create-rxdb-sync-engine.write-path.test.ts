@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
+import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
 import {
@@ -2049,12 +2050,18 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it.each(['abort', 'cleanup failure'] as const)(
+	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'v5', 'v5 abort'] as const)(
 		'drain annihilation preserves the removal outcome on %s',
 		async (fault) => {
 			const events: SyncEvent[] = [];
 			const server = createFakeWriteServer();
-			const engine = engineWith({ fetch: server.fetch, diagnostics: (e) => events.push(e) });
+			const legacy = fault.startsWith('v5');
+			const aborted = fault.endsWith('abort');
+			const engine = engineWith({
+				fetch: server.fetch,
+				diagnostics: (e) => events.push(e),
+				ports: legacy ? { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION } : {},
+			});
 			try {
 				await engine.ready;
 				await insertBornLocalOrder(engine, UUID_A);
@@ -2074,17 +2081,24 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				const facet = writeFacetFor('orders')!;
 				const ack = facet.onDeleteAck;
 				vi.spyOn(facet, 'onDeleteAck').mockImplementationOnce((db, mutation, signal, ...rest) => {
-					if (fault === 'abort') vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
+					if (aborted) vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
 					return ack(db, mutation, signal, ...rest);
 				});
-				vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
-					new Error('cleanup failed')
-				);
+				if (!legacy)
+					vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
+						new Error('cleanup failed')
+					);
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				if (fault === 'queue cleanup failure')
+					vi.spyOn(queue, 'removeMarked').mockRejectedValueOnce(new Error('disk'));
 				await engine.sync('write-drain');
-				expect((await queue.pending()).map((row) => row.operation)).toEqual(
-					fault === 'abort' ? ['create', 'delete'] : []
-				);
-				expect(Boolean(await orderJson(engine, UUID_A))).toBe(fault === 'abort');
+				if (fault === 'queue cleanup failure')
+					expect(outcomes.filter((event) => event.type === 'write-annihilated')).toHaveLength(2);
+				expect(
+					(await queue.pending()).filter((row) => !row.supersededBy).map((row) => row.operation)
+				).toEqual(aborted ? ['create', 'delete'] : []);
+				expect(Boolean(await orderJson(engine, UUID_A))).toBe(aborted);
 				expect(server.received).toEqual([]);
 				if (fault === 'cleanup failure') {
 					expect(events).toContainEqual(
