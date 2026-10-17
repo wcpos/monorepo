@@ -1456,10 +1456,12 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, scope: target });
 
 		expect(first.scope.switch).toHaveBeenCalledTimes(2);
+		// CLIENT181 with a toast: the cashier is told to reload and choose the store again.
 		expect(networkError).toHaveBeenCalledWith(
-			expect.any(String),
+			'ENGINE SCOPE SWITCH FAILED',
 			expect.objectContaining({
-				code: 'SYNC999',
+				code: 'CLIENT181',
+				showToast: true,
 				context: expect.objectContaining({
 					scopeKey: expect.any(String),
 				}),

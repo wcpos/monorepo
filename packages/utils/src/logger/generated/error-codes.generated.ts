@@ -86,6 +86,7 @@ export type ErrorCode =
 	| 'CHECKOUT411'
 	| 'CHECKOUT421'
 	| 'CLIENT151'
+	| 'CLIENT181'
 	| 'AUTH131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
@@ -913,6 +914,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'Part of the screen failed to load and was replaced by an error message.',
 	},
+	CLIENT181: {
+		code: 'CLIENT181',
+		symbol: 'STORE_SWITCH_FAILED',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint: 'Reload WCPOS and choose the store again. Nothing on this device is lost.',
+		dataSafety: 'no-impact',
+		summary: "WCPOS couldn't switch to that store.",
+	},
 	AUTH131: {
 		code: 'AUTH131',
 		symbol: 'STORE_SESSION_INCOMPLETE',
@@ -1011,5 +1021,6 @@ export const ERROR_CODES = {
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
+	STORE_SWITCH_FAILED: 'CLIENT181',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;

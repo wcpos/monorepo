@@ -23,6 +23,12 @@ describe('classifyPrintFailure', () => {
 		});
 	});
 
+	it('codes a request that never left (axios Network Error / ERR_NETWORK) PRINT301', () => {
+		expect(
+			classifyPrintFailure(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+		).toEqual({ cancelled: false, code: 'PRINT301' });
+	});
+
 	it('codes any failed automatic print PRINT101 (the sale is saved; print it from the receipt)', () => {
 		expect(classifyPrintFailure(new Error('ECONNREFUSED'), { autoPrint: true })).toEqual({
 			cancelled: false,

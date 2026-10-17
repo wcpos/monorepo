@@ -106,7 +106,8 @@ export async function refreshAccessToken({
 	const session = `${site.url ?? ''}|${String(wpUser.id ?? '')}`;
 	if (session !== refreshStreakSession) {
 		refreshStreakSession = session;
-		refreshFailureStreak = 0;
+		// The backoff belongs to the previous session too: it must not skip this one's refresh.
+		resetRefreshCooldown();
 	}
 	const nowMs = Date.now();
 	if (nowMs < refreshRetryAtMs) {

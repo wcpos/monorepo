@@ -19,7 +19,10 @@ const CANCELLED = /Printing did not complete|Print job cancelled|Printer service
 
 /** The printer was never reached: no connection, no answer, no address. */
 const UNREACHABLE =
-	/timed out|timeout|ETIMEDOUT|ECONNREFUSED|refused|not responding|bluetooth.*unavailable|is not connected|missing its device key|missing an address|Failed to fetch|MODULE_MISSING/i;
+	/timed out|timeout|ETIMEDOUT|ECONNREFUSED|refused|not responding|bluetooth.*unavailable|is not connected|missing its device key|missing an address|Failed to fetch|Network Error|MODULE_MISSING/i;
+
+/** Transport error codes for a request that never reached its destination. */
+const UNREACHABLE_CODES = new Set(['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNREFUSED']);
 
 export type PrintFailure = { cancelled: true } | { cancelled: false; code: ErrorCode };
 
@@ -36,7 +39,9 @@ export function classifyPrintFailure(
 	const message = getErrorMessage(error);
 	if (code === 'ERR_PRINT_INCOMPLETE' || CANCELLED.test(message)) return { cancelled: true };
 	if (autoPrint) return { cancelled: false, code: ERROR_CODES.AUTOPRINT_DID_NOT_START };
-	if (UNREACHABLE.test(message)) return { cancelled: false, code: ERROR_CODES.PRINTER_UNREACHABLE };
+	if ((typeof code === 'string' && UNREACHABLE_CODES.has(code)) || UNREACHABLE.test(message)) {
+		return { cancelled: false, code: ERROR_CODES.PRINTER_UNREACHABLE };
+	}
 	return { cancelled: false, code: ERROR_CODES.PRINT_JOB_FAILED };
 }
 

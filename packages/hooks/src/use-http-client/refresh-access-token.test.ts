@@ -496,6 +496,19 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.error).not.toHaveBeenCalled();
 		});
 
+		it('does not let another session’s backoff skip this session’s refresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			await refreshAccessToken({ ...first, operationId: 'first' });
+			await refreshAccessToken({ ...other, operationId: 'other' });
+
+			// Both sessions reached the store: the first's cooldown did not apply to the second.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
 		it('warns with the store’s own code once transient refresh failures persist', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
 			const { config } = makeConfig(post);

@@ -398,8 +398,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		}
 		entry.renderKey = cacheKey;
 		void requestScope(entry, options.scope, projected).catch((error) => {
+			// The cashier is left on a stuck or previous store: say so, and what to do.
 			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
+				showToast: true,
 				context: {
 					scopeKey: cacheKey,
 					error: error instanceof Error ? error.message : String(error),
