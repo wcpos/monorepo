@@ -112,11 +112,14 @@ function fakeQueue(rows: readonly QueueRow[]) {
 	// The selector parameter is honoured rather than ignored on purpose: a reader
 	// that starts passing one must make the WHOLE-queue count wrong, not just the
 	// call-shape assertion below.
-	const count = jest.fn((query?: { selector?: { status?: { $in: string[] } } }) => {
-		const statuses = query?.selector?.status?.$in;
-		const counted = statuses
-			? rows.filter((row) => statuses.includes(row.status ?? 'pending'))
-			: rows;
+	const count = jest.fn((query?: { selector?: { status?: string | { $in: string[] } } }) => {
+		const status = query?.selector?.status;
+		const counted =
+			typeof status === 'string'
+				? rows.filter((row) => row.status === status)
+				: status?.$in
+					? rows.filter((row) => status.$in.includes(row.status ?? 'pending'))
+					: rows;
 		return {
 			$: new BehaviorSubject(counted.length),
 			exec: () => Promise.resolve(counted.length),
@@ -187,7 +190,14 @@ describe('Unsent work — "is it safe to reset?"', () => {
 		await countUnsentChanges(engine);
 
 		expect(queue.count).toHaveBeenCalled();
-		for (const call of queue.count.mock.calls) expect(call).toEqual([]);
+		// The whole queue is counted bare; the only other count is the EQUALITY count of the
+		// internal coordination rows (admission/fence rows, #2607) that is subtracted from it.
+		// Never a `$ne`: under the SQLite translator that is null-unsafe and would hide every
+		// status-less (pending) row.
+		const calls = queue.count.mock.calls;
+		expect(calls).toEqual(expect.arrayContaining([[], [{ selector: { status: 'internal' } }]]));
+		for (const call of calls)
+			expect([[], [{ selector: { status: 'internal' } }]]).toContainEqual(call);
 	});
 });
 

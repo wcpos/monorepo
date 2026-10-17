@@ -17,6 +17,7 @@ import {
 
 type FakeQueue = {
 	count$: BehaviorSubject<number>;
+	internal$?: BehaviorSubject<number>;
 	execError?: Error;
 	exec?: () => Promise<number>;
 };
@@ -28,15 +29,21 @@ function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
 			: {
 					collections: {
 						[MUTATION_QUEUE_RXDB_COLLECTION]: {
-							count: () => ({
-								$: queue.count$,
-								exec: () =>
-									queue.exec
-										? queue.exec()
-										: queue.execError
-											? Promise.reject(queue.execError)
-											: Promise.resolve(queue.count$.value),
-							}),
+							count: (query?: { selector?: { status?: string } }) =>
+								query?.selector?.status === 'internal'
+									? {
+											$: queue.internal$ ?? new BehaviorSubject(0),
+											exec: () => Promise.resolve(queue.internal$?.value ?? 0),
+										}
+									: {
+											$: queue.count$,
+											exec: () =>
+												queue.exec
+													? queue.exec()
+													: queue.execError
+														? Promise.reject(queue.execError)
+														: Promise.resolve(queue.count$.value),
+										},
 						},
 					},
 				};
@@ -56,10 +63,16 @@ beforeEach(() => {
 
 describe('countUnsentChanges', () => {
 	it('excludes internal coordination rows from the unsent mutation count', async () => {
-		const engine = fakeEngine({ count$: new BehaviorSubject(0) });
+		// Whole queue minus the internal rows, by EQUALITY: `$ne` is null-unsafe under the
+		// SQLite translator and would hide every status-less (pending) row.
+		const engine = fakeEngine({
+			count$: new BehaviorSubject(5),
+			internal$: new BehaviorSubject(2),
+		});
 		const count = jest.spyOn(engine.active()!.database.collections.recordMutations, 'count');
-		await countUnsentChanges(engine);
-		expect(count).toHaveBeenCalledWith({ selector: { status: { $ne: 'internal' } } });
+		await expect(countUnsentChanges(engine)).resolves.toMatchObject({ count: 3 });
+		expect(count).toHaveBeenCalledWith({ selector: { status: 'internal' } });
+		for (const call of count.mock.calls) expect(JSON.stringify(call)).not.toContain('$ne');
 	});
 
 	it('counts the WHOLE queue — every row is a change the server has never seen', () => {
