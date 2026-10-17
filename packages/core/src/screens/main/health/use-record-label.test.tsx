@@ -15,6 +15,7 @@ let mockDatabase: unknown = {
 	},
 };
 let mockDbListener: ((database: unknown) => void) | null = null;
+let mockEventListener: ((event: unknown) => void) | null = null;
 const mockEngine = {
 	active: () => (mockDatabase ? { database: mockDatabase } : null),
 	db$: (listener: (database: unknown) => void) => {
@@ -24,12 +25,19 @@ const mockEngine = {
 		};
 	},
 	ready: Promise.resolve(),
+	events: (listener: (event: unknown) => void) => {
+		mockEventListener = listener;
+		return () => {
+			mockEventListener = null;
+		};
+	},
 };
 
 jest.mock('@wcpos/query', () => {
 	const actual = jest.requireActual('@wcpos/query');
 	return {
 		COLLECTION_VOCABULARY: actual.COLLECTION_VOCABULARY,
+		engineCollection: actual.engineCollection,
 		observeEngineCollection: actual.observeEngineCollection,
 		resolveLegacyField: actual.resolveLegacyField,
 		useQueryRuntime: () => ({ engine: mockEngine }),
@@ -161,6 +169,27 @@ describe('useRecordLabel', () => {
 
 		expect(result.current?.status).toBe('unresolved');
 		expect(result.current?.text).toBe('Product');
+	});
+
+	// Clear & re-download replaces the collection inside the SAME database, so
+	// db$ stays quiet; the reset event must re-read, and a record the reset
+	// removed must stop reading as found (Open record hangs off 'found').
+	it('re-reads after Clear & re-download replaces the collection', async () => {
+		mockExec.mockResolvedValueOnce({ uuid: 'o-1', number: '1234', payload: {} });
+		const { result } = renderHook(() => useRecordLabel('orders', 'o-1'));
+		await waitFor(() => expect(result.current?.status).toBe('found'));
+
+		mockExec.mockResolvedValueOnce(null);
+		act(() =>
+			mockEventListener?.({ type: 'collection-reset', scopeId: 's', collection: 'products' })
+		);
+		expect(result.current?.status).toBe('found');
+
+		act(() =>
+			mockEventListener?.({ type: 'collection-reset', scopeId: 's', collection: 'orders' })
+		);
+		await waitFor(() => expect(result.current?.status).toBe('missing'));
+		expect(result.current?.text).toBe('Order (not on this device)');
 	});
 
 	it('looks up a pull-only collection by its store id too', async () => {

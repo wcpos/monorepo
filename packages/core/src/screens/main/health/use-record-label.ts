@@ -1,10 +1,11 @@
 import * as React from 'react';
 
-import { EMPTY, from } from 'rxjs';
-import { catchError, switchMap, tap } from 'rxjs/operators';
+import { EMPTY, from, merge, Observable } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 import {
 	COLLECTION_VOCABULARY,
+	engineCollection,
 	observeEngineCollection,
 	resolveLegacyField,
 	useQueryRuntime,
@@ -114,7 +115,15 @@ export function useRecordLabel(
 		// before the scope is open, must still get its name once it is. Each
 		// emission drops the previous answer first — store ids overlap across
 		// stores, so another store's record name must never stand in.
-		const subscription = observeEngineCollection(engine, rowKey)
+		// Clear & re-download replaces the collection IN the same database, so
+		// `db$` stays quiet; the engine's `collection-reset` event is the signal
+		// to read the replacement (the record may be gone with it).
+		const replaced$ = new Observable<void>((subscriber) =>
+			engine.events((event) => {
+				if (event.type === 'collection-reset' && event.collection === rowKey) subscriber.next();
+			})
+		).pipe(map(() => engineCollection(engine.active()?.database, rowKey)));
+		const subscription = merge(observeEngineCollection(engine, rowKey), replaced$)
 			.pipe(
 				tap(() => setResolved(null)),
 				switchMap((records) =>

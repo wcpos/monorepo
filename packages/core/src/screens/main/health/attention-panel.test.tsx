@@ -28,6 +28,7 @@ const mockEngine = {
 		},
 	})),
 	db$: () => () => undefined,
+	events: () => () => undefined,
 	ready: Promise.resolve(),
 	sync: mockSync,
 	checkCollection: mockCheckCollection,
@@ -36,6 +37,7 @@ const mockEngine = {
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
+	engineCollection: jest.requireActual('@wcpos/query').engineCollection,
 	observeEngineCollection: jest.requireActual('@wcpos/query').observeEngineCollection,
 	resolveLegacyField: jest.requireActual('@wcpos/query').resolveLegacyField,
 	useQueryRuntime: () => ({ engine: mockEngine }),
