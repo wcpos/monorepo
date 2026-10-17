@@ -48,6 +48,45 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it('refuses a late writer receipt after durable admission-lost rejection', async () => {
+		const q = await queueWith(mut());
+		await q.replace({ ...(await q.all())[0], admittedBy: 'swept' });
+		expect(await drainMutationQueue({ queue: q, push: async (m) => ok(m) })).toMatchObject({
+			pushed: 0,
+			rejected: [{ reason: 'admission-lost' }],
+		});
+		await expect(q.recordWriterReceipt('m1')).rejects.toThrow();
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			rejectedReason: 'admission-lost',
+		});
+		expect((await q.all())[0].admissionReleased).toBeUndefined();
+		expect(await q.pending()).toEqual([]);
+	});
+
+	it('does not count a delete-ack abort as failure and drains it on reactivation', async () => {
+		const q = await queueWith(mut({ operation: 'delete' }));
+		const controller = new AbortController();
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (m) => ok(m),
+			signal: controller.signal,
+			applyAck: async () => {
+				controller.abort();
+				throw Object.assign(new Error('lookup aborted'), { name: 'AbortError' });
+			},
+		});
+		expect(result).toMatchObject({ pushed: 0, failed: 0 });
+		expect((await q.all())[0]).toMatchObject({ status: 'claimed' });
+		expect((await q.all())[0].attempts ?? 0).toBe(0);
+		expect((await q.all())[0].nextAttemptAt).toBeUndefined();
+		expect(await drainMutationQueue({ queue: q, push: async (m) => ok(m) })).toMatchObject({
+			pushed: 1,
+			failed: 0,
+		});
+		expect(await q.all()).toEqual([]);
+	});
+
 	it('keeps the receipted replacement when receipt wins the recovery removal CAS', async () => {
 		const storage = new InMemoryRecordMutationStorage();
 		let ids = ['next'];

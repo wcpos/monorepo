@@ -568,6 +568,8 @@ export class RecordMutationQueue {
 		if (
 			!stored?.mutation.admittedBy ||
 			stored.mutation.supersededBy ||
+			// Rejection authorizes lane bookkeeping cleanup; a late receipt cannot undo it.
+			stored.mutation.status === 'rejected' ||
 			stored.mutation.rejectedReason === 'superseded-by-void'
 		)
 			throw new Error('Writer receipt no longer owns its mutation');

@@ -1106,7 +1106,8 @@ export async function drainMutationQueue(input: {
 			}
 			await input.queue.acknowledge([mutation.mutationId]);
 			pushed += 1;
-		} catch {
+		} catch (error) {
+			if (input.signal?.aborted || (error as { name?: string })?.name === 'AbortError') break;
 			// The push landed but the ack/remove failed — leave it queued (the re-push dedupes), block
 			// later links, and back it off so we don't hammer. An abort here is a scope switch, not a
 			// failure, so skip the backoff.

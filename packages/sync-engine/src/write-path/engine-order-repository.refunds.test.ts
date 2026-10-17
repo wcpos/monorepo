@@ -60,6 +60,43 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	it.each(['dirty', 'held'])(
+		'protects a skeleton winning the pull insert race: %s',
+		async (protection) => {
+			const h = await harness();
+			const incoming = parent(42, []);
+			const orders = h.collection<ReturnType<typeof parent>>('orders');
+			const local = {
+				...incoming.local,
+				dirty: protection === 'dirty',
+				pendingMutationIds: protection === 'dirty' ? ['create'] : [],
+			};
+			const insert = orders.bulkInsert.bind(orders);
+			vi.spyOn(orders, 'bulkInsert').mockImplementationOnce(async (documents) => {
+				await orders.insert(
+					withOrderColumns({
+						...incoming,
+						local,
+						payload: { ...incoming.payload, status: 'pos-open' },
+					})
+				);
+				if (protection === 'held')
+					await queueFor(h.scope.database as never).admitWriter(
+						'orders',
+						incoming.uuid,
+						'writer',
+						Date.now()
+					);
+				return insert(documents);
+			});
+			expect(await h.repo.upsertMany([incoming])).toEqual([]);
+			expect((await orders.findOne(incoming.uuid).exec())?.toJSON()).toMatchObject({
+				local,
+				payload: { status: 'pos-open' },
+			});
+		}
+	);
+
 	it.each(['local create', 'void', 'none'])('rechecks insert protection: %s', async (hold) => {
 		const h = await harness();
 		const incoming = parent(42, []);

@@ -79,18 +79,21 @@ describe.each([
 			return document;
 		});
 		const bulkUpsert = vi.spyOn(collection, 'bulkUpsert');
+		const insert = name === 'orders' ? vi.spyOn(collection, 'bulkInsert') : bulkUpsert;
 		const bulkWrite = vi.spyOn(collection.storageInstance, 'bulkWrite');
 		const changed = vi.fn();
 		const subscription = collection.$.subscribe(changed);
 		try {
 			await repository.upsertMany(page);
-			expect(bulkUpsert).toHaveBeenCalledTimes(1);
+			expect(insert).toHaveBeenCalledTimes(1);
 			expect(changed).toHaveBeenCalledTimes(2);
+			insert.mockClear();
 			bulkUpsert.mockClear();
 			bulkWrite.mockClear();
 			changed.mockClear();
 			const read = vi.spyOn(collection, 'findByIds');
 			const applied = await repository.upsertMany(page);
+			expect(insert).not.toHaveBeenCalled();
 			expect(bulkUpsert).not.toHaveBeenCalled();
 			expect(bulkWrite).not.toHaveBeenCalled();
 			expect(changed).not.toHaveBeenCalled();
@@ -115,8 +118,9 @@ describe.each([
 			);
 			await (await collection.findOne(page[0].uuid).exec())!.remove();
 			bulkUpsert.mockClear();
+			insert.mockClear();
 			await repository.upsertMany([page[0]]);
-			expect(bulkUpsert).toHaveBeenCalledTimes(1);
+			expect(insert).toHaveBeenCalledTimes(1);
 			expect(await collection.findOne(page[0].uuid).exec()).not.toBeNull();
 			await (await collection.findOne(page[0].uuid).exec())!.incrementalPatch({
 				local: { dirty: true, pendingMutationIds: [] },

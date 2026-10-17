@@ -72,6 +72,7 @@ type OrdersCollection = {
 	} | null>;
 	insertLocal(id: string, data: PrintCountStash): Promise<unknown>;
 	upsertLocal(id: string, data: PrintCountStash): Promise<unknown>;
+	bulkInsert(docs: unknown[]): Promise<{ error: { status: number; documentId: string }[] }>;
 	bulkUpsert(docs: unknown[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): { exec(): Promise<Map<string, StoredOrderDoc>> };
@@ -373,8 +374,25 @@ export class EngineOrderRepository {
 		});
 		const inserts = changed.filter((document) => !residents.has(document.uuid));
 		const updates = changed.filter((document) => residents.has(document.uuid));
-		if (inserts.length > 0)
-			assertBulkSuccess(await this.db.orders.bulkUpsert(inserts), 'engine-order-repository upsert');
+		if (inserts.length > 0) {
+			const result = await this.db.orders.bulkInsert(inserts);
+			assertBulkSuccess(
+				{ error: result.error.filter((error) => error.status !== 409) },
+				'order insert'
+			);
+			const conflicts = new Set(result.error.map((error) => error.documentId));
+			const winners = conflicts.size
+				? await this.db.orders.findByIds([...conflicts]).exec()
+				: new Map<string, StoredOrderDoc>();
+			for (const document of inserts.filter((row) => conflicts.has(row.uuid))) {
+				const winner = winners.get(document.uuid);
+				if (!winner) skipped.add(document.uuid);
+				else {
+					residents.set(document.uuid, winner);
+					updates.push(document);
+				}
+			}
+		}
 		for (const document of updates) {
 			const resident = residents.get(document.uuid)!;
 			if (resident.incrementalModify) {
