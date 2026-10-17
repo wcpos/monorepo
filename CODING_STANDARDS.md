@@ -247,28 +247,67 @@ a request that would make one screen differ from this table is answered with the
 then built only if the owner confirms the exception.
 
 #### Buttons (`@wcpos/components/button`)
-| Role | Variant | Where it sits | Examples |
-|---|---|---|---|
-| Primary: the action the screen exists for | `default` (filled) | one per screen, full width on a phone, 56 pt when it is the sale's button | *Take 18,00 € in Cash*, *Try again* after a refusal, *Set up Tap to Pay*, *Connect a reader* when nothing is connected |
-| Secondary: the reversible alternative beside the primary | `outline` | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Help* |
-| Quiet: navigation, escapes, more | `ghost` (muted label at rest) / `link` | after the buttons, on its own line | *Reader guide*, *Details*, *Cancel* on a scan |
-| Destructive: what loses something | `outline-destructive` (red outline, never filled); `ghost-destructive` in a dense row; or the last red row of a ⋮ menu | never in the same row as a primary; in a menu it is last | *Forget*, *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
-| Unavailable | the same button, `disabled`, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
+The seven kept variants (decision 1[^board]); nothing else is in the cva union, so TypeScript refuses any other.
 
-Sizes: `sm` (36) in rows and toolbars, `default` (44) everywhere else, `lg` (56) for the sale
-button (Pay, Take payment, Open/Close register, New sale); no height or radius class on a Button
-(lint enforces it). Solid `destructive` is only the alert's confirm and the swipe Remove block;
-a selected choice is a `Chip`, never a Button that toggles its variant.
+| Variant | Role | Where it sits | Examples |
+|---|---|---|---|
+| `default` (filled `bg-primary`) | Primary: the action the screen exists for | one per screen, full width on a phone | *Take 18,00 € in Cash*, *Try again* after a refusal, *Save order*, *Connect a reader* when nothing is connected |
+| `outline` | Secondary: the reversible alternative beside the primary | same row or stacked under the primary, never heavier than it | *Disconnect*, *Choose another way*, *Close*, *Help* |
+| `ghost` (muted label at rest) | Quiet: navigation, escapes, more | after the buttons, on its own line, or in a toolbar | *Reader guide*, *Details*, *Cancel* on a scan |
+| `link` | Inline text that behaves as a button | in the flow of text, no surface | *Open docs*, a back crumb |
+| `outline-destructive` | Destructive: what loses something (never filled) | never in the same row as a primary | *Void*, *Cancel payment*, *Restore defaults*, *Cancel on terminal* |
+| `ghost-destructive` | The quiet form of the same, in a dense row | inside a table or list row | *Remove* on a queued email's row |
+| `destructive` (solid red) | Only the confirm inside an `AlertDialog` and the swipe Remove block | the alert's footer, the swipe strip | *Delete* in *Delete this order?* |
+| any, `disabled` | Unavailable, with one line beside it saying why | in the SAME slot the live button uses | *Connecting…*, *Installing…* |
+
+| Size | Height | Where |
+|---|---|---|
+| `sm` | 36 (`h-9`) | in table rows, dense toolbars and panel footers |
+| `default` | 44 (`h-ctl`, the control token) | everywhere else |
+| `lg` | 56 (`h-14`) | the pane's one sale button: Pay, Take payment, Open/Close register, New sale |
+
+No height or radius class on a Button (lint enforces it); a small pill is a `Chip size="sm"`, never a
+Button. Remove or forget a row is the last red row of its ⋮ menu, not a button. A selected choice is a
+`Chip`, never a Button that toggles its variant. Icon-only actions are an `IconButton` (44, `size="sm"`
+32 in dense rows), with an `accessibilityLabel`.
 
 Rules: a slot never empties while its state changes (Connect → Connecting… → Disconnect is one
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
 never shares a colour with Void (§7).
 
+#### Situation → overlay
+One shell (`lib/overlay.tsx`) and one answer per situation (decisions 5 and 6[^board]); on a phone every
+anchored overlay becomes a bottom sheet and every side panel becomes a page.
+
+| Situation | Overlay | Notes |
+|---|---|---|
+| Edit or add a record (line, fee, customer, product, order, printer) | side panel, `DialogContent side="right"` | on the POS it opens over the other column |
+| Confirm a loss | `AlertDialog` | no ×, the scrim does not dismiss, the confirm is solid `destructive` |
+| Row actions | `DropdownMenu` on an `IconButton` ⋮ | destructive last and red, after a separator |
+| Display or column settings | side panel (`UISettingsDialog`) | on every screen, never a popover |
+| Pick one of a few | `Select` or `DropdownMenuRadioItem` | never a popover full of buttons |
+| A small non-modal choice (the bell, a date range, the numpad) | `Popover` | no form, no scrolling, no footer |
+| The cashier (switch user, register, store; sign out) | `UserSheet` (right panel) | the one cashier surface on every screen |
+| A multi-step task (checkout) | full screen | never a centred modal that grew |
+
 #### Chips, badges and switches
-- A selectable choice is a Chip; a static count or state is a Badge; a Button is never a toggle.
-  `Chip size="sm"` (32) only in a dense table cell or a row's filter strip; the default (44)
-  everywhere else.
-- Few-way view switch = SegmentedControl; sections = Tabs.
+| Element | Component | Sizes |
+|---|---|---|
+| A selectable choice (a filter, a reader, a split option) | `Chip`, `on` when selected (border and text go primary) | default 44 (`h-ctl`); `size="sm"` 32 (`h-8`) only in a dense table cell or a row's filter strip |
+| A static count or state | `Badge` (solid tone by `variant`) | `sm` 16, default 20, `lg` 24; full radius |
+| A few-way view switch (List / Grid, Fixed / Percent) | `SegmentedControl` | 44 (`min-h-ctl`) |
+| Sections inside a panel | `Tabs` | 44 (`h-ctl`) triggers |
+| An on/off setting | `Switch` | — |
+
+A Button is never a toggle, and full radius belongs to `Chip` and `Badge` alone.
+
+#### Page bars
+- Every non-POS screen (Orders, Products, Customers, Coupons, Settings, Store health, Support, Reports, Closures) uses `PageBar`, most of them through `ManagementBar`.
+- The bar has the title left (16 px semibold, no store suffix), then search, actions, the bell and the avatar below `lg`, at 64 wide / 44 on a phone, with no rule under it.
+- The POS keeps its `RegisterBar` (48, on the cart card) as ruled 2026-09-11.
+- A side menu's active item is the Settings lift (`bg-card` on `bg-background`); the rail keeps its white square.
+
+[^board]: The visual reference for these tables and the twelve decisions (ruled 2026-10-16) is the board `~/Projects/wcpos-handoffs/design-system-gallery-2026-10-16.html`.
 
 #### Rows and cards
 A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),
