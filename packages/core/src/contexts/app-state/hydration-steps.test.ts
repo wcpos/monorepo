@@ -1144,9 +1144,15 @@ describe('testAuthorizationMethod', () => {
 		});
 	});
 
-	it.each([true, false])(
+	it.each([
+		['received', true, true],
+		['stripped', false, false],
+		['missing', undefined, false],
+		['HTML challenge', 'html', false],
+		['failed preflight', null, false],
+	] as const)(
 		'probes the instance header before trusting reflection: %s',
-		async (allowed) => {
+		async (_scenario, received, allowed) => {
 			fetchMock.mockResolvedValueOnce({
 				ok: true,
 				json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
@@ -1155,8 +1161,17 @@ describe('testAuthorizationMethod', () => {
 				expect(new URL(url).searchParams.get('wcpos')).toBe('1');
 				expect(new Headers(init.headers).get('X-WCPOS')).toBe('1');
 				expect(new Headers(init.headers).get('X-WCPOS-Instance')).toBe('wcpos-instance-probe');
-				if (!allowed) throw new TypeError('Failed preflight');
-				return { ok: true };
+				if (received === null) throw new TypeError('Failed preflight');
+				const body = echoBody({ cors: { reflects_request_headers: true } });
+				if (typeof received === 'boolean') {
+					Object.assign(body.headers, {
+						'x-wcpos-instance': { received, length: received ? 20 : 0 },
+					});
+				}
+				return new Response(
+					received === 'html' ? '<html>Checking your browser</html>' : JSON.stringify(body),
+					{ status: 200 }
+				);
 			});
 
 			await expect(

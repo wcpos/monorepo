@@ -633,7 +633,7 @@ export async function testAuthorizationMethod(
 		if (echo) {
 			const useProtocolHeaders = protocolHeadersSupported(echo);
 			// One harmless request per site negotiation proves this header's actual CORS path.
-			let instanceProbe: Response | null = null;
+			let instanceProbe: HeaderEchoResult | null = null;
 			if (Platform.isWeb && echo.cors?.reflects_request_headers === true) {
 				const prepared = buildRequestPreamble(
 					{
@@ -647,11 +647,17 @@ export async function testAuthorizationMethod(
 						headers: { [INSTANCE_HEADER]: 'wcpos-instance-probe' },
 					}
 				);
-				instanceProbe = await fetchWithProbeTimeout(prepared.url, {
-					headers: Object.fromEntries(prepared.headers),
-				});
+				const result = await fetchJsonWithTimeout(
+					prepared.url,
+					{ cache: 'no-store', headers: Object.fromEntries(prepared.headers) },
+					AUTH_PROBE_TIMEOUT_MS
+				);
+				instanceProbe = result?.response.ok ? parseHeaderEcho(result.data) : null;
 			}
-			const useInstanceHeader = instanceHeaderSupported(echo, instanceProbe?.ok);
+			const useInstanceHeader = instanceHeaderSupported(
+				echo,
+				instanceProbe?.headers[INSTANCE_HEADER.toLowerCase()]?.received === true
+			);
 			// Only names the probe actually sent can be dead — the map also
 			// carries the rest of the server's floor, which arrives
 			// `received: false` on every healthy store.
