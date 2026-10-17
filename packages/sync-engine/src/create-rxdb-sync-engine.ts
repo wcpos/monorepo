@@ -58,6 +58,7 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
+import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -108,6 +109,7 @@ import {
 	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	QUERY_TOTAL_LEASE_FOR_MS,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -346,6 +348,10 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+// Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
+const ENGINE_REQUEST_DEADLINE_MS = 60_000;
+// Leave five seconds to settle the probe before its claim can be taken over.
+const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -876,20 +882,28 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const fetcher: EngineFetcher = async (url, init) => {
-		if (updateRequiredRefusal !== null) {
-			return new Response(updateRequiredRefusal.body, {
-				status: updateRequiredRefusal.status,
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
+	const createRequestObservation = (callerSignal?: AbortSignal | null) => {
 		const startedAtMs = nowMs();
+		let observed = false;
+		// The age that decides whether an abort was a timeout is measured at the ABORT, not at
+		// the moment a transport that ignored the signal finally rejects (which can be at the
+		// deadline, long after a young cancellation).
+		let abortedAtMs: number | null = callerSignal?.aborted ? nowMs() : null;
+		const onAbort = () => {
+			abortedAtMs ??= nowMs();
+		};
+		callerSignal?.addEventListener('abort', onAbort, { once: true });
+		// A lane signal is reused across many requests; drop the listener when this one ends.
+		const release = () => callerSignal?.removeEventListener('abort', onAbort);
+		const abortAgeMs = () => (abortedAtMs ?? nowMs()) - startedAtMs;
 		const observe = (
 			status: number,
 			retryAfter?: string | null,
 			pressure?: ServerPressure,
 			serverLoad1m?: number
 		): void => {
+			if (observed) return;
+			observed = true;
 			const atMs = nowMs();
 			const reportedBefore = serverPressure.reported();
 			const signalBefore = serverPressure.signal();
@@ -914,6 +928,19 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
+		return { observe, abortAgeMs, release };
+	};
+	const transportFetcher = async (
+		url: string,
+		init: RequestInit | undefined,
+		{ observe, abortAgeMs }: ReturnType<typeof createRequestObservation>
+	) => {
+		if (updateRequiredRefusal !== null) {
+			return new Response(updateRequiredRefusal.body, {
+				status: updateRequiredRefusal.status,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -940,7 +967,7 @@ export function createRxdbSyncEngine(
 			const aborted =
 				(error as { name?: unknown } | null)?.name === 'AbortError' ||
 				init?.signal?.aborted === true;
-			const abortedYoung = aborted && nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			const abortedYoung = aborted && abortAgeMs() < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
@@ -1021,6 +1048,40 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
+	const observeDeadline = async <T>(
+		request: (observation: ReturnType<typeof createRequestObservation>) => Promise<T>,
+		lane: string,
+		callerSignal?: AbortSignal | null
+	) => {
+		const observation = createRequestObservation(callerSignal);
+		const startedAtMs = nowMs();
+		try {
+			return await request(observation);
+		} catch (error) {
+			if (error instanceof RequestTimeoutError) {
+				observation.observe(0);
+				diagnostics({
+					type: 'engine.request.deadline',
+					level: 'warn',
+					fields: { lane, elapsedMs: nowMs() - startedAtMs },
+				});
+			}
+			throw error;
+		} finally {
+			observation.release();
+		}
+	};
+	const fetcher = (url: string, init?: RequestInit, lane = 'host-transport') =>
+		observeDeadline(
+			(observation) =>
+				withRequestTimeout(
+					(url, init) => transportFetcher(url, init, observation),
+					ENGINE_REQUEST_DEADLINE_MS,
+					timers
+				)(url, { ...init, signal: init?.signal ?? undefined }),
+			lane,
+			init?.signal
+		);
 	const rawQueryTotal = ports.queryTotal;
 	const queryTotal =
 		rawQueryTotal === undefined
@@ -1029,7 +1090,19 @@ export function createRxdbSyncEngine(
 					fetchWooQueryTotal: async (
 						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
 					): Promise<number | null> =>
-						updateRequiredRefusal === null ? rawQueryTotal.fetchWooQueryTotal(input) : null,
+						updateRequiredRefusal === null
+							? observeDeadline(
+									() =>
+										withRequestTimeout(
+											(_url, init) =>
+												rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
+											QUERY_TOTAL_REQUEST_DEADLINE_MS,
+											timers
+										)(input.request.endpoint, { signal: input.signal }),
+									'query-total-retry',
+									input.signal
+								)
+							: null,
 				};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
@@ -1756,7 +1829,7 @@ export function createRxdbSyncEngine(
 		needsPrime: (scopeId) => !bootstrappedScopes.has(scopeId),
 		timers,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'change-signal'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
 		writeBlob,
@@ -1782,7 +1855,7 @@ export function createRxdbSyncEngine(
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'require'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
@@ -1825,7 +1898,7 @@ export function createRxdbSyncEngine(
 		},
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		fetcher,
+		fetcher: (url, init) => fetcher(url, init, 'write-drain'),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		mintUuid: uuid,
 		now: nowMs,
