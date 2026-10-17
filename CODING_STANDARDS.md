@@ -149,6 +149,8 @@ differs from the first, and then as a plan (*Payment 1 of 2*), not a second tota
   returns to is wrong; use a close (×) or a labelled action instead.
 - System fonts. Tabular numerals for every amount. Base size 14 px web, 16 px native; nothing
   below 12 px, and never below 14 px for anything the cashier reads at arm's length.
+  Text a cashier reads is never under 12 px in any step (`text-xs` is the floor). `text-2xs`
+  (11 px) is only for glyph-like text: avatar initials, badge counts. There is no `text-3xs`.
 
 #### 4. Layout is a grid, not a wrap
 Tiles are equal width in fixed columns and keep their order. Width never follows label length.

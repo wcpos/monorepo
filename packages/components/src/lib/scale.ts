@@ -1,8 +1,8 @@
 /**
  * The scale-and-density step table (wcpos/roadmap#289, spec #357).
  *
- * The seven scale tokens `apps/main/global.css` declares in `@theme` are the
- * Regular column here; a step is applied by scoping the same seven names to
+ * The nine scale tokens `apps/main/global.css` declares in `@theme` are the
+ * Regular column here; a step is applied by scoping the same nine names to
  * another column. This module is the only place those numbers live, so the
  * gallery cells and the running app cannot disagree — a component reads a
  * utility (`h-ctl`, `min-h-row`, `text-amt`), never the step.
@@ -18,7 +18,7 @@ export type ScaleOverride = 'auto' | ScaleStep;
 export type Pointer = 'coarse' | 'fine';
 
 /**
- * The seven scale tokens, as plain px numbers. A type alias, not an interface:
+ * The nine scale tokens, as plain px numbers. A type alias, not an interface:
  * `ScopedVariables` takes a record, and only an alias gets the implicit index
  * signature that makes it assignable.
  */
@@ -30,17 +30,27 @@ export type ScaleVariables = {
 	'--spacing-tile': number;
 	'--radius': number;
 	'--text-amt': number;
+	'--text-xs': number;
+	'--text-2xs': number;
 };
 
 /**
  * Per step: spacing unit, body type, control height, row height, tile, radius,
- * amount type — the order the seven tokens are declared in the sheet. Regular
- * is the sheet's own column, so a Regular app scopes nothing new.
+ * amount type, xs type, 2xs type — the order the nine tokens are declared in
+ * the sheet. Regular is the sheet's own column, so a Regular app scopes nothing
+ * new.
+ *
+ * The two small sizes are explicit, not a ratio of the body type: a ratio took
+ * Compact's xs to 11.1 and 2xs to 10.2, under every platform's floor (Apple HIG
+ * Caption 2 is 11 pt; Material and Android's Accessibility Scanner ask for
+ * 12 sp; the web convention is 12 px). Apple's and Material's own type tables
+ * hold the smallest sizes fixed across size settings and let the large ones
+ * move, so Compact keeps Regular's 12 / 11 and only Spacious grows them.
  */
 export const SCALE_STEPS = {
-	compact: [3.5, 13, 40, 36, 56, 6, 34],
-	regular: [4, 14, 44, 44, 64, 8, 40],
-	spacious: [5, 16, 52, 52, 80, 10, 48],
+	compact: [3.5, 13, 40, 36, 56, 6, 34, 12, 11],
+	regular: [4, 14, 44, 44, 64, 8, 40, 12, 11],
+	spacious: [5, 16, 52, 52, 80, 10, 48, 14, 13],
 } as const satisfies Record<ScaleStep, readonly number[]>;
 
 /**
@@ -76,12 +86,12 @@ export function resolveStep(override: string | undefined | null, extent: number)
 }
 
 /**
- * The seven values to scope for a step, with the control and row heights
+ * The nine values to scope for a step, with the control and row heights
  * floored for the pointer. The tile is never floored — it is already the
  * largest of the three and a floor would flatten Compact's keypad.
  */
 export function scaleVariables(step: ScaleStep, pointer: Pointer): ScaleVariables {
-	const [spacing, base, ctl, row, tile, radius, amt] = SCALE_STEPS[step];
+	const [spacing, base, ctl, row, tile, radius, amt, xs, xxs] = SCALE_STEPS[step];
 	const floor = POINTER_FLOORS[pointer];
 
 	return {
@@ -92,5 +102,7 @@ export function scaleVariables(step: ScaleStep, pointer: Pointer): ScaleVariable
 		'--spacing-tile': tile,
 		'--radius': radius,
 		'--text-amt': amt,
+		'--text-xs': xs,
+		'--text-2xs': xxs,
 	};
 }

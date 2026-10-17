@@ -23,7 +23,7 @@ jest.mock('../image', () => ({
 it('uses the xs ramp size and muted default surface with foreground initials', () => {
 	const { container } = render(<Avatar fallback="PK" size="xs" />);
 	expect(container.firstChild).toHaveClass('size-5', 'bg-muted');
-	expect(container.querySelector('span')).toHaveClass('text-3xs', 'text-foreground');
+	expect(container.querySelector('span')).toHaveClass('text-2xs', 'text-foreground');
 });
 
 it('falls back on image error and resets only when source content changes', () => {
