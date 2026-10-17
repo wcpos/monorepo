@@ -1530,6 +1530,35 @@ describe('createEngineFetcher', () => {
 		expect(requestStatusOf(offline)).toBe(0);
 	});
 
+	it('starts the streak over when the store scope or the cashier changes', async () => {
+		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
+		const auth = { ...BASE_AUTH };
+		const { fetcher, appMetricsObserver, scope } = createFetcherHarness({
+			fetch,
+			auth,
+			scope: { storeId: 1 },
+		});
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		await fetcher(url);
+		await fetcher(url);
+		// Same site, another store: only the storeId header moves.
+		scope.storeId = 2;
+		await fetcher(url);
+		// Same store, another cashier: the credentials object is replaced in place.
+		await fetcher(url);
+		auth.credentials = { getLatest: () => ({ access_token: 'other-cashier' }) };
+		await fetcher(url);
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
 	it('counts each path on its own, so one blip across lanes stays quiet', async () => {
 		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });

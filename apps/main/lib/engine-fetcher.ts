@@ -141,7 +141,11 @@ export function createEngineFetcher(input: {
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
-	const failureStreak = createFailureStreaks();
+	// Rebuilt when the cashier changes: a same-site swap keeps this fetcher and
+	// replaces `auth.credentials` in place (as for `forbiddenPaths` below), and
+	// the outgoing cashier's failures must not count toward the incoming one's.
+	let failureStreak = createFailureStreaks();
+	let failureStreakOwner: unknown = input.auth.credentials;
 	// Paths that have already answered 403 on this fetcher. A permission error is
 	// a property of the session (a cashier role without that capability), not of
 	// the tick, so it is reported at error ONCE per path and at info after that;
@@ -193,8 +197,15 @@ export function createEngineFetcher(input: {
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
-		// The failure-streak key: one logical request, query included (see createFailureStreaks).
-		const operationKey = `${method} ${url.split('#', 1)[0]}`;
+		// The failure-streak key: one logical request, query included (see
+		// createFailureStreaks), in the LIVE store scope. A same-site store switch
+		// only moves `scope.storeId` (a header, not the URL), so without it store
+		// A's two failures plus store B's first would read as B's third.
+		if (failureStreakOwner !== input.auth.credentials) {
+			failureStreak = createFailureStreaks();
+			failureStreakOwner = input.auth.credentials;
+		}
+		const operationKey = `${String(input.scope?.storeId ?? '')} ${method} ${url.split('#', 1)[0]}`;
 		let isPushRequest = false;
 		try {
 			isPushRequest = isPushRoute(new URL(url));
