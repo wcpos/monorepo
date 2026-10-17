@@ -16,6 +16,10 @@
       "browser": "./src/app-info/index.web.ts",
       "default": "./src/app-info/index.ts"
     },
+    "./get-instance-id": {
+      "browser": "./src/get-instance-id.web.ts",
+      "default": "./src/get-instance-id.ts"
+    },
     "./logger": "./src/logger/index.ts",
     "./logger/constants": "./src/logger/constants.ts",
     "./open-external-url": {

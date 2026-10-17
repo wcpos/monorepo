@@ -1,7 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { File, Paths } from 'expo-file-system';
 
-import { getInstallId } from '../get-install-id.native';
 import { AppInfo } from '../app-info';
 import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
 import {
@@ -69,8 +68,13 @@ function initialize(): void {
 		enableWatchdogTerminationTracking: true,
 	});
 	isInitialized = true;
-	const id = getInstallId();
-	if (id) Sentry.setUser({ id });
+	const file = installIdFile();
+	let id = file.exists ? file.textSync() : '';
+	if (!id) {
+		id = globalThis.crypto.randomUUID();
+		file.write(id);
+	}
+	Sentry.setUser({ id });
 }
 
 export function setTelemetryConsent(consent: TelemetryConsent): void {

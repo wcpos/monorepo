@@ -20,7 +20,7 @@ import {
 	refreshAccessToken,
 	type RefreshAccessTokenConfig,
 } from '@wcpos/hooks/use-http-client/refresh-access-token';
-import { getInstallId } from '@wcpos/utils/get-install-id';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { defaultConfig } from '@wcpos/database/adapters/default';
@@ -568,7 +568,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
 			},
 			storage: defaultConfig.storage,
-			installId: getInstallId(),
+			installId: getInstanceId(),
 			fetcher,
 			onUpdateRequired: (details) => {
 				reportUpdateRequired(options.scope.site, details);

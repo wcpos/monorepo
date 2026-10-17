@@ -16,8 +16,7 @@ let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
 const pendingCaptures = createPendingCaptures();
 
-export function getInstallId(): string | undefined {
-	if (typeof window === 'undefined') return undefined;
+function getInstallId(): string | undefined {
 	const electronInstallId = (window as unknown as { electron?: { installId?: unknown } }).electron
 		?.installId;
 	if (typeof electronInstallId === 'string' && electronInstallId.trim()) {
