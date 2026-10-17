@@ -64,7 +64,7 @@ function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootPro
 		() =>
 			TAX_ID_TYPES.map((type) => ({
 				value: type,
-				label: t(TAX_ID_LABEL_KEYS[type], { _: type }),
+				label: t(TAX_ID_LABEL_KEYS[type]),
 			})),
 		[t]
 	);
@@ -73,7 +73,7 @@ function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootPro
 			options={options}
 			value={value?.value}
 			onChange={(_nextValue, option) => onValueChange?.(option)}
-			placeholder={t('tax_id.type_label', { _: 'Type' })}
+			placeholder={t('tax_id.type_label')}
 			fallbackLabel={value?.label ?? value?.value ?? ''}
 			matchWidth
 			{...props}
@@ -102,7 +102,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 	return (
 		<Collapsible>
 			<CollapsibleTrigger>
-				<Text>{t('tax_id.section_label', { _: 'Tax IDs' })}</Text>
+				<Text>{t('tax_id.section_label')}</Text>
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<VStack className="gap-2">
@@ -120,7 +120,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 										render={({ field: { value: rhfValue, onChange: _ignored, ...rest } }) => (
 											<FormSelect
 												customComponent={TaxIdTypeSelect}
-												label={t('tax_id.type_label', { _: 'Type' })}
+												label={t('tax_id.type_label')}
 												value={rhfValue as string}
 												onChange={(next) => handleTypeChange(index, next as TaxIdType)}
 												{...rest}
@@ -134,17 +134,11 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 										name={`${name}.${index}.value`}
 										render={({ field: rhf }) => (
 											<FormInput
-												label={t('tax_id.value_label', { _: 'ID' })}
+												label={t('tax_id.value_label')}
 												placeholder={TAX_ID_PLACEHOLDERS[type]}
 												{...rhf}
 												value={rhf.value ?? ''}
-												description={
-													showFormatWarning
-														? t('tax_id.invalid_format', {
-																_: 'Format does not match the selected type.',
-															})
-														: undefined
-												}
+												description={showFormatWarning ? t('tax_id.invalid_format') : undefined}
 											/>
 										)}
 									/>
@@ -155,7 +149,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 										name={`${name}.${index}.country`}
 										render={({ field: rhf }) => (
 											<FormInput
-												label={t('tax_id.country_label', { _: 'Country' })}
+												label={t('tax_id.country_label')}
 												{...rhf}
 												value={rhf.value ?? ''}
 												maxLength={2}
@@ -170,11 +164,12 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 											<IconButton
 												variant="destructive"
 												name="circleMinus"
+												accessibilityLabel={t('tax_id.remove')}
 												onPress={() => remove(index)}
 											/>
 										</TooltipTrigger>
 										<TooltipContent>
-											<Text>{t('tax_id.remove', { _: 'Remove tax ID' })}</Text>
+											<Text>{t('tax_id.remove')}</Text>
 										</TooltipContent>
 									</Tooltip>
 								</View>
@@ -183,7 +178,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 					})}
 					<HStack>
 						<Button variant="outline" onPress={() => append({ ...DEFAULT_ROW })}>
-							<ButtonText>{t('tax_id.add', { _: 'Add tax ID' })}</ButtonText>
+							<ButtonText>{t('tax_id.add')}</ButtonText>
 						</Button>
 					</HStack>
 				</VStack>

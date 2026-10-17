@@ -85,7 +85,7 @@ function RegisterBarContent({
 					<IconButton
 						name="bars"
 						testID="pos-drawer-open-button"
-						aria-label={t('common.menu')}
+						accessibilityLabel={t('common.menu')}
 						onPress={() => (navigation as unknown as { openDrawer: () => void }).openDrawer()}
 					/>
 				)}
@@ -117,6 +117,7 @@ function RegisterBarContent({
 				{(session || lastClosure) && (
 					<IconButton
 						name="cashRegister"
+						accessibilityLabel={t('common.register')}
 						testID="register-bar-drawer"
 						iconClassName={overdue ? 'text-warning' : 'text-foreground'}
 						onPress={() => onPanelOpenChange(true)}

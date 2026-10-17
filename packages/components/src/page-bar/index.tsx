@@ -69,7 +69,7 @@ export function PageBar({
 						<IconButton
 							name="bars"
 							onPress={onMenu.onPress}
-							aria-label={onMenu.label}
+							accessibilityLabel={onMenu.label}
 							testID={id('menu')}
 							className="h-ctl w-ctl -ml-2 items-center justify-center"
 						/>

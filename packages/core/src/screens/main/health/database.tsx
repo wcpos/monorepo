@@ -343,6 +343,7 @@ function CollectionRowView({
 			<DropdownMenuTrigger asChild>
 				<IconButton
 					name="ellipsisVertical"
+					accessibilityLabel={t('common.more_actions')}
 					testID={`db-row-menu-${row.key}`}
 					disabled={phase === 'clearing' || busy}
 					loading={syncing || checking === row.key}

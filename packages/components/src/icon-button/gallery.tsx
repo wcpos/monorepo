@@ -19,22 +19,27 @@ const SIZES = ['xs', 'sm', 'lg', 'xl', '2xl', '3xl', '4xl'] as const satisfies r
 	Props['size']
 >[];
 
+const ADD = 'Add product';
+
 const examples: ({ id: string } & Props)[] = [
 	...VARIANTS.map((variant): { id: string } & Props => ({
 		id: variant,
 		name: variant === 'destructive' ? 'trash' : 'plus',
 		// An icon-only control's name says what it does.
-		...(variant === 'destructive' ? { accessibilityLabel: 'Delete product' } : {}),
+		accessibilityLabel: variant === 'destructive' ? 'Delete product' : ADD,
 		variant,
 	})),
-	...SIZES.map((size): { id: string } & Props => ({ id: `size-${size}`, name: 'plus', size })),
-	{ id: 'on', name: 'plus', on: true },
-	{ id: 'loading', name: 'plus', loading: true },
-	{ id: 'disabled', name: 'plus', disabled: true },
+	...SIZES.map((size): { id: string } & Props => ({
+		id: `size-${size}`,
+		name: 'plus',
+		accessibilityLabel: ADD,
+		size,
+	})),
+	{ id: 'on', name: 'plus', accessibilityLabel: ADD, on: true },
+	{ id: 'loading', name: 'plus', accessibilityLabel: ADD, loading: true },
+	{ id: 'disabled', name: 'plus', accessibilityLabel: ADD, disabled: true },
 ];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,
-	render: () => (
-		<IconButton accessibilityLabel="Add product" {...props} testID={`gallery-icon-button-${id}`} />
-	),
+	render: () => <IconButton {...props} testID={`gallery-icon-button-${id}`} />,
 }));

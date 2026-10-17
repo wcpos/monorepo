@@ -425,6 +425,7 @@ export function QuickFilterEditor({
 							/>
 							<IconButton
 								name="xmark"
+								accessibilityLabel={t('common.remove')}
 								testID={`quick-filter-condition-remove-${index}`}
 								onPress={() =>
 									setDraft((value) => ({

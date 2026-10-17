@@ -7,6 +7,7 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useProductsStockStatusFilter, VariationsPopover } from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';
+import { useT } from '../../../../../contexts/translations';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
@@ -16,6 +17,7 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 export function VariableActions({
 	row,
 }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
+	const t = useT();
 	const parent = row.original.record;
 	const { addVariation } = useAddVariation();
 	// Read here, inside the products QueryStateProvider — PopoverContent portals out of it
@@ -47,6 +49,7 @@ export function VariableActions({
 					name="circleChevronRight"
 					variant="success"
 					size="4xl"
+					accessibilityLabel={t('common.variations')}
 				/>
 			</PopoverTrigger>
 			<PopoverContent side="right" className="w-auto max-w-80 p-2">

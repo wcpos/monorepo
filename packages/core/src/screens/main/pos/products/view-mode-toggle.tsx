@@ -27,6 +27,7 @@ export function ViewModeToggle() {
 			<TooltipTrigger asChild>
 				<IconButton
 					name={viewMode === 'table' ? 'grid' : 'list'}
+					accessibilityLabel={tooltipText}
 					onPress={handlePress}
 					testID="view-mode-toggle"
 				/>

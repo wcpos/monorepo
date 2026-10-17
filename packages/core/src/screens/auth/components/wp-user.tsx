@@ -167,6 +167,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				}
 				trailing={trailing}
 				removable
+				removeLabel={t('auth.remove_2', { name: wpUser.display_name })}
 				onRemove={() => setDeleteDialogOpened(true)}
 			>
 				<Text className="text-base font-medium">{displayName}</Text>

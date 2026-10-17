@@ -24,6 +24,7 @@ import { TILE_SURFACE } from '../lib/tile-surface';
  *   trailing={<StatusBadge label="Valid" variant="success" />}
  *   selected
  *   removable
+ *   removeLabel="Remove Paul Kilmurray"
  *   onRemove={() => {}}
  * />
  *
@@ -50,7 +51,7 @@ const listItemVariants = cva(
 	}
 );
 
-export interface ListItemProps
+interface ListItemBaseProps
 	extends Omit<PressableProps, 'children'>, VariantProps<typeof listItemVariants> {
 	/** Content rendered on the left (avatar, icon, etc.) */
 	leading?: React.ReactNode;
@@ -62,13 +63,24 @@ export interface ListItemProps
 	trailing?: React.ReactNode;
 	/** Whether this item is in a selected state */
 	selected?: boolean;
-	/** Whether to show a remove (X) button */
-	removable?: boolean;
 	/** Called when the remove button is pressed */
 	onRemove?: () => void;
 	/** Custom children — if provided, replaces title/subtitle */
 	children?: React.ReactNode;
 }
+
+// The remove (X) is icon-only, so a removable row must say what removing it does: the caller
+// passes the translated name, and TypeScript refuses a removable row without one.
+type ListItemRemoveProps =
+	| { removable?: false; removeLabel?: undefined }
+	| {
+			/** Whether to show a remove (X) button */
+			removable: true;
+			/** The remove button's accessible name, translated by the caller. */
+			removeLabel: string;
+	  };
+
+export type ListItemProps = ListItemBaseProps & ListItemRemoveProps;
 
 export function ListItem({
 	leading,
@@ -77,6 +89,7 @@ export function ListItem({
 	trailing,
 	selected,
 	removable,
+	removeLabel,
 	onRemove,
 	variant,
 	className,
@@ -124,6 +137,7 @@ export function ListItem({
 					name="xmark"
 					size="xs"
 					variant="destructive"
+					accessibilityLabel={removeLabel}
 					// A disabled row cannot be removed either (CodeRabbit on #2213).
 					disabled={pressableProps.disabled ?? undefined}
 					onPress={(e) => {

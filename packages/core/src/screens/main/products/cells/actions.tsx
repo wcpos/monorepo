@@ -93,7 +93,11 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> 
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" testID="product-actions-button" />
+					<IconButton
+						name="ellipsisVertical"
+						accessibilityLabel={t('common.more_actions')}
+						testID="product-actions-button"
+					/>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<CapabilityTooltip show={!caps.canEditProducts} hint="editProducts">

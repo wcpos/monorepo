@@ -16,8 +16,18 @@ export const stories = [
 				subtitle="· UK Store"
 				status={{ label: 'Offline', variant: 'warning' }}
 			>
-				<IconButton name="sliders" aria-label="Filters" testID="filters" onPress={onPress} />
-				<IconButton name="bell" aria-label="Notifications" testID="bell" onPress={onPress} />
+				<IconButton
+					name="sliders"
+					accessibilityLabel="Filters"
+					testID="filters"
+					onPress={onPress}
+				/>
+				<IconButton
+					name="bell"
+					accessibilityLabel="Notifications"
+					testID="bell"
+					onPress={onPress}
+				/>
 			</PageBar>
 		),
 	},
@@ -29,7 +39,7 @@ export const stories = [
 					<PageBar testID="phone-menu" title="Products" onMenu={{ label: 'Menu', onPress }}>
 						<IconButton
 							name="bell"
-							aria-label="Notifications"
+							accessibilityLabel="Notifications"
 							testID="phone-bell"
 							onPress={onPress}
 						/>

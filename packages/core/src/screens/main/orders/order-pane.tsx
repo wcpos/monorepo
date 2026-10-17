@@ -83,7 +83,7 @@ function OrderPaneContent({
 		<IconButton
 			name="xmark"
 			testID="order-pane-close"
-			aria-label={t('orders.close_order')}
+			accessibilityLabel={t('orders.close_order')}
 			{...{ ref: focusClose }}
 			onPress={onClose}
 		/>
@@ -133,7 +133,7 @@ function OrderPaneContent({
 								name="ellipsisVertical"
 								iconClassName="rotate-90"
 								testID="order-actions-button"
-								aria-label={t('orders.order_actions')}
+								accessibilityLabel={t('orders.order_actions')}
 							/>
 						}
 					/>
