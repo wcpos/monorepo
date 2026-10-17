@@ -1132,6 +1132,57 @@ describe('enqueueWriteIntent', () => {
 		if (priorExplicit) expect(queued.get('mutation-1')?.explicit).toBe(true);
 	});
 
+	it.each([false, true])('born-twice preserves admissions: released=%s', async (released) => {
+		const storage = createFakeMutationCollection();
+		let data = { local: { dirty: false, pendingMutationIds: [] as string[] } };
+		const resident = {
+			incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+				data = modify(data);
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: storage,
+			},
+		} as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const now = () => new Date().toISOString();
+		const mutation: QueuedMutation = {
+			mutationId: 'create',
+			collectionName: 'orders',
+			recordId: 'order',
+			operation: 'create',
+			origin: 'minted',
+			payload: { status: 'pos-open' },
+			baseRevision: null,
+			queuedAt: now(),
+		};
+		await queue.admitWriter('orders', 'order', 'writer', Date.now());
+		const edit: QueuedMutation = { ...mutation, mutationId: 'edit', admittedBy: 'writer' };
+		await queue.enqueue(edit);
+		const finishWrite = async () => {
+			data.local.dirty = true;
+			data.local.pendingMutationIds.push('edit');
+			await queue.releaseWriter('orders', 'order', 'writer');
+		};
+		if (released) await finishWrite();
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation,
+			ackRevision: 'r1',
+			mintUuid: () => 'follow-up',
+			now,
+		});
+		const rows = await queue.all();
+		expect(rows.every((row) => !row.supersededBy)).toBe(true);
+		const ids = rows.map((row) => row.mutationId);
+		expect(ids).toEqual(released ? ['follow-up'] : ['edit', 'follow-up']);
+		if (!released) await finishWrite();
+		expect(data.local.pendingMutationIds.sort()).toEqual(ids.sort());
+		expect(await queue.admissionState((await queue.all()).at(-1)!, Date.now())).toBe('released');
+	});
+
 	it('strips non-string order meta display fields after coalescing over resident payload', async () => {
 		const mutationCollection = createFakeMutationCollection();
 		const queued = {

@@ -1195,10 +1195,13 @@ export async function requeueBornTwiceSnapshot(input: {
 			last &&
 			last.explicit !== true &&
 			(last.status === undefined || last.status === 'pending') &&
-			(last.attempts ?? 0) === 0
+			(last.attempts ?? 0) === 0 &&
+			(await queue.admissionState(last, Date.parse(input.now()))) === 'released'
 		) {
 			const replacement: QueuedMutation = {
 				...last,
+				// Release may have completed after the placement snapshot. Preserve its proof.
+				...(last.admittedBy ? { admissionReleased: last.admittedBy } : {}),
 				mutationId: followUpId,
 				payload: sanitizeOutboundPayload(mutation.collectionName, {
 					...mutation.payload,

@@ -9,6 +9,11 @@ import {
 	syncCustomPullBatchIntoRepository,
 } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
+import {
+	InMemoryRecordMutationStorage,
+	pendingRecordIds,
+	RecordMutationQueue,
+} from './recordMutationQueue';
 import { mintRemoteId } from './woo/remoteIdCodec';
 
 // Pull fixtures come from the contract-faithful fake server (fakePullServer.ts, pinned against the
@@ -719,6 +724,38 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 		sequence: 12,
 	};
 
+	it.each(['preparing', 'committed'] as const)(
+		'a %s void fence protects a delayed pull through removal',
+		async (phase) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const queue = new RecordMutationQueue(storage);
+			const id = fakeUuid(11);
+			const residents = new Set([id]);
+			await queue.fenceForVoid('orders', id, 'void', Date.now());
+			await queue.setVoidPhase('orders', id, 'void', phase);
+			const protectedIds = pendingRecordIds(await storage.list());
+			await queue.setVoidPhase('orders', id, 'void', 'committed');
+			residents.delete(id); // The pull resumes only after the void removed the resident.
+			const input = {
+				baseUrl: BASE_URL,
+				limit: 50,
+				fetcher: seededServer().fetch,
+				repository: {
+					upsertMany: async (documents: PullResponse['documents']) => {
+						for (const document of documents) residents.add(document.uuid);
+					},
+				},
+			};
+			await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+			expect(residents.has(id)).toBe(false);
+			await queue.releaseVoidFence('orders', id, 'void');
+			await syncCustomPullBatchIntoRepository({
+				...input,
+				pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+			});
+			expect(residents.has(id)).toBe(true);
+		}
+	);
 	it('filters pending documents out of the upsert but still advances the checkpoint', async () => {
 		const server = seededServer();
 		const repository = {

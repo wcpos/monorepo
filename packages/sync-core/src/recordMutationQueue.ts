@@ -371,7 +371,7 @@ export class RecordMutationQueue {
 				(row.attempts ?? 0) !== 0
 			)
 				return false;
-			if (replacement.admittedBy) {
+			if (replacement.admittedBy && replacement.admissionReleased !== replacement.admittedBy) {
 				// Keep the receipted generation until this admission durably releases.
 				if (
 					!(await this.storage.appendIfUnchanged(
@@ -1031,7 +1031,8 @@ export class RecordMutationQueue {
 export function pendingRecordIds(mutations: readonly QueuedMutation[]): Set<string> {
 	const ids = new Set<string>();
 	for (const mutation of mutations) {
-		if (isInternalRow(mutation) || mutation.status === 'rejected') continue;
+		// A void fence protects even an absent resident until its owner releases it.
+		if (isInternalRow(mutation) ? !mutation.supersededBy : mutation.status === 'rejected') continue;
 		ids.add(mutation.recordId);
 	}
 	return ids;
