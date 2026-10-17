@@ -339,7 +339,7 @@ describe('checkout failure report', () => {
 			'Checkout failed',
 			expect.objectContaining({
 				showToast: true,
-				code: ERROR_CODES.SYNC_UNREACHABLE,
+				code: ERROR_CODES.WRITE_STILL_SENDING,
 				toast: { title: expect.stringContaining('still on its way to your store') },
 				context: expect.objectContaining({
 					error: 'Timed out waiting for mutation "mutation-1"',

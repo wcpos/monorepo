@@ -359,7 +359,7 @@ describe('useMutation', () => {
 			'customers create failed',
 			expect.objectContaining({
 				showToast: true,
-				code: 'SYNC121',
+				code: 'SYNC191',
 				toast: { title: 'common.still_sending' },
 				context: expect.objectContaining({ pushState: { queueDepth: 1 } }),
 			})

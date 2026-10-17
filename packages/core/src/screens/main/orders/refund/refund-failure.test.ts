@@ -73,7 +73,7 @@ describe('classifyRefundFailure', () => {
 	])('sends the cashier to the order’s refunds after %s', (_label, error) => {
 		expect(classifyRefundFailure(error, t)).toEqual({
 			level: 'error',
-			code: 'PAYMENT999',
+			code: 'PAYMENT311',
 			title: 'orders.refund_outcome_unknown',
 			text2: 'orders.refund_check_before_retry',
 		});

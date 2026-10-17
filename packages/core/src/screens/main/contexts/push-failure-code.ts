@@ -106,7 +106,8 @@ export function reportPushFailure(
 	if (error instanceof WriteOutcomeTimeoutError) {
 		logger.warn(message, {
 			showToast: true,
-			code: ERROR_CODES.SYNC_UNREACHABLE,
+			// SYNC191: still on its way — "don't enter it again", not "can't be reached".
+			code: ERROR_CODES.WRITE_STILL_SENDING,
 			...(stillSendingTitle !== undefined ? { toast: { title: stillSendingTitle } } : {}),
 			context: { ...fullContext, pushState: error.diagnostics, outcome: 'still-queued' },
 		});

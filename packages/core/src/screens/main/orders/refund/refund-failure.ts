@@ -79,7 +79,7 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 
 	return {
 		level: 'error',
-		code: ERROR_CODES.PAYMENT_UNEXPECTED,
+		code: ERROR_CODES.REFUND_OUTCOME_UNKNOWN,
 		title: t('orders.refund_outcome_unknown'),
 		text2: t('orders.refund_check_before_retry'),
 	};

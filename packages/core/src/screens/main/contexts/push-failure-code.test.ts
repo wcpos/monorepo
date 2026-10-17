@@ -59,7 +59,7 @@ describe('reportPushFailure', () => {
 			'Failed to save order',
 			expect.objectContaining({
 				showToast: true,
-				code: 'SYNC121',
+				code: 'SYNC191',
 				toast: { title: 'Still on its way' },
 				context: expect.objectContaining({ pushState: { queueDepth: 3 } }),
 			})
