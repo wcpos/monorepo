@@ -26,8 +26,9 @@ export async function getInstanceId(): Promise<string | undefined> {
 			typeof navigator !== 'undefined' && navigator.locks
 				? await navigator.locks.request('wcpos-instance-id', readOrMint)
 				: readOrMint();
-		return cached;
 	} catch {
-		return undefined;
+		// Rejected Web Locks are unavailable; use the same path as absent locks.
+		cached = readOrMint();
 	}
+	return cached;
 }

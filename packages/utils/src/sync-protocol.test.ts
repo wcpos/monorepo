@@ -1,7 +1,9 @@
 import {
 	formatClientSignal,
+	instanceHeaderSupported,
 	parseUpdateRequiredBody,
 	protocolHeadersSupported,
+	sendsInstanceHeader,
 	sendsProtocolHeaders,
 	sendsProtocolQueryTwins,
 } from './sync-protocol';
@@ -96,3 +98,17 @@ describe('protocol transport send rule', () => {
 		}
 	});
 });
+
+it.each([true, false, undefined])(
+	'requires reflection AND a successful instance probe: %s',
+	(flag) => {
+		for (const probe of [true, false, undefined]) {
+			expect(instanceHeaderSupported({ cors: { reflects_request_headers: flag } }, probe)).toBe(
+				flag === true && probe === true
+			);
+		}
+		for (const platform of ['web', 'ios', 'android', 'electron']) {
+			expect(sendsInstanceHeader(platform, flag)).toBe(platform !== 'web' || flag === true);
+		}
+	}
+);

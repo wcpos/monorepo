@@ -11,6 +11,7 @@ import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
+import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -64,6 +65,7 @@ export type EngineFetcherAuth = {
 	useRestRouteParam?: boolean;
 	useCacheBuster?: boolean;
 	useProtocolHeaders?: boolean;
+	useInstanceHeader?: boolean;
 };
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
@@ -181,6 +183,9 @@ export function createEngineFetcher(input: {
 				{ url, method, headers: init?.headers }
 			);
 			const { headers } = prepared;
+			if (!sendsInstanceHeader(AppInfo.platform, input.auth.useInstanceHeader)) {
+				headers.delete(INSTANCE_HEADER);
+			}
 			const parsedUrl = new URL(prepared.url);
 			// Plain permalinks carry the REST route in ?rest_route= with pathname
 			// '/', so the push exemption must classify from the route, not the path.

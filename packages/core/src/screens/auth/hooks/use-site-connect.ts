@@ -86,6 +86,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 	use_rest_route_param: boolean;
 	use_cache_buster: boolean;
 	use_protocol_headers: boolean;
+	use_instance_header: boolean;
 }
 
 export type SiteConnectStatus =
@@ -165,6 +166,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					use_rest_route_param: authResult.useRestRouteParam,
 					use_cache_buster: useCacheBuster,
 					use_protocol_headers: authResult.useProtocolHeaders,
+					use_instance_header: authResult.useInstanceHeader,
 				};
 
 				// Parse and validate the data using the database schema

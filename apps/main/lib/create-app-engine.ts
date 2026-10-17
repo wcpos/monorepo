@@ -116,6 +116,7 @@ export interface CreateAppSyncEngineOptions {
 	useCacheBuster?: boolean;
 	bareAuthParam?: boolean;
 	useProtocolHeaders?: boolean;
+	useInstanceHeader?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
 	 * request's arc id is passed so the refresh layer's "Session renewed
@@ -147,6 +148,7 @@ type MutableFetcherOptions = Pick<
 	| 'useRestRouteParam'
 	| 'useCacheBuster'
 	| 'useProtocolHeaders'
+	| 'useInstanceHeader'
 >;
 type CachedEngine = {
 	renderKey: string | null;
@@ -408,7 +410,7 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 
 /** Shared by render and awaited session commits, including the incoming cashier's refresh. */
 export function createSessionFetcherOptions(
-	site: RefreshAccessTokenConfig['site'],
+	site: RefreshAccessTokenConfig['site'] & { use_instance_header?: boolean },
 	wpCredentials: RefreshAccessTokenConfig['wpUser'] & CreateAppSyncEngineOptions['credentials'],
 	sessionRenewedMessage: string
 ): MutableFetcherOptions {
@@ -419,6 +421,7 @@ export function createSessionFetcherOptions(
 		useCacheBuster: site.use_cache_buster,
 		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
 		useProtocolHeaders: site.use_protocol_headers,
+		useInstanceHeader: site.use_instance_header,
 		refreshAuth: (context) =>
 			refreshAccessToken({
 				site: {
@@ -445,6 +448,7 @@ function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOp
 		useRestRouteParam: options.useRestRouteParam,
 		useCacheBuster: options.useCacheBuster,
 		useProtocolHeaders: options.useProtocolHeaders,
+		useInstanceHeader: options.useInstanceHeader,
 	};
 }
 

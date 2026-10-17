@@ -56,3 +56,32 @@ describe('getInstanceId (web)', () => {
 		spy.mockRestore();
 	});
 });
+
+it('falls back to persistent storage when Web Locks rejects', async () => {
+	window.localStorage.clear();
+	Object.defineProperty(navigator, 'locks', {
+		configurable: true,
+		value: { request: () => Promise.reject(new Error('SecurityError')) },
+	});
+	try {
+		const { getInstanceId } = await import('./get-instance-id.web');
+		const id = await getInstanceId();
+		expect(id).toMatch(/^[0-9a-f-]{36}$/);
+		expect(window.localStorage.getItem('wcpos_instance_id')).toBe(id);
+	} finally {
+		Reflect.deleteProperty(navigator, 'locks');
+	}
+});
+
+it('loads the root barrel without native Expo modules', () => {
+	jest.isolateModules(() => {
+		jest.doMock(
+			'expo-file-system',
+			() => {
+				throw new Error('Native Expo module loaded');
+			},
+			{ virtual: true }
+		);
+		expect(() => jest.requireActual('./index')).not.toThrow();
+	});
+});
