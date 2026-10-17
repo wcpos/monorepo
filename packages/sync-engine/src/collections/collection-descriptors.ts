@@ -266,7 +266,9 @@ export type CollectionWriteFacet = {
 	onDeleteAck: (
 		db: RxDatabase,
 		mutation: { mutationId: string; recordId: string },
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		/** Annihilation reports cleanup without rejecting committed removal; must not throw. */
+		onCleanupError?: (error: unknown) => void
 	) => Promise<void>;
 };
 
@@ -395,12 +397,12 @@ function ackBookkeeping(options: {
 				};
 			});
 		},
-		onDeleteAck: async (db, mutation, signal) => {
-			if (signal?.aborted) return;
+		onDeleteAck: async (db, mutation, signal, onCleanupError) => {
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
 			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
 			const data =
@@ -413,10 +415,15 @@ function ackBookkeeping(options: {
 							)
 						)[0]
 					: undefined);
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
 			if (doc) await doc.remove();
-			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			try {
+				if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			} catch (error) {
+				if (!onCleanupError) throw error; // Ordinary delete acks retry the cascade.
+				onCleanupError(error); // Removal committed: annihilation must not restore the chain.
+			}
 		},
 	};
 }

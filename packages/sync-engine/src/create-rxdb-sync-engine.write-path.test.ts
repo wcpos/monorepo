@@ -27,6 +27,7 @@ import {
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
 import { heldOpenCartMutations } from './write-path/open-cart-hold';
+import * as refundChildren from './write-path/refund-children';
 
 import type { RxStorage } from 'rxdb';
 
@@ -2047,6 +2048,55 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			await engine.dispose();
 		}
 	});
+
+	it.each(['abort', 'cleanup failure'] as const)(
+		'drain annihilation preserves the removal outcome on %s',
+		async (fault) => {
+			const events: SyncEvent[] = [];
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: server.fetch, diagnostics: (e) => events.push(e) });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date().toISOString(),
+					});
+				}
+				const facet = writeFacetFor('orders')!;
+				const ack = facet.onDeleteAck;
+				vi.spyOn(facet, 'onDeleteAck').mockImplementationOnce((db, mutation, signal, ...rest) => {
+					if (fault === 'abort') vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
+					return ack(db, mutation, signal, ...rest);
+				});
+				vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
+					new Error('cleanup failed')
+				);
+				await engine.sync('write-drain');
+				expect((await queue.pending()).map((row) => row.operation)).toEqual(
+					fault === 'abort' ? ['create', 'delete'] : []
+				);
+				expect(Boolean(await orderJson(engine, UUID_A))).toBe(fault === 'abort');
+				expect(server.received).toEqual([]);
+				if (fault === 'cleanup failure') {
+					expect(events).toContainEqual(
+						expect.objectContaining({ type: 'void.cleanup-failed', message: 'cleanup failed' })
+					);
+				}
+			} finally {
+				vi.restoreAllMocks();
+				await engine.dispose();
+			}
+		}
+	);
 
 	it('internal admission rows are invisible to checkout and health selectors', async () => {
 		const engine = engineWith({ fetch: createFakeWriteServer().fetch });

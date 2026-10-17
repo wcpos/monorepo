@@ -508,7 +508,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								await facet.onDeleteAck(
 									database,
 									{ mutationId: mutation.mutationId, recordId: mutation.recordId },
-									signal
+									signal,
+									(error) =>
+										deps.diagnostics({
+											type: 'void.cleanup-failed',
+											level: 'error',
+											collection: mutation.collectionName,
+											message: String(error instanceof Error ? error.message : error),
+											fields: { recordId: mutation.recordId, step: 'refunds' },
+										})
 								);
 							},
 							// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the
