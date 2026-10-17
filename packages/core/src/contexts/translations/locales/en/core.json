@@ -1535,7 +1535,7 @@
 	"health.logs.error_summary.AUTH101": "Your session ended and you need to sign in again.",
 	"health.logs.error_summary.AUTH201": "Your account does not have permission to perform this action.",
 	"health.logs.error_summary.AUTH301": "Another authentication plugin is preventing WCPOS from connecting.",
-	"health.logs.error_summary.AUTH311": "WCPOS can't reach its connection point on your store.",
+	"health.logs.error_summary.AUTH311": "Your store isn't answering WCPOS's requests.",
 	"health.logs.error_summary.AUTH401": "A secure connection to this store could not be trusted.",
 	"health.logs.error_summary.CHECKOUT101": "Checkout did not finish, and the cart is still safe to retry.",
 	"health.logs.error_summary.CHECKOUT201": "WCPOS could not confirm whether checkout completed.",
