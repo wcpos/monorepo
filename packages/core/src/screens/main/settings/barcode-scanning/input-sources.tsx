@@ -381,7 +381,6 @@ export function InputSources() {
 								{registration.available ? (
 									<View className="items-start">
 										<Button
-											size="sm"
 											variant="outline"
 											onPress={registration.start}
 											testID="register-scanner-button"
