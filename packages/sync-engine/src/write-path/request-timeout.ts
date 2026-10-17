@@ -26,12 +26,17 @@ export function withRequestTimeout(
 			init?.signal?.addEventListener('abort', abort, { once: true });
 		}
 		let timedOut = false;
+		let rejectDeadline!: (error: Error) => void;
+		const deadline = new Promise<never>((_, reject) => {
+			rejectDeadline = reject;
+		});
 		const handle = timers.setTimeout(() => {
 			timedOut = true;
+			rejectDeadline(new RequestTimeoutError(timeoutMs));
 			controller.abort();
 		}, timeoutMs);
 		try {
-			return await fetcher(url, { ...init, signal: controller.signal });
+			return await Promise.race([fetcher(url, { ...init, signal: controller.signal }), deadline]);
 		} catch (error) {
 			if (timedOut) throw new RequestTimeoutError(timeoutMs);
 			throw error;

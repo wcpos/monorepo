@@ -225,6 +225,11 @@ export const CONFORMANCE_TABLE = {
 				? ERROR_CODES.SYNC_TASK_CRASHED
 				: httpStatusCode(fields.status),
 	},
+	'engine.request.deadline': {
+		operationType: 'sync.lane',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_TASK_CRASHED,
+	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
 		outcome: 'ok',

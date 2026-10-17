@@ -1971,6 +1971,7 @@
 	"health.logs.event.engine_ready_failed": "Syncing could not start",
 	"health.logs.event.engine_ready_stalled": "Syncing is taking longer than expected to start",
 	"health.logs.event.engine_reconnect_retick": "Resumed syncing after reconnecting",
+	"health.logs.event.engine_request_deadline": "Sync request timed out",
 	"health.logs.event.engine_reset_needs_confirmation": "A data reset is waiting for your confirmation",
 	"health.logs.event.engine_scope_switched": "Switched to another store",
 	"health.logs.event.maintenance_lane_error": "A background maintenance task failed",
