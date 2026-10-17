@@ -20,6 +20,7 @@ import {
 	refreshAccessToken,
 	type RefreshAccessTokenConfig,
 } from '@wcpos/hooks/use-http-client/refresh-access-token';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { defaultConfig } from '@wcpos/database/adapters/default';
@@ -91,6 +92,7 @@ export interface CreateAppSyncEngineOptions {
 	useCacheBuster?: boolean;
 	bareAuthParam?: boolean;
 	useProtocolHeaders?: boolean;
+	useInstanceHeader?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
 	 * request's arc id is passed so the refresh layer's "Session renewed
@@ -122,6 +124,7 @@ type MutableFetcherOptions = Pick<
 	| 'useRestRouteParam'
 	| 'useCacheBuster'
 	| 'useProtocolHeaders'
+	| 'useInstanceHeader'
 >;
 type WriteLeaderState = {
 	current: ReturnType<typeof electWriteLeader> | null;
@@ -191,7 +194,7 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 
 /** Shared by render and awaited session commits, including the incoming cashier's refresh. */
 export function createSessionFetcherOptions(
-	site: RefreshAccessTokenConfig['site'],
+	site: RefreshAccessTokenConfig['site'] & { use_instance_header?: boolean },
 	wpCredentials: RefreshAccessTokenConfig['wpUser'] & CreateAppSyncEngineOptions['credentials'],
 	sessionRenewedMessage: string
 ): MutableFetcherOptions {
@@ -202,6 +205,7 @@ export function createSessionFetcherOptions(
 		useCacheBuster: site.use_cache_buster,
 		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
 		useProtocolHeaders: site.use_protocol_headers,
+		useInstanceHeader: site.use_instance_header,
 		refreshAuth: (context) =>
 			refreshAccessToken({
 				site: {
@@ -228,6 +232,7 @@ function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOp
 		useRestRouteParam: options.useRestRouteParam,
 		useCacheBuster: options.useCacheBuster,
 		useProtocolHeaders: options.useProtocolHeaders,
+		useInstanceHeader: options.useInstanceHeader,
 	};
 }
 
@@ -567,6 +572,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
 			},
 			storage: defaultConfig.storage,
+			getInstanceId,
 			fetcher,
 			onUpdateRequired: (details) => {
 				reportUpdateRequired(options.scope.site, details);
@@ -578,7 +584,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				});
 			},
 			queryTotal: {
-				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
+				fetchWooQueryTotal: (input) =>
+					fetchWooQueryTotal(input, engine.hostTransport().fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
 			holdAutomaticTicks: () =>

@@ -643,6 +643,7 @@ describe('TEST_AUTHORIZATION', () => {
 			use_jwt_as_param: false,
 			use_rest_route_param: false,
 			use_protocol_headers: false,
+			use_instance_header: false,
 		});
 		expect(siteDoc.use_jwt_as_param).toBe(false);
 		expect(siteDoc.use_rest_route_param).toBe(false);
@@ -735,6 +736,7 @@ describe('TEST_AUTHORIZATION', () => {
 			use_jwt_as_param: false,
 			use_rest_route_param: false,
 			use_protocol_headers: true,
+			use_instance_header: false,
 		});
 		expect(siteDoc.use_protocol_headers).toBe(true);
 		// Unsent floor names are unknown, not dead: no false alarm on a healthy store.
@@ -956,6 +958,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -984,6 +987,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1096,6 +1100,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1135,24 +1140,51 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: true,
+			useInstanceHeader: false,
 		});
 	});
 
-	it('enables protocol headers when the echo proves reflected CORS names are authorized', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
-		});
+	it.each([
+		['received', true, true],
+		['stripped', false, false],
+		['missing', undefined, false],
+		['HTML challenge', 'html', false],
+		['failed preflight', null, false],
+	] as const)(
+		'probes the instance header before trusting reflection: %s',
+		async (_scenario, received, allowed) => {
+			fetchMock.mockResolvedValueOnce({
+				ok: true,
+				json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
+			});
+			fetchMock.mockImplementationOnce(async (url, init) => {
+				expect(new URL(url).searchParams.get('wcpos')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS-Instance')).toBe('wcpos-instance-probe');
+				if (received === null) throw new TypeError('Failed preflight');
+				const body = echoBody({ cors: { reflects_request_headers: true } });
+				if (typeof received === 'boolean') {
+					Object.assign(body.headers, {
+						'x-wcpos-instance': { received, length: received ? 20 : 0 },
+					});
+				}
+				return new Response(
+					received === 'html' ? '<html>Checking your browser</html>' : JSON.stringify(body),
+					{ status: 200 }
+				);
+			});
 
-		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({
-			ok: true,
-			useJwtAsParam: false,
-			useRestRouteParam: false,
-			useProtocolHeaders: true,
-		});
-	});
+			await expect(
+				testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+			).resolves.toEqual({
+				ok: true,
+				useJwtAsParam: false,
+				useRestRouteParam: false,
+				useProtocolHeaders: true,
+				useInstanceHeader: allowed,
+			});
+		}
+	);
 
 	it('classifies a challenge page returned by the path echo', async () => {
 		fetchMock
@@ -1294,6 +1326,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
@@ -1312,6 +1345,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 	});
 
@@ -1329,6 +1363,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1414,6 +1449,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -1438,6 +1474,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
@@ -1459,6 +1496,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1504,6 +1542,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: false,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1527,6 +1566,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -1552,6 +1592,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -1573,6 +1614,7 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 			useRestRouteParam: true,
 			useProtocolHeaders: false,
+			useInstanceHeader: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);

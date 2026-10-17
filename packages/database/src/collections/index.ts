@@ -85,6 +85,10 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// no cache key, so existing documents need no change.
 			return oldDoc;
 		},
+		7(oldDoc) {
+			// Optional instance-header verdict: absent keeps web sends disabled until probed.
+			return oldDoc;
+		},
 	},
 };
 

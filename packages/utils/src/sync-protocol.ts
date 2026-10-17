@@ -6,6 +6,7 @@ export const SYNC_PROTOCOL_VERSION = 2;
 
 export const PROTOCOL_HEADER = 'X-WCPOS-Protocol';
 export const CLIENT_HEADER = 'X-WCPOS-Client';
+export const INSTANCE_HEADER = 'X-WCPOS-Instance';
 export const PROTOCOL_QUERY_PARAM = 'wcpos_protocol';
 export const CLIENT_QUERY_PARAM = 'wcpos_client';
 
@@ -52,6 +53,21 @@ export function protocolHeadersSupported(echo: EchoCorsCapability | null | undef
 		echoFloorHas(echo, [PROTOCOL_HEADER, CLIENT_HEADER]) ||
 		echo?.cors?.reflects_request_headers === true
 	);
+}
+
+/** INSTANCE_HEADER is outside the frozen floor: reflection needs a successful path probe. */
+export function instanceHeaderSupported(
+	echo: EchoCorsCapability | null | undefined,
+	probeSucceeded: boolean | undefined
+): boolean {
+	return echo?.cors?.reflects_request_headers === true && probeSucceeded === true;
+}
+
+export function sendsInstanceHeader(
+	platform: string,
+	useInstanceHeader: boolean | undefined
+): boolean {
+	return platform !== 'web' || useInstanceHeader === true;
 }
 
 /** Native always sends the signal headers (no CORS preflight exists there);

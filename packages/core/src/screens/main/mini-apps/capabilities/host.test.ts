@@ -26,10 +26,15 @@ describe('useHostCapabilities', () => {
 
 		for (const path of ['/wcpos/v1/settings', '/wc/v3/orders', '/wp/v2/users']) {
 			await act(async () => {
-				await result.current['http.proxy']({ method: 'GET', path, query: {}, body: null });
+				await result.current['http.proxy']({
+					method: 'GET',
+					path,
+					headers: { 'x-Wcpos-Instance': 'forged' },
+				});
 			});
 		}
 		expect(mockRequest).toHaveBeenCalledTimes(3);
+		expect(mockRequest.mock.calls[0][0]).toEqual(expect.objectContaining({ headers: {} }));
 
 		for (const path of [
 			'https://evil.example',
