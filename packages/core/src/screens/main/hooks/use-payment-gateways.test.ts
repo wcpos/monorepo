@@ -156,4 +156,55 @@ describe('usePaymentGateways', () => {
 			jest.useRealTimers();
 		}
 	});
+
+	describe('retries after cancellation', () => {
+		const cancelled = () =>
+			Object.assign(new Error('canceled'), { name: 'CanceledError', code: 'ERR_CANCELED' });
+		const catalog = { data: [{ id: 'stripe', capabilities: { supports_checkout: true } }] };
+
+		beforeEach(() => jest.useFakeTimers());
+		afterEach(() => jest.useRealTimers());
+
+		it('retries every cancel and resolves once a load succeeds', async () => {
+			mockGet
+				.mockRejectedValueOnce(cancelled())
+				.mockRejectedValueOnce(cancelled())
+				.mockRejectedValueOnce(cancelled())
+				.mockResolvedValueOnce(catalog);
+
+			const { result } = renderHook(() => usePaymentGateways('stripe'));
+			for (let tick = 0; tick < 3; tick += 1) {
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(0);
+				});
+				expect(result.current.loading).toBe(true);
+				await act(async () => {
+					await jest.advanceTimersByTimeAsync(1_000);
+				});
+			}
+
+			expect(mockGet).toHaveBeenCalledTimes(4);
+			expect(result.current.loading).toBe(false);
+			expect(result.current.error).toBeNull();
+			expect(result.current.gateway?.id).toBe('stripe');
+		});
+
+		it('stops after ten cancel retries and settles as a failure, never pending forever', async () => {
+			mockGet.mockRejectedValue(cancelled());
+
+			const { result } = renderHook(() => usePaymentGateways('stripe'));
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(15_000);
+			});
+
+			// The first load plus ten retries, then no more.
+			expect(mockGet).toHaveBeenCalledTimes(11);
+			expect(result.current.loading).toBe(false);
+			expect(result.current.error).toBe('payment_gateways_fetch_failed');
+			expect(getLogger([]).warn).toHaveBeenCalledWith(
+				'Payment gateways could not be loaded',
+				expect.objectContaining({ code: 'AUTH101' })
+			);
+		});
+	});
 });

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { PaymentGatewayContract } from './payment-gateway-contract';
 import { useRestHttpClient } from './use-rest-http-client';
@@ -11,23 +12,40 @@ import { storeRequestFailureCode } from '../../../utils/store-request-failure-co
 const gatewaysLogger = getLogger(['wcpos', 'pos', 'checkout', 'gateways']);
 
 /**
- * A cancelled load with no auth hold latched (a refresh already in flight) is retried
- * once after this delay, so the catalog cannot wait forever for a signal that never
- * comes. One retry: a second cancel waits for the auth signal like any other.
+ * An auth flow cancels in-flight requests on purpose (CanceledError) — a token refresh
+ * as often as a full re-login, and a refresh latches no auth hold, so no "auth
+ * restored" signal is guaranteed to follow. Every cancel therefore schedules a retry
+ * after this delay: long enough for a refresh to land, short enough that checkout's
+ * pending state is barely noticed.
  */
-const UNLATCHED_CANCEL_RETRY_MS = 1_000;
+const RETRY_AFTER_CANCEL_MS = 1_000;
+/**
+ * Retries after cancels, per mount, before the load is reported as failed. Ten seconds
+ * of back-to-back cancels means the session is not coming back on its own: consumers
+ * must get a settled (failed) state instead of pending forever.
+ */
+const MAX_CANCEL_RETRIES = 10;
+
+function isCancellation(error: unknown): boolean {
+	return (
+		(error as { code?: unknown } | null)?.code === 'ERR_CANCELED' ||
+		(error as { name?: unknown } | null)?.name === 'CanceledError'
+	);
+}
 
 export function usePaymentGateways(selectedGatewayId?: string | null) {
 	const http = useRestHttpClient();
 	const [gateways, setGateways] = React.useState<PaymentGatewayContract[]>([]);
+	// True until a load SETTLES (success, or a failure that is not a cancellation): a
+	// cancelled load is not a result, so checkout must not fall back to the legacy
+	// webview, nor the refund form default to cash, while it is retried.
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
 	const gatewaysRef = React.useRef<PaymentGatewayContract[]>([]);
-	// True while a load was cancelled by an auth flow: the catalog is NOT resolved yet,
-	// so `loading` stays true (checkout must not fall back to the legacy webview, nor the
-	// refund form to cash) until auth completes and the load runs again.
-	const awaitingAuthRef = React.useRef(false);
-	const unlatchedRetriedRef = React.useRef(false);
+	const awaitingRetryRef = React.useRef(false);
+	const cancelRetriesRef = React.useRef(0);
+	const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+	const mountedRef = React.useRef(true);
 	const fetchGatewaysRef = React.useRef<(() => Promise<PaymentGatewayContract[]>) | null>(null);
 
 	React.useEffect(() => {
@@ -35,47 +53,46 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	}, [gateways]);
 
 	const fetchGateways = React.useCallback(async (): Promise<PaymentGatewayContract[]> => {
+		if (retryTimerRef.current) {
+			clearTimeout(retryTimerRef.current);
+			retryTimerRef.current = null;
+		}
+		awaitingRetryRef.current = false;
 		setLoading(true);
 		setError(null);
-		awaitingAuthRef.current = false;
 		try {
 			const response = await http.get('payment-gateways');
 			const next = Array.isArray(response?.data) ? response.data : [];
 			gatewaysRef.current = next;
-			// A settled load ends the cancellation episode: a later cancel gets its own retry.
-			unlatchedRetriedRef.current = false;
 			setGateways(next);
+			setLoading(false);
 			return next;
 		} catch (err) {
-			// An auth flow in progress cancels the request on purpose (CanceledError): not a
-			// failure, and certainly not "store unreachable".
-			const cancelled =
-				(err as { code?: unknown } | null)?.code === 'ERR_CANCELED' ||
-				(err as { name?: unknown } | null)?.name === 'CanceledError';
-			if (cancelled) {
-				// Not a failure — no row — and not a result: stay pending and load again
-				// once the session is restored.
-				awaitingAuthRef.current = true;
-				if (!requestStateManager.isAuthFailed() && !unlatchedRetriedRef.current) {
-					unlatchedRetriedRef.current = true;
-					setTimeout(() => {
-						if (awaitingAuthRef.current) void fetchGatewaysRef.current?.();
-					}, UNLATCHED_CANCEL_RETRY_MS);
-				}
+			if (!mountedRef.current) return gatewaysRef.current;
+			if (isCancellation(err) && cancelRetriesRef.current < MAX_CANCEL_RETRIES) {
+				// Not a failure (no row) and not a result: stay pending and try again.
+				cancelRetriesRef.current += 1;
+				awaitingRetryRef.current = true;
+				retryTimerRef.current = setTimeout(() => {
+					retryTimerRef.current = null;
+					if (mountedRef.current && awaitingRetryRef.current) void fetchGatewaysRef.current?.();
+				}, RETRY_AFTER_CANCEL_MS);
 				return gatewaysRef.current;
 			}
-			unlatchedRetriedRef.current = false;
 			// The one row for this failure (the HTTP transport row is forensic). The
 			// checkout screen's inline error is the instruction, so no toast; offline is
-			// forensic too, since nothing was attempted.
+			// forensic too, since nothing was attempted. Cancels that never stopped are
+			// the session not coming back: AUTH101 (sign in again).
+			const code = isCancellation(err) ? ERROR_CODES.SESSION_EXPIRED : storeRequestFailureCode(err);
 			gatewaysLogger[isExpectedPreflightBlock(err) ? 'debug' : 'warn'](
 				'Payment gateways could not be loaded',
-				{ code: storeRequestFailureCode(err), context: { error: getErrorMessage(err) } }
+				{ code, context: { error: getErrorMessage(err) } }
 			);
-			setError(err instanceof Error ? err.message : 'payment_gateways_fetch_failed');
+			setError(
+				err instanceof Error && !isCancellation(err) ? err.message : 'payment_gateways_fetch_failed'
+			);
+			setLoading(false);
 			return gatewaysRef.current;
-		} finally {
-			if (!awaitingAuthRef.current) setLoading(false);
 		}
 	}, [http]);
 	// Effect: keeps the delayed retry pointed at the current loader (not read during render).
@@ -83,15 +100,24 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 		fetchGatewaysRef.current = fetchGateways;
 	}, [fetchGateways]);
 
-	// External store subscription: the auth hold clearing is the "auth completed" event
-	// for a load that an auth flow cancelled.
+	// External store subscription: the auth hold clearing is the "auth completed" event;
+	// a load waiting on a retry runs now instead of at the next tick.
 	React.useEffect(
 		() =>
 			requestStateManager.onAuthFailed((failed) => {
-				if (!failed && awaitingAuthRef.current) void fetchGateways();
+				if (!failed && awaitingRetryRef.current) void fetchGateways();
 			}),
 		[fetchGateways]
 	);
+
+	// Mount-only lifecycle: retries must never fire into an unmounted hook.
+	React.useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+		};
+	}, []);
 
 	React.useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- fetchGateways is the mount/reload event for this external resource; state updates happen in the async fetch lifecycle.

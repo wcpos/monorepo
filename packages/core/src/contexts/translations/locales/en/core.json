@@ -539,6 +539,7 @@
 	"orders.refund_destination": "Refund destination",
 	"orders.refund_failed": "Failed to process refund",
 	"orders.refund_offline": "You're offline, so no refund was made.",
+	"orders.refund_sign_in": "No refund was made — sign in, then try again.",
 	"orders.refund_background": "WCPOS was in the background, so no refund was made.",
 	"orders.refund_outcome_unknown": "WCPOS couldn't confirm whether this refund went through.",
 	"orders.refund_check_before_retry": "Open the order and check its refunds before trying again — a retry could refund twice.",

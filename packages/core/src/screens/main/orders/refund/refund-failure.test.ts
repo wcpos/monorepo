@@ -13,6 +13,19 @@ describe('classifyRefundFailure', () => {
 		});
 	});
 
+	it('says no refund was made when sign-in cancelled the refused request, never "outcome unknown"', () => {
+		const cancelled = Object.assign(new Error('canceled'), {
+			name: 'CanceledError',
+			code: 'ERR_CANCELED',
+		});
+
+		expect(classifyRefundFailure(cancelled, t)).toEqual({
+			level: 'warn',
+			code: 'AUTH101',
+			title: 'orders.refund_sign_in',
+		});
+	});
+
 	it('says no refund was made when the request never left (offline)', () => {
 		const offline = Object.assign(new Error('offline'), { blockCode: 'preflight-offline' });
 

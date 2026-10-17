@@ -317,7 +317,9 @@ export function RefundOrderForm({ order }: Props) {
 	const isValid = !refundDetailsLoading && refundTotalNum > 0 && refundTotalNum <= maxRefundable;
 
 	const handleSubmit = React.useCallback(async () => {
-		if (loading || refundDetailsLoading) return;
+		// Gateways still loading: the destination is not known yet (it must not default
+		// to cash and refund the wrong way), so nothing is submitted.
+		if (loading || refundDetailsLoading || gatewaysLoading) return;
 		if (!orderData.id) return;
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
@@ -418,6 +420,7 @@ export function RefundOrderForm({ order }: Props) {
 	}, [
 		blockIfDegraded,
 		loading,
+		gatewaysLoading,
 		refundDetailsLoading,
 		form,
 		order,
@@ -572,8 +575,8 @@ export function RefundOrderForm({ order }: Props) {
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction
 						testID="process-refund-button"
-						loading={loading}
-						disabled={!isValid || storageDegraded}
+						loading={loading || gatewaysLoading}
+						disabled={!isValid || storageDegraded || gatewaysLoading}
 						onPress={() => setConfirmOpen(true)}
 					>
 						{t('orders.process_refund')}
@@ -598,7 +601,7 @@ export function RefundOrderForm({ order }: Props) {
 							variant="destructive"
 							testID="confirm-process-refund-button"
 							onPress={handleSubmit}
-							disabled={loading || storageDegraded}
+							disabled={loading || storageDegraded || gatewaysLoading}
 						>
 							{t('orders.process_refund')}
 						</AlertDialogAction>

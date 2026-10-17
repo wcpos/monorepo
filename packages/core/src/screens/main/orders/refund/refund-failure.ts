@@ -43,6 +43,16 @@ function isRefusal(status: number | undefined): status is number {
  * everything else must send the cashier to the order's refunds first.
  */
 export function classifyRefundFailure(error: unknown, t: Translate): RefundFailureReport {
+	// The auth handler cancels a refused (401) request on purpose while it launches the
+	// sign-in: the store refused it, so no refund was made — never "outcome unknown".
+	const failure = error as { code?: unknown; name?: unknown } | null;
+	if (failure?.code === 'ERR_CANCELED' || failure?.name === 'CanceledError') {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.SESSION_EXPIRED,
+			title: t('orders.refund_sign_in'),
+		};
+	}
 	// Backgrounded (the tab was hidden), not offline: no code, no "you're offline".
 	if ((error as { isSleeping?: unknown } | null)?.isSleeping === true) {
 		return {
