@@ -747,9 +747,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint:
-			"Nothing on this device is lost. Ask your host to stop caching the store's API (both /wp-json/ and ?rest_route= addresses), then reconnect.",
+			"Nothing on this device is lost. Ask your host to stop caching the store's API (both /wp-json/ and ?rest_route= addresses). If WCPOS didn't connect, reconnect afterwards.",
 		dataSafety: 'no-impact',
-		summary: "Your host's cache could show one person's data to another, so WCPOS won't connect.",
+		summary: "Your host's cache can replay one person's store data to another.",
 	},
 	HOST161: {
 		code: 'HOST161',
@@ -851,9 +851,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SEARCH_INDEX_DIVERGENCE',
 		domain: 'CLIENT',
 		severity: 'error',
-		actionHint: 'Nothing to do. If search still looks wrong, reload WCPOS.',
+		actionHint: 'Nothing to do unless search still looks wrong — then reload WCPOS.',
 		dataSafety: 'no-impact',
-		summary: 'Search showed some wrong results, so WCPOS hid them and is rebuilding search.',
+		summary: "Search showed some results that don't match your products, so WCPOS hid them.",
 	},
 	CLIENT142: {
 		code: 'CLIENT142',
@@ -871,9 +871,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint:
-			"Nothing to do. If a product you can see still won't come up in search, reload WCPOS.",
+			"Nothing to do unless a product you can see still won't come up in search — then reload WCPOS.",
 		dataSafety: 'no-impact',
-		summary: 'Search was missing some products, so WCPOS is rebuilding it.',
+		summary: 'Search was missing a product it should have found.',
 	},
 	CLIENT144: {
 		code: 'CLIENT144',
