@@ -508,6 +508,7 @@ describe('enqueueWriteIntent', () => {
 				mutationId: 'delete-1',
 				recordId: 'order-1',
 				annihilated: true,
+				annihilatedMutationIds: rejected ? ['create-1'] : [],
 			});
 			expect(await orders.findOne().exec()).toBeNull();
 			expect(observe).toHaveBeenCalledWith({
@@ -1533,6 +1534,22 @@ describe('admission crash recovery', () => {
 		const db = { collections } as unknown as RxDatabase;
 		return { storage, resident, collections, db, queue: queueFor(db) };
 	};
+	it('refuses an update after a server-known delete without changing the queue', async () => {
+		const { db, queue, resident } = fixture();
+		await resident.incrementalModify((data) => ({ ...data, remoteId: '1' }));
+		await queue.enqueue({ ...prior, operation: 'delete' });
+		const before = await queue.all();
+		await expect(
+			enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', recordId: 'order', operation: 'update', payload: {} },
+				mintUuid: () => 'update',
+				now: () => prior.queuedAt,
+			})
+		).rejects.toMatchObject({ code: 'write-superseded-by-delete' });
+		expect(await queue.all()).toEqual(before);
+	});
+
 	it('returns a successful write and delivers it when synthetic receipt holder cleanup throws', async () => {
 		const { db, queue } = fixture();
 		vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('release failed'));

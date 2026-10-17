@@ -18,7 +18,15 @@ export function decideWritePlacement(input: {
 	hasBaseRevision: boolean;
 }): WritePlacement {
 	const { rows, operation, isRecovery, canCoalesce } = input;
-	if (isRecovery && rows.some((row) => row.operation === 'delete')) {
+	if (
+		operation !== 'delete' &&
+		rows.some(
+			(row) =>
+				row.operation === 'delete' &&
+				(row.status === undefined || row.status === 'pending' || row.status === 'claimed') &&
+				!row.supersededBy?.startsWith('coalesce:')
+		)
+	) {
 		return { kind: 'refuse-recovery-superseded-by-delete' };
 	}
 	if (canCoalesce && operation === 'delete' && isNeverPushedChain(rows)) {

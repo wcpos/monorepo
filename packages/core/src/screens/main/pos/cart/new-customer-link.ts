@@ -244,8 +244,14 @@ export async function reconcileCustomerLink(
 			await deps.drop(orderUuid, link.at);
 			return 'dropped';
 		}
-		if (!(await deps.stampCustomer({ ...order, uuid: orderUuid }, customerId, slot)))
-			return 'waiting';
+		try {
+			if (!(await deps.stampCustomer({ ...order, uuid: orderUuid }, customerId, slot)))
+				return 'waiting';
+		} catch (error) {
+			if ((error as { code?: string })?.code !== 'write-superseded-by-delete') throw error;
+			await deps.drop(orderUuid, link.at);
+			return 'dropped';
+		}
 		return 'stamped';
 	});
 }

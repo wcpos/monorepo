@@ -537,6 +537,7 @@ export const useLocalMutation = () => {
 				const doc = await patchLocalResident(latest, changes);
 				return { changes, document: doc as TDocument };
 			} catch (error) {
+				if ((error as { code?: string })?.code === 'write-superseded-by-delete') throw error;
 				const err = error as Record<string, unknown>;
 				let message = getErrorMessage(error);
 				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;

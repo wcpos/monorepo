@@ -264,6 +264,7 @@ export async function enqueueWriteIntent(input: {
 	mutationId: string;
 	recordId: string;
 	annihilated?: boolean;
+	annihilatedMutationIds?: string[];
 	/** The pending row this enqueue coalesced INTO and replaced — its id is now orphaned. */
 	supersededMutationId?: string;
 }> {
@@ -308,6 +309,14 @@ export async function enqueueWriteIntent(input: {
 		for (const row of marked) await queue.unmarkForAnnihilation(row.mutationId, token);
 		await queue.releaseVoidFence(name, recordId, token);
 	};
+	const annihilationReceipt = (marked: QueuedMutation[]) => ({
+		mutationId: input.mintUuid(),
+		recordId,
+		annihilated: true,
+		annihilatedMutationIds: marked
+			.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+			.map((row) => row.mutationId),
+	});
 	const cleanupCommittedVoid = async (marked: QueuedMutation[], token: string) => {
 		if (legacyQueue) return;
 		let step = 'removeMarked';
@@ -442,7 +451,7 @@ export async function enqueueWriteIntent(input: {
 			canCoalesce,
 			hasBaseRevision: intent.operation !== 'delete' || !!(intent.baseRevision ?? storedRevision),
 		});
-		// DEAD-LETTER RECOVERY GUARD (#832), checked HERE — inside the loop, against
+		// QUEUED-DELETE GUARD (ordinary writes and recovery), checked inside the loop, against
 		// the same `rows` read that decides coalescing — because checking it before
 		// the loop is not enough: a delete enqueued in between would become the
 		// coalesce target, and coalescing takes the INCOMING operation
@@ -451,8 +460,11 @@ export async function enqueueWriteIntent(input: {
 		// it must never win over a newer deletion. If a delete lands after this read
 		// the CAS below refuses and the next iteration re-reads and finds it.
 		if (placement.kind === 'refuse-recovery-superseded-by-delete') {
-			throw new Error(
-				`requeue: ${intent.collection}/${intent.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
+			throw Object.assign(
+				new Error(
+					`write: ${intent.collection}/${intent.recordId} is queued for deletion — sending another change would undo that; discard instead`
+				),
+				{ code: 'write-superseded-by-delete' }
 			);
 		}
 		// A recovered UPDATE never coalesces into a live successor (#832 follow-up,
@@ -533,7 +545,7 @@ export async function enqueueWriteIntent(input: {
 				collection: intent.collection,
 				fields: { recordId: intent.recordId, removed: marked.length },
 			});
-			return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
+			return annihilationReceipt(marked);
 		}
 
 		let mutation: QueuedMutation;
@@ -647,7 +659,7 @@ export async function enqueueWriteIntent(input: {
 								deadLetters: settledDeadLetters,
 							},
 						});
-						return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
+						return annihilationReceipt(marked);
 					}
 					throw new Error(
 						'write(delete): a baseRevision is required — the server 428s an unconditional delete'

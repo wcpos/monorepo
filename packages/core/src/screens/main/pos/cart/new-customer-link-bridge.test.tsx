@@ -311,6 +311,20 @@ describe('NewCustomerLinkBridge', () => {
 		mockWrite.mockResolvedValue({ mutationId: 'm-order', recordId: ORDER });
 	});
 
+	it('drops a late-delete refusal without a toast or a retry', async () => {
+		seed({ order: attachedOpenCart });
+		await linkOrderToCustomer();
+		await acknowledgeCustomer(91);
+		mockWrite.mockRejectedValueOnce(
+			Object.assign(new Error('void'), { code: 'write-superseded-by-delete' })
+		);
+		render(<NewCustomerLinkBridge />);
+		await flush();
+		expect(await pendingCustomerLinks(mockStoreDB)).toEqual({});
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
 	it('leaves the order a guest with the copied addresses while the customer is unacknowledged (offline)', async () => {
 		seed({ order: attachedOpenCart });
 		await linkOrderToCustomer();

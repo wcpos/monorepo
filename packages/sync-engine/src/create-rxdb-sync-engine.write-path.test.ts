@@ -14,6 +14,7 @@ import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
+import { awaitWriteOutcome } from '../../query/src/await-write-outcome';
 import {
 	createEngineHarness,
 	memoryEngineStorage,
@@ -4235,6 +4236,35 @@ describe('#507 offline write flows through the public handle', () => {
 			const order = await orderJson(engine, UUID_A);
 			expect(order?.remoteId).toBe(remoteId(900_000_500));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each(['pending', 'rejected'] as const)('enqueue void settles the %s chain', async (status) => {
+		const engine = engineWith({ fetch: vi.fn() });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const intent = {
+				collection: 'orders',
+				recordId: UUID_A,
+				payload: {},
+				explicit: true,
+			} as const;
+			const create = await engine.write({ ...intent, operation: 'create' });
+			const update = await engine.write({ ...intent, operation: 'update' });
+			if (status === 'rejected') {
+				const queue = queueFor(engine.active()!.database);
+				await queue.replace({ ...(await queue.all())[0]!, status });
+			}
+			const ids: string[] = [];
+			engine.events((event) => {
+				if (event.type === 'write-annihilated') ids.push(event.mutationId);
+			});
+			const receipt = await engine.write({ ...intent, operation: 'delete' });
+			expect(ids).toEqual([create.mutationId, update.mutationId, receipt.mutationId]);
+			await expect(awaitWriteOutcome(engine, create.mutationId)).resolves.toBe('success-local');
 		} finally {
 			await engine.dispose();
 		}
