@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
 	composeObservers,
 	createMetricsCollector,
 	NOOP_OBSERVER,
 	type SyncEvent,
+	type SyncEventFields,
 } from './telemetry';
 
 // The metrics collector is deliberately vocabulary-agnostic — it keys its Maps by
@@ -215,4 +216,11 @@ describe('NOOP_OBSERVER hot-path tripwire', () => {
 		for (let index = 0; index < 10_000; index += 1) NOOP_OBSERVER(event);
 		expect(performance.now() - started).toBeLessThan(200);
 	});
+});
+
+it('types maintenance lane errors with an optional numeric transport status', () => {
+	expectTypeOf<SyncEventFields<'maintenance.lane.error'>>().toEqualTypeOf<{
+		readonly lane: string;
+		readonly status?: number;
+	}>();
 });

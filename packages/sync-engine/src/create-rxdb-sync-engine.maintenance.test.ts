@@ -279,6 +279,33 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it.each(['deadline', 'HTTP 500'])(
+		'classifies a forced census failure from %s without misreporting a task crash',
+		async (failure) => {
+			const harness = await createEngineHarness({
+				mode: 'manual',
+				queryTotal: {
+					fetchWooQueryTotal: () =>
+						failure === 'deadline' ? new Promise(() => {}) : Promise.reject(new Error('HTTP 500')),
+				},
+			});
+			vi.useFakeTimers();
+			try {
+				const check = harness.engine.checkCollection('products');
+				await vi.advanceTimersByTimeAsync(25_000);
+				await expect(check).resolves.toMatchObject({ status: 'error' });
+				const error = harness.diagnostics.find((event) => event.type === 'maintenance.lane.error');
+				expect(error?.fields).toEqual({
+					lane: 'query-total-retry',
+					...(failure === 'deadline' ? { status: 0 } : {}),
+				});
+			} finally {
+				vi.useRealTimers();
+				await harness.dispose();
+			}
+		}
+	);
+
 	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
 		let failProbe = true;
 		const fetchWooQueryTotal = vi.fn(async () => {
@@ -969,7 +996,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+	it('dispose cancels an in-flight maintenance probe before closing the scope database', async () => {
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'orders:total:guarded-dispose'
@@ -1013,12 +1040,12 @@ describe('maintenance lanes through the public handle', () => {
 		);
 		const disposing = engine.dispose();
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
+		const closeStartedBeforeFetchFinished = close.mock.calls.length > 0;
 
 		releaseFetch(42);
 		const report = await tick;
 		await disposing;
-		expect(closeStartedBeforeTickFinished).toBe(false);
+		expect(closeStartedBeforeFetchFinished).toBe(true);
 		expect(report.status).toBe('ran');
 	});
 

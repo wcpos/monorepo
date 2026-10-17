@@ -12,26 +12,34 @@ export class RequestTimeoutError extends Error {
 	}
 }
 
-export function withRequestTimeout(
-	fetcher: Fetcher,
+export function withRequestTimeout<Result>(
+	fetcher: (url: string, init?: Parameters<Fetcher>[1]) => Promise<Result>,
 	timeoutMs: number,
 	timers: EngineTimers = systemTimers
-): Fetcher {
+): typeof fetcher {
 	return async (url, init) => {
 		const controller = new AbortController();
-		const abort = () => controller.abort();
+		let timedOut = false;
+		let rejectDeadline!: (error: Error) => void;
+		const deadline = new Promise<never>((_, reject) => {
+			rejectDeadline = reject;
+		});
+		const abort = () => {
+			controller.abort();
+			rejectDeadline(Object.assign(new Error('request aborted'), { name: 'AbortError' }));
+		};
 		if (init?.signal?.aborted) {
 			abort();
 		} else {
 			init?.signal?.addEventListener('abort', abort, { once: true });
 		}
-		let timedOut = false;
 		const handle = timers.setTimeout(() => {
 			timedOut = true;
+			rejectDeadline(new RequestTimeoutError(timeoutMs));
 			controller.abort();
 		}, timeoutMs);
 		try {
-			return await fetcher(url, { ...init, signal: controller.signal });
+			return await Promise.race([fetcher(url, { ...init, signal: controller.signal }), deadline]);
 		} catch (error) {
 			if (timedOut) throw new RequestTimeoutError(timeoutMs);
 			throw error;

@@ -341,6 +341,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "engine.request.deadline",
+		"domain": "SYNC",
+		"label": "Sync request timed out",
+		"introducedIn": "1.11.1"
+	},
+	{
 		"type": "engine.reset-needs-confirmation",
 		"domain": "SYNC",
 		"label": "A data reset is waiting for your confirmation",
