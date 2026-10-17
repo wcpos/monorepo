@@ -54,7 +54,7 @@ export function DemoButton() {
 
 		void (async () => {
 			try {
-				const sites: import('@wcpos/database').SiteDocument[] = await user.populate('sites');
+				const sites: NonNullable<typeof connectedSite>[] = await user.populate('sites');
 				if (cancelled) return;
 				const site = sites.find((site) => site.wcpos_login_url === claim.loginUrl);
 				if (!site) {
