@@ -56,10 +56,13 @@ const fallbackTextVariants: Record<
 	NonNullable<VariantProps<typeof avatarVariants>['variant']>,
 	string
 > = {
+	// A tone is the wash behind the initials; the initials stay in the foreground, as a tinted
+	// Badge's words do: a tone's own colour on its 15% wash reads under the 4.5:1 text floor
+	// (light theme: success 4.0:1, error 4.2:1, warning 2.6:1).
 	default: 'text-foreground',
-	success: 'text-success',
-	warning: 'text-warning',
-	error: 'text-destructive',
+	success: 'text-foreground',
+	warning: 'text-foreground',
+	error: 'text-foreground',
 	muted: 'text-muted-foreground',
 };
 
