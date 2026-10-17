@@ -999,8 +999,26 @@ export function createRxdbSyncEngine(
 			: {
 					fetchWooQueryTotal: async (
 						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
-					): Promise<number | null> =>
-						updateRequiredRefusal === null ? rawQueryTotal.fetchWooQueryTotal(input) : null,
+					): Promise<number | null> => {
+						if (updateRequiredRefusal !== null) return null;
+						const startedAtMs = nowMs();
+						try {
+							return await withRequestTimeout(
+								(_url, init) =>
+									rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
+								ENGINE_REQUEST_DEADLINE_MS,
+								timers
+							)(input.request.endpoint, { signal: input.signal });
+						} catch (error) {
+							if (error instanceof RequestTimeoutError)
+								diagnostics({
+									type: 'engine.request.deadline',
+									level: 'warn',
+									fields: { lane: 'query-total-retry', elapsedMs: nowMs() - startedAtMs },
+								});
+							throw error;
+						}
+					},
 				};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,

@@ -68,3 +68,42 @@ it.each(['headers', 'body'])(
 		expect(recordTick).toHaveBeenCalledOnce();
 	}
 );
+
+it('releases a black-holed query-total lane so the next run starts', async () => {
+	await harness.dispose();
+	const fetchWooQueryTotal = vi.fn().mockResolvedValue(7);
+	harness = await createEngineHarness({
+		mode: 'manual',
+		queryTotal: { fetchWooQueryTotal },
+		now: () => Date.now(),
+	});
+	fetchWooQueryTotal.mockImplementationOnce(() => new Promise(() => {}));
+	vi.useFakeTimers();
+	const recordTick = vi.fn();
+	const gate = createAutomaticTickGate({
+		isGated: () => false,
+		connectivity: () => 'online',
+		now: () => Date.now(),
+		diagnostics: vi.fn(),
+		onStatusChange: vi.fn(),
+		seedRetickLanes: [],
+		recordTick,
+		tickLane: (lane) => harness.engine.sync(lane),
+	});
+	const first = gate.runLane('query-total-retry');
+	await vi.advanceTimersByTimeAsync(0);
+	expect(gate.runLane('query-total-retry')).toBe(first);
+	await vi.advanceTimersByTimeAsync(60_000);
+	expect(fetchWooQueryTotal.mock.calls[0][0].signal.aborted).toBe(true);
+	await first;
+	expect(harness.diagnostics).toContainEqual(
+		expect.objectContaining({
+			type: 'engine.request.deadline',
+			fields: { lane: 'query-total-retry', elapsedMs: 60_000 },
+		})
+	);
+	const second = gate.runLane('query-total-retry');
+	expect(second).not.toBe(first);
+	await second;
+	expect(recordTick).toHaveBeenCalledTimes(2);
+});
