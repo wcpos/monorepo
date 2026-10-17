@@ -1,3 +1,4 @@
+export { getInstallId } from './get-install-id';
 export { bareAuthParamSupported, formatAuthorizationParam } from './auth-param';
 export {
 	deriveSyntheticPathBase,

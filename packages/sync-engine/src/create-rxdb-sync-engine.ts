@@ -246,6 +246,7 @@ export type EngineStringStore = {
 };
 
 export type RxdbSyncEnginePorts = {
+	installId?: string;
 	site: { syncBaseUrl: string; wpJsonRoot: string; wcposVersion?: () => string | undefined };
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
@@ -830,6 +831,11 @@ export function createRxdbSyncEngine(
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
 	const fetcher: EngineFetcher = async (url, init) => {
+		if (ports.installId !== undefined) {
+			const headers = new Headers(init?.headers);
+			headers.set('X-WCPOS-Instance', ports.installId);
+			init = { ...init, headers };
+		}
 		if (updateRequiredRefusal !== null) {
 			return new Response(updateRequiredRefusal.body, {
 				status: updateRequiredRefusal.status,

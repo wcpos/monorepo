@@ -45,6 +45,20 @@ describe('sentry-sink.native', () => {
 		jest.clearAllMocks();
 	});
 
+	it('exposes a stable persisted installation id', () => {
+		const { getInstallId } = jest.requireActual('../get-install-id.native');
+		files.set(installIdPath, 'stored-id');
+		expect([getInstallId(), getInstallId()]).toEqual(['stored-id', 'stored-id']);
+	});
+
+	it('returns undefined when installation storage is unavailable', () => {
+		const { getInstallId } = jest.requireActual('../get-install-id.native');
+		jest.mocked(File).mockImplementationOnce(() => {
+			throw new Error('unavailable');
+		});
+		expect(getInstallId()).toBeUndefined();
+	});
+
 	it('does not initialize or capture before consent', () => {
 		expect(initCallsOnImport).toBe(0);
 		captureLoggedError({ message: 'Checkout failed' });

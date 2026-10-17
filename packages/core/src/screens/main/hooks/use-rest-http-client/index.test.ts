@@ -16,6 +16,7 @@ const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http
 	http: { request: jest.Mock };
 };
 
+jest.mock('@wcpos/utils/get-install-id', () => ({ getInstallId: jest.fn() }));
 jest.mock('@wcpos/hooks/use-http-client/http', () => ({
 	http: { request: jest.fn(), isCancel: () => false },
 }));
@@ -104,6 +105,16 @@ describe('useRestHttpClient methods', () => {
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
 	});
+
+	it.each(['till-123', undefined])(
+		'adds the available instance id to default headers: %s',
+		async (installId) => {
+			jest.requireMock('@wcpos/utils/get-install-id').getInstallId.mockReturnValue(installId);
+			const { result } = renderHook(() => useRestHttpClient('orders'));
+			await result.current.get('/42');
+			expect(latestRequest().headers).toEqual(installId ? { 'X-WCPOS-Instance': installId } : {});
+		}
+	);
 
 	it('wires Axios update-required refusals to the current site gate', () => {
 		renderHook(() => useRestHttpClient('orders'));

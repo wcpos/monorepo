@@ -98,6 +98,25 @@ afterEach(() => {
 });
 
 describe('RxdbSyncEngine facade timers and live configuration', () => {
+	it.each(['till-123', undefined])(
+		'sends the instance header only when provided: %s',
+		async (installId) => {
+			const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response('{}'));
+			const engine = engineWith({ installId, fetcher });
+			await engine.ready;
+			fetcher.mockClear();
+			try {
+				await engine.sync('change-signal');
+				expect(fetcher.mock.calls.length).toBeGreaterThan(0);
+				for (const [, init] of fetcher.mock.calls) {
+					expect(new Headers(init?.headers).get('X-WCPOS-Instance')).toBe(installId ?? null);
+				}
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('publishes per-collection activity and monotonic reset/switch generations', async () => {
 		const engine = engineWith();
 		await engine.ready;

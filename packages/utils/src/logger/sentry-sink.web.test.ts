@@ -37,6 +37,23 @@ describe('sentry-sink.web', () => {
 		jest.clearAllMocks();
 	});
 
+	it('exposes a stable persisted installation id', () => {
+		const { getInstallId } = jest.requireActual('../get-install-id');
+		localStorageData.set('wcpos_install_id', 'stored-id');
+		expect([getInstallId(), getInstallId()]).toEqual(['stored-id', 'stored-id']);
+	});
+
+	it('returns undefined when installation storage is unavailable', () => {
+		const { getInstallId } = jest.requireActual('../get-install-id');
+		localStorage.getItem.mockImplementationOnce(() => {
+			throw new Error('unavailable');
+		});
+		localStorage.setItem.mockImplementationOnce(() => {
+			throw new Error('unavailable');
+		});
+		expect(getInstallId()).toBeUndefined();
+	});
+
 	it('does not initialize Sentry at module load', () => {
 		expect(sentryInitCallsOnImport).toBe(0);
 	});

@@ -6,6 +6,7 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { getInstallId } from '@wcpos/utils/get-install-id';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
@@ -251,9 +252,10 @@ export const useRestHttpClient = (endpoint = '') => {
 			// joining so the composed path never carries `//`. Pretty routing
 			// tolerated the double slash, but rest_route matching is strict.
 			const pathFormBaseURL = apiURL.replace(/\/+$/, '') + '/' + endpoint;
+			const installId = getInstallId();
 			const defaultConfig: RequestConfig = {
 				baseURL: pathFormBaseURL,
-				headers: {},
+				headers: installId === undefined ? {} : { 'X-WCPOS-Instance': installId },
 				params: {},
 				wcposPreamble: {
 					purpose: 'rest',
