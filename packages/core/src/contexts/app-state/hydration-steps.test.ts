@@ -1224,8 +1224,10 @@ describe('testAuthorizationMethod', () => {
 				ok: true,
 				json: jest.fn(async () => echoBody({ cors: { reflects_request_headers: true } })),
 			});
-			fetchMock.mockImplementationOnce(async (_url, init) => {
-				expect(init.headers).toEqual({ 'X-WCPOS-Instance': 'wcpos-instance-probe' });
+			fetchMock.mockImplementationOnce(async (url, init) => {
+				expect(new URL(url).searchParams.get('wcpos')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS')).toBe('1');
+				expect(new Headers(init.headers).get('X-WCPOS-Instance')).toBe('wcpos-instance-probe');
 				if (!allowed) throw new TypeError('Failed preflight');
 				return { ok: true };
 			});
