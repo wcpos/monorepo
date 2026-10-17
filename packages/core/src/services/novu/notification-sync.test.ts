@@ -104,4 +104,26 @@ describe('new notification behaviour', () => {
 			})
 		);
 	});
+
+	it('keeps a coded SYNC101 row when the local notification write rejects', async () => {
+		const failing = {
+			findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+			insert: jest.fn(async () => {
+				throw new Error('storage gone');
+			}),
+			upsert: jest.fn(async () => {
+				throw new Error('storage gone');
+			}),
+		} as unknown as NotificationCollection;
+
+		await syncNotificationToRxDB(failing, 'subscriber-1', {
+			id: 'n-3',
+			subject: 'Hello',
+		} as unknown as NovuNotification);
+
+		expect(logger.warn).toHaveBeenCalledWith(
+			'Novu: Failed to sync notification to RxDB',
+			expect.objectContaining({ code: 'SYNC101' })
+		);
+	});
 });

@@ -182,8 +182,10 @@ export async function syncNotificationToRxDB(
 		}
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
-		novuLogger.debug('Novu: Failed to sync notification to RxDB', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
+		// A local findOne/insert/upsert rejected: the device's copy of the notification
+		// is what failed, so it keeps a coded row (warn — the notification still shows).
+		novuLogger.warn('Novu: Failed to sync notification to RxDB', {
+			code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 			context: { notificationId, error },
 		});
 	}

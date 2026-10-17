@@ -767,7 +767,10 @@ describe('observeEngineQuery', () => {
 	});
 
 	describe('search index divergence self-check', () => {
-		beforeEach(() => searchError.mockClear());
+		beforeEach(() => {
+			searchError.mockClear();
+			searchWarn.mockClear();
+		});
 
 		it('rebuilds a divergent index and emits the corrected result set', async () => {
 			const database = await createEngineDatabase(['categories']);
@@ -818,6 +821,42 @@ describe('observeEngineQuery', () => {
 					},
 				});
 			} finally {
+				await database.close();
+			}
+		});
+
+		it('warns, not errors, for a divergence seen while the first rebuild is still running', async () => {
+			const database = await createEngineDatabase(['categories']);
+			const engine = createFakeEngine(database);
+			await database.collections.categories.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.categories.findOne('false-hit').exec();
+			if (!falseHit) throw new Error('missing pending-rebuild fixture');
+			jest.spyOn(database.collections.categories, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => [falseHit],
+			} as never);
+			// The rebuild never completes during this test.
+			const recreateSearch = jest.fn(() => new Promise(() => undefined));
+			Object.assign(database.collections.categories, { recreateSearch });
+			const query = {
+				collection: 'products/categories',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+
+			const first = observeEngineQuery(engine, 'divergence-pending', query).subscribe();
+			const second = observeEngineQuery(engine, 'divergence-pending', query).subscribe();
+			try {
+				await waitFor(() => expect(searchWarn).toHaveBeenCalledTimes(2));
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+				// Neither subscription has checked a rebuilt index yet.
+				expect(searchError).not.toHaveBeenCalled();
+			} finally {
+				first.unsubscribe();
+				second.unsubscribe();
 				await database.close();
 			}
 		});

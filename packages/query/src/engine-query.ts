@@ -48,6 +48,7 @@ import {
 	searchTokens,
 } from './search-match';
 import {
+	completedSearchRebuilds,
 	rebuiltSearchIndexes,
 	SEARCH_SCAN_RETHROTTLE_MS,
 	type SearchableCollection,
@@ -307,7 +308,8 @@ function matchingSelectors$(
 						const alreadyRebuilt = rebuiltSearchIndexes.has(sharedKey);
 						// A rebuild is triggered automatically ("nothing to do"): warn. Only a
 						// divergence that survives a rebuild is an error.
-						searchLogger[alreadyRebuilt ? 'error' : 'warn']('Search index divergence detected', {
+						const survivedRebuild = completedSearchRebuilds.has(sharedKey);
+						searchLogger[survivedRebuild ? 'error' : 'warn']('Search index divergence detected', {
 							code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
 							showToast: false,
 							context: {
@@ -331,6 +333,7 @@ function matchingSelectors$(
 								searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
 								documentSnapshot,
 							});
+							completedSearchRebuilds.add(sharedKey);
 							if (rebuilt) searchInstances.next(rebuilt);
 							return filtered;
 						} catch (error) {

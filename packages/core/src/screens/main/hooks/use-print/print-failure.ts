@@ -17,9 +17,14 @@ type Translate = (key: string) => string;
  */
 const CANCELLED = /Printing did not complete|Print job cancelled|Printer service is closing/i;
 
-/** The printer was never reached: no connection, no answer, no address. */
+/**
+ * The printer was never reached: no connection, no answer, no address. Not a bare
+ * "Failed to fetch": receipt and image ASSET fetches use that phrase too ("Failed to
+ * fetch receipt: 500"), and they are not the printer — the web printer transports
+ * wrap their own fetch failures in a typed PrinterConnectionError instead.
+ */
 const UNREACHABLE =
-	/timed out|timeout|ETIMEDOUT|ECONNREFUSED|refused|not responding|bluetooth.*unavailable|is not connected|missing its device key|missing an address|Failed to fetch|Network Error|MODULE_MISSING/i;
+	/timed out|timeout|ETIMEDOUT|ECONNREFUSED|refused|not responding|bluetooth.*unavailable|is not connected|missing its device key|missing an address|Network Error|MODULE_MISSING/i;
 
 /** Transport error codes for a request that never reached its destination. */
 const UNREACHABLE_CODES = new Set(['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNREFUSED']);
@@ -39,7 +44,12 @@ export function classifyPrintFailure(
 	const message = getErrorMessage(error);
 	if (code === 'ERR_PRINT_INCOMPLETE' || CANCELLED.test(message)) return { cancelled: true };
 	if (autoPrint) return { cancelled: false, code: ERROR_CODES.AUTOPRINT_DID_NOT_START };
-	if ((typeof code === 'string' && UNREACHABLE_CODES.has(code)) || UNREACHABLE.test(message)) {
+	const name = (error as { name?: unknown } | null)?.name;
+	if (
+		name === 'PrinterConnectionError' ||
+		(typeof code === 'string' && UNREACHABLE_CODES.has(code)) ||
+		UNREACHABLE.test(message)
+	) {
 		return { cancelled: false, code: ERROR_CODES.PRINTER_UNREACHABLE };
 	}
 	return { cancelled: false, code: ERROR_CODES.PRINT_JOB_FAILED };

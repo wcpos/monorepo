@@ -103,9 +103,10 @@ export async function refreshAccessToken({
 	}
 	// Persistence is measured per session: another store's or cashier's failures must
 	// not make this session's first blip read as "keeps happening".
-	// The engine's session fetcher passes no `url`, so fall back on the API bases: two
-	// stores with the same user id must never share one streak or one backoff.
-	const siteIdentity = site.url || site.wcpos_api_url || site.wp_api_url || '';
+	// Keyed by the store's API base first: the engine's session fetcher passes no `url`
+	// while the HTTP-client path does, and the same store must get the same key from
+	// both. Two stores with the same user id must never share one streak or backoff.
+	const siteIdentity = site.wcpos_api_url || site.wp_api_url || site.url || '';
 	const session = `${siteIdentity}|${String(wpUser.id ?? '')}`;
 	if (session !== refreshStreakSession) {
 		refreshStreakSession = session;

@@ -1181,6 +1181,7 @@
 	"health.database.sync_skipped": "Sync didn’t run.",
 	"health.database.sync_skipped_offline": "This device is offline.",
 	"health.database.sync_skipped_busy": "The store is busy right now — try again in a moment.",
+	"health.database.sync_skipped_no_scope": "No store is open on this device right now. Reopen the store, then try again.",
 	"health.database.clear_body_orders": "The orders held on this device will be removed. Nothing on the server changes. Orders re-download as you view them — open and recent orders return in the background.",
 	"health.database.last_check_error": "Last check didn't complete — retrying",
 	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading.",

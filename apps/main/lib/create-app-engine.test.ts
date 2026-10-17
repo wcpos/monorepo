@@ -1469,6 +1469,47 @@ describe('createAppSyncEngine scope cache', () => {
 		);
 	});
 
+	it('gives no reload toast for a switch the cashier has already superseded', async () => {
+		const rejecters: ((error: Error) => void)[] = [];
+		const first = createEngineDouble(
+			undefined,
+			() =>
+				new Promise<never>((_resolve, reject) => {
+					rejecters.push(reject);
+				})
+		);
+		const engines = [first, createEngineDouble()];
+		const { createAppSyncEngine, networkError } = loadCreateAppEngine(() => {
+			const engine = engines.shift();
+			if (!engine) return first;
+			return engine;
+		});
+		createAppSyncEngine(BASE_OPTIONS);
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' } });
+		await Promise.resolve();
+		// The cashier picks store-3 before store-2's switch settles.
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' } });
+
+		// store-2's switch (the superseded one) is the one that fails.
+		rejecters[0](new Error('refused'));
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const rows = networkError.mock.calls.filter(
+			([message]) => message === 'ENGINE SCOPE SWITCH FAILED'
+		);
+		expect(rows.length).toBeGreaterThan(0);
+		// Still a row (support needs it), but no "reload" toast against the store now open.
+		expect(rows[0][1]).toEqual(
+			expect.objectContaining({
+				code: 'CLIENT181',
+				showToast: false,
+				context: expect.objectContaining({ superseded: true }),
+			})
+		);
+	});
+
 	it('switches within the new site while the prior site disposal is pending', async () => {
 		jest.useFakeTimers();
 		try {

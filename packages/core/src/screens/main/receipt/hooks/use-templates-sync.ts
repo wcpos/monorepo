@@ -72,7 +72,18 @@ export function syncTemplates(
 				})
 			);
 			if (rows.length > 0) {
-				const result = await collection.bulkUpsert(rows);
+				let result: Awaited<ReturnType<typeof collection.bulkUpsert>>;
+				try {
+					result = await collection.bulkUpsert(rows);
+				} catch (writeError) {
+					// The request worked; the LOCAL write failed (storage / worker down) — the
+					// only copy failing, so a coded row, not the refresh's info line.
+					templatesLogger.error('Receipt templates could not be saved on this device', {
+						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+						context: { error: (writeError as Error)?.message ?? String(writeError) },
+					});
+					return;
+				}
 				// bulkUpsert reports per-document failures in its result instead of
 				// throwing — surface them, or a rejected set is indistinguishable
 				// from an empty store (the receipt modal just shows no templates).

@@ -225,8 +225,21 @@ describe('useManualSync', () => {
 		});
 	});
 
-	it('shows no raw engine reason for other skips', async () => {
+	it('tells the cashier to reopen the store when no store is open', async () => {
 		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'no active scope' });
+
+		const { result } = renderHook(() => useManualSync());
+		await act(() => result.current.sync());
+
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'warning',
+			text1: 'Sync didn’t run.',
+			text2: 'No store is open on this device right now. Reopen the store, then try again.',
+		});
+	});
+
+	it('shows no raw engine reason for other skips', async () => {
+		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'some engine detail' });
 
 		const { result } = renderHook(() => useManualSync());
 		await act(() => result.current.sync());

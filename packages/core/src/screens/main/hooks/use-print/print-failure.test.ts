@@ -29,6 +29,24 @@ describe('classifyPrintFailure', () => {
 		).toEqual({ cancelled: false, code: 'PRINT301' });
 	});
 
+	it('keeps a receipt/asset fetch failure off the printer: PRINT201, not PRINT301', () => {
+		expect(classifyPrintFailure(new Error('Failed to fetch receipt: 500'))).toEqual({
+			cancelled: false,
+			code: 'PRINT201',
+		});
+		expect(classifyPrintFailure(new Error('Failed to fetch thermal image asset'))).toEqual({
+			cancelled: false,
+			code: 'PRINT201',
+		});
+	});
+
+	it('codes a typed printer connection failure PRINT301', () => {
+		const connection = Object.assign(new Error('Could not reach the Epson printer'), {
+			name: 'PrinterConnectionError',
+		});
+		expect(classifyPrintFailure(connection)).toEqual({ cancelled: false, code: 'PRINT301' });
+	});
+
 	it('codes any failed automatic print PRINT101 (the sale is saved; print it from the receipt)', () => {
 		expect(classifyPrintFailure(new Error('ECONNREFUSED'), { autoPrint: true })).toEqual({
 			cancelled: false,

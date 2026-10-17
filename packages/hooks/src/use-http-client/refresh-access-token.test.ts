@@ -522,6 +522,29 @@ describe('refreshAccessToken', () => {
 			expect(post).toHaveBeenCalledTimes(2);
 		});
 
+		it('gives the same store the same key whether or not the caller passes its url', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const engineSite = { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' };
+			const httpClientSite = { ...engineSite, url: 'https://a.test' };
+			const viaEngine = makeConfig(post, engineSite);
+			const viaHttpClient = makeConfig(post, httpClientSite as never);
+			(viaHttpClient.config as { wpUser: unknown }).wpUser = viaEngine.wpUser;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [viaEngine.config, viaHttpClient.config, viaEngine.config]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'alternating' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// Three failures for ONE store, alternating callers: the streak persisted.
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+		});
+
 		it('codes a 2xx refresh with an unreadable body SYNC151 (malformed), not "cannot be reached"', async () => {
 			const post = jest.fn().mockResolvedValue({ status: 200, data: { unexpected: true } });
 			const { config } = makeConfig(post);

@@ -43,7 +43,9 @@ function showReportToast(
 				? t('health.database.sync_skipped_offline')
 				: report.reason === 'lifecycle operation pending'
 					? t('health.database.sync_skipped_busy')
-					: undefined;
+					: report.reason === 'no active scope'
+						? t('health.database.sync_skipped_no_scope')
+						: undefined;
 		Toast.show({
 			type: 'warning',
 			text1: t('health.database.sync_skipped'),

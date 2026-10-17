@@ -43,6 +43,14 @@ export const SEARCH_SCAN_RETHROTTLE_MS = 500;
 export const rebuiltSearchIndexes = new Set<string>();
 
 /**
+ * The rebuilds that actually COMPLETED. `rebuiltSearchIndexes` is set the moment a
+ * rebuild starts (it is the in-flight guard), so a second subscription spotting the
+ * same divergence while that rebuild is pending has checked no rebuilt index yet: only
+ * a divergence found after completion is the error "a rebuild did not cure it".
+ */
+export const completedSearchRebuilds = new Set<string>();
+
+/**
  * One subject per collection:locale, shared by every active subscription, so a
  * rebuild rebinds ALL of them — `recreateSearch` destroys the instance the
  * others still hold. Entries are never deleted: the population is bounded by

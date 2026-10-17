@@ -232,8 +232,10 @@ export function UserMenu() {
 				// The raw message rides the row below; the cashier gets what to do.
 				description: t('common.store_switch_failed_hint'),
 			});
+			// The same incident as the engine's failed scope switch: CLIENT181, so the
+			// row says what the toast says.
 			uiLogger.error('Store switch failed', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+				code: ERROR_CODES.STORE_SWITCH_FAILED,
 				context: { error },
 			});
 		} finally {
