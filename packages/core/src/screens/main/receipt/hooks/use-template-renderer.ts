@@ -4,6 +4,7 @@ import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
+import { loadBarcodeLibrary } from '@wcpos/receipt-renderer/barcode-library';
 import type { TemplateDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
@@ -12,6 +13,7 @@ import { useStoreDay } from '../../../../hooks/use-store-day';
 import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useRegister } from '../../../../services/register/use-register';
 import { useActiveTemplatesState } from './use-active-templates';
+import { useBarcodeLibrary } from './use-barcode-library';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
@@ -108,6 +110,7 @@ export function useTemplateRenderer({
 	storeId,
 	previewEnabled = true,
 }: UseTemplateRendererOptions): TemplateRendererResult {
+	const barcodesReady = useBarcodeLibrary();
 	const { templates: activeTemplates, synced } = useActiveTemplatesState(
 		templateType ?? (localReport ? 'report' : 'receipt'),
 		storeId
@@ -263,7 +266,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, receiptData]);
+	}, [templates, receiptData, barcodesReady]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -370,6 +373,7 @@ export function useTemplateRenderer({
 		data ??= localReport ?? null;
 		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
+		await loadBarcodeLibrary().catch(() => undefined);
 		return {
 			receiptData: data,
 			...(!isOffline && documentReady && document?.startsWith('closure:')

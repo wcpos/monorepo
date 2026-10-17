@@ -1,5 +1,6 @@
 import {
 	encodeThermalTemplate,
+	loadBarcodeLibrary,
 	renderBarcode,
 	renderQrCode,
 	renderReceiptTemplate,
@@ -369,6 +370,7 @@ export async function renderThermalBarcodeAsset(input: {
 	if (!text) return undefined;
 
 	try {
+		await loadBarcodeLibrary();
 		const markup =
 			input.kind === 'qrcode'
 				? renderQrCode(text, input.size ?? 4)

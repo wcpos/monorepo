@@ -1,4 +1,4 @@
-import { toSVG } from 'bwip-js/browser';
+import { getBarcodeLibrary } from './barcode-library';
 
 import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
@@ -100,9 +100,11 @@ export function renderBarcode(
 ): string {
 	const text = value.trim();
 	if (!text) return '';
+	const library = getBarcodeLibrary();
+	if (!library) return renderBarcodePending(kind, text);
 
 	try {
-		const svg = toSVG({
+		const svg = library.toSVG({
 			bcid: barcodeType.toLowerCase(),
 			text,
 			height: safeInteger(height, 40, 1, 600) / 10,
@@ -120,9 +122,11 @@ export function renderBarcode(
 export function renderQrCode(value: string, size: number, paperWidthChars?: number): string {
 	const text = value.trim();
 	if (!text) return '';
+	const library = getBarcodeLibrary();
+	if (!library) return renderBarcodePending('qrcode', text);
 
 	try {
-		const svg = toSVG({
+		const svg = library.toSVG({
 			bcid: 'qrcode',
 			text,
 			scale: safeInteger(size, 4, 1, 20),
@@ -132,6 +136,10 @@ export function renderQrCode(value: string, size: number, paperWidthChars?: numb
 	} catch (error) {
 		return renderBarcodeError('qrcode', 'qrcode', text, error);
 	}
+}
+
+function renderBarcodePending(kind: 'barcode' | 'qrcode', text: string): string {
+	return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" data-barcode-pending="true" style="text-align: center; padding: 8px 0"><code>${escapeHtml(text)}</code></div>`;
 }
 
 function renderBarcodeError(
