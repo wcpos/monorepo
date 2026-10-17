@@ -35,7 +35,7 @@ jest.mock('@wcpos/query', () => ({
 // eslint-disable-next-line import/first
 import { ScaleProvider } from './index';
 
-const SEVEN = [
+const NINE = [
 	'--spacing',
 	'--text-base',
 	'--spacing-ctl',
@@ -43,6 +43,8 @@ const SEVEN = [
 	'--spacing-tile',
 	'--radius',
 	'--text-amt',
+	'--text-xs',
+	'--text-2xs',
 ];
 
 function scopedVariables(container: HTMLElement) {
@@ -53,7 +55,7 @@ function scopedVariables(container: HTMLElement) {
 
 function rootValues() {
 	const root = document.documentElement.style;
-	return SEVEN.map((name) => root.getPropertyValue(name));
+	return NINE.map((name) => root.getPropertyValue(name));
 }
 
 beforeEach(() => {
@@ -64,7 +66,7 @@ beforeEach(() => {
 	delete store.$;
 	appState.store = store;
 	pointer = 'fine';
-	SEVEN.forEach((name) => document.documentElement.style.removeProperty(name));
+	NINE.forEach((name) => document.documentElement.style.removeProperty(name));
 });
 
 describe('ScaleProvider', () => {
@@ -84,10 +86,12 @@ describe('ScaleProvider', () => {
 			'--spacing-tile': 56,
 			'--radius': 6,
 			'--text-amt': 34,
+			'--text-xs': 12,
+			'--text-2xs': 11,
 		});
 	});
 
-	it('scopes the seven variables for a spacious store on a 390-wide window', () => {
+	it('scopes the nine variables for a spacious store on a 390-wide window', () => {
 		store.scale = 'spacious';
 		dimensions.width = 390;
 		dimensions.height = 844;
@@ -102,6 +106,8 @@ describe('ScaleProvider', () => {
 			'--spacing-tile': 80,
 			'--radius': 10,
 			'--text-amt': 48,
+			'--text-xs': 14,
+			'--text-2xs': 13,
 		});
 	});
 
@@ -135,7 +141,17 @@ describe('ScaleProvider', () => {
 
 		render(<ScaleProvider>child</ScaleProvider>);
 
-		expect(rootValues()).toEqual(['3.5px', '13px', '44px', '44px', '56px', '6px', '34px']);
+		expect(rootValues()).toEqual([
+			'3.5px',
+			'13px',
+			'44px',
+			'44px',
+			'56px',
+			'6px',
+			'34px',
+			'12px',
+			'11px',
+		]);
 	});
 
 	it('updates the root mirror when the step changes', () => {
@@ -156,7 +172,7 @@ describe('ScaleProvider', () => {
 		const { unmount } = render(<ScaleProvider>child</ScaleProvider>);
 		unmount();
 
-		expect(rootValues()).toEqual(['', '', '', '', '', '', '']);
+		expect(rootValues()).toEqual(NINE.map(() => ''));
 		expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe(
 			'rebeccapurple'
 		);
@@ -167,6 +183,6 @@ describe('ScaleProvider', () => {
 
 		render(<ScaleProvider>child</ScaleProvider>);
 
-		expect(rootValues()).toEqual(['', '', '', '', '', '', '']);
+		expect(rootValues()).toEqual(NINE.map(() => ''));
 	});
 });

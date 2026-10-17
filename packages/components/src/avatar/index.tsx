@@ -67,7 +67,7 @@ const fallbackTextSizeVariants: Record<
 	NonNullable<VariantProps<typeof avatarVariants>['size']>,
 	string
 > = {
-	xs: 'text-3xs',
+	xs: 'text-2xs',
 	sm: 'text-2xs',
 	md: 'text-xs',
 	lg: 'text-sm',

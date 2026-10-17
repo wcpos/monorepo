@@ -19,3 +19,8 @@ The rules themselves live in `CODING_STANDARDS.md` § Design — read that secti
 A cashier at a counter, standing, arm's length from a shared tablet, under shop lighting, with a
 customer waiting. Sometimes a stall-holder who last opened the app four months ago. Judge every
 screen at 5 pm with a queue: can the next action be found in under a second without reading?
+
+## The type floor
+
+Text a cashier reads is never under 12 px in any step (`text-xs` is the floor). `text-2xs` (11 px)
+is only for glyph-like text: avatar initials, badge counts. There is no `text-3xs`.

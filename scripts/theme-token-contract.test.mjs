@@ -26,11 +26,15 @@ const themeBody = [...css.matchAll(/@theme\s*\{([^{}]*)\}/g)]
 const inlineThemeBody = [...css.matchAll(/@theme\s+inline\s*\{([^{}]*)\}/g)]
 	.map(([, body]) => body).join('\n');
 
+// The type tokens a step scopes directly (scale.ts SCALE_STEPS); every other
+// text token derives from these, so it must resolve inline.
+const SCALE_TEXT_TOKENS = ['--text-base', '--text-amt', '--text-xs', '--text-2xs'];
+
 test('derived type and radius tokens are inline so scopes recompute them', () => {
 	const declarations = /--(?:text-[\w-]+|radius-[\w-]+)\s*:/g;
 	const derived = [...css.matchAll(declarations)]
 		.map(([declaration]) => declaration.replace(/\s*:$/, ''))
-		.filter((token) => token !== '--text-base' && token !== '--text-amt');
+		.filter((token) => !SCALE_TEXT_TOKENS.includes(token));
 	assert.ok(derived.length > 0);
 	for (const token of derived) {
 		const declaration = new RegExp(`${token}\\s*:`);
@@ -54,10 +58,18 @@ const aliases = {
 	'chart-1': 'c1', 'chart-2': 'c2', 'chart-3': 'c3', 'chart-4': 'c4', 'chart-5': 'c5',
 };
 
-test('the seven scale tokens are plain px numbers in @theme', () => {
-	for (const token of ['spacing', 'text-base', 'spacing-ctl', 'spacing-row', 'spacing-tile', 'radius', 'text-amt']) {
+test('the nine scale tokens are plain px numbers in @theme', () => {
+	for (const token of ['spacing', 'text-base', 'spacing-ctl', 'spacing-row', 'spacing-tile', 'radius', 'text-amt', 'text-xs', 'text-2xs']) {
 		assert.match(themeBody, new RegExp(`--${token}\\s*:\\s*\\d+(?:\\.\\d+)?px\\s*;`), token);
 	}
+});
+
+// Text a cashier reads is never under 12 px in any step; 2xs is glyph-only and
+// 3xs is gone (CODING_STANDARDS.md § Design).
+test('the type floor: xs is 12 px, 2xs is 11 px, and there is no 3xs', () => {
+	assert.match(themeBody, /--text-xs\s*:\s*12px\s*;/);
+	assert.match(themeBody, /--text-2xs\s*:\s*11px\s*;/);
+	assert.doesNotMatch(css, /--text-3xs/);
 });
 
 test('@theme contains no rem units', () => {
