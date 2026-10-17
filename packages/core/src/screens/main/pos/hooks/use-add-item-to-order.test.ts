@@ -692,6 +692,41 @@ describe('useAddItemToOrder', () => {
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 	});
 
+	it('rebinds an orphaned skeleton to the current register before creating the order', async () => {
+		order.isNew = true;
+		const skeletonPayload = {
+			uuid: 'order-uuid',
+			line_items: [],
+			meta_data: [{ key: '_wcpos_register', value: 'previous-register' }],
+		};
+		mockFindEngineResident.mockResolvedValue({
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: '', source: 'skeleton' },
+			payload: skeletonPayload,
+			toMutableJSON: () => ({ payload: skeletonPayload }),
+		});
+		mockPatchEngineResident.mockImplementation(
+			async ({ changes }: { changes: Record<string, unknown> }) => {
+				const payload = { ...skeletonPayload, ...changes };
+				return { payload, toMutableJSON: () => ({ payload }) };
+			}
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', { product_id: 2, quantity: 1 });
+		});
+
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operation: 'create',
+				payload: expect.objectContaining({
+					meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register' }]),
+				}),
+			})
+		);
+	});
+
 	it('keeps the orphaned skeleton and its lines when the retried create fails again', async () => {
 		order.isNew = true;
 		const skeletonPayload = { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] };

@@ -178,7 +178,8 @@ export const useAddItemToOrder = () => {
 						),
 						meta_data: ensurePosOrderIdentityMeta(
 							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
-							identity
+							identity,
+							true
 						),
 					},
 				});
