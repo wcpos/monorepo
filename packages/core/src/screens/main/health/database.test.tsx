@@ -177,6 +177,12 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>

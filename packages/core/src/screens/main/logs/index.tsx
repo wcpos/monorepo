@@ -3,6 +3,7 @@ import { Platform, ScrollView, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -22,7 +23,7 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 import { QuerySearchInput } from '../components/query-search-input';
-import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
+import { type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
 import { LedgerFooter, LedgerPane, useLevelLabel } from './ledger';
@@ -416,39 +417,54 @@ function LogsScreenContent() {
 						/>
 
 						<HStack className="flex-wrap items-center gap-2">
-							<Chip on={preset === 'all'} onPress={() => applyPreset('all')} testID="logs-chip-all">
-								{t('health.logs.preset_all')}
-							</Chip>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_all')}
+								on={preset === 'all'}
+								onPress={() => applyPreset('all')}
+								testID="logs-chip-all"
+							/>
+							<Chip
+								size="sm"
+								label={t('health.logs.preset_actions')}
 								on={preset === 'actions'}
 								onPress={() => applyPreset('actions')}
 								testID="logs-chip-actions"
-							>
-								{t('health.logs.preset_actions')}
-							</Chip>
+							/>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_errors')}
 								on={preset === 'errors'}
 								onPress={() => applyPreset('errors')}
 								testID="logs-chip-errors"
-							>
-								{t('health.logs.preset_errors')}
-							</Chip>
+							/>
 							<Chip
+								size="sm"
+								label={t('health.logs.preset_sync')}
 								on={preset === 'sync'}
 								onPress={() => applyPreset('sync')}
 								testID="logs-chip-sync"
-							>
-								{t('health.logs.preset_sync')}
-							</Chip>
+							/>
 							{activeKind ? (
-								<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
-									{`${levelLabel(activeKind)} ×`}
-								</Chip>
+								// The level filter set from a ledger row: pressing it or its clear control
+								// drops the filter, as the "×" it used to carry promised.
+								<Chip
+									size="sm"
+									label={levelLabel(activeKind)}
+									on
+									onPress={() => actions.clearFilter('kind')}
+									onClear={() => actions.clearFilter('kind')}
+									testID="logs-chip-kind"
+								/>
 							) : null}
 							<View className="flex-1" />
-							<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
-								{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
-							</Chip>
+							<Chip
+								size="sm"
+								label={verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
+								on={verbose}
+								onPress={toggleVerbose}
+								testID="logs-chip-verbose"
+							/>
 						</HStack>
 					</VStack>
 				</ScrollView>

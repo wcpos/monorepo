@@ -81,6 +81,9 @@ export function Chip({
 			// the handler and the focus live there and never fire twice from one tap.
 			onPress={onClear ? undefined : onPress}
 			role={onClear ? undefined : 'button'}
+			// The selected state is announced, not only drawn: `on` is a choice, so assistive tech
+			// hears which preset is picked (the health chip this replaced carried it).
+			aria-selected={onClear ? undefined : on}
 			tabIndex={onClear ? -1 : 0}
 			accessible={onClear ? false : undefined}
 			className={cn(
@@ -100,6 +103,7 @@ export function Chip({
 					<Pressable
 						testID={id('label')}
 						role="button"
+						aria-selected={on}
 						disabled={inactive}
 						className="flex-1 flex-row items-center gap-1.5 self-stretch active:opacity-70"
 						// The label's press bubbles: with a clear control the root has no handler, so

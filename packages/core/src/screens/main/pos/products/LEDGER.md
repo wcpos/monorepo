@@ -6,7 +6,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Compose the POS product browser, shared query state, display settings and storage-outage feedback.
 
-**Composes:** `@wcpos/components/{button,card,combobox,docs-link,error-boundary,form,hstack,icon-button,select,slider,suspense,text,toggle-group,tooltip,vstack}`.
+**Composes:** `@wcpos/components/{button,card,combobox,docs-link,error-boundary,form,hstack,icon-button,select,slider,suspense,text,tooltip,vstack}`.
 
 ## Lines
 

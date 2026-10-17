@@ -54,6 +54,15 @@ it.each([
 	const label = screen.getByTestId('chip-label').dataset.classes?.split(' ') ?? [];
 	expect(label).toEqual(expect.arrayContaining([text, 'text-primary', 'font-semibold']));
 });
+it('announces the on-state on the press target, with or without a clear control', () => {
+	const { rerender } = render(<Chip label="Menu" testID="chip" on />);
+	expect(screen.getByTestId('chip')).toHaveAttribute('aria-selected', 'true');
+	rerender(<Chip label="Menu" testID="chip" on onClear={jest.fn()} />);
+	expect(screen.getByTestId('chip-label')).toHaveAttribute('aria-selected', 'true');
+	expect(screen.getByTestId('chip')).not.toHaveAttribute('aria-selected');
+	rerender(<Chip label="Menu" testID="chip" />);
+	expect(screen.getByTestId('chip')).not.toHaveAttribute('aria-selected', 'true');
+});
 it('renders count zero and a leading icon', () => {
 	const { container } = render(<Chip label="Menu" count={0} icon="plus" testID="chip" />);
 	expect(screen.getByTestId('chip-count')).toHaveTextContent('0');
