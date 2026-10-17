@@ -1,2 +1,2 @@
 export { parseLinkHeader } from './parse-link-header';
-export { asciiHost, normalizeStoreUrl } from './store-url';
+export { asciiHost, normalizeStoreUrl, withAsciiHost } from './store-url';

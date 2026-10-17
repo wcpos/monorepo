@@ -6,6 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { createTestT } from '../../../../jest/translate';
+import { URL_IMPLEMENTATIONS, withGlobalUrl } from '../../../../jest/url-implementations';
 import { upsertSiteData } from '../../../utils/site-writes';
 import { connectionAddressOf, normalizeSiteAddress, useSiteConnect } from './use-site-connect';
 
@@ -59,10 +60,20 @@ describe('normalizeSiteAddress', () => {
 		['https://example.com/', 'https://example.com', true],
 		['https://example.com/staging', 'https://example.com', false],
 		['https://example.com/Staging', 'https://example.com/staging', false],
-		['https://münchen-laden.de/', 'xn--mnchen-laden-dlb.de', true],
-		['https://Bücher.example/shop', 'https://xn--bcher-kva.example/shop/', true],
 	])('compares %s with %s: same address = %s', (saved, incoming, same) => {
 		expect(normalizeSiteAddress(saved) === normalizeSiteAddress(incoming)).toBe(same);
+	});
+
+	describe.each(URL_IMPLEMENTATIONS)('%s', (_, impl) => {
+		withGlobalUrl(impl);
+
+		it.each([
+			['https://münchen-laden.de/', 'xn--mnchen-laden-dlb.de', true],
+			['https://Bücher.example/shop', 'https://xn--bcher-kva.example/shop/', true],
+			['https://bücher.example:443/shop', 'https://xn--bcher-kva.example:443/shop', true],
+		])('compares %s with %s: same address = %s', (saved, incoming, same) => {
+			expect(normalizeSiteAddress(saved) === normalizeSiteAddress(incoming)).toBe(same);
+		});
 	});
 });
 

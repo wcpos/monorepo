@@ -8,7 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
-import { normalizeStoreUrl, parseLinkHeader } from '../../../lib/url';
+import { normalizeStoreUrl, parseLinkHeader, withAsciiHost } from '../../../lib/url';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
@@ -54,7 +54,8 @@ interface UseUrlDiscoveryReturn {
 const extractWpApiUrlFromLink = (link: string | undefined): string | null => {
 	if (!link) return null;
 	const parsed = parseLinkHeader(link);
-	return get(parsed, ['https://api.w.org/', 'url']) || null;
+	const url = get(parsed, ['https://api.w.org/', 'url']);
+	return url ? withAsciiHost(url) : null;
 };
 
 /**

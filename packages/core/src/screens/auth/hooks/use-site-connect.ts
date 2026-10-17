@@ -29,7 +29,7 @@ export function normalizeSiteAddress(url: string | undefined): string {
 	return (url ?? '')
 		.replace(/^https?:\/\//i, '')
 		.replace(/^[^/]+/, (segment) =>
-			segment.replace(/^[^?#]+/, (host) => asciiHost(host)).toLowerCase()
+			segment.replace(/^[^?#\\]+/, (host) => asciiHost(host)).toLowerCase()
 		)
 		.replace(/\/$/, '');
 }
