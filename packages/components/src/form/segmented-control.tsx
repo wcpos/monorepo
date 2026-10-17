@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
@@ -21,6 +22,8 @@ export function FormSegmentedControl({
 	segments,
 	disabled,
 	testID,
+	onBlur,
+	ref,
 }: FormItemProps<string> & { segments: Segments; testID?: string }) {
 	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 	const drawn = segments.map((segment) => ({
@@ -38,6 +41,10 @@ export function FormSegmentedControl({
 				onValueChange={(next) => onChange?.(next)}
 				testID={testID}
 				aria-disabled={!!disabled}
+				// The controller's blur marks the field touched (focus leaving a segment bubbles
+				// here) and its ref lets focus-on-error reach the control, as the toggle group did.
+				onBlur={onBlur}
+				ref={ref as React.Ref<React.ComponentRef<typeof View>>}
 				{...ariaProps}
 			/>
 			{!!description && <FormDescription>{description}</FormDescription>}

@@ -103,6 +103,15 @@ describe('FormSegmentedControl', () => {
 		);
 	});
 
+	it('forwards the controller blur and ref to the control', () => {
+		const onBlur = jest.fn();
+		const ref = React.createRef<unknown>();
+		render(<Field onBlur={onBlur} ref={ref} testID="field" />);
+		expect(ref.current).toBe(screen.getByTestId('field'));
+		fireEvent.blur(screen.getByTestId('field-fixed_cart'));
+		expect(onBlur).toHaveBeenCalled();
+	});
+
 	it('disables every segment when the field is disabled', () => {
 		const onChange = jest.fn();
 		render(<Field onChange={onChange} disabled />);

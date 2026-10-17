@@ -20,6 +20,8 @@ export type Segment = {
 	testID?: string;
 };
 type SegmentedControlProps = ViewProps & {
+	/** Reaches the group's root view (a form field's focus-on-error). */
+	ref?: React.Ref<React.ComponentRef<typeof View>>;
 	segments:
 		| readonly [Segment, Segment]
 		| readonly [Segment, Segment, Segment]
