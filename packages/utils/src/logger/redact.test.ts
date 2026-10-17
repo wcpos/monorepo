@@ -1,6 +1,15 @@
 import { redactSensitiveFields } from './redact';
 
 describe('redactSensitiveFields', () => {
+	it.each([
+		['Authorization: Basic YWRtaW46c2VjcmV0', 'Authorization: Basic [REDACTED]'],
+		['Retry with Basic YWRtaW46c2VjcmV0 now', 'Retry with Basic [REDACTED] now'],
+		['Retry with bAsIc YWRtaW46c2VjcmV0 now', 'Retry with Basic [REDACTED] now'],
+		['Basic YWJjZA==, Basic abcd+/_-', 'Basic [REDACTED], Basic [REDACTED]'],
+	])('redacts Basic credentials in %s while preserving the scheme', (input, expected) => {
+		expect(redactSensitiveFields(input)).toBe(expected);
+	});
+
 	it('should redact access_token at top level', () => {
 		const input = { access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdef' };
 		const result = redactSensitiveFields(input);

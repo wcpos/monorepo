@@ -9,8 +9,9 @@ const SENSITIVE_KEYS = new Set([
 	'authorization',
 ]);
 
+// Keep the scheme when a Basic credential has already been scrubbed below.
 const CREDENTIAL_PAIR =
-	/(\b(?:access[_-]?token|refresh[_-]?token|jwt[_-]?token|license[_-]?key|authorization|token|password|secret)\b["']?\s*[:=]\s*["']?)[^"'\s,;&#]+/gi;
+	/(\b(?:access[_-]?token|refresh[_-]?token|jwt[_-]?token|license[_-]?key|authorization|token|password|secret)\b["']?\s*[:=]\s*["']?(?:Basic\s+(?=\[REDACTED\]))?)[^"'\s,;&#]+/gi;
 
 /**
  * Mask a string value: show first 6 + last 5 chars, or [REDACTED] if too short.
@@ -24,6 +25,7 @@ export function redactSensitiveText(value: string): string {
 	return value
 		.replace(/(https?:\/\/)[^/\s@]+@/gi, '$1[REDACTED]@')
 		.replace(/\bBearer\s+[^\s,;"']+/gi, 'Bearer [REDACTED]')
+		.replace(/\bBasic\s+[A-Za-z0-9+/=_-]{8,}/gi, 'Basic [REDACTED]')
 		.replace(CREDENTIAL_PAIR, '$1[REDACTED]');
 }
 
