@@ -27,6 +27,7 @@ export type WriteReceipt = {
 	mutationId: string;
 	recordId: string;
 	annihilated?: boolean;
+	annihilatedMutationIds?: string[];
 	supersededMutationId?: string;
 };
 export type WriteOptions = {
@@ -189,14 +190,17 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 				if (receipt.annihilated) {
 					// The honest terminal contract (gate2 #516 item 3): the delete was
 					// satisfied locally (chain cancelled, resident row removed) — ONE
-					// terminal event for the receipt mutationId, and no 'enqueued'
+					// terminal event per chain id, then the receipt id, and no 'enqueued'
 					// diagnostics (nothing was enqueued).
-					deps.emitWriteEvent({
+					const event = {
 						type: 'write-annihilated',
 						collection: intent.collection,
 						recordId: receipt.recordId,
 						mutationId: receipt.mutationId,
-					});
+					} as const;
+					for (const mutationId of receipt.annihilatedMutationIds ?? [])
+						deps.emitWriteEvent({ ...event, mutationId });
+					deps.emitWriteEvent(event);
 					return receipt;
 				}
 				deps.diagnostics({

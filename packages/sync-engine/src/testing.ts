@@ -26,6 +26,7 @@ export {
 	engineSyncCollectionCreators,
 	engineCollectionCreators,
 } from './collections/engine-collections';
+export { drainableGenerationCollectionCreators } from './collections/drainable-generation';
 export {
 	createEngineHarness,
 	type CapturedEngineTimers,

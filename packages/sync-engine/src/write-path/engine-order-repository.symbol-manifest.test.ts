@@ -46,6 +46,10 @@ function orderDatabase() {
 			upsertLocal: async (id: string, data: { counts: Record<string, number> }) => {
 				localDocs.set(id, structuredClone(data));
 			},
+			bulkInsert: async (documents: unknown[]) => {
+				await db.orders.bulkUpsert(documents);
+				return { error: [] };
+			},
 			bulkUpsert: async (documents: unknown[]) => {
 				orderUpserts.push(documents);
 				return [];

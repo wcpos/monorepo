@@ -12,7 +12,7 @@ import type { AdapterDatabase } from './engine-adapter/execute-query';
 export function observeResidentRead<T>(
 	engine: RxdbSyncEngine,
 	spec: {
-		collections: LegacyCollectionName[];
+		collections: (LegacyCollectionName | 'recordMutations')[];
 		absent: T;
 		read: (database: AdapterDatabase) => Observable<T>;
 	}

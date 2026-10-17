@@ -61,6 +61,7 @@ import {
 import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 import {
 	EngineOrderRepository,
+	type OrderIngestionContext,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
@@ -250,7 +251,11 @@ export type CollectionWriteFacet = {
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
 	/** Missing-row ack/discard write-back through the collection's repository seam. */
-	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
+	upsertServerDocument: (
+		db: RxDatabase,
+		document: Record<string, unknown>,
+		context?: OrderIngestionContext
+	) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
@@ -266,7 +271,9 @@ export type CollectionWriteFacet = {
 	onDeleteAck: (
 		db: RxDatabase,
 		mutation: { mutationId: string; recordId: string },
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		/** Annihilation reports cleanup without rejecting committed removal; must not throw. */
+		onCleanupError?: (error: unknown) => void
 	) => Promise<void>;
 };
 
@@ -395,12 +402,12 @@ function ackBookkeeping(options: {
 				};
 			});
 		},
-		onDeleteAck: async (db, mutation, signal) => {
-			if (signal?.aborted) return;
+		onDeleteAck: async (db, mutation, signal, onCleanupError) => {
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
 			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
 			const data =
@@ -413,10 +420,15 @@ function ackBookkeeping(options: {
 							)
 						)[0]
 					: undefined);
-			if (signal?.aborted) return;
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
 			if (doc) await doc.remove();
-			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			try {
+				if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			} catch (error) {
+				if (!onCleanupError) throw error; // Ordinary delete acks retry the cascade.
+				onCleanupError(error); // Removal committed: annihilation must not restore the chain.
+			}
 		},
 	};
 }
@@ -657,8 +669,11 @@ const ordersWriteFacet = createWriteFacet({
 	// because a payload may predate it (#885/#890) and this rewrites line arrays.
 	graftAckIdentity: (payload, source, options) =>
 		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
-	upsert: async (db, document) => {
-		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
+	upsert: async (db, document, context) => {
+		await new EngineOrderRepository(db.collections as never).upsertMany(
+			[document as never],
+			context
+		);
 	},
 });
 

@@ -50,7 +50,7 @@ async function setup(overrides: Partial<ChangeSignalLaneDeps> = {}, store = memo
 			createDatabase: async () => ({
 				listCollections: () => Object.keys(db.collections),
 				resetCollection: async () => undefined,
-				pendingMutationCount: async () => 0,
+				pendingMutationIds: async () => [],
 				close: async () => undefined,
 			}),
 		});
@@ -601,7 +601,7 @@ it.each([false, true])('failed switch releases admission (outgoing=%s)', async (
 			return {
 				listCollections: () => [],
 				resetCollection: async () => undefined,
-				pendingMutationCount: async () => 0,
+				pendingMutationIds: async () => [],
 				close: async () => undefined,
 			};
 		},

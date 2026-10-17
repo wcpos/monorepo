@@ -2694,7 +2694,7 @@ describe('previous-generation database drain', () => {
 		);
 		const { createRxDatabase } = jest.requireActual<typeof import('rxdb')>('rxdb');
 		const actual = jest.requireActual<typeof import('@wcpos/sync-engine')>('@wcpos/sync-engine');
-		const { engineCollectionCreators } = jest.requireActual<
+		const { drainableGenerationCollectionCreators } = jest.requireActual<
 			typeof import('@wcpos/sync-engine/testing')
 		>('@wcpos/sync-engine/testing');
 		const { createFakeWriteServer } = jest.requireActual<typeof import('@wcpos/sync-core/testing')>(
@@ -2714,7 +2714,7 @@ describe('previous-generation database drain', () => {
 		};
 		// A till that closed a sale under v5 and upgraded before it was sent.
 		const legacy = await createRxDatabase({ name: LEGACY, storage, multiInstance: false });
-		const creators = engineCollectionCreators();
+		const creators = drainableGenerationCollectionCreators();
 		await legacy.addCollections({
 			orders: creators.orders as never,
 			recordMutations: creators.recordMutations as never,

@@ -39,6 +39,9 @@ export type SyncEventLevel = 'debug' | 'info' | 'warn' | 'error';
  * labelled.
  */
 export type SyncEventType =
+	| 'void.recovery.identity-appeared'
+	| 'void.cleanup-failed'
+	| 'write.admission-release-failed'
 	// apply
 	| 'apply.barcode-rederive'
 	| 'apply.delete'

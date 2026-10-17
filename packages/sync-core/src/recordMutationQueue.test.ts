@@ -38,6 +38,127 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('admission expiry preserves fenced and real rows for their own settlement', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await storage.append({ ...mut(), admittedBy: 'writer' });
+		await storage.append({
+			...mut({ mutationId: 'marked' }),
+			admittedBy: 'writer',
+			supersededBy: 'void',
+			markedAt: 1000,
+		});
+		await q.clearExpiredAnnihilation(31_001);
+		expect((await q.all()).map((row) => row.mutationId)).toEqual(['m1', 'marked']);
+		expect((await q.all())[1].supersededBy).toBe('void');
+	});
+
+	it('a committed fence alone remains pending reset work even after expiry', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.fenceForVoid('products', 'rec-A', 'void', 0);
+		expect(await q.pendingResetCount(1)).toBe(0);
+		await q.setVoidPhase('products', 'rec-A', 'void', 'committed');
+		expect(await q.pendingResetCount(1)).toBe(1);
+		expect(await q.pendingResetCount(120_001)).toBe(1);
+	});
+
+	it('live recovery preserves marks while their later-acquired fence is still live', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut());
+		await q.markForAnnihilation('m1', 'void', 0);
+		await q.fenceForVoid('products', 'rec-A', 'void', 1000);
+		expect(await q.hasVoidFence('products', 'rec-A', 120_001)).toBe(true);
+		expect((await q.all())[0].supersededBy).toBe('void');
+	});
+
+	it('coalescing recovers an expired pre-commit mark without a scope reopen', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut());
+		await q.markForAnnihilation('m1', 'crashed', 0);
+		expect(await q.coalesceInto('m1', mut({ mutationId: 'replacement' }))).toBe(true);
+		expect((await q.all()).map((row) => row.mutationId)).toEqual(['replacement']);
+	});
+
+	it('only one scope opener finishes an expired committed void', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		await q.fenceForVoid('products', 'rec-A', 'void', 0);
+		await q.setVoidPhase('products', 'rec-A', 'void', 'committed');
+		let removals = 0;
+		const removeResident = async () => {
+			removals += 1;
+		};
+		await Promise.all([
+			q.clearExpiredAnnihilation(120_001, removeResident),
+			other.clearExpiredAnnihilation(120_001, removeResident),
+		]);
+		expect(removals).toBe(1);
+	});
+
+	it('internal admission rows cannot affect restored positions or pending counts', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.admitWriter('products', 'rec-A', 'writer', 1000);
+		expect(await q.pending()).toHaveLength(0);
+		const [restored] = await q.restoreAheadOfRecordNewcomers([mut()]);
+		expect(restored.seq).toBe(1);
+		expect((await storage.list()).find((row) => row.admittedBy)?.seq).toBeUndefined();
+	});
+
+	it('scope cleanup removes expired writer admissions but preserves live ones', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await q.admitWriter('products', 'stale', 'writer', 1000);
+		await q.admitWriter('products', 'fresh', 'writer', 30_000);
+		await q.clearExpiredAnnihilation(31_001);
+		expect((await storage.list()).map((row) => row.recordId)).toEqual(['fresh']);
+	});
+
+	it('a live writer admission blocks a void, but a crashed writer expires after 30 seconds', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await storage.append({
+			...mut({ mutationId: 'products/rec-A' }),
+			status: 'rejected',
+			expiresAt: 0,
+			admittedBy: 'crashed-writer',
+			admittedAt: 1000,
+		});
+		expect(await q.fenceForVoid('products', 'rec-A', 'void', 30_999)).toBe(false);
+		expect(await q.fenceForVoid('products', 'rec-A', 'void', 31_001)).toBe(true);
+		expect(await q.hasVoidFence('products', 'rec-A', 31_001)).toBe(true);
+		await q.releaseVoidFence('products', 'rec-A', 'void');
+		expect(await storage.list()).toEqual([]);
+	});
+
+	it('a marked row cannot be coalesced or claimed by another queue instance', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		const row = { ...mut(), supersededBy: 'void', markedAt: Date.now() };
+		await q.enqueue(row);
+		expect(await other.coalesceInto('m1', mut({ mutationId: 'replacement' }))).toBe(false);
+		expect(await other.claim({ ...row, status: 'claimed' })).toBe(false);
+		expect((await q.all()).map((item) => item.mutationId)).toEqual(['m1']);
+	});
+
+	it('marks and unmarks without removing or reviving a row changed by another instance', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		const row = await q.enqueue(mut());
+		expect(await q.markForAnnihilation('m1', 'void')).toBe(true);
+		expect(await other.markForAnnihilation('m1', 'other')).toBe(false);
+		expect(await other.removeMarked('m1', 'other')).toBe(false);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(true);
+		expect(await q.all()).toEqual([row]);
+		await q.markForAnnihilation('m1', 'void');
+		await other.remove(['m1']);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(false);
+		expect(await q.all()).toEqual([]);
+	});
+
 	it('migrates durable v1 rows with a deterministic synthesized seq', () => {
 		const legacy = mut({ mutationId: 'durable-v1' });
 		const migrated = recordMutationQueueMigrationStrategies[2](legacy);
@@ -356,6 +477,19 @@ describe('RecordMutationQueue — conditional (CAS) transitions (#507 P1-2)', ()
 		expect((await q.all()).map((m) => m.mutationId)).toEqual(['m-replacement']);
 	});
 
+	it.each([{ attempts: 1 }, { claimedBy: 'other-window' }, { nextAttemptAt: iso(1000) }])(
+		'never-pushed removal refuses push evidence %j',
+		async (evidence) => {
+			const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+			await q.enqueue({ ...mut(), ...evidence });
+			const before = await q.all();
+			expect(await q.removePending('m1', { requireNeverPushed: true })).toBe(false);
+			expect(await q.all()).toEqual(before);
+			// Callers that settle rather than annihilate retain the existing contract.
+			expect(await q.removePending('m1')).toBe(true);
+		}
+	);
+
 	it('removePending refuses a claimed row — an in-flight create cannot be annihilated', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		const row = await q.enqueue(mut({ mutationId: 'm-create', operation: 'create' }));
@@ -412,7 +546,7 @@ describe('pendingRecordIds', () => {
 
 describe('RxRecordMutationStorage', () => {
 	// A faithful RxDB-like fake keyed by mutationId, with a monotonic `_rev` per
-	// row and NON-incremental patch/remove that fail closed (409) on a stale rev —
+	// row and NON-incremental modify/remove that fail closed (409) on a stale rev —
 	// the exact optimistic-concurrency contract the conditional writes rely on.
 	function fakeCollection() {
 		const store = new Map<string, { mutation: RecordMutation; rev: string }>();
@@ -426,13 +560,13 @@ describe('RxRecordMutationStorage', () => {
 				get revision() {
 					return store.get(mutationId)?.rev ?? '';
 				},
-				patch: async (changes: Partial<RecordMutation>) => {
+				modify: async (change: (row: RecordMutation) => RecordMutation) => {
 					const current = store.get(mutationId);
 					if (!current || current.rev !== entry.rev) {
 						throw Object.assign(new Error('CONFLICT'), { status: 409, code: 'CONFLICT' });
 					}
 					store.set(mutationId, {
-						mutation: { ...current.mutation, ...changes },
+						mutation: change(current.mutation),
 						rev: nextRev(),
 					});
 				},
@@ -465,6 +599,20 @@ describe('RxRecordMutationStorage', () => {
 		};
 		return col;
 	}
+
+	it('void back-off clears optional keys before persisting the pending row', async () => {
+		const storage = new RxRecordMutationStorage(fakeCollection());
+		const q = new RecordMutationQueue(storage);
+		await q.replace({ ...mut(), admittedBy: 'lost-writer' });
+		expect(await q.markForAnnihilation('m1', 'void', 0, 'lost')).toBe(true);
+		expect(await q.unmarkForAnnihilation('m1', 'void')).toBe(true);
+		const [row] = await storage.list();
+		expect(row.status).toBe('pending');
+		expect(Object.keys(row).filter((key) => row[key as keyof typeof row] === undefined)).toEqual(
+			[]
+		);
+		expect(row).not.toHaveProperty('rejectedReason');
+	});
 
 	it('append persists a mutation and list returns it via toJSON', async () => {
 		const storage = new RxRecordMutationStorage(fakeCollection());

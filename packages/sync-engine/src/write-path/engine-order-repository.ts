@@ -22,8 +22,9 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
+import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
@@ -52,7 +53,9 @@ type StoredOrderDoc = {
 	toJSON(): unknown;
 	/** rxdb's write queue: the modifier runs against the CURRENT document when the write lands. */
 	incrementalModify?(
-		modifier: (data: Record<string, unknown>) => Record<string, unknown>
+		modifier: (
+			data: Record<string, unknown>
+		) => Record<string, unknown> | Promise<Record<string, unknown>>
 	): Promise<unknown>;
 };
 
@@ -69,6 +72,7 @@ type OrdersCollection = {
 	} | null>;
 	insertLocal(id: string, data: PrintCountStash): Promise<unknown>;
 	upsertLocal(id: string, data: PrintCountStash): Promise<unknown>;
+	bulkInsert(docs: unknown[]): Promise<{ error: { status: number; documentId: string }[] }>;
 	bulkUpsert(docs: unknown[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): { exec(): Promise<Map<string, StoredOrderDoc>> };
@@ -88,6 +92,7 @@ type SyncCheckpointsCollection = {
 
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
+	recordMutations?: unknown;
 	orders: OrdersCollection;
 	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
@@ -256,17 +261,22 @@ export function stashPrintCounts(
 	});
 }
 
+export type OrderIngestionContext = { source: 'ack'; mutationId: string; recordId: string };
+
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
 	/** Returns the subset the storage guard actually applied, so the ingest site can
 	 * record manifest rows for exactly those documents (the guard-skipped-manifest class,
 	 * Greptile P1 on this PR — same contract as `collectionSchedulerRepository`). */
-	async upsertMany(documents: OrderDocument[]): Promise<readonly OrderDocument[]> {
+	async upsertMany(
+		documents: OrderDocument[],
+		context?: OrderIngestionContext
+	): Promise<readonly OrderDocument[]> {
 		if (documents.length === 0) return [];
 		// Offline-first guard: a pulled server row must never clobber a local edit that hasn't drained
-		// yet. `upsertMany` is only ever the pull-apply path (every incoming order is server truth with
-		// `local.dirty === false`), so dropping any incoming id whose ALREADY-STORED counterpart carries
+		// yet. Pull ingestion carries server truth with
+		// `local.dirty === false`, so dropping any incoming id whose ALREADY-STORED counterpart carries
 		// un-drained local work protects the edit at the storage boundary in its own right — independent
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
@@ -274,7 +284,11 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
-		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		const protectsLocal = (id: string, resident: unknown) =>
+			id !== context?.recordId && hasPendingLocalWork(resident);
+		let applicable = documents.filter(
+			(document) => !protectsLocal(document.uuid, residents.get(document.uuid)?.toJSON())
+		);
 		if (applicable.length === 0) return [];
 		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
 		const counts = { ...stash?.get('counts') };
@@ -327,7 +341,7 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		const changed = withoutUnchanged(
+		let changed = withoutUnchanged(
 			this.db.orders,
 			residents,
 			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
@@ -338,16 +352,59 @@ export class EngineOrderRepository {
 		// drain carrying one) is kept, never overwritten by this pull's older snapshot. (rxdb's
 		// bulkUpsert updates an existing document the same way, one queued write per document, but
 		// with a modifier that ignores the current data.)
+		const skipped = new Set<string>();
+		const heldIds = this.db.recordMutations
+			? createOrderPendingMutationIds(this.db.recordMutations, context?.mutationId)
+			: async () => new Set<string>();
+		const currentResidents =
+			changed.length > 0
+				? await this.db.orders.findByIds(changed.map((document) => document.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		for (const [uuid, resident] of currentResidents) residents.set(uuid, resident);
+		const held = await heldIds();
+		changed = changed.filter((document) => {
+			if (
+				held.has(document.uuid) ||
+				protectsLocal(document.uuid, currentResidents.get(document.uuid)?.toJSON())
+			) {
+				skipped.add(document.uuid);
+				return false;
+			}
+			return true;
+		});
 		const inserts = changed.filter((document) => !residents.has(document.uuid));
 		const updates = changed.filter((document) => residents.has(document.uuid));
-		if (inserts.length > 0)
-			assertBulkSuccess(await this.db.orders.bulkUpsert(inserts), 'engine-order-repository upsert');
+		if (inserts.length > 0) {
+			const result = await this.db.orders.bulkInsert(inserts);
+			assertBulkSuccess(
+				{ error: result.error.filter((error) => error.status !== 409) },
+				'order insert'
+			);
+			const conflicts = new Set(result.error.map((error) => error.documentId));
+			const winners = conflicts.size
+				? await this.db.orders.findByIds([...conflicts]).exec()
+				: new Map<string, StoredOrderDoc>();
+			for (const document of inserts.filter((row) => conflicts.has(row.uuid))) {
+				const winner = winners.get(document.uuid);
+				if (!winner) skipped.add(document.uuid);
+				else {
+					residents.set(document.uuid, winner);
+					updates.push(document);
+				}
+			}
+		}
 		for (const document of updates) {
 			const resident = residents.get(document.uuid)!;
 			if (resident.incrementalModify) {
-				await resident.incrementalModify((current) =>
-					withPreservedPrintCount(current, document as unknown as Record<string, unknown>)
-				);
+				await resident.incrementalModify(async (current) => {
+					// Re-run inside RxDB's per-record write queue, including on conflict retry.
+					if (protectsLocal(document.uuid, current) || (await heldIds()).has(document.uuid)) {
+						skipped.add(document.uuid);
+						return current;
+					}
+					skipped.delete(document.uuid);
+					return withPreservedPrintCount(current, document as unknown as Record<string, unknown>);
+				});
 			} else {
 				assertBulkSuccess(
 					await this.db.orders.bulkUpsert([document]),
@@ -355,6 +412,8 @@ export class EngineOrderRepository {
 				);
 			}
 		}
+		changed = changed.filter((document) => !skipped.has(document.uuid));
+		applicable = applicable.filter((document) => !skipped.has(document.uuid));
 		// Stash entries this commit wrote into its documents are retired; anything stashed since this
 		// pull read the stash lands now.
 		const written: Record<string, number> = {};

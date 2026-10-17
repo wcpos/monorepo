@@ -26,6 +26,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION, OPEN_CART_ORDER_STATUS } from '@wcpos/sync-engine';
 import type { HoldCandidate, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { observeUnsentWorkCount } from '@wcpos/query';
 import { forgetUnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { useMutationCounts } from './use-engine-monitor';
@@ -88,6 +89,7 @@ const QUEUE: QueueRow[] = [
 
 const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
 const mockEngine = {
+	ready: new Promise(() => {}),
 	active: () => {
 		const database = mockDatabase$.value;
 		return database ? { database } : null;
@@ -99,36 +101,36 @@ const mockEngine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	observeUnsentWorkCount: jest.fn(jest.requireActual('@wcpos/query').observeUnsentWorkCount),
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 
 /**
- * A queue collection that answers BOTH readers off the same rows: `count()` (no
+ * A queue collection that answers BOTH readers off the same rows: `find()` (no
  * selector — how Unsent work reads it) and `find({selector})` (how the backlog
  * and needs-a-decision families read it). A row with no `status` counts as
  * pending, exactly as the queue schema treats it.
  */
 function fakeQueue(rows: readonly QueueRow[]) {
-	// The selector parameter is honoured rather than ignored on purpose: a reader
-	// that starts passing one must make the WHOLE-queue count wrong, not just the
-	// call-shape assertion below.
-	const count = jest.fn((query?: { selector?: { status?: { $in: string[] } } }) => {
-		const statuses = query?.selector?.status?.$in;
-		const counted = statuses
-			? rows.filter((row) => statuses.includes(row.status ?? 'pending'))
-			: rows;
+	const count = jest.fn((query?: { selector?: { status?: string | { $in: string[] } } }) => {
+		const status = query?.selector?.status;
+		const counted =
+			typeof status === 'string'
+				? rows.filter((row) => row.status === status)
+				: status?.$in
+					? rows.filter((row) => status.$in.includes(row.status ?? 'pending'))
+					: rows;
 		return {
 			$: new BehaviorSubject(counted.length),
 			exec: () => Promise.resolve(counted.length),
 		};
 	});
-	const find = jest.fn((query: { selector: { status: { $in: string[] } } }) => ({
-		$: new BehaviorSubject(
-			rows
-				.filter((row) => query.selector.status.$in.includes(row.status ?? 'pending'))
-				.map((row) => ({ toJSON: () => row }))
-		),
-	}));
+	const find = jest.fn((query?: { selector: { status: { $in: string[] } } }) => {
+		const selected = rows
+			.filter((row) => !query || query.selector.status.$in.includes(row.status ?? 'pending'))
+			.map((row) => ({ ...row, toJSON: () => row }));
+		return { $: new BehaviorSubject(selected), exec: async () => selected };
+	});
 	return { count, find };
 }
 
@@ -155,7 +157,7 @@ function mountQueue(rows: readonly QueueRow[], openCartRecordIds: readonly strin
 
 /** The `$in` list the hook used for the family whose selector names `status`. */
 function statusSelectors(queue: ReturnType<typeof fakeQueue>): string[][] {
-	return queue.find.mock.calls.map((call) => call[0].selector.status.$in);
+	return queue.find.mock.calls.map((call) => call[0]?.selector.status.$in ?? []);
 }
 
 beforeEach(() => {
@@ -178,16 +180,14 @@ describe('Unsent work — "is it safe to reset?"', () => {
 		});
 	});
 
-	it('applies NO selector — this family’s exclusion rule is "none at all"', async () => {
-		// The pin: `count()` is called bare. `status` is optional in the queue
-		// schema (absent means pending), so ANY status selector both hides those
-		// rows and quietly adopts another family's exclusions.
+	it('the named read counts all rows minus internal coordination rows', async () => {
+		// Bare find preserves status-less legacy rows; exclusion happens in one snapshot.
 		const { engine, queue } = mountQueue(QUEUE, [OPEN_CART_RECORD]);
 
 		await countUnsentChanges(engine);
 
-		expect(queue.count).toHaveBeenCalled();
-		for (const call of queue.count.mock.calls) expect(call).toEqual([]);
+		expect(observeUnsentWorkCount).toHaveBeenCalledWith(engine, { snapshot: true });
+		expect(queue.find.mock.calls).toEqual([[]]);
 	});
 });
 

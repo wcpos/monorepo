@@ -65,7 +65,6 @@ import {
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
-	MUTATION_QUEUE_RXDB_COLLECTION,
 	resetEngineCollection,
 	type ResettableCollectionName,
 	SYNC_COLLECTION_NAMES,
@@ -136,6 +135,7 @@ import {
 	createWritePlane,
 	type WriteIntent,
 } from './write-path/write-plane';
+import { queueFor } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
@@ -1272,6 +1272,19 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(collectionCreators() as never);
+			if (scopeDatabaseGeneration === SCOPE_DATABASE_GENERATION) {
+				try {
+					await queueFor(db, { now: nowMs, observe: diagnostics }).clearExpiredAnnihilation(
+						nowMs()
+					);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.guard',
+						level: 'warn',
+						message: `Expired void cleanup failed: ${String(error)}`,
+					});
+				}
+			}
 			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
@@ -1346,7 +1359,7 @@ export function createRxdbSyncEngine(
 					}
 					await resetEngineCollection(db, name);
 				},
-				pendingMutationCount: () => db.collections[MUTATION_QUEUE_RXDB_COLLECTION].count().exec(),
+				pendingMutationIds: async () => queueFor(db).pendingResetIds(nowMs()),
 				close: async () => {
 					databaseByScopeId.delete(scopeId);
 					localCoverageByScopeId.delete(scopeId);

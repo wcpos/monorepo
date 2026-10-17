@@ -11,8 +11,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
+import { DRAINABLE_SCOPE_DATABASE_GENERATION } from '@wcpos/sync-core';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
+import { awaitWriteOutcome } from '../../query/src/await-write-outcome';
 import {
 	createEngineHarness,
 	memoryEngineStorage,
@@ -27,6 +29,7 @@ import {
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
 import { heldOpenCartMutations } from './write-path/open-cart-hold';
+import * as refundChildren from './write-path/refund-children';
 
 import type { RxStorage } from 'rxdb';
 
@@ -2048,6 +2051,434 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'fence', 'v5', 'v5 abort'])(
+		'drain annihilation preserves the removal outcome on %s',
+		async (fault) => {
+			const events: SyncEvent[] = [];
+			const server = createFakeWriteServer();
+			const legacy = fault.startsWith('v5');
+			const aborted = fault.endsWith('abort');
+			const engine = engineWith({
+				fetch: server.fetch,
+				diagnostics: (e) => events.push(e),
+				ports: legacy ? { scopeDatabaseGeneration: DRAINABLE_SCOPE_DATABASE_GENERATION } : {},
+			});
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date().toISOString(),
+					});
+				}
+				const facet = writeFacetFor('orders')!;
+				const ack = facet.onDeleteAck;
+				vi.spyOn(facet, 'onDeleteAck').mockImplementationOnce((db, mutation, signal, ...rest) => {
+					if (aborted) vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
+					return ack(db, mutation, signal, ...rest);
+				});
+				if (!legacy)
+					vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
+						new Error('cleanup failed')
+					);
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				if (fault === 'queue cleanup failure')
+					vi.spyOn(queue, 'removeMarked').mockRejectedValueOnce(new Error('disk'));
+				if (fault === 'fence')
+					vi.spyOn(queue, 'releaseVoidFence').mockRejectedValueOnce(new Error('disk'));
+				await engine.sync('write-drain');
+				if (fault === 'fence' || fault.includes('cleanup failure')) {
+					const cancelled = () =>
+						outcomes.filter((e) => e.type === 'write-annihilated').map((e) => e.mutationId);
+					expect(cancelled()).toEqual(['create', 'delete']);
+					await queue.clearExpiredAnnihilation(Date.now() + 120_001);
+					await engine.sync('write-drain');
+					expect(cancelled()).toEqual(['create', 'delete']);
+					expect(await engine.active()!.database.recordMutations.find().exec()).toEqual([]);
+				}
+				expect(
+					(await queue.pending()).filter((row) => !row.supersededBy).map((row) => row.operation)
+				).toEqual(aborted ? ['create', 'delete'] : []);
+				expect(Boolean(await orderJson(engine, UUID_A))).toBe(aborted);
+				expect(server.received).toEqual([]);
+				if (fault === 'cleanup failure') {
+					expect(events).toContainEqual(
+						expect.objectContaining({ type: 'void.cleanup-failed', message: 'cleanup failed' })
+					);
+				}
+			} finally {
+				vi.restoreAllMocks();
+				await engine.dispose();
+			}
+		}
+	);
+
+	it.each([false, true])(
+		'recovered void emits every receipt outcome (earlier sweep=%s)',
+		async (swept) => {
+			let now = Date.now();
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: server.fetch, now: () => now });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date(now).toISOString(),
+					});
+				}
+				await queue.fenceForVoid('orders', UUID_A, 'crashed-leader', now);
+				for (const id of ['create', 'delete'])
+					await queue.markForAnnihilation(id, 'crashed-leader', now);
+				await queue.setVoidPhase('orders', UUID_A, 'crashed-leader', 'committed');
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				now += 120_001;
+				if (swept) await queue.clearExpiredAnnihilation(now);
+				await engine.sync('write-drain');
+				expect(
+					outcomes
+						.filter((event) => event.type === 'write-annihilated')
+						.map((event) => event.mutationId)
+				).toEqual(['create', 'delete']);
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				expect(await queue.all()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it('internal admission rows are invisible to checkout and health selectors', async () => {
+		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
+		try {
+			await engine.ready;
+			const db = engine.active()!.database;
+			const queue = queueFor(db);
+			await queue.admitWriter('orders', UUID_A, 'writer', Date.now());
+			for (const statuses of [['rejected', 'conflicted', 'needs-revision'], ['rejected']]) {
+				expect(
+					await db.collections.recordMutations
+						.find({
+							selector: {
+								status: { $in: statuses },
+								collectionName: { $eq: 'orders' },
+							},
+						})
+						.exec()
+				).toEqual([]);
+			}
+			expect(await queue.all()).toEqual([]);
+			expect(await queue.pending()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('admission release failure preserves a committed write receipt', async () => {
+		const events: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: createFakeWriteServer().fetch,
+			diagnostics: (e) => events.push(e),
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const queue = queueFor(engine.active()!.database);
+			vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('disk release failed'));
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pending' },
+			});
+			expect(await queue.all()).toEqual([
+				expect.objectContaining({ mutationId: receipt.mutationId }),
+			]);
+			expect(events.filter((e) => e.type === 'write.admission-release-failed')).toEqual([
+				expect.objectContaining({
+					fields: expect.objectContaining({ mutationId: receipt.mutationId }),
+				}),
+			]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		{ status: 'pending', step: 'removeMarked' },
+		{ status: 'rejected', step: 'removeMarked' },
+		{ status: 'pending', step: 'releaseVoidFence' },
+		{ status: 'rejected', step: 'releaseVoidFence' },
+	] as const)(
+		'committed void survives $step failure for a $status create',
+		async ({ status, step }) => {
+			let now = Date.parse('2026-09-18T00:00:00.000Z');
+			const events: SyncEvent[] = [];
+			const engineEvents: EngineEvent[] = [];
+			const server = createFakeWriteServer();
+			const engine = engineWith({
+				fetch: server.fetch,
+				now: () => now,
+				diagnostics: (event) => events.push(event),
+			});
+			try {
+				await engine.ready;
+				engine.events((event) => engineEvents.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+				});
+				const db = engine.active()!.database;
+				const queue = queueFor(db);
+				const [create] = await queue.all();
+				if (status === 'rejected') await queue.replace({ ...create, status });
+				const failure = vi.spyOn(queue, step).mockRejectedValue(new Error('disk cleanup failed'));
+				const result = engine.write({
+					collection: 'orders',
+					operation: 'delete',
+					recordId: UUID_A,
+				});
+				await expect(result).resolves.toMatchObject({ annihilated: true });
+				const receipt = await result;
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				expect(fence?.toJSON()).toMatchObject({ payload: { phase: 'committed' } });
+				expect(events.filter((event) => event.type === 'void.cleanup-failed')).toEqual([
+					expect.objectContaining({
+						fields: {
+							token: fence!.toJSON().supersededBy,
+							step,
+							error: 'Error: disk cleanup failed',
+						},
+					}),
+				]);
+				expect(engineEvents).toContainEqual({
+					type: 'write-annihilated',
+					collection: 'orders',
+					recordId: UUID_A,
+					mutationId: receipt.mutationId,
+				});
+				if (step === 'removeMarked')
+					expect(await queue.all()).toEqual([
+						expect.objectContaining({
+							mutationId: create.mutationId,
+							supersededBy: fence!.toJSON().supersededBy,
+						}),
+					]);
+				failure.mockRestore();
+				now += 120_001;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0 });
+				expect(await db.collections.recordMutations.find().exec()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it.each(['drain', 'writer', 'identity'] as const)(
+		'live recovery via %s without reopening scope',
+		async (path) => {
+			let now = Date.parse('2026-09-18T00:00:00.000Z');
+			const events: SyncEvent[] = [];
+			const engine = engineWith({
+				fetch: createFakeWriteServer().fetch,
+				now: () => now,
+				diagnostics: (e) => events.push(e),
+			});
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const db = engine.active()!.database;
+				const queue = queueFor(db);
+				const receipt = await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+				});
+				await queue.fenceForVoid('orders', UUID_A, 'crashed', now);
+				await queue.markForAnnihilation(receipt.mutationId, 'crashed', now);
+				if (path !== 'drain') await queue.setVoidPhase('orders', UUID_A, 'crashed', 'committed');
+				if (path === 'writer') await (await db.collections.orders.findOne(UUID_A).exec())!.remove();
+				if (path === 'identity')
+					await (await db.collections.orders.findOne(UUID_A).exec())!.incrementalPatch({
+						remoteId: '123',
+					});
+				now += 120_001;
+				if (path === 'drain') {
+					expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1 });
+				} else if (path === 'writer') {
+					// The real create contract inserts the born-local row before enqueue.
+					// Recover first through a write attempt against the absent resident.
+					await expect(
+						engine.write({
+							collection: 'orders',
+							operation: 'update',
+							recordId: UUID_A,
+							payload: {},
+						})
+					).rejects.not.toMatchObject({ reason: 'void-in-progress' });
+					expect(await queue.all()).toEqual([]);
+					await insertBornLocalOrder(engine, UUID_A);
+					await expect(
+						engine.write({
+							collection: 'orders',
+							operation: 'create',
+							recordId: UUID_A,
+							payload: { status: 'pending' },
+						})
+					).resolves.toHaveProperty('mutationId');
+				} else {
+					await queue.hasVoidFence('orders', UUID_A, now);
+					expect((await orderJson(engine, UUID_A))?.remoteId).toBe('123');
+					expect(events.filter((e) => e.type === 'void.recovery.identity-appeared')).toHaveLength(
+						1
+					);
+					expect(await queue.hasVoidFence('orders', UUID_A, now)).toBe(false);
+				}
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it('reset requires confirmation for a live writer admission', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await queueFor(engine.active()!.database).admitWriter('orders', UUID_A, 'writer', Date.now());
+			expect(await engine.scope.resetCollection('mutations')).toBe('needs-confirmation');
+			expect(
+				await engine.active()!.database.collections.recordMutations.find().exec()
+			).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		[false, false, false, null],
+		[true, false, false, null],
+		[true, true, false, null],
+		[true, true, true, null],
+		[true, true, false, 'remoteId'],
+		[true, true, false, 'revision'],
+	] as const)('void recovery: %s/%s/%s/%s', async (expired, committed, removed, identity) => {
+		const server = createFakeWriteServer({ firstId: 900_000_200 });
+		const events: SyncEvent[] = [];
+		const options = {
+			diagnostics: (event: SyncEvent) => events.push(event),
+			fetch: (url: string, init?: RequestInit) => server.fetch(url, init as never),
+			identity: freshIdentity(),
+			storage: memoryEngineStorage(),
+			now: () => Date.parse('2026-09-18T00:00:00.000Z'),
+		};
+		const before = engineWith(options);
+		try {
+			await before.ready;
+			await insertBornLocalOrder(before, UUID_A);
+			const receipt = await before.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pending' },
+			});
+			expect(
+				await queueFor(before.active()!.database).markForAnnihilation(
+					receipt.mutationId,
+					'abandoned-void',
+					options.now()
+				)
+			).toBe(true);
+			expect(
+				await queueFor(before.active()!.database).fenceForVoid(
+					'orders',
+					UUID_A,
+					'abandoned-void',
+					options.now()
+				)
+			).toBe(true);
+			if (identity)
+				await (await before
+					.active()!
+					.database.collections.orders.findOne(UUID_A)
+					.exec())!.incrementalPatch(
+					identity === 'remoteId' ? { remoteId: '123' } : { sync: { revision: 'sha256:appeared' } }
+				);
+
+			if (committed) {
+				const db = before.active()!.database;
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				await fence!.incrementalPatch({ payload: { phase: 'committed' } });
+				if (removed) await (await db.collections.orders.findOne(UUID_A).exec())!.remove();
+			}
+		} finally {
+			await before.dispose();
+		}
+		const reopened = engineWith({
+			...options,
+			now: () => options.now() + (expired ? 120_001 : 1),
+		});
+		try {
+			await reopened.ready;
+			expect(
+				await queueFor(reopened.active()!.database).hasVoidFence('orders', UUID_A, options.now())
+			).toBe(!expired);
+			const rows = await queueFor(reopened.active()!.database).all();
+			if (identity) {
+				expect(await orderJson(reopened, UUID_A)).not.toBeNull();
+				expect(rows).toHaveLength(1);
+				expect(rows[0]).not.toHaveProperty('supersededBy');
+				expect(
+					events.filter((event) => event.type === 'void.recovery.identity-appeared')
+				).toHaveLength(1);
+				return;
+			}
+			if (committed) {
+				expect(rows).toEqual([]);
+				expect(await orderJson(reopened, UUID_A)).toBeNull();
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
+			expect(rows).toHaveLength(1);
+			if (!expired) {
+				expect(rows[0]).toHaveProperty('supersededBy', 'abandoned-void');
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
+			expect(rows[0]).not.toHaveProperty('supersededBy');
+			expect(await reopened.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			expect(await queueRows(reopened)).toEqual([]);
+			expect((await orderJson(reopened, UUID_A))?.remoteId).toBe(remoteId(900_000_200));
+		} finally {
+			await reopened.dispose();
+		}
+	});
+
 	it('the queue survives A→B→A: an offline write drains after the return', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_200 });
 		const connectivity = scriptedConnectivity('offline');
@@ -3810,6 +4241,35 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
+	it.each(['pending', 'rejected'] as const)('enqueue void settles the %s chain', async (status) => {
+		const engine = engineWith({ fetch: vi.fn() });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const intent = {
+				collection: 'orders',
+				recordId: UUID_A,
+				payload: {},
+				explicit: true,
+			} as const;
+			const create = await engine.write({ ...intent, operation: 'create' });
+			const update = await engine.write({ ...intent, operation: 'update' });
+			if (status === 'rejected') {
+				const queue = queueFor(engine.active()!.database);
+				await queue.replace({ ...(await queue.all())[0]!, status });
+			}
+			const ids: string[] = [];
+			engine.events((event) => {
+				if (event.type === 'write-annihilated') ids.push(event.mutationId);
+			});
+			const receipt = await engine.write({ ...intent, operation: 'delete' });
+			expect(ids).toEqual([create.mutationId, update.mutationId, receipt.mutationId]);
+			await expect(awaitWriteOutcome(engine, create.mutationId)).resolves.toBe('success-local');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('regression 6 (re-ruled by #516 item 3): pending-create + delete ANNIHILATES — terminal write-annihilated event, local row REMOVED, nothing pushed', async () => {
 		const events: SyncEvent[] = [];
 		const engineEvents: EngineEvent[] = [];
@@ -4807,7 +5267,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		}
 	});
 
-	it('#526: failed resident removal restores ahead of a concurrent same-record newcomer', async () => {
+	it('#526: failed resident removal preserves work and refuses a concurrent newcomer', async () => {
 		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
 		try {
 			await engine.ready;
@@ -4831,23 +5291,34 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				queuedAt: '2026-07-11T00:00:00.000Z',
 			});
 			const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
-			vi.spyOn(resident!, 'remove').mockImplementationOnce(async () => {
-				await engine.write({
-					collection: 'orders',
-					operation: 'update',
-					recordId: UUID_A,
-					payload: { status: 'newcomer' },
-				});
+			const remove = vi.spyOn(resident!, 'remove', 'get').mockReturnValueOnce(async () => {
+				await expect(
+					engine.write({
+						collection: 'orders',
+						operation: 'update',
+						recordId: UUID_A,
+						payload: { status: 'newcomer' },
+					})
+				).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
 				throw new Error('scripted resident remove failure');
 			});
 			await expect(
 				engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A })
 			).rejects.toThrow('scripted resident remove failure');
 			const rows = (await queueRows(engine)).sort((a, b) => Number(a.seq) - Number(b.seq));
-			expect(rows.map((row) => row.seq)).toEqual([1, 2, 3]);
-			expect(rows.map((row) => row.operation)).toEqual(['create', 'update', 'update']);
+			expect(rows.map((row) => row.seq)).toEqual([1, 2]);
+			expect(rows.map((row) => row.operation)).toEqual(['create', 'update']);
 			expect((rows[1]?.payload as { status?: string }).status).toBe('chain');
-			expect((rows[2]?.payload as { status?: string }).status).toBe('newcomer');
+			remove.mockRestore();
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+			await insertBornLocalOrder(engine, UUID_A);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { id: 0 },
+			});
+			expect(await queue.pending()).toMatchObject([{ operation: 'create' }]);
 		} finally {
 			await engine.dispose();
 		}

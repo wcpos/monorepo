@@ -172,7 +172,7 @@ function searchTermOf(descriptor: EngineQueryDescriptor): string {
  */
 export function observeBinding(
 	engine: RxdbSyncEngine,
-	collections: LegacyCollectionName[]
+	collections: (LegacyCollectionName | 'recordMutations')[]
 ): Observable<AdapterDatabase | null> {
 	return observeEngineDatabases(engine).pipe(
 		map((database) => {
@@ -180,7 +180,10 @@ export function observeBinding(
 			return {
 				database: adapterDatabase,
 				collections: collections.map(
-					(name) => adapterDatabase?.collections[engineCollectionNameFor(name)]
+					(name) =>
+						adapterDatabase?.collections[
+							name === 'recordMutations' ? name : engineCollectionNameFor(name)
+						]
 				),
 			};
 		}),
