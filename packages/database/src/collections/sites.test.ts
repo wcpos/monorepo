@@ -48,14 +48,19 @@ describe('a sites collection stored under either shipped v7 schema', () => {
 	};
 
 	it.each([
-		['main 1.11.2', 'search_meta_keys'],
-		['next before #2646', 'use_instance_header'],
-	] as const)('opens a %s database under the current schema', async (_label, missing) => {
+		// Each shape stores the property only it carries, so the reopen proves that value survives.
+		['main 1.11.2', 'search_meta_keys', { use_instance_header: true }],
+		[
+			'next before #2646',
+			'use_instance_header',
+			{ search_meta_keys: { customers: ['loyalty_number'], orders: ['po_number'] } },
+		],
+	] as const)('opens a %s database under the current schema', async (_label, missing, own) => {
 		const storage = getRxStorageMemory();
 		const name = `sites-v7-${missing.replace(/_/g, '-')}`;
 		const stored = await createRxDatabase({ name, storage, multiInstance: false });
 		await stored.addCollections({ sites: { schema: v7Without(missing) as never } });
-		await stored.sites.insert({ uuid: 'site-1', name: 'Store', use_cache_buster: true });
+		await stored.sites.insert({ uuid: 'site-1', name: 'Store', use_cache_buster: true, ...own });
 		await stored.close();
 
 		const { userCollections } = await import('./index');
@@ -63,11 +68,14 @@ describe('a sites collection stored under either shipped v7 schema', () => {
 		try {
 			await reopened.addCollections({ sites: userCollections.sites as never });
 			const site = await reopened.sites.findOne('site-1').exec();
-			expect(site?.toJSON()).toMatchObject({
+			const json = site?.toJSON() as Record<string, unknown> | undefined;
+			expect(json).toMatchObject({
 				uuid: 'site-1',
 				name: 'Store',
 				use_cache_buster: true,
+				...own,
 			});
+			expect(json).not.toHaveProperty(missing);
 		} finally {
 			await reopened.close();
 		}
