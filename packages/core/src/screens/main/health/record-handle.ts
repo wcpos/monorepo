@@ -2,7 +2,8 @@ type LabelSource = Record<string, unknown> | null | undefined;
 
 /**
  * Best-effort human handle for a record: products and variations by name,
- * orders by `#number · total`, customers by first/last name, then username.
+ * orders by `#number · total`, customers by first/last name, then username,
+ * coupons by code.
  *
  * Each source is read top-level first, then through its `payload` (stored
  * records keep promoted columns beside the Woo payload), and earlier sources
@@ -32,5 +33,8 @@ export function recordHandle(...sources: LabelSource[]): string | null {
 		.join(' ');
 	if (person !== '') return person;
 	const username = pick('username');
-	return typeof username === 'string' && username !== '' ? username : null;
+	if (typeof username === 'string' && username !== '') return username;
+	// Coupons have no name; the code is what the merchant knows them by.
+	const code = pick('code');
+	return typeof code === 'string' && code.trim() !== '' ? code.trim() : null;
 }

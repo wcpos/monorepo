@@ -66,6 +66,10 @@ describe('recordHandle', () => {
 		expect(recordHandle({ payload: { username: 'ada' } })).toBe('ada');
 	});
 
+	it('names a coupon by its code', () => {
+		expect(recordHandle({ payload: { code: ' SAVE10 ', amount: '10' } })).toBe('SAVE10');
+	});
+
 	it('falls back to a later source when the first names nothing', () => {
 		expect(recordHandle({ payload: { stock_quantity: 3 } }, { name: 'Queued Name' })).toBe(
 			'Queued Name'
@@ -190,6 +194,17 @@ describe('useRecordLabel', () => {
 		);
 		await waitFor(() => expect(result.current?.status).toBe('missing'));
 		expect(result.current?.text).toBe('Order (not on this device)');
+	});
+
+	it('labels a coupon by its code', async () => {
+		mockDatabase = {
+			collections: { coupons: { findOne: (query: unknown) => mockFindOne(query) } },
+		};
+		mockExec.mockResolvedValue({ uuid: 'c-1', payload: { code: 'SAVE10' } });
+
+		const { result } = renderHook(() => useRecordLabel('coupons', 'c-1'));
+
+		await waitFor(() => expect(result.current?.text).toBe('Coupon: SAVE10'));
 	});
 
 	it('looks up a pull-only collection by its store id too', async () => {

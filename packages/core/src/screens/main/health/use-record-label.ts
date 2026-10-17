@@ -45,7 +45,7 @@ function recordKind(collection: string, t: Translate): string {
 		case 'taxRates':
 			return t('common.tax_rates');
 		case 'coupons':
-			return t('common.coupons');
+			return t('common.coupon');
 		default:
 			return collection;
 	}
