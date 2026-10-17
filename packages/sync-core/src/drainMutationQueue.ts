@@ -445,7 +445,9 @@ export async function drainMutationQueue(input: {
 	const backoff = input.backoff ?? DEFAULT_RETRY_BACKOFF;
 	const limit = input.limit ?? Number.POSITIVE_INFINITY;
 
-	if (!input.signal?.aborted) await input.queue.clearExpiredAnnihilation(now());
+	const recovered = input.signal?.aborted
+		? []
+		: await input.queue.recoverAnnihilatedMutations(now());
 
 	// LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel never-pushed create→delete
 	// chains BEFORE the scan, so an annihilated create is never claimed or pushed
@@ -462,7 +464,9 @@ export async function drainMutationQueue(input: {
 				...(input.signal ? { signal: input.signal } : {}),
 				emit,
 			});
-	const annihilated = annihilation.chains;
+	const annihilated =
+		annihilation.chains +
+		new Set(recovered.map((row) => `${row.collectionName}/${row.recordId}`)).size;
 	// Scan the WHOLE pending set, not a pre-sliced page: `limit` bounds the number of push ATTEMPTS
 	// (the network ops), not the scan — otherwise a deferred row at the head would consume a slot and
 	// starve a ready row behind it. 'claimed' rows are INCLUDED: a claim outlives a tick when a crash
@@ -1103,7 +1107,7 @@ export async function drainMutationQueue(input: {
 	return {
 		pushed,
 		annihilated,
-		annihilatedMutations: annihilation.mutations,
+		annihilatedMutations: [...recovered, ...annihilation.mutations],
 		held,
 		conflicts,
 		failed,

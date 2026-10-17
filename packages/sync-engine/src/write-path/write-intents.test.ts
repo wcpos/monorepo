@@ -1537,6 +1537,65 @@ describe('admission crash recovery', () => {
 		const db = { collections } as unknown as RxDatabase;
 		return { storage, resident, collections, db, queue: queueFor(db) };
 	};
+	it('delivers a committed receipt when expiry swept its holder during the dirty mark', async () => {
+		const { resident, collections, db, queue } = fixture();
+		let now = Date.now();
+		const modify = resident.incrementalModify;
+		vi.spyOn(resident, 'incrementalModify').mockImplementationOnce(async (change) => {
+			now += 30_001;
+			await queueFor({ collections } as unknown as RxDatabase).clearExpiredAnnihilation(now);
+			await modify(change);
+		});
+		const receipt = await enqueueWriteIntent({
+			db,
+			mintUuid: () => 'receipt',
+			now: () => new Date(now).toISOString(),
+			intent: { collection: 'orders', operation: 'create', recordId: 'order', payload: {} },
+		});
+		expect(receipt.mutationId).toBe('receipt');
+		const delivered: string[] = [];
+		expect(
+			await drainMutationQueue({
+				queue,
+				now: () => now,
+				push: async (mutation) => {
+					delivered.push(mutation.mutationId);
+					return { outcome: 'created', mutation, document: { id: 1 }, currentRevision: 'r1' };
+				},
+			})
+		).toMatchObject({ pushed: 1, rejected: [] });
+		expect(delivered).toEqual(['receipt']);
+	});
+
+	it('settles an admission-lost dead letter with a born-local void', async () => {
+		const { resident, db, queue } = fixture();
+		let removed = false;
+		Object.assign(resident, {
+			remove: async () => {
+				removed = true;
+			},
+		});
+		await queue.replace({
+			...prior,
+			mutationId: 'orphan',
+			admittedBy: 'swept',
+			status: 'rejected',
+			rejectedReason: 'admission-lost',
+			payload: { id: 0 },
+			baseRevision: null,
+		});
+		expect(
+			await enqueueWriteIntent({
+				db,
+				mintUuid: () => 'void',
+				now: () => new Date().toISOString(),
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+			})
+		).toMatchObject({ annihilated: true });
+		expect(removed).toBe(true);
+		expect(await queue.all()).toEqual([]);
+	});
+
 	it.each([false, true, 'expired'] as const)(
 		'recovers a committed receipt when release fails persistently=%s',
 		async (persistent) => {

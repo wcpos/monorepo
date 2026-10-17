@@ -288,7 +288,8 @@ export async function enqueueWriteIntent(input: {
 	const liveRecordRows = async (rows: QueuedMutation[]) => {
 		const live: QueuedMutation[] = [];
 		for (const row of rows.filter(isRecordRow)) {
-			if ((await queue.admissionState(row, nowMs())) !== 'lost') live.push(row);
+			if (row.status === 'rejected' || (await queue.admissionState(row, nowMs())) !== 'lost')
+				live.push(row);
 		}
 		return live;
 	};

@@ -226,6 +226,7 @@ export class RecordMutationQueue {
 	 * both consume the same prior row.
 	 */
 	private chain: Promise<unknown> = Promise.resolve();
+	private readonly recoveredAnnihilations: QueuedMutation[] = [];
 	private readonly voidRevisions = new Map<string, RevisionToken | undefined>();
 	public constructor(
 		private readonly storage: RecordMutationStorage,
@@ -542,7 +543,8 @@ export class RecordMutationQueue {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === fenceId(collection, record)
 			);
-			if (stored?.mutation.admittedBy !== token) return;
+			if (stored?.mutation.admittedBy !== token)
+				throw new Error('Writer admission was swept or replaced before release');
 			if (stored.mutation.payload.phase !== 'released') {
 				// Elapsed time alone cannot revoke an owner that still wins this CAS.
 				// Durable release proof first: expiry cannot steal this holder while its
@@ -553,7 +555,7 @@ export class RecordMutationQueue {
 						stored.rev
 					))
 				)
-					return;
+					throw new Error('Writer admission changed before release');
 			}
 			await this.finishWriterRelease(collection, record, token);
 		});
@@ -738,6 +740,12 @@ export class RecordMutationQueue {
 		});
 	}
 
+	/** Include earlier scope-open/writer sweeps; only the drain consumes their outcomes. */
+	async recoverAnnihilatedMutations(nowMs: number): Promise<QueuedMutation[]> {
+		await this.clearExpiredAnnihilation(nowMs);
+		return this.recoveredAnnihilations.splice(0);
+	}
+
 	async clearExpiredAnnihilation(
 		nowMs: number,
 		removeResident = this.recovery.removeResident
@@ -772,7 +780,8 @@ export class RecordMutationQueue {
 				if (isInternalRow(row) || row.supersededBy !== fence.supersededBy) continue;
 				if (removed === false)
 					await this.unmarkForAnnihilation(row.mutationId, fence.supersededBy!);
-				else await this.removeMarked(row.mutationId, fence.supersededBy!);
+				else if (await this.removeMarked(row.mutationId, fence.supersededBy!))
+					this.recoveredAnnihilations.push(row);
 			}
 			await this.releaseVoidFence(
 				fence.collectionName,

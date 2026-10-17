@@ -2112,6 +2112,51 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	);
 
+	it.each([false, true])(
+		'recovered void emits every receipt outcome (earlier sweep=%s)',
+		async (swept) => {
+			let now = Date.now();
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: server.fetch, now: () => now });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date(now).toISOString(),
+					});
+				}
+				await queue.fenceForVoid('orders', UUID_A, 'crashed-leader', now);
+				for (const id of ['create', 'delete'])
+					await queue.markForAnnihilation(id, 'crashed-leader', now);
+				await queue.setVoidPhase('orders', UUID_A, 'crashed-leader', 'committed');
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				now += 120_001;
+				if (swept) await queue.clearExpiredAnnihilation(now);
+				await engine.sync('write-drain');
+				expect(
+					outcomes
+						.filter((event) => event.type === 'write-annihilated')
+						.map((event) => event.mutationId)
+				).toEqual(['create', 'delete']);
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				expect(await queue.all()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('internal admission rows are invisible to checkout and health selectors', async () => {
 		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
 		try {
