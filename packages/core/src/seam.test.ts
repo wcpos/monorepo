@@ -7,7 +7,9 @@
  * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
  * evasion. Transparent receiver/argument wrappers and baseUrl-rooted package imports do not
  * bypass these checks. TS, TSX, MTS and CTS sources are scanned. A record's own change stream
- * remains allowed (ADR 0028), including element access and destructuring.
+ * remains allowed (ADR 0028), including element access and destructuring. Both stream fences
+ * ($ and collections$) share lifecycle/collection receiver names; helper re-exports are fenced,
+ * and collection-named find calls accept only inline callbacks without a query fingerprint.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -126,7 +128,7 @@ const residentHelperNames = new Set([
 	'useLocalMutation',
 	'useMutation',
 ]);
-const storageNames = new Set(['db$', 'collections', 'collections$', 'storageInstance', 'localDB']);
+const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
 
 function staticName(node: ts.Node | undefined): string | undefined {
 	if (!node) return undefined;
@@ -183,7 +185,7 @@ function isChangeStreamReceiver(node: ts.Node): boolean {
 	const receiver = unwrap(node)!;
 	return (
 		isCollectionReceiver(receiver) ||
-		(ts.isIdentifier(receiver) && ['db', 'database'].includes(receiver.text))
+		(ts.isIdentifier(receiver) && LIFECYCLE_RECEIVERS.has(receiver.text))
 	);
 }
 
@@ -241,12 +243,12 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		: normalizedPath.startsWith('packages/')
 			? normalizedPath
 			: posix.join('packages/core/src', normalizedPath);
+	const residentHelperModules = [
+		'packages/core/src/screens/main/hooks/mutations/use-local-mutation.ts',
+		'packages/core/src/screens/main/hooks/mutations/use-mutation.ts',
+	];
 	const allowsResidentHelpers =
-		filePath.includes('/commands/') ||
-		[
-			'packages/core/src/screens/main/hooks/mutations/use-local-mutation.ts',
-			'packages/core/src/screens/main/hooks/mutations/use-mutation.ts',
-		].includes(filePath);
+		filePath.includes('/commands/') || residentHelperModules.includes(filePath);
 	const root = ts.createSourceFile(
 		path,
 		source,
@@ -306,7 +308,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 	};
 	const checkProperty = (node: ts.Node, name: string | undefined, receiver?: ts.Node) => {
 		if (!name) return;
-		if (storageNames.has(name)) report('storage token', node);
+		if (
+			storageNames.has(name) ||
+			(name === 'collections$' && receiver && isChangeStreamReceiver(receiver))
+		)
+			report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
 		if (rawQueryNames.has(name)) report('raw query construction', node);
@@ -357,6 +363,23 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			checkImport(node, node.moduleSpecifier, names, !!bindings && ts.isNamespaceImport(bindings));
 		} else if (ts.isExportDeclaration(node)) {
 			const bindings = node.exportClause;
+			if (!allowsResidentHelpers && node.moduleSpecifier) {
+				if (bindings && ts.isNamedExports(bindings)) {
+					for (const binding of bindings.elements) {
+						if (
+							residentHelperNames.has((binding.propertyName ?? binding.name).text) ||
+							residentHelperNames.has(binding.name.text)
+						)
+							report('resident helper write', binding);
+					}
+				} else if (ts.isStringLiteralLike(node.moduleSpecifier)) {
+					const target = posix.join(posix.dirname(filePath), node.moduleSpecifier.text);
+					if (
+						residentHelperModules.some((module) => target === module || `${target}.ts` === module)
+					)
+						report('resident helper write', node);
+				}
+			}
 			checkImport(
 				node,
 				node.moduleSpecifier,
@@ -390,9 +413,8 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 				(!argument ||
 					ts.isObjectLiteralExpression(argument) ||
 					(isCollectionReceiver(findReceiver) &&
-						(ts.isIdentifier(argument) ||
-							ts.isPropertyAccessExpression(argument) ||
-							ts.isElementAccessExpression(argument))))
+						!ts.isFunctionExpression(argument) &&
+						!ts.isArrowFunction(argument)))
 			)
 				report('raw query construction', node);
 			if (
@@ -665,7 +687,7 @@ it.each(
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
 });
 
-it.each(['db$', 'collections', 'collections$', 'storageInstance', 'localDB', 'collection'])(
+it.each(['db$', 'collections', 'storageInstance', 'localDB', 'collection'])(
 	'fences all storage accesses of %s',
 	(name) => {
 		for (const source of [`doc?.${name};`, `doc?.['${name}'];`, `const { ${name}: value } = doc;`])
@@ -1173,5 +1195,92 @@ it('walks ts/tsx/mts/cts sources while excluding tests, stories and test directo
 			]);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+// Round 8: non-callback queries, helper barrels and shared stream receiver names.
+it.each([
+	'collection.find(buildQuery());',
+	'collections.orders.find(`selector`);',
+	"collections['orders']['find'](new Query());",
+	'ordersCollection.find(query ?? fallback);',
+	'collection.find((buildQuery() as Query));',
+	'collection.find(null);',
+])('fences every non-callback query on collection receivers: %s', (source) => {
+	expect(violations(source).filter(({ rule }) => rule === 'raw query construction')).toHaveLength(
+		1
+	);
+});
+
+it.each([
+	"export { useMutation as mutate } from './hooks/mutations/use-mutation';",
+	"export { helper as useMutation } from './helpers';",
+	"export { patchEngineResident } from './helpers';",
+	"export * from './hooks/mutations/use-mutation';",
+	"export * from './hooks/mutations/use-local-mutation';",
+	"export * as mutations from './hooks/mutations/use-local-mutation';",
+])('fences resident helper re-exports outside defining/command modules: %s', (source) => {
+	expect(violations(source, 'screens/main/example.ts').map(({ rule }) => rule)).toEqual([
+		'resident helper write',
+	]);
+	for (const path of [
+		'screens/main/hooks/mutations/use-mutation.ts',
+		'screens/main/hooks/mutations/use-local-mutation.ts',
+		'screens/main/commands/example.ts',
+	]) {
+		expect(violations(source, path)).toEqual([]);
+	}
+});
+
+it.each([
+	"export * from './helpers';",
+	"export { insert } from './helpers';",
+	"export * from './unrelated/use-mutation';",
+])('allows unrelated helper barrels: %s', (source) => {
+	expect(violations(source, 'screens/main/example.ts')).toEqual([]);
+});
+
+it.each(['localDB', 'storeDB', 'userDB', 'fastStoreDB'])(
+	'fences change streams on lifecycle receiver %s',
+	(receiver) => {
+		for (const source of [
+			`${receiver}.$;`,
+			`${receiver}['$'];`,
+			`const { $: changes } = ${receiver};`,
+			`(${receiver} as Database).$;`,
+		]) {
+			expect(violations(source).map(({ rule }) => rule)).toEqual(['raw change stream']);
+		}
+	}
+);
+
+it.each([
+	'db',
+	'database',
+	'localDB',
+	'storeDB',
+	'userDB',
+	'fastStoreDB',
+	'collection',
+	'ordersCollection',
+	'collections.orders',
+	"collections['orders']",
+])('fences collections$ on database/collection receiver %s', (receiver) => {
+	for (const source of [
+		`${receiver}.collections$;`,
+		`${receiver}['collections$'];`,
+		`const { collections$: changes } = ${receiver};`,
+	]) {
+		expect(violations(source).filter(({ rule }) => rule === 'storage token')).toHaveLength(1);
+	}
+});
+
+it.each(['order', 'doc', 'record', 'this'])('allows unrelated collections$ on %s', (receiver) => {
+	for (const source of [
+		`${receiver}.collections$;`,
+		`${receiver}['collections$'];`,
+		`const { collections$: changes } = ${receiver};`,
+	]) {
+		expect(violations(source)).toEqual([]);
 	}
 });
