@@ -369,7 +369,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Note the unsaved change and check device storage, then restart. Do not clear local data."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Write the change down and free up device storage, then enter it again. Contact support if it repeats."
 			)
 		).not.toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
@@ -386,20 +386,20 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				'Data on this device may be affected — contact support before clearing it. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.'
+				"Changes not yet sent are kept on this device — don't clear its data. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 			)
 		).not.toBeNull();
 	});
 
-	it('pairs the data-at-risk warning with the local repair step on a repair-local code', () => {
+	it('sends damaged local data to support, never to a Repair button that does not exist', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC111' }} kind="error" />);
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Repair from Store health → Database."
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Tap Copy debug info at the top of Logs and send it to WCPOS support. Don't reinstall."
 			)
 		).not.toBeNull();
-		expect(screen.queryByText(/Contact support/)).toBeNull();
+		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 	});
 
 	it.each(['PAYMENT201', 'PRINT201'] as const)(
@@ -412,20 +412,24 @@ describe('RowDetail', () => {
 					? 'Check the terminal and provider dashboard before re-charging.'
 					: 'Check the printer before reprinting.';
 			expect(
-				screen.getByText(
-					`The final result couldn't be confirmed — verify before retrying. ${action}`
-				)
+				screen.getByText(`The result couldn't be confirmed — check before trying again. ${action}`)
 			).not.toBeNull();
 			expect(screen.queryByText(/check your store/i)).toBeNull();
 		}
 	);
 
-	it('renders the per-code database reset action for SYNC311', () => {
+	it('never tells a merchant to clear an unopenable database on SYNC311', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
+		// Clearing deletes the only copy of sales that never reached the store
+		// (2026-10-17 audit): the action is update-then-support, behind the
+		// data-at-risk warning.
 		expect(
-			screen.getByText('Clear the local database and reopen. This loses any unsynced sales.')
+			screen.getByText(
+				"Don't clear this device's data — it may hold sales that haven't reached your store. Update WCPOS to the latest version and reopen. If it still won't open, tap Copy debug info and contact support."
+			)
 		).not.toBeNull();
+		expect(screen.queryByText(/clear the local database/i)).toBeNull();
 		expect(
 			screen.queryByText(
 				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
