@@ -69,7 +69,7 @@ it.each(['headers', 'body'])(
 	}
 );
 
-it('releases a black-holed query-total lane so the next run starts', async () => {
+it('releases a black-holed query-total lane before its lease expires so the next run starts', async () => {
 	await harness.dispose();
 	const fetchWooQueryTotal = vi.fn(async (_input: { signal?: AbortSignal }) => 42);
 	fetchWooQueryTotal.mockImplementationOnce(() => new Promise(() => {}));
@@ -91,7 +91,7 @@ it('releases a black-holed query-total lane so the next run starts', async () =>
 	});
 	const first = gate.runLane('query-total-retry');
 	expect(gate.runLane('query-total-retry')).toBe(first);
-	await vi.advanceTimersByTimeAsync(59_999);
+	await vi.advanceTimersByTimeAsync(24_999);
 	expect(recordTick).not.toHaveBeenCalled();
 	await vi.advanceTimersByTimeAsync(1);
 	expect(recordTick).toHaveBeenCalledOnce();
@@ -99,11 +99,43 @@ it('releases a black-holed query-total lane so the next run starts', async () =>
 	expect(harness.diagnostics).toContainEqual(
 		expect.objectContaining({
 			type: 'engine.request.deadline',
-			fields: { lane: 'query-total-retry', elapsedMs: 60_000 },
+			fields: { lane: 'query-total-retry', elapsedMs: 25_000 },
 		})
 	);
 	const second = gate.runLane('query-total-retry');
 	expect(second).not.toBe(first);
 	await second;
 	expect(recordTick).toHaveBeenCalledTimes(2);
+});
+
+it.each(['headers', 'body'])('counts black-holed %s once in server pressure', async (stage) => {
+	const rejectTransport: ((error: Error) => void)[] = [];
+	fetch.mockImplementation(() =>
+		stage === 'headers'
+			? new Promise((_, reject) => rejectTransport.push(reject))
+			: Promise.resolve(
+					new Response(
+						new ReadableStream({
+							start: (controller) => rejectTransport.push((error) => controller.error(error)),
+						})
+					)
+				)
+	);
+	vi.useFakeTimers();
+	const requests = Array.from({ length: 3 }, () =>
+		harness.engine
+			.hostTransport()
+			.fetcher('https://example.test/probe')
+			.catch((error) => error)
+	);
+	await vi.advanceTimersByTimeAsync(60_000);
+	expect(await Promise.all(requests)).toEqual(Array(3).fill(expect.any(RequestTimeoutError)));
+	expect(harness.engine.status().serverPressure).toMatchObject({
+		multiplier: 2,
+		signal: 'timeout',
+	});
+	for (const reject of rejectTransport)
+		reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+	await vi.advanceTimersByTimeAsync(0);
+	expect(harness.engine.status().serverPressure.multiplier).toBe(2);
 });

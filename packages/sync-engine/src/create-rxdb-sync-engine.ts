@@ -58,6 +58,7 @@ import type {
 	SyncObserver,
 } from '@wcpos/sync-core';
 
+import { QUERY_TOTAL_LEASE_FOR_MS } from './scheduler/query-total-requests';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
@@ -349,6 +350,8 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
 // Allow slow paged pulls, but release a black-holed lane within a cashier-sized wait.
 const ENGINE_REQUEST_DEADLINE_MS = 60_000;
+// Leave five seconds to settle the probe before its claim can be taken over.
+const QUERY_TOTAL_REQUEST_DEADLINE_MS = QUERY_TOTAL_LEASE_FOR_MS - 5_000;
 
 /**
  * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
@@ -877,20 +880,17 @@ export function createRxdbSyncEngine(
 	// trap as runtime 429 counters). Once set, every lane sees a local replay of
 	// the refusal — uniform downstream error handling, zero network.
 	let updateRequiredRefusal: { status: number; body: string } | null = null;
-	const transportFetcher: EngineFetcher = async (url, init) => {
-		if (updateRequiredRefusal !== null) {
-			return new Response(updateRequiredRefusal.body, {
-				status: updateRequiredRefusal.status,
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
+	const createRequestObservation = () => {
 		const startedAtMs = nowMs();
-		const observe = (
+		let observed = false;
+		return (
 			status: number,
 			retryAfter?: string | null,
 			pressure?: ServerPressure,
 			serverLoad1m?: number
 		): void => {
+			if (observed) return;
+			observed = true;
 			const atMs = nowMs();
 			const reportedBefore = serverPressure.reported();
 			const signalBefore = serverPressure.signal();
@@ -915,6 +915,19 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 			}
 		};
+	};
+	const transportFetcher = async (
+		url: string,
+		init: RequestInit | undefined,
+		observe: ReturnType<typeof createRequestObservation>
+	) => {
+		if (updateRequiredRefusal !== null) {
+			return new Response(updateRequiredRefusal.body, {
+				status: updateRequiredRefusal.status,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
+		const startedAtMs = nowMs();
 		let response: Response;
 		try {
 			response = await rawFetcher(url, init);
@@ -1022,24 +1035,34 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
-	const deadlineFetcher = withRequestTimeout(transportFetcher, ENGINE_REQUEST_DEADLINE_MS, timers);
-	const observeDeadline = async <T>(request: () => Promise<T>, lane: string) => {
+	const observeDeadline = async <T>(
+		request: (observe: ReturnType<typeof createRequestObservation>) => Promise<T>,
+		lane: string
+	) => {
+		const observe = createRequestObservation();
 		const startedAtMs = nowMs();
 		try {
-			return await request();
+			return await request(observe);
 		} catch (error) {
-			if (error instanceof RequestTimeoutError)
+			if (error instanceof RequestTimeoutError) {
+				observe(0);
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
 					fields: { lane, elapsedMs: nowMs() - startedAtMs },
 				});
+			}
 			throw error;
 		}
 	};
 	const fetcher = (url: string, init?: RequestInit, lane = 'host-transport') =>
 		observeDeadline(
-			() => deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined }),
+			(observe) =>
+				withRequestTimeout(
+					(url, init) => transportFetcher(url, init, observe),
+					ENGINE_REQUEST_DEADLINE_MS,
+					timers
+				)(url, { ...init, signal: init?.signal ?? undefined }),
 			lane
 		);
 	const rawQueryTotal = ports.queryTotal;
@@ -1056,7 +1079,7 @@ export function createRxdbSyncEngine(
 										withRequestTimeout(
 											(_url, init) =>
 												rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
-											ENGINE_REQUEST_DEADLINE_MS,
+											QUERY_TOTAL_REQUEST_DEADLINE_MS,
 											timers
 										)(input.request.endpoint, { signal: input.signal }),
 									'query-total-retry'
