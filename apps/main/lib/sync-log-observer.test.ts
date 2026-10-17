@@ -1110,6 +1110,23 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0]).toMatchObject({ level: 'error', code: errorCode });
 	});
 
+	it('keeps a catalogue dead letter whose revert is pending an uncoded attempt', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				level: 'warn',
+				collection: 'products',
+				fields: { recordId: 'p-1', status: 403, revertPending: true },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			code: undefined,
+			terminal: { outcome: 'rejected' },
+		});
+	});
+
 	it('parks needs-revision under the conflict code, not "fix the named field"', () => {
 		observer.observe(
 			event({ type: 'queue.write.needs-revision', level: 'warn', fields: { recordId: 'o-1' } })

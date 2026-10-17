@@ -551,13 +551,14 @@ export const CONFORMANCE_TABLE = {
 	},
 	// The dead-letter verdict: the record parks for Store health. Error, the
 	// severity of every code it maps to — and the level that reaches Sentry, now
-	// that the push.error before it is an info attempt. For a catalogue edit the
-	// engine holds this row until its auto-revert settles and writes it only if
-	// the revert does not land; otherwise queue.write.auto-reverted is the row.
+	// that the push.error before it is an info attempt. A catalogue edit's dead
+	// letter is stamped `revertPending` by the engine: an uncoded attempt, because
+	// the revert decides the verdict — queue.write.auto-reverted when it lands, a
+	// second push.rejected (`revertFailed`) at error when it does not.
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		level: 'error',
+		level: (_event, fields) => (fields.revertPending === true ? 'info' : 'error'),
 		code: (_event, fields) => {
 			if (fields.status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
 			if (fields.reason === 'pos_data_invalid' || fields.reason === 'rest_invalid_param') {

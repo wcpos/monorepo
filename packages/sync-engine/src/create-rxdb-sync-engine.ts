@@ -52,7 +52,6 @@ import type {
 	ScopeDatabase,
 	ScopeEvent,
 	StoreScopeIdentity,
-	SyncEvent,
 	SyncObserver,
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
@@ -775,29 +774,6 @@ export function createRxdbSyncEngine(
 	let onLedgerRebuilt: (() => void) | undefined;
 	// All tick emitters share per-lane severity state, including rejected automatic ticks.
 	const laneLastEmittedError = new Map<string, string>();
-	// A refused catalogue edit is reverted to server truth right after it
-	// dead-letters (see emitWriteEvent below), and `queue.write.auto-reverted` is
-	// then the verdict the cashier reads. Its push.rejected is therefore HELD,
-	// keyed by mutationId, until the revert's outcome is known: dropped once the
-	// revert lands, released unchanged — still the coded dead-letter verdict — on
-	// every path where it does not (a born-local create that never reverts, a
-	// discard that throws, a tick that ended before the revert started, dispose).
-	// A create is never held: a born-local one parks for Store health instead.
-	const heldRejections = new Map<string, SyncEvent>();
-	const revertsInFlight = new Set<string>();
-	const forwardDiagnostic = (event: SyncEvent): void => {
-		try {
-			ports.diagnostics?.(event);
-		} catch {
-			// The observer seam must never throw into the engine (ADR 0018).
-		}
-	};
-	const releaseHeldRejection = (mutationId: string): void => {
-		const held = heldRejections.get(mutationId);
-		heldRejections.delete(mutationId);
-		revertsInFlight.delete(mutationId);
-		if (held !== undefined) forwardDiagnostic(held);
-	};
 	const diagnostics: SyncObserver = (event) => {
 		if (
 			(event.type === 'engine.lane.tick' || event.type === 'signal.tick.error') &&
@@ -817,15 +793,23 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
+		// A refused catalogue edit is reverted to server truth right after it
+		// dead-letters (see emitWriteEvent below), and the verdict is emitted where
+		// that outcome is known: `queue.write.auto-reverted` when the revert lands,
+		// a `push.rejected` marked `revertFailed` when it does not. This dead
+		// letter is stamped `revertPending` so the log keeps it an uncoded attempt.
+		// A create is never stamped: a born-local one parks for Store health, and
+		// its push.rejected is the verdict. Residual: if the post-drain cleanup
+		// throws before write-rejected (so no revert runs), the edit keeps only this
+		// info row and its parked entry in Store health's attention panel.
 		if (
 			event.type === 'push.rejected' &&
 			event.collection !== undefined &&
 			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
 			event.fields?.op !== 'create' &&
-			typeof event.fields?.mutationId === 'string'
+			event.fields?.revertFailed !== true
 		) {
-			heldRejections.set(event.fields.mutationId, event);
-			return;
+			event = { ...event, fields: { ...event.fields, revertPending: true } };
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
@@ -834,7 +818,11 @@ export function createRxdbSyncEngine(
 				// Re-resolution is best-effort; the rebuild itself already succeeded.
 			}
 		}
-		forwardDiagnostic(event);
+		try {
+			ports.diagnostics?.(event);
+		} catch {
+			// The observer seam must never throw into the engine (ADR 0018).
+		}
 	};
 	const nowMs = ports.now ?? (() => Date.now());
 	const timers = ports.timers ?? systemTimers;
@@ -1961,7 +1949,6 @@ export function createRxdbSyncEngine(
 			// health lists the rejected row and "Send again" rebuilds the payload
 			// from the kept resident.
 			if (event.bornLocalCreate === true) {
-				releaseHeldRejection(event.mutationId);
 				return;
 			}
 			// Reactive revert (#1082): a rejected catalog change is settled for the
@@ -1973,13 +1960,9 @@ export function createRxdbSyncEngine(
 			// exactly between that overlay's read and its upsert can still flash
 			// server truth for a beat — accepted: the newer mutation's queue row
 			// survives and the next drain re-decides the record either way.
-			revertsInFlight.add(event.mutationId);
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
-					// Reverted: the auto-reverted row below is the verdict.
-					heldRejections.delete(event.mutationId);
-					revertsInFlight.delete(event.mutationId);
 					diagnostics({
 						type: 'queue.write.auto-reverted',
 						level: 'error',
@@ -1996,19 +1979,23 @@ export function createRxdbSyncEngine(
 						},
 					});
 				} catch {
-					// The rejected row stays parked for Store Health when discard cannot
-					// settle it — so the held dead-letter verdict is the row after all.
-					releaseHeldRejection(event.mutationId);
+					// The revert failed: the rejected row stays parked for Store Health,
+					// and this is the dead-letter verdict the stamped row deferred to.
+					diagnostics({
+						type: 'push.rejected',
+						level: 'error',
+						collection: event.collection,
+						fields: {
+							recordId: event.recordId,
+							mutationId: event.mutationId,
+							...(event.status !== undefined ? { status: event.status } : {}),
+							...(event.reason !== undefined ? { reason: event.reason } : {}),
+							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
+							revertFailed: true,
+						},
+					});
 				}
 			})();
-		},
-		// The drain that dead-lettered these has settled: a held rejection of its
-		// whose revert never started (the post-drain cleanup threw before
-		// write-rejected) has no revert coming, so its verdict is the row.
-		onDrainSettled: (rejectedMutationIds) => {
-			for (const mutationId of rejectedMutationIds) {
-				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
-			}
 		},
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
@@ -2706,13 +2693,6 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			changeSignalLane.stopActivation();
-			// A held verdict whose revert never started has nothing left to settle
-			// it: release it now. One whose revert IS running is left to that revert
-			// — it already passed its usability check and may still land, and its
-			// own success (auto-reverted) or failure (release) is the one verdict.
-			for (const mutationId of [...heldRejections.keys()]) {
-				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
-			}
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's

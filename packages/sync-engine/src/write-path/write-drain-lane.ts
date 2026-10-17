@@ -300,15 +300,6 @@ export type WriteDrainLaneDeps = {
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
-	/**
-	 * Called once THIS drain tick has settled, with the mutationIds it
-	 * dead-lettered (each emitted a `push.rejected`). The engine holds a
-	 * catalogue rejection until its revert settles; a held one whose revert this
-	 * drain never started has nothing left to settle it. Per drain, so an
-	 * overlapping drain (a manual sync beside an automatic tick) never releases
-	 * another drain's rejection before that drain has started its revert.
-	 */
-	onDrainSettled?: (rejectedMutationIds: readonly string[]) => void;
 	mintUuid: () => string;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	drainInstanceIdFor: () => string;
@@ -360,8 +351,6 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		}
 		// This tick's streak instance, read once: a switch mid-tick leaves it dead.
 		const tickStreak = tickFailureStreaks();
-		// The rejections THIS drain dead-lettered (see deps.onDrainSettled).
-		const drainRejections: string[] = [];
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -728,15 +717,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									status,
 									reason,
 								}),
-							observe: (event) => {
-								if (
-									event.type === 'push.rejected' &&
-									typeof event.fields?.mutationId === 'string'
-								) {
-									drainRejections.push(event.fields.mutationId);
-								}
-								deps.diagnostics(event);
-							},
+							observe: deps.diagnostics,
 							settleFailures,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -821,6 +802,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							});
 						}
 						for (const { mutation: dead, status, reason, serverMessage } of result.rejected) {
+							// A dead letter never pushes again: its push streak goes with it.
+							pushFailures.delete(dead.mutationId);
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
 							// push, so drop it from the record's pendingMutationIds (+ dirty
 							// when empty) — the pull-apply guard frees the record and the next
@@ -916,8 +899,6 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				fields: { consecutiveFailures },
 			});
 			return { lane: 'write-drain', status: 'error', error: message };
-		} finally {
-			if (drainRejections.length > 0) deps.onDrainSettled?.(drainRejections);
 		}
 	}
 
