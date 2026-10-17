@@ -3,8 +3,9 @@
  * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
  * violation must be frozen and not retired; vanished fingerprints require pinned retirement.
  * Declaration chains distinguish identical accesses in different functions, methods and classes.
- * Raw queries, resident helper writes, engine aliases and cross-package relative imports are
- * fenced syntactically: this catches accidental leaks, not deliberate evasion.
+ * Raw queries, resident helper writes, engine aliases, cross-package relative imports and raw
+ * database/collection change streams are fenced syntactically: accidental leaks, not deliberate
+ * evasion. A record's own change stream remains allowed (ADR 0028).
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -138,6 +139,22 @@ function memberReceiver(node: ts.Node | undefined, name: string): ts.Expression 
 		node.argumentExpression.text === name
 	)
 		return node.expression;
+}
+
+function isChangeStreamReceiver(node: ts.Expression): boolean {
+	if (ts.isIdentifier(node))
+		return ['db', 'database', 'collection'].includes(node.text) || node.text.endsWith('Collection');
+	if (
+		ts.isPropertyAccessExpression(node) ||
+		(ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
+	) {
+		const owner = node.expression;
+		return (
+			(ts.isIdentifier(owner) && owner.text === 'collections') ||
+			!!memberReceiver(owner, 'collections')
+		);
+	}
+	return false;
 }
 
 function isEngineReceiver(node: ts.Node | undefined): boolean {
@@ -353,7 +370,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 					report('database or collection lifecycle (close) outside the data layer', node);
 			}
 		}
-		if (ts.isPropertyAccessExpression(node)) checkProperty(node, node.name.text, node.expression);
+		if (ts.isPropertyAccessExpression(node)) {
+			checkProperty(node, node.name.text, node.expression);
+			if (node.name.text === '$' && isChangeStreamReceiver(node.expression))
+				report('raw change stream', node);
+		}
 		if (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression))
 			checkProperty(node, node.argumentExpression.text, node.expression);
 		if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent) && !node.dotDotDotToken)
@@ -874,5 +895,28 @@ it.each(['doc.getLocal$;', "doc['getLocal$']();", 'const { getLocal$ } = doc;'])
 	'fences getLocal$ in %s',
 	(source) => {
 		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+	}
+);
+
+it.each([
+	['collection.$.subscribe(listener);', 'collection.$'],
+	['db.$.pipe(operator);', 'db.$'],
+	['database.$;', 'database.$'],
+	['ordersCollection.$;', 'ordersCollection.$'],
+	['collections.orders.$;', 'collections.orders.$'],
+	["collections['orders'].$;", "collections['orders'].$"],
+	['db.collections.orders.$;', 'db.collections.orders.$'],
+	["db.collections['orders'].$;", "db.collections['orders'].$"],
+	['collection?.$?.subscribe(listener);', 'collection?.$'],
+])('fences raw change streams in %s', (source, text) => {
+	expect(violations(source).filter(({ rule }) => rule === 'raw change stream')).toEqual([
+		{ rule: 'raw change stream', declaration: '', text },
+	]);
+});
+
+it.each(['order.$;', 'doc.$;', 'record.$;', 'this.$;'])(
+	'allows record change streams in %s',
+	(source) => {
+		expect(violations(source)).toEqual([]);
 	}
 );

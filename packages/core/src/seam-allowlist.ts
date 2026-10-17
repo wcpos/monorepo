@@ -15,7 +15,9 @@
  * raw query members (especially count fields) likewise include non-RxDB receivers. Engine
  * alias checks match names, not types. Resident helper imports/calls are exempt only in their
  * two defining modules and commands/ modules. No alias propagation or deliberate-evasion
- * modelling is performed. Conservative matches remain pinned until explicitly retired.
+ * modelling is performed. Raw change streams match database/collection receiver names, not
+ * types; record streams (order.$, doc.$) remain allowed. Conservative matches remain pinned
+ * until explicitly retired.
  */
 export const SEAM_FROZEN_VIOLATIONS_2026_10_16: readonly string[] = [
 	'contexts/app-state/hydration-steps.ts :: raw query construction ::  :: userDB.sites.findOne :: 1',
