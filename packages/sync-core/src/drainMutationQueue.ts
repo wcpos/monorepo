@@ -134,7 +134,7 @@ const RETRYABLE_4XX = new Set([SESSION_EXPIRED_STATUS, 408, 409, 425, 429]);
  * bare status would otherwise look transient), or its status is a permanent client error
  * (4xx, not in RETRYABLE_4XX).
  */
-function isNonRetryable(error: unknown): boolean {
+export function isNonRetryable(error: unknown): boolean {
 	const e = error as { status?: unknown; permanent?: unknown } | null;
 	if (e?.permanent === true) return true;
 	const status = e?.status;
@@ -267,8 +267,19 @@ async function annihilateNeverPushedChains(input: {
 
 export async function drainMutationQueue(input: {
 	queue: RecordMutationQueue;
-	/** Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard, telemetry). */
-	push: (mutation: RecordMutation) => Promise<PushResult>;
+	/**
+	 * Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard,
+	 * telemetry). It receives the queued row, so `attempts` is there to stamp the push.
+	 */
+	push: (mutation: QueuedMutation) => Promise<PushResult>;
+	/**
+	 * Consecutive failures to RECORD a mutation's settlement locally — the
+	 * backoff reschedule after a failed push, or the acknowledge after a good
+	 * one — keyed `<kind>:<mutationId>`. Owned by the host so it outlives one
+	 * drain: a failed reschedule leaves `attempts` unpersisted, so nothing in
+	 * the queue row can count the streak. Omitted → counted per drain only.
+	 */
+	settleFailures?: Map<string, number>;
 	/**
 	 * Apply the server ack for a successful push (reconcile id + write the document).
 	 * Receives the abort signal so a scope-switch can cancel the ack write itself.
@@ -443,6 +454,13 @@ export async function drainMutationQueue(input: {
 
 	// Bump the attempt count + set the backoff gate after a failed push OR a failed ack, so the next
 	// drain waits before re-pushing (ADR 0012) — the same policy for both failure kinds.
+	const settleFailures = input.settleFailures ?? new Map<string, number>();
+	const noteSettleFailure = (kind: 'ack' | 'reschedule', mutationId: string): number => {
+		const key = `${kind}:${mutationId}`;
+		const streak = (settleFailures.get(key) ?? 0) + 1;
+		settleFailures.set(key, streak);
+		return streak;
+	};
 	let attemptStartedAt: number | undefined;
 	const applyBackoff = async (mutation: QueuedMutation): Promise<void> => {
 		if (!(await stillOwnLease(mutation.mutationId))) return;
@@ -455,6 +473,7 @@ export async function drainMutationQueue(input: {
 				// The release compares attempt start with the cashier's press; an in-flight press is not already tried.
 				nextAttemptAt: new Date((attemptStartedAt ?? now()) + delayMs).toISOString(),
 			});
+			settleFailures.delete(`reschedule:${mutation.mutationId}`);
 		} catch {
 			// Couldn't persist the backoff — surface the rare double-fault (the push/ack failed AND the
 			// reschedule write failed). The row keeps its prior gate, so the next drain re-pushes (without
@@ -463,7 +482,12 @@ export async function drainMutationQueue(input: {
 				type: 'queue.write.reschedule-failed',
 				level: 'warn',
 				collection: mutation.collectionName,
-				fields: { recordId: mutation.recordId, mutationId: mutation.mutationId, attempts },
+				fields: {
+					recordId: mutation.recordId,
+					mutationId: mutation.mutationId,
+					attempts,
+					consecutiveFailures: noteSettleFailure('reschedule', mutation.mutationId),
+				},
 			});
 		}
 	};
@@ -531,6 +555,8 @@ export async function drainMutationQueue(input: {
 				level: 'warn',
 				collection: mutation.collectionName,
 				fields: {
+					// The engine reads `op` to tell whether a catalogue auto-revert follows.
+					op: mutation.operation,
 					recordId: mutation.recordId,
 					mutationId: mutation.mutationId,
 					status,
@@ -971,12 +997,28 @@ export async function drainMutationQueue(input: {
 				break;
 			}
 			await input.queue.acknowledge([mutation.mutationId]);
+			settleFailures.delete(`ack:${mutation.mutationId}`);
 			pushed += 1;
-		} catch {
+		} catch (error) {
 			// The push landed but the ack/remove failed — leave it queued (the re-push dedupes), block
 			// later links, and back it off so we don't hammer. An abort here is a scope switch, not a
 			// failure, so skip the backoff.
 			failed += 1;
+			if (!input.signal?.aborted) {
+				// No push.error follows a push that landed, so this is the only row
+				// about an ack that keeps failing; the streak says when it persists.
+				emit({
+					type: 'queue.write.ack-failed',
+					level: 'warn',
+					collection: mutation.collectionName,
+					fields: {
+						recordId: mutation.recordId,
+						mutationId: mutation.mutationId,
+						reason: error instanceof Error ? error.name : 'unknown',
+						consecutiveFailures: noteSettleFailure('ack', mutation.mutationId),
+					},
+				});
+			}
 			blockedRecords.add(recordKey(mutation));
 			if (!input.signal?.aborted) {
 				await applyBackoff({ ...draining, status: 'pending' });

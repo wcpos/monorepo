@@ -156,8 +156,10 @@ function HelpLink({ code }: { code: string }) {
  */
 const DATABASE_CODES: ReadonlySet<string> = new Set([
 	'SYNC201',
+	'SYNC202',
 	'SYNC211',
 	'SYNC221',
+	'SYNC222',
 	'SYNC321',
 	'SYNC331',
 ]);

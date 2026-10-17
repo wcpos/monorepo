@@ -722,7 +722,15 @@ describe('LocalCoverage interface', () => {
 				type: 'coverage.existence-reconcile',
 				level: 'warn',
 				message: expect.stringContaining('cursor store failed'),
-				fields: expect.objectContaining({ pruned: 1 }),
+				fields: expect.objectContaining({ pruned: 1, consecutiveFailures: 1 }),
+			})
+		);
+		// The audit swallows the failure, so the streak is what says the cursor is stuck.
+		await expect(coverage.reconcilePass()).rejects.toThrow(/orders drill failed/);
+		expect(diagnostics).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'coverage.existence-reconcile',
+				fields: expect.objectContaining({ consecutiveFailures: 2 }),
 			})
 		);
 	});

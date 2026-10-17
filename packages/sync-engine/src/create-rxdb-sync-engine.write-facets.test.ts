@@ -1062,6 +1062,16 @@ describe('write facets beyond orders', () => {
 		expect(harness.diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(
 			false
 		);
+		// A born-local create never reverts, so its verdict is emitted where that is
+		// known: after the stamped attempt, one push.rejected at error, revertSkipped.
+		expect(
+			harness.diagnostics
+				.filter((event) => event.type === 'push.rejected')
+				.map((event) => [event.level, event.fields?.revertPending, event.fields?.revertSkipped])
+		).toEqual([
+			['warn', true, undefined],
+			['error', undefined, true],
+		]);
 		await subject.dispose();
 	});
 
@@ -1099,6 +1109,13 @@ describe('write facets beyond orders', () => {
 				fields: expect.objectContaining({ reason: 'identity-ambiguous' }),
 			})
 		);
+		// A create that reverts gets ONE verdict: its dead letter is only the
+		// stamped attempt, never a second coded row beside auto-reverted.
+		expect(
+			harness.diagnostics
+				.filter((event) => event.type === 'push.rejected')
+				.map((event) => event.fields?.revertPending)
+		).toEqual([true]);
 		await subject.dispose();
 	});
 

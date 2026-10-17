@@ -64,6 +64,7 @@ const EMPTY_DRAIN_RESULT = {
 	succeeded: 0,
 	coalescedReruns: 0,
 	failed: 0,
+	failedUnreported: 0,
 	failureLost: 0,
 	renewalLost: 0,
 	totalDocuments: 0,
@@ -290,6 +291,7 @@ describe('require() for orders (the durable path)', () => {
 			manager: {
 				runGuarded: async (operation: (captured: typeof bound) => Promise<unknown>) =>
 					operation(bound),
+				onEvent: () => () => undefined,
 			} as never,
 			databaseFor: () => database as never,
 			coverageFor: () =>

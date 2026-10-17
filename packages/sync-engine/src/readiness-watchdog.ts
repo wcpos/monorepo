@@ -19,6 +19,9 @@ export function armReadinessWatchdog(options: {
 	const timers = options.timers ?? systemTimers;
 	const armedAtMs = options.now();
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	// Stamped on each stall so the cashier log can stay quiet for the first one:
+	// a slow open usually completes, and `engine.ready` follows when it does.
+	let stalls = 0;
 	const stop = (): void => {
 		if (timer !== null) timers.clearTimeout(timer);
 		timer = null;
@@ -27,11 +30,12 @@ export function armReadinessWatchdog(options: {
 		const phase = options.phase();
 		const elapsedMs = options.now() - armedAtMs;
 		const phaseElapsedMs = options.now() - phase.sinceMs;
+		stalls += 1;
 		options.diagnostics({
 			type: 'engine.ready-stalled',
 			level: 'error',
 			message: `sync engine initial open not ready after ${elapsedMs}ms — waiting on "${phase.phase}" for ${phaseElapsedMs}ms`,
-			fields: { phase: phase.phase, elapsedMs, phaseElapsedMs },
+			fields: { phase: phase.phase, elapsedMs, phaseElapsedMs, stalls },
 		});
 		timer = timers.setTimeout(emitStalled, options.repeatStallMs ?? READY_STALL_REPEAT_MS);
 		timers.unref(timer);

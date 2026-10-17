@@ -144,6 +144,31 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC202",
+		"symbol": "RECORD_REVERTED",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "The change wasn't saved. Read the store's reason, fix what it names, then make the change again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "Your store refused this change, so this device went back to the store's version.",
+		"docsBody": "The store refused a catalogue change (a product, variation, customer or coupon edit), so the POS restored the store's own version of the record. Nothing is waiting to send and nothing needs retrying: the edit is simply not there any more. Read the store's reason, fix what it names, then make the change again.",
+		"troubleshooting": [
+			"Expand the log entry: it names the record and carries the store's own reason for refusing the change (serverMessage, or the serverCode when the store sent no sentence).",
+			"The record on this device now shows the store's version again — your edit was discarded, not queued, so there is nothing to retry.",
+			"If the reason is a permission message (for example \"you are not allowed to edit this resource\"), ask your store admin whether your account may edit this kind of record.",
+			"If the reason names a field, fix that detail and make the change again; if it names something the POS does not show, open the same record in WP Admin — another plugin may add validation the POS cannot see.",
+			"If the same change is refused again with no clear reason, use Copy debug info and contact support, including the serverCode."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
+		"evidence": "monorepo#1082 (reactive revert of rejected catalogue edits); sync log audit 2026-10-17",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"code": "SYNC211",
 		"symbol": "RECORD_INVALID_FIELD",
 		"domain": "SYNC",
@@ -1125,6 +1150,52 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC222",
+		"symbol": "STORE_EDIT_OVERWRITTEN",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "Check the fields listed below in WP Admin. If the store's edit was the right one, make it again there.",
+		"retryPolicy": "never",
+		"dataSafety": "order-safe",
+		"escalation": "none",
+		"summary": "This device saved its version over a newer edit made in your store.",
+		"docsBody": "This order was edited in your store while this device was saving its own change. The POS re-checked the order against the store's latest version and saved the till's values, so the store's edit to the listed fields was replaced. The order itself is saved. If the store's edit was the one you wanted, make it again in WP Admin.",
+		"troubleshooting": [
+			"Expand the log entry: it names the order and lists the fields where the till's value replaced the store's.",
+			"Open the same order in WP Admin and check those fields. If they are right as they are, there is nothing to do.",
+			"If someone had changed one of those fields in WP Admin on purpose, make that edit again there — the order is saved, so nothing on the till needs retrying.",
+			"If this keeps happening on the same orders, two people are probably editing them at the same time; agree on where each kind of edit happens."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
+		"evidence": "monorepo#1204 (order conflict auto-recovery); sync log audit 2026-10-17",
+		"introducedIn": "1.11.3"
+	},
+	{
+		"code": "SYNC231",
+		"symbol": "RECORD_SENT_UNRECORDED",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "Nothing to do — don't enter it again. WCPOS keeps re-checking, and the store ignores the repeat.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "Your store received this change, but this device couldn't record that it was sent.",
+		"docsBody": "The store accepted this change, but this device could not save the note that it was sent, so it keeps the change queued and sends it again. The store recognises the repeat and ignores it, so nothing is duplicated. Do not enter the change again — that would create a second one.",
+		"troubleshooting": [
+			"Expand the log entry: it names the record whose send could not be recorded on this device.",
+			"Check the record in WP Admin — it is already there. Do not enter it again on the till: a second entry would be a second sale or record.",
+			"This device keeps re-sending until it can record the send; the store ignores each repeat, so nothing is duplicated.",
+			"If this keeps appearing, the device's storage is refusing writes: free up storage, then restart WCPOS. Contact support with Copy debug info if it continues."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "Independent review of monorepo#2671 (queue.write.ack-failed); server dedupes pushes on mutationId",
+		"introducedIn": "1.11.3"
+	},
+	{
 		"code": "CHECKOUT401",
 		"symbol": "TOTALS_DIVERGED",
 		"domain": "CHECKOUT",
@@ -1881,6 +1952,29 @@
 		],
 		"evidence": "monorepo#2112 — a Windows till blocked at login behind a boundary-caught error that produced no Sentry event in 90 days",
 		"introducedIn": "1.10.21"
+	},
+	{
+		"code": "CLIENT171",
+		"symbol": "CLOCK_OUT_OF_SYNC",
+		"domain": "CLIENT",
+		"severity": "warn",
+		"actionHint": "Set this device's date and time to update automatically. If it already does, ask the site admin to check the server's clock.",
+		"retryPolicy": "after-change",
+		"dataSafety": "order-safe",
+		"escalation": "none",
+		"summary": "This device's clock and your store's clock are more than a minute apart.",
+		"docsBody": "WCPOS compares this device's clock with the time your store's server reports. They are more than a minute apart, so order times, receipts and reports may be off until they agree. Sales are still saved; fix whichever clock is wrong.",
+		"troubleshooting": [
+			"Expand the log entry: it shows how far apart the two clocks are and which one is ahead.",
+			"Open this device's date and time settings and turn on automatic (network) time and time zone.",
+			"If the device was already set automatically and its time is right, the server's clock is the wrong one — ask the site admin or host to check the server's date, time and time zone.",
+			"Reopen WCPOS after a fix: the clocks are compared again each time a store is opened, and the warning stops once they agree."
+		],
+		"logSources": [
+			"network-inspector"
+		],
+		"evidence": "apps/main/lib/clock-skew.ts (60 s threshold); sync log audit 2026-10-17",
+		"introducedIn": "1.11.3"
 	},
 	{
 		"code": "AUTH131",

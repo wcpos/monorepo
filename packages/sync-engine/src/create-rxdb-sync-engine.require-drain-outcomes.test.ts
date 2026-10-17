@@ -224,6 +224,9 @@ describe('per-task drain outcomes across the require-plane', () => {
 		});
 
 		await expect(handle.ready).rejects.toThrow(/scheduler drain failed/i);
+		// The cause survives the drain: the 500 the transport row already reported,
+		// so the requirement's own row does not report it again as a local failure.
+		await expect(handle.ready).rejects.toMatchObject({ status: 500 });
 		handle.release();
 	});
 

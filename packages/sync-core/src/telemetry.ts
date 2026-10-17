@@ -113,6 +113,7 @@ export type SyncEventType =
 	// queue
 	| 'queue.drain.progress'
 	| 'queue.scheduler.drain'
+	| 'queue.write.ack-failed'
 	| 'queue.write.annihilate'
 	| 'queue.write.auto-reverted'
 	| 'queue.write.born-twice-requeue'
@@ -163,11 +164,16 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
 export type SyncEventFieldsByType = {
 	'maintenance.lane.error': {
 		readonly lane: string;
+		/** The failed request's status (0 = no response); absent for a local failure. */
 		readonly status?: number;
+		/** Failed ticks in a row for this lane, this one included. */
+		readonly consecutiveFailures: number;
 	};
 	'engine.request.deadline': {
 		readonly lane: string;
 		readonly elapsedMs: number;
+		/** Deadlines in a row on this lane, this one included. */
+		readonly consecutiveDeadlines: number;
 	};
 	'signal.cycle': {
 		readonly collectionsChecked?: readonly string[];
@@ -216,6 +222,10 @@ export type SyncEventFieldsByType = {
 		readonly changed: number;
 		readonly skippedDirty?: number;
 		readonly durationMs?: number;
+		/** Stamped when the audit ran but its cursor could not be saved. */
+		readonly outcome?: 'failed';
+		/** Cursor writes that failed in a row, this one included (with `outcome`). */
+		readonly consecutiveFailures?: number;
 	};
 	'coverage.compacted': { readonly removed: number };
 	'transport.request': {
@@ -274,6 +284,10 @@ export type SyncEventFieldsByType = {
 		readonly scanned?: number;
 		readonly succeeded: number;
 		readonly failed: number;
+		/** Of `failed`, tasks whose cause no transport/deadline row reported. */
+		readonly failedUnreported?: number;
+		/** Drains in a row with such a failure, this one included. */
+		readonly consecutiveUnreportedFailures?: number;
 		readonly claimLost?: number;
 		readonly completionLost?: number;
 		readonly failureLost?: number;

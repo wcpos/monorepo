@@ -7,6 +7,7 @@ import type {
 } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { isReportedRequestStatus } from '@wcpos/sync-engine';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
 import { presetFor } from '../components/health/performance-logic';
@@ -39,8 +40,13 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	code: ErrorCode | null | ((event: SyncEvent, fields: SyncEventFieldsBase) => ErrorCode | null);
 	/** False when this event is internal narration, even if its emitter raises the level. */
 	visible?: boolean;
-	/** Cashier-facing severity when it intentionally differs from the engine severity. */
-	level?: 'info' | 'warn' | 'error';
+	/**
+	 * Cashier-facing severity when it intentionally differs from the engine
+	 * severity. A function when the row is an attempt until it persists: it reads
+	 * the attempt/streak count the emitter stamped and stays info below
+	 * `PERSISTENT_FAILURE_STREAK`.
+	 */
+	level?: RowLevel | ((event: SyncEvent, fields: SyncEventFieldsBase) => RowLevel);
 	/**
 	 * Request a cashier-facing toast for this row. Returns the toast content
 	 * separately from `message`: the persisted row message is forensic (record
@@ -84,6 +90,31 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
  */
 type ConformanceTable = { [T in SyncEventType]: Conformance<T> };
 
+type RowLevel = 'info' | 'warn' | 'error';
+
+/**
+ * Failures in a row before a retried attempt reads as a failure that has
+ * persisted. One failure is a blip the engine retries on its own; three in a
+ * row — three ticks, or three pushes of one record, typically tens of seconds
+ * apart — means the next retry is not going to fix it either.
+ */
+export const PERSISTENT_FAILURE_STREAK = 3;
+
+/** Info while a retried failure is still an attempt; warn once it has persisted. */
+const streakLevel = (count: unknown): RowLevel =>
+	num(count) >= PERSISTENT_FAILURE_STREAK ? 'warn' : 'info';
+
+/**
+ * True when the failure was a request the transport layer already reported:
+ * status 0 (the deadline row or the thrown-fetch transport row) or any non-2xx
+ * answer but 304 (the transport row). Those rows own the incident, so the lane
+ * or requirement row about the same request stays info. A 2xx poison page is
+ * NOT covered — the transport row read it as a success. The rule is the
+ * engine's own (`isReportedRequestStatus`), so stamping and reading agree.
+ */
+const requestReported = (fields: SyncEventFieldsBase): boolean =>
+	isReportedRequestStatus(fields.status);
+
 /** The outcome vocabulary an emitter may stamp explicitly via `fields.outcome`. */
 const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
 	'ok',
@@ -114,8 +145,9 @@ function httpStatusCode(status: number): ErrorCode {
 	// status is advisory and middleboxes rewrite it); this only labels the
 	// forensic request row when the status DID survive.
 	if (status === 426) return ERROR_CODES.APP_UPDATE_REQUIRED;
-	if (status >= 400) return ERROR_CODES.STORE_SERVER_ERROR;
-	return ERROR_CODES.SYNC_UNREACHABLE;
+	// Every other answer — a 4xx/5xx, an unexpected 1xx/3xx, a 2xx whose body
+	// could not be read — is the server responding badly, never unreachability.
+	return ERROR_CODES.STORE_SERVER_ERROR;
 }
 
 function sanitizeReason(value: unknown): string | undefined {
@@ -207,25 +239,38 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
 	},
+	// A deliberate rebaseline, not lost data: the same tick re-pulls the stored
+	// records and refreshes the reference lists, and `apply.rebaseline` warns
+	// with SYNC321 if that reconcile comes up short. Telling the cashier to
+	// "download the affected data again" asked for what the engine just did.
 	'signal.cursor': {
 		operationType: 'sync.cursor',
 		outcome: 'unknown',
-		code: ERROR_CODES.SYNC_BEHIND_HEAD,
+		code: null,
+		level: 'info',
 	},
 	'signal.tick.error': {
 		operationType: 'sync.cycle',
 		outcome: 'failed',
-		// No status field means the failure was local (bulkUpsert and friends), not
-		// transport — stamping an "unreachable" code there would mislead (#836).
+		// The next cadence tick retries from the saved cursor. A failed request is
+		// the transport/deadline row's to report; a local failure (bulkUpsert and
+		// friends) alarms once it has failed several ticks running.
+		level: (_event, fields) =>
+			requestReported(fields) ? 'info' : streakLevel(fields.consecutiveFailures),
+		// No status field means the failure was local, not transport — stamping an
+		// "unreachable" code there would mislead (#836).
 		code: (_event, fields) =>
 			typeof fields.status !== 'number'
 				? ERROR_CODES.SYNC_TASK_CRASHED
 				: httpStatusCode(fields.status),
 	},
+	// The lanes retry on their next tick, so one slow answer is an attempt; the
+	// row alarms once the same lane has timed out several times running.
 	'engine.request.deadline': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
 		code: ERROR_CODES.SYNC_UNREACHABLE,
+		level: (_event, fields) => streakLevel(fields.consecutiveDeadlines),
 		message: (_event, fields) => `Request deadline exceeded after ${num(fields.elapsedMs)} ms`,
 	},
 	'engine.lane.tick': {
@@ -258,15 +303,21 @@ export const CONFORMANCE_TABLE = {
 		outcome: 'unknown',
 		code: ERROR_CODES.APP_START_SLOW,
 		// The watchdog emits at error, but the CLIENT111 ruling is warn severity —
-		// a stall that usually self-resolves must not read as a failure.
-		level: 'warn',
+		// a stall that usually self-resolves must not read as a failure. The
+		// first stall (15s) is info: a slow open usually completes and
+		// `engine.ready` follows. Only the repeat (75s) is the warn.
+		level: (_event, fields) => (num(fields.stalls) >= 2 ? 'warn' : 'info'),
 	},
 	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok', code: null },
 	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok', code: null },
+	// The reset was REFUSED, so nothing changed: the queued changes it would have
+	// destroyed are still there and still send. The merchant's only reset path
+	// (Store health → Database) confirms in its own dialog and never lands here.
 	'engine.reset-needs-confirmation': {
 		operationType: 'sync.reset',
 		outcome: 'cancelled',
 		code: null,
+		level: 'info',
 	},
 	'engine.disposed': { operationType: 'sync.lifecycle', outcome: 'ok', code: null },
 	'engine.connectivity-error': {
@@ -309,11 +360,23 @@ export const CONFORMANCE_TABLE = {
 		didWork: (f) => num(f.refetched) > 0,
 	},
 	'apply.refresh': { operationType: 'sync.apply', outcome: 'ok', code: null },
-	'apply.barcode-rederive': { operationType: 'sync.apply', outcome: 'ok', code: null },
+	// Info even when the rebuilt index was declined (`applied: false`, stamped
+	// outcome failed): only a mid-tick scope switch declines it, which drops the
+	// tick's other guarded writes too — the config baseline among them — so the
+	// scope re-derives on its next tick. Nothing for the merchant to do.
+	'apply.barcode-rederive': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		code: null,
+		level: 'info',
+	},
+	// The designed tombstone path: local copies of ids the store no longer
+	// serves are removed (pending local edits protected). Nothing to do.
 	'targeted.pull.shortfall-prune': {
 		operationType: 'sync.apply',
 		outcome: 'recovered',
 		code: null,
+		level: 'info',
 	},
 	// A pull escalation is a READ-side divergence: the detector found this
 	// record's local copy differs from the store's, so it needs status-aware
@@ -349,20 +412,33 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
 	},
+	// The scheduler retries the task after a delay. A failed request is the
+	// transport/deadline row's incident; a local failure loading the records has
+	// no other row, so it stays a warn.
 	'coverage.require.error': {
 		operationType: 'sync.coverage',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_PARTIAL,
+		code: ERROR_CODES.SYNC_TASK_CRASHED,
+		level: (_event, fields) => (requestReported(fields) ? 'info' : 'warn'),
 	},
 	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok', code: null },
+	// A failed audit-cursor write (stamped outcome failed) is info while the next
+	// pass can still save it; a cursor that keeps failing never advances, so the
+	// audit rescans the same buckets forever — warn SYNC101 once that persists.
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
-		code: null,
+		code: (_event, fields) =>
+			fields.outcome === 'failed' && streakLevel(fields.consecutiveFailures) === 'warn'
+				? ERROR_CODES.LOCAL_DB_WRITE_FAILED
+				: null,
+		level: (_event, fields) =>
+			fields.outcome === 'failed' ? streakLevel(fields.consecutiveFailures) : 'info',
 		// Prune is the audit's only executed action. `missing`/`changed` are
 		// observations, and windowed stores keep `missing` > 0 by design — counting
 		// them as work would persist a steady-state row every audit cycle.
-		didWork: (f) => num(f.pruned) > 0,
+		// A failed cursor write is kept too: it is the evidence of a stuck audit.
+		didWork: (f) => num(f.pruned) > 0 || f.outcome === 'failed',
 	},
 	'coverage.compacted': {
 		// Emitted on every retention pass, including the common no-op one; without
@@ -378,7 +454,14 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		level: 'info',
 	},
-	'coverage.ledger-rebuilt': { operationType: 'sync.coverage', outcome: 'recovered', code: null },
+	// Derivable metadata the engine dropped and rebuilt itself — the sibling of
+	// ledger-reattached, and just as nothing-to-do.
+	'coverage.ledger-rebuilt': {
+		operationType: 'sync.coverage',
+		outcome: 'recovered',
+		code: null,
+		level: 'info',
+	},
 	'transport.request': {
 		operationType: 'sync.http',
 		outcome: 'ok',
@@ -392,7 +475,7 @@ export const CONFORMANCE_TABLE = {
 		// part of a refresh arc (carries an operationId, #899) is chain evidence,
 		// not idle traffic — rare (once per JWT TTL), and without it the recovered
 		// chain would be missing its successful ending under verbose.
-		didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+		didWork: (f) => requestReported(f) || typeof f.operationId === 'string',
 		forensic: true,
 	},
 	'push.outcome': {
@@ -401,30 +484,49 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		message: recordMessage('push completed'),
 	},
+	// One push of one record, not the record's verdict. Each failure is info
+	// until the same mutation has failed PERSISTENT_FAILURE_STREAK pushes running
+	// (the adapter stamps `attempt`); what settles the rest:
+	//  - 401: the write drain holds the session, and the auth layer's row
+	//    (refresh failure / "Sync paused") is the one to act on;
+	//  - 428: the drain refreshes the revision and re-pushes once; a failure
+	//    parks as queue.write.needs-revision or dead-letters as push.rejected.
+	//    Only when the refresh itself keeps throwing does the row back off and
+	//    retry with nothing else reporting it — so a 428 counts its attempts too;
+	//  - not retryable (a permanent 4xx, identity-ambiguous): it dead-letters,
+	//    and push.rejected / queue.write.auto-reverted carry the verdict.
+	// The push route's transport row is info for the same reason (engine-fetcher).
 	'push.error': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		// The adapter emits push.error for auth/rate refusals and for 2xx replies
-		// whose body could not be read — those reached the store, so "unreachable"
-		// would mislead. 2xx-with-unreadable-ack is the record not confirming:
-		// SYNC_PARTIAL until #1150's generic codes offer a sharper home.
+		level: (_event, fields) => {
+			if (fields.status === 401) return 'info';
+			if (fields.status === 428) return streakLevel(fields.attempt);
+			if (fields.retryable !== true) return 'info';
+			return streakLevel(fields.attempt);
+		},
+		// Only a retryable failure that persisted reaches a code. A 2xx whose body
+		// could not be read (a host challenge page, PHP output) reached the store,
+		// so "unreachable" would mislead; no status, 408 and 425 are the request
+		// not getting an answer in time.
 		code: (_event, fields) => {
 			const status = typeof fields.status === 'number' ? fields.status : 0;
-			if (status === 401) return ERROR_CODES.SESSION_EXPIRED;
-			if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
 			if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
-			if (status >= 500) return ERROR_CODES.STORE_SERVER_ERROR;
-			if (fields.reason === 'pos_data_invalid') return ERROR_CODES.RECORD_INVALID_FIELD;
-			if (status >= 400) return ERROR_CODES.RECORD_REJECTED;
-			if (status >= 200 && status < 300) return ERROR_CODES.SYNC_PARTIAL;
+			// A 428 that keeps coming back: the store demands a revision the till
+			// cannot fetch, which the site admin has to look at.
+			if (status === 428) return ERROR_CODES.STORE_SERVER_ERROR;
+			if (status >= 500 || (status >= 200 && status < 300)) return ERROR_CODES.STORE_SERVER_ERROR;
 			return ERROR_CODES.SYNC_UNREACHABLE;
 		},
 		message: recordMessage('push failed'),
 	},
+	// Fires only on a scope switch or dispose. The claimed row re-pushes on the
+	// next drain and the server dedupes on mutationId, so nothing was lost.
 	'push.aborted': {
 		operationType: 'sync.record',
 		outcome: 'cancelled',
 		code: null,
+		level: 'info',
 		message: recordMessage('push aborted'),
 	},
 	'push.conflict': {
@@ -440,17 +542,33 @@ export const CONFORMANCE_TABLE = {
 		level: 'info',
 		message: recordMessage('push conflict'),
 	},
+	// Another writer holds the reservation or the record lock; the drain retries
+	// with backoff and the lock usually frees. One that keeps holding is a wedged
+	// reservation on the server, so it warns SYNC131 once it has persisted.
 	'push.in_progress': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: null,
-		level: 'info',
+		code: ERROR_CODES.STORE_SERVER_ERROR,
+		level: (_event, fields) => streakLevel(fields.attempt),
 		message: recordMessage('push already in progress'),
 	},
+	// The dead-letter verdict: the record parks for Store health. Error, the
+	// severity of every code it maps to — and the level that reaches Sentry, now
+	// that the push.error before it is an info attempt. A catalogue edit's dead
+	// letter is stamped `revertPending` by the engine: an uncoded attempt, because
+	// the revert decides the verdict — queue.write.auto-reverted when it lands, a
+	// second push.rejected (`revertFailed`) at error when it does not.
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		code: ERROR_CODES.RECORD_REJECTED,
+		level: (_event, fields) => (fields.revertPending === true ? 'info' : 'error'),
+		code: (_event, fields) => {
+			if (fields.status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
+			if (fields.reason === 'pos_data_invalid' || fields.reason === 'rest_invalid_param') {
+				return ERROR_CODES.RECORD_INVALID_FIELD;
+			}
+			return ERROR_CODES.RECORD_REJECTED;
+		},
 		message: recordMessage('rejected by server'),
 	},
 	// R1: the write SUCCEEDED — the server accepted the order and the till
@@ -471,23 +589,34 @@ export const CONFORMANCE_TABLE = {
 	// different question. `failed` stays as the outcome because the POS's
 	// calculation genuinely did not survive; filtering by outcome must not hide
 	// it (the PY02001 lesson).
+	//
+	// A difference smaller than one minor currency unit (`roundingClass`
+	// 'sub-cent': under 0.01 on every field) is float noise no customer was
+	// charged, so it is info with no code (owner ruling 2026-10-17). The order's
+	// own currency decimals do not reach the drain, so 0.01 is the unit.
 	'push.money-divergence': {
 		operationType: 'sync.money',
 		outcome: 'failed',
 		code: ERROR_CODES.TOTALS_DIVERGED,
+		level: (_event, fields) => (fields.roundingClass === 'sub-cent' ? 'info' : 'error'),
 		message: recordMessage('server totals differ from the till'),
 	},
+	// The store demanded a revision the till could not obtain, and the row parks
+	// for the same Store health resolution as a conflict. There is no field to
+	// fix, so SYNC211 sent the cashier looking for one.
 	'queue.write.needs-revision': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		code: ERROR_CODES.RECORD_INVALID_FIELD,
+		code: ERROR_CODES.RECORD_CONFLICT,
 		message: recordMessage('needs revision'),
 	},
+	// The change is gone — the store's value was restored — so SYNC201's "saved
+	// only on this device… fix the field, then retry" was false on every count.
 	'queue.write.auto-reverted': {
 		operationType: 'sync.record',
 		outcome: 'recovered',
-		code: ERROR_CODES.RECORD_REJECTED,
-		level: 'error',
+		code: ERROR_CODES.RECORD_REVERTED,
+		level: 'warn',
 		toast(event, fields) {
 			// The server's human-readable message ("Sorry, you are not allowed to
 			// edit this resource.", localized by WP) over the machine code.
@@ -502,10 +631,12 @@ export const CONFORMANCE_TABLE = {
 		},
 		message: recordMessage('change reverted to server value; see Store health'),
 	},
+	// The order saved, but over a newer store edit to the listed fields: someone
+	// may need to make that edit again in WP Admin.
 	'queue.write.conflict-overwrote-server': {
 		operationType: 'sync.record',
 		outcome: 'recovered',
-		code: null,
+		code: ERROR_CODES.STORE_EDIT_OVERWRITTEN,
 		level: 'warn',
 		message: (event, fields) => {
 			const overwrittenFields = Array.isArray(fields.overwrittenFields)
@@ -535,11 +666,33 @@ export const CONFORMANCE_TABLE = {
 		code: ERROR_CODES.RECORD_CONFLICT,
 		message: recordMessage('conflict transition failed'),
 	},
+	// The backoff write failed: the next drain re-pushes without the delay, and
+	// the push.error before it reported the push failure. But with `attempts`
+	// unpersisted that push.error never counts past attempt 1, so this row's own
+	// streak (kept outside the queue row) is the verdict for storage that keeps
+	// refusing the write.
 	'queue.write.reschedule-failed': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_PARTIAL,
+		code: (_event, fields) =>
+			streakLevel(fields.consecutiveFailures) === 'warn' ? ERROR_CODES.LOCAL_DB_WRITE_FAILED : null,
+		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
 		message: recordMessage('reschedule failed'),
+	},
+	// The push landed but recording it here failed; the next drain re-pushes and
+	// the server dedupes. No push.error follows a push that landed, so a streak
+	// of these is the only signal that this device cannot record its sends. Its
+	// own code, never SYNC101: that one says "enter it again", which here would
+	// create a second sale — the store already has this one.
+	'queue.write.ack-failed': {
+		operationType: 'sync.record',
+		outcome: 'unknown',
+		code: (_event, fields) =>
+			streakLevel(fields.consecutiveFailures) === 'warn'
+				? ERROR_CODES.RECORD_SENT_UNRECORDED
+				: null,
+		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
+		message: recordMessage('sent, but could not be recorded on this device'),
 	},
 	'queue.write.resolve': {
 		operationType: 'sync.record',
@@ -567,27 +720,51 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
 	},
+	// An aggregate of background tasks: failed tasks retry after 30s by
+	// themselves and lost claims are routine contention, so the row is info —
+	// unless a task keeps failing with a cause no transport/deadline row reported
+	// (a local failure after the fetch). Nothing else reports that, so it warns
+	// SYNC401 once it has repeated over several drains.
 	'queue.scheduler.drain': {
 		operationType: 'sync.queue',
 		outcome: 'ok',
-		code: ERROR_CODES.SYNC_PARTIAL,
-		didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
+		code: (_event, fields) =>
+			num(fields.failedUnreported) > 0 ? ERROR_CODES.SYNC_TASK_CRASHED : null,
+		level: (_event, fields) =>
+			num(fields.failedUnreported) > 0 ? streakLevel(fields.consecutiveUnreportedFailures) : 'info',
+		// Lost-work counters still count as work: they are the support evidence
+		// for a slow server, now that no warn level carries them past the gate.
+		didWork: (f) =>
+			num(f.succeeded) +
+				num(f.failed) +
+				num(f.failureLost) +
+				num(f.completionLost) +
+				num(f.renewalLost) >
+			0,
 	},
 	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	// The write drain's next tick re-runs it, so a crash alarms only once it has
+	// repeated (the lane stamps `consecutiveFailures`). Conflict resolution's
+	// claim-release failure shares the type, carries no streak and stays info:
+	// the claim frees itself at the lease deadline.
 	'queue.write.tick.error': {
 		operationType: 'sync.queue',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_PARTIAL,
+		code: ERROR_CODES.SYNC_TASK_CRASHED,
+		level: (_event, fields) => streakLevel(fields.consecutiveFailures),
 	},
-	// One row when the write drain starts holding a session the store refused (401);
-	// per-push 401 rows are warn, so Sentry sees one AUTH101 per hold.
+	// One row when the write drain starts holding a session the store refused
+	// (401). Info: the auth layer already writes the verdict for the same 401 —
+	// "Sync paused… sign in again" when the renewed session is refused, "Unable
+	// to refresh session" when the refresh fails — and a second AUTH101 here
+	// made one expired session read as two problems.
 	'queue.write.session-refused': {
 		operationType: 'sync.queue',
 		outcome: 'failed',
-		code: ERROR_CODES.SESSION_EXPIRED,
-		level: 'error',
+		code: null,
+		level: 'info',
 	},
 	'engine.listener-error': {
 		operationType: 'sync.lifecycle',
@@ -600,10 +777,14 @@ export const CONFORMANCE_TABLE = {
 	// the runtime default. Invisible rows remain available to diagnostics only.
 	// ————————————————————————————————————————————————————————————————————————
 	// decided: visible — reaching the hard cap leaves the cashier's list incomplete.
+	// Info: the 100,000-row ceiling takes ten thousand scroll ticks to reach, so
+	// hitting it means a corrupted limit (support evidence), and the window
+	// simply stops growing — there is nothing for the merchant to do or lose.
 	'browse-window.backstop-reached': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
 		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: invisible — a racing reset only changes internal lane bookkeeping.
@@ -624,21 +805,28 @@ export const CONFORMANCE_TABLE = {
 	// where a started line with no outcome names a wedged requirement.
 	'coverage.require.started': INVISIBLE,
 	// decided: visible — a data request stopped making progress and was abandoned so
-	// the rest of the queue could keep loading; the screen that asked retries on its
-	// own, but the cashier's records did not load, which is what SYNC_PARTIAL means.
+	// the rest of the queue could keep loading. The screen that asked re-declares
+	// it, so one stall is info; stalls with nothing completing in between (a
+	// storage promise that never settles, before any request) have no other row,
+	// so they warn SYNC181 once they persist. SYNC321's "retry only the records
+	// that failed" named a retry the cashier has no button for.
 	'coverage.require.stalled': {
 		operationType: 'sync.coverage',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_PARTIAL,
+		code: ERROR_CODES.LOCAL_DB_STALLED,
+		level: (_event, fields) => streakLevel(fields.consecutiveStalls),
 	},
 	// decided: invisible — the breadcrumb recording that an abandoned request
 	// eventually settled; pure diagnostics narration.
 	'coverage.require.stall-settled': INVISIBLE,
 	// decided: visible — the requested customer ordering is unavailable to the cashier.
+	// A 400 here is a store plugin predating #1488 (see the emitter), so the
+	// instruction is the plugin update; the transport and coverage rows for the
+	// same 400 stay quiet.
 	'customer.browse-window.sort-rejected': {
 		operationType: 'sync.coverage',
 		outcome: 'rejected',
-		code: null,
+		code: ERROR_CODES.WCPOS_PLUGIN_OUTDATED,
 		didWork: () => true,
 	},
 	// decided: invisible — the activity counter self-corrects without changing cashier work.
@@ -656,46 +844,62 @@ export const CONFORMANCE_TABLE = {
 		didWork: () => true,
 	},
 	// decided: visible — missing barcode settings can degrade product scanning.
+	// Info: the 5s hydrate timeout trips on any slow store, scans fall back to an
+	// online lookup meanwhile, and the next config poll re-pulls the barcode
+	// collections — so a warn here fired on every scope open of a slow store.
 	'engine.barcode-selector-hydrate-failed': {
 		operationType: 'sync.startup',
 		outcome: 'failed',
-		code: ERROR_CODES.BARCODE_CONFIG_UNAVAILABLE,
-		level: 'warn',
+		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: invisible — scheduling a catch-up tick after reconnect is internal narration.
 	'engine.reconnect.retick': INVISIBLE,
-	// decided: visible — single-tab-only syncing explains multi-tab degradation.
+	// decided: visible — explains multi-tab degradation to support.
+	// Info, and not CLIENT121: without Web Locks this tab becomes a writer of its
+	// own (web-write-leader.ts), the opposite of "one tab syncs for all". Its
+	// sales still send, and a second such tab is fenced by the drain's claim
+	// lease and the server's mutationId dedupe — nothing for the merchant to do.
 	'engine.write-leader.degraded': {
 		operationType: 'sync.lifecycle',
 		outcome: 'unknown',
-		code: ERROR_CODES.MULTI_TAB_LIMITED,
+		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
+	// The lane re-runs on its next tick: a failed request is the transport/deadline
+	// row's incident, and a local crash alarms once it has repeated.
 	'maintenance.lane.error': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
-		// Status 0 is the request deadline (no response at all): unreachable, not a crash.
+		// Status 0 is a request with no response at all: unreachable, not a crash.
 		code: (_event, fields) =>
 			fields.status === 0 ? ERROR_CODES.SYNC_UNREACHABLE : ERROR_CODES.SYNC_TASK_CRASHED,
-		level: 'warn',
+		level: (_event, fields) =>
+			requestReported(fields) ? 'info' : streakLevel(fields.consecutiveFailures),
 		didWork: () => true,
 	},
 	// decided: invisible — routine maintenance summaries are background narration.
 	'maintenance.lane.tick': INVISIBLE,
 	// decided: visible — approximate catalogue totals explain incomplete-looking results.
+	// Info: a lasting store capability the engine handles by design, written on
+	// every walk, with nothing for the cashier to do.
 	'product.browse-window.approximate': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
 		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: visible — an unsupported brand filter changes the products the cashier sees.
+	// Info for the same reason as the approximate row above.
 	'product.browse-window.brand-filter-ignored': {
 		operationType: 'sync.coverage',
 		outcome: 'rejected',
 		code: null,
+		level: 'info',
 		didWork: () => true,
 	},
 	// decided: visible — an unsaved rejection can leave a cashier's sale unrecoverable.
@@ -729,11 +933,22 @@ export const CONFORMANCE_TABLE = {
  */
 const CONFORMANCE = new Map<string, Conformance>(Object.entries(CONFORMANCE_TABLE));
 
+/** The row's level: debug when invisible, else the table's call, else the emitter's. */
+function rowLevel(
+	conformance: Conformance | undefined,
+	event: SyncEvent,
+	fields: SyncEventFieldsBase
+): SyncEvent['level'] {
+	if (conformance?.visible === false) return 'debug';
+	const level = conformance?.level;
+	return (typeof level === 'function' ? level(event, fields) : level) ?? event.level;
+}
+
 /** Resolve the shared cashier-log error classification for a raw sync event. */
 export function resolveSyncEventErrorCode(event: SyncEvent): ErrorCode | null {
 	const fields = (event.fields ?? {}) as Record<string, unknown>;
 	const conformance: Conformance = CONFORMANCE.get(event.type) ?? INHERITED_DEFAULT;
-	const level = conformance.visible === false ? 'debug' : (conformance.level ?? event.level);
+	const level = rowLevel(conformance, event, fields);
 	if (level !== 'warn' && level !== 'error') return null;
 	return typeof conformance.code === 'function'
 		? conformance.code(event, fields)
@@ -766,7 +981,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
 		const isInvisible = mapped?.visible === false;
-		const level = isInvisible ? 'debug' : (mapped?.level ?? event.level);
+		const level = rowLevel(mapped, event, fields);
 		const isFailure = level === 'warn' || level === 'error';
 
 		// Tally BEFORE any gate, so successful attempts — which never persist — still
@@ -776,7 +991,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const attemptMs = num(fields.durationMs);
 			httpMs += attemptMs;
 			if (attemptMs > httpMaxMs) httpMaxMs = attemptMs;
-			if (fields.status === 0 || num(fields.status) >= 400) httpErrors += 1;
+			if (requestReported(fields)) httpErrors += 1;
 		}
 		if (isInvisible && !isVerboseDiagnostics()) return;
 
@@ -795,11 +1010,10 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		const conformance: Conformance = mapped ?? INHERITED_DEFAULT;
 		const code = resolveSyncEventErrorCode(event);
 		// The did-work gate only ever suppresses IDLE work. A warn/error event is
-		// never idle, so it bypasses the gate entirely: several emitters raise the
-		// level on a signal their counters don't carry — `queue.scheduler.drain`
-		// goes to `error` on completionLost/failureLost/renewalLost while
-		// `succeeded` and `failed` are both 0 — and gating those would silently
-		// drop exactly the lost-work evidence this observer exists to preserve.
+		// never idle, so it bypasses the gate entirely: an emitter may raise the
+		// level on a signal its counters don't carry, and gating that would
+		// silently drop exactly the lost-work evidence this observer exists to
+		// preserve.
 		if (conformance.didWork && !isFailure && !isInvisible && !conformance.didWork(fields)) return;
 
 		const collection =
@@ -813,7 +1027,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		//      could not apply;
 		//   2. the counters say so while the level stays info — queue.write.drain
 		//      and the engine.lane.tick summary carry failed/rejected records on an
-		//      otherwise routine drain.
+		//      otherwise routine drain, and an info transport row carries a failed
+		//      status.
 		// Explicit non-'ok' outcomes (rejected/cancelled/unknown) are deliberate
 		// classifications and are never overridden. An emitter that saw the WHOLE
 		// arc settle may also stamp the outcome itself via `fields.outcome` (#899:
@@ -829,6 +1044,9 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			if (isFailure) outcome = 'failed';
 			else if (num(fields.failed) + num(fields.rejected) > 0) outcome = 'failed';
 			else if (fields.status === 'error') outcome = 'failed';
+			// A request settled quietly (its incident is another row's to report) is
+			// still a failed request: filtering by outcome must find it.
+			else if (event.type === 'transport.request' && requestReported(fields)) outcome = 'failed';
 		}
 
 		const durationMs =
