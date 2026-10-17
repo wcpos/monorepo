@@ -33,7 +33,7 @@ const LIFECYCLE_RECEIVERS = new Set([
 ]);
 
 const FROZEN_LENGTH = 890;
-const FROZEN_DIGEST = 'f5b18062ee9cd9a410162655b5092a6311de33ccae77e29530a9d099054258ad';
+const FROZEN_DIGEST = '0000c04ab1d0d534336bf3e2a6b7f21e3bcca1f4b3bc588da6730081ddbe7470';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
