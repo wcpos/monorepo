@@ -15,7 +15,7 @@ import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/util
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
-import { scheduleRequest } from './request-queue';
+import { isDroppedRequestError, scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
@@ -305,7 +305,10 @@ export const useHttpClient = (
 		const endpoint = processedConfig.url
 			? new URL(processedConfig.url, 'http://localhost').pathname
 			: 'unknown';
-		const response = await scheduleRequest(() => http.request(dispatchConfig));
+		const response = await scheduleRequest(
+			() => http.request(dispatchConfig),
+			`${method} ${endpoint}`
+		);
 		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 			httpLogger.info('HTTP request completed', {
 				context: { method, endpoint, status: response.status },
@@ -375,7 +378,13 @@ export const useHttpClient = (
 					const details = parseUpdateRequiredBody(axiosError.response.data);
 					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
 				}
-				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
+				// A request the queue dropped is already reported once per burst as
+				// CLIENT131 by the queue; a row per request here would bury it in CLIENT999s.
+				if (
+					!(error as any).isPreFlightBlocked &&
+					!isDroppedRequestError(error) &&
+					databaseEpoch === getDatabaseEpoch()
+				) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
 						? new URL(reqConfig.url, 'http://localhost').pathname

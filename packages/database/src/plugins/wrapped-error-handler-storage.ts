@@ -455,6 +455,16 @@ function getTargetedRecovery(message: string): RegExpMatchArray | null {
 		return null;
 	}
 }
+
+/** RxDB's write conflict, read from its error code or status field only. */
+function isRxConflict(error: unknown, message: string): boolean {
+	const fields = (error ?? {}) as { code?: unknown; status?: unknown };
+	return (
+		fields.code === 'CONFLICT' ||
+		fields.status === 409 ||
+		getRemoteErrorDetails(message).code === 'CONFLICT'
+	);
+}
 /**
  * Classify an error from the RxDB storage layer and log it appropriately.
  * Returns true if the error was handled (callers may provide a fallback value).
@@ -469,25 +479,16 @@ function handleStorageError(
 	const targetedRecovery = getTargetedRecovery(message);
 	const candidate = targetedRecovery ? '' : message;
 
-	// CONFLICT errors (409) -- typically harmless, retried on next sync cycle
-	if (candidate.includes('CONFLICT') || candidate.includes('409')) {
-		storageLogger.warn(`Write conflict in ${methodName}`, {
-			code: ERROR_CODES.RECORD_CONFLICT,
-			context: {
-				method: methodName,
-			},
-		});
-		return true;
-	}
-
-	// Schema validation errors (COL22)
-	if (
-		candidate.includes('COL22') ||
-		candidate.includes('schema validation') ||
-		candidate.includes('schema mismatch')
-	) {
-		storageLogger.warn(`Schema validation failed in ${methodName}`, {
-			code: ERROR_CODES.SCHEMA_MISMATCH,
+	// Never matched by substring: the worker's error text carries document data
+	// and stack frames, so "409" in a price or a line number used to swallow real
+	// failures and report them as a store clash (SYNC221). A local revision
+	// conflict is not a store clash either — every write comes back as a 409 and
+	// RxDB's incremental writes re-run against it — so it earns no coded row.
+	// Schema failures are not classified here at all: RxDB's validator wraps
+	// outside this storage and reports them as 422s in the write result, so a
+	// "schema" substring here was only ever a coincidence stamped SYNC311.
+	if (isRxConflict(error, message)) {
+		storageLogger.debug(`Local write conflict in ${methodName}`, {
 			context: {
 				method: methodName,
 			},

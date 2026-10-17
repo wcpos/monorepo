@@ -191,7 +191,7 @@ export const resetCollectionPlugin: RxPlugin = {
 						if (!schema) {
 							resetLogger.error('No schema found for store collection', {
 								showToast: false,
-								code: ERROR_CODES.SCHEMA_MISMATCH,
+								code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 								context: {
 									collection: collectionName,
 								},
@@ -209,9 +209,12 @@ export const resetCollectionPlugin: RxPlugin = {
 						});
 					}
 				} catch (error: any) {
+					// The collection is re-added from the very schema the app runs, so this
+					// is a failure to create it, not data from an incompatible version
+					// (SYNC311, whose advice is to clear local data).
 					resetLogger.error('Failed to re-add collection', {
 						showToast: true,
-						code: ERROR_CODES.SCHEMA_MISMATCH,
+						code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 						context: {
 							collection: collectionName,
 							database: database.name,
