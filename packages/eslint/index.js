@@ -417,8 +417,9 @@ export const designSystemOwnershipSelectors = [
 		selector:
 			'JSXOpeningElement[name.name=/^(Button|IconButton)$/]' +
 			' > JSXAttribute[name.name="className"]' +
-			// `:` as well as whitespace before the utility: a variant prefix (`web:h-20`) still overrides.
-			' > Literal[value=/(^|\\s|:)(h-|min-h-|max-h-|size-|rounded)/]',
+			// `:` as well as whitespace before the utility: a variant prefix (`web:h-20`) still
+			// overrides, and so does the legacy leading important marker (`!h-20`).
+			' > Literal[value=/(^|\\s|:)!?(h-|min-h-|max-h-|size-|rounded)/]',
 		message:
 			'Height and radius on this component are owned by its size prop; pick a size (sm/default/lg) or add one in packages/components.',
 	},
