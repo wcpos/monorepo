@@ -209,6 +209,14 @@ function AppStack() {
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
 			<ExtraDataProvider>
 				<SyncConfigBridge />
+				{/* Under BOTH providers on purpose. The online-status provider: a REST client
+				    rendered above it reads the context default ("offline") and sets the
+				    app-wide request block — every request then fails "No internet connection"
+				    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). The
+				    query provider: the client's re-login path reads the query runtime
+				    (useSessionLoginFlow, #2629), and above the provider that throws at render
+				    on every fresh load (dev-next, 2026-10-17). */}
+				<CustomerDisplayServiceController />
 				{/* Keeps the "changes that never reached your server" count current for
 				    the root error boundary, which renders above every provider and so
 				    cannot ask the engine itself (#1098). */}
@@ -435,11 +443,6 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<OnlineStatusLogger />
-			{/* Lives under the online-status provider on purpose: it uses the REST client, and a
-			    client rendered above the provider reads the context default ("offline") and sets
-			    the app-wide request block — every request then fails "No internet connection"
-			    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). */}
-			<CustomerDisplayServiceController />
 			<EngineConnectivityBridge />
 			<MetricsPersistenceBridge />
 			<SyncStatusPersistenceBridge />
