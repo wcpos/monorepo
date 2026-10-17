@@ -228,7 +228,9 @@ export const CONFORMANCE_TABLE = {
 	'engine.request.deadline': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
-		code: ERROR_CODES.SYNC_TASK_CRASHED,
+		code: ERROR_CODES.SYNC_UNREACHABLE,
+		message: (_event, fields) =>
+			`Engine request deadline exceeded after ${num(fields.elapsedMs)} ms`,
 	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',

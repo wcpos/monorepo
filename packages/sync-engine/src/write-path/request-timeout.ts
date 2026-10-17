@@ -12,11 +12,11 @@ export class RequestTimeoutError extends Error {
 	}
 }
 
-export function withRequestTimeout(
-	fetcher: Fetcher,
+export function withRequestTimeout<T>(
+	fetcher: (...args: Parameters<Fetcher>) => Promise<T>,
 	timeoutMs: number,
 	timers: EngineTimers = systemTimers
-): Fetcher {
+): (...args: Parameters<Fetcher>) => Promise<T> {
 	return async (url, init) => {
 		const controller = new AbortController();
 		const abort = () => controller.abort();

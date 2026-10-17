@@ -1023,10 +1023,10 @@ export function createRxdbSyncEngine(
 		return response;
 	};
 	const deadlineFetcher = withRequestTimeout(transportFetcher, ENGINE_REQUEST_DEADLINE_MS, timers);
-	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
+	const observeDeadline = async <T>(request: () => Promise<T>, lane: string) => {
 		const startedAtMs = nowMs();
 		try {
-			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+			return await request();
 		} catch (error) {
 			if (error instanceof RequestTimeoutError)
 				diagnostics({
@@ -1037,6 +1037,11 @@ export function createRxdbSyncEngine(
 			throw error;
 		}
 	};
+	const fetcher = (url: string, init?: RequestInit, lane = 'host-transport') =>
+		observeDeadline(
+			() => deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined }),
+			lane
+		);
 	const rawQueryTotal = ports.queryTotal;
 	const queryTotal =
 		rawQueryTotal === undefined
@@ -1045,7 +1050,18 @@ export function createRxdbSyncEngine(
 					fetchWooQueryTotal: async (
 						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
 					): Promise<number | null> =>
-						updateRequiredRefusal === null ? rawQueryTotal.fetchWooQueryTotal(input) : null,
+						updateRequiredRefusal === null
+							? observeDeadline(
+									() =>
+										withRequestTimeout(
+											(_url, init) =>
+												rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
+											ENGINE_REQUEST_DEADLINE_MS,
+											timers
+										)(input.request.endpoint, { signal: input.signal }),
+									'query-total-retry'
+								)
+							: null,
 				};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,

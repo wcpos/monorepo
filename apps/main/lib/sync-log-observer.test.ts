@@ -87,6 +87,14 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].code).toBe(errorCode);
 	});
 
+	it('classifies engine request deadlines as unreachable, not crashed', () => {
+		observer.observe(
+			event({ type: 'engine.request.deadline', level: 'warn', fields: { elapsedMs: 60_000 } })
+		);
+		expect(rows[0]).toMatchObject({ code: 'SYNC121', terminal: { outcome: 'failed' } });
+		expect(rows[0].message).toMatch(/deadline.*60000/i);
+	});
+
 	it('classifies signal tick auth, rate-limit and local failures separately', () => {
 		for (const fields of [{ status: 401 }, { status: 429 }, {}]) {
 			observer.observe(event({ type: 'signal.tick.error', level: 'error', fields }));
