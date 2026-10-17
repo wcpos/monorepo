@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
 
+import { useCartTableReadOnly } from './cells/read-only';
 import { CartTable } from './table';
 
 const mockPulseAdd = jest.fn();
@@ -260,4 +261,39 @@ it('pulses once for an added line and does not pulse again on an unchanged reren
 	rerender(<CartTable />);
 	rerender(<CartTable />);
 	expect(mockPulseAdd.mock.calls).toEqual([['added']]);
+});
+
+describe('read-only (checkout and receipt)', () => {
+	function Probe() {
+		const readOnly = useCartTableReadOnly();
+		return <div data-testid="probe">{JSON.stringify(readOnly)}</div>;
+	}
+	beforeEach(() => {
+		mockPulseAdd.mockClear();
+		mockCartLines.line_items = [line('line-a')];
+		mockCartLines.fee_lines = [];
+		mockCartLines.shipping_lines = [];
+	});
+
+	it('renders the same rows stilled: no pulse rows, the footer inside, cells told read-only', () => {
+		render(<CartTable readOnly paidBy={{ 'line-a': ['Cash'] }} footer={<Probe />} />);
+		expect(screen.queryAllByTestId('cart-row')).toHaveLength(0);
+		expect(screen.getByTestId('probe').textContent).toBe('{"paidBy":{"line-a":["Cash"]}}');
+		for (const label of ['Qty', 'Item', 'Price', 'Total'])
+			expect(screen.getByText(label)).toBeTruthy();
+	});
+
+	it('never pulses and never shows the empty-cart state', () => {
+		mockCartLines.line_items = [];
+		const { rerender } = render(<CartTable readOnly />);
+		expect(screen.queryByTestId('cart-empty')).toBeNull();
+		mockCartLines.line_items = [line('added')];
+		rerender(<CartTable readOnly />);
+		expect(mockPulseAdd).not.toHaveBeenCalled();
+	});
+
+	it('has no footer and no read-only context in the editable cart', () => {
+		render(<CartTable footer={<Probe />} />);
+		expect(screen.queryByTestId('probe')).toBeNull();
+	});
 });

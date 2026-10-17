@@ -137,7 +137,7 @@ describe('open orders position', () => {
 jest.mock('../checkout/checkout-mode', () => ({
 	useOrderCheckoutStage: (record: { isNew?: boolean }) => (record.isNew ? 'cart' : mockStage),
 }));
-jest.mock('./checkout-ledger', () => ({ CheckoutLedger: () => <div data-testid="cart-card" /> }));
+jest.mock('./stilled-cart', () => ({ StilledCart: () => <div data-testid="cart-card" /> }));
 
 it('hides the open-order tabs while the register is closed or counting', () => {
 	mockIsNew = false;
