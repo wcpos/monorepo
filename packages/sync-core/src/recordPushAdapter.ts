@@ -1,4 +1,5 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
+import { isNonRetryable } from './drainMutationQueue';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
 import { mapCouponExpiryToPayload } from './couponWirePayload';
@@ -148,6 +149,12 @@ export async function pushRecordMutation(input: {
 	 * written to a guessed field.
 	 */
 	barcodeSelectors?: readonly string[];
+	/**
+	 * Which attempt this push is for the mutation (1 = first). Stamped on
+	 * `push.error` so the cashier log can tell a first failure the drain will
+	 * retry from one that has persisted; omitted reads as a first attempt.
+	 */
+	attempt?: number;
 }): Promise<PushResult> {
 	const { mutation } = input;
 	const emit = (event: SyncEvent): void => {
@@ -162,6 +169,14 @@ export async function pushRecordMutation(input: {
 		recordId: mutation.recordId,
 		mutationId: mutation.mutationId,
 	};
+	// Every push.error says how the drain will treat it: `retryable` failures are
+	// re-pushed with backoff, the rest dead-letter and `push.rejected` carries
+	// the verdict. The log reads both to decide whether this row is an attempt
+	// or an alarm.
+	const failureFields = (error: RecordPushError | null) => ({
+		attempt: input.attempt ?? 1,
+		retryable: error === null || !isNonRetryable(error),
+	});
 
 	const endpoint = input.resolveEndpoint(mutation);
 	// Send the full mutation ENVELOPE, not just the payload: the server needs the
@@ -223,6 +238,7 @@ export async function pushRecordMutation(input: {
 				reason: error instanceof Error ? error.name : 'unknown',
 				...(error instanceof Error ? { message: error.message.slice(0, 200) } : {}),
 				phase: 'transport',
+				...(aborted ? {} : failureFields(null)),
 			},
 		});
 		throw error;
@@ -244,7 +260,9 @@ export async function pushRecordMutation(input: {
 				type: 'push.in_progress',
 				level: 'warn',
 				collection: mutation.collectionName,
-				fields: baseFields,
+				// Retried like any transient failure; the attempt lets the log tell a
+				// lock that frees from a reservation that never does.
+				fields: { ...baseFields, reason, ...failureFields(null) },
 			});
 			throw new RecordPushError(mutation, 409, reason);
 		}
@@ -255,19 +273,25 @@ export async function pushRecordMutation(input: {
 		// it as either would loop the mutation forever. Throw a permanent error so the drain
 		// dead-letters it with the failure surfaced.
 		if (body?.code === 'woo_rxdb_sync_identity_ambiguous') {
-			emit({
-				type: 'push.error',
-				level: 'error',
-				collection: mutation.collectionName,
-				fields: { ...baseFields, status: 409, reason: 'identity-ambiguous' },
-			});
-			throw new RecordPushError(
+			const error = new RecordPushError(
 				mutation,
 				409,
 				'identity-ambiguous',
 				true,
 				readServerMessage(body, 409)
 			);
+			emit({
+				type: 'push.error',
+				level: 'error',
+				collection: mutation.collectionName,
+				fields: {
+					...baseFields,
+					status: 409,
+					reason: 'identity-ambiguous',
+					...failureFields(error),
+				},
+			});
+			throw error;
 		}
 		emit({
 			type: 'push.conflict',
@@ -294,29 +318,42 @@ export async function pushRecordMutation(input: {
 		// delete-only mapping to a null-truth conflict result bypassed that
 		// recovery and parked an unresolvable row (no `current`, no revision).
 		const body = await safeJson(response);
-		emit({
-			type: 'push.error',
-			level: 'warn',
-			collection: mutation.collectionName,
-			fields: { ...baseFields, status: 428, reason: 'precondition-required' },
-		});
-		throw new RecordPushError(
+		const error = new RecordPushError(
 			mutation,
 			428,
 			typeof body?.code === 'string' ? body.code : 'precondition-required',
 			false,
 			readServerMessage(body, 428)
 		);
+		emit({
+			type: 'push.error',
+			level: 'warn',
+			collection: mutation.collectionName,
+			fields: {
+				...baseFields,
+				status: 428,
+				reason: 'precondition-required',
+				...failureFields(error),
+			},
+		});
+		throw error;
 	}
 
 	if (!response.ok) {
 		const body = await safeJson(response);
 		const reason = typeof body?.code === 'string' ? body.code : undefined;
 		const serverMessage = readServerMessage(body, response.status);
+		const error = new RecordPushError(
+			mutation,
+			response.status,
+			reason,
+			reason === WOO_REST_CANNOT_DELETE,
+			serverMessage
+		);
 		emit({
 			type: 'push.error',
-			// The plugin's 401 means no user is logged in; the write drain reports
-			// queue.write.session-refused once instead of once per push.
+			// The plugin's 401 means no user is logged in; the write drain holds the
+			// session and the auth layer's row is the verdict, not one row per push.
 			level: response.status === 401 ? 'warn' : 'error',
 			collection: mutation.collectionName,
 			fields: {
@@ -327,15 +364,10 @@ export async function pushRecordMutation(input: {
 				// it: a 500 is retried, never dead-lettered, so this event is the ONLY
 				// place the row's "why" can come from (#2439).
 				...(serverMessage !== undefined ? { serverMessage } : {}),
+				...failureFields(error),
 			},
 		});
-		throw new RecordPushError(
-			mutation,
-			response.status,
-			reason,
-			reason === WOO_REST_CANNOT_DELETE,
-			serverMessage
-		);
+		throw error;
 	}
 
 	const outcome = OUTCOME_BY_OP[mutation.operation];
@@ -365,7 +397,12 @@ export async function pushRecordMutation(input: {
 				type: 'push.error',
 				level: 'error',
 				collection: mutation.collectionName,
-				fields: { ...baseFields, status: response.status, reason: 'extract-failed' },
+				fields: {
+					...baseFields,
+					status: response.status,
+					reason: 'extract-failed',
+					...failureFields(null),
+				},
 			});
 			throw new RecordPushError(mutation, response.status, 'extract-failed');
 		}
@@ -377,7 +414,12 @@ export async function pushRecordMutation(input: {
 				type: 'push.error',
 				level: 'error',
 				collection: mutation.collectionName,
-				fields: { ...baseFields, status: response.status, reason: 'no-document' },
+				fields: {
+					...baseFields,
+					status: response.status,
+					reason: 'no-document',
+					...failureFields(null),
+				},
 			});
 			throw new RecordPushError(mutation, response.status, 'no-document');
 		}
@@ -394,7 +436,12 @@ export async function pushRecordMutation(input: {
 				type: 'push.error',
 				level: 'error',
 				collection: mutation.collectionName,
-				fields: { ...baseFields, status: response.status, reason: 'no-document' },
+				fields: {
+					...baseFields,
+					status: response.status,
+					reason: 'no-document',
+					...failureFields(null),
+				},
 			});
 			throw new RecordPushError(mutation, response.status, 'no-document');
 		}

@@ -256,7 +256,9 @@ async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unkno
 	return doc?.toJSON() ?? null;
 }
 
-function rejectedProductFetch(options: { failPull?: boolean } = {}) {
+function rejectedProductFetch(
+	options: { failPull?: boolean; pullAnswer?: Promise<Response> } = {}
+) {
 	const pulls: number[][] = [];
 	const fetch = async (url: string): Promise<Response> => {
 		const parsed = new URL(url);
@@ -274,6 +276,7 @@ function rejectedProductFetch(options: { failPull?: boolean } = {}) {
 			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
 		);
 		if (options.failPull) return new Response('unavailable', { status: 503 });
+		if (options.pullAnswer) return options.pullAnswer;
 		return Response.json([productPayload(9)]);
 	};
 	return { pulls, fetch };
@@ -1764,6 +1767,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
+			// The revert is the one verdict: the dead letter about the same refusal is
+			// stamped revertPending (an uncoded attempt in the log) and no
+			// revertFailed verdict follows.
+			const rejections = diagnostics.filter((event) => event.type === 'push.rejected');
+			expect(rejections.map((event) => event.fields?.revertPending)).toEqual([true]);
+			expect(rejections.some((event) => event.fields?.revertFailed === true)).toBe(false);
 		} finally {
 			await engine.dispose();
 		}
@@ -2048,6 +2057,106 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('owes the verdict when post-drain processing fails before the revert starts', async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// The first queue read AFTER the dead letter is durable fails once — the
+			// post-drain processing dies before write-rejected can start the revert.
+			const queue = queueFor(engine.active()!.database as never);
+			const replace = queue.replace.bind(queue);
+			const pending = queue.pending.bind(queue);
+			let deadLettered = false;
+			let failed = false;
+			vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
+				await replace(row);
+				if (row.status === 'rejected') deadLettered = true;
+			});
+			vi.spyOn(queue, 'pending').mockImplementation(async () => {
+				if (deadLettered && !failed) {
+					failed = true;
+					throw new Error('queue read failed');
+				}
+				return pending();
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'error' });
+			// A later healthy drain must not add a second verdict.
+			await engine.sync('write-drain');
+
+			const rejections = diagnostics.filter((event) => event.type === 'push.rejected');
+			// The stamped attempt, then exactly ONE coded verdict, emitted by the drain.
+			expect(
+				rejections.map((event) => {
+					const fields = event.fields as Record<string, unknown> | undefined;
+					return [event.level, fields?.revertPending, fields?.revertSkipped, fields?.status];
+				})
+			).toEqual([
+				['warn', true, undefined, 403],
+				['error', undefined, true, 403],
+			]);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
+	});
+
+	it("treats a revert cut short by a scope switch as stale, never as the incoming scope's verdict", async () => {
+		let answerPull!: (response: Response) => void;
+		const route = rejectedProductFetch({
+			pullAnswer: new Promise<Response>((resolve) => {
+				answerPull = resolve;
+			}),
+		});
+		const diagnostics: SyncEvent[] = [];
+		const a = freshIdentity();
+		const engine = engineWith({
+			fetch: route.fetch,
+			identity: a,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+
+			// The cashier switches while the revert's pull is in flight; it then fails.
+			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
+			answerPull(new Response('unavailable', { status: 503 }));
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// No revertFailed verdict lands in the incoming scope's log.
+			expect(
+				diagnostics.some(
+					(event) => event.type === 'push.rejected' && event.fields?.revertFailed === true
+				)
+			).toBe(false);
+		} finally {
+			answerPull(new Response('unavailable', { status: 503 }));
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
@@ -2074,6 +2183,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect(state.orderPulls).toEqual([]);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// No revert follows an order, so its dead letter is the verdict, unstamped.
+			expect(
+				diagnostics
+					.filter((event) => event.type === 'push.rejected')
+					.map((event) => [event.level, event.fields?.revertPending])
+			).toEqual([['warn', undefined]]);
 		} finally {
 			await engine.dispose();
 		}
@@ -2103,6 +2218,23 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect((await productJson(engine))?.stockQuantity).toBe(2);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// The revert failed, so the verdict is emitted where that is known: a
+			// push.rejected at error, marked revertFailed, after the stamped attempt.
+			await vi.waitFor(() =>
+				expect(
+					diagnostics
+						.filter((event) => event.type === 'push.rejected')
+						.map((event) => [
+							event.level,
+							event.fields?.revertPending,
+							event.fields?.revertFailed,
+							event.fields?.status,
+						])
+				).toEqual([
+					['warn', true, undefined, 403],
+					['error', undefined, true, 403],
+				])
+			);
 		} finally {
 			await engine.dispose();
 		}
@@ -2138,8 +2270,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 	it('transient failure backs off durably, then succeeds once the window elapses', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_300 });
-		let failures = 1;
-		// One raw 500 (transient server error) before the fake server answers —
+		let failures = 2;
+		// Two raw 500s (transient server errors) before the fake server answers —
 		// the drain must back off durably, then land the re-push.
 		const flakyFetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (failures > 0) {
@@ -2149,7 +2281,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			return server.fetch(url, init as never);
 		};
 		let nowMs = 1_700_000_000_000;
-		const engine = engineWith({ fetch: flakyFetch, now: () => nowMs });
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: flakyFetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
 		await engine.ready;
 		await insertBornLocalOrder(engine, UUID_A);
 		await engine.write({
@@ -2166,10 +2303,148 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			deferred: 1,
 			pushed: 0,
 		});
-		// …and once the window elapses the re-push lands.
+		// …and once the window elapses the re-push fails again…
+		nowMs += 5 * 60_000;
+		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 0 });
+		// …then lands.
 		nowMs += 5 * 60_000;
 		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+		// Each push.error names its attempt, so the log can tell a first failure
+		// the drain retries from one that has persisted.
+		expect(
+			diagnostics
+				.filter((event) => event.type === 'push.error')
+				.map((event) => [event.fields?.attempt, event.fields?.retryable])
+		).toEqual([
+			[1, true],
+			[2, true],
+		]);
 		await engine.dispose();
+	});
+
+	it("numbers push.error by consecutive PUSH failures, not the ack failures' backoff", async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_400 });
+		let failPush = false;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (failPush && url.includes('/push/')) return new Response('upstream boom', { status: 500 });
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		await engine.ready;
+		await insertBornLocalOrder(engine, UUID_A);
+		await engine.write({
+			collection: 'orders',
+			operation: 'create',
+			recordId: UUID_A,
+			payload: { status: 'pending' },
+			explicit: true,
+		});
+		const queue = queueFor(engine.active()!.database as never);
+		const ackSpy = vi
+			.spyOn(queue, 'acknowledge')
+			.mockRejectedValueOnce(new Error('storage down'))
+			.mockRejectedValueOnce(new Error('storage down'));
+		try {
+			// Two sends land but cannot be recorded: the queue row's backoff counter climbs.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			// Now the push itself fails, for the first time.
+			failPush = true;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1]);
+		} finally {
+			ackSpy.mockRestore();
+			await engine.dispose();
+		}
+	});
+
+	it('keeps the push streak across a 409 the drain re-anchors past', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let pushes = 0;
+		// Every drain: the push 409s, the drain re-anchors and re-pushes, and that 503s.
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (!url.includes('/push/')) return server.fetch(url, init as never);
+			pushes += 1;
+			return pushes % 2 === 1
+				? Response.json(
+						{ current: { id: 42 }, currentRevision: 'sha256:server-r2' },
+						{ status: 409 }
+					)
+				: new Response('upstream boom', { status: 503 });
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			// The 409 is not the end of the sequence, so it must not clear the streak.
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('starts a fresh push streak after a parked conflict is retried on the server base', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let mode: 'fail' | 'server' = 'fail';
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> =>
+			mode === 'fail' && url.includes('/push/')
+				? new Response('upstream boom', { status: 503 })
+				: server.fetch(url, init as never);
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+			// Two failed pushes, then the clash parks (two 409s outlive the recovery).
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			mode = 'server';
+			conflictPastAutoRecovery(server, 'sha256:server-r2');
+			expect(await engine.sync('write-drain')).toMatchObject({ conflicts: 1 });
+			// Retried on the server base: a NEW push sequence, so its first failure is attempt 1.
+			await engine.resolveConflict(receipt.mutationId, 'retry-with-server-base');
+			mode = 'fail';
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2, 1]);
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('write() on a collection without a push/ack contract is caller misuse', async () => {

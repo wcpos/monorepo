@@ -218,9 +218,10 @@ describe('NOOP_OBSERVER hot-path tripwire', () => {
 	});
 });
 
-it('types maintenance lane errors with an optional numeric transport status', () => {
+it('types maintenance lane errors with an optional numeric transport status and a streak', () => {
 	expectTypeOf<SyncEventFields<'maintenance.lane.error'>>().toEqualTypeOf<{
 		readonly lane: string;
 		readonly status?: number;
+		readonly consecutiveFailures: number;
 	}>();
 });

@@ -43,6 +43,12 @@ describe('package exports', () => {
 				// @wcpos/query's catalogue-search blob reads through it, so no
 				// unsubscribed full-read RxQuery stays cached (#2502).
 				'findAllUncached',
+				// Who reports a failed request (#2671): the host marks the errors it
+				// wrote a transport row for, and the cashier log reads the same
+				// reported-status rule the lanes stamp by — one rule, both sides.
+				'isReportedRequestStatus',
+				'markTransportFailure',
+				'requestStatusOf',
 			].sort()
 		);
 	});

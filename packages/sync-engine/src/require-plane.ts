@@ -82,6 +82,8 @@ import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
+import { type FailureStreak, scopeBoundFailureStreak } from './failure-streak';
+import { isReportedRequestStatus, requestStatusOf } from './transport-failure';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
@@ -501,6 +503,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
 	let running = false;
+	// Requirement stalls with no requirement completing in between, stamped on
+	// coverage.require.stalled: the screen re-declares a stalled requirement, so
+	// one stall is an attempt; repeated ones (storage that never settles, a walk
+	// that never progresses) have no other row and must reach the merchant.
+	// Replaced on every scope activation; each execution settles the instance it
+	// started with, so a scope-A execution timing out after the switch to B
+	// never counts toward B's streak.
+	const stallStreaks = scopeBoundFailureStreak(deps.manager);
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
@@ -613,7 +623,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		const mine = input.drain.tasks.filter((outcome) => owned.has(outcome.taskId));
 		const failed = mine.filter((outcome) => outcome.kind === 'failed');
 		if (failed.length > 0) {
-			throw new Error(`require: scheduler drain failed ${failed.length} task(s)`);
+			// Keep the cause: when every failed task died on a request the transport
+			// already reported, the requirement error carries that status so the log
+			// does not report the same incident as a local failure.
+			const reported = failed.every((outcome) => isReportedRequestStatus(outcome.requestStatus));
+			throw Object.assign(new Error(`require: scheduler drain failed ${failed.length} task(s)`), {
+				...(reported ? { status: failed[0]!.requestStatus } : {}),
+			});
 		}
 		const documents = mine.reduce((total, outcome) => total + outcome.documents, 0);
 		const requests = mine.reduce((total, outcome) => total + outcome.requests, 0);
@@ -672,6 +688,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const abandonStalledExecution = (
 		entry: QueuedRequirement,
 		startedAt: number,
+		executionStreak: FailureStreak,
 		execution: Promise<CoverageOutcome>
 	): void => {
 		const durationMs = Date.now() - startedAt;
@@ -680,6 +697,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		// surviving handle must find the entry already abandoned rather than
 		// re-running abandonment (or cascading it to a predecessor).
 		entry.released = true;
+		const consecutiveStalls = executionStreak.fail();
 		deps.diagnostics({
 			type: 'coverage.require.stalled',
 			level: 'warn',
@@ -689,6 +707,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				requirementId: entry.requirement.id,
 				kind: entry.requirement.kind,
 				durationMs,
+				consecutiveStalls,
 			},
 		});
 		const stallError = new Error(`require: stalled after ${durationMs}ms with no progress`);
@@ -1408,6 +1427,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				next.started = true;
 				const startedAt = Date.now();
+				const executionStreak = stallStreaks();
 				// The start line is the stall watchdog's evidence twin: when a stall IS hit, the
 				// artifact's last started-without-outcome pair names exactly which requirement
 				// wedged — the line run 33445432662 did not have.
@@ -1440,13 +1460,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (raced === STALLED) {
 					// One hung await must never starve the queue (the serial pump IS the
 					// choke point): abandon this execution and keep draining.
-					abandonStalledExecution(next, startedAt, execution);
+					abandonStalledExecution(next, startedAt, executionStreak, execution);
 					forgetSearch(next);
 					continue;
 				}
 				try {
 					if ('outcome' in raced) {
 						const outcome = raced.outcome;
+						executionStreak.reset();
 						deps.diagnostics({
 							type: 'coverage.require.outcome',
 							level: 'info',
@@ -1524,6 +1545,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								},
 							});
 						} else {
+							const requestStatus = requestStatusOf(error);
 							const message =
 								error instanceof Error && error.message.startsWith('require: ')
 									? error.message
@@ -1553,6 +1575,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 									// (the HTTP client logs a full stack there).
 									errorName: error instanceof Error ? error.name : typeof error,
 									errorDetail: error instanceof Error ? error.message : String(error),
+									// A failed request already has its own transport or deadline
+									// row; the status lets the log keep this one quiet.
+									...(requestStatus !== undefined ? { status: requestStatus } : {}),
 								},
 							});
 							for (const subscriber of next.subscribers) {

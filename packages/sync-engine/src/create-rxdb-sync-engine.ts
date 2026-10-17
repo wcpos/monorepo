@@ -56,6 +56,8 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { createFailureStreak, type FailureStreak } from './failure-streak';
+import { AUTO_REVERT_COLLECTIONS } from './write-path/auto-revert-collections';
 import { RequestTimeoutError, withRequestTimeout } from './write-path/request-timeout';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
@@ -153,13 +155,6 @@ import { type EngineTimers, systemTimers } from './engine-timers';
 import type { WriteOutcomeBridge } from './write-path/write-outcome-bridge';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
-
-const AUTO_REVERT_COLLECTIONS: ReadonlySet<string> = new Set([
-	'products',
-	'variations',
-	'customers',
-	'coupons',
-] satisfies SyncCollectionName[]);
 
 export type {
 	CoverageOutcome,
@@ -792,6 +787,24 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
+		// A refused catalogue change is reverted to server truth right after it
+		// dead-letters (see emitWriteEvent below), and the verdict is emitted where
+		// that outcome is known: `queue.write.auto-reverted` when the revert lands,
+		// a `push.rejected` marked `revertFailed` when it does not, or marked
+		// `revertSkipped` for a born-local create (which never reverts — it parks
+		// for Store health). This dead letter is stamped `revertPending` so the log
+		// keeps it an uncoded attempt. If the post-drain cleanup throws before
+		// write-rejected (so no revert runs), the write drain emits the verdict
+		// itself (`revertSkipped`) on its way out.
+		if (
+			event.type === 'push.rejected' &&
+			event.collection !== undefined &&
+			AUTO_REVERT_COLLECTIONS.has(event.collection) &&
+			event.fields?.revertFailed !== true &&
+			event.fields?.revertSkipped !== true
+		) {
+			event = { ...event, fields: { ...event.fields, revertPending: true } };
+		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
 				onLedgerRebuilt?.();
@@ -1008,8 +1021,27 @@ export function createRxdbSyncEngine(
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
+	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
+	// answer is retried by the next tick, so the log alarms only on a streak.
+	// Keyed by lane AND request path (query stripped): a lane issues several
+	// requests, and a healthy `/changes/tick` probe must not reset the streak of
+	// a `/changes/sequence-log` that keeps timing out beside it. Any answer on
+	// that path — whatever its status — ends its streak. Like the lane streaks,
+	// the instances are dropped on every scope activation (see the 'switched'
+	// handler) and each request settles the instance it started with.
+	const consecutiveDeadlines = new Map<string, FailureStreak>();
+	const deadlineStreakFor = (lane: string, url: string): FailureStreak => {
+		const key = `${lane} ${url.split(/[?#]/, 1)[0] ?? url}`;
+		let streak = consecutiveDeadlines.get(key);
+		if (streak === undefined) {
+			streak = createFailureStreak();
+			consecutiveDeadlines.set(key, streak);
+		}
+		return streak;
+	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
+		const deadlineStreak = deadlineStreakFor(lane, url);
 		const observation = createRequestObservation(startedAtMs, init?.signal);
 		const deadlineFetcher = withRequestTimeout(
 			(url, init) => transportFetcher(url, init, observation),
@@ -1017,14 +1049,20 @@ export function createRxdbSyncEngine(
 			timers
 		);
 		try {
-			return await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
+			deadlineStreak.reset();
+			return response;
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
 				observation.observe(0);
 				diagnostics({
 					type: 'engine.request.deadline',
 					level: 'warn',
-					fields: { lane, elapsedMs: nowMs() - startedAtMs },
+					fields: {
+						lane,
+						elapsedMs: nowMs() - startedAtMs,
+						consecutiveDeadlines: deadlineStreak.fail(),
+					},
 				});
 			}
 			throw error;
@@ -1042,21 +1080,28 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
+						const deadlineStreak = deadlineStreakFor('query-total-retry', input.request.endpoint);
 						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
-							return await withRequestTimeout(
+							const total = await withRequestTimeout(
 								(_url, init) =>
 									rawQueryTotal.fetchWooQueryTotal({ ...input, signal: init?.signal }),
 								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
+							deadlineStreak.reset();
+							return total;
 						} catch (error) {
 							if (error instanceof RequestTimeoutError) {
 								observe(0);
 								diagnostics({
 									type: 'engine.request.deadline',
 									level: 'warn',
-									fields: { lane: 'query-total-retry', elapsedMs: nowMs() - startedAtMs },
+									fields: {
+										lane: 'query-total-retry',
+										elapsedMs: nowMs() - startedAtMs,
+										consecutiveDeadlines: deadlineStreak.fail(),
+									},
 								});
 							}
 							throw error;
@@ -1163,9 +1208,15 @@ export function createRxdbSyncEngine(
 				status: report.status,
 			});
 		scheduleStatusChange();
+		// Always info, a failed tick included: every lane that reports
+		// `status: 'error'` has already written its own row about the cause
+		// (signal.tick.error, maintenance.lane.error, queue.write.tick.error), and
+		// the next tick re-runs it. The observer still files the row as failed from
+		// the status. Error stays only for the ticks that THREW past their lane
+		// (automatic-tick-gate, rebaseline continuation), which nothing else reports.
 		diagnostics({
 			type: 'engine.lane.tick',
-			level: report.status === 'error' ? 'error' : 'info',
+			level: 'info',
 			fields: {
 				lane: report.lane,
 				status: report.status,
@@ -1530,6 +1581,9 @@ export function createRxdbSyncEngine(
 	manager.onEvent((event: ScopeEvent) => {
 		switch (event.type) {
 			case 'switched': {
+				// Every deadline streak belongs to the outgoing scope: drop them all,
+				// so requests started from here on count from zero.
+				consecutiveDeadlines.clear();
 				for (const collection of SYNC_COLLECTION_NAMES) {
 					collectionCoverageGeneration.set(
 						collection,
@@ -1892,7 +1946,24 @@ export function createRxdbSyncEngine(
 			// warns before deleting). It dead-letters like an order instead: Store
 			// health lists the rejected row and "Send again" rebuilds the payload
 			// from the kept resident.
+			// The dead-letter verdict the stamped push.rejected deferred to, emitted
+			// here because this is where the change's outcome is known.
+			const rejectionVerdict = (marker: 'revertFailed' | 'revertSkipped') =>
+				diagnostics({
+					type: 'push.rejected',
+					level: 'error',
+					collection: event.collection,
+					fields: {
+						recordId: event.recordId,
+						mutationId: event.mutationId,
+						...(event.status !== undefined ? { status: event.status } : {}),
+						...(event.reason !== undefined ? { reason: event.reason } : {}),
+						...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
+						[marker]: true,
+					},
+				});
 			if (event.bornLocalCreate === true) {
+				rejectionVerdict('revertSkipped');
 				return;
 			}
 			// Reactive revert (#1082): a rejected catalog change is settled for the
@@ -1904,6 +1975,10 @@ export function createRxdbSyncEngine(
 			// exactly between that overlay's read and its upsert can still flash
 			// server truth for a beat — accepted: the newer mutation's queue row
 			// survives and the next drain re-decides the record either way.
+			// The scope this revert belongs to: a revert cut short by a store or
+			// cashier switch is stale, not failed — its verdict would land in the
+			// incoming scope's log. The change stays parked for Store health.
+			const revertScopeId = manager.activeScope;
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
@@ -1923,7 +1998,8 @@ export function createRxdbSyncEngine(
 						},
 					});
 				} catch {
-					// The rejected row stays parked for Store Health when discard cannot settle it.
+					// The revert failed: the rejected row stays parked for Store Health.
+					if (manager.activeScope === revertScopeId) rejectionVerdict('revertFailed');
 				}
 			})();
 		},
