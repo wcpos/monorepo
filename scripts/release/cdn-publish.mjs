@@ -121,14 +121,17 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 	token, publishToken, signingPrivateKey, fetch }) {
 	console.log('CDN: hash build and construct descriptor');
 	const files = await readBuild(buildDir);
+	if (!files[WORKER_FILE]) {
+		throw new Error('no sqlite.worker.js in the build: only 2.x builds publish to cdn.wcpos.com');
+	}
 	const sri = Object.fromEntries(Object.entries(files).map(([path, bytes]) => [path, computeSri(bytes)]));
-	const descriptor = buildDescriptor({ appVersion, monorepoSha, runId, lane, sri,
+	let descriptor = buildDescriptor({ appVersion, monorepoSha, runId, lane, sri,
 		metadata: JSON.parse(files[METADATA_FILE].toString()),
 		workerVersion: workerRxdbVersion(files[WORKER_FILE].toString()) });
-	const canonical = canonicalJson(descriptor);
+	let canonical = canonicalJson(descriptor);
 	console.log('CDN: sign descriptor and verify with WebCrypto');
 	const privateKey = createPrivateKey(signingPrivateKey);
-	const signature = signDescriptor(canonical, privateKey);
+	let signature = signDescriptor(canonical, privateKey);
 	const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
 	if (!await verifyDescriptorSignature(canonical, signature, publicJwk)) {
 		throw new Error('Descriptor signature failed WebCrypto verification');
@@ -157,7 +160,15 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 	// The R2 REST object API answers HEAD with 405, so existence is a GET of the small descriptor.
 	const existing = await request(`${CDN_ORIGIN}/b/${descriptor.build_id}/${DESCRIPTOR_FILE}`, 'GET', undefined, undefined, true, null);
 	console.log(existing.status === 200 ? 'CDN: completed build exists; skip R2 uploads' : 'CDN: upload build to R2');
-	if (existing.status !== 200) {
+	if (existing.status === 200) {
+		canonical = await existing.text();
+		const storedSignature = await request(`${CDN_ORIGIN}/b/${descriptor.build_id}/${SIGNATURE_FILE}`, 'GET', undefined, undefined, false, null);
+		signature = await storedSignature.text();
+		if (!await verifyDescriptorSignature(canonical, signature, publicJwk)) {
+			throw new Error('Stored descriptor signature failed WebCrypto verification');
+		}
+		descriptor = JSON.parse(canonical);
+	} else {
 		for (const path of Object.keys(files).sort()) {
 			await upload(`${BUILD_PREFIX}/${path}`, files[path], CONTENT_TYPES[extname(path).toLowerCase()] ?? DEFAULT_TYPE);
 		}

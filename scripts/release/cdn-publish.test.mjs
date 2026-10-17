@@ -88,6 +88,12 @@ async function fixture(t, options = {}) {
 	const calls = [];
 	const kv = new Map(Object.entries(options.kv ?? {}));
 	const r2 = new Map();
+	const storedDescriptor = canonicalJson(buildDescriptor({ ...descriptorOptions,
+		appVersion: options.appVersion ?? '2.0.0', lane: options.release ? undefined : 'next',
+		sri: Object.fromEntries(Object.entries(files).map(([path, bytes]) => [path, computeSri(bytes)])),
+		builtAt: '2020-01-01T00:00:00.000Z',
+	}));
+	const storedSignature = signDescriptor(options.badSignature ? `${storedDescriptor} ` : storedDescriptor, signingPrivateKey);
 	const manifestResponses = [...(options.manifestResponses ?? [])];
 	const fetch = async (input, init = {}) => {
 		const url = new URL(input);
@@ -117,9 +123,10 @@ async function fixture(t, options = {}) {
 			r2.set(key, { body: Buffer.from(init.body), type: init.headers['Content-Type'] });
 			return Response.json({ key });
 		}
-		if (/^\/b\/[0-9a-f]{16}\/bundle\.json$/.test(url.pathname)) {
+		if (/^\/b\/[0-9a-f]{16}\/bundle\.(json|sig)$/.test(url.pathname)) {
 			assert.equal(init.headers?.Authorization, undefined);
-			return new Response(options.exists ? '{}' : null, { status: options.exists ? 200 : 404 });
+			const body = url.pathname.endsWith('.json') ? storedDescriptor : storedSignature;
+			return new Response(options.exists ? body : null, { status: options.exists ? 200 : 404 });
 		}
 		assert.equal(init.headers?.Authorization, undefined);
 		if (url.pathname === '/manifest') {
@@ -135,7 +142,7 @@ async function fixture(t, options = {}) {
 		assert.ok(Object.hasOwn(files, path));
 		return new Response(options.corrupt ? 'corrupted' : files[path]);
 	};
-	return { calls, kv, r2, files, args: {
+	return { calls, kv, r2, files, storedDescriptor, storedSignature, args: {
 		buildDir, appVersion: options.appVersion ?? '2.0.0', monorepoSha: descriptorOptions.monorepoSha,
 		runId: '123', lane: options.release ? undefined : 'next', token: 'test-token', publishToken: 'test-publish-token', signingPrivateKey, fetch,
 	} };
@@ -200,6 +207,33 @@ test('release publish never reads or writes a lane pointer, even for prereleases
 	assert.ok(f.kv.has('index:2.0'));
 	assert.equal(f.calls.some((c) => decodeURIComponent(c.url.pathname).includes('lane:')), false);
 	assert.equal(f.calls.filter((c) => c.url.pathname === '/manifest').length, 1);
+});
+
+test('existing build reuses the stored signed bytes and timestamp without uploads', async (t) => {
+	const f = await fixture(t, { exists: true });
+	const result = await publish(f.args);
+	assert.deepEqual(f.kv.get(`bundle:${result.build_id}`), {
+		descriptor: f.storedDescriptor, signature: f.storedSignature,
+	});
+	assert.equal(f.kv.get('index:next')[0].built_at, '2020-01-01T00:00:00.000Z');
+	assert.equal(result.built_at, '2020-01-01T00:00:00.000Z');
+	assert.equal(f.r2.size, 0);
+	assert.ok(f.calls.some((c) => c.url.pathname.endsWith('/bundle.sig') && c.method === 'GET'));
+});
+
+test('stored signature mismatch is fatal before any writes', async (t) => {
+	const f = await fixture(t, { exists: true, badSignature: true });
+	await assert.rejects(publish(f.args), /Stored descriptor signature failed WebCrypto verification/);
+	assert.equal(f.calls.some((c) => c.method === 'PUT'), false);
+});
+
+test('build without sqlite worker fails with the 2.x-only explanation before requests', async (t) => {
+	const f = await fixture(t);
+	await rm(join(f.args.buildDir, 'sqlite.worker.js'));
+	await assert.rejects(publish(f.args), {
+		message: 'no sqlite.worker.js in the build: only 2.x builds publish to cdn.wcpos.com',
+	});
+	assert.equal(f.calls.length, 0);
 });
 
 test('publish encodes individual R2 segments and maps other asset extensions', async (t) => {

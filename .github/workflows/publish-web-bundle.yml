@@ -88,6 +88,7 @@ jobs:
       app_version: ${{ steps.build-version.outputs.app_version }}
       web_bundle_commit: ${{ steps.web-bundle.outputs.commit }}
       cdn_configured: ${{ steps.cdn-config.outputs.configured }}
+      cdn_lane: ${{ steps.build-version.outputs.cdn_lane }}
     steps:
       - name: 🔎 Is CDN publishing configured?
         id: cdn-config
@@ -207,9 +208,27 @@ jobs:
         run: pnpm web build
 
       - name: 📌 Record the built app version
-        if: ${{ steps.build.outcome == 'success' }}
+        if: ${{ steps.build.outcome == 'success' || steps.published.outputs.already == 'true' }}
         id: build-version
-        run: echo "app_version=$(node -p "require('./apps/main/package.json').version")" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT: ${{ steps.build.outcome == 'success' }}
+          MONOREPO_SHA: ${{ steps.monorepo-sha.outputs.sha }}
+          BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILT" = true ]; then
+            app_version=$(node -p "require('./apps/main/package.json').version")
+          else
+            app_version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/apps/main/package.json?ref=${MONOREPO_SHA}" \
+              -H "Accept: application/vnd.github.raw" --jq .version)
+          fi
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          if [ "$BUNDLE_BRANCH" = next ] || [ "${app_version%%.*}" -ge 2 ]; then
+            echo "cdn_lane=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cdn_lane=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # The build copies apps/main/public into build/ and web-bundle's build.js keeps
       # its pinned indexeddb.worker.js; gate every worker about to be published.
@@ -417,7 +436,7 @@ jobs:
   cdn:
     name: ☁️ Publish to cdn.wcpos.com
     needs: publish
-    if: needs.publish.outputs.built == 'true' && needs.publish.outputs.cdn_configured == 'true'
+    if: needs.publish.outputs.cdn_configured == 'true' && needs.publish.outputs.cdn_lane == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -434,10 +453,36 @@ jobs:
           node-version: 24
 
       - name: 📦 Download web build
+        if: ${{ needs.publish.outputs.built == 'true' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: web-build
           path: ${{ runner.temp }}/web-build
+
+      - name: 📌 Resolve the CDN build directory
+        id: cdn-build
+        env:
+          BUILT: ${{ needs.publish.outputs.built }}
+          WEB_BUNDLE_COMMIT: ${{ needs.publish.outputs.web_bundle_commit }}
+          BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
+          MONOREPO_SHA: ${{ needs.publish.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILT" = true ]; then
+            echo "build_dir=$RUNNER_TEMP/web-build" >> "$GITHUB_OUTPUT"
+            echo "web_bundle_commit=$WEB_BUNDLE_COMMIT" >> "$GITHUB_OUTPUT"
+          else
+            git clone --depth 1 --branch "$BUNDLE_BRANCH" https://github.com/wcpos/web-bundle.git "$RUNNER_TEMP/web-bundle"
+            head_message=$(git -C "$RUNNER_TEMP/web-bundle" log -1 --format=%B)
+            if [[ "$head_message" != *"from monorepo $MONOREPO_SHA"* ]]; then
+              echo "::error::web-bundle@$BUNDLE_BRANCH has moved on; bytes for monorepo $MONOREPO_SHA are gone."
+              exit 1
+            fi
+            # The retention rule may leave hashed chunks from the previous day's build.
+            # A different build id than the artifact path would yield is accepted.
+            echo "build_dir=$RUNNER_TEMP/web-bundle/build" >> "$GITHUB_OUTPUT"
+            echo "web_bundle_commit=$(git -C "$RUNNER_TEMP/web-bundle" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: ☁️ Sign, publish and verify CDN build
         env:
@@ -446,11 +491,12 @@ jobs:
           CDN_SIGNING_PRIVATE_KEY: ${{ secrets.CDN_SIGNING_PRIVATE_KEY }}
           APP_VERSION: ${{ needs.publish.outputs.app_version }}
           MONOREPO_SHA: ${{ needs.publish.outputs.sha }}
-          WEB_BUNDLE_COMMIT: ${{ needs.publish.outputs.web_bundle_commit }}
+          BUILD_DIR: ${{ steps.cdn-build.outputs.build_dir }}
+          WEB_BUNDLE_COMMIT: ${{ steps.cdn-build.outputs.web_bundle_commit }}
           BUNDLE_BRANCH: ${{ github.event.inputs.bundle_branch }}
         run: |
           set -euo pipefail
-          args=(--build-dir "$RUNNER_TEMP/web-build" --app-version "$APP_VERSION"
+          args=(--build-dir "$BUILD_DIR" --app-version "$APP_VERSION"
             --monorepo-sha "$MONOREPO_SHA" --run-id "$GITHUB_RUN_ID")
           if [ "$BUNDLE_BRANCH" = next ]; then args+=(--lane next); fi
           if [ -n "$WEB_BUNDLE_COMMIT" ]; then args+=(--web-bundle-commit "$WEB_BUNDLE_COMMIT"); fi
