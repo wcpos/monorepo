@@ -47,6 +47,7 @@ import { useCartLines } from '../hooks/use-cart-lines';
 import { EmptyCart } from './empty-cart';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
+import { type CartTableReadOnly, CartTableReadOnlyProvider } from './cells/read-only';
 
 import type { Column, ColumnDef } from '../../../../table-types';
 const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
@@ -147,8 +148,19 @@ interface CartTableProps {
 	 * existing order they are baseline data.
 	 */
 	lastDraftOrderUuidRef?: React.RefObject<string | undefined>;
+	/**
+	 * Checkout and receipt: the same table, columns and widths, stilled. Every cell renders
+	 * its value as text, rows are not pressable (no swipe, Edit or Remove), and there is no
+	 * add pulse and no scroll-to-row. See `cells/read-only.tsx`.
+	 */
+	readOnly?: boolean;
+	/** Read-only only: the split-payment annotation per line (`useCheckoutMode().linesPaidBy`). */
+	paidBy?: CartTableReadOnly['paidBy'];
+	/** Read-only only: rendered inside the rows' scroll after the last row (the payments block). */
+	footer?: React.ReactNode;
 }
-export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
+export function CartTable({ lastDraftOrderUuidRef, readOnly, paidBy, footer }: CartTableProps) {
+	const readOnlyValue = React.useMemo(() => (readOnly ? { paidBy } : null), [readOnly, paidBy]);
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const t = useT();
 	// The decided cart line at phone width has no Price column (the cart board, 2026-09-17):
@@ -202,6 +214,9 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	 * rowRefs). Routing it through state/meta instead re-ran a consumer effect
 	 * on every cart re-render (totals recalcs), restarting the animation
 	 * several times per add and making it stutter.
+	 *
+	 * Read-only rows are plain `TableRow`s that never register in rowRefs, so the
+	 * stilled cart cannot pulse: nothing it shows was just added.
 	 */
 	React.useEffect(() => {
 		if (!currentOrderRef.current?.uuid) {
@@ -273,7 +288,9 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 		features: cartTableFeatures,
 		data,
 		columns,
-		getRowId: (line) => line.uuid,
+		// A line without POS uuid meta (an order made outside the POS, seen on a receipt) falls
+		// back to its server id within its kind, so two such lines never share a row identity.
+		getRowId: (line) => line.uuid || `${line.type}-${line.item.id ?? line.position}`,
 		// debugTable: true,
 		meta: {
 			onChange: (_data: unknown) => {
@@ -290,107 +307,137 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 			},
 		},
 	});
+	const cellProps = (
+		id: string,
+		meta: Column<CartTableLine, unknown, CartTableFeatures>['columnDef']['meta']
+	) => {
+		return {
+			className: AMOUNT_COLUMNS[id]?.cell,
+			style: AMOUNT_COLUMNS[id]
+				? { alignItems: getFlexAlign(meta?.align || 'left') }
+				: {
+						flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+						flexBasis: meta?.width ? meta.width : undefined,
+						flexShrink: id === 'name' ? 1 : 0,
+						alignItems: getFlexAlign(meta?.align || 'left'),
+					},
+		};
+	};
 	return (
-		<Table
-			aria-labelledby="cart-table"
-			className="h-full"
-			onLayout={({ nativeEvent }) => setNarrow(nativeEvent.layout.width < PRICE_COLUMN_MIN_WIDTH)}
-		>
-			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
-				React.createElement(
-					// Measurement tooling must stay outside ordinary application bundles (ledger 16).
+		<CartTableReadOnlyProvider value={readOnlyValue}>
+			<Table
+				aria-labelledby="cart-table"
+				className="h-full"
+				onLayout={({ nativeEvent }) => setNarrow(nativeEvent.layout.width < PRICE_COLUMN_MIN_WIDTH)}
+			>
+				{!readOnly &&
+					process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+					React.createElement(
+						// Measurement tooling must stay outside ordinary application bundles (ledger 16).
 
-					(
-						require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
-					).CartAddTimingCommit,
-					{ orderId: currentOrderRecord.uuid, lines: line_items }
-				)}
-			<TableHeader className="border-border border-b">
-				{table.getHeaderGroups().map((group) => (
-					<TableRow key={group.id} className="min-h-row">
-						{group.headers.map((header) => {
-							const meta = header.column.columnDef.meta;
-							return (
-								<TableHead
-									key={header.id}
-									className={cn('min-h-row', AMOUNT_COLUMNS[header.column.id]?.head)}
-									style={
-										AMOUNT_COLUMNS[header.column.id]
-											? { alignItems: getFlexAlign(meta?.align || 'left') }
-											: {
-													flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-													flexBasis: meta?.width ? meta.width : undefined,
-													flexShrink: header.column.id === 'name' ? 1 : 0,
-													alignItems: getFlexAlign(meta?.align || 'left'),
-												}
-									}
-								>
-									{header.isPlaceholder || meta?.hideLabel
-										? null
-										: flexRender(header.column.columnDef.header, header.getContext())}
-								</TableHead>
-							);
-						})}
-					</TableRow>
-				))}
-			</TableHeader>
-			{data.length === 0 ? (
-				<EmptyCart />
-			) : (
-				<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
-					<TableBody>
-						{table.getRowModel().rows.map((row, index) => (
-							<PulseTableRow
-								key={row.id}
-								ref={(ref) => {
-									rowRefs.current.set(row.id, ref);
-								}}
-								index={index}
-								table={table}
-								row={row}
-								className="bg-card border-border min-h-row border-b"
-								onLayout={(e) => {
-									const { y, height } = e.nativeEvent.layout;
-									rowLayouts.current.set(row.id, { y, height });
-								}}
-							>
-								<LineStrip line={row.original} rowRefs={rowRefs}>
-									{(wrapTotal) => {
-										const visible = row.getVisibleCells();
-										// The strip's press target is the Total cell; with Total hidden in the
-										// settings it is the last visible cell, so Edit and Remove stay reachable.
-										const targetId = visible.some((cell) => cell.column.id === 'total')
-											? 'total'
-											: visible.at(-1)?.column.id;
-										return visible.map((cell) => {
-											const meta = cell.column.columnDef.meta;
-											const content = flexRender(cell.column.columnDef.cell, cell.getContext());
-											return (
-												<TableCell
-													key={cell.id}
-													className={AMOUNT_COLUMNS[cell.column.id]?.cell}
-													style={
-														AMOUNT_COLUMNS[cell.column.id]
-															? { alignItems: getFlexAlign(meta?.align || 'left') }
-															: {
-																	flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-																	flexBasis: meta?.width ? meta.width : undefined,
-																	flexShrink: cell.column.id === 'name' ? 1 : 0,
-																	alignItems: getFlexAlign(meta?.align || 'left'),
-																}
+						(
+							require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
+						).CartAddTimingCommit,
+						{ orderId: currentOrderRecord.uuid, lines: line_items }
+					)}
+				<TableHeader className="border-border border-b">
+					{table.getHeaderGroups().map((group) => (
+						<TableRow key={group.id} className="min-h-row">
+							{group.headers.map((header) => {
+								const meta = header.column.columnDef.meta;
+								return (
+									<TableHead
+										key={header.id}
+										className={cn('min-h-row', AMOUNT_COLUMNS[header.column.id]?.head)}
+										style={
+											AMOUNT_COLUMNS[header.column.id]
+												? { alignItems: getFlexAlign(meta?.align || 'left') }
+												: {
+														flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+														flexBasis: meta?.width ? meta.width : undefined,
+														flexShrink: header.column.id === 'name' ? 1 : 0,
+														alignItems: getFlexAlign(meta?.align || 'left'),
 													}
-												>
-													{cell.column.id === targetId ? wrapTotal(content) : content}
-												</TableCell>
-											);
-										});
+										}
+									>
+										{header.isPlaceholder || meta?.hideLabel
+											? null
+											: flexRender(header.column.columnDef.header, header.getContext())}
+									</TableHead>
+								);
+							})}
+						</TableRow>
+					))}
+				</TableHeader>
+				{readOnly ? (
+					<ScrollView testID="checkout-cart-scroll">
+						<TableBody>
+							{table.getRowModel().rows.map((row) => (
+								<TableRow
+									key={row.id}
+									testID="checkout-line-row"
+									className="bg-card border-border min-h-row border-b"
+								>
+									{row.getVisibleCells().map((cell) => (
+										<TableCell
+											key={cell.id}
+											{...cellProps(cell.column.id, cell.column.columnDef.meta)}
+										>
+											{flexRender(cell.column.columnDef.cell, cell.getContext())}
+										</TableCell>
+									))}
+								</TableRow>
+							))}
+						</TableBody>
+						{footer}
+					</ScrollView>
+				) : data.length === 0 ? (
+					<EmptyCart />
+				) : (
+					<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
+						<TableBody>
+							{table.getRowModel().rows.map((row, index) => (
+								<PulseTableRow
+									key={row.id}
+									ref={(ref) => {
+										rowRefs.current.set(row.id, ref);
 									}}
-								</LineStrip>
-							</PulseTableRow>
-						))}
-					</TableBody>
-				</ScrollView>
-			)}
-		</Table>
+									index={index}
+									table={table}
+									row={row}
+									className="bg-card border-border min-h-row border-b"
+									onLayout={(e) => {
+										const { y, height } = e.nativeEvent.layout;
+										rowLayouts.current.set(row.id, { y, height });
+									}}
+								>
+									<LineStrip line={row.original} rowRefs={rowRefs}>
+										{(wrapTotal) => {
+											const visible = row.getVisibleCells();
+											// The strip's press target is the Total cell; with Total hidden in the
+											// settings it is the last visible cell, so Edit and Remove stay reachable.
+											const targetId = visible.some((cell) => cell.column.id === 'total')
+												? 'total'
+												: visible.at(-1)?.column.id;
+											return visible.map((cell) => {
+												const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+												return (
+													<TableCell
+														key={cell.id}
+														{...cellProps(cell.column.id, cell.column.columnDef.meta)}
+													>
+														{cell.column.id === targetId ? wrapTotal(content) : content}
+													</TableCell>
+												);
+											});
+										}}
+									</LineStrip>
+								</PulseTableRow>
+							))}
+						</TableBody>
+					</ScrollView>
+				)}
+			</Table>
+		</CartTableReadOnlyProvider>
 	);
 }

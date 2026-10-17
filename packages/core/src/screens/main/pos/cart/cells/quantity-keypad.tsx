@@ -7,16 +7,39 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../../contexts/translations';
 import { NumberInput } from '../../../components/number-input';
+import { useNumberFormat } from '../../../hooks/use-number-format';
 import { lineRef, useCartUnmet } from '../../conditions/use-cart-conditions';
 import { useSplitLineItem } from '../../hooks/use-split-line-item';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
+import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
 	type: 'line_items';
 }
-export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
+export function Quantity(props: CellContext<Props, 'quantity'>) {
+	return useCartTableReadOnly() ? <ReadOnlyQuantity {...props} /> : <EditableQuantity {...props} />;
+}
+
+/** The quantity as the input shows it, centred in the same cell, with nothing to press. */
+function ReadOnlyQuantity({ row }: CellContext<Props, 'quantity'>) {
+	const { item, uuid } = row.original;
+	// The store's separators, as the quantity input shows a fractional quantity.
+	const { format } = useNumberFormat();
+	return (
+		<VStack className="min-h-row items-center justify-center">
+			<Text
+				testID={readOnlyTestID('qty', readOnlyLineKey(uuid, item))}
+				className="text-center font-semibold tabular-nums"
+			>
+				{format(item.quantity ?? 1)}
+			</Text>
+		</VStack>
+	);
+}
+
+function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
 	const { splitLineItem } = useSplitLineItem();

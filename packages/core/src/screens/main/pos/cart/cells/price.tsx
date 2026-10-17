@@ -8,16 +8,45 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
+import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
 	type: 'line_items';
 }
-export function Price({ row, column }: CellContext<Props, 'price'>) {
+export function Price(props: CellContext<Props, 'price'>) {
+	return useCartTableReadOnly() ? <ReadOnlyPrice {...props} /> : <EditablePrice {...props} />;
+}
+
+/** The unit price the input shows, as muted text in the order's currency. */
+function ReadOnlyPrice({ row, column }: CellContext<Props, 'price'>) {
+	const { item, uuid } = row.original;
+	const { getLineItemData } = useLineItemData();
+	const { price, regular_price } = getLineItemData(item);
+	const { format } = useCurrentOrderCurrencyFormat();
+	return (
+		<VStack space="xs">
+			{price !== regular_price && column.columnDef.meta?.show?.('on_sale') && (
+				<Text className="text-muted-foreground text-right tabular-nums line-through">
+					{format(regular_price || 0)}
+				</Text>
+			)}
+			<Text
+				testID={readOnlyTestID('price', readOnlyLineKey(uuid, item))}
+				className="text-muted-foreground text-right tabular-nums"
+			>
+				{format(Number(price ?? 0))}
+			</Text>
+		</VStack>
+	);
+}
+
+function EditablePrice({ row, column }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
