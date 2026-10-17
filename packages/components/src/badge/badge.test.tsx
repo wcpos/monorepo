@@ -153,13 +153,13 @@ describe('badge label', () => {
 
 describe('badge tinted', () => {
 	it.each([
-		['success', 'bg-success/15', 'text-success'],
-		['warning', 'bg-warning/15', 'text-warning'],
-		['destructive', 'bg-destructive/15', 'text-destructive'],
-		['default', 'bg-primary/15', 'text-primary'],
+		['success', 'bg-success/15'],
+		['warning', 'bg-warning/15'],
+		['destructive', 'bg-destructive/15'],
+		['default', 'bg-primary/15'],
 	] as const)(
-		'%s: a wash of the tone, the words in the tone, the solid height',
-		(tone, bg, text) => {
+		'%s: a wash of the tone, the words in the foreground, the solid height',
+		(tone, bg) => {
 			const { container } = render(
 				<Badge variant={tone} tinted>
 					Ready
@@ -168,9 +168,10 @@ describe('badge tinted', () => {
 			const root = container.firstChild as HTMLElement;
 			expect(root).toHaveClass(bg, 'h-5', 'rounded-full');
 			expect(root.className).not.toMatch(new RegExp(`(^| )${bg.split('/')[0]}( |$)`));
+			// The words keep the 4.5:1 floor on every wash: amber on amber/15 is 2.7:1 in light.
 			const label = screen.getByText('Ready');
-			expect(label).toHaveClass(text);
-			expect(label.className).not.toMatch(/-foreground/);
+			expect(label).toHaveClass('text-foreground');
+			expect(label.className).not.toMatch(/text-(success|warning|destructive|primary)\b/);
 		}
 	);
 

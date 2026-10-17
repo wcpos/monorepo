@@ -26,9 +26,12 @@ const badgeVariants = cva('items-center justify-center rounded-full', {
 		},
 		/**
 		 * The quiet form of a state label (a printer scan's "Ready", a scan test's "Typing"): a wash
-		 * of the tone with the words in the tone, at the solid badge's height. The solid badge is
-		 * for counts and states that must be seen at a glance; the tinted one sits in a row beside
-		 * the row's own text. Muted has no wash to lighten, so it stays as the solid muted.
+		 * of the tone behind words in the foreground, at the solid badge's height. The words are not
+		 * in the tone: amber and green text on their own wash read 2.7:1 and 3.9:1 in the light
+		 * theme, under the 4.5:1 text floor (§ Design 7), and one colour rule for every tone beats
+		 * a per-tone exception. The solid badge is for counts and states that must be seen at a
+		 * glance; the tinted one sits in a row beside the row's own text. Muted has no wash to
+		 * lighten, so it stays as the solid muted.
 		 */
 		tinted: { true: '', false: '' },
 	},
@@ -64,11 +67,11 @@ const badgeTextVariants = cva('font-bold tabular-nums', {
 		tinted: { true: '', false: '' },
 	},
 	compoundVariants: [
-		{ tinted: true, variant: 'default', class: 'text-primary' },
-		{ tinted: true, variant: 'destructive', class: 'text-destructive' },
-		{ tinted: true, variant: 'secondary', class: 'text-secondary' },
-		{ tinted: true, variant: 'success', class: 'text-success' },
-		{ tinted: true, variant: 'warning', class: 'text-warning' },
+		{ tinted: true, variant: 'default', class: 'text-foreground' },
+		{ tinted: true, variant: 'destructive', class: 'text-foreground' },
+		{ tinted: true, variant: 'secondary', class: 'text-foreground' },
+		{ tinted: true, variant: 'success', class: 'text-foreground' },
+		{ tinted: true, variant: 'warning', class: 'text-foreground' },
 	],
 	defaultVariants: {
 		variant: 'default',
