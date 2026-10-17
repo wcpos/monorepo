@@ -38,14 +38,18 @@ export function ConnectionTypeSegmented({
 		{ value: 'bluetooth', label: t('settings.connection_bluetooth') },
 		{ value: 'usb', label: t('settings.connection_usb') },
 	];
-	const options = allOptions.filter((option) => enabledTypes.includes(option.value));
-
-	// One way is no choice: with a single supported type (a browser without WebUSB or Web
-	// Bluetooth) there is nothing to switch, so no control is drawn.
-	if (options.length < 2) return null;
-	const segments = options.map((option): Segment => ({
+	const current = value === 'system' ? 'usb' : value;
+	// A saved type this platform cannot use (a USB printer opened in a browser without WebUSB)
+	// stays on show, disabled, so the cashier sees it and can move the profile to a supported one.
+	const shown = allOptions.filter(
+		(option) => enabledTypes.includes(option.value) || option.value === current
+	);
+	// One way is no choice: when the only type is the one already set, nothing is drawn.
+	if (shown.length < 2) return null;
+	const segments = shown.map((option): Segment => ({
 		value: option.value,
 		label: option.label,
+		disabled: !enabledTypes.includes(option.value),
 		testID: `add-printer-connection-type-${option.value}`,
 	})) as unknown as React.ComponentProps<typeof SegmentedControl>['segments']; // 2 or 3, checked above
 
@@ -55,7 +59,7 @@ export function ConnectionTypeSegmented({
 			testID="add-printer-connection-type-segmented"
 			className="w-full"
 			segments={segments}
-			value={value === 'system' ? 'usb' : value}
+			value={current}
 			onValueChange={(next) => {
 				if (isConnectionType(next)) {
 					onChange(next);

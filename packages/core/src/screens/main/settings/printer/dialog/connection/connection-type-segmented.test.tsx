@@ -26,7 +26,9 @@ jest.mock('@wcpos/components/segmented-control', () => ({
 					data-testid={segment.testID}
 					role="radio"
 					aria-checked={segment.value === value ? 'true' : 'false'}
-					onClick={() => onValueChange(segment.value)}
+					disabled={segment.disabled}
+					// As the real control: choosing the selected segment again is a no-op.
+					onClick={() => segment.value !== value && onValueChange(segment.value)}
 				>
 					{segment.label}
 				</button>
@@ -63,6 +65,22 @@ describe('ConnectionTypeSegmented', () => {
 		expect(screen.getByTestId('add-printer-connection-type-usb')).toBeInTheDocument();
 		expect(screen.queryByTestId('add-printer-connection-type-bluetooth')).toBeNull();
 		expect(screen.queryByTestId('add-printer-connection-type-cloud')).toBeNull();
+	});
+
+	it('keeps a saved type this platform cannot use on show, disabled, beside the supported one', () => {
+		const onChange = jest.fn();
+		render(
+			<ConnectionTypeSegmented
+				form={{ clearErrors: jest.fn() }}
+				value="usb"
+				onChange={onChange}
+				availableTypes={['network']}
+			/>
+		);
+
+		expect(screen.getByTestId('add-printer-connection-type-usb')).toBeDisabled();
+		fireEvent.click(screen.getByTestId('add-printer-connection-type-network'));
+		expect(onChange).toHaveBeenCalledWith('network');
 	});
 
 	it('draws no switch when only one connection type is supported', () => {
@@ -121,7 +139,8 @@ it.each(['bluetooth', 'usb'])(
 		await waitFor(() => expect(screen.getByTestId('address-error')).toBeEmptyDOMElement());
 		fireEvent.click(screen.getByText('Invalidate'));
 		expect(screen.getByTestId('address-error')).toHaveTextContent('required');
-		fireEvent.click(screen.getByTestId(`add-printer-connection-type-${type}`));
+		// A real transition back: choosing the selected segment again changes nothing.
+		fireEvent.click(screen.getByTestId('add-printer-connection-type-network'));
 		await waitFor(() => expect(screen.getByTestId('address-error')).toBeEmptyDOMElement());
 	}
 );
