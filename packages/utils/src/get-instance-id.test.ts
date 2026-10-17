@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import { BroadcastChannel } from 'node:worker_threads';
 type GetInstanceId = typeof import('./get-instance-id.web').getInstanceId;
 
 describe('getInstanceId (web)', () => {
@@ -49,30 +48,54 @@ describe('getInstanceId (web)', () => {
 		read.mockRestore();
 	});
 
-	it('converges two unlocked tabs that each read back their own candidate', async () => {
+	it('converges unlocked tab memos and storage despite delayed channel delivery', async () => {
+		jest.useFakeTimers();
+		const channels: DelayedChannel[] = [];
+		class DelayedChannel {
+			onmessage: ((event: { data: unknown }) => void) | null = null;
+			constructor() {
+				channels.push(this);
+			}
+			postMessage(data: unknown) {
+				for (const peer of channels.filter((peer) => peer !== this))
+					setTimeout(() => peer.onmessage?.({ data }), 100);
+			}
+			close() {
+				this.onmessage = null;
+			}
+		}
 		const second = jest.requireActual<{ getInstanceId: GetInstanceId }>(
 			'./get-instance-id.web'
 		).getInstanceId;
 		Object.defineProperty(globalThis, 'BroadcastChannel', {
 			configurable: true,
-			value: BroadcastChannel,
+			value: DelayedChannel,
 		});
 		const a = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 		const b = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 		const candidates: ReturnType<Crypto['randomUUID']>[] = [b, a];
 		const mint = jest
 			.spyOn(window.crypto, 'randomUUID')
-			.mockImplementation(() => candidates.shift()!);
+			.mockImplementation(() => candidates.shift() ?? a);
 		const read = jest
 			.spyOn(Storage.prototype, 'getItem')
 			.mockReturnValueOnce(null)
 			.mockReturnValueOnce(b)
+			.mockReturnValueOnce(b)
 			.mockReturnValueOnce(null);
 		try {
-			const ids = await Promise.all([getInstanceId(), second()]);
-			expect(ids).toEqual([a, a]);
+			const first = getInstanceId();
+			await jest.advanceTimersByTimeAsync(60);
+			const other = second();
+			await jest.advanceTimersByTimeAsync(110);
+			expect(await getInstanceId()).toBe(a);
+			await jest.advanceTimersByTimeAsync(500);
+			await Promise.all([first, other]);
+			expect(await getInstanceId()).toBe(a);
+			expect(await second()).toBe(a);
 			expect(window.localStorage.getItem('wcpos_instance_id')).toBe(a);
 		} finally {
+			jest.useRealTimers();
 			read.mockRestore();
 			mint.mockRestore();
 			jest.resetModules();
