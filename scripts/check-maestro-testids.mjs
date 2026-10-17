@@ -100,8 +100,17 @@ for (const dir of isMain ? sourceDirs : []) {
 			// An arm counts only when it IS a literal (after `?` or `:`, before `:` or the end),
 			// never a string nested in a call such as `makeID('suffix')`.
 			const arms = m[1].slice(conditional.index);
-			for (const value of arms.matchAll(/[?:]\s*["']([^"']+)["']\s*(?=:|$|[;)\]}])/g)) {
-				literals.add(value[1]);
+			// A parenthesised arm, `? ('a') :`, is still the literal; a template arm adds its
+			// static prefix (or the whole template when it interpolates nothing).
+			for (const value of arms.matchAll(
+				/[?:]\s*\(?\s*(?:["']([^"']+)["']|`([^`]*)`)\s*\)?\s*(?=:|$|[;)\]}])/g
+			)) {
+				if (value[1] !== undefined) literals.add(value[1]);
+				else {
+					const dynamicStart = value[2].indexOf('${');
+					if (dynamicStart === -1) literals.add(value[2]);
+					else if (dynamicStart > 0) prefixes.add(value[2].slice(0, dynamicStart));
+				}
 			}
 		}
 		// Template-literal values, including inside short expressions (ternaries).

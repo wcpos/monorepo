@@ -68,6 +68,14 @@ test('counts an arm only when the arm is the literal, not a quoted call argument
 	);
 });
 
+test('counts parenthesised and template-literal arms of a testID variable', (t) => {
+	const source =
+		"const testID = on ? ('active-id') : 'inactive-id';\n" +
+		'const rowTestID = left ? `left-${l}` : `right-${r}`;';
+	const present = check(t, "id: 'active-id'\nid: 'inactive-id'\nid: 'right-456'", source);
+	assert.equal(present.status, 0, present.stderr);
+});
+
 test('reads a typed testID variable and starts the arms at the conditional, not at ?. or ??', (t) => {
 	const source = `const testID: string = product?.kind === 'cond-a' ? 'typed-a' : 'typed-b';
 const otherTestID = (mode ?? 'cond-b') === 'x' ? 'typed-c' : 'typed-d';`;
