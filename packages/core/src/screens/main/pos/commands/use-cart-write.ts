@@ -17,5 +17,18 @@ export function useCartWrite() {
 			settleCartWrite(input, { localPatch, configForOrder, serverOwnsMoney }),
 		[localPatch, configForOrder, serverOwnsMoney]
 	);
-	return { localPatch: write };
+	// Birth writes use the same settlement/ownership guard before inserting their resident.
+	const settleIntent = React.useCallback(
+		(document: CurrentOrderRecord, data: object) =>
+			settleCartWrite(
+				{ document, data },
+				{
+					localPatch: ({ data }) => data,
+					configForOrder,
+					serverOwnsMoney,
+				}
+			),
+		[configForOrder, serverOwnsMoney]
+	);
+	return { localPatch: write, settleIntent };
 }

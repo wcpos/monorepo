@@ -10,7 +10,7 @@ import type { OrderPayload } from './cart-config-for-order';
 export function settleCartWrite<T>(
 	input: { document: CurrentOrderRecord; data: object },
 	deps: {
-		localPatch: (input: { document: CurrentOrderRecord; data: object }) => T;
+		localPatch: (input: { document: CurrentOrderRecord; data: Record<string, unknown> }) => T;
 		configForOrder: (order: OrderPayload) => CartConfig;
 		serverOwnsMoney: (uuid: string) => boolean;
 	}

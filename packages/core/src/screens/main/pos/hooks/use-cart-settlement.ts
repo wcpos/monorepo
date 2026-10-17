@@ -269,40 +269,41 @@ export const useCartSettlement = () => {
 	 */
 	const moneyWriteChain = React.useRef<Promise<unknown>>(Promise.resolve());
 
+	const writeSettledMoney = React.useCallback(
+		(latestOrder: CurrentOrderRecord, data: Partial<OrderDocument>) =>
+			localPatch({ document: latestOrder, data }),
+		[localPatch]
+	);
+
 	const settleMoney = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
-			const result = settleAggregate(
-				snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
-				configForOrder(freshOrder.payload)
-			);
-			// Before the `changed` bail, not after: a cart whose money is already
-			// correct can still be resting on a tax rate the store has dropped, and
-			// that is precisely the order the cashier must be told about.
-			reportEngineWarnings(result.warnings, {
-				orderId: freshOrder.uuid,
-				site: 'settleAggregate',
-			});
-			if (!result.changed) return;
 			const write = moneyWriteChain.current.then(() => {
-				const latest = currentOrderRecord.getLatest();
+				const latestOrder = currentOrderRecord.getLatest();
 				if (
 					serverOwnsMoneyRef.current ||
-					latest.payload.meta_data?.some(
+					latestOrder.payload.meta_data?.some(
 						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
 					)
 				)
 					return;
-				return localPatch({
-					document: latest,
-					data: settlementPatch(result) as Partial<OrderDocument>,
+				const result = settleAggregate(
+					snapshotFromOrderJSON(latestOrder.payload),
+					configForOrder(latestOrder.payload)
+				);
+				// Report warnings even when the persisted money already matches.
+				reportEngineWarnings(result.warnings, {
+					orderId: freshOrder.uuid,
+					site: 'settleAggregate',
 				});
+				if (!result.changed) return;
+				return writeSettledMoney(latestOrder, settlementPatch(result) as Partial<OrderDocument>);
 			});
 			// The chain must survive a failed write, or one rejection would strand every
 			// later settlement behind it. The caller still sees the rejection.
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[configForOrder, currentOrderRecord, localPatch, reportEngineWarnings]
+		[configForOrder, currentOrderRecord, reportEngineWarnings, writeSettledMoney]
 	);
 
 	/**
@@ -379,8 +380,8 @@ export const useCartSettlement = () => {
 				 * read the four line arrays, and if those (and the order's identity and
 				 * status) still hold, the patch it computed is still the right patch.
 				 */
-				const latest = currentOrderRecord.getLatest();
-				if (replayContentKey(latest) !== replayContentKey(freshOrder)) return;
+				const latestOrder = currentOrderRecord.getLatest();
+				if (replayContentKey(latestOrder) !== replayContentKey(freshOrder)) return;
 
 				/**
 				 * A divergence that arrived WHILE this pass was awaiting its coupon
@@ -392,22 +393,17 @@ export const useCartSettlement = () => {
 				 */
 				if (
 					serverOwnsMoneyRef.current ||
-					latest.payload.meta_data?.some(
+					latestOrder.payload.meta_data?.some(
 						(entry) => entry.key === '_wcpos_money_owner' && entry.value === 'server'
 					)
 				)
 					return;
 
-				await localPatch({
-					// Through the handle just read, not the one this pass started with: a
-					// metadata write may have replaced the resident while the coupon
-					// context was in flight, and the content key above proved the two are
-					// equal in everything this patch depends on.
-					document: latest,
-					// settle outputs structural line types; this boundary writes them back to
-					// the DB document they came from.
-					data: settlementPatch(result) as Partial<OrderDocument>,
-				});
+				// Through the handle just read, not the one this pass started with: a
+				// metadata write may have replaced the resident while the coupon
+				// context was in flight, and the content key above proved the two are
+				// equal in everything this patch depends on.
+				await writeSettledMoney(latestOrder, settlementPatch(result) as Partial<OrderDocument>);
 			} finally {
 				if (replayingRef.current === flightKey) replayingRef.current = null;
 			}
@@ -417,9 +413,9 @@ export const useCartSettlement = () => {
 			configKey,
 			currentOrderRecord,
 			getCouponContext,
-			localPatch,
 			reportEngineWarnings,
 			t,
+			writeSettledMoney,
 		]
 	);
 

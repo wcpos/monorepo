@@ -427,11 +427,40 @@ describe('useCartSettlement reference demand (#952)', () => {
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
+	it('does not overwrite command money with a queued pre-command aggregate', async () => {
+		const math = jest.requireActual('@wcpos/order-math');
+		settleAggregate.mockImplementation(math.settleAggregate);
+		let release!: () => void;
+		localPatch.mockImplementationOnce(async ({ data }) => {
+			revision = { ...revision, ...data };
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		});
+		localPatch.mockImplementation(async ({ data }) => {
+			revision = { ...revision, ...data };
+		});
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+		await act(async () => {
+			editCart([{ total: '10', total_tax: '0', product_id: 1 }]);
+		});
+		// The command lands after the queued pass computed 10, without another line signal.
+		revision = { ...revision, ...{ ...MONEY_PATCH, total: '20', discount_total: '0' } };
+		const commandLine = { subtotal: '20', total: '20', total_tax: '0', product_id: 1 };
+		lineItems$.value[0] = commandLine;
+		await act(async () => {
+			release();
+		});
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(currentPayload()).toMatchObject({ total: '20' });
+	});
+
 	it('stands down when ownership arrives before the queued aggregate write', async () => {
 		renderHook(() => useCartSettlement());
-		expect(settleAggregate).toHaveBeenCalled();
 		revision = buildRevision({ meta_data: [{ key: '_wcpos_money_owner', value: 'server' }] });
 		await act(async () => {});
+		expect(settleAggregate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 

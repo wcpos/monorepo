@@ -166,6 +166,52 @@ describe('useAddItemToOrder', () => {
 		order.toMutableJSON = () => ({ payload: { ...order.payload } });
 	});
 
+	it.each([false, true])(
+		'settles resident and create money before birth (orphan: %s)',
+		async (orphan) => {
+			order.isNew = true;
+			const payload = { uuid: 'order-uuid', line_items: [] };
+			if (orphan)
+				mockFindEngineResident.mockResolvedValue({
+					payload,
+					toMutableJSON: () => ({ payload }),
+				});
+			mockInsertEngineResident.mockImplementation(async ({ payload }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			}));
+			mockPatchEngineResident.mockImplementation(async ({ changes }) => ({
+				payload: changes,
+				toMutableJSON: () => ({ payload: changes }),
+			}));
+			mockWrite.mockResolvedValue({ mutationId: 'birth' });
+			const { result } = renderHook(() => useAddItemToOrder());
+			await act(async () => {
+				await result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					subtotal: '10',
+					total: '10',
+					subtotal_tax: '2',
+					total_tax: '2',
+					taxes: [{ id: 1, total: '2', subtotal: '2' }],
+				});
+			});
+			const money = {
+				total: '12',
+				total_tax: '2',
+				tax_lines: [expect.objectContaining({ rate_id: 1, tax_total: '2' })],
+			};
+			expect(
+				orphan
+					? mockPatchEngineResident.mock.calls[0][0].changes
+					: mockInsertEngineResident.mock.calls[0][0].payload
+			).toMatchObject(money);
+			expect(mockWrite).toHaveBeenCalledTimes(1);
+			expect(mockWrite.mock.calls[0][0]).toMatchObject({ operation: 'create', payload: money });
+		}
+	);
+
 	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
 		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
 		const residentPayloadProxy = new Proxy({ status: 'pos-open' }, {});
@@ -679,13 +725,13 @@ describe('useAddItemToOrder', () => {
 			expect.objectContaining({
 				collection: 'orders',
 				recordId: 'order-uuid',
-				changes: {
+				changes: expect.objectContaining({
 					line_items: [{ product_id: 1, quantity: 1 }, expect.objectContaining({ product_id: 2 })],
 					meta_data: expect.arrayContaining([
 						{ key: '_pos_user', value: '7' },
 						{ key: '_pos_store', value: '11' },
 					]),
-				},
+				}),
 			})
 		);
 		expect(mockWrite).toHaveBeenCalledTimes(1);

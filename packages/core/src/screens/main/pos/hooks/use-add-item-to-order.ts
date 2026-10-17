@@ -79,7 +79,7 @@ export const useAddItemToOrder = () => {
 	// render-time subscription re-rendered the whole grid on every cart write.
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
-	const { localPatch } = useCartWrite();
+	const { localPatch, settleIntent } = useCartWrite();
 	const { ctx, actor } = useActionContext();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
@@ -169,7 +169,7 @@ export const useAddItemToOrder = () => {
 					manager: runtime,
 					collection: 'orders',
 					recordId,
-					changes: {
+					changes: settleIntent(orphanedSkeleton as unknown as CurrentOrderRecord, {
 						[type]: buildCartLines(
 							recordId,
 							(priorPayload[type] as CartLine[] | undefined) ?? [],
@@ -181,7 +181,7 @@ export const useAddItemToOrder = () => {
 							identity,
 							true
 						),
-					},
+					}),
 				});
 			} else {
 				const orderData = order.toMutableJSON().payload;
@@ -199,7 +199,7 @@ export const useAddItemToOrder = () => {
 					manager: runtime,
 					collection: 'orders',
 					recordId,
-					payload: orderJSON,
+					payload: settleIntent(order, orderJSON),
 				});
 			}
 			const payload = resident.toMutableJSON().payload as Record<string, unknown>;
@@ -236,7 +236,7 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, identity, runtime, setCurrentOrderID]
+		[buildCartLines, identity, runtime, setCurrentOrderID, settleIntent]
 	);
 
 	/**
