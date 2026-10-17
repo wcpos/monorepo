@@ -29,6 +29,8 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePanelSide } from '../contexts/overlay-side';
 import { ClearLocalData } from './clear-local-data';
 import { SwitchStoreSheet } from './switch-store-sheet';
+import { useCurrentOrderOptional } from '../contexts/current-order/context';
+import { isCartAttributed } from '../../../../services/register-session/cart-attribution';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -146,6 +148,9 @@ export function UserSheet({
 	const [storeOpen, setStoreOpen] = React.useState(false);
 	const side = usePanelSide('shell');
 	const { registers } = useRegisterBinding();
+	const currentOrder = useCurrentOrderOptional();
+	// The rail is outside CurrentOrderProvider; no shared selection exists yet (ADR 0030).
+	const attributed = !currentOrder || isCartAttributed(currentOrder.payload);
 	const t = useT();
 	const router = useRouter();
 	return (
@@ -176,6 +181,8 @@ export function UserSheet({
 										<View className="border-border border-b">
 											<Button
 												testID="user-sheet-switch-register"
+												disabled={attributed}
+												aria-disabled={attributed}
 												variant="ghost"
 												className="flex-row justify-start gap-2"
 												onPress={() => {
@@ -185,6 +192,13 @@ export function UserSheet({
 											>
 												{t('register.switch_register')}
 											</Button>
+											{attributed && (
+												<Text className="text-muted-foreground px-3 pb-3">
+													{currentOrder
+														? t('register.switch_register_blocked_cart')
+														: t('register.switch_register_unavailable_here')}
+												</Text>
+											)}
 										</View>
 									)}
 									{(stores?.length ?? 0) > 1 && (

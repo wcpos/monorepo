@@ -1,4 +1,9 @@
-import { attributeRefunds, deriveDrawerTerms, deriveExpected } from './expected';
+import {
+	attributeRefunds,
+	deriveDrawerTerms,
+	deriveExpected,
+	deriveUnsyncedDelta,
+} from './expected';
 
 it('derives captured session cash and card net of refunds and non-voided movements', () => {
 	const result = deriveExpected({
@@ -327,4 +332,27 @@ it('counts cash sales by order, so a split cash payment is one sale', () => {
 		ledgerRowsBySession: [leg('o1', '10.0000'), leg('o1', '5.0000'), leg('o2', '20.0000')],
 	});
 	expect(terms.cashSales).toEqual({ amount: '35.0000', count: 2 });
+});
+
+// A filtered derivation misses the reversal of a movement already in the baseline.
+it.each(['synced', 'pending'])('reverses a voided %s movement only once', (syncStatus) => {
+	const input = {
+		session: { id: 'session', counted_float: '100' },
+		ledgerRowsBySession: [],
+		movements: [
+			{ id: 'in', session_id: 'session', type: 'paid_in', amount: '20', voided_by: 'void' },
+			{ id: 'void', session_id: 'session', type: 'void', amount: '20', voids: 'in' },
+		],
+	};
+	const baselineHas = (id: string | number | null | undefined) =>
+		id === 'in' && syncStatus === 'synced';
+	expect(
+		deriveExpected(
+			{ ...input, session: { ...input.session, server_expected: { cash: '100' } } },
+			baselineHas
+		).cash
+	).toBe(syncStatus === 'synced' ? '80.0000' : '100');
+	expect(deriveUnsyncedDelta(input, baselineHas)).toEqual({
+		cash: syncStatus === 'synced' ? '-20.0000' : '0.0000',
+	});
 });

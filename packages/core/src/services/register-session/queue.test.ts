@@ -46,7 +46,7 @@ beforeEach(async () => {
 	await db.addCollections({
 		closures: { schema: closuresLiteral, autoMigrate: false },
 		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
-		cash_movements: { schema: cashMovementsLiteral },
+		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
 	});
 });
 afterEach(async () => {
@@ -150,6 +150,7 @@ it('backs off a 5xx without posting dependent movements', async () => {
 });
 it('sends movements after create but before a deferred counting transition', async () => {
 	const row = await open();
+	await row.incrementalPatch({ server_expected: { cash: '100' } });
 	const movement = await recordMovement(db.cash_movements, {
 		sessionId: row.id,
 		type: 'paid_out',
@@ -162,7 +163,7 @@ it('sends movements after create but before a deferred counting transition', asy
 		data:
 			url === 'movements'
 				? { ...movement.toJSON() }
-				: { ...row.toJSON(), status: url === 'sessions' ? 'open' : body.status },
+				: { ...row.getLatest().toJSON(), status: url === 'sessions' ? 'open' : body.status },
 	}));
 	await drain();
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['sessions', 'movements']);
@@ -187,6 +188,23 @@ it('sends movements after create but before a deferred counting transition', asy
 	await drain();
 	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
 	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
+	expect(row.getLatest().server_expected).toEqual({ cash: '100' });
+	http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+		data: { ...row.getLatest().toJSON(), expected: { cash: '95' }, sales_count: 0, movements: [] },
+		headers: { date: 'Tue, 15 Sep 2026 10:00:05 GMT' },
+	});
+	await refreshSessions({
+		registerId: 'register',
+		http,
+		sessions: db.register_sessions,
+		movements: db.cash_movements,
+		closures: db.closures,
+	});
+	const refreshed = row.getLatest().toJSON();
+	expect(refreshed).toMatchObject({
+		server_expected: { cash: '95' },
+		server_expected_at: expect.any(String),
+	});
 });
 it('closes a predecessor before creating its successor on the same register', async () => {
 	const predecessor = await open();
@@ -238,6 +256,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		server_status: 'counting',
 		sync_status: 'synced',
 		status: 'counting',
+		approved_counted: { cash: '80', card: '10' },
 	});
 	await closeSession(db.register_sessions, row.id, { counted: { cash: '80', card: '10' } });
 	http.post.mockRejectedValue({
@@ -252,6 +271,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		pending_status: null,
 		sync_status: 'synced',
 		approval_required: true,
+		approved_counted: null,
 		sync_error: 'wcpos_override_refused',
 		counted: { cash: '80', card: '10' },
 	});
@@ -902,3 +922,83 @@ it.each([403, 503])(
 		}
 	}
 );
+
+it.each([
+	['2026-09-15T10:00:00', 'Tue, 15 Sep 2026 10:00:05 GMT', '2026-09-15T10:00:00.000Z'],
+	[undefined, 'Tue, 15 Sep 2026 10:00:05 GMT', '2026-09-15T10:00:05.000Z'],
+	[undefined, undefined, null],
+])(
+	'anchors detail to server time %s / %s, never device time',
+	async (as_of_gmt, date, expectedAt) => {
+		const row = await open();
+		await row.incrementalPatch({ sync_status: 'synced' });
+		const movement = await recordMovement(db.cash_movements, {
+			sessionId: row.id,
+			type: 'paid_in',
+			amount: '20',
+			reason: 'Float',
+			actor: 7,
+		});
+		http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+			data: {
+				...row.getLatest().toJSON(),
+				expected: { cash: '120' },
+				as_of_gmt,
+				movements: [movement.toJSON()],
+			},
+			headers: { date },
+		});
+		await refreshSessions({
+			registerId: 'register',
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+			closures: db.closures,
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({
+			server_expected_at: expectedAt,
+			server_movement_ids: [movement.id],
+		});
+		expect(movement.getLatest().sync_status).toBe('pending');
+	}
+);
+
+it('persists snapshot membership arrays and clears them when an older detail omits them', async () => {
+	const row = await open();
+	await row.incrementalPatch({ sync_status: 'synced' });
+	for (const ids of [
+		{
+			order_ids: [1, 2],
+			ledger_row_ids: ['cash', 'card'],
+			refund_ids: [20],
+			ledger_rows: [{ id: 'cash', updated_at_gmt: '2026-09-15T08:00:00', status: 'captured' }],
+			refunds: [{ id: 20, updated_at_gmt: '2026-09-15T08:00:00' }],
+		},
+		{ order_ids: [], ledger_row_ids: [], refund_ids: [], ledger_rows: [], refunds: [] },
+		{},
+	]) {
+		http.get.mockResolvedValueOnce({ data: [row.getLatest().toJSON()] }).mockResolvedValueOnce({
+			data: {
+				...row.getLatest().toJSON(),
+				expected: { cash: '100' },
+				as_of_gmt: '2026-09-15T09:00:00',
+				movements: [],
+				...ids,
+			},
+		});
+		await refreshSessions({
+			registerId: 'register',
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+			closures: db.closures,
+		});
+		expect(row.getLatest().toJSON()).toMatchObject({
+			server_order_ids: ids.order_ids ?? null,
+			server_ledger_row_ids: ids.ledger_row_ids ?? null,
+			server_refund_ids: ids.refund_ids ?? null,
+			server_ledger_rows: ids.ledger_rows ?? null,
+			server_refunds: ids.refunds ?? null,
+		});
+	}
+});

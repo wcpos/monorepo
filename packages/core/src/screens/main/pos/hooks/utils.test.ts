@@ -56,6 +56,21 @@ describe('Utilities', () => {
 			).toEqual(existing);
 		});
 
+		it('rebinds only the register when an empty cart starts after a switch', () => {
+			const existing = [
+				{ key: '_wcpos_register', value: 'A' },
+				{ key: '_pos_user', value: '3' },
+			];
+			const meta = ensurePosOrderIdentityMeta(
+				existing,
+				{ userId: 7, storeId: 11, registerId: 'B' },
+				true
+			);
+			expect(meta).toContainEqual({ key: '_wcpos_register', value: 'B' });
+			expect(meta).not.toContainEqual({ key: '_wcpos_register', value: 'A' });
+			expect(meta).toContainEqual({ key: '_pos_user', value: '3' });
+		});
+
 		it('omits the store entry for the default store', () => {
 			expect(
 				ensurePosOrderIdentityMeta([], { userId: 7, storeId: 0, taxBasedOn: 'base' })

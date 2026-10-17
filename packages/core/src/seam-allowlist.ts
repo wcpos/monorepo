@@ -904,7 +904,11 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	// 2026-10-17: RepeatChip's `count` member access was removed on next (not a raw query; the
 	// rule matched a `.count(` on a non-collection receiver). Retired, never re-added.
 	'screens/main/health/components/repeat-chip.tsx :: raw query construction :: RepeatChip :: count :: 1',
+	// #2609: retain server baselines on movement drain, pre-action guards and refund changes.
+	'services/register-session/queue.ts :: record mutator :: drain :: session.incrementalPatch :: 1',
+	'services/register-session/session-store.ts :: record mutator :: requireOpenSession :: session.incrementalPatch :: 1',
+	'services/register-session/use-register-session.ts :: record mutator :: useRegisterSession :: current.getLatest().incrementalPatch :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 1;
+export const SEAM_RETIRED_FLOOR = 4;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'424b4400393f1c58578f8eccb30703db20f5cbda1cd2eb54225c7fc038995b40';
+	'e7768c27e74a714f1305871d9129bfecfc56292f1792a3fa495ec4ee6094d922';
