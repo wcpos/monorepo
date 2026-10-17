@@ -222,6 +222,7 @@ async function annihilateNeverPushedChains(input: {
 		const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
 		if (
 			!isNeverPushedChain(rows) ||
+			rows.some((row) => row.requeuedFrom) ||
 			pendingRows.length < 2 ||
 			pendingRows[pendingRows.length - 1]?.operation !== 'delete' ||
 			pendingRows.length !== rows.length

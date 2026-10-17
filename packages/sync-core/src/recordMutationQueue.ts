@@ -226,6 +226,7 @@ export class RecordMutationQueue {
 	 * both consume the same prior row.
 	 */
 	private chain: Promise<unknown> = Promise.resolve();
+	private readonly voidRevisions = new Map<string, RevisionToken | undefined>();
 	public constructor(
 		private readonly storage: RecordMutationStorage,
 		private readonly recovery: {
@@ -655,7 +656,7 @@ export class RecordMutationQueue {
 				(row?.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
 			)
 				return false;
-			return this.storage.appendIfUnchanged(
+			const held = await this.storage.appendIfUnchanged(
 				{
 					mutationId: id,
 					collectionName: collection,
@@ -681,12 +682,35 @@ export class RecordMutationQueue {
 				},
 				stored?.rev ?? null
 			);
+			if (held && !writer)
+				this.voidRevisions.set(
+					token,
+					await this.voidRevision(id, token, nowMs + ANNIHILATION_TTL_MS)
+				);
+			return held;
 		});
 	}
 
-	async releaseVoidFence(collection: string, record: string, token: string): Promise<void> {
-		if ((await this.all()).some((row) => row.supersededBy === token)) return;
-		await this.removeMarked(fenceId(collection, record), token);
+	// Read back only our write: recovery always advances expiresAt, so cannot be adopted here.
+	private async voidRevision(id: string, token: string, expiresAt: number, phase?: string) {
+		return (await this.storage.listStored()).find(
+			({ mutation: row }) =>
+				row.mutationId === id &&
+				row.supersededBy === token &&
+				row.expiresAt === expiresAt &&
+				row.payload.phase === phase
+		)?.rev;
+	}
+
+	async releaseVoidFence(
+		collection: string,
+		record: string,
+		token: string,
+		revision = this.voidRevisions.get(token)
+	): Promise<void> {
+		if (!revision || (await this.all()).some((row) => row.supersededBy === token)) return;
+		if (await this.storage.removeIfUnchanged(fenceId(collection, record), revision))
+			this.voidRevisions.delete(token);
 	}
 
 	async setVoidPhase(
@@ -700,8 +724,17 @@ export class RecordMutationQueue {
 				(item) => item.mutation.mutationId === fenceId(collection, record)
 			);
 			// No owned fence to roll back: release this void's marks, not the foreign holder.
-			if (!stored || stored.mutation.supersededBy !== token) return phase === 'preparing';
-			return this.storage.appendIfUnchanged({ ...stored.mutation, payload: { phase } }, stored.rev);
+			if (!stored || stored.mutation.supersededBy !== token)
+				return !this.voidRevisions.has(token) && phase === 'preparing';
+			const { mutation: row, rev } = stored;
+			if (rev !== this.voidRevisions.get(token)) return false;
+			if (!(await this.storage.appendIfUnchanged({ ...row, payload: { phase } }, rev)))
+				return false;
+			this.voidRevisions.set(
+				token,
+				await this.voidRevision(row.mutationId, token, row.expiresAt!, phase)
+			);
+			return true;
 		});
 	}
 
@@ -727,6 +760,13 @@ export class RecordMutationQueue {
 				))
 			)
 				continue;
+			const revision = await this.voidRevision(
+				fence.mutationId,
+				fence.supersededBy!,
+				nowMs + ANNIHILATION_TTL_MS,
+				'committed'
+			);
+			if (!revision) continue;
 			const removed = await removeResident(fence);
 			for (const { mutation: row } of stored) {
 				if (isInternalRow(row) || row.supersededBy !== fence.supersededBy) continue;
@@ -734,7 +774,12 @@ export class RecordMutationQueue {
 					await this.unmarkForAnnihilation(row.mutationId, fence.supersededBy!);
 				else await this.removeMarked(row.mutationId, fence.supersededBy!);
 			}
-			await this.releaseVoidFence(fence.collectionName, fence.recordId, fence.supersededBy!);
+			await this.releaseVoidFence(
+				fence.collectionName,
+				fence.recordId,
+				fence.supersededBy!,
+				revision
+			);
 		}
 		for (const { mutation: row, rev } of stored) {
 			if (
@@ -1063,7 +1108,16 @@ export function pendingRecordIds(mutations: readonly QueuedMutation[]): Set<stri
 	const ids = new Set<string>();
 	for (const mutation of mutations) {
 		// A void fence protects even an absent resident until its owner releases it.
-		if (isInternalRow(mutation) ? !mutation.supersededBy : mutation.status === 'rejected') continue;
+		const liveAdmission =
+			mutation.admittedBy !== undefined &&
+			mutation.payload.phase !== 'released' &&
+			(mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > Date.now();
+		if (
+			isInternalRow(mutation)
+				? !mutation.supersededBy && !liveAdmission
+				: mutation.status === 'rejected'
+		)
+			continue;
 		ids.add(mutation.recordId);
 	}
 	return ids;

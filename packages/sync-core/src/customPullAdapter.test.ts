@@ -724,6 +724,43 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 		sequence: 12,
 	};
 
+	it('a live admission protects a delayed pull until the write is acknowledged', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const queue = new RecordMutationQueue(storage);
+		const id = fakeUuid(11);
+		await queue.admitWriter('orders', id, 'writer', Date.now());
+		const protectedIds = pendingRecordIds(await storage.list());
+		await queue.enqueue({
+			mutationId: 'edit',
+			collectionName: 'orders',
+			recordId: id,
+			operation: 'update',
+			origin: 'existing',
+			payload: {},
+			baseRevision: null,
+			queuedAt: new Date().toISOString(),
+		});
+		let dirty = true;
+		const input = {
+			baseUrl: BASE_URL,
+			limit: 50,
+			fetcher: seededServer().fetch,
+			repository: {
+				upsertMany: async (documents: PullResponse['documents']) => {
+					if (documents.some((document) => document.uuid === id)) dirty = false;
+				},
+			},
+		};
+		await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+		expect(dirty).toBe(true);
+		await queue.releaseWriter('orders', id, 'writer');
+		await queue.removePending('edit');
+		await syncCustomPullBatchIntoRepository({
+			...input,
+			pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+		});
+		expect(dirty).toBe(false);
+	});
 	it.each(['preparing', 'committed'] as const)(
 		'a %s void fence protects a delayed pull through removal',
 		async (phase) => {

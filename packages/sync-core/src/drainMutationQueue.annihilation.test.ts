@@ -77,6 +77,55 @@ async function queueWith(...mutations: RecordMutation[]): Promise<RecordMutation
 }
 
 describe('drainMutationQueue — leader-side annihilation (#1059)', () => {
+	it('a recovery renewal refuses the stalled original rollback and keeps the chain marked', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		const other = new RecordMutationQueue(storage);
+		await q.enqueue(create());
+		await q.enqueue(del());
+		let resume!: () => void;
+		const paused = new Promise<void>((resolve) => {
+			resume = resolve;
+		});
+		let recovery: Promise<void> | undefined;
+		let resident = true;
+		const result = await drainMutationQueue({
+			queue: q,
+			now: () => 0,
+			push: async (m) => ok(m),
+			removeResident: async () => {
+				let started!: () => void;
+				const renewed = new Promise<void>((resolve) => {
+					started = resolve;
+				});
+				recovery = other.clearExpiredAnnihilation(120_001, async () => {
+					resident = false;
+					started();
+					await paused;
+				});
+				await renewed;
+				throw new Error('original removal aborted');
+			},
+		});
+		const marked = await q.all();
+		resume();
+		await recovery;
+		expect(result.pushed).toBe(0);
+		expect(marked).toHaveLength(2);
+		expect(marked.every((row) => row.supersededBy)).toBe(true);
+		expect(resident).toBe(false);
+		expect(await storage.list()).toEqual([]);
+	});
+
+	it('pushes a recovered create followed by delete rather than annihilating it', async () => {
+		const q = await queueWith(create(), del());
+		await q.replace({ ...(await q.all())[0], requeuedFrom: 'identity-ambiguous' });
+		const removeResident = vi.fn();
+		const result = await drainMutationQueue({ queue: q, push: async (m) => ok(m), removeResident });
+		expect(result).toMatchObject({ annihilated: 0, pushed: 2 });
+		expect(removeResident).not.toHaveBeenCalled();
+	});
+
 	it.each(['removeMarked', 'releaseVoidFence'] as const)(
 		'reports success after %s fails',
 		async (step) => {
