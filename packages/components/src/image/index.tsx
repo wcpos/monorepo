@@ -16,6 +16,13 @@ export type ImageProps = ExpoImageProps & {
 	className?: string;
 };
 
+// Fade a picture in on first load, but not when it comes back from the memory cache (a
+// recycled grid cell scrolled back into view; the cell must pass a `recyclingKey`, or the new
+// source counts as a source change and fades). 'memory', not 'all': the first sight after a
+// cold start is a disk hit, and its fade still masks the decode. Native only; index.web.tsx
+// keeps its plain 250 ms fade.
+const FADE = { duration: 250, skipOnCacheHit: 'memory' } as const;
+
 /**
  * Image component with Tailwind className support via Uniwind.
  * Uses expo-image for optimized image loading.
@@ -26,7 +33,7 @@ export function Image({ source, ...props }: ImageProps) {
 			source={source}
 			responsivePolicy="initial"
 			contentFit="contain"
-			transition={250}
+			transition={FADE}
 			{...props}
 		/>
 	);
