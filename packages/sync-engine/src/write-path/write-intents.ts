@@ -491,6 +491,10 @@ export async function enqueueWriteIntent(input: {
 				await fence(token);
 				await guardAnnihilation(placement.chain, token, marked);
 				const resident = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+				if (JSON.stringify(resident?.toJSON()) !== JSON.stringify(stored)) {
+					await unmark(marked, token);
+					continue;
+				}
 				if (!(await phase(token, 'committed'))) throw voidInProgress();
 				if (resident) await resident.remove();
 			} catch (error) {
@@ -596,8 +600,14 @@ export async function enqueueWriteIntent(input: {
 							}
 							await fence(token);
 							settledDeadLetters = await guardAnnihilation(successors, token, marked);
+							// A pull can give a rejected-only resident server identity while we mark.
+							const resident = await collection.findOne(recordId).exec();
+							if (JSON.stringify(resident?.toJSON()) !== JSON.stringify(stored)) {
+								await unmark(marked, token);
+								continue;
+							}
 							if (!(await phase(token, 'committed'))) throw voidInProgress();
-							await doc.remove();
+							await resident.remove();
 						} catch (error) {
 							if (await collection.findOne(recordId).exec()) await unmark(marked, token);
 							throw error;

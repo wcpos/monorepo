@@ -117,6 +117,64 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each(['rejected', 'pending'] as const)(
+		'a pull during %s annihilation preserves the resident and queues a server delete',
+		async (status) => {
+			const storage = createFakeMutationCollection();
+			let data: Record<string, unknown> = { payload: { id: 0 }, sync: {} };
+			let removed = false;
+			const resident = {
+				toJSON: () => data,
+				remove: async () => {
+					removed = true;
+				},
+				incrementalModify: async (modify: (row: typeof data) => typeof data) => {
+					data = modify(data);
+				},
+			};
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => (removed ? null : resident) }) },
+					recordMutations: storage,
+				},
+			} as unknown as RxDatabase;
+			const queue = queueFor(db);
+			await storage.bulkUpsert([
+				{
+					mutationId: 'create',
+					collectionName: 'orders',
+					recordId: 'order',
+					operation: 'create',
+					origin: 'minted',
+					payload: { id: 0 },
+					baseRevision: null,
+					queuedAt: '2026-09-18T00:00:00.000Z',
+					status,
+				},
+			]);
+			const mark = queue.markForAnnihilation.bind(queue);
+			vi.spyOn(queue, 'markForAnnihilation').mockImplementationOnce(async (...args) => {
+				const marked = await mark(...args);
+				data = { ...data, remoteId: '42', sync: { revision: 'pulled-revision' } };
+				return marked;
+			});
+			const receipt = await enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+				mintUuid: () => 'delete',
+				now: () => '2026-09-18T00:00:01.000Z',
+			});
+			expect(removed).toBe(false);
+			expect(receipt.annihilated).not.toBe(true);
+			expect(await queue.all()).toEqual([
+				expect.objectContaining({ mutationId: 'create', status }),
+				expect.objectContaining({ operation: 'delete', baseRevision: 'pulled-revision' }),
+			]);
+			expect((await queue.all()).every((row) => !row.supersededBy)).toBe(true);
+			expect(storage.store.has('orders/order')).toBe(false);
+		}
+	);
+
 	it('a slow dirty mark releases its unchanged admission and the receipted row delivers', async () => {
 		const storage = createFakeMutationCollection();
 		let now = Date.now();
