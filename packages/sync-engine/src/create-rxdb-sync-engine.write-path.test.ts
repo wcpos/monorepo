@@ -256,7 +256,9 @@ async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unkno
 	return doc?.toJSON() ?? null;
 }
 
-function rejectedProductFetch(options: { failPull?: boolean; hangPull?: boolean } = {}) {
+function rejectedProductFetch(
+	options: { failPull?: boolean; hangPull?: boolean; gatePull?: Promise<void> } = {}
+) {
 	const pulls: number[][] = [];
 	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 		const parsed = new URL(url);
@@ -274,6 +276,7 @@ function rejectedProductFetch(options: { failPull?: boolean; hangPull?: boolean 
 			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
 		);
 		if (options.failPull) return new Response('unavailable', { status: 503 });
+		if (options.gatePull) await options.gatePull;
 		if (options.hangPull) {
 			return new Promise<Response>((_, reject) =>
 				init?.signal?.addEventListener('abort', () =>
@@ -2080,10 +2083,50 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		expect(diagnostics.some((event) => event.type === 'push.rejected')).toBe(false);
 
 		await engine.dispose();
-		// No revert can land any more: the coded dead-letter verdict is the row.
-		expect(
-			diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
-		).toEqual(['warn']);
+		// Dispose leaves a RUNNING revert to settle its own verdict; here its pull
+		// is aborted, so the revert fails and releases the coded dead letter.
+		await vi.waitFor(() =>
+			expect(
+				diagnostics.filter((event) => event.type === 'push.rejected').map((event) => event.level)
+			).toEqual(['warn'])
+		);
+		expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+	});
+
+	it('lets a revert already running at dispose settle the one verdict', async () => {
+		let openPull!: () => void;
+		const route = rejectedProductFetch({
+			gatePull: new Promise<void>((resolve) => {
+				openPull = resolve;
+			}),
+		});
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		await engine.ready;
+		await insertServerBornProduct(engine, 2);
+		await engine.write({
+			collection: 'products',
+			operation: 'update',
+			recordId: UUID_A,
+			payload: productPayload(2),
+		});
+		expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+		await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+
+		// Dispose while the revert is mid-flight, then let its pull answer.
+		const disposing = engine.dispose();
+		openPull();
+		await disposing;
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		// Whichever way the revert ended, the edit has exactly ONE coded verdict.
+		const verdicts = diagnostics.filter(
+			(event) => event.type === 'push.rejected' || event.type === 'queue.write.auto-reverted'
+		);
+		expect(verdicts).toHaveLength(1);
 	});
 
 	it('never auto-reverts a rejected order mutation', async () => {
@@ -2236,6 +2279,49 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			[2, true],
 		]);
 		await engine.dispose();
+	});
+
+	it("numbers push.error by consecutive PUSH failures, not the ack failures' backoff", async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_400 });
+		let failPush = false;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (failPush && url.includes('/push/')) return new Response('upstream boom', { status: 500 });
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		await engine.ready;
+		await insertBornLocalOrder(engine, UUID_A);
+		await engine.write({
+			collection: 'orders',
+			operation: 'create',
+			recordId: UUID_A,
+			payload: { status: 'pending' },
+			explicit: true,
+		});
+		const queue = queueFor(engine.active()!.database as never);
+		const ackSpy = vi
+			.spyOn(queue, 'acknowledge')
+			.mockRejectedValueOnce(new Error('storage down'))
+			.mockRejectedValueOnce(new Error('storage down'));
+		try {
+			// Two sends land but cannot be recorded: the queue row's backoff counter climbs.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			// Now the push itself fails, for the first time.
+			failPush = true;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1]);
+		} finally {
+			ackSpy.mockRestore();
+			await engine.dispose();
+		}
 	});
 
 	it('write() on a collection without a push/ack contract is caller misuse', async () => {

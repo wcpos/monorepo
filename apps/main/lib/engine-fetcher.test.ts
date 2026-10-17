@@ -1559,6 +1559,36 @@ describe('createEngineFetcher', () => {
 		]);
 	});
 
+	it('settles a request still in flight at a cashier change into the outgoing tracker', async () => {
+		let releaseLate!: (response: Response) => void;
+		const fetch = jest
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise<Response>((resolve) => {
+						releaseLate = resolve;
+					})
+			)
+			.mockImplementation(async () => new Response(null, { status: 503 }));
+		const auth = { ...BASE_AUTH };
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch, auth });
+		const url = 'https://store.example.test/wp-json/wcpos/v2/changes';
+
+		const late = fetcher(url);
+		auth.credentials = { getLatest: () => ({ access_token: 'incoming-cashier' }) };
+		await fetcher(url);
+		await fetcher(url);
+		// The outgoing cashier's request fails late: it must not be the incoming third.
+		releaseLate(new Response(null, { status: 503 }));
+		await late;
+
+		expect(appMetricsObserver.mock.calls.map(([event]) => event.level)).toEqual([
+			'info',
+			'info',
+			'info',
+		]);
+	});
+
 	it('counts each path on its own, so one blip across lanes stays quiet', async () => {
 		const fetch = jest.fn(async () => new Response(null, { status: 503 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });

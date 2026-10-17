@@ -327,10 +327,16 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	// Thrown ticks in a row, stamped on queue.write.tick.error: the next tick
 	// re-runs the drain, so the log treats one crash as an attempt and only a
 	// streak as a failure that has persisted. A tick that RAN resets it.
-	const tickFailureStreak = createScopedFailureStreak();
+	const tickFailureStreak = createScopedFailureStreak(() => deps.manager.activeScope);
 	// The drain's settlement-write failure streaks (see drainMutationQueue's
 	// settleFailures): they must outlive one drain to count anything.
 	const settleFailures = new Map<string, number>();
+	// Consecutive PUSH failures per mutation, stamped as push.error's `attempt`.
+	// Not the queue row's `attempts`: that backoff counter is bumped by a failed
+	// local acknowledgement too, which would make a first HTTP failure after two
+	// ack failures read as a third failed push. Keyed by mutationId, which is
+	// unique per scope, so no scope binding is needed.
+	const pushFailures = new Map<string, number>();
 
 	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
@@ -343,6 +349,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		if (deps.manager.activeScope === null) {
 			return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
 		}
+		// The scope this tick's streak belongs to, captured before it can move.
+		const tickScopeId = deps.manager.activeScope;
 		try {
 			const tickReport = await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -556,25 +564,34 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									if (till) tillAggregates.set(outbound.mutationId, till);
 									else tillAggregates.delete(outbound.mutationId);
 								}
-								return pushRecordMutation({
-									mutation: outbound,
-									resolveEndpoint,
-									barcodeSelectors: barcodeSelectorsFor(
-										scopeBarcodeSelectors(),
-										mutation.collectionName
-									),
-									fetcher: (url, init) => {
-										// Absorb the adapter's signal — tickFetcher already merged
-										// it; forwarding would force AbortSignal.any in scopedFetch.
-										const { signal: _absorbed, ...rest } = (init ?? {}) as {
-											signal?: AbortSignal;
-										} & Record<string, unknown>;
-										return boundFetch(url, rest as never);
-									},
-									signal: tickAbort.signal,
-									observe: deps.diagnostics,
-									attempt: (mutation.attempts ?? 0) + 1,
-								});
+								const attempt = (pushFailures.get(mutation.mutationId) ?? 0) + 1;
+								try {
+									const pushed = await pushRecordMutation({
+										mutation: outbound,
+										resolveEndpoint,
+										barcodeSelectors: barcodeSelectorsFor(
+											scopeBarcodeSelectors(),
+											mutation.collectionName
+										),
+										fetcher: (url, init) => {
+											// Absorb the adapter's signal — tickFetcher already merged
+											// it; forwarding would force AbortSignal.any in scopedFetch.
+											const { signal: _absorbed, ...rest } = (init ?? {}) as {
+												signal?: AbortSignal;
+											} & Record<string, unknown>;
+											return boundFetch(url, rest as never);
+										},
+										signal: tickAbort.signal,
+										observe: deps.diagnostics,
+										attempt,
+									});
+									pushFailures.delete(mutation.mutationId);
+									return pushed;
+								} catch (error) {
+									// Our own cancellation (a scope switch) is not a push failure.
+									if (!tickAbort.signal.aborted) pushFailures.set(mutation.mutationId, attempt);
+									throw error;
+								}
 							},
 							applyAck: async (mutation, pushResult, signal) => {
 								const facet = writeFacetFor(mutation.collectionName);
@@ -863,7 +880,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				deps.setLastError(null);
 				return report;
 			});
-			if (tickReport.status === 'ran') tickFailureStreak.reset();
+			if (tickReport.status === 'ran') tickFailureStreak.reset(tickScopeId);
 			return tickReport;
 		} catch (error) {
 			if (signal?.aborted) {
@@ -872,7 +889,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			deps.setLastError(message);
-			const consecutiveFailures = tickFailureStreak.fail(deps.manager.activeScope);
+			const consecutiveFailures = tickFailureStreak.fail(tickScopeId);
 			deps.diagnostics({
 				type: 'queue.write.tick.error',
 				level: 'error',

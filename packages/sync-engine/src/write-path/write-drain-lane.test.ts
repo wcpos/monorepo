@@ -41,6 +41,29 @@ describe('write drain tick errors', () => {
 		).toEqual([1, 2, 1]);
 	});
 
+	it('keeps a tick that started under the outgoing scope out of the incoming streak', async () => {
+		let failures = 0;
+		const { lane, diagnostics, manager } = laneWith(async () => {
+			failures += 1;
+			// The third tick began under scope-1 and fails after the switch.
+			if (failures === 3) manager.activeScope = 'scope-2';
+			throw new Error('queue read failed');
+		});
+		manager.activeScope = 'scope-2';
+		await lane.tick();
+		await lane.tick();
+		manager.activeScope = 'scope-1';
+		await lane.tick();
+		await lane.tick();
+
+		expect(
+			diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'queue.write.tick.error')
+				.map((event) => event.fields.consecutiveFailures)
+		).toEqual([1, 2, 1, 3]);
+	});
+
 	it('starts the streak over when the scope switched between crashes', async () => {
 		const { lane, diagnostics, manager } = laneWith(async () => {
 			throw new Error('queue read failed');

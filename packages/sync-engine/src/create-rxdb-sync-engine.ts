@@ -1042,20 +1042,22 @@ export function createRxdbSyncEngine(
 	// Deadlines in a row per lane, stamped on engine.request.deadline: one slow
 	// answer is retried by the next tick, so the log alarms only on a streak.
 	// Any answer on the lane — whatever its status — ends the streak. Scoped like
-	// the lane streaks: a deadline under another store scope starts over.
+	// the lane streaks, to the scope the REQUEST started under (captured at its
+	// start): a late completion after a switch never touches the incoming scope.
 	// Late-bound: the scope manager is created further down.
 	let activeScopeForStreaks: () => string | null = () => null;
 	const consecutiveDeadlines = new Map<string, ScopedFailureStreak>();
-	const noteDeadline = (lane: string): number => {
+	const deadlineStreakFor = (lane: string): ScopedFailureStreak => {
 		let streak = consecutiveDeadlines.get(lane);
 		if (streak === undefined) {
-			streak = createScopedFailureStreak();
+			streak = createScopedFailureStreak(() => activeScopeForStreaks());
 			consecutiveDeadlines.set(lane, streak);
 		}
-		return streak.fail(activeScopeForStreaks());
+		return streak;
 	};
 	const fetcher = async (url: string, init?: RequestInit, lane = 'host-transport') => {
 		const startedAtMs = nowMs();
+		const requestScopeId = activeScopeForStreaks();
 		const observation = createRequestObservation(startedAtMs, init?.signal);
 		const deadlineFetcher = withRequestTimeout(
 			(url, init) => transportFetcher(url, init, observation),
@@ -1064,7 +1066,7 @@ export function createRxdbSyncEngine(
 		);
 		try {
 			const response = await deadlineFetcher(url, { ...init, signal: init?.signal ?? undefined });
-			consecutiveDeadlines.get(lane)?.reset();
+			deadlineStreakFor(lane).reset(requestScopeId);
 			return response;
 		} catch (error) {
 			if (error instanceof RequestTimeoutError) {
@@ -1075,7 +1077,7 @@ export function createRxdbSyncEngine(
 					fields: {
 						lane,
 						elapsedMs: nowMs() - startedAtMs,
-						consecutiveDeadlines: noteDeadline(lane),
+						consecutiveDeadlines: deadlineStreakFor(lane).fail(requestScopeId),
 					},
 				});
 			}
@@ -1094,6 +1096,7 @@ export function createRxdbSyncEngine(
 					): Promise<number | null> => {
 						if (updateRequiredRefusal !== null) return null;
 						const startedAtMs = nowMs();
+						const requestScopeId = activeScopeForStreaks();
 						const { observe, release } = createRequestObservation(startedAtMs, input.signal);
 						try {
 							const total = await withRequestTimeout(
@@ -1102,7 +1105,7 @@ export function createRxdbSyncEngine(
 								QUERY_TOTAL_REQUEST_DEADLINE_MS,
 								timers
 							)(input.request.endpoint, { signal: input.signal });
-							consecutiveDeadlines.get('query-total-retry')?.reset();
+							deadlineStreakFor('query-total-retry').reset(requestScopeId);
 							return total;
 						} catch (error) {
 							if (error instanceof RequestTimeoutError) {
@@ -1113,7 +1116,8 @@ export function createRxdbSyncEngine(
 									fields: {
 										lane: 'query-total-retry',
 										elapsedMs: nowMs() - startedAtMs,
-										consecutiveDeadlines: noteDeadline('query-total-retry'),
+										consecutiveDeadlines:
+											deadlineStreakFor('query-total-retry').fail(requestScopeId),
 									},
 								});
 							}
@@ -2702,9 +2706,13 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			changeSignalLane.stopActivation();
-			// No revert can land for this instance any more: every held dead-letter
-			// verdict is the row now.
-			for (const mutationId of [...heldRejections.keys()]) releaseHeldRejection(mutationId);
+			// A held verdict whose revert never started has nothing left to settle
+			// it: release it now. One whose revert IS running is left to that revert
+			// — it already passed its usability check and may still land, and its
+			// own success (auto-reverted) or failure (release) is the one verdict.
+			for (const mutationId of [...heldRejections.keys()]) {
+				if (!revertsInFlight.has(mutationId)) releaseHeldRejection(mutationId);
+			}
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's

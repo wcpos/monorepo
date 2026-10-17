@@ -205,6 +205,9 @@ export function createEngineFetcher(input: {
 			failureStreak = createFailureStreaks();
 			failureStreakOwner = input.auth.credentials;
 		}
+		// Bound to THIS request: a request still in flight when the cashier changes
+		// settles into the outgoing cashier's tracker, never the incoming one's.
+		const requestStreak = failureStreak;
 		const operationKey = `${String(input.scope?.storeId ?? '')} ${method} ${url.split('#', 1)[0]}`;
 		let isPushRequest = false;
 		try {
@@ -288,7 +291,7 @@ export function createEngineFetcher(input: {
 				// A push's failure is push.error's to report (attempt-counted); any
 				// other path alarms only once it has failed several times running.
 				// An abort is ours, so it neither counts nor resets the streak.
-				const streak = aborted ? 0 : failureStreak(operationKey, true);
+				const streak = aborted ? 0 : requestStreak(operationKey, true);
 				input.emitTransport(
 					{
 						type: 'transport.request',
@@ -465,7 +468,7 @@ export function createEngineFetcher(input: {
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
 			const healthy = attempt.response.ok || status === 304 || (status === 404 && isTickProbe);
-			const streak = failureStreak(operationKey, !healthy);
+			const streak = requestStreak(operationKey, !healthy);
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
@@ -548,7 +551,7 @@ export function createEngineFetcher(input: {
 			first.settle('debug', { outcome: 'recovered', operationId });
 			retry.settle('debug', { operationId });
 			// A healthy answer ends this request's failure streak, refreshed or not.
-			failureStreak(operationKey, false);
+			requestStreak(operationKey, false);
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.
