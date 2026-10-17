@@ -3,10 +3,12 @@
  * commands. Frozen fingerprints pin individual violations, not per-file counts. Every current
  * violation must be frozen and not retired; vanished fingerprints require pinned retirement.
  * Declaration chains distinguish identical accesses in different functions, methods and classes.
+ * Raw queries, resident helper writes, engine aliases and cross-package relative imports are
+ * fenced syntactically: this catches accidental leaks, not deliberate evasion.
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, posix, relative, sep } from 'node:path';
 
 import * as ts from 'typescript';
 
@@ -28,8 +30,8 @@ const LIFECYCLE_RECEIVERS = new Set([
 	'collection',
 ]);
 
-const FROZEN_LENGTH = 574;
-const FROZEN_DIGEST = '9e378ca876101e0684efed014567fc573f23fb44738c4f9b0511a95be35da12d';
+const FROZEN_LENGTH = 890;
+const FROZEN_DIGEST = 'f5b18062ee9cd9a410162655b5092a6311de33ccae77e29530a9d099054258ad';
 const forbiddenQueryNames = new Set([
 	'engineCollection',
 	'observeEngineCollection',
@@ -98,6 +100,24 @@ const mutatorNames = new Set([
 	'atomicUpdate',
 	'atomicPatch',
 ]);
+const rawQueryNames = new Set([
+	'findOne',
+	'findByIds',
+	'count',
+	'exportJSON',
+	'find$',
+	'findOne$',
+	'insert$',
+	'update$',
+	'remove$',
+]);
+const residentHelperNames = new Set([
+	'patchEngineResident',
+	'patchAndEnqueueEngineResident',
+	'insertEngineResident',
+	'useLocalMutation',
+	'useMutation',
+]);
 const storageNames = new Set(['db$', 'collections', 'storageInstance', 'localDB']);
 
 function staticName(node: ts.Node | undefined): string | undefined {
@@ -127,6 +147,17 @@ function isEngineReceiver(node: ts.Node | undefined): boolean {
 	);
 }
 
+function bindsEngine(name: ts.BindingName): boolean {
+	return (
+		ts.isObjectBindingPattern(name) &&
+		name.elements.some(
+			(binding) =>
+				!binding.dotDotDotToken &&
+				(staticName(binding.propertyName ?? binding.name) === 'engine' || bindsEngine(binding.name))
+		)
+	);
+}
+
 function declarationChain(node: ts.Node): string {
 	const names: string[] = [];
 	for (let parent = node.parent; parent; parent = parent.parent) {
@@ -153,6 +184,19 @@ function declarationChain(node: ts.Node): string {
 }
 
 function violations(source: string, path = 'seam-fixture.tsx') {
+	// Accept scan paths (absolute) and fixtures relative to either the repo or core/src.
+	const normalizedPath = path.split(sep).join('/');
+	const filePath = posix.isAbsolute(normalizedPath)
+		? posix.relative(posix.join(__dirname.split(sep).join('/'), '../../..'), normalizedPath)
+		: normalizedPath.startsWith('packages/')
+			? normalizedPath
+			: posix.join('packages/core/src', normalizedPath);
+	const allowsResidentHelpers =
+		filePath.includes('/commands/') ||
+		[
+			'packages/core/src/screens/main/hooks/mutations/use-local-mutation.ts',
+			'packages/core/src/screens/main/hooks/mutations/use-mutation.ts',
+		].includes(filePath);
 	const root = ts.createSourceFile(
 		path,
 		source,
@@ -176,6 +220,11 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 	) => {
 		if (!specifier || !ts.isStringLiteralLike(specifier)) return;
 		const module = specifier.text;
+		if (module.startsWith('.')) {
+			const target = posix.normalize(posix.join(posix.dirname(filePath), module));
+			if (target !== 'packages/core' && !target.startsWith('packages/core/'))
+				report('cross-package relative import', node);
+		}
 		const from = (name: string) => module === name || module.startsWith(`${name}/`);
 		const only = (allowed: Set<string>) =>
 			!wholeModule && names.length > 0 && names.every((name) => allowed.has(name));
@@ -206,6 +255,7 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 		if (storageNames.has(name)) report('storage token', node);
 		if (name === 'collection') report('record collection back-reference', node);
 		if (mutatorNames.has(name)) report('record mutator', node);
+		if (rawQueryNames.has(name)) report('raw query construction', node);
 		if ((name === 'write' || name === 'resolveConflict') && isEngineReceiver(receiver))
 			report('write plane outside a command module', node);
 		if (name === 'require' && isEngineReceiver(receiver))
@@ -214,8 +264,29 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			report('collection reset outside the reset command', node);
 	};
 	const visit = (node: ts.Node) => {
+		if (
+			ts.isVariableDeclaration(node) &&
+			node.initializer &&
+			(isEngineReceiver(node.initializer) ||
+				isEngineReceiver(memberReceiver(node.initializer, 'scope')) ||
+				bindsEngine(node.name))
+		)
+			report('engine handle aliased', node);
 		if (ts.isImportDeclaration(node)) {
 			const bindings = node.importClause?.namedBindings;
+			if (!allowsResidentHelpers) {
+				if (node.importClause?.name && residentHelperNames.has(node.importClause.name.text))
+					report('resident helper write', node.importClause.name);
+				if (bindings && ts.isNamedImports(bindings)) {
+					for (const binding of bindings.elements) {
+						if (
+							residentHelperNames.has((binding.propertyName ?? binding.name).text) ||
+							residentHelperNames.has(binding.name.text)
+						)
+							report('resident helper write', binding);
+					}
+				}
+			}
 			const names =
 				bindings && ts.isNamedImports(bindings)
 					? bindings.elements.map((binding) => (binding.propertyName ?? binding.name).text)
@@ -243,6 +314,18 @@ function violations(source: string, path = 'seam-fixture.tsx') {
 			checkImport(node, node.argument.literal, qualifier ? [qualifier.text] : [], !qualifier);
 		} else if (ts.isCallExpression(node)) {
 			const callee = node.expression;
+			const name = ts.isPropertyAccessExpression(callee)
+				? callee.name.text
+				: ts.isElementAccessExpression(callee)
+					? staticName(callee.argumentExpression)
+					: staticName(callee);
+			if (!allowsResidentHelpers && name && residentHelperNames.has(name))
+				report('resident helper write', node);
+			if (
+				memberReceiver(callee, 'find') &&
+				(node.arguments.length === 0 || ts.isObjectLiteralExpression(node.arguments[0]))
+			)
+				report('raw query construction', node);
 			if (
 				callee.kind === ts.SyntaxKind.ImportKeyword ||
 				(ts.isIdentifier(callee) && callee.text === 'require')
@@ -583,9 +666,9 @@ it.each(['write', 'resolveConflict'])('fences engine %s calls and extraction', (
 			`const { ${name} } = ${receiver};`,
 			`const { ['${name}']: fn } = ${receiver};`,
 		])
-			expect(violations(source).map(({ rule }) => rule)).toEqual([
-				'write plane outside a command module',
-			]);
+			expect(violations(source).map(({ rule }) => rule)).toContain(
+				'write plane outside a command module'
+			);
 	}
 });
 
@@ -608,7 +691,7 @@ it.each([
 				`const { ${name}: fn } = ${receiver};`,
 				`const { ['${name}']: fn } = ${receiver};`,
 			])
-				expect(violations(source).map(({ rule }) => rule)).toEqual([rule]);
+				expect(violations(source).map(({ rule }) => rule)).toContain(rule);
 		}
 	}
 });
@@ -659,3 +742,137 @@ it('parses TypeScript assertions and generic arrows as TS, not TSX', () => {
 it.each(['fixture.ts', 'fixture.tsx'])('fails the scan on parse errors in %s', (path) => {
 	expect(() => violations('const broken = ; doc.remove();', path)).toThrow(path);
 });
+
+it.each([
+	'findOne',
+	'findByIds',
+	'count',
+	'exportJSON',
+	'find$',
+	'findOne$',
+	'insert$',
+	'update$',
+	'remove$',
+])('fences raw query member %s including extraction', (name) => {
+	for (const source of [
+		`alias.${name}({});`,
+		`alias['${name}']();`,
+		`alias?.['${name}']?.();`,
+		`const query = alias.${name};`,
+		`const query = alias['${name}'];`,
+		`const { ${name}: query } = alias;`,
+		`const { ['${name}']: query } = alias;`,
+		`({ ${name}: query } = alias);`,
+	]) {
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['raw query construction']);
+	}
+});
+
+it.each([
+	'alias.find({ selector: {} });',
+	"alias['find']({});",
+	"alias?.['find']?.({});",
+	'alias.find();',
+	"alias['find']();",
+	"alias?.['find']?.();",
+])('fences raw find construction in %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['raw query construction']);
+});
+
+it.each([
+	'items.find((x) => x.id);',
+	'items.find(predicateFn);',
+	"items['find'](predicateFn);",
+	"str.indexOf('x');",
+	'insert(value);',
+	'const { db } = other;',
+])('allows unrelated collection/helper/handle syntax in %s', (source) => {
+	expect(violations(source)).toEqual([]);
+});
+
+it.each([
+	'patchEngineResident',
+	'patchAndEnqueueEngineResident',
+	'insertEngineResident',
+	'useLocalMutation',
+	'useMutation',
+])('fences resident helper %s imports and calls outside command modules', (name) => {
+	for (const source of [
+		`import { ${name} } from './helpers';`,
+		`import { ${name} as helper } from './helpers';`,
+		`${name}({});`,
+		`helpers.${name}({});`,
+		`helpers['${name}']({});`,
+	]) {
+		expect(violations(source, 'screens/main/example.tsx').map(({ rule }) => rule)).toEqual([
+			'resident helper write',
+		]);
+	}
+});
+
+it.each([
+	'screens/main/hooks/mutations/use-local-mutation.ts',
+	'screens/main/hooks/mutations/use-mutation.ts',
+	'extensions/commands/example.ts',
+	'screens/main/commands/example.ts',
+])('allows resident helpers in defining/command module %s', (path) => {
+	expect(
+		violations("import { patchEngineResident } from './helpers'; patchEngineResident({});", path)
+	).toEqual([]);
+});
+
+it('does not exempt other modules alongside the defining mutation helpers', () => {
+	expect(
+		violations('patchEngineResident({});', 'screens/main/hooks/mutations/other.ts').map(
+			({ rule }) => rule
+		)
+	).toEqual(['resident helper write']);
+});
+
+it.each([
+	'const writer = engine;',
+	'const writer = runtime.engine;',
+	"const writer = runtime['engine'];",
+	"const writer = runtime?.['engine'];",
+	'const { engine } = runtime;',
+	'const { engine: writer } = runtime;',
+	"const { ['engine']: writer } = runtime;",
+	'const { nested: { engine } } = runtime;',
+	'const { safe } = engine;',
+	'const [writer] = runtime.engine;',
+	'const scope = engine.scope;',
+	"const scope = runtime['engine']['scope'];",
+	'const { safe } = runtime.engine.scope;',
+])('fences an engine handle stored in a local: %s', (source) => {
+	expect(violations(source).map(({ rule }) => rule)).toEqual(['engine handle aliased']);
+});
+
+it.each([
+	"import { value } from '../../database/src';",
+	"export { value } from '../../database/src';",
+	"const value = import('../../database/src');",
+	"const value = require('../../database/src');",
+	"type Value = import('../../database/src').Value;",
+])('fences cross-package relative imports: %s', (source) => {
+	for (const path of ['packages/core/src/example.ts', 'example.ts', `${__dirname}/example.ts`]) {
+		expect(violations(source, path).map(({ rule }) => rule)).toEqual([
+			'cross-package relative import',
+		]);
+	}
+});
+
+it.each(['./helpers', '../utils', '../../core/src/helpers'])(
+	'allows relative imports within core: %s',
+	(specifier) => {
+		expect(
+			violations(`import { value } from '${specifier}';`, 'packages/core/src/example.ts')
+		).toEqual([]);
+	}
+);
+
+it.each(['doc.getLocal$;', "doc['getLocal$']();", 'const { getLocal$ } = doc;'])(
+	'fences getLocal$ in %s',
+	(source) => {
+		expect(violations(source).map(({ rule }) => rule)).toEqual(['record mutator']);
+	}
+);
