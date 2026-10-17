@@ -235,15 +235,21 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		record && recordLabel?.status === 'found' && recordLabel.uuid
 			? (FIX_ROUTES[record.collection]?.(recordLabel.uuid) ?? null)
 			: null;
-	// A recovered or settled row has nothing left on the Database tab — an
-	// auto-reverted SYNC201 already restored the store's copy.
+	const context = row.context ?? {};
+	// Only a row about a record or a queued change has anything on the Database
+	// tab (SYNC211 is also stamped on settings/auth 400s), and a recovered or
+	// settled row has nothing left there — an auto-reverted SYNC201 already
+	// restored the store's copy.
+	const hasRecordContext =
+		(context.recordId !== undefined && context.recordId !== null) ||
+		(context.mutationId !== undefined && context.mutationId !== null);
 	const toDatabase =
 		row.code !== undefined &&
 		DATABASE_CODES.has(row.code) &&
+		hasRecordContext &&
 		row.outcome !== 'recovered' &&
 		row.outcome !== 'ok';
 
-	const context = row.context ?? {};
 	const reason =
 		typeof context.reason === 'string' && context.reason.length > 0 ? context.reason : null;
 	const eventType = eventTypeOf(row);

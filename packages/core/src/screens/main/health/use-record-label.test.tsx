@@ -66,6 +66,14 @@ describe('recordHandle', () => {
 		expect(recordHandle({ payload: { username: 'ada' } })).toBe('ada');
 	});
 
+	it('skips a blank value so the payload or a later source still names it', () => {
+		expect(recordHandle({ name: '  ', payload: { name: 'Blue Tee' } })).toBe('Blue Tee');
+		expect(recordHandle({ name: '', payload: { name: ' ' } }, { name: 'Queued Name' })).toBe(
+			'Queued Name'
+		);
+		expect(recordHandle({ number: '', payload: { number: '1234' } })).toBe('#1234');
+	});
+
 	it('names a coupon by its code', () => {
 		expect(recordHandle({ payload: { code: ' SAVE10 ', amount: '10' } })).toBe('SAVE10');
 	});

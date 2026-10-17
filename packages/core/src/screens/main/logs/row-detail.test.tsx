@@ -561,7 +561,13 @@ describe('RowDetail', () => {
 		it('offers no Database action on an auto-reverted (recovered) SYNC201 row', () => {
 			render(
 				<RowDetail
-					row={{ ...row, level: 'error', code: 'SYNC201', outcome: 'recovered' }}
+					row={{
+						...row,
+						level: 'error',
+						code: 'SYNC201',
+						outcome: 'recovered',
+						context: { type: 'queue.write.auto-reverted', mutationId: 'm-1' },
+					}}
 					kind="error"
 					title="Reverted a change"
 				/>
@@ -573,10 +579,38 @@ describe('RowDetail', () => {
 		it.each(['SYNC201', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
 			'takes a %s row to Store health → Database',
 			(code) => {
-				render(<RowDetail row={{ ...row, level: 'warn', code }} kind="warn" title="Problem" />);
+				render(
+					<RowDetail
+						row={{
+							...row,
+							level: 'warn',
+							code,
+							context: { type: 'push.error', mutationId: 'm-1' },
+						}}
+						kind="warn"
+						title="Problem"
+					/>
+				);
 
 				fireEvent.click(screen.getByTestId('logs-go-database-log-1'));
 				expect(mockPush).toHaveBeenCalledWith('/health/database');
+			}
+		);
+
+		// SYNC211 is also stamped on a settings or auth HTTP 400: nothing about it
+		// lives on the Database tab.
+		it.each(['SYNC201', 'SYNC211', 'SYNC221', 'SYNC321', 'SYNC331'])(
+			'offers no Database action on a %s row with no record or queued change',
+			(code) => {
+				render(
+					<RowDetail
+						row={{ ...row, level: 'warn', code, context: { type: 'http.error', status: 400 } }}
+						kind="warn"
+						title="Problem"
+					/>
+				);
+
+				expect(screen.queryByTestId('logs-go-database-log-1')).toBeNull();
 			}
 		);
 

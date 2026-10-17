@@ -15,8 +15,13 @@ export function recordHandle(...sources: LabelSource[]): string | null {
 		for (const source of sources) {
 			if (!source) continue;
 			const payload = source.payload as Record<string, unknown> | undefined;
-			const value = source[key] ?? payload?.[key];
-			if (value !== undefined && value !== null) return value;
+			// A blank value names nothing: skip it so the payload, or a later
+			// source, still gets its turn.
+			for (const value of [source[key], payload?.[key]]) {
+				if (value === undefined || value === null) continue;
+				if (typeof value === 'string' && value.trim() === '') continue;
+				return value;
+			}
 		}
 		return undefined;
 	};

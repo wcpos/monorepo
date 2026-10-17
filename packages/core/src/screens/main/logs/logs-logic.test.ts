@@ -572,6 +572,14 @@ describe('deriveStuckRecords', () => {
 });
 
 describe('rowDetailData', () => {
+	// Push rows persist the mutation kind as `op`; others name it `operation`.
+	it('names the record change in the Operation fact from `op` or `operation`', () => {
+		expect(
+			rowDetailData(row({ operationType: 'sync.record', context: { op: 'update' } })).operation
+		).toBe('sync.record · update');
+		expect(rowDetailData(row({ context: { operation: 'delete' } })).operation).toBe('delete');
+	});
+
 	it('assembles correlation values from terminal fields and context', () => {
 		const detail = rowDetailData(
 			row({

@@ -347,9 +347,11 @@ export function rowDetailData(row: LogRow): RowDetailData {
 	const context = row.context ?? {};
 	const detail: RowDetailData = {};
 
-	// `context.operation` is the record change itself (create / update / delete),
-	// the "operation named in the log" the guidance copy refers to.
-	const operationParts = [row.operationId, row.operationType, context.operation].filter(
+	// The record change itself (create / update / delete), the "operation named
+	// in the log" the guidance copy refers to: `operation` on most rows, `op` on
+	// the push rows that persist the mutation kind.
+	const recordChange = context.operation ?? context.op;
+	const operationParts = [row.operationId, row.operationType, recordChange].filter(
 		(part): part is string => typeof part === 'string' && part.length > 0
 	);
 	if (operationParts.length > 0) detail.operation = operationParts.join(' · ');
