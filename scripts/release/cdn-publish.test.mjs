@@ -100,7 +100,7 @@ async function fixture(t, options = {}) {
 			const kvPrefix = '/client/v4/accounts/d9df0d95f1cee465811e977842e5063a/storage/kv/namespaces/0ddbce1d02ad40f5868c1e14cfd5b3f2/values/';
 			if (url.pathname.startsWith(objectPrefix)) {
 				const key = decodeURIComponent(url.pathname.slice(objectPrefix.length));
-				if (method === 'HEAD') return new Response(null, { status: options.exists ? 200 : 404 });
+				if (method === 'GET') return new Response(options.exists ? '{}' : null, { status: options.exists ? 200 : 404 });
 				assert.equal(method, 'PUT');
 				r2.set(key, { body: Buffer.from(init.body), type: init.headers['Content-Type'] });
 				return new Response('{}');

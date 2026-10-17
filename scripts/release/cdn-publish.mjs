@@ -151,9 +151,10 @@ export async function publish({ buildDir, appVersion, monorepoSha, runId, lane, 
 	};
 	const writeKv = (key, value) => request(kvUrl(key), 'PUT', JSON.stringify(value), CONTENT_TYPES['.json']);
 	const prefix = `${BUNDLE_PREFIX}/${descriptor.build_id}`;
-	const head = await request(objectUrl(`${prefix}/${DESCRIPTOR_FILE}`), 'HEAD', undefined, undefined, true);
-	console.log(head.status === 200 ? 'CDN: completed build exists; skip R2 uploads' : 'CDN: upload build to R2');
-	if (head.status !== 200) {
+	// The R2 REST object API answers HEAD with 405, so existence is a GET of the small descriptor.
+	const existing = await request(objectUrl(`${prefix}/${DESCRIPTOR_FILE}`), 'GET', undefined, undefined, true);
+	console.log(existing.status === 200 ? 'CDN: completed build exists; skip R2 uploads' : 'CDN: upload build to R2');
+	if (existing.status !== 200) {
 		for (const path of Object.keys(files).sort()) {
 			await request(objectUrl(`${prefix}/${BUILD_PREFIX}/${path}`), 'PUT', files[path],
 				CONTENT_TYPES[extname(path).toLowerCase()] ?? DEFAULT_TYPE);
