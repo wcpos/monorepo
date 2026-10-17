@@ -106,7 +106,6 @@ describe('badge colour contract', () => {
 	it.each([
 		['ghost', 'ghost'],
 		['outline', 'outline'],
-		['muted', 'muted'],
 	] as const)('inherits no stateful text colour from the %s variant', (_label, variant) => {
 		render(
 			<Button variant={variant} testID="host">

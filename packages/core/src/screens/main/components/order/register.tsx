@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import type { CellContext } from '@wcpos/core/table-types';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
@@ -23,13 +23,11 @@ export function Register({
 	)?.actions;
 	if (!id) return null;
 	return (
-		<ButtonPill
+		<Chip
 			testID="order-register"
-			variant="ghost-secondary"
-			size="xs"
+			size="sm"
+			label={names[id] || id.slice(0, 8)}
 			onPress={() => actions?.setFilter('register', id)}
-		>
-			{names[id] || id.slice(0, 8)}
-		</ButtonPill>
+		/>
 	);
 }

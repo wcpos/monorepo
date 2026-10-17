@@ -98,7 +98,6 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/button', () => ({
-	ButtonGroupSeparator: () => <div />,
 	Button: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 }));
 jest.mock('@wcpos/components/text', () => ({

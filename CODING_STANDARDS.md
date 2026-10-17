@@ -262,6 +262,11 @@ Rules: a slot never empties while its state changes (Connect → Connecting… �
 slot; the ⋮ beside it stays put); buttons are 44 pt minimum, 48 pt default on a phone; Pay
 never shares a colour with Void (§7).
 
+#### Chips, badges and switches
+- A selectable choice is a Chip; a static count or state is a Badge; a Button is never a toggle.
+  `Chip size="sm"` (32) only in a dense table cell or a row's filter strip; the default (44)
+  everywhere else.
+
 #### Rows and cards
 A list row is a card with: an icon square (40 pt, tinted by state: success / destructive / muted),
 line 1 the name (16 px semibold) with an optional chip at the right edge, line 2 the identifiers

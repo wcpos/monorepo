@@ -130,7 +130,7 @@ export function DisplayCurrentTaxRates({
 			</VStack>
 			<View className="flex-row">
 				<Button
-					variant="muted"
+					variant="outline"
 					onPress={() => {
 						// The popover (a sheet on a phone) would otherwise stay open over the modal.
 						onOpenChange(false);
