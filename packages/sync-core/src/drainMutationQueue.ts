@@ -209,6 +209,7 @@ async function annihilateNeverPushedChains(input: {
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
+		if ((await input.queue.admissionState(row, input.now())) !== 'released') continue;
 		const key = recordKey(row);
 		const bucket = byRecord.get(key);
 		if (bucket) bucket.push(row);
@@ -238,7 +239,12 @@ async function annihilateNeverPushedChains(input: {
 		try {
 			if ((await input.currentRevision?.(head)) || (await input.hasServerIdentity?.(head)))
 				continue;
-			const fresh = (await input.queue.all()).filter((row) => recordKey(row) === recordKey(head));
+			const fresh: QueuedMutation[] = [];
+			for (const row of (await input.queue.all()).filter(
+				(row) => recordKey(row) === recordKey(head)
+			)) {
+				if ((await input.queue.admissionState(row, input.now())) !== 'lost') fresh.push(row);
+			}
 			if (
 				fresh.some(
 					(row) =>
@@ -697,6 +703,13 @@ export async function drainMutationQueue(input: {
 			break;
 		}
 
+		// Wait for the owner's durable release, so a lease expiring between this
+		// read and claim can never authorize a stale append after a void.
+		const admission = await input.queue.admissionState(mutation, now());
+		if (admission === 'live') {
+			blockedRecords.add(recordKey(mutation));
+			continue;
+		}
 		// Re-stamp the optimistic-concurrency base AT DRAIN TIME from the record's
 		// current sync.revision (fallback: the enqueue-time base) — an update queued
 		// while an earlier ack was in flight must push against the revision that ack
@@ -720,6 +733,9 @@ export async function drainMutationQueue(input: {
 				: {};
 		const draining = {
 			...bare,
+			...(admission === 'released' && mutation.admittedBy
+				? { admissionReleased: mutation.admittedBy }
+				: {}),
 			baseRevision: freshRevision || mutation.baseRevision,
 			status: 'claimed' as const,
 			...lease,
@@ -748,6 +764,10 @@ export async function drainMutationQueue(input: {
 			) {
 				blockedRecords.add(recordKey(mutation));
 			}
+			continue;
+		}
+		if (admission === 'lost') {
+			await deadLetter(draining, { reason: 'admission-lost' });
 			continue;
 		}
 		attemptStartedAt = now();

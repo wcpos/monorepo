@@ -268,6 +268,13 @@ export async function enqueueWriteIntent(input: {
 
 	const isRecordRow = (item: QueuedMutation) =>
 		item.collectionName === requested.collection && item.recordId === requested.recordId;
+	const liveRecordRows = async (rows: QueuedMutation[]) => {
+		const live: QueuedMutation[] = [];
+		for (const row of rows.filter(isRecordRow)) {
+			if ((await queue.admissionState(row, nowMs())) !== 'lost') live.push(row);
+		}
+		return live;
+	};
 	const mark = (row: QueuedMutation, token: string) =>
 		legacyQueue
 			? queue.removePending(row.mutationId, { requireNeverPushed: true })
@@ -313,7 +320,7 @@ export async function enqueueWriteIntent(input: {
 		token?: string,
 		marked?: QueuedMutation[]
 	) => {
-		const fresh = (await queue.all()).filter(isRecordRow);
+		const fresh = await liveRecordRows(await queue.all());
 		const ownIds = new Set(
 			successors.filter((row) => !row.requeuedFrom).map((row) => row.mutationId)
 		);
@@ -367,7 +374,7 @@ export async function enqueueWriteIntent(input: {
 	for (let attempt = 0; attempt < 10; attempt += 1) {
 		if (!legacyQueue && (await queue.hasVoidFence(name, recordId, nowMs()))) throw voidInProgress();
 		const rows = await queue.pending();
-		const recordRows = rows.filter(isRecordRow);
+		const recordRows = await liveRecordRows(rows);
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
 		const doc = (await collection.findOne(requested.recordId).exec()) as MutationDoc | null;
@@ -566,8 +573,8 @@ export async function enqueueWriteIntent(input: {
 						!deadLetters.some((row) => rejectionSuggestsServerRecord(row.rejectedReason));
 					if (bornLocal) {
 						// As above, retain successors until dead letters and resident are settled.
-						const successors = (await queue.pending()).filter(
-							(row) => isRecordRow(row) && row.operation !== 'create'
+						const successors = (await liveRecordRows(await queue.pending())).filter(
+							(row) => row.operation !== 'create'
 						);
 						await guardAnnihilation(successors);
 						const token = input.mintUuid();
@@ -645,6 +652,7 @@ export async function enqueueWriteIntent(input: {
 			};
 		}
 
+		if (!legacyQueue) mutation = { ...mutation, admittedBy: mutation.mutationId };
 		const residentSnapshot = JSON.stringify(stored);
 		const queueSnapshot = JSON.stringify(recordRows);
 		// Hold admission through bookkeeping/compensation as well as the append: a
@@ -665,7 +673,7 @@ export async function enqueueWriteIntent(input: {
 		try {
 			if (!legacyQueue) {
 				const freshDoc = await collection.findOne(recordId).exec();
-				if (JSON.stringify((await queue.pending()).filter(isRecordRow)) !== queueSnapshot) continue;
+				if (JSON.stringify(await liveRecordRows(await queue.pending())) !== queueSnapshot) continue;
 				if (doc && !freshDoc) throw voidInProgress();
 				if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) continue;
 			}
@@ -774,7 +782,9 @@ export async function enqueueWriteIntent(input: {
 					// resurrect a superseded intent alongside it. In that case adapt: leave
 					// the queue as-is (the enqueue stands; only the dirty-mark is missing,
 					// and the drain's ack/reject bookkeeping self-heals it) and rethrow.
-					const unwound = await queue.removePending(mutation.mutationId);
+					const unwound =
+						(await queue.admissionState(mutation, nowMs())) !== 'lost' &&
+						(await queue.removePending(mutation.mutationId));
 					if (unwound && prior) await queue.replace(prior);
 					throw error;
 				}
@@ -792,7 +802,7 @@ export async function enqueueWriteIntent(input: {
 		} finally {
 			if (!legacyQueue) {
 				try {
-					await queue.releaseWriter(name, recordId, mutation.mutationId);
+					await queue.releaseWriter(name, recordId, mutation.mutationId, nowMs());
 				} catch (error) {
 					if (!committed && !writeFailed) throw error;
 					try {

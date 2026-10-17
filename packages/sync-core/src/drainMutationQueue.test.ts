@@ -48,6 +48,52 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it.each(['live', 'released', 'release interrupted', 'release during scan', 'expired', 'fenced'])(
+		'delivers only completed admissions: %s',
+		async (state) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const q = new RecordMutationQueue(storage);
+			await q.admitWriter('products', 'rec-A', 'writer', 0);
+			const row = { ...mut(), admittedBy: 'writer' };
+			if (state === 'fenced') await q.fenceForVoid('products', 'rec-A', 'void', 30_001);
+			await q.enqueue(row);
+			if (state === 'released') await q.releaseWriter('products', 'rec-A', 'writer', 1);
+			if (state === 'release interrupted') {
+				const append = storage.appendIfUnchanged.bind(storage);
+				vi.spyOn(storage, 'appendIfUnchanged').mockImplementation(async (m, rev) => {
+					if (m.admissionReleased) throw new Error('disk');
+					return append(m, rev);
+				});
+				await expect(q.releaseWriter('products', 'rec-A', 'writer', 1)).rejects.toThrow('disk');
+				vi.restoreAllMocks();
+				expect(await q.fenceForVoid('products', 'rec-A', 'void', 60_000)).toBe(false);
+				await q.clearExpiredAnnihilation(60_000);
+			}
+
+			if (state === 'release during scan') {
+				const classify = q.admissionState.bind(q);
+				let reads = 0;
+				vi.spyOn(q, 'admissionState').mockImplementation(async (...args) => {
+					if (++reads === 2) await q.releaseWriter('products', 'rec-A', 'writer', 1);
+					return classify(...args);
+				});
+			}
+			const push = vi.fn(async (m: RecordMutation) => {
+				expect((await q.all())[0].admissionReleased).toBe('writer');
+				return ok(m);
+			});
+			const now = state === 'expired' || state === 'fenced' ? 30_001 : 1;
+			const result = await drainMutationQueue({ queue: q, push, now: () => now });
+			expect(result.pushed).toBe(state.startsWith('release') ? 1 : 0);
+			if (state === 'expired' || state === 'fenced') {
+				expect(await q.all()).toMatchObject([
+					{ status: 'rejected', rejectedReason: 'admission-lost' },
+				]);
+				expect(await q.pendingResetCount(now)).toBe(1);
+			}
+		}
+	);
+
 	it.each([
 		'admission',
 		'expired fence',

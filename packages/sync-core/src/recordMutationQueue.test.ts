@@ -38,6 +38,21 @@ const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 });
 
 describe('RecordMutationQueue', () => {
+	it('admission expiry preserves fenced and real rows for their own settlement', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const q = new RecordMutationQueue(storage);
+		await storage.append({ ...mut(), admittedBy: 'writer' });
+		await storage.append({
+			...mut({ mutationId: 'marked' }),
+			admittedBy: 'writer',
+			supersededBy: 'void',
+			markedAt: 1000,
+		});
+		await q.clearExpiredAnnihilation(31_001);
+		expect((await q.all()).map((row) => row.mutationId)).toEqual(['m1', 'marked']);
+		expect((await q.all())[1].supersededBy).toBe('void');
+	});
+
 	it('a committed fence alone remains pending reset work even after expiry', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		await q.fenceForVoid('products', 'rec-A', 'void', 0);

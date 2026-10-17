@@ -148,6 +148,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.engine_ready_stalled');
 		case 'engine.reconnect.retick':
 			return t('health.logs.event.engine_reconnect_retick');
+		case 'engine.request.deadline':
+			return t('health.logs.event.engine_request_deadline');
 		case 'engine.reset-needs-confirmation':
 			return t('health.logs.event.engine_reset_needs_confirmation');
 		case 'engine.scope-switched':

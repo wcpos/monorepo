@@ -12,6 +12,8 @@ describe('package exports', () => {
 		expect(Object.keys(production).sort()).toEqual(
 			[
 				'createRxdbSyncEngine',
+				// Register accounting shares the engine's definition of pending local work.
+				'hasPendingLocalWork',
 				'normalizeVariationAttributes',
 				// The variation projector, exported so @wcpos/query's parity test can pin
 				// the map face against it — the drift tripwire #1308 gave products/orders.

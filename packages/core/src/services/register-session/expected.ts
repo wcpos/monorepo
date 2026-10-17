@@ -91,17 +91,37 @@ export function attributeRefunds(
 	return { byMethod, count: ids.size, countByMethod };
 }
 
-export function deriveExpected({
-	session,
-	movements,
-	ledgerRowsBySession,
-	refundRecords = [],
-}: {
-	session: { id: string; counted_float: string };
-	movements: readonly Movement[];
-	ledgerRowsBySession: readonly LedgerRow[];
-	refundRecords?: readonly RefundDocumentType[];
-}): Record<string, string> {
+export function deriveExpected(
+	{
+		session,
+		movements,
+		ledgerRowsBySession,
+		refundRecords = [],
+	}: {
+		session: {
+			id: string;
+			counted_float: string;
+			server_expected?: Record<string, string> | null;
+			server_ledger_rows?: readonly { id?: string; status?: string }[] | null;
+		};
+		movements: readonly Movement[];
+		ledgerRowsBySession: readonly LedgerRow[];
+		refundRecords?: readonly RefundDocumentType[];
+	},
+	baselineHas?: (id: string | number | null | undefined) => boolean
+): Record<string, string> {
+	if (session.server_expected && baselineHas) {
+		const delta = deriveUnsyncedDelta(
+			{ session, movements, ledgerRowsBySession, refundRecords },
+			baselineHas
+		);
+		const expected = { ...session.server_expected };
+		for (const [method, amount] of Object.entries(delta)) {
+			if (toMinor(amount, 4))
+				expected[method] = fromMinor(toMinor(expected[method] ?? '0', 4) + toMinor(amount, 4), 4);
+		}
+		return expected;
+	}
 	// Server money uses four decimals. Integer arithmetic avoids floating-point drift.
 	const totals: Record<string, number> = { cash: toMinor(session.counted_float, 4) };
 	for (const row of ledgerRowsBySession) {
@@ -172,4 +192,54 @@ export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
 		voids: live.filter((row) => row.type === 'void').length,
 		expected: deriveExpected(input).cash,
 	};
+}
+
+export function deriveUnsyncedDelta(
+	input: Parameters<typeof deriveExpected>[0],
+	baselineHas: (id: string | number | null | undefined) => boolean
+): Record<string, string> {
+	// Compare the full local view with only the part already represented in the baseline.
+	// Restoring a synced target's pending void marker makes its reversal a signed debit.
+	const full = deriveExpected(input);
+	for (const row of input.ledgerRowsBySession) {
+		if (row.session_id !== input.session.id || !baselineHas(row.id)) continue;
+		const snapshot = input.session.server_ledger_rows?.find(({ id }) => id === row.id);
+		if (
+			['voided', 'failed'].includes(row.status) &&
+			snapshot &&
+			['captured', 'authorized'].includes(snapshot.status ?? '')
+		) {
+			const method = row.kind === 'cash' ? 'cash' : row.method_id;
+			full[method] = fromMinor(toMinor(full[method] ?? '0', 4) - toMinor(row.amount, 4), 4);
+		}
+	}
+	const known = deriveExpected({
+		...input,
+		movements: input.movements
+			.filter((row) => baselineHas(row.id))
+			.map((row) => ({
+				...row,
+				voided_by: baselineHas(row.voided_by) ? row.voided_by : null,
+			})),
+		ledgerRowsBySession: input.ledgerRowsBySession
+			.filter((row) => baselineHas(row.id))
+			.map((row) => ({
+				...row,
+				refunds: row.refunds?.filter((refund) => baselineHas(refund.id)),
+				refunded_amount: fromMinor(
+					toMinor(row.refunded_amount, 4) -
+						(row.refunds ?? [])
+							.filter((refund) => !baselineHas(refund.id) && refund.status === 'succeeded')
+							.reduce((sum, refund) => sum + toMinor(refund.amount, 4), 0),
+					4
+				),
+			})),
+		refundRecords: input.refundRecords?.filter((row) => baselineHas(row.id)),
+	});
+	return Object.fromEntries(
+		Object.keys({ ...full, ...known }).map((method) => [
+			method,
+			fromMinor(toMinor(full[method] ?? '0', 4) - toMinor(known[method] ?? '0', 4), 4),
+		])
+	);
 }

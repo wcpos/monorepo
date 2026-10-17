@@ -443,9 +443,10 @@ describe('change-signal server-pressure adaptation', () => {
 		// Now the server pushes back, and the till goes idle again.
 		await context.respond(new Response(null, { status: 429 }));
 		lastActivityMs = 1;
+		const cadenceDelay = armedDelay(context.engine, context.now());
 		context.setNow(context.now() + 20 * 60_000);
 		// Force the decay level forward the way a fired tick would.
-		const pending = context.timers.timeouts.at(-1)!;
+		const pending = context.timers.timeouts.findLast((timer) => timer.delay === cadenceDelay)!;
 		clearTimeout(pending.handle);
 		pending.callback();
 		const decayedUnderPressure = armedDelay(context.engine, context.now());

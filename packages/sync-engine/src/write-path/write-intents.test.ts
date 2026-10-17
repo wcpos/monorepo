@@ -3,7 +3,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
-import { RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
+import { drainMutationQueue, RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
 import { enqueueWriteIntent, queueFor, requeueBornTwiceSnapshot } from './write-intents';
@@ -117,6 +117,71 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it('a late append after admission loss survives as a dead letter, not a resurrected sale', async () => {
+		const storage = createFakeMutationCollection();
+		let present = true;
+		let now = Date.now();
+		const resident = {
+			toJSON: () => ({ payload: { id: 0 }, sync: {} }),
+			remove: async () => {
+				present = false;
+			},
+			incrementalModify: vi.fn(),
+		};
+		const collections = {
+			orders: { findOne: () => ({ exec: async () => (present ? resident : null) }) },
+			recordMutations: storage,
+		};
+		const db = { collections } as unknown as RxDatabase;
+		const otherDb = { collections } as unknown as RxDatabase;
+		const queue = queueFor(db);
+		const other = queueFor(otherDb);
+		const enqueue = queue.enqueue.bind(queue);
+		const fence = other.fenceForVoid.bind(other);
+		vi.spyOn(queue, 'enqueue').mockImplementationOnce(async (mutation) => {
+			now += 30_001;
+			let appended: QueuedMutation;
+			vi.spyOn(other, 'fenceForVoid').mockImplementationOnce(async (...args) => {
+				const held = await fence(...args);
+				appended = await enqueue(mutation);
+				return held;
+			});
+			await enqueueWriteIntent({
+				db: otherDb,
+				intent: { collection: 'orders', operation: 'delete', recordId: 'order' },
+				mintUuid: () => 'void',
+				now: () => new Date(now).toISOString(),
+			});
+			return appended!;
+		});
+		await expect(
+			enqueueWriteIntent({
+				db,
+				intent: {
+					collection: 'orders',
+					operation: 'create',
+					recordId: 'order',
+					payload: { id: 0 },
+				},
+				mintUuid: () => 'late',
+				now: () => new Date(now).toISOString(),
+			})
+		).rejects.toMatchObject({ reason: 'void-in-progress' });
+		expect(present).toBe(false);
+		expect(await queue.pendingResetCount(now)).toBe(1);
+		const push = vi.fn();
+		await drainMutationQueue({ queue, push, now: () => now });
+		expect(push).not.toHaveBeenCalled();
+		expect(await queue.all()).toMatchObject([
+			{
+				mutationId: 'late',
+				admittedBy: 'late',
+				status: 'rejected',
+				rejectedReason: 'admission-lost',
+			},
+		]);
+	});
+
 	it.each([
 		'void between read and admission',
 		'expired admission',

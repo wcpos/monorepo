@@ -51,6 +51,7 @@ const {
 	expiresAt: _expiresAt,
 	admittedBy: _admittedBy,
 	admittedAt: _admittedAt,
+	admissionReleased: _admissionReleased,
 	mutationId: _mutationId,
 	...drainableQueueProperties
 } = recordMutationQueueSchema.properties;

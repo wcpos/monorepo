@@ -271,3 +271,14 @@ it('reads the default-store directory without rebinding the physical till', asyn
 		name: 'Physical',
 	});
 });
+
+it('reloads the directory on remount after a rejected request', async () => {
+	mockHttp.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ data: rows });
+	const first = renderHook(() => useRegisterDirectory(mockStoreId));
+	await waitFor(() => expect(first.result.current.failed).toBe(true));
+	first.unmount();
+	const second = renderHook(() => useRegisterDirectory(mockStoreId));
+	await waitFor(() => expect(second.result.current.registers).toEqual(rows));
+	expect(second.result.current.failed).toBe(false);
+	expect(mockHttp.get).toHaveBeenCalledTimes(2);
+});

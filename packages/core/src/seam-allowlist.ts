@@ -909,7 +909,11 @@ export const SEAM_RETIRED_FINGERPRINTS: readonly string[] = [
 	'screens/main/hooks/use-unsent-changes.ts :: raw query construction :: unsentCount$ :: queueOf(database).count :: 1',
 	'screens/main/hooks/use-unsent-changes.ts :: storage token :: queueOf :: database.collections :: 1',
 	'screens/main/hooks/use-unsent-changes.ts :: storage token :: unsentCount$ :: engine.db$ :: 1',
+	// #2609: retain server baselines on movement drain, pre-action guards and refund changes.
+	'services/register-session/queue.ts :: record mutator :: drain :: session.incrementalPatch :: 1',
+	'services/register-session/session-store.ts :: record mutator :: requireOpenSession :: session.incrementalPatch :: 1',
+	'services/register-session/use-register-session.ts :: record mutator :: useRegisterSession :: current.getLatest().incrementalPatch :: 1',
 ];
-export const SEAM_RETIRED_FLOOR = 6;
+export const SEAM_RETIRED_FLOOR = 9;
 export const SEAM_RETIRED_PREFIX_DIGEST =
-	'81f07bac07e776a24c55a112d97e48f65d9c4bdc92f46eb86185d90951c9d1d4';
+	'3428daa54b84b9068f6dbf3dc6c0fa8995fbe300991d7c7b2c20cdd5da8c5074';

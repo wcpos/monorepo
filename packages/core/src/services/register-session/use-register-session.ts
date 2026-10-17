@@ -16,21 +16,23 @@ import {
 
 import {
 	declareRequirements,
+	type EngineRecord,
 	observeEngineQuery,
 	useDocField,
 	useQueryRuntime,
 } from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { readLedger, toMinor } from '@wcpos/order-math';
+import { getLogger } from '@wcpos/utils/logger';
+import { readLedger } from '@wcpos/order-math';
 import { mintRemoteId } from '@wcpos/sync-core';
 import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
-import type { RequirementHandle } from '@wcpos/sync-engine';
+import { hasPendingLocalWork, type RequirementHandle } from '@wcpos/sync-engine';
 
 import { useStoreDay } from '../../hooks/use-store-day';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 import { deriveDrawerTerms, deriveExpected } from './expected';
+import { sessionRefreshRequests } from './refresh';
 import * as actions from './session-store';
 import {
 	useCashMovementCollection,
@@ -42,6 +44,67 @@ const logger = getLogger(['wcpos', 'registerSession']);
 // A drain that has not answered in fifteen seconds is offline or stalled, and the till must
 // still close; the closure then carries the fallback and the parent arrives later.
 const REFUND_PARENT_WAIT_MS = 15_000;
+
+function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
+	return hasPendingLocalWork(record) || record.remoteId === null;
+}
+
+function afterBaseline(at?: string | null, baselineAt?: string | null) {
+	baselineAt = baselineAt?.replace(/Z?$/, 'Z');
+	return (
+		!!at && !!baselineAt && Date.parse(at.endsWith('Z') ? at : `${at}Z`) > Date.parse(baselineAt)
+	);
+}
+function outsideBaseline(
+	record: {
+		remoteId?: unknown;
+		payload: { id?: number; date_created_gmt?: string };
+	},
+	baselineAt?: string | null,
+	orderIds?: readonly number[] | null
+) {
+	if (orderIds != null) return !orderIds.some((id) => id === record.payload.id);
+	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
+}
+function baselineContains(
+	orders: readonly EngineRecord<'orders'>[],
+	refunds: readonly EngineRecord<'refunds'>[],
+	movements: readonly { id: string }[],
+	baselineAt?: string | null,
+	movementIds: readonly string[] = [],
+	ledgerRowIds?: readonly string[] | null,
+	refundIds?: readonly number[] | null
+) {
+	if (!baselineAt) return undefined;
+	const pending = new Set<string | number | null | undefined>([
+		...refunds
+			.filter((row) => outsideBaseline(row, baselineAt, refundIds))
+			.map((row) => row.payload.id),
+		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
+		...orders.flatMap((order) =>
+			readLedger(order.payload.meta_data).flatMap((row) =>
+				(row.refunds ?? [])
+					.filter((refund) => {
+						const at = (refund as { created_at_gmt?: string }).created_at_gmt;
+						return refundIds != null
+							? !refundIds.includes(refund.id)
+							: !at || afterBaseline(at, baselineAt);
+					})
+					.map(({ id }) => id)
+			)
+		),
+		...orders.flatMap((order) =>
+			readLedger(order.payload.meta_data)
+				.filter((row) =>
+					ledgerRowIds != null
+						? !ledgerRowIds.includes(row.id)
+						: afterBaseline(row.created_at_gmt, baselineAt)
+				)
+				.map(({ id }) => id)
+		),
+	]);
+	return (id: string | number | null | undefined) => !pending.has(id);
+}
 
 /** Whether now is past today's `HH:MM` close time; no or unreadable close time is never past. */
 function isPastClose(closeTime: string | null | undefined) {
@@ -58,13 +121,13 @@ function isPastClose(closeTime: string | null | undefined) {
 
 export function useRegisterSession() {
 	const missingParentKey = React.useRef('');
-	const anchorInvalidationPending = React.useRef(false);
 	const [accountingChanges] = React.useState(() => new Subject<void>());
 	const pendingParents = React.useRef<RequirementHandle[]>([]);
-	const latestAccounting = React.useRef<Pick<
-		Parameters<typeof actions.writeClosure>[0],
-		'orders' | 'refundRecords'
-	> | null>(null);
+	const latestAccounting = React.useRef<{
+		orders: EngineRecord<'orders'>[];
+		refundRecords: RefundDocumentType[];
+		refundSources: EngineRecord<'refunds'>[];
+	} | null>(null);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
 	const actor = useRegisterActor();
 	const { today, timezone } = useStoreDay();
@@ -97,8 +160,11 @@ export function useRegisterSession() {
 			// eslint-disable-next-line react-hooks/refs -- RxJS invokes this on subscription emissions, not while constructing the observable during render.
 			switchMap((current) => {
 				if (!current)
-					return of({ orders: { hits: [] as never[] }, refundRecords: [] as RefundDocumentType[] });
-				let previousRefunds: string | undefined;
+					return of({
+						orders: { hits: [] as never[] },
+						refundRecords: [] as RefundDocumentType[],
+						refundSources: [] as EngineRecord<'refunds'>[],
+					});
 				return observeEngineQuery(engine, {
 					collection: 'orders',
 					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
@@ -173,54 +239,22 @@ export function useRegisterSession() {
 											],
 										},
 										refundRecords,
+										refundSources: refunds.hits.map(({ record }) => record),
 									}))
 								);
 							})
 						);
 					}),
 					tap((accounting) => {
-						const allocations = accounting.orders.hits
-							.flatMap(({ record }) => readLedger(record.payload.meta_data))
-							.filter((row) => row.refunds?.length || toMinor(row.refunded_amount, 4) > 0)
-							.map(({ id, session_id, kind, method_id, status, refunded_amount, refunds }) => ({
-								id,
-								session_id,
-								kind,
-								method_id,
-								status,
-								refunded_amount,
-								refunds,
-							}));
-						const signature = JSON.stringify([accounting.refundRecords, allocations]);
-						const changed =
-							previousRefunds === undefined
-								? accounting.refundRecords.length > 0
-								: signature !== previousRefunds;
-						previousRefunds = signature;
-						if (changed) anchorInvalidationPending.current = true;
 						latestAccounting.current = {
 							orders: accounting.orders.hits.map(({ record }) => record),
 							refundRecords: accounting.refundRecords,
+							refundSources: accounting.refundSources,
 						};
 						accountingChanges.next();
 					}),
-					concatMap(async (accounting) => {
-						// Close must derive while the persisted anchor is still being cleared.
-						try {
-							if (anchorInvalidationPending.current && current.getLatest().server_expected) {
-								await current.getLatest().incrementalPatch({ server_expected: null });
-							}
-							anchorInvalidationPending.current = false;
-						} catch (error) {
-							logger.warn(
-								'Register session anchor invalidation failed; close will derive accounting',
-								{
-									context: { sessionId: current.id, error: getErrorMessage(error) },
-								}
-							);
-						}
-						return accounting;
-					})
+					// Preserve the existing asynchronous accounting emission boundary.
+					concatMap(async (accounting) => accounting)
 				);
 			})
 		);
@@ -307,12 +341,6 @@ export function useRegisterSession() {
 						key === '_wcpos_session' && value === session?.id
 				) || readLedger(record.payload.meta_data).some((row) => row.session_id === session?.id)
 		) ?? [];
-	// 'failed' counts as outstanding, not settled: the server never took the row, so falling
-	// back to its expected total drops the movement and hands the cashier the variance.
-	const localPending =
-		session?.sync_status !== 'synced' ||
-		entries.some((row) => row.sync_status !== 'synced') ||
-		orders.some(({ record }) => record.local.dirty);
 	const accountingOrders = data?.orders.hits ?? [];
 	const drawerInput = session
 		? {
@@ -326,11 +354,40 @@ export function useRegisterSession() {
 			}
 		: undefined;
 	const terms = drawerInput ? deriveDrawerTerms(drawerInput) : undefined;
-	const expected = session
-		? !localPending && session.server_expected
-			? session.server_expected
-			: deriveExpected(drawerInput!)
-		: {};
+	const baselineHas = baselineContains(
+		accountingOrders.map(({ record }) => record),
+		data?.refundSources ?? [],
+		entries,
+		session?.server_expected_at,
+		session?.server_movement_ids,
+		session?.server_ledger_row_ids,
+		session?.server_refund_ids
+	);
+	// Snapshot-counted voids debit the baseline even offline. Other in-place edits keep
+	// the baseline plus deltas until refreshed rather than inventing their prior state.
+	// Compare each row's snapshot version; older plugins fall back to the snapshot time.
+	const versions = [...(session?.server_ledger_rows ?? []), ...(session?.server_refunds ?? [])];
+	const baselineVersion = (id: string | number | undefined) =>
+		versions.find((row) => row.id === id)?.updated_at_gmt ?? session?.server_expected_at;
+	const baselineStale =
+		!!drawerInput?.ledgerRowsBySession.some((row) => {
+			if (!baselineHas?.(row.id)) return false;
+			const snapshot = session?.server_ledger_rows?.find(({ id }) => id === row.id);
+			// Tokens are server-owned: compare them, never reconstruct their financial hash.
+			return snapshot?.version !== undefined
+				? row.version !== snapshot.version
+				: afterBaseline(row.updated_at_gmt, baselineVersion(row.id));
+		}) ||
+		(data?.refundRecords ?? []).some(
+			(row) =>
+				baselineHas?.(row.id) && afterBaseline(row.date_modified_gmt, baselineVersion(row.id))
+		);
+	// Ask the existing bridge to refresh external state; it debounces requests across consumers.
+	React.useEffect(() => {
+		if (baselineStale && sessions && binding.registerId)
+			sessionRefreshRequests.next({ sessions, registerId: binding.registerId });
+	}, [baselineStale, sessions, binding.registerId]);
+	const expected = drawerInput ? deriveExpected(drawerInput, baselineHas) : {};
 	const overdue = !!session && session.status === 'open' && isPastClose(closeTime);
 	return {
 		session,
@@ -345,7 +402,7 @@ export function useRegisterSession() {
 		terms,
 		varianceThreshold,
 		unsyncedCount:
-			orders.filter(({ record }) => record.local.dirty).length +
+			orders.filter(({ record }) => pendingMoney(record)).length +
 			entries.filter((row) => row.sync_status !== 'synced').length +
 			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
@@ -353,8 +410,11 @@ export function useRegisterSession() {
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
 		salesCount:
-			!localPending && session?.server_sales_count != null
-				? session.server_sales_count
+			session?.server_sales_count != null && session.server_expected_at != null
+				? session.server_sales_count +
+					orders.filter(({ record }) =>
+						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
+					).length
 				: orders.length,
 		lastClosure:
 			data?.closureRows.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null,
@@ -382,7 +442,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			startCounting: async () => {
-				const row = await actions.startCounting(sessions!, session!.id);
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
+				const row = await actions.startCounting(sessions, session.id);
 				recordRegisterFact({
 					kind: 'counting-started',
 					actor,
@@ -392,7 +453,8 @@ export function useRegisterSession() {
 				return row;
 			},
 			backToSelling: async () => {
-				const row = await actions.backToSelling(sessions!, session!.id);
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
+				const row = await actions.backToSelling(sessions, session.id);
 				recordRegisterFact({
 					kind: 'counting-abandoned',
 					actor,
@@ -402,6 +464,7 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
+				if (!sessions || !session) throw new actions.RegisterSessionRequiredError();
 				const closed =
 					session!.status === 'closed'
 						? session!
@@ -470,13 +533,25 @@ export function useRegisterSession() {
 						opened_by_name: actorName(closed.opened_by),
 						approved_by_name: actorName(closed.approved_by),
 					},
-					tillExpected:
-						!localPending &&
-						!anchorInvalidationPending.current &&
-						latestSession.server_expected &&
-						!refundRecords?.length
-							? latestSession.server_expected
-							: undefined,
+					tillExpected: deriveExpected(
+						{
+							session: latestSession,
+							movements: entries,
+							refundRecords,
+							ledgerRowsBySession: (
+								accounting?.orders ?? accountingOrders.map(({ record }) => record)
+							).flatMap((record) => readLedger(record.payload.meta_data)),
+						},
+						baselineContains(
+							accounting?.orders ?? [],
+							accounting?.refundSources ?? [],
+							entries,
+							latestSession.server_expected_at,
+							latestSession.server_movement_ids,
+							latestSession.server_ledger_row_ids,
+							latestSession.server_refund_ids
+						)
+					),
 					userDB,
 					siteUuid: site.uuid!,
 					session: closed,

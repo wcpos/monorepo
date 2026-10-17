@@ -26,6 +26,7 @@ export const registerSessionsLiteral = {
 		closed_by: { type: ['number', 'null'] },
 		approval_required: { type: 'boolean', default: false },
 		approved_by: { type: ['number', 'null'] },
+		approved_counted: { type: ['object', 'null'], additionalProperties: { type: 'string' } },
 		counted: { type: ['object', 'null'], additionalProperties: { type: 'string' } },
 		closure_id: { type: ['string', 'null'] },
 		pending_status: { type: ['string', 'null'], default: null },
@@ -38,6 +39,36 @@ export const registerSessionsLiteral = {
 			additionalProperties: { type: 'string' },
 			default: null,
 		},
+		server_movement_ids: { type: 'array', items: { type: 'string' }, default: [] },
+		// Null means an older server omitted membership; an empty array is an empty snapshot.
+		server_order_ids: { type: ['array', 'null'], items: { type: 'number' }, default: null },
+		server_ledger_row_ids: { type: ['array', 'null'], items: { type: 'string' }, default: null },
+		server_refund_ids: { type: ['array', 'null'], items: { type: 'number' }, default: null },
+		server_ledger_rows: {
+			type: ['array', 'null'],
+			default: null,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string' },
+					updated_at_gmt: { type: 'string' },
+					status: { type: 'string' },
+					version: { type: 'string' },
+				},
+			},
+		},
+		server_refunds: {
+			type: ['array', 'null'],
+			default: null,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'number' },
+					updated_at_gmt: { type: 'string' },
+				},
+			},
+		},
+		server_expected_at: { type: ['string', 'null'], default: null },
 		server_sales_count: { type: ['number', 'null'], default: null },
 		...sessionOutboxProperties,
 	},

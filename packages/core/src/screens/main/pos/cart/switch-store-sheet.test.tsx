@@ -3,12 +3,20 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { Toast } from '@wcpos/components/toast';
+
 import { SwitchStoreSheet } from './switch-store-sheet';
 
 let mockSwitching = false;
 const mockSwitch = jest.fn(async () => {});
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('./use-switch-store', () => ({
-	useSwitchStore: () => ({ handleSwitchStore: mockSwitch, isSwitching: mockSwitching }),
+	useSwitchStore: () => ({
+		...jest.requireActual('./use-switch-store').useSwitchStore(),
+		...(mockSwitching ? { isSwitching: true } : {}),
+	}),
 }));
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => [
@@ -18,7 +26,11 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => ({}) }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: {}, store: { localID: 'store-1' } }),
+	useStoreSession: () => ({
+		wpCredentials: {},
+		store: { localID: 'store-1' },
+		switchStore: mockSwitch,
+	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
@@ -92,4 +104,14 @@ it('blocks the app and refuses dismissal while a switch is hydrating', () => {
 	fireEvent.click(screen.getByTestId('dismiss'));
 	expect(onOpenChange).not.toHaveBeenCalled();
 	expect((screen.getByTestId('switch-store-row-store-2') as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('keeps the sheet open and shows a toast when hydration fails', async () => {
+	mockSwitch.mockRejectedValueOnce(new Error('hydration failed'));
+	const onOpenChange = jest.fn();
+	render(<SwitchStoreSheet open onOpenChange={onOpenChange} />);
+	await React.act(async () => fireEvent.click(screen.getByTestId('switch-store-row-store-2')));
+	expect(onOpenChange).not.toHaveBeenCalled();
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(Toast.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 });

@@ -69,6 +69,7 @@ export type QueuedMutation = RecordMutation & {
 	readonly expiresAt?: number;
 	readonly admittedBy?: string;
 	readonly admittedAt?: number;
+	readonly admissionReleased?: string;
 	/** Queue-local override for cashier-triggered pushes; never serialized to the server. */
 	readonly explicit?: boolean;
 	/** Monotonic, per-scope queue position — minted by `enqueue`, the primary drain order key. */
@@ -494,15 +495,73 @@ export class RecordMutationQueue {
 		});
 	}
 
-	async releaseWriter(collection: string, record: string, token: string): Promise<void> {
+	async admissionState(row: QueuedMutation, nowMs: number): Promise<'released' | 'live' | 'lost'> {
+		if (!row.admittedBy || row.admissionReleased === row.admittedBy) return 'released';
+		const rows = await this.storage.list();
+		if (
+			rows.some(
+				(item) => item.mutationId === row.mutationId && item.admissionReleased === row.admittedBy
+			)
+		)
+			return 'released';
+		const holder = rows.find(
+			(item) => item.mutationId === fenceId(row.collectionName, row.recordId)
+		);
+		return holder?.admittedBy === row.admittedBy &&
+			(holder.payload.phase === 'released' ||
+				(holder.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
+			? 'live'
+			: 'lost';
+	}
+
+	async releaseWriter(
+		collection: string,
+		record: string,
+		token: string,
+		nowMs = Date.now()
+	): Promise<void> {
 		await this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === fenceId(collection, record)
 			);
-			if (stored?.mutation.admittedBy === token) {
-				await this.storage.removeIfUnchanged(stored.mutation.mutationId, stored.rev);
+			if (stored?.mutation.admittedBy !== token) return;
+			if (stored.mutation.payload.phase !== 'released') {
+				if ((stored.mutation.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs) return;
+				// Durable release proof first: expiry cannot steal this holder while its
+				// receipt is being copied to the appended row (or after a crash here).
+				if (
+					!(await this.storage.appendIfUnchanged(
+						{ ...stored.mutation, payload: { phase: 'released' } },
+						stored.rev
+					))
+				)
+					return;
 			}
+			await this.finishWriterRelease(collection, record, token);
 		});
+	}
+
+	private async finishWriterRelease(
+		collection: string,
+		record: string,
+		token: string
+	): Promise<void> {
+		const rows = await this.storage.listStored();
+		const holder = rows.find(({ mutation }) => mutation.mutationId === fenceId(collection, record));
+		if (holder?.mutation.admittedBy !== token || holder.mutation.payload.phase !== 'released')
+			return;
+		for (const { mutation, rev } of rows) {
+			if (
+				isInternalRow(mutation) ||
+				mutation.admittedBy !== token ||
+				mutation.collectionName !== collection ||
+				mutation.recordId !== record
+			)
+				continue;
+			if (!(await this.storage.appendIfUnchanged({ ...mutation, admissionReleased: token }, rev)))
+				return;
+		}
+		await this.storage.removeIfUnchanged(holder.mutation.mutationId, holder.rev);
 	}
 
 	async fenceForVoid(
@@ -531,6 +590,7 @@ export class RecordMutationQueue {
 			const row = stored?.mutation;
 			if (
 				row?.payload.phase === 'committed' ||
+				row?.payload.phase === 'released' ||
 				(row?.expiresAt ?? 0) > nowMs ||
 				(row?.admittedBy !== undefined && (row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS > nowMs)
 			)
@@ -591,6 +651,10 @@ export class RecordMutationQueue {
 	): Promise<void> {
 		if (this.recovery.enabled?.() === false) return;
 		const stored = await this.storage.listStored();
+		for (const { mutation: row } of stored) {
+			if (isInternalRow(row) && row.payload.phase === 'released' && row.admittedBy)
+				await this.finishWriterRelease(row.collectionName, row.recordId, row.admittedBy);
+		}
 		const committed = stored.filter(
 			({ mutation: row }) => isInternalRow(row) && row.payload.phase === 'committed'
 		);
@@ -613,8 +677,14 @@ export class RecordMutationQueue {
 			await this.releaseVoidFence(fence.collectionName, fence.recordId, fence.supersededBy!);
 		}
 		for (const { mutation: row, rev } of stored) {
-			if (committed.some(({ mutation }) => mutation.supersededBy === row.supersededBy)) continue;
 			if (
+				row.payload.phase === 'released' ||
+				committed.some(({ mutation }) => mutation.supersededBy === row.supersededBy)
+			)
+				continue;
+			if (
+				isInternalRow(row) &&
+				row.supersededBy === undefined &&
 				row.admittedBy !== undefined &&
 				(row.admittedAt ?? 0) + WRITER_ADMISSION_TTL_MS <= nowMs &&
 				(row.expiresAt ?? 0) <= nowMs
@@ -1164,6 +1234,7 @@ export const recordMutationQueueSchema = {
 		expiresAt: { type: 'number' },
 		admittedBy: { type: 'string', maxLength: 64 },
 		admittedAt: { type: 'number' },
+		admissionReleased: { type: 'string', maxLength: 64 },
 		status: {
 			type: 'string',
 			enum: ['pending', 'claimed', 'conflicted', 'needs-revision', 'rejected', 'internal'],

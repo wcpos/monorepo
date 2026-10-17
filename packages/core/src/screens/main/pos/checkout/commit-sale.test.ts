@@ -226,9 +226,9 @@ it('a guard refusal is returned and the write never runs', async () => {
 	expect(patchSession).not.toHaveBeenCalled();
 });
 
-it('the write receives the gate-stamped ids after the pre-action session write', async () => {
+it('the write receives the gate-stamped ids without patching the session', async () => {
 	const written = await commitSale(ctx, request, async (sale) => {
-		expect(patchSession).toHaveBeenCalledWith({ server_expected: null, server_sales_count: null });
+		expect(patchSession).not.toHaveBeenCalled();
 		return { registerId: sale.registerId, sessionId: sale.sessionId };
 	});
 	expect(written).toEqual({ registerId: 'register', sessionId: 'session' });

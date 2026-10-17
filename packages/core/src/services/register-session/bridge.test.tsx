@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -58,7 +58,13 @@ jest.mock('./use-register-session-collections', () => ({
 	useCashMovementCollection: () => movements,
 }));
 jest.mock('./queue', () => ({ drainRegisterSessionQueue: jest.fn() }));
-jest.mock('./refresh', () => ({ refreshSessions: jest.fn() }));
+const mockRefreshRequests = new Subject<unknown>();
+jest.mock('./refresh', () => ({
+	refreshSessions: jest.fn(),
+	get sessionRefreshRequests() {
+		return mockRefreshRequests;
+	},
+}));
 
 const log = jest.mocked(getLogger(['wcpos', 'registerSession']));
 const drain = jest.mocked(drainRegisterSessionQueue);
@@ -233,9 +239,14 @@ it('recovers only an interrupted local close; imported history and written closu
 		entries: [],
 		orders: { hits: [] },
 		closureRows: [] as unknown[],
+		refundRecords: [],
 	};
 	observed = data;
 	const view = renderHook(() => useRegisterSession());
+	// An older emission without refund records must also remain usable.
+	observed = { ...data, refundRecords: undefined };
+	view.rerender();
+	observed = data;
 	// Imported closed history: synced, no local closure row.
 	expect(view.result.current.session).toBeNull();
 	// A close this till made whose closure write was interrupted: pending, no closure row.
@@ -250,4 +261,49 @@ it('recovers only an interrupted local close; imported history and written closu
 	data.active = [{ id: 'counting', status: 'counting' }];
 	view.rerender();
 	expect(view.result.current.session?.id).toBe('counting');
+});
+
+it('debounces snapshot refresh requests through the existing bridge cycle', async () => {
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+	await act(async () => {
+		mockRefreshRequests.next({ sessions, registerId: 'register' });
+		mockRefreshRequests.next({ sessions, registerId: 'register' });
+		await jest.advanceTimersByTimeAsync(500);
+	});
+	expect(refresh).toHaveBeenCalledTimes(2);
+});
+
+it('coalesces mid-cycle invalidations without overlapping or overwriting the later snapshot', async () => {
+	const finish: (() => void)[] = [];
+	let snapshot = 0;
+	let active = 0;
+	let peak = 0;
+	refresh.mockImplementation(() => {
+		const version = refresh.mock.calls.length;
+		peak = Math.max(peak, ++active);
+		return new Promise<void>((resolve) =>
+			finish.push(() => {
+				snapshot = version;
+				active--;
+				resolve();
+			})
+		);
+	});
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+	for (let i = 0; i < 2; i++) {
+		await act(async () => {
+			mockRefreshRequests.next({ sessions, registerId: 'register' });
+			await jest.advanceTimersByTimeAsync(250);
+		});
+	}
+	expect(refresh).toHaveBeenCalledTimes(1);
+	await act(async () => finish[0]());
+	expect(refresh).toHaveBeenCalledTimes(2);
+	expect(snapshot).toBe(1);
+	await act(async () => finish[1]());
+	expect(peak).toBe(1);
+	expect(snapshot).toBe(2);
+	expect(refresh).toHaveBeenCalledTimes(2);
 });
