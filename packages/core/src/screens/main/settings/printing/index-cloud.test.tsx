@@ -111,6 +111,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

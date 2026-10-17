@@ -12,7 +12,15 @@ import { Input, InputProps } from '../input';
 import { Keypad } from '../keypad';
 import { VStack } from '../vstack';
 
-function Display({ selection, onSelectionChange, className, disabled, ref, ...props }: InputProps) {
+function Display({
+	selection,
+	onSelectionChange,
+	className,
+	disabled,
+	ref,
+	backspaceLabel,
+	...props
+}: InputProps & { backspaceLabel: string }) {
 	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 	/**
@@ -56,7 +64,11 @@ function Display({ selection, onSelectionChange, className, disabled, ref, ...pr
 				{...props}
 			/>
 			<Input.Right className="pr-1">
-				<IconButton name="deleteLeft" onPress={handleBackspacePress} />
+				<IconButton
+					name="deleteLeft"
+					accessibilityLabel={backspaceLabel}
+					onPress={handleBackspacePress}
+				/>
 			</Input.Right>
 		</Input.Root>
 	);
@@ -66,6 +78,8 @@ Display.displayName = 'NumpadDisplay';
 
 interface NumpadProps {
 	changeSignLabel: string;
+	/** The backspace key's accessible name; the caller translates it, as it does `changeSignLabel`. */
+	backspaceLabel: string;
 	ref?: React.Ref<{ getValue: () => number } | null>;
 	initialValue?: number;
 	calculator?: boolean;
@@ -85,6 +99,7 @@ interface NumpadProps {
  */
 function Numpad({
 	changeSignLabel,
+	backspaceLabel,
 	ref,
 	initialValue = 0,
 	calculator = false,
@@ -186,6 +201,7 @@ function Numpad({
 		<VStack className="gap-2 self-start">
 			<Display
 				ref={localRef}
+				backspaceLabel={backspaceLabel}
 				value={formatDisplay(currentValue)}
 				onSubmitEditing={handleSubmitEditing}
 				onKeyPress={handleKeyPress}

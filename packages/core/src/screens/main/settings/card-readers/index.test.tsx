@@ -99,6 +99,7 @@ jest.mock('@wcpos/components/progress', () => ({
 }));
 // The menu renders its items inline so a test can press Forget without a portal.
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DropdownMenuTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -149,6 +150,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<button data-testid={testID} onClick={() => mockProviderClose?.()}>
 			{children}
 		</button>
+	),
+}));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({

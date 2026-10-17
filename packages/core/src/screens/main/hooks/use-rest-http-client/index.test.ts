@@ -8,6 +8,10 @@ import { renderHook } from '@testing-library/react';
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { useRestHttpClient } from './index';
+import { useHostCapabilities } from '../../mini-apps/capabilities/host';
+
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 const { useHttpClient: useSharedHttpClient } = jest.requireActual<
 	typeof import('@wcpos/hooks/use-http-client/use-http-client')
@@ -16,6 +20,7 @@ const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http
 	http: { request: jest.Mock };
 };
 
+jest.mock('@wcpos/utils/get-instance-id', () => ({ getInstanceId: jest.fn() }));
 jest.mock('@wcpos/hooks/use-http-client/http', () => ({
 	http: { request: jest.fn(), isCancel: () => false },
 }));
@@ -45,6 +50,7 @@ const mockSite = {
 	use_jwt_as_param: false,
 	use_rest_route_param: false,
 	use_protocol_headers: false,
+	use_instance_header: undefined as boolean | undefined,
 	wcpos_version: '',
 	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
 	wp_api_url: 'https://example.com/wp-json/',
@@ -95,14 +101,44 @@ function latestRequest(): Record<string, unknown> {
 
 describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
+		jest.restoreAllMocks();
 		jest.clearAllMocks();
 		clearUpdateRequired(mockSite.wp_api_url);
+		mockSite.use_instance_header = undefined;
 		mockSite.use_jwt_as_param = false;
 		mockSite.use_rest_route_param = false;
 		mockSite.use_protocol_headers = false;
 		mockSite.wcpos_version = '';
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
+	});
+
+	it.each([
+		['till-123', true],
+		['till-123', undefined],
+		[undefined, true],
+	] as const)('adds the available instance id to default headers: %s', async (installId, flag) => {
+		jest.replaceProperty(jest.requireActual('@wcpos/utils/app-info').AppInfo, 'platform', 'web');
+		mockSite.use_instance_header = flag;
+		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockReturnValue(installId);
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+		await result.current.get('/42', {
+			headers: { 'X-WCPOS-Instance': 'forged', 'x-Wcpos-Instance': 'also-forged' },
+		});
+		expect(latestRequest().headers).toEqual(
+			installId && flag ? { 'X-WCPOS-Instance': installId } : {}
+		);
+	});
+
+	it('keeps the host identity on mini-app proxy calls', async () => {
+		mockSite.use_instance_header = true;
+		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockResolvedValue('host');
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		await result.current['http.proxy']({
+			path: '/wcpos/v1/orders',
+			headers: { 'x-Wcpos-Instance': 'forged' },
+		});
+		expect(latestRequest().headers).toEqual({ 'X-WCPOS-Instance': 'host' });
 	});
 
 	it('wires Axios update-required refusals to the current site gate', () => {

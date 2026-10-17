@@ -4,6 +4,7 @@ import { ActivityIndicator, Linking, Platform, View } from 'react-native';
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
+import { Badge, type BadgeProps } from '@wcpos/components/badge';
 import { Button } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -301,11 +302,11 @@ export function PrinterSetupDialog({
 	const scanning = busy && !bleScanning;
 	const scanScreen = phase === 'scanning' || phase === 'checking' || phase === 'results';
 	const vendorLabel = (vendor?: string) => vendors.find((v) => v.value === vendor)?.label ?? '';
-	const pill: Record<string, string> = {
-		ready: 'bg-success/15 text-success',
-		unsure: 'bg-warning/10 text-warning',
-		notprinter: 'bg-destructive/10 text-destructive',
-		unknown: 'bg-muted text-muted-foreground',
+	const tone: Record<string, BadgeProps['variant']> = {
+		ready: 'success',
+		unsure: 'warning',
+		notprinter: 'destructive',
+		unknown: 'muted',
 	};
 	const cards = found.map((p) => {
 		const status = classifyPrinter(p, platform);
@@ -318,9 +319,9 @@ export function PrinterSetupDialog({
 				disabled={!['ready', 'unsure'].includes(status)}
 				onPress={() => flow.select(p)}
 				trailing={
-					<Text className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pill[status]}`}>
+					<Badge variant={tone[status]} tinted>
 						{t(`settings.setup_${status}`)}
-					</Text>
+					</Badge>
 				}
 			>
 				<Text className="text-base font-semibold">{p.name}</Text>
@@ -333,11 +334,11 @@ export function PrinterSetupDialog({
 								? ` · ${vendorLabel(p.identity.vendor)}`
 								: ''}
 					</Text>
-					<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
+					<Badge variant="muted">
 						{native && secureTargetFor(p)
 							? t('settings.setup_source_network_secure')
 							: t(`settings.setup_source_${p.source}`)}
-					</Text>
+					</Badge>
 				</View>
 			</ListItem>
 		);

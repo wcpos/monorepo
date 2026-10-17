@@ -10,7 +10,11 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock('../icon', () => ({ Icon: () => null }));
-jest.mock('../icon-button', () => ({ IconButton: () => null }));
+jest.mock('../icon-button', () => ({
+	IconButton: ({ accessibilityLabel }: { accessibilityLabel?: string }) => (
+		<button aria-label={accessibilityLabel} />
+	),
+}));
 jest.mock('../text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
@@ -18,7 +22,13 @@ jest.mock('../text', () => ({
 it('preserves digit, sign and decimal IDs and feeds Keypad presses to the reducer', () => {
 	const ref = React.createRef<{ getValue: () => number }>();
 	render(
-		<Numpad changeSignLabel="Cambiar signo" ref={ref} decimalSeparator="," discounts={[10]} />
+		<Numpad
+			changeSignLabel="Cambiar signo"
+			backspaceLabel="Borrar"
+			ref={ref}
+			decimalSeparator=","
+			discounts={[10]}
+		/>
 	);
 	for (const digit of '0123456789')
 		expect(screen.getByTestId(`numpad-key-${digit}`)).toBeInTheDocument();
@@ -31,4 +41,9 @@ it('preserves digit, sign and decimal IDs and feeds Keypad presses to the reduce
 	expect(ref.current?.getValue()).toBe(-12.5);
 	fireEvent.click(screen.getByTestId('keypad-key-10'));
 	expect(ref.current?.getValue()).toBe(-11.25);
+});
+
+it('names the icon-only backspace key with the caller-translated label', () => {
+	render(<Numpad changeSignLabel="Cambiar signo" backspaceLabel="Borrar el último dígito" />);
+	expect(screen.getByRole('button', { name: 'Borrar el último dígito' })).toBeInTheDocument();
 });

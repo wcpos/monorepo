@@ -127,6 +127,7 @@ export function NumberInput({
 				<VStack className="gap-1">
 					<Numpad
 						changeSignLabel={t('common.change_sign')}
+						backspaceLabel={t('common.backspace')}
 						ref={numpadRef}
 						initialValue={toNumber(value)}
 						onChangeText={handleChange}

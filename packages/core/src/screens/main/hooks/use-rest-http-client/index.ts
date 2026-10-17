@@ -6,10 +6,13 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { AppInfo } from '@wcpos/utils/app-info';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
+import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
 import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -272,6 +275,18 @@ export const useRestHttpClient = (endpoint = '') => {
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
+			config.headers = Object.fromEntries(
+				Object.entries(config.headers ?? {}).filter(
+					([key]) => key.toLowerCase() !== 'x-wcpos-instance'
+				)
+			);
+			const installId = await getInstanceId();
+			if (
+				installId !== undefined &&
+				sendsInstanceHeader(AppInfo.platform, site.use_instance_header)
+			) {
+				config.headers[INSTANCE_HEADER] = installId;
+			}
 
 			try {
 				const response = await httpClient.request(config);

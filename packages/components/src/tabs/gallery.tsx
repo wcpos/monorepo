@@ -4,9 +4,14 @@ import { View } from 'react-native';
 import { Text } from '../text';
 import { ScrollableTabsList, Tabs, TabsContent, TabsList, TabsTrigger } from './index';
 
+// The overflow arrows' names come from the caller, as the app's caller translates them.
+function LabelledScrollableTabsList(props: React.ComponentProps<typeof TabsList>) {
+	return <ScrollableTabsList {...props} previousLabel="Previous tab" nextLabel="Next tab" />;
+}
+
 function Example({ disabled = false, scrollable = false }) {
 	const [value, setValue] = React.useState('Form');
-	const List = scrollable ? ScrollableTabsList : TabsList;
+	const List = scrollable ? LabelledScrollableTabsList : TabsList;
 	const labels = scrollable
 		? ['Form', 'JSON', 'Preview', 'Details', 'History', 'Notes', 'Settings', 'Activity']
 		: ['Form', 'JSON', 'Preview'];

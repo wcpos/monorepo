@@ -540,7 +540,8 @@ jobs:
   gallery-shoot:
     name: Gallery shoot
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The compare ran 5.3 min for 2,352 cells (2026-10-17); five themes make it ~3,400.
+    timeout-minutes: 30
     needs: changes
     if: >-
       needs.changes.outputs.gallery == 'true' &&
@@ -598,7 +599,8 @@ jobs:
   gallery-update:
     name: Gallery (update baselines)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Shoots twice (update, then compare), so twice the shoot's budget.
+    timeout-minutes: 45
     needs: changes
     if: >-
       needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&

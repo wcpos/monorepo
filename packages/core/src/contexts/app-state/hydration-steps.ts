@@ -12,7 +12,11 @@ import {
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
-import { protocolHeadersSupported } from '@wcpos/utils/sync-protocol';
+import {
+	INSTANCE_HEADER,
+	instanceHeaderSupported,
+	protocolHeadersSupported,
+} from '@wcpos/utils/sync-protocol';
 import {
 	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
@@ -249,6 +253,7 @@ export type AuthTransportResolution =
 			useJwtAsParam: boolean;
 			useRestRouteParam: boolean;
 			useProtocolHeaders: boolean;
+			useInstanceHeader: boolean;
 	  }
 	| { ok: false; code: ErrorCode | null; timedOut?: true };
 
@@ -647,6 +652,32 @@ export async function testAuthorizationMethod(
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
 			const useProtocolHeaders = protocolHeadersSupported(echo);
+			// One harmless request per site negotiation proves this header's actual CORS path.
+			let instanceProbe: HeaderEchoResult | null = null;
+			if (Platform.isWeb && echo.cors?.reflects_request_headers === true) {
+				const prepared = buildRequestPreamble(
+					{
+						purpose: 'probe-echo',
+						client: AppInfo,
+						accessToken,
+						site: { wcpos_version: wcposVersion },
+					},
+					{
+						url: useRestRouteParam ? queryEchoUrl : pathEchoUrl,
+						headers: { [INSTANCE_HEADER]: 'wcpos-instance-probe' },
+					}
+				);
+				const result = await fetchJsonWithTimeout(
+					prepared.url,
+					{ cache: 'no-store', headers: Object.fromEntries(prepared.headers) },
+					AUTH_PROBE_TIMEOUT_MS
+				);
+				instanceProbe = result?.response.ok ? parseHeaderEcho(result.data) : null;
+			}
+			const useInstanceHeader = instanceHeaderSupported(
+				echo,
+				instanceProbe?.headers[INSTANCE_HEADER.toLowerCase()]?.received === true
+			);
 			// Only names the probe actually sent can be dead — the map also
 			// carries the rest of the server's floor, which arrives
 			// `received: false` on every healthy store.
@@ -666,10 +697,22 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { ok: true, useJwtAsParam: false, useRestRouteParam, useProtocolHeaders };
+				return {
+					ok: true,
+					useJwtAsParam: false,
+					useRestRouteParam,
+					useProtocolHeaders,
+					useInstanceHeader,
+				};
 			}
 			if (paramAuthArrives) {
-				return { ok: true, useJwtAsParam: true, useRestRouteParam, useProtocolHeaders };
+				return {
+					ok: true,
+					useJwtAsParam: true,
+					useRestRouteParam,
+					useProtocolHeaders,
+					useInstanceHeader,
+				};
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
@@ -728,6 +771,7 @@ export async function testAuthorizationMethod(
 				useJwtAsParam: false,
 				useRestRouteParam,
 				useProtocolHeaders: false,
+				useInstanceHeader: false,
 			};
 		}
 
@@ -749,6 +793,7 @@ export async function testAuthorizationMethod(
 				useJwtAsParam: true,
 				useRestRouteParam,
 				useProtocolHeaders: false,
+				useInstanceHeader: false,
 			};
 		}
 		if (legacy.statuses?.[0] === 400 && legacy.statuses[1] === 414) {
@@ -1154,6 +1199,7 @@ const testAuthorizationStep: HydrationStep = {
 					use_jwt_as_param: !!result.useJwtAsParam,
 					use_rest_route_param: !!result.useRestRouteParam,
 					use_protocol_headers: !!result.useProtocolHeaders,
+					use_instance_header: !!result.useInstanceHeader,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {
